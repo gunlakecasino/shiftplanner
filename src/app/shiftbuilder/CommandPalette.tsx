@@ -36,6 +36,9 @@ interface CommandPaletteProps {
   onToggleLock?: (slotKey: string) => void;
   onCycleBreak?: (slotKey: string) => void;
 
+  /** Direct assignment from contextual palette (tap slot → pick person, or vice versa) */
+  onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
+
   // For better contextual header in seeded slot mode (Phase 1 polish)
   selectedSlotAssignment?: any;
 
@@ -992,9 +995,19 @@ export function CommandPalette({
                       key={item.id}
                       value={`${item.label} ${item.keywords.join(" ")}`}
                       onSelect={() => {
-                        // Multi-step support: Selecting a person enters "Assign this person" context
+                        // Roster selection in contextual flows
                         if (item.group === "Roster" && item.metadata?.tm) {
                           const tm = item.metadata.tm;
+
+                          // If we already have a slot selected (user tapped a card first),
+                          // perform the assignment immediately.
+                          if (selectedSlot && onAssign) {
+                            onAssign(selectedSlot, tm.id, tm.name || tm.fullName || tm.id);
+                            onOpenChange(false);
+                            return;
+                          }
+
+                          // Otherwise fall back to the multi-step "pick person then pick slot" flow
                           setSelectedPerson(tm);
                           setContextStep('person-to-slot');
                           setSelectedSlot(null);

@@ -4481,6 +4481,7 @@ export default function ShiftBuilder() {
         initialContext={cmdkInitialContext}
         onRemoveFromSlot={unassign}
         onToggleLock={toggleLock}
+        onAssign={assign}
         onCycleBreak={(slotKey) => {
           const current = assignments[slotKey]?.breakGroup ?? 0;
           const next = (current % 3) + 1; // simple cycle 1->2->3->1
