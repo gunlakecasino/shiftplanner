@@ -470,7 +470,6 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       data-slot-key={def.key}
-      data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
@@ -756,7 +755,6 @@ const AuxCard: React.FC<AuxCardProps> = ({
 
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
-      data-slot-key={def.key}
       data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
