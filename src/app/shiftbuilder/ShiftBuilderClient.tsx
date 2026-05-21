@@ -439,6 +439,7 @@ interface ZoneCardProps {
   borderColor?: string;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = ({ 
@@ -450,7 +451,8 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
   loading = false, 
   borderColor,
   isDraftMode = false,
-  draftInfo 
+  draftInfo,
+  onRemoveTask 
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -539,7 +541,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} />
+        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} />
       </div>
     </div>
   );
@@ -548,7 +550,12 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
 // Compact list of selected tasks shown at the bottom of a Zone / AUX card.
 // Replaces the static `def.locations` strings we used to render. When empty,
 // renders nothing so the card collapses gracefully.
-const ZoneTaskList: React.FC<{ tasks: NightSlotTask[] | undefined; hasTM: boolean }> = ({ tasks, hasTM }) => {
+const ZoneTaskList: React.FC<{
+  tasks: NightSlotTask[] | undefined;
+  hasTM: boolean;
+  slotKey: string;
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+}> = ({ tasks, hasTM, slotKey, onRemoveTask }) => {
   if (!tasks || tasks.length === 0) return null;
   return (
     <div
@@ -556,7 +563,24 @@ const ZoneTaskList: React.FC<{ tasks: NightSlotTask[] | undefined; hasTM: boolea
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
       {tasks.map((t) => (
-        <div key={t.id} className="truncate">{t.taskLabel}</div>
+        <div
+          key={t.id}
+          className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
+        >
+          <span className="truncate">{t.taskLabel}</span>
+          {onRemoveTask && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveTask(slotKey, t.taskLabel);
+              }}
+              className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
+              title="Remove task"
+            >
+              ×
+            </button>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -572,6 +596,7 @@ interface RRCardProps {
   borderColor?: string;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -585,7 +610,8 @@ const RRSide: React.FC<{
   setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onClick: (k: string, el: HTMLElement, e?: React.MouseEvent) => void;
   loading?: boolean;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false }) => {
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -639,7 +665,24 @@ const RRSide: React.FC<{
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
-            <div key={t.id} className="truncate">{t.taskLabel}</div>
+            <div
+              key={t.id}
+              className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
+            >
+              <span className="truncate">{t.taskLabel}</span>
+              {onRemoveTask && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveTask(slotKey, t.taskLabel);
+                  }}
+                  className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
+                  title="Remove task"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -656,7 +699,8 @@ const RRCard: React.FC<RRCardProps> = ({
   loading = false, 
   borderColor,
   isDraftMode = false,
-  draftInfo 
+  draftInfo,
+  onRemoveTask 
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -699,6 +743,7 @@ const RRCard: React.FC<RRCardProps> = ({
             setBreakGroupForSlot={setBreakGroupForSlot}
             onClick={onGenderClick}
             loading={loading}
+            onRemoveTask={onRemoveTask}
           />
           <RRSide
             slotKey={wKey}
@@ -708,6 +753,7 @@ const RRCard: React.FC<RRCardProps> = ({
             setBreakGroupForSlot={setBreakGroupForSlot}
             onClick={onGenderClick}
             loading={loading}
+            onRemoveTask={onRemoveTask}
           />
         </div>
       </div>
@@ -725,6 +771,7 @@ interface AuxCardProps {
   borderColor?: string;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
 }
 
 const AuxCard: React.FC<AuxCardProps> = ({ 
@@ -736,7 +783,8 @@ const AuxCard: React.FC<AuxCardProps> = ({
   loading = false, 
   borderColor,
   isDraftMode = false,
-  draftInfo 
+  draftInfo,
+  onRemoveTask 
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -836,7 +884,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} />
+        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} />
       </div>
     </div>
   );
@@ -1121,8 +1169,9 @@ interface OverlapSlotProps {
   selectedTasks: Record<string, NightSlotTask[]>;
   onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
 }
-const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo }) => {
+const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo, onRemoveTask }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
@@ -1170,7 +1219,24 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
-            <div key={t.id} className="truncate">{t.taskLabel}</div>
+            <div
+              key={t.id}
+              className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
+            >
+              <span className="truncate">{t.taskLabel}</span>
+              {onRemoveTask && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveTask(slotKey, t.taskLabel);
+                  }}
+                  className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
+                  title="Remove task"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -2953,6 +3019,26 @@ export default function ShiftBuilder() {
     [nightId, selectedDay.date, selectedDay.name, persistAddTask, persistRemoveTask]
   );
 
+  // Direct "X" delete from task list on cards (hover affordance).
+  // Optimistic UI update + reuse the existing persistRemoveTask helper.
+  const handleRemoveTask = React.useCallback(
+    (uiKey: string, taskLabel: string) => {
+      const targetNightId = nightId;
+      const captureDate = selectedDay.date;
+      const captureDayName = selectedDay.name;
+
+      // Optimistic removal from local state for instant feedback
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.filter((t) => t.taskLabel !== taskLabel);
+        return { ...prev, [uiKey]: next };
+      });
+
+      persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, taskLabel);
+    },
+    [nightId, selectedDay.date, selectedDay.name, persistRemoveTask]
+  );
+
   // Operator-authored custom task: insert into the catalog AND select it for
   // this night. Future popovers will show it as a normal catalog option.
   // If the catalog insert fails (other than the duplicate case which is
@@ -3823,6 +3909,7 @@ export default function ShiftBuilder() {
                           borderColor={cardBorders[def.key]}
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[def.key]}
+                          onRemoveTask={handleRemoveTask}
                         />
                       ))}
                     </div>
@@ -3854,6 +3941,7 @@ export default function ShiftBuilder() {
                           borderColor={cardBorders[`MRR${def.num}`] || cardBorders[`WRR${def.num}`]}
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[`MRR${def.num}`] || draftAssignments[`WRR${def.num}`]}
+                          onRemoveTask={handleRemoveTask}
                         />
                       ))}
                     </div>
@@ -3889,6 +3977,7 @@ export default function ShiftBuilder() {
                           borderColor={cardBorders[def.key]}
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[def.key]}
+                          onRemoveTask={handleRemoveTask}
                         />
                       ))}
                     </div>
@@ -4080,6 +4169,7 @@ export default function ShiftBuilder() {
                                 loading={loadingAssignments}
                                 isDraftMode={isDraftMode}
                                 draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
+                                onRemoveTask={handleRemoveTask}
                               />
                             ))}
                           </div>
@@ -4482,6 +4572,34 @@ export default function ShiftBuilder() {
         onRemoveFromSlot={unassign}
         onToggleLock={toggleLock}
         onAssign={assign}
+        onAddTask={async (uiKey, taskLabel) => {
+          if (!nightId) {
+            showToast("error", "No active night selected");
+            return;
+          }
+          try {
+            const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+            await addNightSlotTask({
+              nightId,
+              slotKey: slot_key,
+              slotType: slot_type,
+              rrSide: rr_side,
+              taskLabel,
+              sortOrder: 50,
+            });
+            // Refresh tasks so cards show the new one immediately
+            const fresh = await getNightSlotTasks(nightId);
+            const byKey: Record<string, NightSlotTask[]> = {};
+            for (const t of fresh) {
+              if (!byKey[t.slotKey]) byKey[t.slotKey] = [];
+              byKey[t.slotKey].push(t);
+            }
+            setSelectedTasks(byKey);
+          } catch (e) {
+            console.error("Failed to add task from palette", e);
+            showToast("error", "Failed to save task");
+          }
+        }}
         onCycleBreak={(slotKey) => {
           const current = assignments[slotKey]?.breakGroup ?? 0;
           const next = (current % 3) + 1; // simple cycle 1->2->3->1
