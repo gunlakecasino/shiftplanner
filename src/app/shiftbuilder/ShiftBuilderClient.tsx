@@ -2021,13 +2021,14 @@ export default function ShiftBuilder() {
   // When using Pencil Pro, hovering (or having the tip near) a card and
   // squeezing the barrel instantly opens the contextual Command Palette.
   useEffect(() => {
-    const handlePointerRaw = (e: PointerEvent) => {
-      if (e.pointerType !== "pen") return;
+    const handlePointerRaw = (e: Event) => {
+      const pe = e as PointerEvent;
+      if (pe.pointerType !== "pen") return;
 
       // Squeeze on Pencil Pro is indicated by the barrel button (buttons & 2)
-      if (e.buttons & 2) {
+      if (pe.buttons & 2) {
         // Find the nearest ancestor that represents a slot/card
-        const cardEl = (e.target as HTMLElement | null)?.closest?.('[data-slot-key]');
+        const cardEl = (pe.target as HTMLElement | null)?.closest?.('[data-slot-key]');
         if (cardEl) {
           const slotKey = cardEl.getAttribute('data-slot-key');
           if (slotKey) {
