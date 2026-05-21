@@ -1,0 +1,956 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* === OMS Design Tokens — Apple-grade calm operational palette === */
+
+  /* Base surfaces */
+  --bg: #F8F8F9;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #F2F2F4;
+  --bg-surface-2: #EBEBED;
+
+  /* Text */
+  --text: #1C1C1E;
+  --text-2: #3C3C43;
+  --text-3: #6C6C72;
+  --text-4: #8E8E93;
+
+  /* Borders & dividers */
+  --border: oklch(0.922 0 0);
+  --border-strong: #D1D1D6;
+  --divider: #E5E5E7;
+
+  /* Accent (subtle professional blue) */
+  --accent: oklch(0.97 0 0);
+  --accent-tint: #E5F0FF;
+  --accent-2: #007AFF;
+
+  /* Status */
+  --success: #30D158;
+  --warn: #FF9500;
+  --warn-bg: #FFF4E5;
+  --error: #FF3B30;
+
+  /* Engine / System */
+  --engine: #5E5CE6;
+  --engine-tint: #E8E7F7;
+
+  /* Slot types */
+  --zone: #007AFF;
+  --rr: #AF52DE;
+  --aux: #FF9500;
+  --break: #34C759;
+
+  /* Interactive */
+  --hover: rgba(0, 0, 0, 0.04);
+  --active: rgba(0, 0, 0, 0.08);
+
+  /* Shadows — refined and calm */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  /* Spacing scale (excellent for iPad + desktop) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* Touch-friendly minimums (iPad Pro) */
+  --touch-min: 44px;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Dark mode (future, but foundations ready) */
+.dark {
+  --bg: #0A0A0B;
+  --bg-elevated: #1C1C1E;
+  --bg-subtle: #141415;
+  --bg-surface-2: #2C2C2E;
+
+  --text: #F2F2F4;
+  --text-2: #D1D1D6;
+  --text-3: #8E8E93;
+  --text-4: #6C6C72;
+
+  --border: oklch(1 0 0 / 10%);
+  --border-strong: #48484A;
+  --divider: #38383A;
+
+  --accent-tint: #1A2A44;
+  --engine-tint: #2A2A44;
+  --warn-bg: #3A2A10;
+
+  --hover: rgba(255, 255, 255, 0.05);
+  --active: rgba(255, 255, 255, 0.1);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Base typography — premium and readable on high-DPI */
+body {
+  font-family: var(--font-geist-sans);
+  font-feature-settings: "tnum", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === High-quality component primitives === */
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.slot {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+  min-height: var(--touch-min);
+}
+
+.slot:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.slot.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12);
+}
+
+.slot.locked {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+
+.roster-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: transform 0.1s cubic-bezier(0.23, 1, 0.32, 1), 
+              box-shadow 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+  cursor: grab;
+  user-select: none;
+}
+
+.roster-item:active {
+  cursor: grabbing;
+  transform: scale(1.015);
+  box-shadow: var(--shadow-md);
+}
+
+.roster-item.dragging {
+  opacity: 0.6;
+  transform: scale(0.98);
+}
+
+/* Beautiful focus rings for keyboard + iPad pencil */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-tint);
+  border-radius: 8px;
+}
+
+/* Subtle premium dividers */
+.divider {
+  border-color: var(--divider);
+}
+
+/* Typography helpers */
+.text-display {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.text-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.text-body {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+
+.text-caption {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  color: var(--text-3);
+}
+
+/* Structured section headers */
+.section-header {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-bottom: var(--space-2);
+}
+
+/* High-quality button base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  transition: all 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: #0075E6;
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border: none;
+}
+
+.btn-ghost:hover {
+  background: var(--hover);
+}
+
+/* Drag preview styling */
+.drag-preview {
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ==========================================================================
+   PRINT SHEET VISUALS — High-fidelity WYSIWYG replica of deployment sheet
+   Calm, dense, operational print aesthetic for iPad Pro + desktop
+   ========================================================================== */
+
+/* The paper surface */
+.print-sheet {
+  background: #FFFFFF;
+  border: 1px solid #C8C8CC;
+  border-radius: 3px;
+  box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.12), 
+              0 2px 8px -2px rgba(0, 0, 0, 0.08),
+              0 0 0 1px rgba(0, 0, 0, 0.02) inset;
+  padding: 14px 16px 18px;
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-feature-settings: "tnum" 1, "ss01" 1;
+}
+
+/* Fixed-size US Letter Landscape artboard (11 × 8.5 in @ 96 dpi).
+   Width and height are pinned in absolute pixels so the paper is
+   identical regardless of viewport, content density, or view mode. */
+.print-artboard {
+  width: 1056px;  /* 11"  × 96 dpi */
+  height: 816px;  /* 8.5" × 96 dpi */
+  background: #FFFFFF;
+  box-shadow:
+    0 0 0 1px #C8C8CC,
+    0 25px 80px -20px rgba(0, 0, 0, 0.28),
+    0 12px 32px -10px rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 18px 24px 14px; /* printed page margins inside the paper */
+  display: flex;
+  flex-direction: column;
+  /* Children layout contract:
+     - .sheet-header    → flex-shrink: 0
+     - middle pane      → flex: 1; min-height: 0; overflow: hidden
+     - .sheet-footer    → flex-shrink: 0
+     This guarantees the paper itself never grows or shrinks; content
+     that won't fit is clipped by `overflow: hidden`. */
+}
+
+/* Sheet header (date + shift meta).
+   Padding/margin are owned by the consuming JSX (Tailwind utilities
+   in @layer utilities win over unlayered rules in Tailwind v4, so
+   declaring them here would be silently overridden). */
+.sheet-header {
+  border-bottom: 1px solid #E5E5E7;
+}
+
+.sheet-date-num {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 82px;
+  font-weight: 800;
+  line-height: 0.72;
+  letter-spacing: -5.5px;
+  color: #111111;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-date-label {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  line-height: 1;
+  color: #1C1C1E; /* Will be overridden per day color in component */
+}
+
+.sheet-shift-meta {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: #555555;
+}
+
+/* Section header bar (ZONES, RESTROOMS / X FILLED, etc.) */
+.sheet-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 5px;
+  padding: 0 2px;
+}
+
+.sheet-section-header .label {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #3C3C43;
+  white-space: nowrap;
+}
+
+.sheet-section-header .divider {
+  flex: 1;
+  height: 1px;
+  background: #E5E5E7;
+}
+
+.sheet-section-header .count {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #555555;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Base card for assignments — rectangular, print clean.
+   Heights are owned by the consuming grid (gridAutoRows) so the card
+   can fluidly fill its row without a min-height fighting the print
+   contract (Zone 135px, RR 112px, AUX 52px in the Golden).
+   The CSS variables --mouse-x / --mouse-y / --card-accent power the
+   accent-aware spotlight hover effect — set per-card by the renderer. */
+.assignment-card {
+  position: relative;
+  background: #FFFFFF;
+  border: 1px solid #D1D1D6;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --card-accent: #6B7280;
+  transition:
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 120ms ease;
+}
+
+/* Spotlight layer — radial gradient using the card's own accent color,
+   centered on the live cursor position. Hidden by default, fades in on
+   hover. Mix-blend keeps the white card surface from being overpowered
+   while still tinting the area under the cursor with the zone's color. */
+.assignment-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    260px circle at var(--mouse-x) var(--mouse-y),
+    color-mix(in srgb, var(--card-accent) 18%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: multiply;
+}
+
+/* Card children sit above the spotlight layer */
+.assignment-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.assignment-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--card-accent) 55%, #D1D1D6);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 20px -6px color-mix(in srgb, var(--card-accent) 25%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+
+.assignment-card:hover::before {
+  opacity: 1;
+}
+
+.assignment-card.drag-over,
+.assignment-card.drop-target-active,
+.drop-target-active {
+  border-color: #007AFF !important;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.22), 0 0 10px -4px rgba(0, 122, 255, 0.3) !important;
+  background: #F8FBFF !important;
+  transition: border-color 80ms ease, box-shadow 80ms ease, background 80ms ease;
+}
+
+/* === Calm printed empty / unassigned treatment (Golden PDF aesthetic) ===
+   These slots read as "deliberately open for this GRAVE window", not broken or disabled.
+   Warmer paper tone, visible but restrained dashed rule, intentional placeholder text. */
+.assignment-card.empty {
+  background: #F3F3F5;
+  border: 1px dashed #BDBDC4;
+  opacity: 1; /* deliberate — no "disabled" wash */
+}
+.assignment-card.empty:hover {
+  border-color: #A8A8B0;
+  background: #F0F0F3;
+}
+.assignment-card.empty .card-name.empty,
+.assignment-card.empty .unassigned-label {
+  color: #6B7280;
+  letter-spacing: 0.3px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+/* Roster panel highlight when an assigned TM is being dragged toward it
+   (drag-back-to-unassign affordance). */
+.roster-drop-active {
+  background: #FFF5F5 !important;
+  box-shadow: inset 0 0 0 2px rgba(255, 59, 48, 0.22);
+}
+
+/* Colored top header bar is applied via style.borderTop or inner .card-header-bar */
+
+/* Inner header area of card — Golden style (tighter, more print-like) */
+.card-header {
+  padding: 4px 7px 2px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  min-height: 19px;
+  border-bottom: 1px solid #F2F2F4;
+}
+
+.card-label {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zone-icon {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-block;
+  margin-top: -1px;
+}
+
+.card-badge {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 700;
+  color: #fff;
+  background: #1D1D1F;
+  letter-spacing: -0.1px;
+  box-shadow: 0 0.5px 1px rgba(0,0,0,0.1);
+  margin-top: -1px;
+}
+
+/* Name area — Golden density */
+.card-name {
+  padding: 2px 7px 1px 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.1;
+  color: #111111;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.card-name.empty {
+  font-size: 11px;
+  font-weight: 500;
+  color: #9CA3AF;
+  font-style: normal;
+  letter-spacing: 0;
+}
+
+/* Location / role subtext + dashed guide lines (Golden style) */
+.card-subtext {
+  padding: 2px 7px 6px 7px;
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.05px;
+  color: #6C6C72;
+  line-height: 1.35;
+  margin-top: auto;
+  position: relative;
+}
+
+/* Subtle dashed guide lines inside cards (very characteristic of the Golden) */
+.card-subtext::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 2px;
+  bottom: 2px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 10px,
+    #C8C8CC 10px,
+    #C8C8CC 11px
+  );
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+/* RR paired card specific */
+.rr-card {
+  min-height: 78px;
+}
+
+.rr-pair-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: #F2F2F4;
+  padding: 0;
+}
+
+.rr-gender {
+  background: #fff;
+  padding: 3px 6px 4px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #F2F2F4;
+}
+
+.rr-gender:last-child {
+  border-right: none;
+}
+
+.rr-gender-label {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #374151;
+  line-height: 1;
+  margin-bottom: 1px;
+  text-transform: uppercase;
+}
+
+.rr-gender-name {
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.15px;
+  line-height: 1.1;
+  color: #111;
+  min-height: 15px;
+}
+
+.rr-gender-sub {
+  font-size: 7.5px;
+  color: #6C6C72;
+  line-height: 1.15;
+  margin-top: 1px;
+}
+
+/* Small lock/source indicators inside cards */
+.card-meta {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 7px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.9);
+  color: #FF9500;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Footer of sheet */
+.sheet-footer {
+  margin-top: 0px;
+  padding-top: 4px;
+  border-top: 1px solid #E5E5E7;
+  font-size: 9px;
+  color: #8E8E93;
+  letter-spacing: 0.4px;
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Notes pad — ruled paper that fills whatever space is left under AUX.
+   Lines are drawn via a repeating gradient so they print correctly with
+   `print-color-adjust: exact`. Each ruled row is 22px tall to match the
+   line-height; padding-top + the gradient offset keep text descenders
+   sitting just above each rule. */
+.notes-pad {
+  padding: 6px 12px 12px;
+  font-family: var(--font-atkinson), var(--font-geist-sans);
+  font-size: 13px;
+  line-height: 22px;
+  color: #1C1C1E;
+  overflow-y: auto;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 21px,
+    #E5E7EB 21px,
+    #E5E7EB 22px
+  );
+  background-position: 0 6px;
+  caret-color: #1C1C1E;
+}
+
+.notes-pad:focus {
+  outline: none;
+  border-color: #A1A1A6 !important;
+}
+
+/* ==========================================================================
+   PRINT — WYSIWYG against the on-screen artboard.
+   The artboard is already 1056×816 (11×8.5" @ 96dpi), so with a matching
+   @page size and zero margins the printed output maps 1:1.
+   ========================================================================== */
+
+@page {
+  size: 11in 8.5in landscape;
+  margin: 0;
+}
+
+@media print {
+  /* Reset the host page so only the artboard surface remains */
+  html, body {
+    background: #FFFFFF !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 11in !important;
+    height: 8.5in !important;
+  }
+
+  /* Neutralize the on-screen zoom stage so position:fixed on the artboard
+     anchors to the page itself, not to a transformed ancestor (which would
+     scale the printed output). */
+  .print-stage {
+    width: auto !important;
+    height: auto !important;
+  }
+  .print-stage-inner {
+    transform: none !important;
+    width: auto !important;
+  }
+
+  /* Hide every non-artboard element. We use visibility (not display:none)
+     so the artboard's ancestors keep their layout boxes — the artboard
+     then gets positioned to the page origin below. */
+  body * {
+    visibility: hidden;
+  }
+  .print-artboard,
+  .print-artboard * {
+    visibility: visible;
+  }
+
+  /* Strip screen-only chrome from the paper itself and dock it to the
+     page origin. `position: fixed` anchors to the print page in Chromium,
+     which avoids the on-screen `mx-auto w-[1056px] relative` wrapper
+     leaving the artboard centered in the gray scroll area on paper. */
+  .print-artboard {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    width: 11in !important;
+    height: 8.5in !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #FFFFFF !important;
+    overflow: visible !important;
+  }
+
+  /* Kill cursor/interactive affordances so they don't render funny */
+  .print-artboard,
+  .print-artboard * {
+    cursor: default !important;
+    user-select: text !important;
+  }
+
+  /* Force background colors to print (off in Chrome by default).
+     Without this the colored top stripes and dark break-group badges
+     come out as outlines instead of solids. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* The quick-action fan overlay is rendered inside the artboard wrapper —
+     hide it if it happened to be open when the user hit Print. */
+  .quick-action-fan {
+    display: none !important;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────
+   * Dual-page print mode
+   * ──────────────────────────────────────────────────────────────────────
+   * When the operator triggers "Print Deployment Sheet" from the command
+   * palette, the client captures BOTH the deployment view and the break
+   * sheet view as HTML and injects them into a `.print-dual-container`.
+   * In this mode:
+   *   - The LIVE artboard (still in the DOM via React) is hidden so it
+   *     doesn't print a third page.
+   *   - Both captured artboards render in normal flow, one per page,
+   *     with a hard page break between.
+   * Duplex / double-sided is the operator's choice in the print dialog —
+   * CSS cannot force it, but landscape is the default via @page above.
+   */
+  body.printing-dual-mode .print-stage,
+  body.printing-dual-mode .print-stage * {
+    visibility: hidden !important;
+  }
+
+  .print-dual-container {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+  }
+  .print-dual-container .print-artboard {
+    /* Override the single-page position:fixed model — we need normal flow
+       so page breaks can split the two captures across pages. */
+    position: static !important;
+    visibility: visible !important;
+    display: block !important;
+    width: 11in !important;
+    height: 8.5in !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #FFFFFF !important;
+    overflow: hidden !important;
+  }
+  /* Page break BEFORE the second artboard, not AFTER the first. Browsers
+     handle break-before more consistently than break-after, and this
+     avoids the "first page is blank" failure mode where break-after on a
+     page-sized element pushes the element itself to the next page. */
+  .print-dual-container .print-artboard + .print-artboard {
+    page-break-before: always;
+    break-before: page;
+  }
+  .print-dual-container .print-artboard * {
+    visibility: visible !important;
+  }
+}
+
+/* Hide the dual container on screen — it only exists transiently during
+   the print pipeline. */
+.print-dual-container {
+  display: none;
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

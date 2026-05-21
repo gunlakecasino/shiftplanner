@@ -1,0 +1,425 @@
+/**
+ * Placement Module — Single Source of Truth for Assignment Order
+ *
+ * This module is the **authoritative definition** of how placements must work
+ * in the Coverage Planner (Phase 1).
+ *
+ * Usage:
+ *   import { PLACEMENT_ORDER, getSlotsInPlacementOrder, runCoveragePlanner } from "@/lib/shiftbuilder/placement";
+ *
+ * All future placement services, engines, and auto-assign logic must use
+ * the functions exported from this file.
+ */
+
+import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
+
+// Minimal interface to avoid circular imports
+export interface AuxDef {
+  key: string;
+  label: string;
+  locations: string[];
+}
+
+// ========================================================
+// AUTHORITATIVE PLACEMENT ORDER (Phase 1 - Coverage Planner)
+// ========================================================
+/**
+ * The **strict, non-negotiable** order the auto-assignment engine
+ * must follow during initial coverage planning.
+ *
+ * Zone 9 SR (Smoking Room) has a **fixed position** and is never
+ * moved based on conditions.
+ *
+ * Any dynamically added Support/Overflow slots must come **after**
+ * this entire list.
+ */
+export const PLACEMENT_ORDER: readonly string[] = [
+  // 1. Restrooms (Men’s + Women’s) — highest priority block
+  "MRR1",
+  "WRR1",
+  "MRR6",
+  "WRR6",
+  "MRR7",
+  "WRR7",
+  "MRR8",
+  "WRR8",
+  "MRR10",
+  "WRR10",
+
+  // 2. Admin
+  "ADM",
+
+  // 3–12. Main Zones in required sequence
+  "Z9",
+  "Z1",
+  "Z4",
+  "Z5",
+  "Z2",
+  "Z3",
+  "Z8",
+  "Z10",
+  "Z7",
+  "Z6",
+
+  // 13. Zone 9 Smoking Room — FIXED POSITION (never conditional)
+  "Z9SR",
+
+  // 14–15. Trash
+  "TR1",
+  "TR2",
+
+  // 16+. Overflow / Support slots (SP1, SP2, SP3, ...) come after everything above
+] as const;
+
+/**
+ * Returns all slot keys in the exact order the Coverage Planner must process them.
+ *
+ * @param auxDefs - Currently active auxiliary/support slots (including user-added ones)
+ */
+export function getSlotsInPlacementOrder(auxDefs: AuxDef[] = []): string[] {
+  const fixed = [...PLACEMENT_ORDER];
+
+  // Any extra support/overflow slots the operator has added must come last
+  const extraSupport = auxDefs
+    .map((d) => d.key)
+    .filter((key) => !fixed.includes(key));
+
+  return [...fixed, ...extraSupport];
+}
+
+// ========================================================
+// COVERAGE PLANNER (Phase 1)
+// ========================================================
+
+export interface CoveragePlannerInput {
+  orderedSlots: string[];
+  assignments: Record<string, any>;
+  roster: any[]; // full or filtered roster
+  graveOnly?: boolean;
+  // Future: constraints, break rules, etc.
+}
+
+export interface CoveragePlannerResult {
+  proposedAssignments: Record<string, string>; // slotKey -> tmId
+  unassignedPeople: any[];
+  notes: string[];
+  /** Per-slot Top-K candidate ranking with score breakdowns (for "Why?" mode) */
+  breakdown: Record<string, SlotRanking>;
+}
+
+export interface SlotRanking {
+  topCandidates: Array<{
+    tmId: string;
+    tmName: string;
+    total: number;
+    breakdown: import("./scoring").SignalBreakdown;
+    excluded?: boolean;
+    excludeReason?: string;
+  }>;
+  /** The tmId actually picked (= topCandidates[0].tmId when not pre-locked) */
+  pickedTmId: string | null;
+  /** Set when the slot was already filled before the engine ran (we preserve) */
+  preserved: boolean;
+}
+
+/**
+ * Runs the Coverage Planner following the strict PLACEMENT_ORDER.
+ *
+ * This is the foundation for the "Run Engine" feature.
+ * Currently a skeleton — will be expanded with real eligibility logic.
+ */
+export function runCoveragePlanner(input: CoveragePlannerInput): CoveragePlannerResult {
+  const { orderedSlots, assignments, roster } = input;
+
+  const proposedAssignments: Record<string, string> = {};
+  const assignedTmIds = new Set<string>();
+  const notes: string[] = [];
+
+  // TODO: Replace with real eligibility + scoring logic
+  // For now: simple greedy assignment in strict order
+  for (const slotKey of orderedSlots) {
+    if (assignments[slotKey]?.tmId) {
+      // Already assigned — respect existing
+      proposedAssignments[slotKey] = assignments[slotKey].tmId;
+      assignedTmIds.add(assignments[slotKey].tmId);
+      continue;
+    }
+
+    // Find first eligible unassigned person (very basic for now)
+    const candidate = roster.find(
+      (tm: any) => !assignedTmIds.has(tm.id) && isEligibleForSlot(tm, slotKey)
+    );
+
+    if (candidate) {
+      proposedAssignments[slotKey] = candidate.id;
+      assignedTmIds.add(candidate.id);
+    } else {
+      notes.push(`No eligible candidate found for ${slotKey}`);
+    }
+  }
+
+  const unassignedPeople = roster.filter((tm: any) => !assignedTmIds.has(tm.id));
+
+  return {
+    proposedAssignments,
+    unassignedPeople,
+    notes,
+    breakdown: {},
+  };
+}
+
+// ========================================================
+// WEIGHTED PLANNER (Phase 1)
+// ========================================================
+
+export interface WeightedPlannerInput extends CoveragePlannerInput {
+  /** Pre-built context with all the reference data + active engine config. */
+  scoringCtx: Omit<ScoringContext, "currentDraft" | "adjacency"> & {
+    /** Optional adjacency override; defaults to buildDefaultAdjacency() */
+    adjacency?: Map<string, string[]>;
+  };
+  /** Top K candidates to keep per slot for the breakdown surface. Default 5. */
+  topK?: number;
+}
+
+/**
+ * Walks PLACEMENT_ORDER. For each slot, scores all eligible candidates not
+ * already used in this draft and picks the highest-scoring TM. Preserves
+ * filled slots as-is (passing them through). Returns a per-slot Top-K
+ * breakdown so the "Why?" panel can show the candidate ranking.
+ *
+ * This is the deterministic core. The Grok-hybrid path (later) wraps this
+ * by feeding the same context + Top-K ranking into Grok and using its
+ * judgment to override the deterministic pick on individual slots.
+ */
+export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlannerResult {
+  const { orderedSlots, assignments, roster, scoringCtx, topK = 5 } = input;
+
+  const proposedAssignments: Record<string, string> = {};
+  const breakdown: Record<string, SlotRanking> = {};
+  const notes: string[] = [];
+
+  // Live mutable draft for within_repeat + pair_affinity awareness.
+  const currentDraft = new Map<string, string>();
+
+  // Seed currentDraft from already-filled slots so the scorer knows who's
+  // taken and where they are (for pair affinity).
+  for (const [slot, a] of Object.entries(assignments)) {
+    const tmId = (a as any)?.tmId;
+    if (tmId) currentDraft.set(slot, tmId);
+  }
+
+  const adjacency = scoringCtx.adjacency ?? buildDefaultAdjacency();
+
+  for (const slotKey of orderedSlots) {
+    // Preserve existing assignment if present.
+    const existing = assignments[slotKey];
+    if (existing?.tmId) {
+      proposedAssignments[slotKey] = existing.tmId;
+      breakdown[slotKey] = {
+        topCandidates: [],
+        pickedTmId: existing.tmId,
+        preserved: true,
+      };
+      continue;
+    }
+
+    // Build candidate set: eligible + not yet placed this run.
+    const candidates = roster.filter(
+      (tm: any) =>
+        !Array.from(currentDraft.values()).includes(tm.id) &&
+        isEligibleForSlot(tm, slotKey)
+    );
+
+    if (candidates.length === 0) {
+      notes.push(`No eligible candidate found for ${slotKey}`);
+      breakdown[slotKey] = {
+        topCandidates: [],
+        pickedTmId: null,
+        preserved: false,
+      };
+      continue;
+    }
+
+    // Score each candidate.
+    const ctx: ScoringContext = {
+      ...scoringCtx,
+      currentDraft,
+      adjacency,
+    };
+    const scored = candidates
+      .map((tm: any) => {
+        const result = scoreAssignment(tm, slotKey, ctx);
+        return {
+          tmId: tm.id,
+          tmName: tm.name || tm.fullName || tm.id,
+          total: result.total,
+          breakdown: result.breakdown,
+          excluded: result.excluded,
+          excludeReason: result.excludeReason,
+        };
+      })
+      .sort((a, b) => {
+        // Excluded candidates sink to the bottom.
+        if (a.excluded && !b.excluded) return 1;
+        if (!a.excluded && b.excluded) return -1;
+        return b.total - a.total;
+      });
+
+    const top = scored.slice(0, topK);
+    const picked = top.find((c) => !c.excluded);
+
+    breakdown[slotKey] = {
+      topCandidates: top,
+      pickedTmId: picked ? picked.tmId : null,
+      preserved: false,
+    };
+
+    if (picked) {
+      proposedAssignments[slotKey] = picked.tmId;
+      currentDraft.set(slotKey, picked.tmId);
+    } else {
+      notes.push(`No non-excluded candidate for ${slotKey}`);
+    }
+  }
+
+  const usedIds = new Set(currentDraft.values());
+  const unassignedPeople = roster.filter((tm: any) => !usedIds.has(tm.id));
+
+  return { proposedAssignments, unassignedPeople, notes, breakdown };
+}
+
+/**
+ * Determines if a team member is eligible for a given slot type,
+ * following the GLCR rules:
+ *
+ * - Main Zone Deployment slots (Z1–Z10 and Z9SR): only **full-grave** TMs,
+ *   i.e. gravePool && !isAMOverlap && !isPMOverlap. Overlap TMs cover
+ *   partial shifts (10pm–3am or 3am–7am) and cannot hold a zone for the
+ *   full 11pm–7am window.
+ * - AM Overlap slots (OL-AM-*, *AM-Overlap*): only grave TMs flagged as AM overlap.
+ * - PM Overlap slots (OL-PM-*, *PM-Overlap*): only grave TMs flagged as PM overlap.
+ * - Restrooms, Admin, Trash, Support, AUX: any active TM (most flexible
+ *   block; the engine still prefers full grave TMs in practice).
+ * - Breaks are ignored for placement decisions.
+ */
+export function isEligibleForSlot(tm: any, slotKey: string): boolean {
+  const isGrave = !!tm.gravePool;
+  const isAMOverlapAssigned = !!tm.isAMOverlap;
+  const isPMOverlapAssigned = !!tm.isPMOverlap;
+
+  // `gravePool` on tm_profiles is a string enum, NOT a boolean. Common
+  // values include "AM", "PM", "Full" (and truthy fallbacks). A TM whose
+  // gravePool is "AM" or "PM" is an overlap-type grave employee — they
+  // cover a partial shift and cannot hold a full-zone slot, regardless of
+  // whether they happen to be assigned to an OL-AM/PM slot tonight.
+  const gravePoolKind = String(tm.gravePool ?? "").toUpperCase();
+  const isOverlapByPool = gravePoolKind === "AM" || gravePoolKind === "PM";
+  const isFullGrave =
+    isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned;
+
+  // Main Zone Deployment + Z9 Smoking Room — strict full-grave only
+  if (slotKey.startsWith("Z")) {
+    return isFullGrave;
+  }
+
+  // Overlap Tab AM — accept TMs flagged as AM by either signal
+  if (slotKey.startsWith("OL-AM") || slotKey.includes("AM-Overlap")) {
+    return isGrave && (isAMOverlapAssigned || gravePoolKind === "AM");
+  }
+
+  // Overlap Tab PM — accept TMs flagged as PM by either signal
+  if (slotKey.startsWith("OL-PM") || slotKey.includes("PM-Overlap")) {
+    return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
+  }
+
+  // Restrooms, Admin, Trash, Support — more flexible (can be non-grave)
+  if (
+    slotKey.startsWith("MRR") ||
+    slotKey.startsWith("WRR") ||
+    slotKey === "ADM" ||
+    slotKey.startsWith("TR") ||
+    slotKey.startsWith("AUX") ||
+    slotKey.startsWith("SP")
+  ) {
+    return true;
+  }
+
+  return true;
+}
+
+// ========================================================
+// VALIDATION
+// ========================================================
+
+/**
+ * Validates that dynamically added AUX slots appear after the fixed placement order.
+ * Returns warnings that can be surfaced in the UI.
+ */
+export function validatePlacementOrder(auxDefs: AuxDef[]): string[] {
+  const warnings: string[] = [];
+  const fixedSet = new Set(PLACEMENT_ORDER);
+
+  const dynamicSlots = auxDefs
+    .map((d) => d.key)
+    .filter((key) => !fixedSet.has(key));
+
+  if (dynamicSlots.length === 0) return warnings;
+
+  // Check that all dynamic slots come after the last fixed slot in the order
+  const lastFixedIndex = PLACEMENT_ORDER.length - 1;
+
+  // For now we just warn if someone tries to insert a support slot in the middle
+  // (future: we can enforce strict ordering when AUX is added)
+
+  return warnings;
+}
+
+// ========================================================
+// PROMPT / GROK SUPPORT (Authoritative Rules as Text)
+// ========================================================
+
+/**
+ * Returns the exact PLACEMENT_ORDER as a human-readable string
+ * suitable for injection into LLM system prompts.
+ */
+export function getPlacementOrderText(): string {
+  return `AUTHORITATIVE PLACEMENT ORDER (strict, non-negotiable for all auto-assignment and Grok suggestions):
+
+1. Restrooms (Men’s + Women’s) — highest priority block
+   MRR1, WRR1, MRR6, WRR6, MRR7, WRR7, MRR8, WRR8, MRR10, WRR10
+
+2. Admin
+   ADM
+
+3–12. Main Zones (in this exact sequence)
+   Z9, Z1, Z4, Z5, Z2, Z3, Z8, Z10, Z7, Z6
+
+13. Zone 9 Smoking Room — FIXED POSITION (never conditional or moved)
+    Z9SR
+
+14–15. Trash
+    TR1, TR2
+
+16+. Any operator-added Overflow / Support slots (SP1, SP2, AUX..., etc.) come AFTER everything above.
+
+When suggesting assignments, you MUST process and propose in this order. Never suggest filling a later slot (e.g. Z2 or Support) before all earlier slots in this list have been considered.`;
+}
+
+/**
+ * Returns a precise, copy-pasteable description of the eligibility rules
+ * for injection into LLM system prompts. This is the single source of truth.
+ */
+export function getEligibilityRulesText(): string {
+  return `STRICT ELIGIBILITY RULES (Grok and all engines MUST obey):
+
+- Main Zone Deployment slots (any slotKey starting with "Z", INCLUDING the fixed Z9SR) require a FULL-GRAVE team member. A TM is full-grave when ALL of the following hold: (a) gravePool is truthy, (b) gravePool is NOT the string "AM" or "PM" (those values mark the TM as an overlap-type employee, e.g. "Full" vs "AM" vs "PM"), AND (c) the per-night isAMOverlap and isPMOverlap flags are both false. Overlap TMs cover partial shifts (10pm–3am or 3am–7am) and cannot hold a zone for the full 11pm–7am window.
+- AM Overlap slots (slotKeys starting with "OL-AM" or containing "AM-Overlap") require gravePool AND isAMOverlap.
+- PM Overlap slots (slotKeys starting with "OL-PM" or containing "PM-Overlap") require gravePool AND isPMOverlap.
+- Restrooms (MRR*/WRR*), ADM, Trash (TR*), and all Support/Overflow/AUX slots have no Grave requirement — any active TM is eligible. Prefer full-grave TMs when possible, but overlap or non-grave TMs are allowed here.
+- Breaks / break groups are IGNORED for all placement and suggestion decisions.
+- Locked slots must be respected (do not suggest changes to locked assignments unless explicitly asked to propose unlocks).
+- Always prefer minimal disruption and respect the current draft or live board state when provided.
+
+These rules are non-negotiable. Any suggestion that would violate them must be rejected by the server guard before being shown to the operator.`;
+}

@@ -1,0 +1,1538 @@
+"use client";
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
+
+// Simple icon helper matching the casino icon aesthetic (thin strokes)
+const Icon = ({ children, size = 18 }: { children: React.ReactNode; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+
+const Icons = {
+  trash: <><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h12z" /></>,
+  lock: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>,
+  unlock: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 019.5-1" /></>,
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M3 21c0-3 3-5 6-5" /><circle cx="15" cy="8" r="3.5" /><path d="M21 21c0-3-3-5-6-5" /></>,
+  clock: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
+  plus: <><path d="M12 5v14M5 12h14" /></>,
+  more: <><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></>,
+  edit: <><path d="M11 4H4v14a2 2 0 002 2h14v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></>,
+};
+import {
+  getActiveTeamMembers,
+  getTeamMembersForNight,
+  getNightAssignments,
+  listRecentNights,
+  upsertZoneAssignment,
+  toggleAssignmentLock,
+  createNightAssignmentChannel,
+  unsubscribeChannel,
+  type TeamMember,
+  type ZoneAssignmentRow,
+  type NightInfo,
+} from "@/lib/shiftbuilder/data";
+
+/**
+ * /shiftbuilder
+ * 
+ * Highly polished, structured Shift Builder for ZDS Forge (OMS).
+ * 
+ * Design goals (per user direction):
+ * - Figma / Canva / Apple-grade experience
+ * - Highly polished structured layout (not freeform canvas)
+ * - Primary target: iPad Pro 13" (touch-first, generous hit areas)
+ * - Excellent on 16" MBP and 27" monitors
+ * - "It is finished" bar — this is the real deliverable
+ */
+
+// ============================================================================
+// Types — Clean, narrow, carry-forward the good model from prior work
+// ============================================================================
+
+type AssignmentSource = "engine" | "manual" | null;
+
+interface ShiftAssignment {
+  slotKey: string;
+  tmId?: string;
+  tmName?: string;
+  source: AssignmentSource;
+  isLocked: boolean;
+  type: "zone" | "rr" | "aux" | "break" | "overlap";
+  sub?: "mens" | "womens";
+  breakGroup?: 1 | 2 | 3;   // Break rotation group for this person
+}
+
+interface NightPlan {
+  nightDate: string;
+  currentPageType: "deployment" | "breaks" | "overlaps";
+  assignments: Record<string, ShiftAssignment>;
+}
+
+interface WeekPlan {
+  weekStart: string;
+  nights: NightPlan[];
+}
+
+// ============================================================================
+// Constants — Structured layout definition
+// ============================================================================
+
+const STANDARD_ZONES = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10"] as const;
+const STANDARD_RR = ["1", "2", "3", "4", "5"] as const;
+
+// ============================================================================
+// Day Definitions — Per-day colors and metadata matching the Golden Master
+// ============================================================================
+
+interface DayDef {
+  index: number;
+  name: string;
+  short: string;      // Single letter for the week strip (F, S, S, M, T, W, T)
+  color: string;      // Accent color from Golden (Friday red, Saturday blue, etc.)
+  meta: string;       // Default meta line ("May 2026 · Day X of 7")
+}
+
+const DAY_DEFS: DayDef[] = [
+  { index: 0, name: "Friday",   short: "F", color: "#C13A14", meta: "May 2026 · Day 1 of 7" },   // exact golden warm red
+  { index: 1, name: "Saturday", short: "S", color: "#0065bf", meta: "May 2026 · Day 2 of 7" },   // deep blue
+  { index: 2, name: "Sunday",   short: "S", color: "#6A1B85", meta: "May 2026 · Day 3 of 7" },   // deep purple
+  { index: 3, name: "Monday",   short: "M", color: "#2E7D32", meta: "May 2026 · Day 4 of 7" },   // deep green
+  { index: 4, name: "Tuesday",  short: "T", color: "#B89708", meta: "May 2026 · Day 5 of 7" },   // deep gold
+  { index: 5, name: "Wednesday",short: "W", color: "#B7679A", meta: "May 2026 · Day 6 of 7" },   // rose/mauve
+  { index: 6, name: "Thursday", short: "T", color: "#313845", meta: "May 2026 · Day 7 of 7" },   // charcoal
+];
+
+// ============================================================================
+// Print-Sheet Slot Definitions — exact structure & visuals from reference
+// Distinct per-zone colors, fixed location/role subtext per slot (print fidelity)
+// ============================================================================
+
+interface ZoneDef {
+  key: string;
+  num: number;
+  color: string;
+  icon: string;           // Golden icon (star, diamond, heart, etc.)
+  locations: string[];    // 1-3 location lines with symbols (from Golden)
+  badge?: string;         // small top-right badge content
+}
+
+const ZONE_DEFS: ZoneDef[] = [
+  { key: "Z1", num: 1, color: "#d97706", icon: "★", locations: ["□ Outdoor Smoking Area"], badge: "1" },
+  { key: "Z2", num: 2, color: "#d97706", icon: "◆", locations: ["□ Elevators & Stairwells"], badge: "2" },
+  { key: "Z3", num: 3, color: "#dc2626", icon: "♥", locations: ["□ Family Restrooms"], badge: "3" },
+  { key: "Z4", num: 4, color: "#dc2626", icon: "▲", locations: ["□ Support in needed areas"], badge: "4" },
+  { key: "Z5", num: 5, color: "#dc2626", icon: "■", locations: ["□ High Traffic Areas"], badge: "5" },
+  { key: "Z6", num: 6, color: "#2563eb", icon: "●", locations: ["□ Outdoor Smoking Area"], badge: "6" },
+  { key: "Z7", num: 7, color: "#ec4899", icon: "◆", locations: ["□ Family Restrooms"], badge: "7" },
+  { key: "Z8", num: 8, color: "#92400e", icon: "★", locations: ["□ Social Hall & Lobby"], badge: "8" },
+  { key: "Z9", num: 9, color: "#dc2626", icon: "▲", locations: ["□ Indoor Break Areas"], badge: "9" },
+  { key: "Z10", num: 10, color: "#16a34a", icon: "●", locations: ["□ High Traffic Areas"], badge: "10" },
+];
+
+interface RRDef {
+  num: number;
+  label: string;      // exact header text to match Golden (e.g. "RR1")
+  color: string;
+  icon: string;
+  mensLoc: string;
+  womensLoc: string;
+  badge?: string;
+}
+
+const RR_DEFS: RRDef[] = [
+  { num: 1, label: "Restroom 1 + 2", color: "#d97706", icon: "●", mensLoc: "Buffet Line", womensLoc: "Buffet Line", badge: "1" }, // one facility serving Zones 1 & 2
+  { num: 2, label: "Restroom 6", color: "#2563eb", icon: "♥", mensLoc: "Main Entry", womensLoc: "Main Entry", badge: "6" },
+  { num: 3, label: "Restroom 7", color: "#ec4899", icon: "■", mensLoc: "Family Restrooms", womensLoc: "Family Restrooms", badge: "7" },
+  { num: 4, label: "Restroom 8", color: "#92400e", icon: "◆", mensLoc: "High Traffic", womensLoc: "High Traffic", badge: "8" },
+  { num: 5, label: "Restroom 10", color: "#16a34a", icon: "▲", mensLoc: "Outdoor Pavilion", womensLoc: "Outdoor Pavilion", badge: "10" },
+];
+
+interface AuxDef {
+  key: string;
+  label: string;
+  color: string;
+  icon: string;
+  locations: string[];
+  badge?: string;
+}
+
+const AUX_DEFS: AuxDef[] = [
+  { key: "AUX-Z9SR", label: "Zone 9 Smoking Room", color: "#dc2626", icon: "★", locations: ["Zone Support Runner"], badge: "A1" }, // Red (Z9 family)
+  { key: "AUX-ADMIN", label: "ADMIN", color: "#7c3aed", icon: "●", locations: ["Administration Desk"], badge: "A2" }, // Purple
+  { key: "AUX-TRASH1", label: "TRASH 1", color: "#ea580c", icon: "■", locations: ["Trash & Grounds"], badge: "A3" }, // Orange
+  { key: "AUX-TRASH2", label: "TRASH 2", color: "#ea580c", icon: "■", locations: ["Trash & Grounds"], badge: "A4" }, // Orange
+  { key: "AUX-SUP", label: "SUPPORT", color: "#64748b", icon: "●", locations: ["Floor Support"], badge: "A5" }, // Slate
+];
+
+// SAMPLE_ROSTER removed — now loaded live from Supabase tm_profiles via getTeamMembersForNight
+
+// ============================================================================
+// Helper: Create skeleton assignment
+// ============================================================================
+
+function makeSkeleton(slotKey: string, type: ShiftAssignment["type"], sub?: "mens" | "womens"): ShiftAssignment {
+  return {
+    slotKey,
+    source: null,
+    isLocked: false,
+    type,
+    sub,
+  };
+}
+
+// ============================================================================
+// UI Key <-> Real DB Slot mapping (so the gorgeous print-accurate shell stays intact)
+// ============================================================================
+
+interface DbSlotInfo {
+  slotKey: string;
+  slotType: "zone" | "rr" | "aux";
+  rrSide?: "mens" | "womens" | null;
+}
+
+const UI_DB_MAP: Record<string, DbSlotInfo> = {
+  // Zones
+  Z1: { slotKey: "zone_1", slotType: "zone" },
+  Z2: { slotKey: "zone_2", slotType: "zone" },
+  Z3: { slotKey: "zone_3", slotType: "zone" },
+  Z4: { slotKey: "zone_4", slotType: "zone" },
+  Z5: { slotKey: "zone_5", slotType: "zone" },
+  Z6: { slotKey: "zone_6", slotType: "zone" },
+  Z7: { slotKey: "zone_7", slotType: "zone" },
+  Z8: { slotKey: "zone_8", slotType: "zone" },
+  Z9: { slotKey: "zone_9", slotType: "zone" },
+  Z10: { slotKey: "zone_10", slotType: "zone" },
+  // RR (map UI 1 -> real rr_1_2, 2->rr_6 etc.)
+  MRR1: { slotKey: "rr_1_2", slotType: "rr", rrSide: "mens" },
+  WRR1: { slotKey: "rr_1_2", slotType: "rr", rrSide: "womens" },
+  MRR2: { slotKey: "rr_6", slotType: "rr", rrSide: "mens" },
+  WRR2: { slotKey: "rr_6", slotType: "rr", rrSide: "womens" },
+  MRR3: { slotKey: "rr_7", slotType: "rr", rrSide: "mens" },
+  WRR3: { slotKey: "rr_7", slotType: "rr", rrSide: "womens" },
+  MRR4: { slotKey: "rr_8", slotType: "rr", rrSide: "mens" },
+  WRR4: { slotKey: "rr_8", slotType: "rr", rrSide: "womens" },
+  MRR5: { slotKey: "rr_10", slotType: "rr", rrSide: "mens" },
+  WRR5: { slotKey: "rr_10", slotType: "rr", rrSide: "womens" },
+  // Aux (best effort match to real common keys)
+  "AUX-Z9SR": { slotKey: "z9_sr", slotType: "aux" },
+  "AUX-ADMIN": { slotKey: "admin", slotType: "aux" },
+  "AUX-TRASH1": { slotKey: "trash_1", slotType: "aux" },
+  "AUX-TRASH2": { slotKey: "trash_2", slotType: "aux" },
+  "AUX-SUP": { slotKey: "support_1", slotType: "aux" },
+};
+
+function uiKeyToDb(uiKey: string): DbSlotInfo | null {
+  return UI_DB_MAP[uiKey] || null;
+}
+
+function dbToUiKey(dbSlot: { slotKey: string; rrSide?: string | null }): string | null {
+  // Reverse lookup (first match wins for simplicity)
+  for (const [ui, info] of Object.entries(UI_DB_MAP)) {
+    if (
+      info.slotKey === dbSlot.slotKey &&
+      (info.rrSide || null) === (dbSlot.rrSide || null)
+    ) {
+      return ui;
+    }
+  }
+  return null;
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export default function ShiftBuilderPage() {
+  // For now we work with a single night (deployment view) — easily extensible to full WeekPlan
+  // Real data state (Supabase backed)
+  const [currentNight, setCurrentNight] = useState<NightInfo | null>(null);
+  const [realRoster, setRealRoster] = useState<(TeamMember & { isOnSchedule: boolean })[]>([]);
+  const [availableNights, setAvailableNights] = useState<NightInfo[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [lastSync, setLastSync] = useState<string>("");
+
+  // Internal plan still drives the beautiful UI shell (keys = UI keys like Z1, MRR1, AUX-ADMIN)
+  // We translate to/from real DB slot keys on load & write.
+  const [plan, setPlan] = useState<NightPlan>({
+    nightDate: "2026-05-21",
+    currentPageType: "deployment",
+    assignments: {},
+  });
+
+  const [selectedRosterId, setSelectedRosterId] = useState<string | null>(null);
+
+  // Break Group selector (grey squares in header) — selectable 1/2/3, defaults to Golden standard
+  const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(2);
+
+  // Quick Action Wheel for a specific slot
+  const [quickActionFor, setQuickActionFor] = useState<string | null>(null);
+  const [quickLookPosition, setQuickLookPosition] = useState(null);
+  const artboardRef = useRef<HTMLDivElement>(null);
+  const positioningRef = useRef<HTMLDivElement>(null); // host for the contextual fan overlay (correct coordinate frame)
+
+  // For custom break group dropdowns (better UX than native select)
+  const [openBreakMenuFor, setOpenBreakMenuFor] = useState<string | null>(null);
+
+  // Contextual fan menu states
+  const [breakFanOpenFor, setBreakFanOpenFor] = useState(null);
+  const [fanHoveredItem, setFanHoveredItem] = useState(null);
+  const [fanHoverTimer, setFanHoverTimer] = useState(null);
+
+  // ============================================================================
+  // New UX: Week Strip + View Tabs (Deployment vs Breaks & Overlaps)
+  // ============================================================================
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0); // 0 = Friday ... 6 = Thursday
+  const [currentView, setCurrentView] = useState<"deployment" | "breaks">("deployment");
+
+  const selectedDay = DAY_DEFS[selectedDayIndex];
+
+  // Derived: current assignments map
+  const assignments = plan.assignments;
+
+  // ==========================================================================
+  // Real persistence helpers (map UI <-> DB then call data layer)
+  // ==========================================================================
+
+  const persistAssign = async (uiKey: string, tm: { id: string; name: string }) => {
+    const dbInfo = uiKeyToDb(uiKey);
+    if (!currentNight || !dbInfo) {
+      console.warn("[shiftbuilder] No night or mapping for", uiKey);
+      return;
+    }
+    try {
+      await upsertZoneAssignment({
+        nightId: currentNight.id,
+        slotKey: dbInfo.slotKey,
+        tmId: tm.id,
+        slotType: dbInfo.slotType,
+        rrSide: dbInfo.rrSide ?? null,
+        isLocked: assignments[uiKey]?.isLocked ?? false,
+      });
+      setLastSync(new Date().toLocaleTimeString());
+    } catch (e: any) {
+      console.error("[shiftbuilder] persistAssign failed", e);
+      alert("Failed to save assignment to Supabase: " + e.message);
+      // caller will have optimistically updated; in real app we would rollback here
+    }
+  };
+
+  const persistUnassign = async (uiKey: string) => {
+    const dbInfo = uiKeyToDb(uiKey);
+    if (!currentNight || !dbInfo) return;
+    try {
+      await upsertZoneAssignment({
+        nightId: currentNight.id,
+        slotKey: dbInfo.slotKey,
+        tmId: null,
+        slotType: dbInfo.slotType,
+        rrSide: dbInfo.rrSide ?? null,
+      });
+      setLastSync(new Date().toLocaleTimeString());
+    } catch (e: any) {
+      console.error("[shiftbuilder] persistUnassign failed", e);
+      alert("Failed to clear assignment in Supabase: " + e.message);
+    }
+  };
+
+  const persistToggleLock = async (uiKey: string) => {
+    const dbInfo = uiKeyToDb(uiKey);
+    const current = assignments[uiKey];
+    if (!currentNight || !dbInfo || !current) return;
+    try {
+      await toggleAssignmentLock({
+        nightId: currentNight.id,
+        slotKey: dbInfo.slotKey,
+        slotType: dbInfo.slotType,
+        rrSide: dbInfo.rrSide ?? null,
+        currentLocked: current.isLocked,
+      });
+      setLastSync(new Date().toLocaleTimeString());
+    } catch (e: any) {
+      console.error("[shiftbuilder] persistToggleLock failed", e);
+      alert("Failed to toggle lock in Supabase: " + e.message);
+    }
+  };
+
+  // ==========================================================================
+  // Load real night data (assignments + roster with on-schedule)
+  // ==========================================================================
+
+  const loadNight = useCallback(async (night: NightInfo) => {
+    setIsLoadingData(true);
+    try {
+      const [assignmentsRows, rosterWithSchedule] = await Promise.all([
+        getNightAssignments(night.id),
+        getTeamMembersForNight(night.id),
+      ]);
+
+      // Translate real DB rows → internal UI-keyed assignments for the shell
+      const newAssignments: Record<string, ShiftAssignment> = {};
+      for (const row of assignmentsRows) {
+        const uiKey = dbToUiKey({ slotKey: row.slotKey, rrSide: row.rrSide });
+        if (uiKey) {
+          newAssignments[uiKey] = {
+            slotKey: uiKey,
+            tmId: row.tmId || undefined,
+            tmName: row.tmName,
+            source: "manual", // or "imported" if we track source later
+            isLocked: row.isLocked,
+            type: (row.slotType as any) || "zone",
+            sub: row.rrSide || undefined,
+          };
+        }
+      }
+
+      setPlan((prev) => ({
+        ...prev,
+        nightDate: night.nightDate,
+        assignments: newAssignments,
+      }));
+      setRealRoster(rosterWithSchedule);
+      setCurrentNight(night);
+      setLastSync(new Date().toLocaleTimeString());
+      // eslint-disable-next-line no-console
+      console.log(`[shiftbuilder] Loaded night ${night.nightDate} (${night.id}) — ${assignmentsRows.length} slots`);
+    } catch (e: any) {
+      console.error("[shiftbuilder] loadNight failed", e);
+      alert("Failed to load real data from Supabase. Check console + env keys.");
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, []);
+
+  // Initial load: pick a sensible default night with real data (2026-05-21 works well)
+  useEffect(() => {
+    (async () => {
+      try {
+        const nights = await listRecentNights(10);
+        setAvailableNights(nights);
+        // Prefer a night around 2026-05-21 or the first one that exists
+        let target = nights.find((n) => n.nightDate === "2026-05-21") || nights[0];
+        if (target) {
+          await loadNight(target);
+        } else {
+          // Fallback: just load roster
+          const roster = await getActiveTeamMembers();
+          setRealRoster(roster.map((t) => ({ ...t, isOnSchedule: true })));
+          setIsLoadingData(false);
+        }
+      } catch (e) {
+        console.error("[shiftbuilder] initial load error", e);
+        setIsLoadingData(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live Supabase Realtime sync — reloads assignments on any external change for the night
+  useEffect(() => {
+    if (!currentNight?.id) return undefined;
+
+    const channel = createNightAssignmentChannel(currentNight.id, () => {
+      // eslint-disable-next-line no-console
+      console.log("[shiftbuilder] realtime update detected — refreshing night data");
+      loadNight(currentNight);
+    });
+
+    return () => {
+      unsubscribeChannel(channel);
+    };
+  }, [currentNight, loadNight]);
+
+  // ==========================================================================
+  // Actions (local optimistic + real persistence)
+  // ==========================================================================
+
+  const assignTM = (slotKey: string, tm: { id: string; name: string }) => {
+    // Optimistic UI update first (instant feel)
+    setPlan((prev) => ({
+      ...prev,
+      assignments: {
+        ...prev.assignments,
+        [slotKey]: {
+          slotKey,
+          tmId: tm.id,
+          tmName: tm.name,
+          source: "manual",
+          isLocked: prev.assignments[slotKey]?.isLocked ?? false,
+          type: prev.assignments[slotKey]?.type ?? "zone",
+          sub: prev.assignments[slotKey]?.sub,
+          breakGroup: prev.assignments[slotKey]?.breakGroup ?? 1, // default to group 1
+        },
+      },
+    }));
+    // Persist immediately
+    persistAssign(slotKey, tm);
+  };
+
+  const setBreakGroupForSlot = (slotKey: string, group: 1 | 2 | 3) => {
+    setPlan((prev) => {
+      const current = prev.assignments[slotKey];
+      if (!current) return prev;
+      return {
+        ...prev,
+        assignments: {
+          ...prev.assignments,
+          [slotKey]: {
+            ...current,
+            breakGroup: group,
+          },
+        },
+      };
+    });
+    setOpenBreakMenuFor(null);
+  };
+
+  // Reusable nice Break Group pill — now with clean menu (no overflow)
+  const BreakGroupPill = ({ slotKey, currentGroup }: { slotKey: string; currentGroup?: 1 | 2 | 3 }) => {
+    const group = currentGroup ?? 1;
+    const shades = {
+      1: { bg: '#E5E7EB', text: '#374151' },
+      2: { bg: '#9CA3AF', text: '#1F2937' },
+      3: { bg: '#6B7280', text: '#FFFFFF' },
+    };
+    const shade = shades[group];
+    const isOpen = openBreakMenuFor === slotKey;
+
+    return (
+      <div className="inline-block" data-break-group-pill>
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenBreakMenuFor(isOpen ? null : slotKey);
+          }}
+          className="w-[17px] h-[17px] flex items-center justify-center text-[9px] font-bold rounded-[4px] cursor-pointer border border-[#C8C8CC] active:scale-95 transition"
+          style={{ background: shade.bg, color: shade.text, fontFamily: 'var(--font-atkinson)' }}
+          title="Change Break Group"
+        >
+          {group}
+        </div>
+
+        {isOpen && createPortal(
+          <div
+            className="fixed z-[200] bg-white border border-[#E5E5E7] rounded-xl shadow-2xl p-1 w-[52px]"
+            style={{ top: 'auto', left: 'auto' }} // TODO: better positioning with ref
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[1,2,3].map(g => (
+              <button
+                key={g}
+                onClick={() => setBreakGroupForSlot(slotKey, g as 1|2|3)}
+                className={`w-full text-center py-1.5 text-xs rounded-lg ${group === g ? 'bg-[#F3F4F6] font-semibold' : 'hover:bg-[#FAFAFA]'}`}
+              >
+                Group {g}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+      </div>
+    );
+  };
+
+  const unassign = (slotKey: string) => {
+    setPlan((prev) => {
+      const next = { ...prev.assignments };
+      if (next[slotKey]) {
+        next[slotKey] = {
+          ...next[slotKey],
+          tmId: undefined,
+          tmName: undefined,
+          source: null,
+          // keep breakGroup so it remembers preference when re-assigned
+        };
+      }
+      return { ...prev, assignments: next };
+    });
+    persistUnassign(slotKey);
+  };
+
+  const toggleLock = (slotKey: string) => {
+    // Toggle locally first
+    setPlan((prev) => {
+      const current = prev.assignments[slotKey];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        assignments: {
+          ...prev.assignments,
+          [slotKey]: {
+            ...current,
+            isLocked: !current.isLocked,
+          },
+        },
+      };
+    });
+    // Persist the lock flip
+    persistToggleLock(slotKey);
+  };
+
+  // ==========================================================================
+  // Drag & Drop (native + high quality feedback)
+  // ==========================================================================
+
+  const handleDragStart = (e: React.DragEvent, tmId: string, tmName: string) => {
+    e.dataTransfer.setData("text/plain", JSON.stringify({ tmId, tmName }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, slotKey: string) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData("text/plain");
+    if (!data) return;
+
+    try {
+      const { tmId, tmName } = JSON.parse(data);
+      assignTM(slotKey, { id: tmId, name: tmName });
+    } catch {
+      // ignore malformed drops
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // visual cleanup if needed
+  };
+
+  // Quick-assign for development / iPad testing (tap to assign next available)
+  const quickAssign = (slotKey: string) => {
+    const available = realRoster.find(
+      (tm) => !Object.values(assignments).some((a) => a.tmId === tm.id)
+    );
+    if (available) {
+      assignTM(slotKey, { id: available.id, name: available.name });
+    }
+  };
+
+  // ==========================================================================
+  // Structured Deployment View — Zones + RR + Aux
+  // ==========================================================================
+
+  // ========================================================================
+  // Print-accurate card renderers (high visual fidelity to reference sheet)
+  // ========================================================================
+
+  const renderZoneCard = (def: ZoneDef) => {
+    const assignment = assignments[def.key] || makeSkeleton(def.key, "zone");
+    const hasTM = !!assignment.tmName;
+    const isLocked = assignment.isLocked;
+
+    const handleCardClick = (e: React.MouseEvent) => {
+      if (isLocked) return;
+      if ((e.target as HTMLElement).closest('[data-break-group-pill]')) return;
+
+      // Capture click position relative to the positioning host (the relative container holding the fan)
+      if (positioningRef.current) {
+        const cardRect = e.currentTarget.getBoundingClientRect();
+        const hostRect = positioningRef.current.getBoundingClientRect();
+        setQuickLookPosition({
+          x: cardRect.left - hostRect.left,
+          y: cardRect.top - hostRect.top + cardRect.height / 2,
+          width: cardRect.width,
+          height: cardRect.height,
+        });
+      }
+      setQuickActionFor(def.key);
+    };
+
+    return (
+      <div
+        key={def.key}
+        className="assignment-card group relative"
+        style={{ borderTop: `5px solid ${def.color}` }}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, def.key)}
+        onDragLeave={handleDragLeave}
+        onClick={handleCardClick}
+      >
+        {/* Colored header strip — Golden style: icon + "ZONE N" + break group pill in upper right */}
+        <div className="card-header">
+          <div className="card-label" style={{ color: def.color }}>
+            <span className="zone-icon">{def.icon}</span>
+            <span>ZONE {def.num}</span>
+          </div>
+          {hasTM && <BreakGroupPill slotKey={def.key} currentGroup={assignment.breakGroup} />}
+        </div>
+
+        {/* TM Name — bold, prominent (Golden style) */}
+        <div
+          className={`card-name ${!hasTM ? "empty" : ""}`}
+          style={{ color: hasTM ? "#111111" : undefined }}
+        >
+          {hasTM ? assignment.tmName : "— Unfilled —"}
+        </div>
+
+        {/* Location lines with symbols (Golden style) */}
+        <div className="card-subtext">
+          {def.locations.map((loc, idx) => (
+            <div key={idx}>{loc}</div>
+          ))}
+        </div>
+
+        {/* Operational indicators removed for visual fidelity — functionality preserved via click/drag/lock actions elsewhere */}
+      </div>
+    );
+  };
+
+  const renderRRCard = (def: RRDef) => {
+    const mensKey = `MRR${def.num}`;
+    const womensKey = `WRR${def.num}`;
+
+    const mens = assignments[mensKey] || makeSkeleton(mensKey, "rr", "mens");
+    const womens = assignments[womensKey] || makeSkeleton(womensKey, "rr", "womens");
+    const hasMens = !!mens.tmName;
+    const hasWomens = !!womens.tmName;
+
+    const handleGenderClick = (e: React.MouseEvent, genderKey: string, has: boolean) => {
+      if ((e.target as HTMLElement).closest('[data-break-group-pill]')) return;
+
+      // Position the fan + dot against the *full* RR card (so the marker is always in the vertical middle of the whole card),
+      // while still targeting the specific gender slot (MEN'S vs WOMEN'S) for the actions.
+      if (positioningRef.current) {
+        const fullCard = (e.currentTarget.closest('.rr-card') || e.currentTarget) as HTMLElement;
+        const cardRect = fullCard.getBoundingClientRect();
+        const hostRect = positioningRef.current.getBoundingClientRect();
+        setQuickLookPosition({
+          x: cardRect.left - hostRect.left,
+          y: cardRect.top - hostRect.top + cardRect.height / 2,
+          width: cardRect.width,
+          height: cardRect.height,
+        });
+      }
+      setQuickActionFor(genderKey);
+    };
+
+    return (
+      <div
+        key={def.num}
+        className="assignment-card rr-card group relative"
+        style={{ borderTop: `5px solid ${def.color}` }}
+      >
+        {/* RR header — Golden style (no dark slot badge in upper right anymore) */}
+        <div className="card-header">
+          <div className="card-label" style={{ color: def.color }}>
+            <span className="zone-icon">{def.icon}</span>
+            <span>{def.label}</span>
+          </div>
+        </div>
+
+        {/* Paired Men's / Women's columns — exact reference treatment */}
+        <div className="rr-pair-grid">
+          {/* Men's */}
+          <div
+            className="rr-gender cursor-pointer active:bg-[#F8F8F9]"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, mensKey)}
+            onClick={(e) => handleGenderClick(e, mensKey, hasMens)}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="rr-gender-label">MEN'S</div>
+              {hasMens && <BreakGroupPill slotKey={mensKey} currentGroup={mens.breakGroup} />}
+            </div>
+            <div className={`rr-gender-name ${!hasMens ? "text-[#9CA3AF]" : ""}`}>
+              {mens.tmName || "—"}
+            </div>
+            <div className="rr-gender-sub">{def.mensLoc}</div>
+          </div>
+
+          {/* Women's */}
+          <div
+            className="rr-gender cursor-pointer active:bg-[#F8F8F9]"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, womensKey)}
+            onClick={(e) => handleGenderClick(e, womensKey, hasWomens)}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="rr-gender-label">WOMEN'S</div>
+              {hasWomens && <BreakGroupPill slotKey={womensKey} currentGroup={womens.breakGroup} />}
+            </div>
+            <div className={`rr-gender-name ${!hasWomens ? "text-[#9CA3AF]" : ""}`}>
+              {womens.tmName || "—"}
+            </div>
+            <div className="rr-gender-sub">{def.womensLoc}</div>
+          </div>
+        </div>
+
+        {/* Operational indicators removed for visual fidelity */}
+      </div>
+    );
+  };
+
+  const renderAuxCard = (def: AuxDef) => {
+    const assignment = assignments[def.key] || makeSkeleton(def.key, "aux");
+    const hasTM = !!assignment.tmName;
+    const isLocked = assignment.isLocked;
+
+    return (
+      <div
+        key={def.key}
+        className="assignment-card group relative"
+        style={{ borderTop: `5px solid ${def.color}` }}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, def.key)}
+        onDragLeave={handleDragLeave}
+        onClick={(e) => {
+          if (isLocked) return;
+          if ((e.target as HTMLElement).closest('[data-break-group-pill]')) return;
+
+          if (positioningRef.current) {
+            const cardRect = e.currentTarget.getBoundingClientRect();
+            const hostRect = positioningRef.current.getBoundingClientRect();
+            setQuickLookPosition({
+              x: cardRect.left - hostRect.left,
+              y: cardRect.top - hostRect.top + cardRect.height / 2,
+              width: cardRect.width,
+              height: cardRect.height,
+            });
+          }
+          setQuickActionFor(def.key);
+        }}
+      >
+        <div className="card-header">
+          <div className="card-label" style={{ color: def.color }}>
+            <span className="zone-icon">{def.icon}</span>
+            <span>{def.label}</span>
+          </div>
+          {hasTM && <BreakGroupPill slotKey={def.key} currentGroup={assignment.breakGroup} />}
+        </div>
+
+        <div className={`card-name ${!hasTM ? "empty" : ""}`}>
+          {hasTM ? assignment.tmName : "— Unfilled —"}
+        </div>
+
+        <div className="card-subtext">
+          {def.locations.map((loc, idx) => (
+            <div key={idx}>{loc}</div>
+          ))}
+        </div>
+
+        {/* Operational indicators removed for visual fidelity */}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#F8F8F9] text-[#1C1C1E]">
+      {/* ==================================================================== */}
+      {/* Premium Top Bar — Apple-grade calm authority */}
+      {/* ==================================================================== */}
+      <header className="sticky top-0 z-50 border-b border-[#E5E5E7] bg-[#F8F8F9]/95 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-6 h-[72px]">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-black flex items-center justify-center">
+                <span className="text-white text-[15px] font-semibold tracking-[-1px]">Z</span>
+              </div>
+              <div>
+                <div className="text-[17px] font-semibold tracking-[-0.3px]">ZDS Forge</div>
+                <div className="text-[11px] text-[#8E8E93] -mt-0.5">Shift Builder</div>
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-[#E5E5E7] mx-2" />
+
+            {/* Week + Night selector — now real & selectable */}
+            <div className="flex items-center gap-2 text-sm">
+              <div className="font-semibold">Live from Supabase</div>
+              <select
+                className="px-3 py-1 rounded-full bg-white border border-[#E5E5E7] text-[#3C3C43] text-xs font-medium cursor-pointer"
+                value={currentNight?.id || ""}
+                onChange={async (e) => {
+                  if (!e.target.value) return;
+                  const next = availableNights.find((n) => n.id === e.target.value);
+                  if (next) await loadNight(next);
+                }}
+                disabled={isLoadingData || availableNights.length === 0}
+              >
+                {availableNights.length === 0 && <option>Loading nights…</option>}
+                {availableNights.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.dayName} {n.nightDate}
+                  </option>
+                ))}
+              </select>
+              {isLoadingData && <span className="text-[10px] text-[#8E8E93]">syncing…</span>}
+              {lastSync && <span className="text-[10px] text-[#34C759]">last sync {lastSync}</span>}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button className="btn btn-secondary text-sm h-9 px-5">Run Engine</button>
+            <button className="btn btn-secondary text-sm h-9 px-5">Publish</button>
+            <button className="btn btn-primary text-sm h-9 px-6">Lock &amp; Finalize</button>
+          </div>
+        </div>
+      </header>
+
+      {/* ==================================================================== */}
+      {/* Main Content — Two-column: Roster + Structured Surface */}
+      {/* ==================================================================== */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* LEFT: Roster Rail — compact for more sheet real-estate (iPad primary) */}
+        <div className="w-[268px] border-r border-[#E5E5E7] bg-[#F8F8F9] flex flex-col">
+          <div className="px-5 pt-6 pb-4">
+            <div className="section-header">Available Team Members</div>
+            <div className="text-xs text-[#8E8E93] mt-1">Drag to any slot • Tap on iPad</div>
+          </div>
+
+          <div className="flex-1 overflow-auto px-4 pb-8 space-y-2">
+            {/* Real Supabase roster — on-schedule (from week assignments) prominently shown, others de-emphasized */}
+            {realRoster.length === 0 && (
+              <div className="text-xs text-[#8E8E93] px-4 py-2">Loading real roster from Supabase…</div>
+            )}
+
+            {realRoster.filter((t) => t.isOnSchedule).length > 0 && (
+              <>
+                <div className="text-[10px] uppercase tracking-[1px] text-[#007AFF] font-semibold px-1 pt-1 pb-1">★ On Schedule (this week)</div>
+                {realRoster.filter((t) => t.isOnSchedule).map((tm) => {
+                  const isAssigned = Object.values(assignments).some((a) => a.tmId === tm.id);
+                  return (
+                    <div
+                      key={tm.id}
+                      draggable={!isAssigned}
+                      onDragStart={(e) => handleDragStart(e, tm.id, tm.name)}
+                      className={`roster-item flex items-center justify-between px-4 py-[13px] ${isAssigned ? "opacity-40 cursor-not-allowed" : "border-l-2 border-[#007AFF]"}`}
+                    >
+                      <div>
+                        <div className="font-semibold text-[15px] tracking-[-0.1px]">{tm.name}</div>
+                        <div className="text-[11px] text-[#8E8E93] font-mono">{tm.id}</div>
+                      </div>
+                      {isAssigned && <div className="text-[10px] text-[#8E8E93]">assigned</div>}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {realRoster.filter((t) => !t.isOnSchedule).length > 0 && (
+              <>
+                <div className="text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-3 pb-1">Other TMs</div>
+                {realRoster.filter((t) => !t.isOnSchedule).map((tm) => {
+                  const isAssigned = Object.values(assignments).some((a) => a.tmId === tm.id);
+                  return (
+                    <div
+                      key={tm.id}
+                      draggable={!isAssigned}
+                      onDragStart={(e) => handleDragStart(e, tm.id, tm.name)}
+                      className={`roster-item flex items-center justify-between px-4 py-[13px] opacity-50 ${isAssigned ? "cursor-not-allowed" : ""}`}
+                    >
+                      <div>
+                        <div className="font-semibold text-[15px] tracking-[-0.1px]">{tm.name}</div>
+                        <div className="text-[11px] text-[#8E8E93] font-mono">{tm.id}</div>
+                      </div>
+                      {isAssigned && <div className="text-[10px] text-[#8E8E93]">assigned</div>}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-[#E5E5E7] text-[11px] text-[#8E8E93]">
+            {realRoster.length} team members • {realRoster.filter(tm => !Object.values(assignments).some(a => a.tmId === tm.id)).length} unassigned
+          </div>
+        </div>
+
+        {/* RIGHT: Letter Landscape Artboard / PDF Preview (exact 11:8.5 proportions) */}
+        <div className="flex-1 overflow-auto bg-[#F2F2F4] p-8 flex justify-center relative">
+          {/* Stable wrapper — horizontal centering only + top padding.
+              Avoids items-center + aspect-ratio reflow bugs when Supabase data arrives. */}
+          <div className="flex flex-col items-center pt-6 relative" ref={positioningRef}>
+
+            {/* ==================================================================== */}
+            {/* Week Strip + View Tabs — Golden-inspired navigation (user requested) */}
+            {/* ==================================================================== */}
+            <div className="w-full max-w-[1056px] mb-3 flex items-center justify-between">
+              {/* Horizontal Week Strip — colored day pills matching Golden PDF aesthetic */}
+              <div className="flex items-center gap-1 bg-white border border-[#E5E5E7] rounded-full px-1 py-1 shadow-sm">
+                {DAY_DEFS.map((day, idx) => {
+                  const isSelected = idx === selectedDayIndex;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedDayIndex(idx)}
+                      className={`min-w-[28px] h-7 px-2 rounded-full text-[11px] font-semibold tracking-[-0.2px] transition-all flex items-center justify-center ${
+                        isSelected 
+                          ? "text-white shadow" 
+                          : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                      }`}
+                      style={{
+                        backgroundColor: isSelected ? day.color : "transparent",
+                      }}
+                      title={day.name}
+                    >
+                      {day.short}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* View Tabs — Deployment vs Breaks & Overlaps */}
+              <div className="flex items-center bg-white border border-[#E5E5E7] rounded-full p-0.5 shadow-sm">
+                <button
+                  onClick={() => setCurrentView("deployment")}
+                  className={`px-4 py-1 text-[12px] font-semibold rounded-full transition-all ${
+                    currentView === "deployment" 
+                      ? "bg-[#111] text-white" 
+                      : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                  }`}
+                >
+                  Deployment
+                </button>
+                <button
+                  onClick={() => setCurrentView("breaks")}
+                  className={`px-4 py-1 text-[12px] font-semibold rounded-full transition-all ${
+                    currentView === "breaks" 
+                      ? "bg-[#111] text-white" 
+                      : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                  }`}
+                >
+                  Breaks &amp; Overlaps
+                </button>
+              </div>
+            </div>
+
+            {/* Print-accurate artboard — locked to exact Letter landscape ratio, always visible */}
+            <div className="print-artboard" ref={artboardRef}>
+              {/* The print-sheet content now lives inside the proportion-locked artboard */}
+              <div className="print-sheet">
+                {currentView === "deployment" && (
+                  /* Deployment Masthead */
+                  <div className="sheet-header flex items-end justify-between">
+                    <div className="flex items-end gap-3">
+                      <div className="flex items-end gap-2.5">
+                        <div className="sheet-date-num tabular-nums">15</div>
+                        <div className="-mb-1">
+                          <div className="sheet-date-label tracking-[-0.6px]" style={{ color: selectedDay.color }}>
+                            {selectedDay.name}
+                          </div>
+                          <div className="sheet-shift-meta -mt-0.5 text-[11px] text-[#4B5563]">
+                            {selectedDay.meta}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-[2px] text-[10px] font-medium">
+                      <div className="text-right">
+                        <div className="text-[9px] font-semibold tracking-[0.5px]" style={{ color: selectedDay.color }}>
+                          GRAVE 11PM — 7AM
+                        </div>
+                        <div className="flex items-center justify-end gap-1 mt-px">
+                          <span className="text-[7.5px] font-medium tracking-wider" style={{ color: selectedDay.color }}>BREAKS</span>
+                          <div className="flex gap-px">
+                            <div className="w-1 h-1 rounded-full bg-[#B91C1C]" />
+                            <div className="w-1 h-1 rounded-full bg-[#B91C1C]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                          </div>
+                          <span className="text-[7.5px] text-[#166534] font-medium tracking-wider ml-1">OVERLAPS</span>
+                          <div className="flex gap-px">
+                            <div className="w-1 h-1 rounded-full bg-[#166534]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                            <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex gap-[2px]">
+                          {DAY_DEFS.map((d, i) => (
+                            <div key={i} className={`min-w-[18px] h-[15px] px-1 rounded-[4px] text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] ${i === selectedDayIndex ? 'text-white' : 'text-[#374151]'}`} style={{ background: i === selectedDayIndex ? selectedDay.color : '#E5E7EB', fontFamily: 'var(--font-atkinson)' }}>
+                              {d.short}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-[1.5px] pl-1 items-center">
+                          {[1,2,3].map((g) => {
+                            const isActive = breakGroup === g;
+                            const shade = g === 1 ? '#D1D5DB' : g === 2 ? '#9CA3AF' : '#6B7280';
+                            const textColor = g === 3 ? '#FFFFFF' : '#374151';
+                            return (
+                              <div key={g} onClick={() => setBreakGroup(g as 1 | 2 | 3)} className={`min-w-[13px] h-[13px] px-1 rounded-[2px] text-[8px] flex items-center justify-center font-bold cursor-pointer transition-all ${isActive ? 'ring-1 ring-offset-1 ring-[#111111] border border-[#111111]' : 'border border-transparent'}`} style={{ background: shade, color: textColor, fontFamily: 'var(--font-atkinson)' }} title={`Break Group ${g}`}>
+                                {g}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="text-[8.5px] text-[#555] ml-0.5 tracking-[0.8px] font-medium" style={{ fontFamily: 'var(--font-atkinson)' }}>GROUPS</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentView === "breaks" && (
+                  /* Golden Break Sheet Masthead (no deployment header above it) */
+                  <div style={{ borderTop: `6px solid ${selectedDay.color}`, paddingTop: '4px', marginBottom: '8px' }}>
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold tracking-[1.5px] text-[#3C3C43]">BREAK SHEET</div>
+                        <div className="text-[20px] font-semibold tracking-[-0.4px]" style={{ color: selectedDay.color }}>
+                          {selectedDay.name} · {selectedDay.meta.split('·')[0].trim()}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[13px] font-bold text-[#111]">23</span>
+                          <span className="text-[9.5px] tracking-[0.1em] uppercase text-[#6B7280]">In Rotation</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="text-[9px] font-semibold tracking-wider text-[#3C3C43]">By Break Wave</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex gap-[1px]">
+                            {DAY_DEFS.map((d, i) => (
+                              <div key={i} className={`min-w-[18px] h-[18px] text-[9px] flex items-center justify-center font-bold rounded ${i === selectedDayIndex ? 'text-white' : 'text-[#6B7280]'}`} style={{ background: i === selectedDayIndex ? selectedDay.color : '#E5E7EB' }}>
+                                {d.short}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="text-[8px] text-[#6B7280] ml-0.5">GROUP</div>
+                          <div className="flex gap-px">
+                            {[1,2,3].map(g => (
+                              <div key={g} className="w-[14px] h-[14px] rounded text-[8px] flex items-center justify-center font-bold text-white" style={{ background: g===1 ? '#1a2332' : g===2 ? '#5a6b7d' : '#c8d3dc' }}>{g}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentView === "deployment" ? (
+                  <>
+                    {/* deployment body content (ZONES, RESTROOMS, AUX) — header is rendered by the && block above */}
+                      <div className="sheet-date-num tabular-nums">15</div>
+                      <div className="-mb-1">
+                        <div 
+                          className="sheet-date-label tracking-[-0.6px]" 
+                          style={{ color: selectedDay.color }}
+                        >
+                          {selectedDay.name}
+                        </div>
+                        <div className="sheet-shift-meta -mt-0.5 text-[11px] text-[#4B5563]">
+                          {selectedDay.meta}
+                        </div>
+                      </div>
+                    {/* Right side — closer to Golden (GRAVE on right, subtle BREAKS indicators, day pills + GROUP dots) */}
+                    <div className="flex flex-col items-end gap-[2px] text-[10px] font-medium">
+                    {/* GRAVE shift time block moved to right per Golden layout + subtle BREAKS row */}
+                    <div className="text-right">
+                      <div className="text-[9px] font-semibold tracking-[0.5px]" style={{ color: selectedDay.color }}>
+                        GRAVE 11PM — 7AM
+                      </div>
+                      <div className="flex items-center justify-end gap-1 mt-px">
+                        <span className="text-[7.5px] font-medium tracking-wider" style={{ color: selectedDay.color }}>
+                          BREAKS
+                        </span>
+                        <div className="flex gap-px">
+                          <div className="w-1 h-1 rounded-full bg-[#B91C1C]" />
+                          <div className="w-1 h-1 rounded-full bg-[#B91C1C]" />
+                          <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                          <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                          <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                        </div>
+                        <span className="text-[7.5px] text-[#166534] font-medium tracking-wider ml-1">OVERLAPS</span>
+                        <div className="flex gap-px">
+                          <div className="w-1 h-1 rounded-full bg-[#166534]" />
+                          <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                          <div className="w-1 h-1 rounded-full bg-[#E5E7EB]" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Day pills + GROUP dots (Golden style) — refined spacing, size, contrast, full 7-day week, crisp Atkinson letters */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex gap-[2px]">
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#B91C1C] text-white text-[9px] flex items-center justify-center font-bold tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>F</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>S</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>S</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>M</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>T</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>W</div>
+                        <div className="min-w-[18px] h-[15px] px-1 rounded-[4px] bg-[#E5E7EB] text-[#374151] text-[9px] flex items-center justify-center font-medium tracking-[-0.2px]" style={{ fontFamily: 'var(--font-atkinson)' }}>T</div>
+                      </div>
+                      {/* Break Group indicators — grey squares with 3 distinct shades.
+                          Click any to select the active break group (1/2/3). Defaults to Golden standard. */}
+                      <div className="flex gap-[1.5px] pl-1 items-center">
+                        {[1, 2, 3].map((g) => {
+                          const isActive = breakGroup === g;
+                          // Three distinct greys for visual distinction (light → dark)
+                          const shade = g === 1 ? '#D1D5DB' : g === 2 ? '#9CA3AF' : '#6B7280';
+                          const textColor = g === 3 ? '#FFFFFF' : '#374151';
+                          return (
+                            <div
+                              key={g}
+                              onClick={() => setBreakGroup(g as 1 | 2 | 3)}
+                              className={`min-w-[13px] h-[13px] px-1 rounded-[2px] text-[8px] flex items-center justify-center font-bold cursor-pointer transition-all ${isActive ? 'ring-1 ring-offset-1 ring-[#111111] border border-[#111111]' : 'border border-transparent'}`}
+                              style={{
+                                background: shade,
+                                color: textColor,
+                                fontFamily: 'var(--font-atkinson)',
+                              }}
+                              title={`Break Group ${g}`}
+                            >
+                              {g}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="text-[8.5px] text-[#555] ml-0.5 tracking-[0.8px] font-medium" style={{ fontFamily: 'var(--font-atkinson)' }}>GROUPS</div>
+                    </div>
+
+                {/* ==================================================================== */}
+                {/* VIEW-SWITCHED CONTENT (Deployment vs Breaks & Overlaps) */}
+                {/* ==================================================================== */}
+                {currentView === "deployment" ? (
+                  <>
+                    {/* ZONES SECTION — 2×5 grid of colored rectangular cards */}
+                    <div>
+                      <div className="sheet-section-header">
+                        <span className="label">ZONES</span>
+                        <span className="divider" />
+                        <span className="count">
+                          {ZONE_DEFS.filter(d => !!assignments[d.key]?.tmName).length} / 10 FILLED
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-5 gap-[7px]">
+                        {ZONE_DEFS.map((def) => renderZoneCard(def))}
+                      </div>
+                    </div>
+                <div>
+                  <div className="sheet-section-header">
+                    <span className="label">ZONES</span>
+                    <span className="divider" />
+                    <span className="count">
+                      {ZONE_DEFS.filter(d => !!assignments[d.key]?.tmName).length} / 10 FILLED
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-[7px]">
+                    {ZONE_DEFS.map((def) => renderZoneCard(def))}
+                  </div>
+                </div>
+
+                {/* RESTROOMS SECTION — 5 paired cards with M/W columns */}
+                <div className="mt-2.5">
+                  <div className="sheet-section-header">
+                    <span className="label">RESTROOMS</span>
+                    <span className="divider" />
+                    <span className="count">
+                      {RR_DEFS.reduce((acc, d) => {
+                        const m = !!assignments[`MRR${d.num}`]?.tmName;
+                        const w = !!assignments[`WRR${d.num}`]?.tmName;
+                        return acc + (m ? 1 : 0) + (w ? 1 : 0);
+                      }, 0)} / 10 FILLED
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-[7px]">
+                    {RR_DEFS.map((def) => renderRRCard(def))}
+                  </div>
+                </div>
+                </>
+                ) : (
+                  /* ===================================================== */
+                  /* BREAKS & OVERLAPS VIEW — Golden Break Sheet style   */
+                  /* ===================================================== */
+                  <div className="break-sheet">
+                    {/* Break Sheet masthead — closer to golden (top day-color bar, "Break Sheet", IN ROTATION, "By Break Wave", week dots + groups) */}
+                    <div className="mb-2 -mx-1 px-1 pt-1" style={{ borderTop: `6px solid ${selectedDay.color}` }}>
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <div className="text-[10px] font-bold tracking-[1.5px] text-[#3C3C43]">BREAK SHEET</div>
+                          <div className="text-[20px] font-semibold tracking-[-0.4px]" style={{ color: selectedDay.color }}>
+                            {selectedDay.name} · {selectedDay.meta.split('·')[0].trim()}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-bold text-[#111]">23</span>
+                            <span className="text-[9.5px] tracking-[0.1em] uppercase text-[#6B7280]">In Rotation</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="text-[9px] font-semibold tracking-wider text-[#3C3C43]">By Break Wave</div>
+
+                          {/* Week pills + GROUP dots inside the sheet, golden style */}
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex gap-[1px]">
+                              {DAY_DEFS.map((d, i) => (
+                                <div
+                                  key={i}
+                                  className={`min-w-[18px] h-[18px] text-[9px] flex items-center justify-center font-bold rounded ${i === selectedDayIndex ? 'text-white' : 'text-[#6B7280]'}`}
+                                  style={{ background: i === selectedDayIndex ? selectedDay.color : '#E5E7EB' }}
+                                >
+                                  {d.short}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="text-[8px] text-[#6B7280] ml-0.5">GROUP</div>
+                            <div className="flex gap-px">
+                              {[1,2,3].map(g => (
+                                <div key={g} className="w-[14px] h-[14px] rounded text-[8px] flex items-center justify-center font-bold text-white" style={{ background: g===1 ? '#1a2332' : g===2 ? '#5a6b7d' : '#c8d3dc' }}>{g}</div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Break columns — matching golden exactly: 3 cols, giant wave num, "Break N" + count, section dividers, rows with left accent, who-line (name + locations), right badge */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[1,2,3].map(wave => {
+                        const waveAssignments = Object.values(assignments).filter(a => a.breakGroup === wave);
+                        const count = waveAssignments.length;
+                        const waveColor = wave === 1 ? '#1a2332' : wave === 2 ? '#5a6b7d' : '#c8d3dc';
+
+                        const getLocs = (a: any) => {
+                          if (a.type === 'zone') return ZONE_DEFS.find(z => z.key === a.slotKey)?.locations?.join(' · ') || '';
+                          if (a.type === 'rr') {
+                            const num = parseInt(a.slotKey.replace(/\D/g, '')) || 1;
+                            const def = RR_DEFS.find(r => r.num === num);
+                            return def ? `${def.mensLoc} / ${def.womensLoc}` : '';
+                          }
+                          return '';
+                        };
+
+                        return (
+                          <div key={wave} className="border border-[#E5E5E7] rounded bg-white overflow-hidden flex flex-col" style={{ borderTop: `3px solid ${waveColor}` }}>
+                            {/* Col head like golden */}
+                            <div className="p-2 flex items-end gap-3" style={{ color: waveColor }}>
+                              <div className="text-[52px] font-extrabold tabular-nums leading-none tracking-[-1px]">{wave}</div>
+                              <div className="-mb-1">
+                                <div className="text-[11px] font-semibold tracking-[0.08em] uppercase">Break {wave}</div>
+                                <div className="text-[10px] text-[#6B7280]">{count} people</div>
+                              </div>
+                            </div>
+
+                            <div className="px-2 pb-2 flex-1 space-y-1.5 text-[9.5px]">
+                              {['zone','rr','aux'].map(cat => {
+                                const items = waveAssignments.filter(a => a.type === cat);
+                                if (!items.length) return null;
+                                const label = cat === 'zone' ? 'Zones' : cat === 'rr' ? 'Restrooms' : 'Auxiliary';
+                                return (
+                                  <div key={cat}>
+                                    {/* Section divider like golden */}
+                                    <div className="text-[#9CA3AF] font-semibold tracking-[0.14em] uppercase text-[8px] mb-0.5 flex items-center gap-1">
+                                      {label}
+                                      <div className="flex-1 h-px bg-[#E5E7EB]" />
+                                    </div>
+                                    {items.map(a => (
+                                      <div key={a.slotKey} className="flex items-start gap-1.5 py-0.5 border-b border-[#F3F4F6] last:border-0">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-semibold text-[#111] truncate">{a.tmName || '—'}</div>
+                                          <div className="text-[#6B7280] text-[8px] leading-tight truncate">{getLocs(a)}</div>
+                                        </div>
+                                        <div className="text-[8px] font-medium px-1 py-0.5 rounded whitespace-nowrap" style={{ background: waveColor, color: '#fff' }}>
+                                          {a.slotKey}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Overlaps section — golden style with time windows + 6 mini slots each */}
+                    <div className="mt-3 border-t pt-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-semibold tracking-wider text-[10.5px]">OVERLAPS</span>
+                        <span className="text-[9.5px] text-[#6B7280]">0 / 12 FILLED</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* PM */}
+                        <div>
+                          <div className="text-[11px] font-semibold text-[#111]">11p – 1a</div>
+                          <div className="text-[8.5px] text-[#6B7280] -mt-0.5">Late evening</div>
+                          <div className="grid grid-cols-6 gap-1 mt-1">
+                            {Array.from({length:6}).map((_,i) => (
+                              <div key={i} className="border border-[#E5E5E7] rounded p-1 text-[8px] min-h-[26px] flex items-center justify-center text-[#9CA3AF]">
+                                —
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* AM */}
+                        <div>
+                          <div className="text-[11px] font-semibold text-[#111]">5a – 7a</div>
+                          <div className="text-[8.5px] text-[#6B7280] -mt-0.5">Early morning</div>
+                          <div className="grid grid-cols-6 gap-1 mt-1">
+                            {Array.from({length:6}).map((_,i) => (
+                              <div key={i} className="border border-[#E5E5E7] rounded p-1 text-[8px] min-h-[26px] flex items-center justify-center text-[#9CA3AF]">
+                                —
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sheet footer — context-aware (Golden style) */}
+                <div className="sheet-footer">
+                  <div>GLCR • GRAVE SHIFT DEPLOYMENT</div>
+                  <div>{selectedDay.name} {selectedDay.meta} • {currentView === "deployment" ? "Zone Deployment Sheet" : "Break Sheet"} • Editable</div>
+                  <div>OMS v1</div>
+                </div>
+              </div>
+              {/* End of print-sheet content inside the artboard */}
+            </div>
+
+            {/* Caption now properly below the artboard (stacked in the column wrapper) */}
+            <div className="mt-3 text-center text-[9px] text-[#8E8E93] tracking-wider">
+              Letter Landscape (11 × 8.5 in) • Exact print proportions • Drag from roster or tap cards to assign
+            </div>
+
+            {/* QuickActionQuickLook — contextual fan that expands around the clicked card */}
+            {quickActionFor && quickLookPosition && (() => {
+              const currentAssignment = assignments[quickActionFor] || {};
+              const hasTM = !!currentAssignment.tmName;
+              const currentBreak = currentAssignment.breakGroup ?? 1;
+              const isBreakFanOpen = breakFanOpenFor === quickActionFor;
+
+              const { x, y, width = 110 } = quickLookPosition;
+
+              // 5 actions — fan expands off the right edge of the clicked element (zone card, RR gender section, or aux)
+              const actions = [
+                { key: 'assign', icon: Icons.plus, color: '#0A84FF', action: () => { /* TODO: roster picker */ setQuickActionFor(null); setQuickLookPosition(null); } },
+                { key: 'remove', icon: Icons.trash, color: '#B91C1C', show: hasTM, action: () => { unassign(quickActionFor); setQuickActionFor(null); setQuickLookPosition(null); } },
+                { key: 'lock', icon: currentAssignment.isLocked ? Icons.unlock : Icons.lock, color: '#374151', action: () => { toggleLock(quickActionFor); setQuickActionFor(null); setQuickLookPosition(null); } },
+                { key: 'tasks', icon: Icons.edit, color: '#374151', action: () => { /* TODO: task editor */ setQuickActionFor(null); setQuickLookPosition(null); } },
+                { key: 'break', isBreak: true, action: () => {} }, // the three grey pills live here
+              ].filter(a => a.show !== false);
+
+              return (
+                <div
+                  className="absolute z-[95] pointer-events-none"
+                  style={{ left: 0, top: 0, width: '100%', height: '100%' }}
+                  onClick={() => { setQuickActionFor(null); setQuickLookPosition(null); }}
+                >
+                  <div
+                    className="absolute pointer-events-auto"
+                    style={{
+                      left: x + width + 2, // nudged 2px outside the right border to match the exact red circle position in the annotation
+                      top: y,
+                      transform: 'translate(0%, -50%)',
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {/* Hub dot — center placed exactly on the right border of the tapped card (as indicated by red circle) */}
+                    <div className="absolute left-0 -translate-x-1/2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white border border-[#C8C8CC] shadow z-10" />
+
+                    {/* The 5 fanned items */}
+                    {actions.map((item, i) => {
+                      const total = actions.length;
+                      // Rightward fan off the right edge of the card
+                      // Primarily to the right, with a gentle downward arc ("right corner down")
+                      const startAngle = -55;
+                      const endAngle = 25;
+                      const angle = startAngle + (i * (endAngle - startAngle) / (total - 1));
+                      const distance = 68; // a bit more breathing room between the five larger icons on the right-edge fan
+
+                      return (
+                        <div
+                          key={item.key}
+                          className="absolute"
+                          style={{
+                            left: 0, // radiate from the attachment point (left of this container = right edge of card)
+                            top: '50%',
+                            transform: `rotate(${angle}deg) translate(${distance}px) rotate(${-angle}deg)`,
+                          }}
+                        >
+                          {item.isBreak ? (
+                            isBreakFanOpen ? (
+                              // Expanded break blade — the three grey pills fan out from this position
+                              <div className="flex gap-0.5">
+                                {[1,2,3].map(g => {
+                                  const shades = {1: '#E5E7EB', 2: '#9CA3AF', 3: '#6B7280'};
+                                  const active = currentBreak === g;
+                                  return (
+                                    <div
+                                      key={g}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setBreakGroupForSlot(quickActionFor, g as 1|2|3);
+                                        setQuickActionFor(null);
+                                        setQuickLookPosition(null);
+                                        setBreakFanOpenFor(null);
+                                      }}
+                                      className={`w-[13px] h-[13px] flex items-center justify-center text-[7px] font-bold rounded-[2px] border cursor-pointer transition-all ${active ? 'border-[#111] scale-110' : 'border-[#D1D5DB] hover:scale-105'}`}
+                                      style={{ background: shades[g], color: g===3 ? '#fff' : '#374151', fontFamily: 'var(--font-atkinson)', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}
+                                      title={`Break Group ${g}`}
+                                    >
+                                      {g}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              // Collapsed break blade — single icon, click to expand
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBreakFanOpenFor(quickActionFor);
+                                }}
+                                onMouseEnter={() => {
+                                  clearTimeout(fanHoverTimer);
+                                  const t = setTimeout(() => setFanHoveredItem(item.key), 1200);
+                                  setFanHoverTimer(t);
+                                }}
+                                onMouseLeave={() => {
+                                  clearTimeout(fanHoverTimer);
+                                  setFanHoveredItem(null);
+                                }}
+                                className="w-6 h-6 rounded-full bg-white border border-[#E5E5E7] flex items-center justify-center shadow-sm hover:shadow-md active:scale-95 transition-all"
+                                style={{ color: item.color, boxShadow: '0 2px 5px rgba(0,0,0,0.13)' }}
+                                title="Break Group"
+                              >
+                                <Icon size={13}>{Icons.users}</Icon>
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); item.action(); }}
+                              className="w-9 h-9 rounded-full bg-white border border-[#E5E5E7] flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 transition-all"
+                              style={{ color: item.color, boxShadow: '0 3px 8px rgba(0,0,0,0.16)' }}
+                              title={item.key}
+                            >
+                              <Icon size={18}>{item.icon}</Icon>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* Bottom Status Bar — calm, authoritative */}
+      {/* ==================================================================== */}
+      <div className="h-11 border-t border-[#E5E5E7] bg-white/70 backdrop-blur flex items-center px-6 text-xs text-[#8E8E93]">
+        <div className="flex-1">Draft • Last saved moments ago</div>
+        <div>Engine ready • 3 manual overrides</div>
+      </div>
+    </div>
+  );
+}

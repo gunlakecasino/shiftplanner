@@ -1,0 +1,1114 @@
+"use client";
+
+/**
+ * Team tab — manage every TM in tm_profiles.
+ *
+ * Layout:
+ *   1. Top strip of Add cards — one per unmatched ADP name from the
+ *      most-recently-applied schedule. One-click → creates a TM and opens
+ *      the edit drawer pre-loaded on it.
+ *   2. Filterable list of all TMs (active + inactive).
+ *   3. Row-click → right-side drawer with 4 sub-tabs:
+ *        - Identity (display_name, full_name, employee_name, status, notes)
+ *        - Grave (grave_pool, primary_section, tie_break_rank, slot_preference)
+ *        - Prefs (tm_preferences + tm_accommodations CRUD)
+ *        - Skills (overall skill_score + per-slot 0-10 grid backed by tm_slot_skills)
+ *
+ * No-auth caveat: every write goes through the service-role key. The drawer
+ * always confirms destructive actions (soft-delete, restore) before firing.
+ */
+
+import React from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
+import {
+  Loader2,
+  AlertTriangle,
+  UserPlus,
+  RefreshCw,
+  X,
+  Search,
+  Archive,
+  RotateCcw,
+  CheckCircle2,
+  Trash2,
+} from "lucide-react";
+import {
+  listAllTMs,
+  upsertTM,
+  softDeleteTM,
+  restoreTM,
+  getUnmatchedFromLatestSchedule,
+  getTMDetail,
+  upsertSlotSkill,
+  addTMPreference,
+  deleteTMPreference,
+  addTMAccommodation,
+  deleteTMAccommodation,
+  createTMFromUnmatched,
+  type TMRecord,
+  type TMPreference,
+  type TMAccommodation,
+  type TMSlotSkill,
+} from "@/lib/shiftbuilder/sudoActions";
+import { supabase } from "@/lib/supabase";
+
+export interface TeamTabProps {
+  onDataChanged?: () => void;
+}
+
+type Filter = "active" | "inactive" | "all";
+
+export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
+  const [tms, setTMs] = React.useState<TMRecord[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [unmatched, setUnmatched] = React.useState<string[]>([]);
+  const [filter, setFilter] = React.useState<Filter>("active");
+  const [query, setQuery] = React.useState("");
+  const [drawerTmId, setDrawerTmId] = React.useState<string | null>(null);
+  const [toast, setToast] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [allSlotIds, setAllSlotIds] = React.useState<string[]>([]);
+
+  const refresh = React.useCallback(async () => {
+    setError(null);
+    try {
+      const rows = await listAllTMs();
+      setTMs(rows);
+      // Discover unmatched names from the most recent applied schedule.
+      const rosterForMatch = rows
+        .filter((r) => r.active)
+        .map((r) => ({ id: r.tmId, name: r.displayName, fullName: r.fullName }));
+      const um = await getUnmatchedFromLatestSchedule(rosterForMatch);
+      setUnmatched(um);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setTMs([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Slot list for the Skills tab — pull from slot_difficulty so the column
+  // header order mirrors the engine's notion of slots.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("slot_difficulty")
+        .select("slot_id")
+        .order("slot_id");
+      if (!cancelled && !error && data) {
+        setAllSlotIds(data.map((r: any) => String(r.slot_id)));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const flash = (kind: "ok" | "err", msg: string) => {
+    setToast({ kind, msg });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  const filtered = React.useMemo(() => {
+    if (!tms) return [];
+    const q = query.trim().toLowerCase();
+    return tms.filter((t) => {
+      if (filter === "active" && !t.active) return false;
+      if (filter === "inactive" && t.active) return false;
+      if (!q) return true;
+      return (
+        (t.displayName ?? "").toLowerCase().includes(q) ||
+        (t.fullName ?? "").toLowerCase().includes(q) ||
+        (t.tmId ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [tms, filter, query]);
+
+  const drawerTM = React.useMemo(
+    () => tms?.find((t) => t.tmId === drawerTmId) ?? null,
+    [tms, drawerTmId]
+  );
+
+  const handleAddUnmatched = async (rawName: string) => {
+    try {
+      const newId = await createTMFromUnmatched(rawName);
+      flash("ok", `Created — opening drawer to finish setup`);
+      await refresh();
+      setDrawerTmId(newId);
+      onDataChanged?.();
+    } catch (err) {
+      flash("err", err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-[15px] text-zinc-100">Team</h2>
+          <p className="text-[12px] text-zinc-500 leading-snug max-w-2xl">
+            Manage every TM in <span className="font-mono">tm_profiles</span>. Edit identity,
+            grave pool, preferences, accommodations, and per-slot skill scores.
+          </p>
+        </div>
+        <button
+          onClick={refresh}
+          className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5"
+        >
+          <RefreshCw className="h-3 w-3" /> refresh
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={cn(
+            "mx-6 mt-3 rounded-lg px-3 py-2 text-[12px] border",
+            toast.kind === "ok"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+              : "bg-red-500/10 border-red-500/30 text-red-200"
+          )}
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Body */}
+      <div className="flex-1 min-h-0 overflow-auto px-6 py-5 space-y-4">
+        {/* Unmatched Add cards */}
+        {unmatched.length > 0 && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <UserPlus className="h-3.5 w-3.5 text-amber-300" />
+              <span className="text-[11px] uppercase tracking-wider text-amber-200 font-mono">
+                Unmatched from latest schedule ({unmatched.length})
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                — click Add to create them in <span className="font-mono">tm_profiles</span>
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {unmatched.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => handleAddUnmatched(name)}
+                  className="group rounded-xl border border-amber-500/40 bg-zinc-900/70 hover:bg-amber-500/15 hover:border-amber-400 px-3 py-2 text-left transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="h-3 w-3 text-amber-300 group-hover:text-amber-200" />
+                    <span className="text-[12px] text-zinc-200 font-medium">{name}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 group-hover:text-amber-200/80 mt-0.5">
+                    click to add
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by display name, full name, or tm_id…"
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+            {(["active", "inactive", "all"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  "px-2.5 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors",
+                  filter === f
+                    ? "bg-red-500/20 text-red-200"
+                    : "text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const newId = await upsertTM({ displayName: "New TM", active: true, status: "active" });
+                await refresh();
+                setDrawerTmId(newId);
+                onDataChanged?.();
+              } catch (err) {
+                flash("err", err instanceof Error ? err.message : String(err));
+              }
+            }}
+            className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-medium inline-flex items-center gap-1.5"
+          >
+            <UserPlus className="h-3 w-3" /> new TM
+          </button>
+        </div>
+
+        {/* List */}
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
+            <AlertTriangle className="inline h-3 w-3 mr-1" />
+            {error}
+          </div>
+        )}
+        {tms === null && (
+          <div className="text-zinc-500 text-[12px] flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" /> Loading TMs…
+          </div>
+        )}
+        {tms && (
+          <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+            <table className="w-full text-[12px]">
+              <thead className="bg-zinc-950 text-zinc-400 text-[10px] uppercase tracking-wider">
+                <tr>
+                  <th className="text-left px-4 py-2.5 font-medium">Display name</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Full name</th>
+                  <th className="text-left px-4 py-2.5 font-medium">tm_id</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Pool</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Skill</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((tm) => (
+                  <tr
+                    key={tm.tmId}
+                    onClick={() => setDrawerTmId(tm.tmId)}
+                    className={cn(
+                      "border-t border-zinc-900 hover:bg-zinc-900/40 cursor-pointer",
+                      !tm.active && "opacity-60"
+                    )}
+                  >
+                    <td className="px-4 py-2.5 text-zinc-100 font-medium">{tm.displayName}</td>
+                    <td className="px-4 py-2.5 text-zinc-400">{tm.fullName ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-zinc-500 font-mono text-[11px]">{tm.tmId}</td>
+                    <td className="px-4 py-2.5">
+                      <PoolPill pool={tm.gravePool} />
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono text-[11px]">
+                      {tm.skillScore === null ? "—" : tm.skillScore.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <StatusPill active={tm.active} status={tm.status} />
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-zinc-500 text-[12px]">
+                      No TMs match the current filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Drawer */}
+      {drawerTM && (
+        <TMEditDrawer
+          tm={drawerTM}
+          allSlotIds={allSlotIds}
+          onClose={() => setDrawerTmId(null)}
+          onSaved={async () => {
+            await refresh();
+            onDataChanged?.();
+          }}
+          onFlash={flash}
+        />
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// Pills
+// =====================================================================
+
+function PoolPill({ pool }: { pool: string | null }) {
+  if (!pool) return <span className="text-zinc-600 text-[10px] font-mono">none</span>;
+  const p = pool.toUpperCase();
+  const color =
+    p === "FULL"
+      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+      : p === "AM"
+      ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+      : p === "PM"
+      ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+      : "bg-zinc-800 text-zinc-400 border-zinc-700";
+  return (
+    <span
+      className={cn(
+        "text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border",
+        color
+      )}
+    >
+      {p}
+    </span>
+  );
+}
+
+function StatusPill({ active, status }: { active: boolean; status: string }) {
+  if (!active) {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border bg-zinc-800 text-zinc-500 border-zinc-700">
+        inactive
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+      {status || "active"}
+    </span>
+  );
+}
+
+// =====================================================================
+// Edit Drawer
+// =====================================================================
+
+type DrawerTab = "identity" | "grave" | "prefs" | "skills";
+
+function TMEditDrawer({
+  tm,
+  allSlotIds,
+  onClose,
+  onSaved,
+  onFlash,
+}: {
+  tm: TMRecord;
+  allSlotIds: string[];
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+  onFlash: (kind: "ok" | "err", msg: string) => void;
+}) {
+  const [tab, setTab] = React.useState<DrawerTab>("identity");
+  const [form, setForm] = React.useState<TMRecord>(tm);
+  const [saving, setSaving] = React.useState(false);
+  const [detail, setDetail] = React.useState<{
+    preferences: TMPreference[];
+    accommodations: TMAccommodation[];
+    slotSkills: TMSlotSkill[];
+  } | null>(null);
+
+  // Re-sync form when a different TM is selected
+  React.useEffect(() => {
+    setForm(tm);
+  }, [tm.tmId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await getTMDetail(tm.tmId);
+        if (!cancelled) setDetail(d);
+      } catch (err) {
+        if (!cancelled) onFlash("err", err instanceof Error ? err.message : String(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tm.tmId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Esc to close
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await upsertTM({
+        tmId: form.tmId,
+        displayName: form.displayName,
+        fullName: form.fullName,
+        employeeName: form.employeeName,
+        active: form.active,
+        gravePool: form.gravePool,
+        primarySection: form.primarySection,
+        tieBreakRank: form.tieBreakRank,
+        skillScore: form.skillScore,
+        status: form.status,
+        slotPreference: form.slotPreference,
+        notes: form.notes,
+      });
+      onFlash("ok", `Saved ${form.displayName}`);
+      await onSaved();
+    } catch (err) {
+      onFlash("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const softDelete = async () => {
+    if (!window.confirm(`Soft-delete ${form.displayName}?\n\nThey'll be marked inactive and removed from the engine roster. History (night_tm_status, appraisals, etc.) is preserved.`)) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await softDeleteTM(form.tmId);
+      onFlash("ok", `${form.displayName} marked inactive`);
+      await onSaved();
+      onClose();
+    } catch (err) {
+      onFlash("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restore = async () => {
+    setSaving(true);
+    try {
+      await restoreTM(form.tmId);
+      onFlash("ok", `${form.displayName} restored`);
+      await onSaved();
+    } catch (err) {
+      onFlash("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const content = (
+    <div className="fixed inset-0 z-[10010] flex justify-end" aria-modal="true" role="dialog">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative h-full w-[640px] bg-zinc-950 text-zinc-100 border-l border-zinc-800 shadow-2xl flex flex-col overflow-hidden"
+        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-semibold text-zinc-100">{form.displayName || "(no display name)"}</div>
+            <div className="text-[10px] font-mono text-zinc-500">{form.tmId}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 hover:text-zinc-100 rounded p-1 transition-colors"
+            aria-label="Close drawer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Tab rail */}
+        <div className="px-3 border-b border-zinc-800 flex items-center gap-1">
+          {(["identity", "grave", "prefs", "skills"] as DrawerTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "px-3 py-2 text-[11px] uppercase tracking-wider font-mono transition-colors border-b-2",
+                tab === t
+                  ? "border-red-400 text-red-200"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-auto px-5 py-4 space-y-4">
+          {tab === "identity" && (
+            <IdentityForm form={form} setForm={setForm} />
+          )}
+          {tab === "grave" && <GraveForm form={form} setForm={setForm} />}
+          {tab === "prefs" && detail && (
+            <PrefsForm
+              tmId={form.tmId}
+              preferences={detail.preferences}
+              accommodations={detail.accommodations}
+              onChanged={async () => {
+                const d = await getTMDetail(form.tmId);
+                setDetail(d);
+              }}
+              onFlash={onFlash}
+            />
+          )}
+          {tab === "skills" && detail && (
+            <SkillsForm
+              tmId={form.tmId}
+              overallScore={form.skillScore}
+              onOverallChange={(v) => setForm((f) => ({ ...f, skillScore: v }))}
+              slotSkills={detail.slotSkills}
+              allSlotIds={allSlotIds}
+              onScoreSaved={async () => {
+                const d = await getTMDetail(form.tmId);
+                setDetail(d);
+              }}
+              onFlash={onFlash}
+            />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-zinc-800 bg-zinc-950/60 px-4 py-2.5 flex items-center justify-between gap-2">
+          <div>
+            {form.active ? (
+              <button
+                onClick={softDelete}
+                disabled={saving}
+                className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-red-600/30 text-zinc-400 hover:text-red-300 text-[11px] font-mono inline-flex items-center gap-1.5"
+              >
+                <Archive className="h-3 w-3" /> soft-delete
+              </button>
+            ) : (
+              <button
+                onClick={restore}
+                disabled={saving}
+                className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-emerald-500/20 text-zinc-400 hover:text-emerald-300 text-[11px] font-mono inline-flex items-center gap-1.5"
+              >
+                <RotateCcw className="h-3 w-3" /> restore
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 text-[12px]"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5"
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(content, document.body);
+}
+
+// =====================================================================
+// Field forms
+// =====================================================================
+
+function IdentityForm({
+  form,
+  setForm,
+}: {
+  form: TMRecord;
+  setForm: React.Dispatch<React.SetStateAction<TMRecord>>;
+}) {
+  return (
+    <div className="space-y-3">
+      <Field label="Display Name *">
+        <input
+          type="text"
+          value={form.displayName ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+          className={inputCx}
+        />
+      </Field>
+      <Field label="Full Name (legal / payroll)">
+        <input
+          type="text"
+          value={form.fullName ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+          className={inputCx}
+        />
+      </Field>
+      <Field label="Employee Name (as it appears in ADP)">
+        <input
+          type="text"
+          value={form.employeeName ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, employeeName: e.target.value }))}
+          className={inputCx}
+        />
+      </Field>
+      <Field label="tm_id (immutable)">
+        <input type="text" value={form.tmId} readOnly disabled className={cn(inputCx, "opacity-60")} />
+      </Field>
+      <Field label="Notes">
+        <textarea
+          rows={4}
+          value={form.notes ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          className={inputCx}
+        />
+      </Field>
+    </div>
+  );
+}
+
+function GraveForm({
+  form,
+  setForm,
+}: {
+  form: TMRecord;
+  setForm: React.Dispatch<React.SetStateAction<TMRecord>>;
+}) {
+  return (
+    <div className="space-y-3">
+      <Field label="Grave Pool">
+        <div className="flex gap-1.5">
+          {([null, "Full", "AM", "PM"] as Array<string | null>).map((opt) => (
+            <button
+              key={String(opt)}
+              onClick={() => setForm((f) => ({ ...f, gravePool: opt }))}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border transition-colors",
+                form.gravePool === opt
+                  ? "bg-red-500/20 text-red-200 border-red-500/40"
+                  : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200"
+              )}
+            >
+              {opt ?? "none"}
+            </button>
+          ))}
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1">
+          Full = full grave roster · AM = AM overlap (Day sheet) · PM = PM overlap (Swings sheet) · none = not on grave shift
+        </div>
+      </Field>
+      <Field label="Primary Section">
+        <input
+          type="text"
+          value={form.primarySection ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, primarySection: e.target.value || null }))}
+          className={inputCx}
+          placeholder="e.g. zones / restrooms / aux"
+        />
+      </Field>
+      <Field label="Slot Preference">
+        <input
+          type="text"
+          value={form.slotPreference ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, slotPreference: e.target.value || null }))}
+          className={inputCx}
+          placeholder="e.g. Z9SR, ADM"
+        />
+      </Field>
+      <Field label="Tie-Break Rank">
+        <input
+          type="number"
+          value={form.tieBreakRank ?? ""}
+          onChange={(e) =>
+            setForm((f) => ({
+              ...f,
+              tieBreakRank: e.target.value === "" ? null : Number(e.target.value),
+            }))
+          }
+          className={inputCx}
+        />
+      </Field>
+      <Field label="Status">
+        <input
+          type="text"
+          value={form.status ?? ""}
+          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+          className={inputCx}
+        />
+      </Field>
+    </div>
+  );
+}
+
+function PrefsForm({
+  tmId,
+  preferences,
+  accommodations,
+  onChanged,
+  onFlash,
+}: {
+  tmId: string;
+  preferences: TMPreference[];
+  accommodations: TMAccommodation[];
+  onChanged: () => void | Promise<void>;
+  onFlash: (kind: "ok" | "err", msg: string) => void;
+}) {
+  const [newPref, setNewPref] = React.useState({ stance: "prefer", strength: "soft", target: "", note: "" });
+  const [newAcc, setNewAcc] = React.useState({ type: "physical", severity: "soft", target: "", note: "" });
+
+  return (
+    <div className="space-y-5">
+      {/* Preferences */}
+      <section>
+        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">Preferences</div>
+        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <table className="w-full text-[11.5px]">
+            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-2 py-1.5">Stance</th>
+                <th className="text-left px-2 py-1.5">Strength</th>
+                <th className="text-left px-2 py-1.5">Target</th>
+                <th className="text-left px-2 py-1.5">Note</th>
+                <th className="text-right px-2 py-1.5 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {preferences.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                    No preferences yet
+                  </td>
+                </tr>
+              )}
+              {preferences.map((p) => (
+                <tr key={p.id} className="border-t border-zinc-900">
+                  <td className="px-2 py-1.5 text-zinc-300">{p.stance}</td>
+                  <td className="px-2 py-1.5 text-zinc-400">{p.strength}</td>
+                  <td className="px-2 py-1.5 text-zinc-200 font-mono">{p.target}</td>
+                  <td className="px-2 py-1.5 text-zinc-500 truncate max-w-[180px]">{p.note ?? ""}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await deleteTMPreference(p.id);
+                          await onChanged();
+                        } catch (err) {
+                          onFlash("err", err instanceof Error ? err.message : String(err));
+                        }
+                      }}
+                      className="text-zinc-600 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-zinc-900 bg-zinc-900/40">
+                <td className="px-2 py-1.5">
+                  <select
+                    value={newPref.stance}
+                    onChange={(e) => setNewPref({ ...newPref, stance: e.target.value })}
+                    className={miniSelectCx}
+                  >
+                    <option value="prefer">prefer</option>
+                    <option value="avoid">avoid</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select
+                    value={newPref.strength}
+                    onChange={(e) => setNewPref({ ...newPref, strength: e.target.value })}
+                    className={miniSelectCx}
+                  >
+                    <option value="soft">soft</option>
+                    <option value="hard">hard</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={newPref.target}
+                    placeholder="slot / area / TM"
+                    onChange={(e) => setNewPref({ ...newPref, target: e.target.value })}
+                    className={miniInputCx}
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={newPref.note}
+                    placeholder="optional note"
+                    onChange={(e) => setNewPref({ ...newPref, note: e.target.value })}
+                    className={miniInputCx}
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <button
+                    onClick={async () => {
+                      if (!newPref.target.trim()) return;
+                      try {
+                        await addTMPreference({ tmId, ...newPref });
+                        setNewPref({ stance: "prefer", strength: "soft", target: "", note: "" });
+                        await onChanged();
+                      } catch (err) {
+                        onFlash("err", err instanceof Error ? err.message : String(err));
+                      }
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 text-[10px] font-mono"
+                  >
+                    add
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Accommodations */}
+      <section>
+        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">Accommodations</div>
+        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <table className="w-full text-[11.5px]">
+            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-2 py-1.5">Type</th>
+                <th className="text-left px-2 py-1.5">Severity</th>
+                <th className="text-left px-2 py-1.5">Target</th>
+                <th className="text-left px-2 py-1.5">Note</th>
+                <th className="text-right px-2 py-1.5 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {accommodations.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                    No accommodations
+                  </td>
+                </tr>
+              )}
+              {accommodations.map((a) => (
+                <tr key={a.id} className="border-t border-zinc-900">
+                  <td className="px-2 py-1.5 text-zinc-300">{a.type}</td>
+                  <td className="px-2 py-1.5 text-zinc-400">{a.severity}</td>
+                  <td className="px-2 py-1.5 text-zinc-200 font-mono">{a.target ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-zinc-500 truncate max-w-[180px]">{a.note}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await deleteTMAccommodation(a.id);
+                          await onChanged();
+                        } catch (err) {
+                          onFlash("err", err instanceof Error ? err.message : String(err));
+                        }
+                      }}
+                      className="text-zinc-600 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-zinc-900 bg-zinc-900/40">
+                <td className="px-2 py-1.5">
+                  <select
+                    value={newAcc.type}
+                    onChange={(e) => setNewAcc({ ...newAcc, type: e.target.value })}
+                    className={miniSelectCx}
+                  >
+                    <option value="physical">physical</option>
+                    <option value="medical">medical</option>
+                    <option value="schedule">schedule</option>
+                    <option value="other">other</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select
+                    value={newAcc.severity}
+                    onChange={(e) => setNewAcc({ ...newAcc, severity: e.target.value })}
+                    className={miniSelectCx}
+                  >
+                    <option value="soft">soft</option>
+                    <option value="hard">hard</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={newAcc.target}
+                    placeholder="e.g. no_sweeper"
+                    onChange={(e) => setNewAcc({ ...newAcc, target: e.target.value })}
+                    className={miniInputCx}
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={newAcc.note}
+                    placeholder="required note"
+                    onChange={(e) => setNewAcc({ ...newAcc, note: e.target.value })}
+                    className={miniInputCx}
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <button
+                    onClick={async () => {
+                      if (!newAcc.note.trim()) return;
+                      try {
+                        await addTMAccommodation({
+                          tmId,
+                          type: newAcc.type,
+                          severity: newAcc.severity,
+                          target: newAcc.target || null,
+                          note: newAcc.note,
+                          status: "active",
+                        });
+                        setNewAcc({ type: "physical", severity: "soft", target: "", note: "" });
+                        await onChanged();
+                      } catch (err) {
+                        onFlash("err", err instanceof Error ? err.message : String(err));
+                      }
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 text-[10px] font-mono"
+                  >
+                    add
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SkillsForm({
+  tmId,
+  overallScore,
+  onOverallChange,
+  slotSkills,
+  allSlotIds,
+  onScoreSaved,
+  onFlash,
+}: {
+  tmId: string;
+  overallScore: number | null;
+  onOverallChange: (v: number | null) => void;
+  slotSkills: TMSlotSkill[];
+  allSlotIds: string[];
+  onScoreSaved: () => void | Promise<void>;
+  onFlash: (kind: "ok" | "err", msg: string) => void;
+}) {
+  const byId = React.useMemo(() => {
+    const m = new Map<string, number>();
+    slotSkills.forEach((s) => m.set(s.slotId, s.score));
+    return m;
+  }, [slotSkills]);
+
+  const setScore = async (slotId: string, score: number) => {
+    try {
+      await upsertSlotSkill({ tmId, slotId, score });
+      await onScoreSaved();
+    } catch (err) {
+      onFlash("err", err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Field label="Overall skill score (0-10) — fallback for any slot missing a per-slot score">
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={0.5}
+            value={overallScore ?? 5}
+            onChange={(e) => onOverallChange(Number(e.target.value))}
+            className="flex-1"
+          />
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.5}
+            value={overallScore ?? ""}
+            onChange={(e) =>
+              onOverallChange(e.target.value === "" ? null : Number(e.target.value))
+            }
+            className={cn(inputCx, "w-20 text-center")}
+          />
+        </div>
+      </Field>
+
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">
+          Per-slot scores (auto-saves)
+        </div>
+        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <table className="w-full text-[11.5px]">
+            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-2 py-1.5">Slot</th>
+                <th className="text-left px-2 py-1.5 w-48">Score</th>
+                <th className="text-right px-2 py-1.5 w-12">Val</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allSlotIds.map((slotId) => {
+                const current = byId.get(slotId) ?? null;
+                return (
+                  <tr key={slotId} className="border-t border-zinc-900">
+                    <td className="px-2 py-1.5 text-zinc-200 font-mono">{slotId}</td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="range"
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={current ?? 5}
+                        onChange={(e) => setScore(slotId, Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-zinc-300 font-mono">
+                      {current ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {allSlotIds.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                    No slots defined in slot_difficulty
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Form primitives
+// =====================================================================
+
+const inputCx =
+  "w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600";
+const miniInputCx =
+  "w-full px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:border-zinc-600";
+const miniSelectCx =
+  "px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:border-zinc-600";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-mono">{label}</span>
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
