@@ -1263,6 +1263,9 @@ export default function ShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
 
+  // Track the last card hovered with an Apple Pencil Pro (for squeeze-to-open gesture)
+  const penHoveredSlotRef = useRef<string | null>(null);
+
   // === Date / week selection ===
   // todayDate holds the active SHIFT date (not the calendar date) — see
   // `currentShiftDate()` for the rollover rule. Captured once on mount so
@@ -1947,9 +1950,6 @@ export default function ShiftBuilder() {
     return Math.max(0.35, Math.min(1, Math.min(w / 1056, h / 816)));
   });
   const stageHostRef = useRef<HTMLDivElement>(null);
-
-  // Track the last card hovered with an Apple Pencil Pro (for squeeze-to-open gesture)
-  const penHoveredSlotRef = useRef<string | null>(null);
 
   // Natural content footprint inside the scroll area: just the artboard now —
   // the pill cluster floats absolutely over the bottom of the artboard, so it
