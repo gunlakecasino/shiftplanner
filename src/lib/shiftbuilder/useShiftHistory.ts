@@ -21,7 +21,7 @@ export interface HistoryEntry {
 }
 
 export interface UseShiftHistoryReturn {
-  recordChange: (description: string, mutator: () => void) => void;
+  recordChange: (description: string, before: Snapshot, after: Snapshot) => void;
   undo: () => Snapshot | null;
   redo: () => Snapshot | null;
   canUndo: boolean;
