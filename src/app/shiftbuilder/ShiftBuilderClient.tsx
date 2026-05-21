@@ -466,6 +466,8 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
+      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = def.key; }}
+      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === def.key) penHoveredSlotRef.current = null; }}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
@@ -594,6 +596,8 @@ const RRSide: React.FC<{
     <div
       ref={setRef}
       onClick={(e) => onClick(slotKey, e.currentTarget, e)}
+      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = slotKey; }}
+      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === slotKey) penHoveredSlotRef.current = null; }}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""}`}
@@ -748,6 +752,8 @@ const AuxCard: React.FC<AuxCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
+      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = def.key; }}
+      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === def.key) penHoveredSlotRef.current = null; }}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
@@ -1126,6 +1132,8 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
     <div
       ref={setRef}
       onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
+      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = slotKey; }}
+      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === slotKey) penHoveredSlotRef.current = null; }}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all ${
@@ -1927,8 +1935,8 @@ export default function ShiftBuilder() {
   // The artboard is locked at 1056×816 (the print contract). zoomMode controls
   // how we present that fixed rectangle inside the on-screen scroll area.
   //   "fit" → auto-scale to fit the available area (never larger than 100%)
-  //   number → explicit scale factor (0.5 / 0.75 / 1)
-  type ZoomMode = "fit" | 0.5 | 0.75 | 1;
+  //   number → explicit scale factor (0.5 / 0.75 / 1 / 1.25)
+  type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.25;
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   // Start with a safe, viewport-derived value so the artboard is always visible
   // at a usable size on first paint, even before any measurement effects run.
@@ -1939,6 +1947,9 @@ export default function ShiftBuilder() {
     return Math.max(0.35, Math.min(1, Math.min(w / 1056, h / 816)));
   });
   const stageHostRef = useRef<HTMLDivElement>(null);
+
+  // Track the last card hovered with an Apple Pencil Pro (for squeeze-to-open gesture)
+  const penHoveredSlotRef = useRef<string | null>(null);
 
   // Natural content footprint inside the scroll area: just the artboard now —
   // the pill cluster floats absolutely over the bottom of the artboard, so it
@@ -2006,6 +2017,33 @@ export default function ShiftBuilder() {
   }, [rosterOpen, recomputeScale]);
 
   const scale = zoomMode === "fit" ? fitScale : zoomMode;
+
+  // === Apple Pencil Pro squeeze gesture to open Command Palette ===
+  // When using Pencil Pro, hovering a card and squeezing the barrel opens
+  // the contextual command palette for that slot (very fast iPad workflow).
+  useEffect(() => {
+    const handlePointerRaw = (e: PointerEvent) => {
+      if (e.pointerType !== "pen") return;
+
+      // Pencil Pro squeeze is reported via the barrel button (buttons & 2)
+      if (e.buttons & 2 && penHoveredSlotRef.current) {
+        const slotKey = penHoveredSlotRef.current;
+        // Fire the contextual palette
+        openPaletteForSlot(slotKey);
+        // Clear so we don't spam on sustained squeeze
+        penHoveredSlotRef.current = null;
+      }
+    };
+
+    const stage = stageHostRef.current;
+    if (stage) {
+      // pointerrawupdate gives high-frequency updates needed for barrel button changes
+      stage.addEventListener("pointerrawupdate", handlePointerRaw, { passive: true });
+      return () => {
+        stage.removeEventListener("pointerrawupdate", handlePointerRaw);
+      };
+    }
+  }, [openPaletteForSlot]);
 
   const selectedDay = DAY_DEFS[selectedDayIndex];
 
@@ -2994,7 +3032,7 @@ export default function ShiftBuilder() {
           value={String(zoomMode)}
           onChange={(e) => {
             const v = e.target.value;
-            setZoomMode(v === "fit" ? "fit" : (Number(v) as 0.5 | 0.75 | 1));
+            setZoomMode(v === "fit" ? "fit" : (Number(v) as 0.5 | 0.75 | 1 | 1.25));
           }}
           className="bg-transparent outline-none border-none pr-0.5 cursor-pointer font-medium"
           title="Zoom"
@@ -3003,6 +3041,7 @@ export default function ShiftBuilder() {
           <option value="0.5">50%</option>
           <option value="0.75">75%</option>
           <option value="1">100%</option>
+          <option value="1.25">125%</option>
         </select>
       </div>
 
