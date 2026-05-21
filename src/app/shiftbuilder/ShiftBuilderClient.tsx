@@ -466,10 +466,11 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = def.key; }}
-      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === def.key) penHoveredSlotRef.current = null; }}
+
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      data-slot-key={def.key}
+      data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
@@ -596,10 +597,10 @@ const RRSide: React.FC<{
     <div
       ref={setRef}
       onClick={(e) => onClick(slotKey, e.currentTarget, e)}
-      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = slotKey; }}
-      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === slotKey) penHoveredSlotRef.current = null; }}
+
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      data-slot-key={slotKey}
       className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""}`}
     >
       {/* Label + badge row */}
@@ -752,10 +753,11 @@ const AuxCard: React.FC<AuxCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = def.key; }}
-      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === def.key) penHoveredSlotRef.current = null; }}
+
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      data-slot-key={def.key}
+      data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
@@ -1132,10 +1134,10 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
     <div
       ref={setRef}
       onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
-      onPointerEnter={(e) => { if (e.pointerType === "pen") penHoveredSlotRef.current = slotKey; }}
-      onPointerLeave={(e) => { if (e.pointerType === "pen" && penHoveredSlotRef.current === slotKey) penHoveredSlotRef.current = null; }}
+
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      data-slot-key={slotKey}
       className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all ${
         isOver ? "drop-target-active" : ""
       } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""}`}
@@ -1263,8 +1265,7 @@ export default function ShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
 
-  // Track the last card hovered with an Apple Pencil Pro (for squeeze-to-open gesture)
-  const penHoveredSlotRef = useRef<string | null>(null);
+
 
   // === Date / week selection ===
   // todayDate holds the active SHIFT date (not the calendar date) — see
@@ -2019,25 +2020,27 @@ export default function ShiftBuilder() {
   const scale = zoomMode === "fit" ? fitScale : zoomMode;
 
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
-  // When using Pencil Pro, hovering a card and squeezing the barrel opens
-  // the contextual command palette for that slot (very fast iPad workflow).
+  // When using Pencil Pro, hovering (or having the tip near) a card and
+  // squeezing the barrel instantly opens the contextual Command Palette.
   useEffect(() => {
     const handlePointerRaw = (e: PointerEvent) => {
       if (e.pointerType !== "pen") return;
 
-      // Pencil Pro squeeze is reported via the barrel button (buttons & 2)
-      if (e.buttons & 2 && penHoveredSlotRef.current) {
-        const slotKey = penHoveredSlotRef.current;
-        // Fire the contextual palette
-        openPaletteForSlot(slotKey);
-        // Clear so we don't spam on sustained squeeze
-        penHoveredSlotRef.current = null;
+      // Squeeze on Pencil Pro is indicated by the barrel button (buttons & 2)
+      if (e.buttons & 2) {
+        // Find the nearest ancestor that represents a slot/card
+        const cardEl = (e.target as HTMLElement | null)?.closest?.('[data-slot-key]');
+        if (cardEl) {
+          const slotKey = cardEl.getAttribute('data-slot-key');
+          if (slotKey) {
+            openPaletteForSlot(slotKey);
+          }
+        }
       }
     };
 
     const stage = stageHostRef.current;
     if (stage) {
-      // pointerrawupdate gives high-frequency updates needed for barrel button changes
       stage.addEventListener("pointerrawupdate", handlePointerRaw, { passive: true });
       return () => {
         stage.removeEventListener("pointerrawupdate", handlePointerRaw);
