@@ -204,6 +204,17 @@ export function useCommandActions({
     });
 
     result.push({
+      id: "tasks",
+      label: "Tasks",
+      keywords: ["task", "tasks", "todo", "note", "add task"],
+      group: "Actions",
+      handler: () => {
+        // Handled specially in CommandPalette for multi-step zone + free text flow
+      },
+      keepOpen: true,
+    });
+
+    result.push({
       id: "action-add-aux",
       label: "Add AUX Slot",
       keywords: ["aux", "add", "extra", "auxiliary"],

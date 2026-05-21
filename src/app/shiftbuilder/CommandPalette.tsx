@@ -39,6 +39,9 @@ interface CommandPaletteProps {
   /** Direct assignment from contextual palette (tap slot → pick person, or vice versa) */
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
 
+  /** Add a free-text task to a slot (used by the new Tasks command) */
+  onAddTask?: (slotKey: string, taskLabel: string) => Promise<void>;
+
   // For better contextual header in seeded slot mode (Phase 1 polish)
   selectedSlotAssignment?: any;
 
@@ -109,6 +112,8 @@ export function CommandPalette({
   onRemoveFromSlot,
   onToggleLock,
   onCycleBreak,
+  onAssign,
+  onAddTask,
   selectedSlotAssignment,
   isDraftMode = false,
   onApplyGrokSuggestions,
@@ -133,7 +138,10 @@ export function CommandPalette({
   // === Multi-step contextual state for powerful workflows ===
   const [selectedPerson, setSelectedPerson] = React.useState<any | null>(null);
   const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
-  const [contextStep, setContextStep] = React.useState<'root' | 'person-to-slot' | 'slot-to-person'>('root');
+  const [contextStep, setContextStep] = React.useState<'root' | 'person-to-slot' | 'slot-to-person' | 'tasks-select-zone' | 'tasks-enter-label'>('root');
+
+  // For the Tasks flow
+  const [selectedTaskSlot, setSelectedTaskSlot] = React.useState<string | null>(null);
 
   // Border mode states
   const [borderStep, setBorderStep] = React.useState<'idle' | 'select-card' | 'select-color'>('idle');
@@ -233,6 +241,12 @@ export function CommandPalette({
       setGrokStructured(null);
       setGrokWarnings([]);
       setGrokUsedStructured(false);
+
+      // Reset tasks flow state
+      setSelectedTaskSlot(null);
+      if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
+        setContextStep('root');
+      }
     }
   }, [open, initialContext, actions]);
 
@@ -416,6 +430,10 @@ export function CommandPalette({
             setSelectedPerson(null);
             setSelectedSlot(null);
             setContextStep('root');
+          } else if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
+            setSelectedTaskSlot(null);
+            setContextStep('root');
+            setInputValue('');
           }
         } else {
           onOpenChange(false);
@@ -886,6 +904,10 @@ export function CommandPalette({
                     ? "Type a command — Tab to complete, Enter to run"
                     : contextStep === "person-to-slot"
                     ? "Type slot (e.g. Z10, MRR2)..."
+                    : contextStep === 'tasks-select-zone'
+                    ? "Select a zone / slot for the task..."
+                    : contextStep === 'tasks-enter-label'
+                    ? "Describe the task (free text)..."
                     : placeholder
                 }
                 className={cn(
@@ -982,8 +1004,67 @@ export function CommandPalette({
                 </>
               )}
 
-              {/* Normal grouped content (only when not in border or command mode) */}
-              {!isCommandMode && borderStep === 'idle' && grouped.map(([groupName, items]) => (
+              {/* Tasks flow: select zone first */}
+              {!isCommandMode && contextStep === 'tasks-select-zone' && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select a zone / slot for the new task</div>
+                  {[
+                    'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
+                    'MRR1','MRR6','MRR7','MRR8','MRR10',
+                    'WRR1','WRR6','WRR7','WRR8','WRR10',
+                    'ADM','TR1','TR2',
+                  ].map((slot) => (
+                    <CommandPrimitive.Item
+                      key={`task-${slot}`}
+                      value={slot}
+                      onSelect={() => {
+                        setSelectedTaskSlot(slot);
+                        setContextStep('tasks-enter-label');
+                        setInputValue('');
+                      }}
+                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
+                    >
+                      <div className="font-medium">{slot}</div>
+                    </CommandPrimitive.Item>
+                  ))}
+                </>
+              )}
+
+              {/* Tasks flow: enter free text label */}
+              {!isCommandMode && contextStep === 'tasks-enter-label' && selectedTaskSlot && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
+                    Task for <span className="font-semibold text-zinc-900">{selectedTaskSlot}</span> — type description and press Enter
+                  </div>
+                  <CommandPrimitive.Item
+                    key="tasks-confirm"
+                    value={`save task ${inputValue}`}
+                    onSelect={async () => {
+                      const label = inputValue.trim();
+                      if (!label || !selectedTaskSlot || !onAddTask) return;
+
+                      try {
+                        await onAddTask(selectedTaskSlot, label);
+                        onOpenChange(false);
+                        // Reset for next time
+                        setSelectedTaskSlot(null);
+                        setContextStep('root');
+                        setInputValue('');
+                      } catch (err) {
+                        console.error('Failed to add task from palette:', err);
+                      }
+                    }}
+                    className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
+                  >
+                    <div className="font-medium">
+                      Save task to {selectedTaskSlot}: <span className="text-[#007AFF]">{inputValue || 'your description'}</span>
+                    </div>
+                  </CommandPrimitive.Item>
+                </>
+              )}
+
+              {/* Normal grouped content (only when not in special modes) */}
+              {!isCommandMode && borderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label'].includes(contextStep) && grouped.map(([groupName, items]) => (
                 <CommandPrimitive.Group
                   key={groupName}
                   id={`group-${groupName.toLowerCase()}`}
@@ -1021,6 +1102,14 @@ export function CommandPalette({
                           setBorderStep('select-card');
                           setBorderTarget(null);
                           // stay open for card selection
+                          return;
+                        }
+
+                        // Tasks flow (initial simple version: select zone → free text)
+                        if (item.id === "tasks") {
+                          setContextStep('tasks-select-zone');
+                          setSelectedTaskSlot(null);
+                          setInputValue('');
                           return;
                         }
 
