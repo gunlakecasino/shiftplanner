@@ -133,7 +133,6 @@ export function CommandPalette({
   whyWarnings,
   whyAvailable,
   onOpenSudo,
-  onAssign,
 }: CommandPaletteProps) {
   // === Multi-step contextual state for powerful workflows ===
   const [selectedPerson, setSelectedPerson] = React.useState<any | null>(null);
