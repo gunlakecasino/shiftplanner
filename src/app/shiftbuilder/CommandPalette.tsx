@@ -981,13 +981,13 @@ export function CommandPalette({
                 <>
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Choose border color for {borderTarget}</div>
                   {[
-                    { name: 'Red', value: '#EF4444' },
-                    { name: 'Blue', value: '#3B82F6' },
-                    { name: 'Green', value: '#22C55E' },
-                    { name: 'Orange', value: '#F97316' },
-                    { name: 'Purple', value: '#8B5CF6' },
-                    { name: 'Teal', value: '#14B8A6' },
-                    { name: 'Yellow', value: '#EAB308' },
+                    { name: 'Gold (Z1/Z2)',     value: '#B89708' },
+                    { name: 'Red (Z3–Z5, Z9)',  value: '#E53935' },
+                    { name: 'Magenta (Z6)',     value: '#B7679A' },
+                    { name: 'Blue (Z7)',        value: '#1976D2' },
+                    { name: 'Brown (Z8)',       value: '#6B5346' },
+                    { name: 'Green (Z10)',      value: '#43A047' },
+                    { name: 'Orange (TR1/TR2)', value: '#FB8C00' },
                   ].map((color) => (
                     <CommandPrimitive.Item
                       key={color.name}

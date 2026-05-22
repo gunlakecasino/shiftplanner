@@ -478,7 +478,10 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
-        ...(borderColor && { boxShadow: `0 0 0 3px ${borderColor}40, 0 0 0 6px ${borderColor}15` })
+        ...(borderColor && {
+          border: `2px solid ${borderColor}`,
+          boxShadow: `0 0 0 1px ${borderColor}33`
+        })
       }}
     >
       {/* Colored top stripe */}
@@ -720,7 +723,10 @@ const RRCard: React.FC<RRCardProps> = ({
       className={`assignment-card relative flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
-        ...(borderColor && { boxShadow: `0 0 0 3px ${borderColor}40, 0 0 0 6px ${borderColor}15` })
+        ...(borderColor && {
+          border: `2px solid ${borderColor}`,
+          boxShadow: `0 0 0 1px ${borderColor}33`
+        })
       }}
     >
       <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
@@ -813,7 +819,10 @@ const AuxCard: React.FC<AuxCardProps> = ({
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
-        ...(borderColor && { boxShadow: `0 0 0 3px ${borderColor}40, 0 0 0 6px ${borderColor}15` })
+        ...(borderColor && {
+          border: `2px solid ${borderColor}`,
+          boxShadow: `0 0 0 1px ${borderColor}33`
+        })
       }}
     >
       <div className="h-[3px] w-full shrink-0" style={{ background: color }} />

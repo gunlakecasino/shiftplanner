@@ -941,7 +941,12 @@ export async function getNightCardBorders(nightId: string): Promise<Record<strin
     .eq('night_id', nightId);
 
   if (error) {
-    console.error('[shiftbuilder/data] getNightCardBorders error:', error);
+    console.error('[shiftbuilder/data] getNightCardBorders error:', {
+      message: error.message,
+      code: (error as any).code,
+      details: (error as any).details,
+      hint: (error as any).hint,
+    });
     return {};
   }
 
@@ -972,7 +977,12 @@ export async function setNightCardBorder(
     );
 
   if (error) {
-    console.error('[shiftbuilder/data] setNightCardBorder failed:', error);
+    console.error('[shiftbuilder/data] setNightCardBorder failed:', {
+      message: error.message,
+      code: (error as any).code,
+      details: (error as any).details,
+      hint: (error as any).hint,
+    });
     throw new Error(`Failed to save card border: ${error.message}`);
   }
 }
@@ -987,7 +997,12 @@ export async function removeNightCardBorder(nightId: string, slotKey: string): P
     .eq('slot_key', slotKey);
 
   if (error) {
-    console.error('[shiftbuilder/data] removeNightCardBorder failed:', error);
+    console.error('[shiftbuilder/data] removeNightCardBorder failed:', {
+      message: error.message,
+      code: (error as any).code,
+      details: (error as any).details,
+      hint: (error as any).hint,
+    });
     throw new Error(`Failed to remove card border: ${error.message}`);
   }
 }
