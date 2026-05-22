@@ -3470,7 +3470,7 @@ export default function ShiftBuilder() {
       });
 
       // Persist to Supabase (use normalized db keys)
-      (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side).catch((err) => {
+      (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side).catch((err: unknown) => {
         console.error('[ShiftBuilder] Failed to set task color:', err);
         // Could add a toast here later if desired
       });
@@ -3496,7 +3496,7 @@ export default function ShiftBuilder() {
       });
 
       const { slot_key, rr_side } = uiToDb(uiKey);
-      (updateNightSlotTaskLabel as any)(targetNightId, slot_key, oldLabel, trimmed, rr_side).catch((err) => {
+      (updateNightSlotTaskLabel as any)(targetNightId, slot_key, oldLabel, trimmed, rr_side).catch((err: unknown) => {
         console.error('[ShiftBuilder] Failed to edit task label:', err);
       });
     },
