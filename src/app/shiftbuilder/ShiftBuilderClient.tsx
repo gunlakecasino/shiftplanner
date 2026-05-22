@@ -34,6 +34,8 @@ import {
   addNightSlotTask,
   removeNightSlotTask,
   addSlotCatalogTask,
+  updateNightSlotTaskColor,
+  updateNightSlotTaskLabel,
   getNightCardBorders,
   setNightCardBorder,
   removeNightCardBorder,
@@ -443,6 +445,8 @@ interface ZoneCardProps {
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = ({ 
@@ -455,7 +459,9 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
   borderColor,
   isDraftMode = false,
   draftInfo,
-  onRemoveTask 
+  onRemoveTask,
+  onSetTaskColor,
+  onEditTask 
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -547,8 +553,194 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} />
+        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} onSetTaskColor={onSetTaskColor} onEditTask={onEditTask} />
       </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// TaskRow — shared per-task line with always-visible color sphere + hover picker
+// Used by Zone cards, RR sides, and Overlap slots. The sphere prints because
+// it is real DOM content (backgroundColor on a div).
+// ============================================================================
+
+const TASK_COLOR_SPHERES = [
+  { name: 'Gold',    hex: '#B89708' },
+  { name: 'Red',     hex: '#E53935' },
+  { name: 'Magenta', hex: '#B7679A' },
+  { name: 'Blue',    hex: '#1976D2' },
+  { name: 'Brown',   hex: '#6B5346' },
+  { name: 'Green',   hex: '#43A047' },
+  { name: 'Orange',  hex: '#FB8C00' },
+] as const;
+
+interface TaskRowProps {
+  task: NightSlotTask;
+  slotKey: string;
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  // Slight visual tweaks per context (Zone vs tight RR/Overlap)
+  textSize?: string;
+  textColorClass?: string;
+}
+
+const TaskRow: React.FC<TaskRowProps> = ({
+  task,
+  slotKey,
+  onRemoveTask,
+  onSetTaskColor,
+  onEditTask,
+  textSize = "text-[11px]",
+  textColorClass = "text-[#6B7280]",
+}) => {
+  const hasColor = !!task.color;
+  const [isColorExpanded, setIsColorExpanded] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editValue, setEditValue] = React.useState('');
+
+  const startEditing = () => {
+    setIsEditing(true);
+    setEditValue(task.taskLabel);
+    setIsColorExpanded(false);
+  };
+
+  const saveEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== task.taskLabel) {
+      onEditTask?.(slotKey, task.taskLabel, trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 ${textSize} ${textColorClass} ${hasColor ? "bg-white/40" : ""}`}
+    >
+      {/* Always-visible color sphere (prints on PDF) */}
+      {hasColor && (
+        <div
+          className="mt-[1px] w-[10px] h-[10px] flex-shrink-0 rounded-full ring-1 ring-black/10"
+          style={{ backgroundColor: task.color! }}
+          title={`Highlight: ${task.color}`}
+        />
+      )}
+
+      {/* Label area — supports inline editing + hanging indent for wrapping */}
+      <div className="min-w-0 flex-1 leading-snug">
+        {isEditing ? (
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={saveEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveEdit();
+              if (e.key === 'Escape') cancelEdit();
+            }}
+            className="w-full bg-white border border-[#007AFF]/40 rounded px-1 py-0.5 text-inherit focus:outline-none"
+            autoFocus
+          />
+        ) : (
+          <span className="block pl-[13px] -indent-[13px]">
+            {task.taskLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Compact hover toolbar — collapsed by default for maximum density.
+          Color control can be clicked to expand the full palette. */}
+      {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
+        <div className="absolute right-0.5 top-0.5 hidden group-hover/task:flex items-center gap-1 bg-white/95 rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 z-10">
+          {/* Color control — collapsed until clicked */}
+          {onSetTaskColor && (
+            <>
+              {!isColorExpanded ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsColorExpanded(true);
+                  }}
+                  className="flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-black/20 hover:ring-black/40"
+                  style={{ backgroundColor: hasColor ? task.color! : '#E5E5E7' }}
+                  title="Change task color"
+                >
+                  <span className="text-[7px] leading-none text-white/70">●</span>
+                </button>
+              ) : (
+                /* Expanded color palette */
+                <div className="flex items-center gap-1">
+                  {TASK_COLOR_SPHERES.map((c) => (
+                    <button
+                      key={c.hex}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetTaskColor(slotKey, task.taskLabel, c.hex);
+                        setIsColorExpanded(false);
+                      }}
+                      className="w-2.5 h-2.5 rounded-full ring-1 ring-black/15 hover:ring-black/40"
+                      style={{ backgroundColor: c.hex }}
+                      title={c.name}
+                    />
+                  ))}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSetTaskColor(slotKey, task.taskLabel, null);
+                      setIsColorExpanded(false);
+                    }}
+                    className="w-2.5 h-2.5 rounded-full bg-white ring-1 ring-black/20 text-[7px] text-[#9CA3AF]"
+                    title="Remove color"
+                  >
+                    ×
+                  </button>
+                  {/* Collapse button */}
+                  <button
+                    onClick={() => setIsColorExpanded(false)}
+                    className="ml-0.5 text-[10px] text-[#9CA3AF] hover:text-[#6B7280]"
+                    title="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Edit (pencil) */}
+          {onEditTask && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                startEditing();
+              }}
+              className="text-[#6B7280] hover:text-[#007AFF] text-[11px] leading-none"
+              title="Edit task"
+            >
+              ✎
+            </button>
+          )}
+
+          {/* Delete */}
+          {onRemoveTask && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveTask(slotKey, task.taskLabel);
+              }}
+              className="text-red-400 hover:text-red-500 text-[12px] leading-none font-bold"
+              title="Remove task"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -561,32 +753,27 @@ const ZoneTaskList: React.FC<{
   hasTM: boolean;
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-}> = ({ tasks, hasTM, slotKey, onRemoveTask }) => {
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
+  const textColor = hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]";
   return (
     <div
-      className={`mt-auto pt-1 text-[11px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+      className={`mt-auto pt-1 text-[11px] leading-tight ${textColor}`}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
       {tasks.map((t) => (
-        <div
+        <TaskRow
           key={t.id}
-          className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
-        >
-          <span className="truncate">{t.taskLabel}</span>
-          {onRemoveTask && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveTask(slotKey, t.taskLabel);
-              }}
-              className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
-              title="Remove task"
-            >
-              ×
-            </button>
-          )}
-        </div>
+          task={t}
+          slotKey={slotKey}
+          onRemoveTask={onRemoveTask}
+          onSetTaskColor={onSetTaskColor}
+          onEditTask={onEditTask}
+          textSize="text-[11px]"
+          textColorClass={textColor}
+        />
       ))}
     </div>
   );
@@ -603,6 +790,8 @@ interface RRCardProps {
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -617,7 +806,9 @@ const RRSide: React.FC<{
   onClick: (k: string, el: HTMLElement, e?: React.MouseEvent) => void;
   loading?: boolean;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask }) => {
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -671,24 +862,16 @@ const RRSide: React.FC<{
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
-            <div
+            <TaskRow
               key={t.id}
-              className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
-            >
-              <span className="truncate">{t.taskLabel}</span>
-              {onRemoveTask && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveTask(slotKey, t.taskLabel);
-                  }}
-                  className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
-                  title="Remove task"
-                >
-                  ×
-                </button>
-              )}
-            </div>
+              task={t}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              onSetTaskColor={onSetTaskColor}
+              onEditTask={onEditTask}
+              textSize="text-[10px]"
+              textColorClass={hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}
+            />
           ))}
         </div>
       )}
@@ -706,7 +889,9 @@ const RRCard: React.FC<RRCardProps> = ({
   borderColor,
   isDraftMode = false,
   draftInfo,
-  onRemoveTask 
+  onRemoveTask,
+  onSetTaskColor,
+  onEditTask 
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -756,16 +941,20 @@ const RRCard: React.FC<RRCardProps> = ({
             onClick={onGenderClick}
             loading={loading}
             onRemoveTask={onRemoveTask}
+            onSetTaskColor={onSetTaskColor}
+            onEditTask={onEditTask}
           />
           <RRSide
             slotKey={wKey}
-            label="WOMEN&rsquo;S"
+            label="WOMEN’S"
             assignment={assignments[wKey]}
             tasks={selectedTasks[wKey]}
             setBreakGroupForSlot={setBreakGroupForSlot}
             onClick={onGenderClick}
             loading={loading}
             onRemoveTask={onRemoveTask}
+            onSetTaskColor={onSetTaskColor}
+            onEditTask={onEditTask}
           />
         </div>
       </div>
@@ -784,6 +973,8 @@ interface AuxCardProps {
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }
 
 const AuxCard: React.FC<AuxCardProps> = ({ 
@@ -796,7 +987,9 @@ const AuxCard: React.FC<AuxCardProps> = ({
   borderColor,
   isDraftMode = false,
   draftInfo,
-  onRemoveTask 
+  onRemoveTask,
+  onSetTaskColor,
+  onEditTask 
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -899,7 +1092,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} />
+        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} onSetTaskColor={onSetTaskColor} onEditTask={onEditTask} />
       </div>
     </div>
   );
@@ -1185,8 +1378,10 @@ interface OverlapSlotProps {
   onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }
-const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo, onRemoveTask }) => {
+const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo, onRemoveTask, onSetTaskColor, onEditTask }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
@@ -1234,24 +1429,16 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
-            <div
+            <TaskRow
               key={t.id}
-              className="group/task flex items-center justify-between truncate hover:bg-white/60 rounded px-0.5 -mx-0.5"
-            >
-              <span className="truncate">{t.taskLabel}</span>
-              {onRemoveTask && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveTask(slotKey, t.taskLabel);
-                  }}
-                  className="ml-1 opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity text-[13px] leading-none font-bold"
-                  title="Remove task"
-                >
-                  ×
-                </button>
-              )}
-            </div>
+              task={t}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              onSetTaskColor={onSetTaskColor}
+              onEditTask={onEditTask}
+              textSize="text-[8px]"
+              textColorClass={hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}
+            />
           ))}
         </div>
       )}
@@ -3058,6 +3245,7 @@ export default function ShiftBuilder() {
           taskLabel: catalogTask.label,
           catalogTaskId: catalogTask.id,
           sortOrder: catalogTask.sortOrder,
+          color: null,
         };
         persistAddTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask);
         return { ...prev, [uiKey]: [...existing, optimistic] };
@@ -3084,6 +3272,55 @@ export default function ShiftBuilder() {
       persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, taskLabel);
     },
     [nightId, selectedDay.date, selectedDay.name, persistRemoveTask]
+  );
+
+  // Per-task color sphere — optimistic + persist
+  const handleSetTaskColor = React.useCallback(
+    (uiKey: string, taskLabel: string, color: string | null) => {
+      const targetNightId = nightId;
+      const captureDate = selectedDay.date;
+      const captureDayName = selectedDay.name;
+
+      // Optimistic update
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.map((t) =>
+          t.taskLabel === taskLabel ? { ...t, color } : t
+        );
+        return { ...prev, [uiKey]: next };
+      });
+
+      // Persist to Supabase
+      updateNightSlotTaskColor(targetNightId, uiKey, taskLabel, null, color).catch((err) => {
+        console.error('[ShiftBuilder] Failed to set task color:', err);
+        // Could add a toast here later if desired
+      });
+    },
+    [nightId, selectedDay.date, selectedDay.name]
+  );
+
+  // Edit / rename an existing task label (inline edit)
+  const handleEditTask = React.useCallback(
+    (uiKey: string, oldLabel: string, newLabel: string) => {
+      const targetNightId = nightId;
+
+      const trimmed = newLabel.trim();
+      if (!trimmed || trimmed === oldLabel) return;
+
+      // Optimistic update — replace the label on the matching task
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.map((t) =>
+          t.taskLabel === oldLabel ? { ...t, taskLabel: trimmed } : t
+        );
+        return { ...prev, [uiKey]: next };
+      });
+
+      updateNightSlotTaskLabel(targetNightId, uiKey, oldLabel, trimmed).catch((err) => {
+        console.error('[ShiftBuilder] Failed to edit task label:', err);
+      });
+    },
+    [nightId]
   );
 
   // Operator-authored custom task: insert into the catalog AND select it for
@@ -3957,6 +4194,8 @@ export default function ShiftBuilder() {
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[def.key]}
                           onRemoveTask={handleRemoveTask}
+                          onSetTaskColor={handleSetTaskColor}
+                          onEditTask={handleEditTask}
                         />
                       ))}
                     </div>
@@ -3989,6 +4228,8 @@ export default function ShiftBuilder() {
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[`MRR${def.num}`] || draftAssignments[`WRR${def.num}`]}
                           onRemoveTask={handleRemoveTask}
+                          onSetTaskColor={handleSetTaskColor}
+                          onEditTask={handleEditTask}
                         />
                       ))}
                     </div>
@@ -4025,6 +4266,8 @@ export default function ShiftBuilder() {
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[def.key]}
                           onRemoveTask={handleRemoveTask}
+                          onSetTaskColor={handleSetTaskColor}
+                          onEditTask={handleEditTask}
                         />
                       ))}
                     </div>
@@ -4217,6 +4460,8 @@ export default function ShiftBuilder() {
                                 isDraftMode={isDraftMode}
                                 draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
                                 onRemoveTask={handleRemoveTask}
+                                onSetTaskColor={handleSetTaskColor}
+                                onEditTask={handleEditTask}
                               />
                             ))}
                           </div>

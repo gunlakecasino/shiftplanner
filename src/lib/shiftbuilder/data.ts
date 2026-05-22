@@ -684,6 +684,7 @@ export interface NightSlotTask {
   taskLabel: string;
   catalogTaskId: string | null;
   sortOrder: number;
+  color: string | null; // per-task highlight color (hex) for the colored sphere
 }
 
 /**
@@ -731,7 +732,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
 
   const { data, error } = await supabase
     .from('night_slot_tasks')
-    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order')
+    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color')
     .eq('night_id', nightId)
     .order('sort_order', { ascending: true })
     .order('task_label', { ascending: true });
@@ -750,6 +751,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     taskLabel: r.task_label,
     catalogTaskId: r.catalog_task_id,
     sortOrder: r.sort_order ?? 0,
+    color: r.color ?? null,
   }));
 }
 
@@ -766,6 +768,7 @@ export interface AddTaskParams {
   taskLabel: string;
   catalogTaskId?: string | null;
   sortOrder?: number;
+  color?: string | null; // optional highlight color for the task sphere
 }
 
 export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
@@ -773,6 +776,7 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     nightId, slotKey, slotType,
     rrSide = null, taskLabel,
     catalogTaskId = null, sortOrder = 0,
+    color = null,
   } = params;
 
   if (!nightId || !slotKey || !taskLabel) {
@@ -793,6 +797,7 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
       task_label: taskLabel,
       catalog_task_id: catalogTaskId,
       sort_order: sortOrder,
+      color,
     });
 
   if (error) {
@@ -909,6 +914,77 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
   if (error) {
     console.error('[shiftbuilder/data] removeNightSlotTask failed:', error);
     throw new Error(`Failed to remove task: ${error.message}`);
+  }
+}
+
+/**
+ * Set (or clear) the highlight color on a specific task row.
+ * Used for the per-task colored sphere feature.
+ */
+export async function updateNightSlotTaskColor(
+  nightId: string,
+  slotKey: string,
+  taskLabel: string,
+  color: string | null,
+  rrSide: 'mens' | 'womens' | null = null
+): Promise<void> {
+  if (!nightId || !slotKey || !taskLabel) {
+    throw new Error('setNightSlotTaskColor requires nightId, slotKey, taskLabel');
+  }
+
+  let q = supabase
+    .from('night_slot_tasks')
+    .update({ color })
+    .eq('night_id', nightId)
+    .eq('slot_key', slotKey)
+    .eq('task_label', taskLabel);
+
+  if (rrSide) q = q.eq('rr_side', rrSide);
+  else q = q.is('rr_side', null);
+
+  const { error } = await q;
+
+  if (error) {
+    console.error('[shiftbuilder/data] updateNightSlotTaskColor failed:', error);
+    throw new Error(`Failed to set task color: ${error.message}`);
+  }
+}
+
+/**
+ * Rename / edit the label of an existing task on a slot.
+ * Because the label is part of the identifying key, we update the task_label column directly.
+ */
+export async function updateNightSlotTaskLabel(
+  nightId: string,
+  slotKey: string,
+  oldLabel: string,
+  newLabel: string,
+  rrSide: 'mens' | 'womens' | null = null
+): Promise<void> {
+  if (!nightId || !slotKey || !oldLabel || !newLabel) {
+    throw new Error('updateNightSlotTaskLabel requires nightId, slotKey, oldLabel, newLabel');
+  }
+
+  const trimmed = newLabel.trim();
+  if (!trimmed) {
+    throw new Error('Task label cannot be empty');
+  }
+
+  let q = supabase
+    .from('night_slot_tasks')
+    .update({ task_label: trimmed })
+    .eq('night_id', nightId)
+    .eq('slot_key', slotKey)
+    .eq('task_label', oldLabel);
+
+  if (rrSide) q = q.eq('rr_side', rrSide);
+  else q = q.is('rr_side', null);
+
+  const { error } = await q;
+
+  if (error) {
+    console.error('[shiftbuilder/data] updateNightSlotTaskLabel failed:', error);
+    throw new Error(`Failed to update task label: ${error.message}`);
   }
 }
 
