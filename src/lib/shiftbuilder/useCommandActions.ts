@@ -204,6 +204,16 @@ export function useCommandActions({
     });
 
     result.push({
+      id: "visual-remove-card-border",
+      label: "Remove Card Border",
+      keywords: ["border", "remove", "clear", "outline", "unhighlight", "card"],
+      group: "Actions",
+      handler: () => {
+        console.log("[Command] Remove Card Border initiated");
+      },
+    });
+
+    result.push({
       id: "tasks",
       label: "Tasks",
       keywords: ["task", "tasks", "todo", "note", "add task"],

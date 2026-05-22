@@ -24,6 +24,7 @@ interface CommandPaletteProps {
   actions: CommandItem[];
   placeholder?: string;
   onAddCardBorder?: (slotKey: string, color: string) => void;
+  onRemoveCardBorder?: (slotKey: string) => void;
 
   /** New Phase 1: Pre-fill the palette with a specific slot or person for contextual flows */
   initialContext?: {
@@ -120,6 +121,7 @@ export function CommandPalette({
   requestGrokStructuredSuggestions,
   onTriggerGrokBoardAnalysis,
   onAddCardBorder,
+  onRemoveCardBorder,
   commandRoster,
   commandShiftDate,
   commandWeekDays,
@@ -144,6 +146,7 @@ export function CommandPalette({
 
   // Border mode states
   const [borderStep, setBorderStep] = React.useState<'idle' | 'select-card' | 'select-color'>('idle');
+  const [removeBorderStep, setRemoveBorderStep] = React.useState<'idle' | 'select-card'>('idle');
   const [borderTarget, setBorderTarget] = React.useState<string | null>(null);
 
   // Track if this open was triggered by tapping a card (for better UX/hints)
@@ -203,6 +206,7 @@ export function CommandPalette({
       setSelectedSlot(null);
       setContextStep('root');
       setBorderStep('idle');
+      setRemoveBorderStep('idle');
       setBorderTarget(null);
       setInputValue("");
       setCommandStatus("idle");
@@ -950,9 +954,8 @@ export function CommandPalette({
                   {[
                     // Zones (Z1–Z10) + Z9 Smoking Room
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    // Restrooms — actual numbering is 1, 6, 7, 8, 10 (not 1–5)
-                    'MRR1','MRR6','MRR7','MRR8','MRR10',
-                    'WRR1','WRR6','WRR7','WRR8','WRR10',
+                    // Restrooms — treated as single cards (one border per RR pair)
+                    'RR1','RR6','RR7','RR8','RR10',
                     // Auxiliary
                     'ADM','TR1','TR2','SP1','SP2','SP3',
                   ].map((slot) => (
@@ -998,6 +1001,34 @@ export function CommandPalette({
                     >
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color.value }} />
                       <div className="font-medium">{color.name}</div>
+                    </CommandPrimitive.Item>
+                  ))}
+                </>
+              )}
+
+              {/* Remove Card Border flow */}
+              {!isCommandMode && removeBorderStep === 'select-card' && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to remove border from</div>
+                  {[
+                    'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
+                    'RR1','RR6','RR7','RR8','RR10',
+                    'ADM','TR1','TR2','SP1','SP2','SP3',
+                  ].map((slot) => (
+                    <CommandPrimitive.Item
+                      key={`remove-${slot}`}
+                      value={slot}
+                      onSelect={() => {
+                        if (onRemoveCardBorder) {
+                          onRemoveCardBorder(slot);
+                        }
+                        setRemoveBorderStep('idle');
+                        setBorderTarget(null);
+                        onOpenChange(false);
+                      }}
+                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
+                    >
+                      <div className="font-medium">{slot}</div>
                     </CommandPrimitive.Item>
                   ))}
                 </>
@@ -1063,7 +1094,7 @@ export function CommandPalette({
               )}
 
               {/* Normal grouped content (only when not in special modes) */}
-              {!isCommandMode && borderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label'].includes(contextStep) && grouped.map(([groupName, items]) => (
+              {!isCommandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label'].includes(contextStep) && grouped.map(([groupName, items]) => (
                 <CommandPrimitive.Group
                   key={groupName}
                   id={`group-${groupName.toLowerCase()}`}
@@ -1101,6 +1132,13 @@ export function CommandPalette({
                           setBorderStep('select-card');
                           setBorderTarget(null);
                           // stay open for card selection
+                          return;
+                        }
+
+                        // Remove Card Border multi-step flow
+                        if (item.id === "visual-remove-card-border") {
+                          setRemoveBorderStep('select-card');
+                          setBorderTarget(null);
                           return;
                         }
 

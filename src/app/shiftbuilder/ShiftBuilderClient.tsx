@@ -274,12 +274,12 @@ const getAuxIcon = (key: string) => AUX_ICONS[key] || "✦";
 // Exact Golden palette (eyeballed from friday_golden_zoneCardSheet.png)
 const ZONE_COLORS: Record<string, string> = {
   Z1:  '#B89708', // gold
-  Z2:  '#43A047', // green
+  Z2:  '#B89708', // gold — matches Z1 (Main Entry area)
   Z3:  '#E53935', // red
   Z4:  '#E53935', // red
-  Z5:  '#B89708', // gold (mirrors Z1 in the Golden)
-  Z6:  '#1976D2', // blue
-  Z7:  '#B7679A', // magenta
+  Z5:  '#E53935', // red
+  Z6:  '#B7679A', // magenta
+  Z7:  '#1976D2', // blue
   Z8:  '#6B5346', // brown
   Z9:  '#E53935', // red
   Z10: '#43A047', // green
@@ -290,8 +290,8 @@ const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
 // RR accent — mirrors the zone color of the area each RR serves
 const RR_COLORS: Record<number, string> = {
   1:  '#B89708', // RR 1+2 — gold (Main Entry, paired with Z1/Z2)
-  6:  '#1976D2', // RR 6  — blue (Slots, paired with Z6)
-  7:  '#E53935', // RR 7  — red  (High Limit)
+  6:  '#B7679A', // RR 6  — magenta (Slots East, matches Z6)
+  7:  '#1976D2', // RR 7  — blue (High Limit, matches Z7)
   8:  '#6B5346', // RR 8  — brown (Table Games, paired with Z8)
   10: '#43A047', // RR 10 — green (Poker, paired with Z10)
 };
@@ -715,7 +715,10 @@ const RRCard: React.FC<RRCardProps> = ({
     <div
       onPointerMove={handleSpotlightMove}
       className={`assignment-card relative flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
-      style={{ ["--card-accent" as any]: color }}
+      style={{ 
+        ["--card-accent" as any]: color,
+        ...(borderColor && { boxShadow: `0 0 0 3px ${borderColor}40, 0 0 0 6px ${borderColor}15` })
+      }}
     >
       <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
       <div
@@ -1473,6 +1476,14 @@ export default function ShiftBuilder() {
 
   const addCardBorder = (slotKey: string, color: string) => {
     setCardBorders(prev => ({ ...prev, [slotKey]: color }));
+  };
+
+  const removeCardBorder = (slotKey: string) => {
+    setCardBorders(prev => {
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
   };
 
   // When the GRAVE filter is active, collapse the "Already Deployed", overlap pools,
@@ -3938,7 +3949,7 @@ export default function ShiftBuilder() {
                           setBreakGroupForSlot={setBreakGroupForSlot}
                           onGenderClick={handleGenderClick}
                           loading={loadingAssignments}
-                          borderColor={cardBorders[`MRR${def.num}`] || cardBorders[`WRR${def.num}`]}
+                          borderColor={cardBorders[`RR${def.num}`] || cardBorders[`MRR${def.num}`] || cardBorders[`WRR${def.num}`]}
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[`MRR${def.num}`] || draftAssignments[`WRR${def.num}`]}
                           onRemoveTask={handleRemoveTask}
@@ -4568,13 +4579,14 @@ export default function ShiftBuilder() {
         onOpenChange={setCmdkOpen}
         actions={commandActions}
         onAddCardBorder={addCardBorder}
+        onRemoveCardBorder={removeCardBorder}
         initialContext={cmdkInitialContext}
         onRemoveFromSlot={unassign}
         onToggleLock={toggleLock}
         onAssign={assign}
         onAddTask={async (uiKey, taskLabel) => {
           if (!nightId) {
-            showToast("error", "No active night selected");
+            showToast("No active night selected", "error");
             return;
           }
           try {
@@ -4597,7 +4609,7 @@ export default function ShiftBuilder() {
             setSelectedTasks(byKey);
           } catch (e) {
             console.error("Failed to add task from palette", e);
-            showToast("error", "Failed to save task");
+            showToast("Failed to save task", "error");
           }
         }}
         onCycleBreak={(slotKey) => {
