@@ -34,6 +34,9 @@ import {
   addNightSlotTask,
   removeNightSlotTask,
   addSlotCatalogTask,
+  getNightCardBorders,
+  setNightCardBorder,
+  removeNightCardBorder,
   getNightBreakAssignments,
   upsertBreakAssignment,
   deleteBreakAssignment,
@@ -1475,15 +1478,33 @@ export default function ShiftBuilder() {
   }>>({});
 
   const addCardBorder = (slotKey: string, color: string) => {
+    // Optimistic update
     setCardBorders(prev => ({ ...prev, [slotKey]: color }));
+
+    // Persist if we have a night
+    if (nightId) {
+      setNightCardBorder(nightId, slotKey, color).catch((e) => {
+        console.error("Failed to persist card border", e);
+        showToast("Couldn't save border (will retry on reload)", "error");
+      });
+    }
   };
 
   const removeCardBorder = (slotKey: string) => {
+    // Optimistic update
     setCardBorders(prev => {
       const next = { ...prev };
       delete next[slotKey];
       return next;
     });
+
+    // Persist removal
+    if (nightId) {
+      removeNightCardBorder(nightId, slotKey).catch((e) => {
+        console.error("Failed to remove card border", e);
+        showToast("Couldn't remove border (will retry on reload)", "error");
+      });
+    }
   };
 
   // When the GRAVE filter is active, collapse the "Already Deployed", overlap pools,
@@ -2579,6 +2600,7 @@ export default function ShiftBuilder() {
     setNightId(null);
     setAssignments({});
     setSelectedTasks({}); // also reset per-night task selections on day switch
+    setCardBorders({});   // reset visual borders when switching days
     setCalledOffIds(new Set());
     setScheduledTmIdsTonight(new Set());
     if (notesRef.current) notesRef.current.innerText = "";
@@ -2603,6 +2625,7 @@ export default function ShiftBuilder() {
           amOverlapMembers,
           nightTaskRows,
           breakRows,
+          nightBorderMap,
           callOffSet,
           activeConfig,
           skillScoreMap,
@@ -2622,6 +2645,7 @@ export default function ShiftBuilder() {
           id ? getGraveAMOverlapMembers(id) : Promise.resolve([]),
           id ? getNightSlotTasks(id) : Promise.resolve([] as NightSlotTask[]),
           id ? getNightBreakAssignments(id) : Promise.resolve([]),
+          id ? getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
           getCallOffsForDate(selectedDay.date),
           getActiveEngineConfig(),
           getTMSkillScores(),
@@ -2748,6 +2772,9 @@ export default function ShiftBuilder() {
           (tasksByUiKey[uiKey] ??= []).push(row);
         });
         setSelectedTasks(tasksByUiKey);
+
+        // Load persisted card borders for this night (visual attention marks)
+        setCardBorders(nightBorderMap || {});
 
         // Detect operator-added AUX slots from loaded rows so the layout
         // survives reload. Defaults are protected (they're always in
@@ -4584,22 +4611,29 @@ export default function ShiftBuilder() {
         onRemoveFromSlot={unassign}
         onToggleLock={toggleLock}
         onAssign={assign}
-        onAddTask={async (uiKey, taskLabel) => {
+        onAddTask={async (uiKeys: string | string[], taskLabel: string) => {
           if (!nightId) {
             showToast("No active night selected", "error");
             return;
           }
+          const keys = Array.isArray(uiKeys) ? uiKeys : [uiKeys];
+          if (keys.length === 0 || !taskLabel?.trim()) return;
+
           try {
-            const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
-            await addNightSlotTask({
-              nightId,
-              slotKey: slot_key,
-              slotType: slot_type,
-              rrSide: rr_side,
-              taskLabel,
-              sortOrder: 50,
-            });
-            // Refresh tasks so cards show the new one immediately
+            // Apply the same task label to every selected card
+            for (const uiKey of keys) {
+              const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+              await addNightSlotTask({
+                nightId,
+                slotKey: slot_key,
+                slotType: slot_type,
+                rrSide: rr_side,
+                taskLabel: taskLabel.trim(),
+                sortOrder: 50,
+              });
+            }
+
+            // Refresh all tasks for the night so every affected card updates
             const fresh = await getNightSlotTasks(nightId);
             const byKey: Record<string, NightSlotTask[]> = {};
             for (const t of fresh) {
@@ -4608,8 +4642,8 @@ export default function ShiftBuilder() {
             }
             setSelectedTasks(byKey);
           } catch (e) {
-            console.error("Failed to add task from palette", e);
-            showToast("Failed to save task", "error");
+            console.error("Failed to add task from palette (multi)", e);
+            showToast("Failed to save task to one or more cards", "error");
           }
         }}
         onCycleBreak={(slotKey) => {

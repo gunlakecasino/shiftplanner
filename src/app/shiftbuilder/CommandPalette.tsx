@@ -143,6 +143,7 @@ export function CommandPalette({
 
   // For the Tasks flow
   const [selectedTaskSlot, setSelectedTaskSlot] = React.useState<string | null>(null);
+  const [multiTaskSlots, setMultiTaskSlots] = React.useState<string[]>([]);
 
   // Border mode states
   const [borderStep, setBorderStep] = React.useState<'idle' | 'select-card' | 'select-color'>('idle');
@@ -247,6 +248,7 @@ export function CommandPalette({
 
       // Reset tasks flow state
       setSelectedTaskSlot(null);
+      setMultiTaskSlots([]);
       if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
         setContextStep('root');
       }
@@ -435,6 +437,7 @@ export function CommandPalette({
             setContextStep('root');
           } else if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
             setSelectedTaskSlot(null);
+            setMultiTaskSlots([]);
             setContextStep('root');
             setInputValue('');
           }
@@ -1034,50 +1037,87 @@ export function CommandPalette({
                 </>
               )}
 
-              {/* Tasks flow: select zone first */}
+              {/* Tasks flow: multi-select cards for the same task */}
               {!isCommandMode && contextStep === 'tasks-select-zone' && (
                 <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select a zone / slot for the new task</div>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
+                    Select cards for the same task (click to toggle)
+                  </div>
                   {[
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
                     'MRR1','MRR6','MRR7','MRR8','MRR10',
                     'WRR1','WRR6','WRR7','WRR8','WRR10',
                     'ADM','TR1','TR2',
-                  ].map((slot) => (
+                  ].map((slot) => {
+                    const isSelected = multiTaskSlots.includes(slot);
+                    return (
+                      <div
+                        key={`task-multi-${slot}`}
+                        onClick={() => {
+                          setMultiTaskSlots((prev) =>
+                            prev.includes(slot)
+                              ? prev.filter((s) => s !== slot)
+                              : [...prev, slot]
+                          );
+                        }}
+                        className={`group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 transition-colors ${
+                          isSelected
+                            ? 'bg-[#007AFF]/10 border-l-2 border-[#007AFF]/70'
+                            : 'hover:bg-zinc-900/5'
+                        }`}
+                      >
+                        <div className="font-medium flex-1">{slot}</div>
+                        {isSelected && <div className="text-[#007AFF] text-xs font-bold">✓</div>}
+                      </div>
+                    );
+                  })}
+
+                  {/* Continue button only when something is selected */}
+                  {multiTaskSlots.length > 0 && (
                     <CommandPrimitive.Item
-                      key={`task-${slot}`}
-                      value={slot}
+                      key="tasks-multi-continue"
+                      value="continue to task label"
                       onSelect={() => {
-                        setSelectedTaskSlot(slot);
                         setContextStep('tasks-enter-label');
                         setInputValue('');
                       }}
-                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
+                      className="mt-2 group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm bg-[#007AFF]/5 text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/15 border-l-2 border-[#007AFF]/60 transition-colors"
                     >
-                      <div className="font-medium">{slot}</div>
+                      <div className="font-semibold">
+                        Continue → assign task to <span className="text-[#007AFF]">{multiTaskSlots.length}</span> card{multiTaskSlots.length === 1 ? '' : 's'}
+                      </div>
                     </CommandPrimitive.Item>
-                  ))}
+                  )}
                 </>
               )}
 
-              {/* Tasks flow: enter free text label */}
-              {!isCommandMode && contextStep === 'tasks-enter-label' && selectedTaskSlot && (
+              {/* Tasks flow: enter free text label (supports multi-select) */}
+              {!isCommandMode && contextStep === 'tasks-enter-label' && (multiTaskSlots.length > 0 || selectedTaskSlot) && (
                 <>
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    Task for <span className="font-semibold text-zinc-900">{selectedTaskSlot}</span> — type description and press Enter
+                    {multiTaskSlots.length > 0 ? (
+                      <>Task for <span className="font-semibold text-zinc-900">{multiTaskSlots.length}</span> selected cards — type description and press Enter</>
+                    ) : (
+                      <>Task for <span className="font-semibold text-zinc-900">{selectedTaskSlot}</span> — type description and press Enter</>
+                    )}
                   </div>
                   <CommandPrimitive.Item
                     key="tasks-confirm"
                     value={`save task ${inputValue}`}
                     onSelect={async () => {
                       const label = inputValue.trim();
-                      if (!label || !selectedTaskSlot || !onAddTask) return;
+                      if (!label || !onAddTask) return;
+
+                      const targets = multiTaskSlots.length > 0 ? multiTaskSlots : (selectedTaskSlot ? [selectedTaskSlot] : []);
+                      if (targets.length === 0) return;
 
                       try {
-                        await onAddTask(selectedTaskSlot, label);
+                        // Support both single-string and array for the first arg
+                        await (onAddTask as any)(targets.length === 1 ? targets[0] : targets, label);
                         onOpenChange(false);
-                        // Reset for next time
+                        // Reset
                         setSelectedTaskSlot(null);
+                        setMultiTaskSlots([]);
                         setContextStep('root');
                         setInputValue('');
                       } catch (err) {
@@ -1087,7 +1127,11 @@ export function CommandPalette({
                     className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
                   >
                     <div className="font-medium">
-                      Save task to {selectedTaskSlot}: <span className="text-[#007AFF]">{inputValue || 'your description'}</span>
+                      {multiTaskSlots.length > 0 ? (
+                        <>Assign to {multiTaskSlots.length} cards: <span className="text-[#007AFF]">{inputValue || 'your description'}</span></>
+                      ) : (
+                        <>Save task to {selectedTaskSlot}: <span className="text-[#007AFF]">{inputValue || 'your description'}</span></>
+                      )}
                     </div>
                   </CommandPrimitive.Item>
                 </>
@@ -1146,6 +1190,7 @@ export function CommandPalette({
                         if (item.id === "tasks") {
                           setContextStep('tasks-select-zone');
                           setSelectedTaskSlot(null);
+                          setMultiTaskSlots([]);
                           setInputValue('');
                           return;
                         }

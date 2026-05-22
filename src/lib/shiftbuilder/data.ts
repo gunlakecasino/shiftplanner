@@ -913,6 +913,86 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
 }
 
 // ============================================================================
+// Card Border persistence (visual attention marks on cards)
+// ============================================================================
+//
+// Stored per-night so borders survive reloads and day switches.
+// Simple key-value per slot for the current GRAVE shift.
+//
+// Table (run once in Supabase):
+//   create table if not exists night_card_borders (
+//     night_id uuid references nights(id) on delete cascade,
+//     slot_key text not null,
+//     color text not null,
+//     updated_at timestamptz default now(),
+//     primary key (night_id, slot_key)
+//   );
+//
+// RLS: same pattern as night_slot_tasks / notes — operators can manage
+// borders for nights they have access to.
+//
+
+export async function getNightCardBorders(nightId: string): Promise<Record<string, string>> {
+  if (!nightId) return {};
+
+  const { data, error } = await supabase
+    .from('night_card_borders')
+    .select('slot_key, color')
+    .eq('night_id', nightId);
+
+  if (error) {
+    console.error('[shiftbuilder/data] getNightCardBorders error:', error);
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  for (const row of data || []) {
+    result[row.slot_key] = row.color;
+  }
+  return result;
+}
+
+export async function setNightCardBorder(
+  nightId: string,
+  slotKey: string,
+  color: string
+): Promise<void> {
+  if (!nightId || !slotKey || !color) return;
+
+  const { error } = await supabase
+    .from('night_card_borders')
+    .upsert(
+      {
+        night_id: nightId,
+        slot_key: slotKey,
+        color,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'night_id,slot_key' }
+    );
+
+  if (error) {
+    console.error('[shiftbuilder/data] setNightCardBorder failed:', error);
+    throw new Error(`Failed to save card border: ${error.message}`);
+  }
+}
+
+export async function removeNightCardBorder(nightId: string, slotKey: string): Promise<void> {
+  if (!nightId || !slotKey) return;
+
+  const { error } = await supabase
+    .from('night_card_borders')
+    .delete()
+    .eq('night_id', nightId)
+    .eq('slot_key', slotKey);
+
+  if (error) {
+    console.error('[shiftbuilder/data] removeNightCardBorder failed:', error);
+    throw new Error(`Failed to remove card border: ${error.message}`);
+  }
+}
+
+// ============================================================================
 // Break group persistence (break_assignments table)
 // ============================================================================
 //
