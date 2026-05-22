@@ -961,6 +961,9 @@ export function CommandPalette({
                     'RR1','RR6','RR7','RR8','RR10',
                     // Auxiliary
                     'ADM','TR1','TR2','SP1','SP2','SP3',
+                    // AM / PM Overlaps
+                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
+                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
                   ].map((slot) => (
                     <CommandPrimitive.Item
                       key={slot}
@@ -1017,6 +1020,9 @@ export function CommandPalette({
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
                     'RR1','RR6','RR7','RR8','RR10',
                     'ADM','TR1','TR2','SP1','SP2','SP3',
+                    // AM / PM Overlaps (optional but available)
+                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
+                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
                   ].map((slot) => (
                     <CommandPrimitive.Item
                       key={`remove-${slot}`}
@@ -1048,6 +1054,9 @@ export function CommandPalette({
                     'MRR1','MRR6','MRR7','MRR8','MRR10',
                     'WRR1','WRR6','WRR7','WRR8','WRR10',
                     'ADM','TR1','TR2',
+                    // AM / PM Overlaps (6 slots each)
+                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
+                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
                   ].map((slot) => {
                     const isSelected = multiTaskSlots.includes(slot);
                     return (

@@ -593,7 +593,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
   onSetTaskColor,
   onEditTask,
   textSize = "text-[11px]",
-  textColorClass = "text-[#6B7280]",
+  textColorClass = "text-[#374151]",
 }) => {
   const hasColor = !!task.color;
   const [isColorExpanded, setIsColorExpanded] = React.useState(false);
@@ -620,18 +620,12 @@ const TaskRow: React.FC<TaskRowProps> = ({
 
   return (
     <div
-      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 ${textSize} ${textColorClass} ${hasColor ? "bg-white/40" : ""}`}
+      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 ${textSize} ${textColorClass}`}
     >
-      {/* Always-visible color sphere (prints on PDF) */}
-      {hasColor && (
-        <div
-          className="mt-[1px] w-[10px] h-[10px] flex-shrink-0 rounded-full ring-1 ring-black/10"
-          style={{ backgroundColor: task.color! }}
-          title={`Highlight: ${task.color}`}
-        />
-      )}
-
-      {/* Label area — supports inline editing + hanging indent for wrapping */}
+      {/* Label area — supports inline editing + hanging indent for wrapping.
+          When a highlight color is set, we apply a left border + subtle background
+          tint directly to the text block so the highlight extends the full length
+          of the task label (including wrapped lines). No separate sphere. */}
       <div className="min-w-0 flex-1 leading-snug">
         {isEditing ? (
           <input
@@ -647,7 +641,15 @@ const TaskRow: React.FC<TaskRowProps> = ({
             autoFocus
           />
         ) : (
-          <span className="block pl-[13px] -indent-[13px]">
+          <span
+            className={`block rounded-sm transition-colors ${hasColor ? '' : 'pl-[13px] -indent-[13px]'}`}
+            style={hasColor ? {
+              backgroundColor: `${task.color}15`,
+              borderLeft: `3px solid ${task.color}`,
+              paddingLeft: '9px',
+              marginLeft: '-1px'
+            } : undefined}
+          >
             {task.taskLabel}
           </span>
         )}
@@ -757,7 +759,7 @@ const ZoneTaskList: React.FC<{
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
-  const textColor = hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]";
+  const textColor = hasTM ? "text-[#374151]" : "text-[#6B7280]";
   return (
     <div
       className={`mt-auto pt-1 text-[11px] leading-tight ${textColor}`}
@@ -870,7 +872,7 @@ const RRSide: React.FC<{
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
               textSize="text-[10px]"
-              textColorClass={hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}
+              textColorClass={hasTM ? "text-[#374151]" : "text-[#6B7280]"}
             />
           ))}
         </div>
@@ -1425,7 +1427,7 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
       )}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-0.5 text-[8px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`mt-0.5 text-[9px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -1436,8 +1438,8 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
-              textSize="text-[8px]"
-              textColorClass={hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}
+              textSize="text-[9px]"
+              textColorClass={hasTM ? "text-[#374151]" : "text-[#6B7280]"}
             />
           ))}
         </div>
@@ -1512,11 +1514,120 @@ export default function ShiftBuilder() {
   // finishing Friday's grave at 6:30am Saturday morning still lands on
   // Friday); after 8:30am it returns today.
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
+    // Restore last selected day from localStorage if available
+    const saved = localStorage.getItem("oms_selected_day_index");
+    if (saved !== null) {
+      const idx = parseInt(saved, 10);
+      if (!isNaN(idx) && idx >= 0 && idx <= 6) {
+        return idx;
+      }
+    }
     const shift = currentShiftDate();
     const ws = startOfShiftWeek(shift);
     return daysBetween(ws, shift);
   });
-  const [currentView, setCurrentView] = useState<"deployment" | "breaks">("deployment");
+
+  const [currentView, setCurrentView] = useState<"deployment" | "breaks">(() => {
+    const saved = localStorage.getItem("oms_current_view");
+    return (saved === "breaks" || saved === "deployment") ? saved : "deployment";
+  });
+
+  // Day picker popover state for the left-rail colored day number.
+  // When true we render a floating horizontal strip of the 7 days immediately
+  // to the right of the left control rail.
+  const [dayPickerOpen, setDayPickerOpen] = useState(false);
+
+  // Calendar popover (full month picker) for jumping to any date via the left-rail calendar icon.
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarView, setCalendarView] = useState<Date>(() => new Date());
+
+  // Centered expandable control cluster (new primary control surface).
+  // Single orb centered on the browser. Tapping expands a centered row of all actions
+  // (roster icon is now inside the "drawer"/cluster). Expands from the center, stays centered.
+  const [controlsExpanded, setControlsExpanded] = useState(false);
+
+  // Close day picker on outside click or Escape (same pattern as the retired pill hooks).
+  useEffect(() => {
+    if (!dayPickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const picker = document.getElementById("left-rail-day-picker");
+      const trigger = document.getElementById("left-rail-day-trigger");
+      // Ignore clicks on the trigger itself (so re-clicking the colored day number
+      // while open will close the picker via this handler, then the button's onClick
+      // will re-open it — resulting in a reliable toggle).
+      if (trigger && trigger.contains(e.target as Node)) return;
+      if (picker && !picker.contains(e.target as Node)) {
+        setDayPickerOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDayPickerOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [dayPickerOpen]);
+
+  // Close calendar popover on outside click or Escape.
+  useEffect(() => {
+    if (!calendarOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const cal = document.getElementById("left-rail-calendar-popover");
+      const trigger = document.getElementById("left-rail-calendar-trigger");
+      if (trigger && trigger.contains(e.target as Node)) return;
+      if (cal && !cal.contains(e.target as Node)) {
+        setCalendarOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCalendarOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [calendarOpen]);
+
+  // Tap anywhere outside the centered control cluster (when expanded) to collapse it.
+  useEffect(() => {
+    if (!controlsExpanded) return;
+
+    const onDown = (e: MouseEvent) => {
+      const orb = document.getElementById("centered-control-orb");
+      const cluster = document.getElementById("centered-controls-cluster");
+
+      // Ignore clicks on the orb or inside the expanded cluster
+      if ((orb && orb.contains(e.target as Node)) || (cluster && cluster.contains(e.target as Node))) return;
+
+      // Ignore clicks inside any open sub popovers
+      const dayP = document.getElementById("left-rail-day-picker");
+      const calP = document.getElementById("left-rail-calendar-popover");
+      if ((dayP && dayP.contains(e.target as Node)) || (calP && calP.contains(e.target as Node))) return;
+
+      // Real outside click → collapse everything
+      setControlsExpanded(false);
+      setDayPickerOpen(false);
+      setCalendarOpen(false);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setControlsExpanded(false);
+        setDayPickerOpen(false);
+        setCalendarOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [controlsExpanded]);
+
   const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(1);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
   const [realRoster, setRealRoster] = useState<any[]>([]);
@@ -1605,6 +1716,16 @@ export default function ShiftBuilder() {
   useEffect(() => {
     localStorage.setItem("oms_roster_open", String(rosterOpen));
   }, [rosterOpen]);
+
+  // Persist selected day and current view (deployment / breaks) so full page
+  // refreshes remember where the operator was.
+  useEffect(() => {
+    localStorage.setItem("oms_selected_day_index", String(selectedDayIndex));
+  }, [selectedDayIndex]);
+
+  useEffect(() => {
+    localStorage.setItem("oms_current_view", currentView);
+  }, [currentView]);
 
   // Called-off TMs for the currently selected night (from `call_offs` table)
   const [calledOffIds, setCalledOffIds] = useState<Set<string>>(new Set());
@@ -2223,9 +2344,9 @@ export default function ShiftBuilder() {
   // Each pill group collapses to its active value by default and expands
   // inline on tap. Click-outside or ESC dismisses; selecting collapses with
   // the new active value (handled per-group at the onClick call sites).
-  const weekPill = useCollapsiblePill();
-  const dayPill = useCollapsiblePill();
-  const viewPill = useCollapsiblePill();
+  // Left-rail day/week/view controls now live in the fixed left control rail
+  // (no more bottom floating pill cluster). The old collapsible pill hooks
+  // are retired with the bottom UI.
 
   // === Zoom & centering ===
   // The artboard is locked at 1056×816 (the print contract). zoomMode controls
@@ -2562,11 +2683,11 @@ export default function ShiftBuilder() {
       });
 
     try {
+      // Hide the live artboard during captures so it doesn't accidentally
+      // get included as an extra (blank) page.
+      if (liveArtboard) liveArtboard.style.visibility = 'hidden';
+
       // Capture deployment view.
-      // flushSync forces React to commit the new state synchronously before
-      // returning — without it, React 19's concurrent rendering can defer
-      // the commit past our RAF window, and BOTH captures end up as the
-      // last-rendered view (the symptom: print only shows the break page).
       flushSync(() => { setCurrentView("deployment"); });
       await nextFrames(2);
       const deploymentHTML =
@@ -2575,13 +2696,47 @@ export default function ShiftBuilder() {
       // Capture breaks view
       flushSync(() => { setCurrentView("breaks"); });
       await nextFrames(2);
+
+      // Force the artboard to the exact print height during capture so that
+      // the breaks view's flex layout sees a full 816px tall container.
+      // This allows `mt-auto` (and flex-1 areas) to pin the Overlaps section
+      // to the very bottom of the landscape page.
+      const artboardForBreaks = document.querySelector(".print-artboard") as HTMLElement | null;
+      const prevHeight = artboardForBreaks?.style.height;
+      const prevMinHeight = artboardForBreaks?.style.minHeight;
+      const prevDisplay = artboardForBreaks?.style.display;
+      const prevFlexDir = artboardForBreaks?.style.flexDirection;
+
+      if (artboardForBreaks) {
+        artboardForBreaks.style.height = "816px";
+        artboardForBreaks.style.minHeight = "816px";
+        artboardForBreaks.style.display = "flex";
+        artboardForBreaks.style.flexDirection = "column";
+      }
+
+      // Force layout calculation
+      artboardForBreaks?.getBoundingClientRect();
+      await nextFrames(1);
+
       const breaksHTML =
         (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
+
+      // Restore
+      if (artboardForBreaks) {
+        artboardForBreaks.style.height = prevHeight || "";
+        artboardForBreaks.style.minHeight = prevMinHeight || "";
+        artboardForBreaks.style.display = prevDisplay || "";
+        artboardForBreaks.style.flexDirection = prevFlexDir || "";
+      }
 
       // Restore the operator's original view before printing — once the
       // container is injected and we trigger print, the visual freezes.
       flushSync(() => { setCurrentView(originalView); });
       await nextFrames(1);
+
+      // Restore visibility of the live artboard (it will be hidden again
+      // by the printing-dual-mode class right before window.print).
+      if (liveArtboard) liveArtboard.style.visibility = '';
 
       // Debug visibility — operators can open Web Inspector and verify the
       // captures actually contain different content.
@@ -2602,6 +2757,28 @@ export default function ShiftBuilder() {
       container.className = "print-dual-container";
       container.innerHTML = deploymentHTML + breaksHTML;
       document.body.appendChild(container);
+
+      // Post-process the breaks artboard (second one) to force the overlaps
+      // section all the way to the bottom of the 816px page.
+      // This is more reliable than relying only on capture-time height.
+      const breaksArtboard = container.querySelectorAll('.print-artboard')[1];
+      if (breaksArtboard) {
+        const overlaps = breaksArtboard.querySelector('.overlaps-section') as HTMLElement | null;
+        if (overlaps) {
+          overlaps.style.marginTop = 'auto';
+          overlaps.style.flexShrink = '0';
+        }
+
+        // Ensure the content area above the overlaps behaves as a flex column
+        // so the waves grow and overlaps get pushed down.
+        const contentArea = breaksArtboard.querySelector('.flex-1.min-h-0.overflow-hidden.flex.flex-col') as HTMLElement | null;
+        if (contentArea) {
+          contentArea.style.display = 'flex';
+          contentArea.style.flexDirection = 'column';
+          contentArea.style.flex = '1 1 0%';
+          contentArea.style.minHeight = '0';
+        }
+      }
 
       // body class so print CSS knows to hide the live artboard and show
       // only the dual container.
@@ -3281,6 +3458,8 @@ export default function ShiftBuilder() {
       const captureDate = selectedDay.date;
       const captureDayName = selectedDay.name;
 
+      const { slot_key, rr_side } = uiToDb(uiKey);
+
       // Optimistic update
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
@@ -3290,8 +3469,8 @@ export default function ShiftBuilder() {
         return { ...prev, [uiKey]: next };
       });
 
-      // Persist to Supabase
-      updateNightSlotTaskColor(targetNightId, uiKey, taskLabel, null, color).catch((err) => {
+      // Persist to Supabase (use normalized db keys)
+      (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side).catch((err) => {
         console.error('[ShiftBuilder] Failed to set task color:', err);
         // Could add a toast here later if desired
       });
@@ -3316,7 +3495,8 @@ export default function ShiftBuilder() {
         return { ...prev, [uiKey]: next };
       });
 
-      updateNightSlotTaskLabel(targetNightId, uiKey, oldLabel, trimmed).catch((err) => {
+      const { slot_key, rr_side } = uiToDb(uiKey);
+      (updateNightSlotTaskLabel as any)(targetNightId, slot_key, oldLabel, trimmed, rr_side).catch((err) => {
         console.error('[ShiftBuilder] Failed to edit task label:', err);
       });
     },
@@ -3897,34 +4077,210 @@ export default function ShiftBuilder() {
         </div>
         {/* End floating roster panel */}
 
-        {/* Collapsed-state sphere — rendered only when rosterOpen is false.
-           Spring-scales in as the panel scales out; tap to genie the panel
-           back. Position mirrors the panel's transform-origin so the visual
-           handoff feels continuous. */}
-        <button
-          type="button"
-          onClick={() => setRosterOpen(true)}
-          aria-label="Open roster"
-          title="Open roster"
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full border border-white/60 shadow-xl shadow-black/15 flex items-center justify-center text-[#1C1C1E] hover:scale-105 active:scale-95"
-          style={{
-            background: "rgba(255,255,255,0.9)",
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
-            transform: rosterOpen ? "translateY(-50%) scale(0)" : "translateY(-50%) scale(1)",
-            opacity: rosterOpen ? 0 : 1,
-            pointerEvents: rosterOpen ? "none" : "auto",
-            transition: "transform 240ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms cubic-bezier(0.32, 0.72, 0, 1)",
-          }}
-        >
-          {/* Users icon (lucide-style inline). Indicates "roster of people". */}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        </button>
+        {/* Old left-anchored roster trigger removed — now part of the centered expandable control cluster below. */}
+
+        {/* Old left rail (roster trigger + collapsible ⋮ controls) fully removed.
+           Replaced by a single centered expandable control cluster (see below). */}
+
+        {/* Floating day-of-week picker (appears to the right of the left rail
+           when the colored day number is clicked). Glass panel, 7 day choices
+           laid out horizontally so the "week of days" expands next to the
+           calendar/day controls on the left rail exactly as requested. */}
+        {dayPickerOpen && !rosterOpen && (
+          <div
+            id="left-rail-day-picker"
+            className="fixed z-[70] flex items-center gap-1 rounded-2xl border border-white/70 bg-white/95 p-1 shadow-2xl shadow-black/10 backdrop-blur-xl"
+            style={{
+              left: "52px",
+              top: "calc(50% + 297px - 16px)",   // vertically align with the day-number sphere
+              transform: "translateY(-50%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {DAY_DEFS.map((day) => {
+              const idx = day.index;
+              const isSelected = idx === selectedDayIndex;
+              const useOutline = currentView === "breaks" && isSelected;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setSelectedDayIndex(idx);
+                    setDayPickerOpen(false);
+                  }}
+                  className={`relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] transition-all flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
+                  style={{
+                    backgroundColor: useOutline ? "#fff" : (isSelected ? day.color : "transparent"),
+                    borderColor: useOutline ? day.color : "transparent",
+                    color: useOutline ? day.color : undefined,
+                    borderWidth: useOutline ? "1.5px" : 0,
+                  }}
+                  title={`${day.name} · ${day.monthYear.split(" ")[0]} ${day.dateNum}`}
+                >
+                  <span>{day.short}</span>
+                  <span className="tabular-nums opacity-80">{day.dateNum}</span>
+                  {mounted && day.isToday && !isSelected && (
+                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#007AFF]" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Full calendar popover — opens when the calendar icon in the left rail is tapped.
+           Lets the operator jump to any date by picking a day in any month. */}
+        {calendarOpen && !rosterOpen && (
+          <div
+            id="left-rail-calendar-popover"
+            className="fixed z-[70] w-[280px] rounded-2xl border border-white/70 bg-white/95 p-3 shadow-2xl shadow-black/10 backdrop-blur-xl text-[12px]"
+            style={{
+              left: "52px",
+              top: "calc(50% + 253px - 80px)",
+              transform: "translateY(-50%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <button
+                onClick={() => setCalendarView(addDays(calendarView, -30))}
+                className="w-6 h-6 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#6B7280]"
+                aria-label="Previous month"
+              >
+                ‹
+              </button>
+
+              <div className="font-semibold text-[#1C1C1E] tabular-nums">
+                {MONTH_LONG[calendarView.getMonth()]} {calendarView.getFullYear()}
+              </div>
+
+              <button
+                onClick={() => setCalendarView(addDays(calendarView, 32))}
+                className="w-6 h-6 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#6B7280]"
+                aria-label="Next month"
+              >
+                ›
+              </button>
+            </div>
+
+            {/* Day headers */}
+            <div className="grid grid-cols-7 text-center text-[#8E8E93] font-medium mb-1">
+              {["S","M","T","W","T","F","S"].map((d, i) => (
+                <div key={i}>{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-0.5 text-center">
+              {(() => {
+                const year = calendarView.getFullYear();
+                const month = calendarView.getMonth();
+
+                const firstOfMonth = new Date(year, month, 1);
+                const startWeekday = firstOfMonth.getDay(); // 0=Sun
+
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                const cells: React.ReactNode[] = [];
+
+                // Leading days from previous month (muted)
+                for (let i = 0; i < startWeekday; i++) {
+                  const d = new Date(year, month, 1 - (startWeekday - i));
+                  cells.push(
+                    <button
+                      key={`prev-${i}`}
+                      onClick={() => {
+                        const newWeek = startOfShiftWeek(d);
+                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                        setWeekStart(newWeek);
+                        setSelectedDayIndex(idx);
+                        setCalendarOpen(false);
+                      }}
+                      className="h-7 w-7 text-[11px] text-[#C8C8CC] hover:bg-[#F3F4F6] rounded-md"
+                    >
+                      {d.getDate()}
+                    </button>
+                  );
+                }
+
+                // Current month days
+                for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+                  const d = new Date(year, month, dayNum);
+                  const currentSelectedDate = DAY_DEFS[selectedDayIndex]?.date;
+                  const isSelectedDay = currentSelectedDate && sameDay(d, currentSelectedDate);
+
+                  cells.push(
+                    <button
+                      key={dayNum}
+                      onClick={() => {
+                        const newWeek = startOfShiftWeek(d);
+                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                        setWeekStart(newWeek);
+                        setSelectedDayIndex(idx);
+                        setCalendarOpen(false);
+                      }}
+                      className={`h-7 w-7 text-[11px] rounded-md transition-colors ${
+                        isSelectedDay
+                          ? "bg-[#111] text-white font-semibold"
+                          : "hover:bg-[#F3F4F6] text-[#1C1C1E]"
+                      }`}
+                    >
+                      {dayNum}
+                    </button>
+                  );
+                }
+
+                // Trailing days from next month
+                const remaining = 42 - cells.length;
+                for (let i = 1; i <= remaining; i++) {
+                  const d = new Date(year, month + 1, i);
+                  cells.push(
+                    <button
+                      key={`next-${i}`}
+                      onClick={() => {
+                        const newWeek = startOfShiftWeek(d);
+                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                        setWeekStart(newWeek);
+                        setSelectedDayIndex(idx);
+                        setCalendarOpen(false);
+                      }}
+                      className="h-7 w-7 text-[11px] text-[#C8C8CC] hover:bg-[#F3F4F6] rounded-md"
+                    >
+                      {d.getDate()}
+                    </button>
+                  );
+                }
+
+                return cells;
+              })()}
+            </div>
+
+            {/* Footer actions */}
+            <div className="mt-2 pt-2 border-t border-[#E5E5E7] flex justify-between">
+              <button
+                onClick={() => {
+                  const today = currentShiftDate();
+                  const newWeek = startOfShiftWeek(today);
+                  const idx = daysBetween(newWeek, today);
+                  setWeekStart(newWeek);
+                  setSelectedDayIndex(Math.max(0, Math.min(6, idx)));
+                  setCalendarOpen(false);
+                }}
+                className="text-[11px] px-2 py-0.5 rounded-md text-[#007AFF] hover:bg-[#E5F0FF]"
+              >
+                Today
+              </button>
+
+              <button
+                onClick={() => setCalendarOpen(false)}
+                className="text-[11px] px-2 py-0.5 rounded-md text-[#6B7280] hover:bg-[#F3F4F6]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* RIGHT: Scaled, centered artboard stage.
            stageHostRef is the gray scroll area; we measure its clientWidth /
@@ -4418,8 +4774,10 @@ export default function ShiftBuilder() {
                   </div>
 
                   {/* OVERLAPS — Golden: full-width section at bottom, two rows
-                     (11p–1a and 5a–7a) of 6 empty slots each. */}
-                  <section className="mt-auto pt-2">
+                     (11p–1a and 5a–7a) of 6 empty slots each. 
+                     The mt-auto + print post-processing pins this to the bottom
+                     of the landscape break sheet page. */}
+                  <section className="mt-auto pt-2 overlaps-section" data-print-target="overlaps">
                     <div className="sheet-section-header">
                       <span className="label">OVERLAPS</span>
                       <div className="divider" />
@@ -4497,168 +4855,6 @@ export default function ShiftBuilder() {
           </div>
           </div>
 
-          {/* ╭─ Floating pill cluster ─────────────────────────────────────╮
-             │  position: fixed → anchored to the browser viewport's        │
-             │  bottom edge so the cluster stays put through scroll/resize. │
-             │                                                              │
-             │  Vertical: bottom-3 (12px) — same baseline as the status     │
-             │  pill (bottom-right) so the bottom chrome reads as a single  │
-             │  horizontal band instead of stacked floating layers.         │
-             │                                                              │
-             │  Horizontal: follows the canvas center. The canvas shifts    │
-             │  right by 296px when the roster panel is open (to clear it), │
-             │  so the cluster shifts by half that = 148px. Collapsed: true │
-             │  viewport center.                                            │
-             │                                                              │
-             │  z-40 sits above artboard content, below header/fan.         │
-             │  Not inside .print-artboard → won't print.                   │
-             ╰──────────────────────────────────────────────────────────────╯ */}
-          <div
-            className="fixed bottom-3 -translate-x-1/2 flex items-center gap-2 z-40 transition-[left] duration-300"
-            style={{ left: rosterOpen ? "calc(50% + 148px)" : "50%" }}
-          >
-            {/* Small sphere / orb button to open Command Palette */}
-            <button
-              onClick={() => setCmdkOpen(true)}
-              className="w-6 h-6 rounded-full bg-white border border-[#E5E5E7] shadow-sm flex items-center justify-center hover:bg-[#F3F4F6] active:scale-95 transition-all"
-              title="Open Command Palette (⌘K)"
-              aria-label="Open Command Palette"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </button>
-
-            {/* ─── Week stepper ────────────────────────────────────────── */}
-            <div
-              ref={weekPill.wrapRef}
-              className="flex items-center gap-0.5 bg-white border border-[#E5E5E7] rounded-full p-0.5 shadow-md"
-            >
-              {weekPill.expanded ? (
-                <>
-                  <button
-                    onClick={goPrevWeek}
-                    className="w-7 h-7 rounded-full text-[#6B7280] hover:bg-[#F3F4F6] flex items-center justify-center"
-                    aria-label="Previous week"
-                    title="Previous week"
-                  >‹</button>
-                  <div
-                    className="px-3 h-7 flex items-center text-[12px] font-semibold tracking-[-0.1px] text-[#1C1C1E] select-none whitespace-nowrap min-w-[148px] justify-center"
-                    title={`Week of ${formatWeekLabel(weekStart)}`}
-                  >
-                    {formatWeekLabel(weekStart)}
-                  </div>
-                  <button
-                    onClick={goNextWeek}
-                    className="w-7 h-7 rounded-full text-[#6B7280] hover:bg-[#F3F4F6] flex items-center justify-center"
-                    aria-label="Next week"
-                    title="Next week"
-                  >›</button>
-                  <button
-                    onClick={() => { goThisWeek(); weekPill.setExpanded(false); }}
-                    disabled={isCurrentWeek}
-                    className={`h-7 px-3 ml-0.5 text-[11px] font-semibold rounded-full transition-all ${isCurrentWeek ? "text-[#C8C8CC] cursor-default" : "text-[#007AFF] hover:bg-[#E5F0FF]"}`}
-                    title="Jump to current week"
-                  >Today</button>
-                </>
-              ) : (
-                <button
-                  onClick={() => weekPill.setExpanded(true)}
-                  className="w-7 h-7 rounded-full text-[#1C1C1E] hover:bg-[#F3F4F6] flex items-center justify-center"
-                  title={`Week of ${formatWeekLabel(weekStart)} — tap to change`}
-                  aria-label={`Week of ${formatWeekLabel(weekStart)} — tap to change week`}
-                  aria-expanded={false}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            {/* ─── Day picker ──────────────────────────────────────────── */}
-            <div
-              ref={dayPill.wrapRef}
-              className="flex items-center gap-1 bg-white border border-[#E5E5E7] rounded-full p-0.5 shadow-md"
-            >
-              {dayPill.expanded ? (
-                DAY_DEFS.map((day) => {
-                  const idx = day.index;
-                  const isSelected = idx === selectedDayIndex;
-                  const useOutline = currentView === "breaks" && isSelected;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => { setSelectedDayIndex(idx); dayPill.setExpanded(false); }}
-                      className={`relative min-w-[40px] h-7 px-2 rounded-full text-[11px] font-semibold tracking-[-0.2px] transition-all flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
-                      style={{ backgroundColor: useOutline ? "white" : (isSelected ? day.color : "transparent"), borderColor: useOutline ? day.color : "transparent", color: useOutline ? day.color : undefined, borderWidth: useOutline ? "1.5px" : 0 }}
-                      title={`${day.name} · ${day.monthYear.split(" ")[0]} ${day.dateNum}`}
-                      aria-expanded={true}
-                    >
-                      <span>{day.short}</span>
-                      <span className="tabular-nums opacity-80">{day.dateNum}</span>
-                      {mounted && day.isToday && !isSelected && (
-                        <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#007AFF]" />
-                      )}
-                    </button>
-                  );
-                })
-              ) : (
-                <button
-                  onClick={() => dayPill.setExpanded(true)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums transition-all ${currentView === "breaks" ? "bg-white border-[1.5px] shadow-sm" : "text-white shadow"}`}
-                  style={{
-                    backgroundColor: currentView === "breaks" ? "white" : selectedDay.color,
-                    borderColor: currentView === "breaks" ? selectedDay.color : "transparent",
-                    color: currentView === "breaks" ? selectedDay.color : "#fff",
-                  }}
-                  title={`${selectedDay.name} · ${selectedDay.monthYear.split(" ")[0]} ${selectedDay.dateNum} — tap to change day`}
-                  aria-label={`${selectedDay.name} ${selectedDay.dateNum} — tap to change day`}
-                  aria-expanded={false}
-                >
-                  {selectedDay.dateNum}
-                </button>
-              )}
-            </div>
-
-            {/* ─── View toggle ─────────────────────────────────────────── */}
-            <div
-              ref={viewPill.wrapRef}
-              className="flex items-center bg-white border border-[#E5E5E7] rounded-full p-0.5 shadow-md"
-            >
-              {viewPill.expanded ? (
-                <>
-                  <button
-                    onClick={() => { setCurrentView("deployment"); viewPill.setExpanded(false); }}
-                    className={`px-4 py-1 text-[12px] font-semibold rounded-full transition-all ${currentView === "deployment" ? "bg-[#111] text-white" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
-                  >Deployment</button>
-                  <button
-                    onClick={() => { setCurrentView("breaks"); viewPill.setExpanded(false); }}
-                    className={`px-4 py-1 text-[12px] font-semibold rounded-full transition-all ${currentView === "breaks" ? "bg-[#111] text-white" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
-                  >Breaks &amp; Overlaps</button>
-                </>
-              ) : (
-                <button
-                  onClick={() => viewPill.setExpanded(true)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center bg-[#111] text-white"
-                  title={`${currentView === "deployment" ? "Deployment" : "Breaks & Overlaps"} — tap to switch view`}
-                  aria-label={`View: ${currentView === "deployment" ? "Deployment" : "Breaks & Overlaps"} — tap to switch`}
-                  aria-expanded={false}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="17 1 21 5 17 9" />
-                    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                    <polyline points="7 23 3 19 7 15" />
-                    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -4675,6 +4871,111 @@ export default function ShiftBuilder() {
         ) : null}
       </DragOverlay>
       </DndContext>
+
+      {/* =====================================================
+         NEW CENTERED EXPANDABLE CONTROL CLUSTER
+         Single orb centered on the browser. Tapping it expands
+         a centered row of all controls (including the roster icon
+         "in the drawer"). Expansion grows from the center point.
+         Tap outside or the orb again to collapse (tap-to-dismiss already wired).
+      ===================================================== */}
+      {/*
+        The main orb — always visible when roster panel is closed.
+        Uses the familiar roster/people icon as the entry point.
+      */}
+      <button
+        id="centered-control-orb"
+        type="button"
+        onClick={() => setControlsExpanded(v => !v)}
+        aria-label={controlsExpanded ? "Collapse controls" : "Expand controls"}
+        title={controlsExpanded ? "Collapse centered controls" : "Open controls (roster, refresh, print, day picker, calendar...)"}
+        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] w-14 h-14 rounded-full border border-white/60 shadow-2xl shadow-black/15 flex items-center justify-center text-[#1C1C1E] hover:scale-105 active:scale-95 transition-all"
+        style={{
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(24px) saturate(180%)",
+          WebkitBackdropFilter: "blur(24px) saturate(180%)",
+          opacity: rosterOpen ? 0.3 : 1,
+          pointerEvents: rosterOpen ? "none" : "auto",
+        }}
+      >
+        {/* App Library icon — grid of tools/controls (Cupertino / iPadOS style) */}
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          {/* Outer library frame */}
+          <rect x="3" y="3" width="18" height="18" rx="4.5" />
+          {/* Top-left "app" */}
+          <rect x="5.75" y="5.75" width="4.5" height="4.5" rx="1.25" />
+          {/* Top-right "app" */}
+          <rect x="13.75" y="5.75" width="4.5" height="4.5" rx="1.25" />
+          {/* Bottom-left "app" */}
+          <rect x="5.75" y="13.75" width="4.5" height="4.5" rx="1.25" />
+          {/* Bottom-right "app" */}
+          <rect x="13.75" y="13.75" width="4.5" height="4.5" rx="1.25" />
+        </svg>
+      </button>
+
+      {/* The expanded centered cluster — grows from the center of the orb above it */}
+      {controlsExpanded && !rosterOpen && (
+        <div
+          id="centered-controls-cluster"
+          className="fixed bottom-[78px] left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-3xl border border-white/70 bg-white/95 p-2 shadow-2xl shadow-black/10 backdrop-blur-xl transition-all"
+          style={{
+            transform: "translateX(-50%) scale(1)",
+            opacity: 1,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Roster button inside the drawer — opens the left roster panel */}
+          <button
+            onClick={() => { setRosterOpen(true); setControlsExpanded(false); }}
+            className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95"
+            title="Open roster"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C1C1E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </button>
+
+          {/* Refresh */}
+          <button onClick={() => window.location.reload()} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Refresh (remembers day & view)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+          </button>
+
+          {/* Command Palette */}
+          <button onClick={() => {
+            const isMac = navigator.platform.toUpperCase().includes('MAC');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: isMac, ctrlKey: !isMac, bubbles: true }));
+          }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Command Palette (⌘K)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
+          </button>
+
+          {/* Print */}
+          <button onClick={() => handlePrintBothPages()} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Print both pages">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+          </button>
+
+          {/* Day arrows */}
+          <button onClick={() => setSelectedDayIndex(p => (p + 6) % 7)} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Previous day">‹</button>
+          <button onClick={() => setSelectedDayIndex(p => (p + 1) % 7)} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Next day">›</button>
+
+          {/* Calendar */}
+          <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Calendar — pick any day">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          </button>
+
+          {/* Colored day number */}
+          <button onClick={() => setDayPickerOpen(true)} className="w-9 h-9 rounded-full border shadow flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: currentView === "breaks" ? "#fff" : selectedDay.color, borderColor: currentView === "breaks" ? selectedDay.color : "transparent", color: currentView === "breaks" ? selectedDay.color : "#fff", borderWidth: currentView === "breaks" ? "1.5px" : 0 }} title={`${selectedDay.name} ${selectedDay.dateNum}`}>
+            {selectedDay.dateNum}
+          </button>
+
+          {/* View flip */}
+          <button onClick={() => setCurrentView(currentView === "deployment" ? "breaks" : "deployment")} className="px-3 h-9 rounded-full border border-white/60 shadow text-[10px] font-bold flex items-center justify-center active:scale-95" style={{ background: currentView === "breaks" ? "rgba(251,191,36,0.85)" : "rgba(255,255,255,0.9)", color: currentView === "breaks" ? "#1C1C1E" : "#6B7280" }} title="Flip view">
+            {currentView === "deployment" ? "DEP" : "BRK"}
+          </button>
+        </div>
+      )}
 
       {/* === Floating status pill — bottom-right. Replaces the old full-width
           status strip. Same content for now (the "Draft • Last saved" text is
