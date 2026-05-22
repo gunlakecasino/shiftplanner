@@ -1513,14 +1513,28 @@ export default function ShiftBuilder() {
   // returns yesterday's calendar date until 8:30am local time (so the operator
   // finishing Friday's grave at 6:30am Saturday morning still lands on
   // Friday); after 8:30am it returns today.
+  // Restore the exact previously-selected GRAVE day (and therefore its week)
+  // so that refresh keeps you on the same Thursday of week N, not the current week.
+  // We persist the actual calendar date (ISO) for the chosen grave shift.
+  const getSavedDate = (): Date | null => {
+    const saved = localStorage.getItem("oms_selected_date");
+    if (!saved) return null;
+    const d = new Date(saved);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
-    // Restore last selected day from localStorage if available
-    const saved = localStorage.getItem("oms_selected_day_index");
-    if (saved !== null) {
-      const idx = parseInt(saved, 10);
-      if (!isNaN(idx) && idx >= 0 && idx <= 6) {
-        return idx;
-      }
+    const savedDate = getSavedDate();
+    if (savedDate) {
+      const ws = startOfShiftWeek(savedDate);
+      const idx = Math.max(0, Math.min(6, daysBetween(ws, savedDate)));
+      return idx;
+    }
+    // Fallback: last index only (legacy), else compute from current shift
+    const legacy = localStorage.getItem("oms_selected_day_index");
+    if (legacy !== null) {
+      const idx = parseInt(legacy, 10);
+      if (!isNaN(idx) && idx >= 0 && idx <= 6) return idx;
     }
     const shift = currentShiftDate();
     const ws = startOfShiftWeek(shift);
@@ -1651,7 +1665,13 @@ export default function ShiftBuilder() {
   // current-day circle don't drift mid-session. If the operator's session
   // spans the 8:30am rollover they can refresh to pick up the new shift.
   const [todayDate] = useState<Date>(() => currentShiftDate());
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfShiftWeek(currentShiftDate()));
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const savedDate = getSavedDate();
+    if (savedDate) {
+      return startOfShiftWeek(savedDate);
+    }
+    return startOfShiftWeek(currentShiftDate());
+  });
   const DAY_DEFS = React.useMemo(() => buildDayDefs(weekStart, todayDate), [weekStart, todayDate]);
 
   // === Live data: nightId resolves from the selected date ==================
@@ -1717,11 +1737,16 @@ export default function ShiftBuilder() {
     localStorage.setItem("oms_roster_open", String(rosterOpen));
   }, [rosterOpen]);
 
-  // Persist selected day and current view (deployment / breaks) so full page
-  // refreshes remember where the operator was.
+  // Persist the exact selected GRAVE day (calendar date) so refresh restores
+  // both the correct weekStart and the day index within that week.
   useEffect(() => {
-    localStorage.setItem("oms_selected_day_index", String(selectedDayIndex));
-  }, [selectedDayIndex]);
+    if (DAY_DEFS.length > 0) {
+      const d = DAY_DEFS[selectedDayIndex]?.date;
+      if (d) {
+        localStorage.setItem("oms_selected_date", d.toISOString());
+      }
+    }
+  }, [selectedDayIndex, weekStart, DAY_DEFS]);
 
   useEffect(() => {
     localStorage.setItem("oms_current_view", currentView);
@@ -2340,6 +2365,26 @@ export default function ShiftBuilder() {
   const goPrevWeek = () => setWeekStart((w) => addDays(w, -7));
   const goNextWeek = () => setWeekStart((w) => addDays(w, 7));
   const goThisWeek = () => setWeekStart(startOfShiftWeek(todayDate));
+
+  // Day navigation that correctly crosses GRAVE week boundaries (Thu index 6 → next Fri = new week index 0)
+  const goPrevDay = () => {
+    if (selectedDayIndex === 0) {
+      setWeekStart(addDays(weekStart, -7));
+      setSelectedDayIndex(6);
+      setDayPickerOpen(false);
+    } else {
+      setSelectedDayIndex(selectedDayIndex - 1);
+    }
+  };
+  const goNextDay = () => {
+    if (selectedDayIndex === 6) {
+      setWeekStart(addDays(weekStart, 7));
+      setSelectedDayIndex(0);
+      setDayPickerOpen(false);
+    } else {
+      setSelectedDayIndex(selectedDayIndex + 1);
+    }
+  };
 
   // Each pill group collapses to its active value by default and expands
   // inline on tap. Click-outside or ESC dismisses; selecting collapses with
@@ -4956,9 +5001,9 @@ export default function ShiftBuilder() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
           </button>
 
-          {/* Day arrows */}
-          <button onClick={() => setSelectedDayIndex(p => (p + 6) % 7)} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Previous day">‹</button>
-          <button onClick={() => setSelectedDayIndex(p => (p + 1) % 7)} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Next day">›</button>
+          {/* Day arrows — cross GRAVE week boundaries (Thu → next Fri, etc.) */}
+          <button onClick={goPrevDay} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Previous day">‹</button>
+          <button onClick={goNextDay} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Next day">›</button>
 
           {/* Calendar */}
           <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Calendar — pick any day">
