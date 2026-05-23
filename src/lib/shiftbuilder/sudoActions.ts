@@ -708,6 +708,49 @@ export async function createTMFromUnmatched(adpRawName: string): Promise<string>
 }
 
 /**
+ * "Merge" an unmatched ADP raw name into an existing TM.
+ * Appends the exact ADP spelling to the TM's full_name (using " | " separator)
+ * so that future schedule parses will exact-match or fuzzy-match this variant.
+ *
+ * This is the "this person already exists under a slightly different name" flow.
+ */
+export async function mergeUnmatchedIntoTM(rawName: string, tmId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("tm_profiles")
+    .select("full_name, display_name")
+    .eq("tm_id", tmId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Could not load TM ${tmId} for merge: ${error?.message}`);
+  }
+
+  const current = (data.full_name || data.display_name || "").trim();
+  const addition = rawName.trim();
+
+  if (!addition) return;
+
+  // Avoid duplicating if it's already present (case-insensitive)
+  if (current.toLowerCase().includes(addition.toLowerCase())) {
+    return;
+  }
+
+  const newFull = current ? `${current} | ${addition}` : addition;
+
+  const { error: updErr } = await supabase
+    .from("tm_profiles")
+    .update({
+      full_name: newFull,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tm_id", tmId);
+
+  if (updErr) {
+    throw new Error(`mergeUnmatchedIntoTM update failed: ${updErr.message}`);
+  }
+}
+
+/**
  * Updates (or creates) the currently active engine_config row.
  * Used by the Sudo > Engine Config tab to let operators switch between
  * deterministic vs grok-hybrid and tune Grok 4.3 reasoning depth.

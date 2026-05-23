@@ -44,7 +44,7 @@ export interface ParsedScheduleRow {
   /** Resolved tm_id if we matched, else null */
   tmId: string | null;
   /** How we matched: 'exact' (display_name), 'full' (full_name), 'fuzzy' (close prefix), 'unmatched' */
-  matchKind: "exact" | "full" | "fuzzy" | "unmatched";
+  matchKind: "exact" | "full" | "fuzzy" | "unmatched" | "ignored";
   /** Per-date cells, keyed by ISO yyyy-mm-dd */
   cells: Record<string, ParsedScheduleCell>;
   /** Source sheet name (when aggregated from multiple sheets) */
@@ -298,6 +298,9 @@ export function parseWorkbook(
     const rawName = String(row[nameColumnIndex] ?? "").trim();
     if (!rawName) continue;
 
+    // Skip non-person summary rows (Grave/Day/Swing Shift Headcount, etc.)
+    if (isNonPersonADPRow(rawName)) continue;
+
     const match = matchTM(rawName, roster);
     const cells: Record<string, ParsedScheduleCell> = {};
     for (const col of dateColumns) {
@@ -464,12 +467,30 @@ function classifyShiftCell(raw: string): ShiftStatus {
 // TM name matching
 // =====================================================================
 
+/**
+ * Returns true for rows that are not actual team members.
+ * ADP exports often include summary rows like:
+ *   "Grave Shift Headcount:", "Day Shift Headcount:", "Swing Shift Headcount:"
+ * These must never be treated as people or offered as "unmatched TMs".
+ */
+export function isNonPersonADPRow(raw: string): boolean {
+  const s = raw.toLowerCase().trim();
+  if (!s) return true;
+  if (s.includes("headcount")) return true;
+  // Add more junk patterns here as they appear in real ADP files
+  return false;
+}
+
 interface TMMatch {
   tmId: string | null;
   kind: ParsedScheduleRow["matchKind"];
 }
 
 function matchTM(rawName: string, roster: TeamMember[]): TMMatch {
+  if (isNonPersonADPRow(rawName)) {
+    return { tmId: null, kind: "ignored" };
+  }
+
   const cleaned = rawName.trim().toLowerCase();
   if (!cleaned) return { tmId: null, kind: "unmatched" };
 

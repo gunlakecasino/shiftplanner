@@ -685,6 +685,7 @@ export interface CatalogTask {
   rrSide: 'mens' | 'womens' | null;
   label: string;
   sortOrder: number;
+  isDefaultOnNewNight: boolean;   // NEW: when true, this task is auto-seeded on fresh nights
 }
 
 export interface NightSlotTask {
@@ -707,7 +708,7 @@ export interface NightSlotTask {
 export async function getSlotTaskCatalog(): Promise<CatalogTask[]> {
   const { data, error } = await supabase
     .from('slot_task_catalog')
-    .select('id, slot_key, slot_type, rr_side, label, sort_order')
+    .select('id, slot_key, slot_type, rr_side, label, sort_order, is_default_on_new_night')
     .order('slot_type', { ascending: true })
     .order('slot_key', { ascending: true })
     .order('sort_order', { ascending: true })
@@ -732,6 +733,7 @@ export async function getSlotTaskCatalog(): Promise<CatalogTask[]> {
     rrSide: r.rr_side,
     label: r.label,
     sortOrder: r.sort_order ?? 0,
+    isDefaultOnNewNight: r.is_default_on_new_night ?? false,
   }));
 }
 
@@ -855,7 +857,7 @@ export async function addSlotCatalogTask(params: AddCatalogParams): Promise<Cata
       label: label.trim(),
       sort_order: sortOrder,
     })
-    .select('id, slot_key, slot_type, rr_side, label, sort_order')
+    .select('id, slot_key, slot_type, rr_side, label, sort_order, is_default_on_new_night')
     .single();
 
   if (!error && data) {
@@ -866,6 +868,7 @@ export async function addSlotCatalogTask(params: AddCatalogParams): Promise<Cata
       rrSide: data.rr_side,
       label: data.label,
       sortOrder: data.sort_order ?? 0,
+      isDefaultOnNewNight: data.is_default_on_new_night ?? false,
     };
   }
 
@@ -873,7 +876,7 @@ export async function addSlotCatalogTask(params: AddCatalogParams): Promise<Cata
   if ((error as any)?.code === '23505') {
     let q = supabase
       .from('slot_task_catalog')
-      .select('id, slot_key, slot_type, rr_side, label, sort_order')
+      .select('id, slot_key, slot_type, rr_side, label, sort_order, is_default_on_new_night')
       .eq('slot_key', slotKey)
       .eq('slot_type', slotType)
       .eq('label', label.trim());
@@ -887,6 +890,7 @@ export async function addSlotCatalogTask(params: AddCatalogParams): Promise<Cata
         rrSide: existing.rr_side,
         label: existing.label,
         sortOrder: existing.sort_order ?? 0,
+        isDefaultOnNewNight: existing.is_default_on_new_night ?? false,
       };
     }
   }
@@ -1018,6 +1022,7 @@ export interface UpdateCatalogParams {
   slotKey?: string;
   slotType?: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide?: 'mens' | 'womens' | null;
+  isDefaultOnNewNight?: boolean;   // NEW
 }
 
 /** Update a catalog row (label, sort, or rarely its slot targeting). */
@@ -1031,6 +1036,9 @@ export async function updateCatalogTask(params: UpdateCatalogParams): Promise<vo
   if (slotKey !== undefined) updates.slot_key = slotKey;
   if (slotType !== undefined) updates.slot_type = slotType;
   if (rrSide !== undefined) updates.rr_side = rrSide;
+  if ((params as any).isDefaultOnNewNight !== undefined) {
+    updates.is_default_on_new_night = (params as any).isDefaultOnNewNight;
+  }
 
   if (Object.keys(updates).length === 0) return;
 
@@ -1153,6 +1161,51 @@ export async function updateCatalogSortOrders(updates: Array<{ id: string; sortO
       throw new Error(`Failed to update sort order: ${error.message}`);
     }
   }
+}
+
+/**
+ * Seed a night with all catalog tasks that are marked as "default on new night".
+ * This is the sustainable replacement for manually copying tasks day-to-day.
+ *
+ * Safe to call multiple times — uses the existing unique constraint + the
+ * idempotent behavior inside addNightSlotTask.
+ */
+export async function seedDefaultTasksForNight(nightId: string): Promise<number> {
+  if (!nightId) return 0;
+
+  const { data: defaults, error: catErr } = await supabase
+    .from('slot_task_catalog')
+    .select('id, slot_key, slot_type, rr_side, label, sort_order')
+    .eq('is_default_on_new_night', true);
+
+  if (catErr) {
+    console.error('[shiftbuilder/data] seedDefaultTasksForNight catalog fetch failed:', catErr);
+    throw new Error(`Failed to load default tasks: ${catErr.message}`);
+  }
+
+  if (!defaults || defaults.length === 0) {
+    return 0;
+  }
+
+  let seeded = 0;
+  for (const d of defaults) {
+    try {
+      await addNightSlotTask({
+        nightId,
+        slotKey: d.slot_key,
+        slotType: d.slot_type as any,
+        rrSide: d.rr_side as any,
+        taskLabel: d.label,
+        catalogTaskId: d.id,
+        sortOrder: d.sort_order ?? 0,
+      });
+      seeded++;
+    } catch (e) {
+      console.warn('[shiftbuilder/data] seed skipped one task:', d.label, e);
+    }
+  }
+
+  return seeded;
 }
 
 // ============================================================================

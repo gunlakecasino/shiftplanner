@@ -5936,6 +5936,7 @@ export default function ShiftBuilder() {
       <SudoWindow
         open={sudoOpen}
         onClose={() => setSudoOpen(false)}
+        currentNightId={nightId}
         onDataChanged={async () => {
           // Refresh anything the sudo window might have mutated
           setTMCommandEpoch((e) => e + 1);

@@ -47,9 +47,10 @@ export interface SudoWindowProps {
    *  cares about (schedule Apply / Unapply / Delete). Parent should
    *  bump its load epoch to refresh roster + night_tm_status state. */
   onDataChanged?: () => void;
+  currentNightId?: string | null;   // passed down so TasksTab can offer "Apply defaults"
 }
 
-export function SudoWindow({ open, onClose, onDataChanged }: SudoWindowProps) {
+export function SudoWindow({ open, onClose, onDataChanged, currentNightId }: SudoWindowProps) {
   const [activeTab, setActiveTab] = React.useState<SudoTab>("schedules");
 
   // Close on Escape.
@@ -170,7 +171,7 @@ export function SudoWindow({ open, onClose, onDataChanged }: SudoWindowProps) {
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeTab === "schedules" && <SchedulesTab onDataChanged={onDataChanged} />}
             {activeTab === "team" && <TeamTab onDataChanged={onDataChanged} />}
-            {activeTab === "tasks" && <TasksTab onDataChanged={onDataChanged} />}
+            {activeTab === "tasks" && <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />}
             {activeTab === "engine" && <EngineConfigTab onDataChanged={onDataChanged} />}
             {activeTab === "sql" && <ComingSoonPanel feature="SQL Runner" />}
             {activeTab === "edge" && <ComingSoonPanel feature="Edge Functions" />}

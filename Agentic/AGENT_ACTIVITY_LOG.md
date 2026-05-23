@@ -6,6 +6,45 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Nightwatch feature debut + Default Daily Tasks system + supporting fixes (big push)
+
+**Context**: User said "Find all file changes and commit and push all throughout the codebase" after the default tasks work and concurrent Nightwatch development.
+
+**Major new systems shipped**:
+
+**1. Default Daily Tasks (sustainable replacement for manual copy)**
+- New column `is_default_on_new_night boolean` on `slot_task_catalog` (migration 20260523_add_default_tasks_flag.sql).
+- `seedDefaultTasksForNight(nightId)` in data.ts — pulls all flagged catalog items and inserts via addNightSlotTask (idempotent).
+- TasksTab.tsx: "Default?" / "✓ Default" toggle pill on every catalog row + "Apply daily defaults" button (appears when currentNightId is live).
+- Full wiring: ShiftBuilderClient → SudoWindow → TasksTab passes `currentNightId`.
+- UpdateCatalogTask and CatalogTask interface extended.
+- Operator now controls recurring daily tasks (RR cleanings, zone duties, overlaps, etc.) centrally. Sweepers and special tasks stay unmarked.
+
+**2. Nightwatch (new major feature area)**
+- New route `/nightwatch` with dedicated layout and client.
+- Components: FreeformCanvas, TimelineStrip, ShiftStrip, QuickStamp, Widgets, PageHeader.
+- lib/nightwatch/: types.ts + db.ts (Supabase layer).
+- New migration 20260523_nightwatch_tables.sql for supporting tables.
+- Styles in nightwatch.css + mockData for development.
+- Appears to be a visual monitoring / stamping / timeline tool for nights (complements the main GRAVE ShiftBuilder).
+
+**3. Supporting refinements accumulated since last push**
+- `adpSchedule.ts`: `isNonPersonADPRow()` + early filter for "Grave/Day/Swing Shift Headcount:" rows (prevents garbage in unmatched).
+- `TeamTab.tsx` + `sudoActions.ts`: "Merge" flow for unmatched ADP names (appends to existing TM full_name).
+- Various small cleanups in ShiftBuilderClient, layout, page.tsx from dark mode / pencil / task work.
+
+**Files staged for this push** (selective, high-signal only):
+- All modified src/ (ShiftBuilderClient, data, sudo tabs, adp, layout, page)
+- New Nightwatch sources (src/app/nightwatch/* + src/lib/nightwatch/*)
+- Two new migrations (default tasks flag + nightwatch tables)
+- Agentic/AGENT_ACTIVITY_LOG.md (this entry)
+
+**Junk deliberately left untracked**: all screenshots, .playwright-mcp/, root Nightwatch/, experimental old migrations, scripts/ one-offs, pnpm/railway json.
+
+**Status**: ✅ Broad but clean push capturing two major new capabilities (Nightwatch + defaults) + hygiene fixes. Ready for Railway.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Dark mode completion + long-hover delay + full UI coverage (review & push)
 
 **Context**: User said "review and push again" after local dark mode work on top of the previous Pencil long-hover push (`6e8a249`).

@@ -36,11 +36,13 @@ import {
   deleteCatalogTask,
   getCatalogTaskUsageCount,
   updateCatalogSortOrders,
+  seedDefaultTasksForNight,
   type CatalogTask,
 } from "@/lib/shiftbuilder/data";
 
 export interface TasksTabProps {
   onDataChanged?: () => void;
+  currentNightId?: string | null;   // optional — enables "Apply defaults to this night" button
 }
 
 type TaskType = "zone" | "rr" | "aux" | "overlap";
@@ -73,7 +75,7 @@ const TYPE_COLORS: Record<TaskType, string> = {
   aux: "bg-sky-500/10 text-sky-400",
 };
 
-export function TasksTab({ onDataChanged }: TasksTabProps) {
+export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
   const [catalog, setCatalog] = React.useState<CatalogTask[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -214,6 +216,34 @@ export function TasksTab({ onDataChanged }: TasksTabProps) {
 
   // Very lightweight drag-reorder (buttons for v1, full dnd-kit in next pass)
   // TODO: replace with proper @dnd-kit/sortable vertical list once the tab is stable
+  const toggleDefault = async (t: CatalogTask) => {
+    try {
+      await updateCatalogTask({
+        id: t.id,
+        isDefaultOnNewNight: !t.isDefaultOnNewNight,
+      } as any);
+      await refresh();
+      onDataChanged?.();
+      showToast(t.isDefaultOnNewNight ? "Removed from daily defaults" : "Now seeds on new nights");
+    } catch (e: any) {
+      showToast(e?.message || "Failed to update default flag", "err");
+    }
+  };
+
+  const handleSeedDefaults = async () => {
+    if (!currentNightId) {
+      showToast("No active night selected on the main board yet", "err");
+      return;
+    }
+    try {
+      const count = await seedDefaultTasksForNight(currentNightId);
+      showToast(`Seeded ${count} default tasks to the current night`);
+      onDataChanged?.();
+    } catch (e: any) {
+      showToast(e?.message || "Seeding failed", "err");
+    }
+  };
+
   const moveInGroup = async (groupKey: string, index: number, dir: -1 | 1) => {
     const items = grouped[groupKey];
     if (!items || index + dir < 0 || index + dir >= items.length) return;
@@ -352,6 +382,16 @@ export function TasksTab({ onDataChanged }: TasksTabProps) {
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
+
+          {currentNightId && (
+            <button
+              onClick={handleSeedDefaults}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 text-sm font-medium"
+              title="Insert every task marked as 'default on new night' into the current board"
+            >
+              <ListTodo className="h-4 w-4" /> Apply daily defaults
+            </button>
+          )}
         </div>
 
         {/* Add form */}
@@ -427,6 +467,23 @@ export function TasksTab({ onDataChanged }: TasksTabProps) {
 
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
                           <span className="font-mono">#{t.sortOrder}</span>
+
+                          {/* Default on new night toggle */}
+                          <button
+                            onClick={() => toggleDefault(t)}
+                            className={cn(
+                              "px-2 py-0.5 rounded-full border text-[10px] transition-colors",
+                              t.isDefaultOnNewNight
+                                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                                : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                            )}
+                            title={t.isDefaultOnNewNight
+                              ? "This task will be auto-seeded on new nights. Click to remove."
+                              : "Click to make this a daily default (auto-seeded on fresh nights)"}
+                          >
+                            {t.isDefaultOnNewNight ? "✓ Default" : "Default?"}
+                          </button>
+
                           <button
                             onClick={() => {
                               const val = prompt("New label for this task?", t.label);

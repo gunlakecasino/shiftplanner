@@ -38,6 +38,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${atkinson.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       {/* Runs before React hydration — prevents flash of wrong theme on load.
           Reads localStorage('oms-theme') first; falls back to system preference. */}

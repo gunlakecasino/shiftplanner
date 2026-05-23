@@ -4,9 +4,13 @@
  * Team tab — manage every TM in tm_profiles.
  *
  * Layout:
- *   1. Top strip of Add cards — one per unmatched ADP name from the
- *      most-recently-applied schedule. One-click → creates a TM and opens
- *      the edit drawer pre-loaded on it.
+ *   1. Top strip of unmatched ADP names from the most-recently-applied schedule.
+ *      Each pill offers two actions:
+ *        • Add → creates a brand new TM (then opens the edit drawer)
+ *        • Merge → links the raw ADP spelling to an *existing* TM by appending
+ *          it to their full_name (so future parses match). Also opens the drawer.
+ *      Non-person rows ("Grave Shift Headcount:", "Day Shift Headcount:", etc.)
+ *      are filtered out at the parser level and never appear here.
  *   2. Filterable list of all TMs (active + inactive).
  *   3. Row-click → right-side drawer with 4 sub-tabs:
  *        - Identity (display_name, full_name, employee_name, status, notes)
@@ -32,6 +36,7 @@ import {
   RotateCcw,
   CheckCircle2,
   Trash2,
+  Link,
 } from "lucide-react";
 import {
   listAllTMs,
@@ -46,6 +51,7 @@ import {
   addTMAccommodation,
   deleteTMAccommodation,
   createTMFromUnmatched,
+  mergeUnmatchedIntoTM,
   type TMRecord,
   type TMPreference,
   type TMAccommodation,
@@ -65,6 +71,10 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
   const [unmatched, setUnmatched] = React.useState<string[]>([]);
   const [filter, setFilter] = React.useState<Filter>("active");
   const [query, setQuery] = React.useState("");
+
+  // Merge flow for unmatched ADP names ("this is actually an existing TM")
+  const [mergingName, setMergingName] = React.useState<string | null>(null);
+  const [mergeSearch, setMergeSearch] = React.useState("");
   const [drawerTmId, setDrawerTmId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [allSlotIds, setAllSlotIds] = React.useState<string[]>([]);
@@ -145,6 +155,36 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
     }
   };
 
+  const handleMergeUnmatched = async (rawName: string, targetTmId: string) => {
+    try {
+      await mergeUnmatchedIntoTM(rawName, targetTmId);
+      flash("ok", `Merged "${rawName}" into existing TM — future schedules will match`);
+      setMergingName(null);
+      setMergeSearch("");
+      await refresh();
+      setDrawerTmId(targetTmId); // open the drawer so operator can review
+      onDataChanged?.();
+    } catch (err) {
+      flash("err", err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  // Active TMs for the merge picker (filtered by the small search box)
+  const mergeCandidates = React.useMemo(() => {
+    if (!tms) return [];
+    const q = mergeSearch.toLowerCase().trim();
+    return tms
+      .filter((t) => t.active)
+      .filter((t) => {
+        if (!q) return true;
+        return (
+          t.displayName.toLowerCase().includes(q) ||
+          (t.fullName ?? "").toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 12); // keep the list small and fast
+  }, [tms, mergeSearch]);
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -180,7 +220,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-auto px-6 py-5 space-y-4">
-        {/* Unmatched Add cards */}
+        {/* Unmatched from latest applied schedule — now supports Add (new TM) or Merge (existing TM) */}
         {unmatched.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
             <div className="flex items-center gap-2 mb-2">
@@ -189,26 +229,106 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                 Unmatched from latest schedule ({unmatched.length})
               </span>
               <span className="text-[10px] text-zinc-500">
-                — click Add to create them in <span className="font-mono">tm_profiles</span>
+                — real people missing from tm_profiles. Use <span className="font-medium text-amber-300">Add</span> or <span className="font-medium text-sky-400">Merge</span>.
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {unmatched.map((name) => (
-                <button
-                  key={name}
-                  onClick={() => handleAddUnmatched(name)}
-                  className="group rounded-xl border border-amber-500/40 bg-zinc-900/70 hover:bg-amber-500/15 hover:border-amber-400 px-3 py-2 text-left transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="h-3 w-3 text-amber-300 group-hover:text-amber-200" />
-                    <span className="text-[12px] text-zinc-200 font-medium">{name}</span>
+
+            {/* Normal list of unmatched pills (hidden while in merge picker mode) */}
+            {!mergingName && (
+              <div className="flex flex-wrap gap-2">
+                {unmatched.map((name) => (
+                  <div
+                    key={name}
+                    className="group flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-900/70 px-2.5 py-1.5 text-left"
+                  >
+                    <span className="text-[12px] text-zinc-200 font-medium px-1">{name}</span>
+
+                    {/* Add as brand new TM */}
+                    <button
+                      onClick={() => handleAddUnmatched(name)}
+                      className="ml-1 flex items-center gap-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300 hover:text-amber-200 transition-colors"
+                      title="Create new TM from this name"
+                    >
+                      <UserPlus className="h-3 w-3" />
+                      Add
+                    </button>
+
+                    {/* Merge into existing TM (the name is a variant of someone already in the roster) */}
+                    <button
+                      onClick={() => {
+                        setMergingName(name);
+                        setMergeSearch("");
+                      }}
+                      className="flex items-center gap-1 rounded-md bg-sky-500/15 hover:bg-sky-500/25 px-2 py-0.5 text-[10px] text-sky-400 hover:text-sky-300 transition-colors"
+                      title="This person already exists — link the ADP spelling to them"
+                    >
+                      <Link className="h-3 w-3" />
+                      Merge
+                    </button>
                   </div>
-                  <div className="text-[10px] text-zinc-500 group-hover:text-amber-200/80 mt-0.5">
-                    click to add
+                ))}
+              </div>
+            )}
+
+            {/* Merge picker — appears when you click "Merge" on one of the unmatched names */}
+            {mergingName && (
+              <div className="rounded-xl border border-sky-500/40 bg-zinc-950/60 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[12px] text-sky-400">
+                    Merge <span className="font-semibold text-zinc-200">“{mergingName}”</span> into which existing TM?
                   </div>
-                </button>
-              ))}
-            </div>
+                  <button
+                    onClick={() => {
+                      setMergingName(null);
+                      setMergeSearch("");
+                    }}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" /> Cancel
+                  </button>
+                </div>
+
+                {/* Quick search within active TMs */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-600" />
+                  <input
+                    type="text"
+                    value={mergeSearch}
+                    onChange={(e) => setMergeSearch(e.target.value)}
+                    placeholder="Search active TMs by name…"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded pl-7 pr-3 py-1 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Candidate list */}
+                {mergeCandidates.length === 0 ? (
+                  <div className="text-[11px] text-zinc-500 py-1">No matching active TMs</div>
+                ) : (
+                  <div className="max-h-[180px] overflow-auto space-y-0.5 pr-1">
+                    {mergeCandidates.map((tm) => (
+                      <button
+                        key={tm.tmId}
+                        onClick={() => handleMergeUnmatched(mergingName, tm.tmId)}
+                        className="w-full text-left rounded-lg px-2.5 py-1.5 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/30 flex items-center justify-between text-[12px]"
+                      >
+                        <div>
+                          <span className="font-medium text-zinc-200">{tm.displayName}</span>
+                          {tm.fullName && tm.fullName !== tm.displayName && (
+                            <span className="ml-2 text-[10px] text-zinc-500">({tm.fullName})</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-sky-400">select → merge</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-2 text-[10px] text-zinc-500">
+                  This will append the exact ADP spelling to the chosen TM’s full_name so future schedules match automatically.
+                </div>
+              </div>
+            )}
           </div>
         )}
 
