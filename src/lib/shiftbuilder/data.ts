@@ -29,6 +29,8 @@ export interface TeamMember {
   status?: string;
   primarySection?: string | null;
   gravePool?: string | null;   // e.g. "A", "B", "Main", etc. — indicates GRAVE shift availability
+  /** Biological gender used to assign MRR (Men's) vs WRR (Women's) restroom slots. */
+  gender?: 'M' | 'F' | null;
 }
 
 export interface ZoneAssignmentRow {
@@ -62,7 +64,7 @@ export interface NightInfo {
 export async function getActiveTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
+    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
     .eq('active', true)
     .order('display_name', { ascending: true });
 
@@ -78,6 +80,7 @@ export async function getActiveTeamMembers(): Promise<TeamMember[]> {
     status: p.status,
     primarySection: p.primary_section,
     gravePool: p.grave_pool ?? null,
+    gender: p.gender ?? null,
   }));
 }
 
@@ -91,7 +94,7 @@ export async function getActiveTeamMembers(): Promise<TeamMember[]> {
 export async function getGraveAvailableTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
+    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
     .eq('active', true)
     .not('grave_pool', 'is', null)   // Primary signal: they are in a grave pool
     .order('display_name', { ascending: true });
@@ -108,6 +111,7 @@ export async function getGraveAvailableTeamMembers(): Promise<TeamMember[]> {
     status: p.status,
     primarySection: p.primary_section,
     gravePool: p.grave_pool ?? null,
+    gender: p.gender ?? null,
   }));
 }
 
@@ -120,7 +124,7 @@ export async function getGravePMOverlapMembers(): Promise<TeamMember[]> {
   try {
     const { data, error } = await supabase
       .from('tm_profiles')
-      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
       .eq('active', true)
       .eq('grave_pool', 'PM')
       .order('display_name', { ascending: true });
@@ -137,6 +141,7 @@ export async function getGravePMOverlapMembers(): Promise<TeamMember[]> {
       status: p.status,
       primarySection: p.primary_section,
       gravePool: 'PM',
+      gender: p.gender ?? null,
       isPMOverlap: true,
       isAMOverlap: false,
     }));
@@ -156,7 +161,7 @@ export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
   try {
     const { data, error } = await supabase
       .from('tm_profiles')
-      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
       .eq('active', true)
       .eq('grave_pool', 'AM')
       .order('display_name', { ascending: true });
@@ -173,6 +178,7 @@ export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
       status: p.status,
       primarySection: p.primary_section,
       gravePool: 'AM',
+      gender: p.gender ?? null,
       isPMOverlap: false,
       isAMOverlap: true,
     }));

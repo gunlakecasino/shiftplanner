@@ -225,13 +225,24 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     }
 
     // Build candidate set: eligible + not yet placed this run.
+    const usedIds = new Set(currentDraft.values());
     const candidates = roster.filter(
       (tm: any) =>
-        !Array.from(currentDraft.values()).includes(tm.id) &&
+        !usedIds.has(tm.id) &&
         isEligibleForSlot(tm, slotKey)
     );
 
+    // DEBUG — log details when candidates are unexpectedly empty
     if (candidates.length === 0) {
+      const eligible = roster.filter((tm: any) => isEligibleForSlot(tm, slotKey));
+      const notUsed = roster.filter((tm: any) => !usedIds.has(tm.id));
+      console.warn(`[runWeightedPlanner] NO CANDIDATES for ${slotKey} — eligible=${eligible.length}  not-yet-used=${notUsed.length}  draft-size=${currentDraft.size}  roster=${roster.length}`);
+      if (eligible.length > 0 && notUsed.length === 0) {
+        console.warn(`  → ALL ${roster.length} TMs already placed. Used IDs:`, [...usedIds].join(", "));
+      } else if (eligible.length === 0) {
+        const sample = roster.slice(0, 3).map((tm: any) => `${tm.id}(pool=${tm.gravePool},gender=${tm.gender})`);
+        console.warn(`  → None eligible for ${slotKey}. Sample TMs:`, sample.join(", "));
+      }
       notes.push(`No eligible candidate found for ${slotKey}`);
       breakdown[slotKey] = {
         topCandidates: [],
@@ -299,8 +310,11 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
  *   full 11pm–7am window.
  * - AM Overlap slots (OL-AM-*, *AM-Overlap*): only grave TMs flagged as AM overlap.
  * - PM Overlap slots (OL-PM-*, *PM-Overlap*): only grave TMs flagged as PM overlap.
- * - Restrooms, Admin, Trash, Support, AUX: any active TM (most flexible
- *   block; the engine still prefers full grave TMs in practice).
+ * - Restrooms (MRR-x / WRR-x), Admin, Trash, Support, AUX: full-night positions.
+ *   AM/PM overlap TMs are excluded because they work partial shifts and cannot
+ *   cover a full-night restroom or admin assignment. Full-grave TMs are eligible.
+ *   NOTE: Men's (MRR-x) vs Women's (WRR-x) assignment requires a gender/section
+ *   field on tm_profiles — currently not present; operator must swap M/W manually.
  * - Breaks are ignored for placement decisions.
  */
 export function isEligibleForSlot(tm: any, slotKey: string): boolean {
@@ -333,15 +347,34 @@ export function isEligibleForSlot(tm: any, slotKey: string): boolean {
     return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
   }
 
-  // Restrooms, Admin, Trash, Support — more flexible (can be non-grave)
+  // Men's Restrooms — full-night, male TMs only (null gender = eligible as safe fallback)
+  if (slotKey.startsWith("MRR")) {
+    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
+    const gender = String(tm.gender ?? "").toUpperCase();
+    if (gender && gender !== "M") return false;
+    return true;
+  }
+
+  // Women's Restrooms — full-night, female TMs only (null gender = eligible as safe fallback)
+  if (slotKey.startsWith("WRR")) {
+    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
+    const gender = String(tm.gender ?? "").toUpperCase();
+    if (gender && gender !== "F") return false;
+    return true;
+  }
+
+  // Admin, Trash, Support, AUX — full-night positions, no gender restriction.
+  // AM/PM overlap TMs work partial shifts (10pm–3am or 3am–7am) and cannot
+  // hold a full-night restroom or admin slot. Only full-grave TMs (or non-grave
+  // active TMs on the roster) are eligible here.
   if (
-    slotKey.startsWith("MRR") ||
-    slotKey.startsWith("WRR") ||
     slotKey === "ADM" ||
     slotKey.startsWith("TR") ||
     slotKey.startsWith("AUX") ||
     slotKey.startsWith("SP")
   ) {
+    // Exclude AM/PM overlap TMs — they cannot cover a full-night position
+    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
     return true;
   }
 
@@ -416,7 +449,7 @@ export function getEligibilityRulesText(): string {
 - Main Zone Deployment slots (any slotKey starting with "Z", INCLUDING the fixed Z9SR) require a FULL-GRAVE team member. A TM is full-grave when ALL of the following hold: (a) gravePool is truthy, (b) gravePool is NOT the string "AM" or "PM" (those values mark the TM as an overlap-type employee, e.g. "Full" vs "AM" vs "PM"), AND (c) the per-night isAMOverlap and isPMOverlap flags are both false. Overlap TMs cover partial shifts (10pm–3am or 3am–7am) and cannot hold a zone for the full 11pm–7am window.
 - AM Overlap slots (slotKeys starting with "OL-AM" or containing "AM-Overlap") require gravePool AND isAMOverlap.
 - PM Overlap slots (slotKeys starting with "OL-PM" or containing "PM-Overlap") require gravePool AND isPMOverlap.
-- Restrooms (MRR*/WRR*), ADM, Trash (TR*), and all Support/Overflow/AUX slots have no Grave requirement — any active TM is eligible. Prefer full-grave TMs when possible, but overlap or non-grave TMs are allowed here.
+- Restrooms (MRR*/WRR*), ADM, Trash (TR*), and all Support/Overflow/AUX slots are full-night positions. Full-grave TMs are eligible. AM/PM overlap TMs (gravePool = "AM" or "PM", or isAMOverlap/isPMOverlap = true) are NOT eligible — they work partial shifts and cannot cover a full-night RR or Admin assignment. Non-grave active TMs are eligible for these slots.
 - Breaks / break groups are IGNORED for all placement and suggestion decisions.
 - Locked slots must be respected (do not suggest changes to locked assignments unless explicitly asked to propose unlocks).
 - Always prefer minimal disruption and respect the current draft or live board state when provided.

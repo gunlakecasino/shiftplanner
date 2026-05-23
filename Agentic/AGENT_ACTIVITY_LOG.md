@@ -6,6 +6,34 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Batch Planner tab in Sudo (run engine across full week)
+
+**Context**: User said "Commit and push all" after completing the Batch Planner feature.
+
+**New major capability**:
+- New Sudo tab: **Batch Planner**
+  - Pick any week that has nights.
+  - See all 7 nights with current assignment counts.
+  - Run the deterministic weighted placement engine for the entire week ("Run All") or per-night.
+  - Live updating status per night (running / done / error).
+  - Options: Skip already-filled nights, require existing schedule, filter by schedule.
+  - Shows summary (assigned / preserved / unfilled) and per-night notes from the engine.
+- New server actions (`sudoActions.ts`):
+  - `listWeeksWithNights`, `listNightsForWeek`
+  - `batchRunEngineForWeek`, `batchRunEngineForNight`
+- Supporting engine improvements in `placement.ts`, `adpSchedule.ts`, `data.ts`, `slot-keys.ts` to support clean batch runs.
+
+**Why this matters**: Operators can now generate solid baseline placements for a whole week quickly from Sudo, then fine-tune individual nights on the main board (or with Grok). Much faster weekly planning workflow.
+
+**Files**:
+- New: `src/app/shiftbuilder/sudo/BatchPlannerTab.tsx` (full feature, ~543 lines)
+- Wiring: `SudoWindow.tsx`
+- Engine/data: adpSchedule, data, placement, slot-keys, sudoActions
+
+**Status**: Feature complete and usable. Only clean source + log staged. All junk (screenshots, .playwright, design mocks, old migrations) left untracked.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Touch toolbar pinning + robust ADP import (auto-create nights/weeks)
 
 **Context**: User said "commit and push now" after further refinements.

@@ -295,8 +295,15 @@ export function parseWorkbook(
 
   for (let r = headerRowIndex + 1; r < aoa.length; r++) {
     const row = aoa[r];
-    const rawName = String(row[nameColumnIndex] ?? "").trim();
-    if (!rawName) continue;
+    const firstName = String(row[nameColumnIndex] ?? "").trim();
+    if (!firstName) continue;
+    // Combine First Name + Last Name columns. The Last Name sits immediately
+    // after the name column — but only if that next column isn't a date column.
+    const nextColIdx = nameColumnIndex + 1;
+    const nextIsDate = dateColumns.some((dc) => dc.colIndex === nextColIdx);
+    const lastName =
+      !nextIsDate && row[nextColIdx] ? String(row[nextColIdx]).trim() : "";
+    const rawName = lastName ? `${firstName} ${lastName}` : firstName;
 
     // Skip non-person summary rows (Grave/Day/Swing Shift Headcount, etc.)
     if (isNonPersonADPRow(rawName)) continue;
@@ -455,6 +462,17 @@ function classifyShiftCell(raw: string): ShiftStatus {
   if (/^\d+(\.\d+)?$/.test(lower) && parseFloat(lower) > 0) {
     return "scheduled";
   }
+  // PTO / leave codes — TM is NOT physically on shift; treat as off.
+  // Must come before the catch-all letter check below.
+  if (
+    lower.includes("pto") ||
+    lower.includes("bereavement") ||
+    lower === "lwop" ||
+    lower === "fmla" ||
+    lower === "loa"
+  ) {
+    return "off";
+  }
   // Shift code patterns — "G11", "GR", "G", "11-7", "11p-7a", etc.
   if (/^(g|gr|grave|night|11)/i.test(lower)) return "scheduled";
   if (/\d+\s*[ap]?\s*-\s*\d+\s*[ap]?/.test(lower)) return "scheduled";
@@ -466,6 +484,31 @@ function classifyShiftCell(raw: string): ShiftStatus {
 // =====================================================================
 // TM name matching
 // =====================================================================
+
+/**
+ * Static alias table: maps a lowercase ADP export name → tm_id.
+ *
+ * Add an entry here whenever ADP uses a name that doesn't resolve to the right
+ * TM through the normal display_name / full_name / fuzzy matching chain. Common
+ * reasons:
+ *   - ADP uses a full legal name while the TM's display_name is a nickname
+ *     ("JT" vs "Jeremy H" in ADP)
+ *   - A placeholder profile with the same display_name exists but has no
+ *     grave_pool (e.g. "Nicole U" → tm_nikki, not the orphan tm_f54acb515ae2)
+ *   - ADP's format doesn't match any variant we can fuzzy-detect automatically
+ *
+ * These overrides fire BEFORE any fuzzy logic, so they are always authoritative.
+ */
+const ADP_NAME_ALIASES: Record<string, string> = {
+  // Jeremy Laker (display "JT") appears in ADP Graves sheet as "Jeremy H"
+  "jeremy h": "tm_jt",
+  // Nikki (Nicole Cederholm) appears in ADP as "Nicole U" — same string as an
+  // orphan profile (tm_f54acb515ae2) that is NOT graves-eligible
+  "nicole u": "tm_nikki",
+  // Scott Walsh (display "Scott") — ADP full name; insurance against the
+  // full_name match failing due to whitespace / encoding edge cases
+  "scott walsh": "tm_scott",
+};
 
 /**
  * Returns true for rows that are not actual team members.
@@ -493,6 +536,12 @@ function matchTM(rawName: string, roster: TeamMember[]): TMMatch {
 
   const cleaned = rawName.trim().toLowerCase();
   if (!cleaned) return { tmId: null, kind: "unmatched" };
+
+  // Static alias table — checked before any fuzzy logic so it's always
+  // authoritative. Covers cases where ADP uses a name that doesn't match the
+  // correct TM's display_name or full_name (e.g. "Jeremy H" → tm_jt).
+  const aliasedId = ADP_NAME_ALIASES[cleaned];
+  if (aliasedId) return { tmId: aliasedId, kind: "exact" };
 
   // Exact display_name match
   const exact = roster.find((tm) => (tm.name ?? "").toLowerCase() === cleaned);

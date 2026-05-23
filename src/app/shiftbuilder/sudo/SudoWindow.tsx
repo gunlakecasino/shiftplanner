@@ -16,15 +16,16 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2 } from "lucide-react";
+import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SchedulesTab } from "./SchedulesTab";
 import { TeamTab } from "./TeamTab";
 import { EngineConfigTab } from "./EngineConfigTab";
 import { TasksTab } from "./TasksTab";
 import { ReportsTab } from "./ReportsTab";
+import { BatchPlannerTab } from "./BatchPlannerTab";
 
-type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "sql" | "edge" | "logs";
+type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "planner" | "sql" | "edge" | "logs";
 
 const TABS: Array<{
   id: SudoTab;
@@ -37,6 +38,7 @@ const TABS: Array<{
   { id: "tasks",     label: "Tasks",        icon: ListTodo,        status: "ready" },
   { id: "reports",   label: "Reports",      icon: BarChart2,       status: "ready" },
   { id: "engine",    label: "Engine Config",icon: Settings2,       status: "ready" },
+  { id: "planner",   label: "Batch Planner",icon: Zap,             status: "ready" },
   { id: "sql",       label: "SQL Runner",   icon: Database,        status: "coming-soon" },
   { id: "edge",      label: "Edge Functions",icon: Code2,          status: "coming-soon" },
   { id: "logs",      label: "Logs",         icon: ScrollText,      status: "coming-soon" },
@@ -176,6 +178,7 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId }: Sud
             {activeTab === "tasks"     && <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />}
             {activeTab === "reports"   && <ReportsTab />}
             {activeTab === "engine"    && <EngineConfigTab onDataChanged={onDataChanged} />}
+            {activeTab === "planner"   && <BatchPlannerTab onDataChanged={onDataChanged} />}
             {activeTab === "sql"       && <ComingSoonPanel feature="SQL Runner" />}
             {activeTab === "edge"      && <ComingSoonPanel feature="Edge Functions" />}
             {activeTab === "logs"      && <ComingSoonPanel feature="Logs" />}

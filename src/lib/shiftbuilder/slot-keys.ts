@@ -128,6 +128,19 @@ export function uiToDb(uiKey: string): DbSlot {
  * visible during development.
  */
 export function dbToUi(slot_key: string, slot_type: string, rr_side: string | null): string {
+  // ── Passthrough guard ──────────────────────────────────────────────────────
+  // Earlier versions of the batch planner wrote UI-format keys directly to
+  // zone_assignments without going through uiToDb (e.g. slot_key="Z1" instead
+  // of "zone_1"). If we detect an already-converted key, return it immediately
+  // so mixed-format data in the DB never produces UNK:* sentinels and never
+  // corrupts the planner's currentDraft.
+  if (/^Z\d+$/.test(slot_key)) return slot_key;                       // Z1..Z10
+  if (/^[MW]RR\d+$/.test(slot_key)) return slot_key;                  // MRR1, WRR7 …
+  if (/^(Z9SR|ADM)$/.test(slot_key)) return slot_key;                 // named aux
+  if (/^(TR|SP|AUX)\d+$/.test(slot_key)) return slot_key;            // TR1, SP2, AUX6 …
+  if (/^OL-(PM|AM)-\d+$/.test(slot_key)) return slot_key;            // overlap slots
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (slot_type === "zone") {
     const m = slot_key.match(/^zone_(\d+)$/);
     if (m) return `Z${m[1]}`;
