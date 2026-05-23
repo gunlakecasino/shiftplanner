@@ -6,6 +6,85 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Dark mode polish on Break Sheet + follow-up push
+
+**Context**: User said "commit and push again" after small local edits.
+
+**Changes**:
+- `ShiftBuilderClient.tsx`: Continued dark mode work on the Break Sheet section.
+  - Added `dark:` variants for wave cards, headers, dividers, TM names, count labels, and accent chips in the break wave UI.
+  - Ensures the printed break sheet view looks correct in both light and dark operator modes.
+- `Agentic/AGENT_ACTIVITY_LOG.md`: Prepended this entry (and the prior Claude DB constraint fix entry was already present).
+
+**Status**: Small, targeted dark mode hardening. Only real source + log staged.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 (Cowork) — DB fix: TM drag/swap persistence (zone_assignments unique constraint)
+
+**Task**: TM drag persistence broken — moves don't save destination, swaps clear both slots on reload.
+
+**Root cause** (confirmed via Supabase live query):
+The `zone_assignments` table had a standard `UNIQUE(night_id, slot_type, slot_key, rr_side)` constraint. In Postgres, `NULL != NULL` under a standard unique constraint — so for every zone/aux slot where `rr_side IS NULL`, the `ON CONFLICT` clause in `upsertZoneAssignment` never fired. Every upsert silently inserted a **new duplicate row** instead of updating the existing one. Ghost rows accumulated — e.g. `zone_2` had 3 rows with 3 different TMs, `zone_7` had 3 rows. On reload, `getNightAssignments` returned all rows ordered by `sort_order/slot_key` and whichever row came first "won" — often not the intended TM.
+
+**Code was correct** — the bug was entirely in the DB constraint. No code changes needed.
+
+**Fix applied directly to Supabase (Graves Ops / iazgrcainbokkdqunkok)**:
+1. Deduplicated all existing ghost rows — kept the best row per logical slot (non-null TM first, then most recent by `updated_at`).
+2. Dropped the old constraint.
+3. Recreated with `UNIQUE NULLS NOT DISTINCT (night_id, slot_type, slot_key, rr_side)` (Postgres 15+ / we are on 17) — NULLs now conflict correctly, `ON CONFLICT` fires and upserts update in place.
+
+**Migration file**: `supabase/migrations/20260523_fix_zone_assignments_unique_nulls.sql`
+
+**Verification**:
+- `pg_get_constraintdef` confirms `UNIQUE NULLS NOT DISTINCT` is live.
+- Duplicate query returns 0 rows — all ghost data cleaned.
+
+**Status**: ✅ Fix live in production. No code deploy needed. Drag/swap persistence should work correctly immediately.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 (Cowork) — Dark mode fix: Break Sheet wave columns
+
+**Task**: Break Sheet tab — the three wave columns were still white in dark mode.
+
+**Root cause**: The break wave column containers and all their inner elements (header, big wave number, "Break N" label, count, category labels, divider lines, dashed TM name rows, slot chip bg) were hardcoded light-only classes with no `dark:` variants.
+
+**Fix** (`ShiftBuilderClient.tsx`, break wave render block ~line 5330):
+- Column container: `bg-white` → `bg-white dark:bg-[#1C1C1E]`, border → `dark:border-[#3A3A3C]`
+- Header border: + `dark:border-[#2C2C2E]`
+- Big wave number + "Break N" label: + `dark:text-[#F2F2F4]`
+- "N people" count + category labels: + `dark:text-[#8E8E93]`
+- Divider line: + `dark:bg-[#3A3A3C]`
+- Dashed TM name row border: + `dark:border-[#48484A]`
+- TM name text: + `dark:text-[#F2F2F4]`
+- Slot accent chip bg: `bg-white` → `bg-white dark:bg-[#2C2C2E]`
+
+**Validation**: `tsc --noEmit` clean (0 errors).
+
+**Status**: ✅ Complete. One file touched, surgical dark: additions only.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 (Cowork) — Session Activation & Orientation
+
+**Task**: User invoked the magic one-liner. Performing full orientation read of the Agentic Command Post.
+
+**Context**: Fresh session startup. No prior chat history in this window.
+
+**Phases / Branches Activated**: Agentic Command Post orientation protocol only. No coding phases yet.
+
+**Decisions Made**:
+- Read README, THIS_IS_WHAT_WE_ARE_DOING.md, full AGENT_ACTIVITY_LOG.md, and ATTACK_PLAN_2026-05-22.md.
+- Confirmed current state: Wave 1 + Wave 2 complete. Dark mode shipped. Nightwatch feature debuted with real DB-backed events. Default Daily Tasks system live. Apple Pencil Pro suite shipped.
+- Remaining open work: `useShiftHistory` hook identity fix (W2-1), Wave 3 architecture evolution, optional dark mode card-meta text tuning.
+
+**Status**: Oriented. Ready for user direction.
+
+**Next**: Ask Brian what to tackle next.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Nightwatch Events widget goes real (DB-backed shift_events)
 
 **Context**: User said "Commit and push again" after further Nightwatch iteration following the previous canvas polish.

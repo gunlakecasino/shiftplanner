@@ -5327,25 +5327,25 @@ export default function ShiftBuilder() {
                       return (
                         <div
                           key={wave}
-                          className="border border-[#E5E5E7] rounded-[3px] bg-white overflow-hidden flex flex-col"
+                          className="border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] bg-white dark:bg-[#1C1C1E] overflow-hidden flex flex-col"
                           style={{ borderTop: `3px solid ${waveColor}` }}
                         >
                           {/* Golden header per wave: big number on the left, BREAK N + count on the right */}
-                          <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4]">
+                          <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4] dark:border-[#2C2C2E]">
                             <div
-                              className="font-black tabular-nums leading-none text-[#1C1C1E]"
+                              className="font-black tabular-nums leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
                               style={{ fontSize: 42, letterSpacing: '-2px', fontFamily: 'var(--font-atkinson)' }}
                             >
                               {wave}
                             </div>
                             <div className="-mb-0.5">
                               <div
-                                className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E]"
+                                className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
                                 style={{ fontSize: 13, fontFamily: 'var(--font-atkinson)' }}
                               >
                                 Break {wave}
                               </div>
-                              <div className="text-[10px] text-[#6B7280] mt-0.5">{count} people</div>
+                              <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5">{count} people</div>
                             </div>
                           </div>
 
@@ -5385,21 +5385,21 @@ export default function ShiftBuilder() {
                               return (
                                 <div key={cat}>
                                   <div className="flex items-center gap-1 mb-1">
-                                    <span className="text-[#6B7280] font-bold tracking-[1.2px] uppercase text-[7.5px]" style={{ fontFamily: 'var(--font-atkinson)' }}>{label}</span>
-                                    <div className="flex-1 h-px bg-[#E5E7EB]" />
+                                    <span className="text-[#6B7280] dark:text-[#8E8E93] font-bold tracking-[1.2px] uppercase text-[7.5px]" style={{ fontFamily: 'var(--font-atkinson)' }}>{label}</span>
+                                    <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-[#3A3A3C]" />
                                   </div>
                                   <div className="space-y-1">
                                     {items.map((a: any, idx: number) => {
                                       const accent = accentFor(a);
                                       return (
                                         <div key={idx} className="flex items-center gap-1.5">
-                                          <div className="flex-1 border-b border-dashed border-[#C8C8CC] pb-px min-w-0">
-                                            <div className="font-semibold text-[#111] truncate text-[9px] leading-tight">
+                                          <div className="flex-1 border-b border-dashed border-[#C8C8CC] dark:border-[#48484A] pb-px min-w-0">
+                                            <div className="font-semibold text-[#111] dark:text-[#F2F2F4] truncate text-[9px] leading-tight">
                                               {a.tmName || " "}
                                             </div>
                                           </div>
                                           <div
-                                            className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white"
+                                            className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white dark:bg-[#2C2C2E]"
                                             style={{ borderColor: accent, color: accent, fontFamily: 'var(--font-atkinson)' }}
                                           >
                                             {chipLabel(a)}
