@@ -1,0 +1,290 @@
+"use client";
+
+import React from "react";
+import { Brain, Settings2, Save, RefreshCw, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  getActiveEngineConfig,
+  type EngineConfig,
+  type PlacementMethod,
+  type GrokReasoningEffort,
+} from "@/lib/shiftbuilder/engineConfig";
+import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
+
+interface EngineConfigTabProps {
+  onDataChanged?: () => void;
+}
+
+const PLACEMENT_OPTIONS: Array<{
+  value: PlacementMethod;
+  label: string;
+  desc: string;
+}> = [
+  {
+    value: "weighted",
+    label: "Weighted (Default)",
+    desc: "Deterministic scoring with tunable weights. Fast and fully predictable.",
+  },
+  {
+    value: "grok-hybrid",
+    label: "Grok-Hybrid",
+    desc: "Deterministic Top-K + Grok 4.3 judgment layer. Best quality when context (notes, history, affinities) matters.",
+  },
+  {
+    value: "greedy",
+    label: "Greedy",
+    desc: "Simple highest-score-first. Good for testing or very small crews.",
+  },
+];
+
+const REASONING_OPTIONS: Array<{
+  value: GrokReasoningEffort;
+  label: string;
+  desc: string;
+  badge: string;
+}> = [
+  {
+    value: "low",
+    label: "Low",
+    desc: "Minimal reasoning. Fastest responses, lowest token cost.",
+    badge: "Fast",
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    desc: "Recommended. Strong judgment with good speed/quality balance.",
+    badge: "Balanced",
+  },
+  {
+    value: "high",
+    label: "High",
+    desc: "Maximum chain-of-thought. Highest quality overrides, higher latency & cost.",
+    badge: "Deep",
+  },
+  {
+    value: "none",
+    label: "None",
+    desc: "Disable reasoning entirely. Pure model output with no extra thinking tokens.",
+    badge: "Raw",
+  },
+];
+
+export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
+  const [config, setConfig] = React.useState<EngineConfig | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
+
+  // Local editing state
+  const [placementMethod, setPlacementMethod] = React.useState<PlacementMethod>("weighted");
+  const [grokReasoningEffort, setGrokReasoningEffort] =
+    React.useState<GrokReasoningEffort>("medium");
+
+  const loadConfig = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const active = await getActiveEngineConfig();
+      setConfig(active);
+      setPlacementMethod(active.placementMethod);
+      setGrokReasoningEffort(active.grokReasoningEffort);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load engine config");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const isGrokHybrid = placementMethod === "grok-hybrid";
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await updateActiveEngineConfig({
+        placementMethod,
+        grokReasoningEffort: isGrokHybrid ? grokReasoningEffort : undefined,
+      });
+
+      setSuccess("Engine config updated. Changes will apply on the next engine run.");
+
+      // Refresh the authoritative config from DB
+      await loadConfig();
+
+      // Notify parent (ShiftBuilderClient) so it can re-fetch engineConfig state
+      onDataChanged?.();
+
+      // Clear success after a moment
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (e: any) {
+      setError(e?.message || "Failed to save engine config");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center text-zinc-400">
+        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+        Loading current engine config…
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-auto p-6 text-zinc-200" style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+      <div className="max-w-3xl">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+            <Settings2 className="h-4.5 w-4.5" />
+          </div>
+          <div>
+            <div className="font-semibold text-lg tracking-tight">Engine Configuration</div>
+            <div className="text-[12px] text-zinc-500">
+              Controls the placement algorithm and Grok 4.3 reasoning depth (when using Grok-Hybrid)
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
+            {success}
+          </div>
+        )}
+
+        {/* Current row info */}
+        {config && (
+          <div className="mb-6 text-[11px] font-mono text-zinc-500">
+            Active row: <span className="text-zinc-400">{config.id}</span> · created{" "}
+            {new Date(config.createdAt).toLocaleDateString()}
+            {config.notes && <span className="ml-2 text-zinc-600">· {config.notes}</span>}
+          </div>
+        )}
+
+        {/* Placement Method */}
+        <div className="mb-8">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-zinc-400">
+            Placement Method
+          </div>
+
+          <div className="grid gap-3">
+            {PLACEMENT_OPTIONS.map((opt) => {
+              const active = placementMethod === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setPlacementMethod(opt.value)}
+                  className={cn(
+                    "text-left rounded-xl border px-4 py-3 transition-all",
+                    active
+                      ? "border-red-500/50 bg-red-500/10 text-red-100"
+                      : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-[14px]">{opt.label}</div>
+                    {active && <div className="text-[10px] text-red-400 font-mono">ACTIVE</div>}
+                  </div>
+                  <div className="mt-1 text-[12.5px] leading-snug text-zinc-400">{opt.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Grok Reasoning Effort — only relevant for grok-hybrid */}
+        <div className={cn("mb-8 transition-opacity", !isGrokHybrid && "opacity-50 pointer-events-none")}>
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-zinc-400">
+            <Brain className="h-3.5 w-3.5" />
+            <span>Grok 4.3 Reasoning Effort</span>
+            {!isGrokHybrid && <span className="normal-case text-[10px] text-zinc-600">(only applies when Grok-Hybrid is selected)</span>}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {REASONING_OPTIONS.map((opt) => {
+              const active = grokReasoningEffort === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => isGrokHybrid && setGrokReasoningEffort(opt.value)}
+                  disabled={!isGrokHybrid}
+                  className={cn(
+                    "text-left rounded-xl border px-4 py-3 transition-all",
+                    active
+                      ? "border-amber-500/60 bg-amber-500/10 text-amber-100"
+                      : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-60"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-[14px]">{opt.label}</div>
+                    <div className="rounded bg-zinc-800 px-1.5 py-px text-[9px] font-mono tracking-wider text-amber-400">
+                      {opt.badge}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-[12.5px] leading-snug text-zinc-400">{opt.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 text-[11px] text-zinc-500">
+            Higher effort gives Grok more time to consider operator notes, call-offs, recent history, and pair dynamics before overriding the deterministic ranking.
+          </div>
+        </div>
+
+        {/* Save */}
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-black transition active:scale-[0.985]",
+              saving && "opacity-70 cursor-wait"
+            )}
+          >
+            {saving ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saving ? "Saving…" : "Update Active Engine Config"}
+          </button>
+
+          <button
+            onClick={loadConfig}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-900"
+          >
+            <RefreshCw className="h-4 w-4" /> Reload
+          </button>
+        </div>
+
+        <div className="mt-6 text-[11px] text-zinc-500 leading-relaxed">
+          Changes take effect the next time you run the placement engine (or switch to Grok-Hybrid mode).
+          The live sheet does not auto-recompute when you save — click “Run Engine” again to see the new behavior.
+        </div>
+
+        {config?.placementMethod === "grok-hybrid" && (
+          <div className="mt-4 rounded-md border border-amber-900/40 bg-amber-950/20 p-3 text-[11px] text-amber-300">
+            Grok-Hybrid is currently active. The reasoning effort above will be used on the next engine run.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
