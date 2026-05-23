@@ -17,6 +17,8 @@ import {
 } from "@/lib/shiftbuilder/commandParser";
 import type { TeamMember } from "@/lib/shiftbuilder/data";
 import type { DisplayNameConflict } from "@/lib/shiftbuilder/tmCommands";
+import { useShiftCompletion } from "@/hooks/useShiftCompletion";
+import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -41,7 +43,10 @@ interface CommandPaletteProps {
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
 
   /** Add a free-text task to a slot (used by the new Tasks command) */
-  onAddTask?: (slotKey: string, taskLabel: string) => Promise<void>;
+  onAddTask?: (slotKey: string | string[], taskLabel: string) => Promise<void>;
+
+  /** Full task catalog so the Tasks flow can offer curated quick-picks instead of only free text */
+  catalog?: any[];
 
   // For better contextual header in seeded slot mode (Phase 1 polish)
   selectedSlotAssignment?: any;
@@ -49,7 +54,7 @@ interface CommandPaletteProps {
   // Grok Intelligence v2 (structured suggestions + Draft integration)
   isDraftMode?: boolean;
   onApplyGrokSuggestions?: (actions: any[]) => void;
-  requestGrokStructuredSuggestions?: (focus: { type: "slot" | "person" | "board"; value?: string }) => Promise<any>;
+  requestGrokStructuredSuggestions?: (focus: { type: "slot" | "person" | "board"; value?: string; userQuestion?: string }) => Promise<any>;
   onTriggerGrokBoardAnalysis?: () => void;
 
   // === Natural-language command mode (`make` / `remove`) ===
@@ -95,6 +100,14 @@ interface CommandPaletteProps {
   // === SUDO trigger ===
   /** Fired when the operator types `sudo` and presses Enter / accepts. */
   onOpenSudo?: () => void;
+
+  // === AI auto-completion context ===
+  /** Names of TMs scheduled tonight but not yet placed — used by command completion */
+  completionScheduledUnplaced?: string[];
+  /** Current assignments snapshot for command completion context */
+  completionAssignments?: Record<string, { tmId?: string; tmName?: string }>;
+  /** Current shift day name */
+  completionDay?: string;
 }
 
 /**
@@ -115,6 +128,7 @@ export function CommandPalette({
   onCycleBreak,
   onAssign,
   onAddTask,
+  catalog,
   selectedSlotAssignment,
   isDraftMode = false,
   onApplyGrokSuggestions,
@@ -135,6 +149,9 @@ export function CommandPalette({
   whyWarnings,
   whyAvailable,
   onOpenSudo,
+  completionScheduledUnplaced,
+  completionAssignments,
+  completionDay,
 }: CommandPaletteProps) {
   // === Multi-step contextual state for powerful workflows ===
   const [selectedPerson, setSelectedPerson] = React.useState<any | null>(null);
@@ -165,8 +182,48 @@ export function CommandPalette({
   // === Why? mode toggle ===
   const [whyOpen, setWhyOpen] = React.useState(false);
 
+  // === Category pill active filter (null = show all) ===
+  const [activeGroupFilter, setActiveGroupFilter] = React.useState<import("@/lib/shiftbuilder/useCommandActions").CommandGroup | null>(null);
+
+  // Debounce timer for the Grok free-text query mode
+  const grokQueryDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // === Natural-language command mode (make / remove) ===
   const [inputValue, setInputValue] = React.useState("");
+
+  // AI ghost-text completion for command mode free-text.
+  // Only active when isCommandMode so it doesn't interfere with roster search.
+  const commandCompletion = useShiftCompletion({
+    surface: "command",
+    context: {
+      day: completionDay,
+      scheduledUnplaced: completionScheduledUnplaced,
+      assignments: completionAssignments,
+    },
+    disabled: false,
+    onAccept: (accepted) => setInputValue(accepted),
+  });
+
+  // Mirror measurement for inline ghost text positioning.
+  const cmdInputRef = React.useRef<HTMLInputElement>(null);
+  const cmdMirrorRef = React.useRef<HTMLSpanElement>(null);
+  const [cmdGhostLeft, setCmdGhostLeft] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    if (!cmdMirrorRef.current) return;
+    const input = cmdInputRef.current;
+    if (input) {
+      const cs = window.getComputedStyle(input);
+      const span = cmdMirrorRef.current;
+      span.style.fontFamily = cs.fontFamily;
+      span.style.fontSize = cs.fontSize;
+      span.style.fontWeight = cs.fontWeight;
+      span.style.letterSpacing = cs.letterSpacing;
+      span.style.paddingLeft = cs.paddingLeft;
+    }
+    setCmdGhostLeft(cmdMirrorRef.current.offsetWidth);
+  }, [inputValue]);
+
   const [commandStatus, setCommandStatus] = React.useState<
     "idle" | "executing" | "success" | "error"
   >("idle");
@@ -200,6 +257,15 @@ export function CommandPalette({
 
   const isCommandMode = !!commandState && commandState.kind !== null;
 
+  // === Grok free-text query mode — activated by typing "?" or "ask " prefix ===
+  const trimmedInput = inputValue.trimStart();
+  const isGrokQueryMode =
+    !isCommandMode &&
+    (trimmedInput.startsWith("?") || trimmedInput.toLowerCase().startsWith("ask "));
+  const grokQueryText = isGrokQueryMode
+    ? (trimmedInput.startsWith("?") ? trimmedInput.slice(1) : trimmedInput.slice(4)).trim()
+    : "";
+
   // Reset context when palette closes
   React.useEffect(() => {
     if (!open) {
@@ -215,6 +281,9 @@ export function CommandPalette({
       setNameConflict(null);
       setConflictChecking(false);
       setWhyOpen(false);
+      setActiveGroupFilter(null);
+      // Cancel any pending Grok query debounce
+      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
     }
   }, [open]);
 
@@ -254,6 +323,57 @@ export function CommandPalette({
       }
     }
   }, [open, initialContext, actions]);
+
+  // === Phase 3.5: Debounced Grok free-text query ===
+  // Fires 800ms after the operator stops typing in "?" / "ask " mode.
+  React.useEffect(() => {
+    if (!isGrokQueryMode || !requestGrokStructuredSuggestions) {
+      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
+      return;
+    }
+    if (grokQueryText.length < 3) {
+      // Too short — clear any stale results without firing
+      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
+      return;
+    }
+
+    if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
+    grokQueryDebounceRef.current = setTimeout(async () => {
+      setGrokLoading(true);
+      setGrokResponse(null);
+      setGrokStructured(null);
+      setGrokWarnings([]);
+      setGrokUsedStructured(false);
+      try {
+        const result = await requestGrokStructuredSuggestions({
+          type: "board",
+          userQuestion: grokQueryText,
+        });
+        if (result.usedStructured && result.structured) {
+          setGrokStructured(result.structured);
+          setGrokWarnings(result.warnings || []);
+          setGrokUsedStructured(true);
+          setGrokResponse(result.text);
+        } else {
+          setGrokResponse(result.text || "Grok responded.");
+        }
+        // After a successful response: reset input to bare "?" so the search
+        // field is clear (no leftover query text), Grok mode stays active
+        // (banner + response panel stay visible), and the cmdk list is
+        // suppressed by shouldFilter=false + empty grokQueryText.
+        setInputValue("?");
+      } catch (err) {
+        setGrokResponse("Grok query failed. Try again.");
+        console.error("[CommandPalette] grok query error:", err);
+      } finally {
+        setGrokLoading(false);
+      }
+    }, 800);
+
+    return () => {
+      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
+    };
+  }, [isGrokQueryMode, grokQueryText, requestGrokStructuredSuggestions]);
 
   const handleAskGrok = async () => {
     if (!selectedSlot && !selectedPerson) return;
@@ -468,6 +588,7 @@ export function CommandPalette({
     const groups: Record<CommandGroup, CommandItem[]> = {
       Roster: [],
       Actions: [],
+      Visual: [],
       Navigation: [],
       Filters: [],
       History: [],
@@ -480,12 +601,18 @@ export function CommandPalette({
       }
     });
 
-    // Only return groups that have items
-    return Object.entries(groups).filter(([_, items]) => items.length > 0) as [
+    // Filter to the active pill category, or return all non-empty groups
+    let result = Object.entries(groups).filter(([_, items]) => items.length > 0) as [
       CommandGroup,
       CommandItem[]
     ][];
-  }, [actions]);
+
+    if (activeGroupFilter) {
+      result = result.filter(([groupName]) => groupName === activeGroupFilter);
+    }
+
+    return result;
+  }, [actions, activeGroupFilter]);
 
   if (!open) return null;
 
@@ -513,22 +640,45 @@ export function CommandPalette({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Floating category pills — Launchpad-inspired, large touch targets for iPad Pencil.
-            These act as both visual section markers and quick filters (Phase 2). */}
-        <div className="flex gap-2 px-4 pt-3 pb-1.5 overflow-x-auto no-scrollbar">
-          {["Roster", "Actions", "Visual", "Navigation", "History"].map((cat) => (
+            Tap once to filter to that group; tap again (or ✕ Clear) to show all. */}
+        <div className="flex gap-2 px-4 pt-3 pb-1.5 overflow-x-auto no-scrollbar items-center">
+          {(["Roster", "Actions", "Visual", "Navigation", "History"] as const).map((cat) => {
+            const isActive = activeGroupFilter === (cat as CommandGroup);
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  if (isActive) {
+                    setActiveGroupFilter(null);
+                  } else {
+                    setActiveGroupFilter(cat as CommandGroup);
+                    // Also scroll into view as a convenience
+                    const el = document.getElementById(`group-${cat.toLowerCase()}`);
+                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                }}
+                className={cn(
+                  "shrink-0 px-3.5 py-1 text-[12px] font-medium tracking-[0.3px] rounded-2xl border transition-all",
+                  isActive
+                    ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                    : "bg-white/60 dark:bg-zinc-900/60 border-white/50 dark:border-white/10 hover:bg-white/80 active:bg-white"
+                )}
+                style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+              >
+                {cat}
+              </button>
+            );
+          })}
+          {/* Clear filter chip — appears when a pill is active */}
+          {activeGroupFilter && (
             <button
-              key={cat}
-              onClick={() => {
-                // For now visual + future filtering. Clicking scrolls/focuses the group.
-                const el = document.getElementById(`group-${cat.toLowerCase()}`);
-                el?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
-              className="shrink-0 px-3.5 py-1 text-[12px] font-medium tracking-[0.3px] rounded-2xl bg-white/60 dark:bg-zinc-900/60 border border-white/50 dark:border-white/10 hover:bg-white/80 active:bg-white transition-all"
+              onClick={() => setActiveGroupFilter(null)}
+              className="shrink-0 px-2.5 py-1 text-[11px] font-medium tracking-[0.3px] rounded-2xl border border-zinc-300/60 bg-zinc-100/60 text-zinc-500 hover:bg-zinc-200/60 active:bg-zinc-200 transition-all"
               style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
             >
-              {cat}
+              ✕ Clear
             </button>
-          ))}
+          )}
         </div>
 
         {/* === Why? mode toggle — visible only when there's a draft to explain. */}
@@ -615,7 +765,7 @@ export function CommandPalette({
             )}
             {selectedSlot && !selectedPerson && (
               <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                Assign to <span className="font-semibold">{selectedSlot}</span>
+                Assign to <span className="font-semibold">{slotKeyToLabel(selectedSlot)}</span>
                 {selectedSlotAssignment?.tmName && (
                   <span className="text-zinc-500 dark:text-zinc-400 font-normal text-xs ml-2">
                     (currently: {selectedSlotAssignment.tmName})
@@ -635,10 +785,12 @@ export function CommandPalette({
               )}
             </div>
 
-            {/* Quick actions migrated from old fan — calm pill style for iPad touch */}
+            {/* Quick actions migrated from old fan — calm pill style for iPad touch.
+                Remove and Cycle Break only show when the slot is occupied; Lock/Unlock
+                is meaningful for both filled and empty slots. */}
             {selectedSlot && (
-              <div className="flex gap-2 px-4 pb-2 pt-1">
-                {onRemoveFromSlot && (
+              <div className="flex gap-2 pb-2 pt-1">
+                {onRemoveFromSlot && selectedSlotAssignment?.tmId && (
                   <button
                     onClick={() => { onRemoveFromSlot(selectedSlot); onOpenChange(false); }}
                     className="text-[11px] px-3 py-1 rounded-full bg-red-500/10 text-red-600 hover:bg-red-500/20 active:scale-[0.985] transition-all border border-red-500/20"
@@ -648,13 +800,13 @@ export function CommandPalette({
                 )}
                 {onToggleLock && (
                   <button
-                    onClick={() => { onToggleLock(selectedSlot); /* keep open for more */ }}
+                    onClick={() => { onToggleLock(selectedSlot); /* keep open for more actions */ }}
                     className="text-[11px] px-3 py-1 rounded-full bg-zinc-900/5 hover:bg-zinc-900/10 active:scale-[0.985] transition-all border border-white/40"
                   >
                     Lock/Unlock
                   </button>
                 )}
-                {onCycleBreak && (
+                {onCycleBreak && selectedSlotAssignment?.tmId && (
                   <button
                     onClick={() => onCycleBreak(selectedSlot)}
                     className="text-[11px] px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 active:scale-[0.985] transition-all border border-amber-500/20"
@@ -851,7 +1003,7 @@ export function CommandPalette({
         <div className="flex items-center px-4 py-3 bg-white/60 dark:bg-zinc-950/60">
           <CommandPrimitive
             className="w-full"
-            shouldFilter={!isCommandMode}
+            shouldFilter={!isCommandMode && !isGrokQueryMode}
             onKeyDown={(e) => {
               if (isCommandMode && commandState) {
                 if (e.key === "Tab" && !e.shiftKey) {
@@ -886,12 +1038,16 @@ export function CommandPalette({
             {/* Cupertino-inspired Search Field treatment */}
             <div className={cn(
               "flex items-center gap-2 px-3 py-1 rounded-2xl border",
-              isCommandMode
+              isGrokQueryMode
+                ? "bg-purple-500/5 border-purple-400/40"
+                : isCommandMode
                 ? "bg-[#007AFF]/5 border-[#007AFF]/30"
                 : "bg-white/50 dark:bg-zinc-950/50 border-white/60 dark:border-white/10"
             )}>
               <div className="text-zinc-400">
-                {isCommandMode ? (
+                {isGrokQueryMode ? (
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                ) : isCommandMode ? (
                   <Terminal className="h-4 w-4 text-[#007AFF]" />
                 ) : (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -900,34 +1056,92 @@ export function CommandPalette({
                   </svg>
                 )}
               </div>
-              <CommandPrimitive.Input
-                autoFocus
-                value={inputValue}
-                onValueChange={setInputValue}
-                aria-label="Search commands, roster, actions, and days"
-                placeholder={
-                  isCommandMode
-                    ? "Type a command — Tab to complete, Enter to run"
-                    : contextStep === "person-to-slot"
-                    ? "Type slot (e.g. Z10, MRR2)..."
-                    : contextStep === 'tasks-select-zone'
-                    ? "Select a zone / slot for the task..."
-                    : contextStep === 'tasks-enter-label'
-                    ? "Describe the task (free text)..."
-                    : placeholder
-                }
-                className={cn(
-                  "flex-1 bg-transparent text-[15px] placeholder:text-zinc-400/70",
-                  "outline-none border-none focus:ring-0",
-                  "font-medium tracking-[-0.2px]",
-                  isCommandMode && "font-mono text-[14px]"
+              {/* Wrapper gives us a relative ancestor for the absolutely-placed ghost span */}
+              <div className="relative flex-1 overflow-hidden">
+                {/* Hidden mirror span — same text as input, used to measure pixel width */}
+                <span
+                  ref={cmdMirrorRef}
+                  aria-hidden
+                  className="absolute invisible whitespace-pre pointer-events-none"
+                  style={{ left: 0, top: 0 }}
+                >
+                  {inputValue || " "}
+                </span>
+
+                <CommandPrimitive.Input
+                  ref={cmdInputRef}
+                  autoFocus
+                  value={inputValue}
+                  onValueChange={(v) => {
+                    setInputValue(v);
+                    // Feed command mode input to AI completion (no-op when not command mode).
+                    if (isCommandMode) commandCompletion.handleChange(v);
+                    else commandCompletion.dismiss();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Tab" && isCommandMode && commandCompletion.ghostText) {
+                      e.preventDefault();
+                      commandCompletion.accept(); // onAccept → setInputValue
+                    }
+                    if (e.key === "Escape" && commandCompletion.ghostText) {
+                      commandCompletion.dismiss();
+                    }
+                  }}
+                  aria-label="Search commands, roster, actions, and days"
+                  placeholder={
+                    isGrokQueryMode
+                      ? grokQueryText.length < 3
+                        ? "Ask Grok anything about tonight's board…"
+                        : grokLoading
+                        ? "Asking Grok…"
+                        : "Keep typing or review results below"
+                      : isCommandMode
+                      ? "Type a command — Tab to complete, Enter to run"
+                      : contextStep === "person-to-slot"
+                      ? "Type slot (e.g. Z10, MRR2)..."
+                      : contextStep === 'tasks-select-zone'
+                      ? "Select a zone / slot for the task..."
+                      : contextStep === 'tasks-enter-label'
+                      ? "Describe the task (free text)..."
+                      : placeholder
+                  }
+                  className={cn(
+                    "w-full bg-transparent text-[15px] placeholder:text-zinc-400/70",
+                    "outline-none border-none focus:ring-0",
+                    "font-medium tracking-[-0.2px]",
+                    isCommandMode && "font-mono text-[14px]",
+                    isGrokQueryMode && "text-purple-800 dark:text-purple-300"
+                  )}
+                  style={{
+                    fontFamily: isCommandMode
+                      ? "var(--font-geist-mono), monospace"
+                      : "var(--font-atkinson), system-ui",
+                    position: "relative",
+                    zIndex: 1,
+                  }}
+                />
+
+                {/* Ghost text — absolutely positioned inline after the typed text */}
+                {isCommandMode && commandCompletion.ghostText && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none select-none absolute whitespace-pre"
+                    style={{
+                      left: cmdGhostLeft,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: "14px",
+                      fontWeight: "inherit",
+                      letterSpacing: "inherit",
+                      color: "rgba(0,122,255,0.30)",
+                      zIndex: 0,
+                    }}
+                  >
+                    {commandCompletion.ghostText}
+                  </span>
                 )}
-                style={{
-                  fontFamily: isCommandMode
-                    ? "var(--font-geist-mono), monospace"
-                    : "var(--font-atkinson), system-ui",
-                }}
-              />
+              </div>
               <button
                 onClick={() => onOpenChange(false)}
                 className="text-zinc-400 hover:text-zinc-600 transition-colors p-1"
@@ -937,9 +1151,46 @@ export function CommandPalette({
               </button>
             </div>
 
+            {/* === Grok Query Mode status banner — shown between input and results === */}
+            {isGrokQueryMode && (
+              <div className="mx-3 mb-2 mt-1 rounded-2xl border border-purple-400/30 bg-purple-50/60 dark:bg-purple-950/30 px-3 py-2 flex items-center gap-2">
+                <Sparkles className={cn("h-3.5 w-3.5 text-purple-500 shrink-0", grokLoading && "animate-pulse")} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 tracking-[0.3px]">
+                    Grok Query Mode
+                  </span>
+                  {grokQueryText.length > 0 && (
+                    <span className="text-[11px] text-purple-600/70 dark:text-purple-400/70 ml-1.5 truncate">
+                      {grokLoading
+                        ? "— asking…"
+                        : grokQueryText.length < 3
+                        ? "— type 3+ chars"
+                        : `— "${grokQueryText}"`}
+                    </span>
+                  )}
+                </div>
+                {grokQueryText.length < 3 && !grokLoading && (
+                  <span className="shrink-0 text-[10px] text-purple-400/80">
+                    ? query · ask query
+                  </span>
+                )}
+              </div>
+            )}
+
             <CommandPrimitive.List className="max-h-[420px] overflow-y-auto px-1 py-2 no-scrollbar">
-              <CommandPrimitive.Empty className="py-8 text-center text-sm text-zinc-500">
-                No results found.
+              <CommandPrimitive.Empty className={cn("py-8 text-center text-sm text-zinc-500", isGrokQueryMode && "hidden")}>
+                <div className="space-y-2 px-4">
+                  <div>No results found.</div>
+                  <div className="text-[11px] text-zinc-400/70 leading-relaxed">
+                    Try:{" "}
+                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">clear zone</span>{" · "}
+                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">swap</span>{" · "}
+                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">break [name]</span>{" · "}
+                    or type{" "}
+                    <span className="font-mono bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1 rounded">?</span>{" "}
+                    to ask Grok
+                  </div>
+                </div>
               </CommandPrimitive.Empty>
 
               {/* Natural-language command-mode suggestions (takes precedence) */}
@@ -957,8 +1208,8 @@ export function CommandPalette({
                   {[
                     // Zones (Z1–Z10) + Z9 Smoking Room
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    // Restrooms — treated as single cards (one border per RR pair)
-                    'RR1','RR6','RR7','RR8','RR10',
+                    // Restrooms — Men's and Women's sides use their full Golden UI keys
+                    'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
                     // Auxiliary
                     'ADM','TR1','TR2','SP1','SP2','SP3',
                     // AM / PM Overlaps
@@ -1018,7 +1269,7 @@ export function CommandPalette({
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to remove border from</div>
                   {[
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    'RR1','RR6','RR7','RR8','RR10',
+                    'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
                     'ADM','TR1','TR2','SP1','SP2','SP3',
                     // AM / PM Overlaps (optional but available)
                     'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
@@ -1110,6 +1361,39 @@ export function CommandPalette({
                       <>Task for <span className="font-semibold text-zinc-900">{selectedTaskSlot}</span> — type description and press Enter</>
                     )}
                   </div>
+
+                  {/* Catalog quick-picks (best judgment: show relevant curated tasks from the Sudo Tasks hub) */}
+                  {catalog && catalog.length > 0 && (
+                    <div className="px-3 pt-1 pb-2">
+                      <div className="text-[9px] uppercase tracking-[0.5px] text-zinc-500/60 mb-1">From catalog</div>
+                      <div className="flex flex-wrap gap-1">
+                        {catalog.slice(0, 10).map((c: any, idx: number) => (
+                          <button
+                            key={c.id || idx}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const targets = multiTaskSlots.length > 0 ? multiTaskSlots : (selectedTaskSlot ? [selectedTaskSlot] : []);
+                              if (targets.length === 0 || !onAddTask) return;
+                              try {
+                                await (onAddTask as any)(targets.length === 1 ? targets[0] : targets, c.label);
+                                onOpenChange(false);
+                                setSelectedTaskSlot(null);
+                                setMultiTaskSlots([]);
+                                setContextStep('root');
+                                setInputValue('');
+                              } catch (err) {
+                                console.error('Catalog task from palette failed:', err);
+                              }
+                            }}
+                            className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 hover:bg-[#007AFF]/10 text-zinc-700 hover:text-[#007AFF] border border-zinc-200 transition-colors"
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-[9px] text-zinc-400 mt-1">or type a custom description below</div>
+                    </div>
+                  )}
                   <CommandPrimitive.Item
                     key="tasks-confirm"
                     value={`save task ${inputValue}`}
@@ -1158,7 +1442,20 @@ export function CommandPalette({
                   {items.map((item) => (
                     <CommandPrimitive.Item
                       key={item.id}
-                      value={`${item.label} ${item.keywords.join(" ")}`}
+                      // For Roster items include both display name and full name so
+                      // operators can search either. For action/navigation items use
+                      // the label only — including generic keywords ("swap replace
+                      // reassign…") in the value causes fuzzy bleed where "jessica"
+                      // matches "Swap RR8: Jeff" because j-e-s-s-i-c-a is scattered
+                      // across the keyword soup. Label-only keeps false-positive rate
+                      // near zero while preserving real name lookups.
+                      value={
+                        item.group === "Roster"
+                          ? [item.label, item.metadata?.tm?.fullName]
+                              .filter(Boolean)
+                              .join(" ")
+                          : item.label
+                      }
                       onSelect={() => {
                         // Roster selection in contextual flows
                         if (item.group === "Roster" && item.metadata?.tm) {
@@ -1248,8 +1545,11 @@ export function CommandPalette({
           style={{ fontFamily: "var(--font-atkinson), var(--font-geist-mono)" }}
         >
           <div className="opacity-70">
-            {contextStep !== 'root' ? "Tab to switch • " : ""}
-            ↑↓ navigate · ↵ select · esc {contextStep !== 'root' ? "back" : "close"}
+            {isGrokQueryMode
+              ? "✦ Grok Query Mode · type ? or ask to start · esc to cancel"
+              : contextStep !== 'root'
+              ? "Tab to switch • ↑↓ navigate · ↵ select · esc back"
+              : "↑↓ navigate · ↵ select · esc close · ? for Grok"}
           </div>
           <div className="opacity-50">Command Palette</div>
         </div>
@@ -1299,20 +1599,23 @@ function RosterItemRow({ item }: { item: CommandItem }) {
         )}
       </div>
 
-      {/* Refined badges — slightly larger for touch, calmer opacity */}
-      <div className="flex gap-1.5 shrink-0">
-        {item.metadata?.isGrave && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium tracking-[0.5px] border border-[#007AFF]/15">G</span>
+      {/* Badges — mutually exclusive eligibility tier: PM > AM > G (Porter separate).
+          A TM is either a PM overlap, AM overlap, or a full-grave — never multiple. */}
+      <div className="flex gap-1.5 shrink-0 items-center">
+        {item.metadata?.isScheduledUnplaced && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-600 font-semibold tracking-[0.5px] border border-amber-400/30" title="On schedule tonight — not yet placed">
+            SCHED
+          </span>
         )}
-        {item.metadata?.isPMOverlap && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AF52DE]/10 text-[#AF52DE] font-medium tracking-[0.5px] border border-[#AF52DE]/15">PM</span>
-        )}
-        {item.metadata?.isAMOverlap && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#34C759]/10 text-[#34C759] font-medium tracking-[0.5px] border border-[#34C759]/15">AM</span>
-        )}
-        {item.metadata?.isPorter && (
+        {item.metadata?.isPorter ? (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium tracking-[0.5px] border border-amber-500/15">P</span>
-        )}
+        ) : item.metadata?.isPMOverlap ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AF52DE]/10 text-[#AF52DE] font-medium tracking-[0.5px] border border-[#AF52DE]/15">PM</span>
+        ) : item.metadata?.isAMOverlap ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#34C759]/10 text-[#34C759] font-medium tracking-[0.5px] border border-[#34C759]/15">AM</span>
+        ) : item.metadata?.isGrave ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium tracking-[0.5px] border border-[#007AFF]/15">G</span>
+        ) : null}
       </div>
     </div>
   );

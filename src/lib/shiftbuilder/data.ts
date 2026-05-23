@@ -112,38 +112,21 @@ export async function getGraveAvailableTeamMembers(): Promise<TeamMember[]> {
 }
 
 /**
- * Returns TMs who are eligible for GRAVE and have an existing overlap assignment
- * on this night (treated as PM Overlaps — out at ~1:00am).
+ * Returns all active TMs with grave_pool = 'PM' (out at ~1:00am).
+ * Derived directly from tm_profiles.grave_pool — the authoritative source of truth.
+ * (Previously used overlap_assignments which had no PM/AM type distinction.)
  */
-export async function getGravePMOverlapMembers(nightId: string): Promise<TeamMember[]> {
-  if (!nightId) return [];
-
+export async function getGravePMOverlapMembers(): Promise<TeamMember[]> {
   try {
-    // Step 1: Get distinct tm_ids from overlap_assignments for this night
-    const { data: overlapRows, error: overlapError } = await supabase
-      .from('overlap_assignments')
-      .select('tm_id')
-      .eq('night_id', nightId);
-
-    if (overlapError) {
-      console.error('[shiftbuilder/data] PM Overlap - overlap_assignments query failed:', overlapError);
-      return [];
-    }
-
-    const tmIds = [...new Set((overlapRows || []).map(r => r.tm_id))];
-    if (tmIds.length === 0) return [];
-
-    // Step 2: Fetch matching tm_profiles that have grave_pool
     const { data, error } = await supabase
       .from('tm_profiles')
       .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
-      .in('tm_id', tmIds)
       .eq('active', true)
-      .not('grave_pool', 'is', null)
+      .eq('grave_pool', 'PM')
       .order('display_name', { ascending: true });
 
     if (error) {
-      console.error('[shiftbuilder/data] PM Overlap - tm_profiles query failed:', error);
+      console.error('[shiftbuilder/data] getGravePMOverlapMembers failed:', error);
       return [];
     }
 
@@ -153,7 +136,7 @@ export async function getGravePMOverlapMembers(nightId: string): Promise<TeamMem
       fullName: p.full_name,
       status: p.status,
       primarySection: p.primary_section,
-      gravePool: p.grave_pool ?? null,
+      gravePool: 'PM',
       isPMOverlap: true,
       isAMOverlap: false,
     }));
@@ -164,38 +147,22 @@ export async function getGravePMOverlapMembers(nightId: string): Promise<TeamMem
 }
 
 /**
- * Returns TMs who are eligible for GRAVE and have an existing overlap assignment
- * on this night (treated as AM Overlaps — in 5:00–5:30am).
+ * Returns all active TMs with grave_pool = 'AM' (in at 5:00–5:30am).
+ * Derived directly from tm_profiles.grave_pool — the authoritative source of truth.
+ * Note: AM overlap TMs are scheduled on the ADP export for the NEXT calendar day
+ * (e.g. a Friday grave shift has AM overlaps imported as Saturday 5am).
  */
-export async function getGraveAMOverlapMembers(nightId: string): Promise<TeamMember[]> {
-  if (!nightId) return [];
-
+export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
   try {
-    // Step 1: Get distinct tm_ids from overlap_assignments for this night
-    const { data: overlapRows, error: overlapError } = await supabase
-      .from('overlap_assignments')
-      .select('tm_id')
-      .eq('night_id', nightId);
-
-    if (overlapError) {
-      console.error('[shiftbuilder/data] AM Overlap - overlap_assignments query failed:', overlapError);
-      return [];
-    }
-
-    const tmIds = [...new Set((overlapRows || []).map(r => r.tm_id))];
-    if (tmIds.length === 0) return [];
-
-    // Step 2: Fetch matching tm_profiles that have grave_pool
     const { data, error } = await supabase
       .from('tm_profiles')
       .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool')
-      .in('tm_id', tmIds)
       .eq('active', true)
-      .not('grave_pool', 'is', null)
+      .eq('grave_pool', 'AM')
       .order('display_name', { ascending: true });
 
     if (error) {
-      console.error('[shiftbuilder/data] AM Overlap - tm_profiles query failed:', error);
+      console.error('[shiftbuilder/data] getGraveAMOverlapMembers failed:', error);
       return [];
     }
 
@@ -205,7 +172,7 @@ export async function getGraveAMOverlapMembers(nightId: string): Promise<TeamMem
       fullName: p.full_name,
       status: p.status,
       primarySection: p.primary_section,
-      gravePool: p.grave_pool ?? null,
+      gravePool: 'AM',
       isPMOverlap: false,
       isAMOverlap: true,
     }));
@@ -217,15 +184,78 @@ export async function getGraveAMOverlapMembers(nightId: string): Promise<TeamMem
 
 /**
  * Returns the set of TM ids that are "on schedule" for a given night.
- * Strategy (realistic for ZDS ops):
- *   - All TMs that appear in zone_assignments / break_assignments / overlap_assignments
- *     for any night in the same week as the target night.
- *   - This gives the full working roster pool for the week (the "scheduled" people).
- * 
- * Falls back to empty set if no assignments yet (new night).
+ *
+ * Sources (merged):
+ *   1. night_tm_status rows for tonight's night_id — populated by ADP import.
+ *   2. night_tm_status rows for the NEXT calendar day, filtered to grave_pool='AM'
+ *      TMs only. Reason: AM overlap TMs (in at 5:00–5:30am) are scheduled by ADP
+ *      under the next morning's date (e.g. a Friday grave shift has AM overlaps
+ *      imported as Saturday 5am), so their night_tm_status rows live under the
+ *      Saturday night_id, not Friday's.
+ *   3. Fallback heuristic: TMs appearing in zone/break/overlap_assignments for
+ *      any night this week — covers weeks where no ADP import has been run yet.
+ *
+ * Falls back to empty set if no data exists at all.
+ *
+ * @param nightId   The night_id of the grave shift (e.g. Friday night's row)
+ * @param shiftDate ISO date string of the shift night (e.g. '2026-05-22')
  */
-export async function getOnScheduleTmIdsForNight(nightId: string): Promise<Set<string>> {
-  // 1. Find the week for this night
+export async function getOnScheduleTmIdsForNight(
+  nightId: string,
+  shiftDate: string
+): Promise<Set<string>> {
+  const tmIdSet = new Set<string>();
+
+  // --- Compute tomorrow's ISO date (only when a valid shiftDate was supplied) ---
+  const shiftDateObj = shiftDate ? new Date(`${shiftDate}T12:00:00Z`) : null;
+  const nextDateStr: string | null = (() => {
+    if (!shiftDateObj || isNaN(shiftDateObj.getTime())) return null;
+    const d = new Date(shiftDateObj);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  // --- Parallel: tonight's night_tm_status + tomorrow's night lookup ---
+  const [tonightStatusRes, tomorrowNightRes] = await Promise.all([
+    supabase
+      .from('night_tm_status')
+      .select('tm_id')
+      .eq('night_id', nightId),
+    nextDateStr
+      ? supabase.from('nights').select('id').eq('night_date', nextDateStr).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  (tonightStatusRes.data || []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
+
+  // AM overlap TMs are imported as next-day schedule entries
+  if (tomorrowNightRes.data?.id) {
+    const tomorrowNightId = tomorrowNightRes.data.id;
+    const { data: nextDayStatus } = await supabase
+      .from('night_tm_status')
+      .select('tm_id')
+      .eq('night_id', tomorrowNightId);
+
+    if (nextDayStatus?.length) {
+      const nextTmIds = (nextDayStatus || []).map((r: any) => r.tm_id).filter(Boolean);
+      if (nextTmIds.length > 0) {
+        // Only include those who are AM overlap TMs (grave_pool = 'AM')
+        const { data: amProfiles } = await supabase
+          .from('tm_profiles')
+          .select('tm_id')
+          .in('tm_id', nextTmIds)
+          .eq('grave_pool', 'AM')
+          .eq('active', true);
+        (amProfiles || []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
+      }
+    }
+  }
+
+  // If night_tm_status has data, we're done — ADP import is the source of truth.
+  if (tmIdSet.size > 0) return tmIdSet;
+
+  // --- Fallback heuristic: scan assignment tables for the whole week ---
+  // Used when no ADP schedule has been imported yet.
   const { data: nightRow, error: nightErr } = await supabase
     .from('nights')
     .select('week_id')
@@ -234,40 +264,22 @@ export async function getOnScheduleTmIdsForNight(nightId: string): Promise<Set<s
 
   if (nightErr || !nightRow?.week_id) {
     console.warn('[shiftbuilder/data] Could not resolve week for night', nightId);
-    return new Set();
+    return tmIdSet;
   }
 
-  const weekId = nightRow.week_id;
-
-  // 2. Get all nights in the week
-  const { data: weekNights, error: weeksErr } = await supabase
+  const { data: weekNights } = await supabase
     .from('nights')
     .select('id')
-    .eq('week_id', weekId);
+    .eq('week_id', nightRow.week_id);
 
-  if (weeksErr || !weekNights?.length) return new Set();
+  if (!weekNights?.length) return tmIdSet;
 
   const nightIds = weekNights.map((n: any) => n.id);
 
-  // 3. Collect tm_ids from all three assignment tables for the week
-  const tmIdSet = new Set<string>();
-
   const [zoneRes, breakRes, overlapRes] = await Promise.all([
-    supabase
-      .from('zone_assignments')
-      .select('tm_id')
-      .in('night_id', nightIds)
-      .not('tm_id', 'is', null),
-    supabase
-      .from('break_assignments')
-      .select('tm_id')
-      .in('night_id', nightIds)
-      .not('tm_id', 'is', null),
-    supabase
-      .from('overlap_assignments')
-      .select('tm_id')
-      .in('night_id', nightIds)
-      .not('tm_id', 'is', null),
+    supabase.from('zone_assignments').select('tm_id').in('night_id', nightIds).not('tm_id', 'is', null),
+    supabase.from('break_assignments').select('tm_id').in('night_id', nightIds).not('tm_id', 'is', null),
+    supabase.from('overlap_assignments').select('tm_id').in('night_id', nightIds).not('tm_id', 'is', null),
   ]);
 
   (zoneRes.data || []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
@@ -281,10 +293,10 @@ export async function getOnScheduleTmIdsForNight(nightId: string): Promise<Set<s
  * Get full roster for the shift builder, with on-schedule flag for the night.
  * On-schedule TMs come first / expanded in the UI.
  */
-export async function getTeamMembersForNight(nightId: string): Promise<(TeamMember & { isOnSchedule: boolean })[]> {
+export async function getTeamMembersForNight(nightId: string, shiftDate?: string): Promise<(TeamMember & { isOnSchedule: boolean })[]> {
   const [all, scheduled] = await Promise.all([
     getActiveTeamMembers(),
-    getOnScheduleTmIdsForNight(nightId),
+    getOnScheduleTmIdsForNight(nightId, shiftDate ?? ''),
   ]);
 
   return all.map((tm) => ({
@@ -985,6 +997,161 @@ export async function updateNightSlotTaskLabel(
   if (error) {
     console.error('[shiftbuilder/data] updateNightSlotTaskLabel failed:', error);
     throw new Error(`Failed to update task label: ${error.message}`);
+  }
+}
+
+// ============================================================================
+// Catalog & Task Management (for Sudo "Tasks" hub + cross-card drag)
+// ============================================================================
+//
+// New helpers (2026-05-22) to support the central Tasks tab and the ability
+// to drag a task instance from one card/slot to another on the canvas.
+//
+// All follow the same error-logging + validation style as the functions above.
+// No schema changes required — the existing tables are sufficient.
+//
+
+export interface UpdateCatalogParams {
+  id: string;
+  label?: string;
+  sortOrder?: number;
+  slotKey?: string;
+  slotType?: 'zone' | 'rr' | 'aux' | 'overlap';
+  rrSide?: 'mens' | 'womens' | null;
+}
+
+/** Update a catalog row (label, sort, or rarely its slot targeting). */
+export async function updateCatalogTask(params: UpdateCatalogParams): Promise<void> {
+  const { id, label, sortOrder, slotKey, slotType, rrSide } = params;
+  if (!id) throw new Error('updateCatalogTask requires id');
+
+  const updates: Record<string, any> = {};
+  if (label !== undefined) updates.label = label.trim();
+  if (sortOrder !== undefined) updates.sort_order = sortOrder;
+  if (slotKey !== undefined) updates.slot_key = slotKey;
+  if (slotType !== undefined) updates.slot_type = slotType;
+  if (rrSide !== undefined) updates.rr_side = rrSide;
+
+  if (Object.keys(updates).length === 0) return;
+
+  const { error } = await supabase
+    .from('slot_task_catalog')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[shiftbuilder/data] updateCatalogTask failed:', error);
+    throw new Error(`Failed to update catalog task: ${error.message}`);
+  }
+}
+
+/** Delete a catalog definition. Night rows keep their denormalized label (safe). */
+export async function deleteCatalogTask(id: string): Promise<void> {
+  if (!id) throw new Error('deleteCatalogTask requires id');
+
+  const { error } = await supabase
+    .from('slot_task_catalog')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[shiftbuilder/data] deleteCatalogTask failed:', error);
+    throw new Error(`Failed to delete catalog task: ${error.message}`);
+  }
+}
+
+/** Return how many night_slot_tasks rows currently reference a catalog id (for delete guard). */
+export async function getCatalogTaskUsageCount(catalogTaskId: string): Promise<number> {
+  if (!catalogTaskId) return 0;
+
+  const { count, error } = await supabase
+    .from('night_slot_tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('catalog_task_id', catalogTaskId);
+
+  if (error) {
+    console.error('[shiftbuilder/data] getCatalogTaskUsageCount failed:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+export interface MoveTaskParams {
+  nightId: string;
+  fromSlotKey: string;
+  fromSlotType: 'zone' | 'rr' | 'aux' | 'overlap';
+  fromRrSide?: 'mens' | 'womens' | null;
+  toSlotKey: string;
+  toSlotType: 'zone' | 'rr' | 'aux' | 'overlap';
+  toRrSide?: 'mens' | 'womens' | null;
+  taskLabel: string;
+}
+
+/**
+ * Move an existing task selection from one slot to another for the same night.
+ * Uses the composite key to locate the row, then updates its slot targeting fields.
+ * This is the persistence for "drag a task chip from one card to another".
+ */
+export async function moveNightSlotTask(params: MoveTaskParams): Promise<void> {
+  const {
+    nightId, taskLabel,
+    fromSlotKey, fromSlotType, fromRrSide = null,
+    toSlotKey, toSlotType, toRrSide = null,
+  } = params;
+
+  if (!nightId || !taskLabel || !fromSlotKey || !toSlotKey) {
+    throw new Error('moveNightSlotTask requires nightId, taskLabel, from/to slot keys');
+  }
+
+  // Locate the row by the old composite key (label is the stable human key within a night+slot)
+  const { data: existing, error: findErr } = await supabase
+    .from('night_slot_tasks')
+    .select('id, color, sort_order, catalog_task_id')
+    .eq('night_id', nightId)
+    .eq('slot_key', fromSlotKey)
+    .eq('slot_type', fromSlotType)
+    .eq('task_label', taskLabel)
+    .maybeSingle();
+
+  if (findErr) {
+    console.error('[shiftbuilder/data] moveNightSlotTask find failed:', findErr);
+    throw new Error(`Failed to locate task for move: ${findErr.message}`);
+  }
+  if (!existing) {
+    // Already moved or never existed — treat as success (idempotent for UI)
+    return;
+  }
+
+  // Update the targeting columns on the existing row (preserves id, color, sort, catalog link)
+  const { error: updErr } = await supabase
+    .from('night_slot_tasks')
+    .update({
+      slot_key: toSlotKey,
+      slot_type: toSlotType,
+      rr_side: toRrSide,
+    })
+    .eq('id', existing.id);
+
+  if (updErr) {
+    console.error('[shiftbuilder/data] moveNightSlotTask update failed:', updErr);
+    throw new Error(`Failed to move task: ${updErr.message}`);
+  }
+}
+
+/** Batch update sort_order for several catalog rows (used by drag-reorder in the hub). */
+export async function updateCatalogSortOrders(updates: Array<{ id: string; sortOrder: number }>): Promise<void> {
+  if (!updates.length) return;
+
+  // Simple sequential updates (catalog is tiny; avoids needing a more complex RPC)
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('slot_task_catalog')
+      .update({ sort_order: u.sortOrder })
+      .eq('id', u.id);
+    if (error) {
+      console.error('[shiftbuilder/data] updateCatalogSortOrders partial failure on', u.id, error);
+      throw new Error(`Failed to update sort order: ${error.message}`);
+    }
   }
 }
 

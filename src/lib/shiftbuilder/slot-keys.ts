@@ -164,6 +164,58 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
 }
 
 /**
+ * UI slot key → human-readable label for the Command Palette header and any
+ * other display surface that needs a friendly slot name.
+ *
+ * Examples:
+ *   "TR1"     → "Trash 1"
+ *   "Z3"      → "Zone 3"
+ *   "MRR7"    → "RR 7 (Men's)"
+ *   "WRR1"    → "RR 1+2 (Women's)"
+ *   "ADM"     → "Admin"
+ *   "Z9SR"    → "Z9 SR"
+ *   "SP3"     → "Support 3"
+ *   "OL-PM-1" → "PM Overlap 2"
+ *   "AUX6"    → "Aux 6"
+ */
+export function slotKeyToLabel(uiKey: string): string {
+  // Zones: Z1 … Z10
+  const zMatch = uiKey.match(/^Z(\d+)$/);
+  if (zMatch) return `Zone ${zMatch[1]}`;
+
+  // RR slots: MRR1, WRR7, etc.
+  const rrMatch = uiKey.match(/^([MW])RR(\d+)$/);
+  if (rrMatch) {
+    const num = parseInt(rrMatch[2], 10);
+    const side = rrMatch[1] === "M" ? "Men's" : "Women's";
+    // RR number 1 is the paired 1+2 station
+    return num === 1 ? `RR 1+2 (${side})` : `RR ${num} (${side})`;
+  }
+
+  // Named AUX
+  if (uiKey === "Z9SR") return "Z9 SR";
+  if (uiKey === "ADM")  return "Admin";
+
+  // TR/SP numbered families
+  const trMatch = uiKey.match(/^TR(\d+)$/);
+  if (trMatch) return `Trash ${trMatch[1]}`;
+
+  const spMatch = uiKey.match(/^SP(\d+)$/);
+  if (spMatch) return `Support ${spMatch[1]}`;
+
+  // Operator-added AUX slots
+  const auxMatch = uiKey.match(/^AUX(\d+)$/);
+  if (auxMatch) return `Aux ${auxMatch[1]}`;
+
+  // Overlaps: OL-PM-0..5, OL-AM-0..5 (0-indexed internally, display 1-indexed)
+  const olMatch = uiKey.match(/^OL-(PM|AM)-(\d+)$/);
+  if (olMatch) return `${olMatch[1]} Overlap ${parseInt(olMatch[2], 10) + 1}`;
+
+  // Fallback: return key as-is — still readable, never blank
+  return uiKey;
+}
+
+/**
  * Helper for the AUX layout-detection logic. Given a DB AUX slot_key, return
  * the matching UI key + a sensible label so the shiftbuilder can synthesize
  * an operator-added slot definition when loading.

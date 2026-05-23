@@ -36,6 +36,7 @@ import {
   addSlotCatalogTask,
   updateNightSlotTaskColor,
   updateNightSlotTaskLabel,
+  moveNightSlotTask,
   getNightCardBorders,
   setNightCardBorder,
   removeNightCardBorder,
@@ -91,6 +92,8 @@ import {
 } from "@/lib/shiftbuilder/grokEngine";
 import { askGrokEngineDraft } from "./actions";
 import { SudoWindow } from "./sudo/SudoWindow";
+import { XAISphere } from "./xai/XAISphere";
+import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 
 
 // === Golden-exact data definitions (restored) ===
@@ -447,6 +450,7 @@ interface ZoneCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = ({ 
@@ -584,6 +588,8 @@ interface TaskRowProps {
   // Slight visual tweaks per context (Zone vs tight RR/Overlap)
   textSize?: string;
   textColorClass?: string;
+  /** When true (from Sudo Tasks tab prefs), render a drag grip and make the row draggable for cross-card reassign */
+  draggable?: boolean;
 }
 
 const TaskRow: React.FC<TaskRowProps> = ({
@@ -594,11 +600,43 @@ const TaskRow: React.FC<TaskRowProps> = ({
   onEditTask,
   textSize = "text-[11px]",
   textColorClass = "text-[#374151]",
+  draggable = false,
 }) => {
+  // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
+  // The Sudo Tasks tab writes to the same localStorage key.
+  const effectiveDraggable = React.useMemo(() => {
+    if (typeof window === 'undefined') return draggable;
+    try {
+      const raw = localStorage.getItem('shiftbuilder:taskUxPrefs');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (typeof p.dragEnabled === 'boolean') return p.dragEnabled;
+      }
+    } catch {}
+    return draggable;
+  }, [draggable]);
   const hasColor = !!task.color;
   const [isColorExpanded, setIsColorExpanded] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState('');
+
+  // dnd-kit support for dragging this task to a different card (when the
+  // Sudo > Tasks tab has the feature enabled).
+  const {
+    attributes: taskDragAttributes,
+    listeners: taskDragListeners,
+    setNodeRef: setTaskDragRef,
+  } = useDraggable({
+    id: `task:${slotKey}:${task.taskLabel}`,
+    data: {
+      type: "task",
+      fromSlot: slotKey,
+      taskLabel: task.taskLabel,
+      catalogTaskId: task.catalogTaskId ?? null,
+      color: task.color ?? null,
+    },
+    disabled: !effectiveDraggable,
+  });
 
   const startEditing = () => {
     setIsEditing(true);
@@ -622,6 +660,17 @@ const TaskRow: React.FC<TaskRowProps> = ({
     <div
       className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 ${textSize} ${textColorClass}`}
     >
+      {effectiveDraggable && (
+        <div
+          ref={setTaskDragRef}
+          {...taskDragListeners}
+          {...taskDragAttributes}
+          className="mt-px mr-1 cursor-grab text-[#9CA3AF] opacity-60 group-hover/task:opacity-100 active:cursor-grabbing select-none touch-none"
+          title="Drag this task to another card to reassign it"
+        >
+          ⠿
+        </div>
+      )}
       {/* Label area — supports inline editing + hanging indent for wrapping.
           When a highlight color is set, we apply a left border + subtle background
           tint directly to the text block so the highlight extends the full length
@@ -757,6 +806,7 @@ const ZoneTaskList: React.FC<{
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
   const textColor = hasTM ? "text-[#374151]" : "text-[#6B7280]";
@@ -794,6 +844,7 @@ interface RRCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -810,6 +861,7 @@ const RRSide: React.FC<{
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
@@ -977,6 +1029,7 @@ interface AuxCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }
 
 const AuxCard: React.FC<AuxCardProps> = ({ 
@@ -1102,7 +1155,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
 
 // Roster row — useDraggable when not already assigned. When assigned we
 // disable the drag handle but still render so the operator can see "in use".
-const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off" }> = ({ tm, isAssigned, emphasis }) => {
+const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off" | "scheduled" }> = ({ tm, isAssigned, emphasis }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tm:${tm.id}`,
     data: { type: "tm", tmId: tm.id, tmName: tm.name },
@@ -1126,7 +1179,7 @@ const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off
       className={`group flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-sm touch-none transition-all border border-transparent ${
         isAssigned
           ? "opacity-45 cursor-not-allowed"
-          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm ${emphasis === "on" ? "border-l-2 border-[#007AFF] bg-white/70" : ""} cursor-grab active:cursor-grabbing`
+          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm ${emphasis === "on" ? "border-l-2 border-[#007AFF] bg-white/70" : emphasis === "scheduled" ? "border-l-2 border-amber-400 bg-amber-50/60" : ""} cursor-grab active:cursor-grabbing`
       } ${isDragging ? "opacity-25 scale-[0.985]" : ""}`}
     >
       {/* Drag grip (Phase 2 affordance) */}
@@ -1144,7 +1197,7 @@ const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off
       {/* Avatar (initials) — calmer, Golden-appropriate */}
       <div
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70"
-        style={{ backgroundColor: emphasis === "on" ? "#007AFF" : "#5A5A5F" }}
+        style={{ backgroundColor: emphasis === "on" ? "#007AFF" : emphasis === "scheduled" ? "#d97706" : "#5A5A5F" }}
       >
         {initials}
       </div>
@@ -1382,6 +1435,7 @@ interface OverlapSlotProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  taskDragEnabled?: boolean;
 }
 const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo, onRemoveTask, onSetTaskColor, onEditTask }) => {
   const a = assignments[slotKey] || {};
@@ -1696,6 +1750,10 @@ export default function ShiftBuilder() {
   const [selectedTasks, setSelectedTasks] = useState<Record<string, NightSlotTask[]>>({});
   const [tasksOpenFor, setTasksOpenFor] = useState<string | null>(null);
 
+  // Task UX prefs (driven by the new Sudo → Tasks tab). Default = enabled so the
+  // "drag tasks between cards" feature works out of the box.
+  const [taskDragEnabled, setTaskDragEnabled] = useState(true);
+
   // === Hydration guard ====================================================
   // The page mixes server-rendered HTML (because it has "use client" but
   // Next.js still SSRs client components for first paint) with client-only
@@ -1765,6 +1823,9 @@ export default function ShiftBuilder() {
   // === Sudo window ===
   const [sudoOpen, setSudoOpen] = useState(false);
 
+  // === xAI Sphere (Master Ops AI Agent) — Phase 1 shell ===
+  const [xaiSphereOpen, setXaiSphereOpen] = useState(false);
+
   // === Engine config + reference data (Phase 1 weighted scoring) ===
   const [engineConfig, setEngineConfig] = useState<EngineConfig | null>(null);
   const [tmSkillScores, setTmSkillScores] = useState<Map<string, number>>(new Map());
@@ -1790,6 +1851,11 @@ export default function ShiftBuilder() {
   const [pmOverlapsExpanded, setPmOverlapsExpanded] = useState(false);
   const [amOverlapsExpanded, setAmOverlapsExpanded] = useState(false);
   const [portersExpanded, setPortersExpanded] = useState(false);
+
+  // Scheduled-tonight-unplaced groups — default expanded (these are the priority view)
+  const [scheduledGravesExpanded, setScheduledGravesExpanded] = useState(true);
+  const [scheduledPMExpanded, setScheduledPMExpanded] = useState(true);
+  const [scheduledAMExpanded, setScheduledAMExpanded] = useState(true);
 
   // Roster search/filter (Phase 1)
   const [rosterSearch, setRosterSearch] = useState("");
@@ -1894,6 +1960,27 @@ export default function ShiftBuilder() {
   // night id resolves; typing triggers a debounced save.
   const notesRef = useRef<HTMLDivElement>(null);
   const notesSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // === Notes AI completion ================================================
+  // useShiftCompletion drives the ghost-text suggestion bar below the notes pad.
+  // We snapshot `assignments` into a plain object for the context payload so
+  // the hook's dependency doesn't churn on every render.
+  const notesCompletion = useShiftCompletion({
+    surface: "notes",
+    context: {
+      day: DAY_DEFS[selectedDayIndex]?.name,
+      assignments: Object.fromEntries(
+        Object.entries(assignments).map(([k, v]: [string, any]) => [
+          k,
+          { tmId: v?.tmId, tmName: v?.tmName },
+        ])
+      ),
+      scheduledUnplaced: Array.from(scheduledTmIdsTonight)
+        .filter((id) => !Object.values(assignments).some((a: any) => a?.tmId === id))
+        .slice(0, 12),
+    },
+  });
+
   // NOTE: handleNotesInput is defined later, AFTER `selectedDay` and
   // `showToast` are declared. Defining it here would TDZ on those bindings
   // in the deps array.
@@ -1904,6 +1991,9 @@ export default function ShiftBuilder() {
   type ToastKind = "error" | "info" | "success";
   interface ToastItem { id: number; message: string; kind: ToastKind; }
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  // Tracks the last time any assignment/task/break was successfully persisted
+  // to Supabase. Drives the live status pill in the bottom-right corner.
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const toastIdRef = useRef(0);
   const showToast = React.useCallback((message: string, kind: ToastKind = "error") => {
     const id = ++toastIdRef.current;
@@ -2245,6 +2335,8 @@ export default function ShiftBuilder() {
   const requestGrokStructuredSuggestions = async (focus: {
     type: "slot" | "person" | "board";
     value?: string;
+    /** Override all default Grok focus messages with a free-text question. */
+    userQuestion?: string;
   }) => {
     const snapshot = buildRichGrokContextSnapshot({
       day: selectedDay.name,
@@ -2261,15 +2353,19 @@ export default function ShiftBuilder() {
       contextType: focus.type === "board" ? "board" : focus.type,
     });
 
+    // userQuestion override takes precedence — used by the ? query mode.
+    const resolvedQuestion =
+      focus.userQuestion ??
+      (focus.type === "slot"
+        ? `Best suggestions for slot ${focus.value}`
+        : focus.type === "person"
+        ? `Best things to do with ${focus.value}`
+        : undefined);
+
     const result = await askGrokForStructuredSuggestions({
       snapshot,
       rosterForGuard: availableGraveRoster,
-      userQuestion:
-        focus.type === "slot"
-          ? `Best suggestions for slot ${focus.value}`
-          : focus.type === "person"
-          ? `Best things to do with ${focus.value}`
-          : undefined,
+      userQuestion: resolvedQuestion,
     });
 
     return result;
@@ -2525,6 +2621,10 @@ export default function ShiftBuilder() {
     const captureNid = nightId;
     const captureDate = selectedDay.date;
     const captureDayName = selectedDay.name;
+    // Feed current text to the AI completion hook (debounced internally).
+    if (notesRef.current) {
+      notesCompletion.handleChange(notesRef.current.innerText);
+    }
     notesSaveTimerRef.current = setTimeout(async () => {
       if (!notesRef.current) return;
       const text = notesRef.current.innerText;
@@ -2540,7 +2640,25 @@ export default function ShiftBuilder() {
         showToast(`Couldn't save notes: ${e?.message ?? "unknown error"}`);
       }
     }, 600);
-  }, [nightId, selectedDay.date, selectedDay.name, showToast]);
+  }, [nightId, selectedDay.date, selectedDay.name, showToast, notesCompletion]);
+
+  // Extracted accept handler — shared by Tab key and the click-to-accept kbd.
+  // Uses execCommand("insertText") so the contentEditable undo stack is intact.
+  const acceptNotesSuggestion = React.useCallback(() => {
+    const accepted = notesCompletion.accept();
+    if (notesRef.current) {
+      const suffix = accepted.slice((notesRef.current.innerText ?? "").length);
+      if (suffix) {
+        notesRef.current.focus();
+        const sel = window.getSelection();
+        if (sel) {
+          sel.selectAllChildren(notesRef.current);
+          sel.collapseToEnd();
+        }
+        document.execCommand("insertText", false, suffix);
+      }
+    }
+  }, [notesCompletion]);
 
   // === Handlers (fully restored) ===
   // Cycle the break group on a slot AND persist to break_assignments.
@@ -2879,8 +2997,20 @@ export default function ShiftBuilder() {
     },
     assign,
     isDraftMode,
+    scheduledTmIdsTonight,
+    calledOffIds,
     onApplyGrokSuggestions: applyGrokSuggestions,
     onTriggerGrokBoardAnalysis: triggerGrokBoardAnalysis,
+    // Phase 3 hot-word callbacks
+    onRemoveFromSlot: unassign,
+    onToggleLock: toggleLock,
+    onCycleBreak: (slotKey: string) => {
+      const current = assignments[slotKey]?.breakGroup ?? 0;
+      const next = (current % 3) + 1;
+      setBreakGroupForSlot(slotKey, next as any);
+    },
+    onOpenPaletteForSlot: openPaletteForSlot,
+    onClearAllBorders: () => setCardBorders({}),
   });
 
   // handleCardClick and dismissQuickFan removed in Phase 1 (Command Palette Upgrade).
@@ -2902,6 +3032,22 @@ export default function ShiftBuilder() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [tasksOpenFor]);
+
+  // Listen for prefs changes coming from the Sudo Tasks tab (custom event + localStorage).
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const raw = localStorage.getItem("shiftbuilder:taskUxPrefs");
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (typeof p.dragEnabled === "boolean") setTaskDragEnabled(p.dragEnabled);
+        }
+      } catch {}
+    };
+    sync();
+    window.addEventListener("task-ux-prefs-changed", sync as any);
+    return () => window.removeEventListener("task-ux-prefs-changed", sync as any);
+  }, []);
 
   // ────────────────────────────────────────────────────────────────────────
   // dnd-kit: roster → card (assign), card → card (swap/move), card → roster
@@ -2937,6 +3083,61 @@ export default function ShiftBuilder() {
       return;
     }
 
+    // Task being dragged between cards. Must be checked BEFORE the "assigned"
+    // TM block — a.type cannot simultaneously be "assigned" and "task", so
+    // nesting this check inside the assigned block made it unreachable.
+    if (a.type === "task") {
+      if (over?.data.current?.type === "slot") {
+        const toUiKey = (over.data.current as any).slotKey;
+        const fromUiKey = a.fromSlot;
+        if (toUiKey === fromUiKey) return;
+
+        const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKey);
+        const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } = uiToDb(fromUiKey);
+
+        // Optimistic move in the selectedTasks buckets (same shape the card renderers use)
+        setSelectedTasks((prev) => {
+          const fromList = prev[fromUiKey] ?? [];
+          const taskToMove = fromList.find((t) => t.taskLabel === a.taskLabel);
+          if (!taskToMove) return prev;
+
+          const newFrom = fromList.filter((t) => t.taskLabel !== a.taskLabel);
+          const movedTask = {
+            ...taskToMove,
+            slotKey: toSlotKey,
+            slotType: toSlotType,
+            rrSide: toRrSide,
+          };
+          const newTo = [...(prev[toUiKey] ?? []), movedTask];
+          return { ...prev, [fromUiKey]: newFrom, [toUiKey]: newTo };
+        });
+
+        // Persist using the same coordinated-night pattern used for TM swaps
+        (async () => {
+          let nid = nightId;
+          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+          if (!nid) return;
+
+          try {
+            await moveNightSlotTask({
+              nightId: nid,
+              fromSlotKey,
+              fromSlotType,
+              fromRrSide,
+              toSlotKey,
+              toSlotType,
+              toRrSide,
+              taskLabel: a.taskLabel,
+            });
+          } catch (e: any) {
+            console.error("[shiftbuilder] task move persist failed", e);
+            showToast("Task moved in UI but failed to save — refresh may revert it");
+          }
+        })();
+      }
+      return;
+    }
+
     // Already-assigned TM being moved
     if (a.type === "assigned") {
       // → another slot: atomic swap (or move if target empty)
@@ -2950,7 +3151,6 @@ export default function ShiftBuilder() {
 
         // Capture night context at action time — both persist calls must
         // target the SAME night id even if the user switches days mid-write.
-        const targetNightId = nightId;
         const captureDate = selectedDay.date;
         const captureDayName = selectedDay.name;
 
@@ -2967,12 +3167,40 @@ export default function ShiftBuilder() {
           next[toKey] = { ...moving, slotKey: toKey };
           return next;
         });
-        // Persist both sides of the swap. Fire-and-forget; the optimistic UI
-        // is already live.
-        persistAssign(targetNightId, captureDate, captureDayName, toKey, movingTmId);
-        persistAssign(targetNightId, captureDate, captureDayName, fromKey, displacedTmId); // null if it was an empty move
+
+        // IMPORTANT BUG FIX (discovered while adding task drag):
+        // The old code passed the possibly-null `targetNightId` to two independent
+        // fire-and-forget persistAssign calls. When the night row didn't exist yet
+        // for this day, both could concurrently call getOrCreateNightForDate and
+        // create *two different* night rows. One (or both) assignments would land
+        // on the "loser" night and disappear on reload.
+        //
+        // Fix: resolve once (serializing the creation), then pass the concrete nid
+        // to both persists. This also makes the upcoming task-move drag safe.
+        (async () => {
+          let nid = nightId;
+          if (!nid) {
+            // Use the day values captured at drag-start — not selectedDay, which
+            // could have changed if the operator switched days during the drag.
+            nid = await resolveNightIdForDate(captureDate, captureDayName);
+          }
+          if (!nid) {
+            showToast("Move recorded locally but failed to create night row — refresh may lose it");
+            return;
+          }
+          try {
+            // MUST await sequentially: fire-and-forget means a quick refresh
+            // races the DB writes and both slots reload as empty from Supabase.
+            await persistAssign(nid, captureDate, captureDayName, toKey, movingTmId);
+            await persistAssign(nid, captureDate, captureDayName, fromKey, displacedTmId);
+          } catch (e: any) {
+            console.error("[shiftbuilder] drag persist failed", e);
+            showToast("Move couldn't be saved — refresh may revert it");
+          }
+        })();
         return;
       }
+
       // → roster panel: unassign
       if (over?.data.current?.type === "roster") {
         const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
@@ -3008,6 +3236,62 @@ export default function ShiftBuilder() {
   // the entire family of "wrong day got written" races.
   const loadEpochRef = useRef<number>(0);
 
+  // === Session-stable data loader ===========================================
+  //
+  // These 6 queries return data that does NOT vary by selected day — they
+  // depend only on the TM roster / engine config, both of which change rarely
+  // and are refreshed by bumping `tmCommandEpoch`. Isolating them here means
+  // day-switches never re-fire these round-trips (each day switch triggered
+  // ~6 unnecessary Supabase calls before this split).
+  useEffect(() => {
+    (async () => {
+      try {
+        const [
+          activeConfig,
+          skillScoreMap,
+          slotDifficultyMap,
+          preferenceRows,
+          pairAffinityRows,
+          accommodationRows,
+        ] = await Promise.all([
+          getActiveEngineConfig(),
+          getTMSkillScores(),
+          getSlotDifficultyRaw(),
+          getTMPreferences(),
+          getTMPairAffinities(),
+          getTMAccommodations(),
+        ]);
+
+        setEngineConfig(activeConfig);
+        setTmSkillScores(skillScoreMap);
+        setSlotDifficulty(slotDifficultyMap);
+
+        const prefByTm = new Map<string, any[]>();
+        preferenceRows.forEach((r: any) => {
+          if (!prefByTm.has(r.tmId)) prefByTm.set(r.tmId, []);
+          prefByTm.get(r.tmId)!.push(r);
+        });
+        setTmPreferencesByTm(prefByTm);
+
+        const pairByTm = new Map<string, any[]>();
+        pairAffinityRows.forEach((r: any) => {
+          if (!pairByTm.has(r.tmId)) pairByTm.set(r.tmId, []);
+          pairByTm.get(r.tmId)!.push(r);
+        });
+        setTmPairAffinitiesByTm(pairByTm);
+
+        const accByTm = new Map<string, any[]>();
+        accommodationRows.forEach((r: any) => {
+          if (!accByTm.has(r.tmId)) accByTm.set(r.tmId, []);
+          accByTm.get(r.tmId)!.push(r);
+        });
+        setTmAccommodationsByTm(accByTm);
+      } catch (e) {
+        console.error("[shiftbuilder] stable data load failed", e);
+      }
+    })();
+  }, [tmCommandEpoch]); // re-run only when operator refreshes roster/config
+
   useEffect(() => {
     const epoch = ++loadEpochRef.current;
 
@@ -3033,6 +3317,9 @@ export default function ShiftBuilder() {
         const id = await getNightIdForDate(selectedDay.date);
         if (loadEpochRef.current !== epoch) return;
 
+        // Day-varying queries only — session-stable data (engineConfig, skills,
+        // prefs, pairings, accommodations, difficulty) is loaded separately in the
+        // `[tmCommandEpoch]` effect above and never re-fires on day switches.
         const [
           members,
           graveMembers,
@@ -3045,12 +3332,6 @@ export default function ShiftBuilder() {
           breakRows,
           nightBorderMap,
           callOffSet,
-          activeConfig,
-          skillScoreMap,
-          slotDifficultyMap,
-          preferenceRows,
-          pairAffinityRows,
-          accommodationRows,
           recentHistory,
           scheduledTonightSet,
         ] = await Promise.all([
@@ -3058,19 +3339,13 @@ export default function ShiftBuilder() {
           getGraveAvailableTeamMembers(),
           id ? getNightAssignments(id) : Promise.resolve([]),
           id ? getNightNotes(id) : Promise.resolve(""),
-          id ? getOnScheduleTmIdsForNight(id) : Promise.resolve(new Set<string>()),
-          id ? getGravePMOverlapMembers(id) : Promise.resolve([]),
-          id ? getGraveAMOverlapMembers(id) : Promise.resolve([]),
+          id ? getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
+          getGravePMOverlapMembers(),
+          getGraveAMOverlapMembers(),
           id ? getNightSlotTasks(id) : Promise.resolve([] as NightSlotTask[]),
           id ? getNightBreakAssignments(id) : Promise.resolve([]),
           id ? getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
           getCallOffsForDate(selectedDay.date),
-          getActiveEngineConfig(),
-          getTMSkillScores(),
-          getSlotDifficultyRaw(),
-          getTMPreferences(),
-          getTMPairAffinities(),
-          getTMAccommodations(),
           getRecentZoneHistory(selectedDay.date, 7),
           id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
         ]);
@@ -3086,41 +3361,20 @@ export default function ShiftBuilder() {
         setCalledOffIds(callOffSet);
         setScheduledTmIdsTonight(scheduledTonightSet);
 
-        // Engine config + reference data for the Phase 1 weighted scoring layer.
-        setEngineConfig(activeConfig);
-        setTmSkillScores(skillScoreMap);
-        setSlotDifficulty(slotDifficultyMap);
-        // Group preferences by tm_id for fast lookup.
-        const prefByTm = new Map<string, any[]>();
-        preferenceRows.forEach((r: any) => {
-          if (!prefByTm.has(r.tmId)) prefByTm.set(r.tmId, []);
-          prefByTm.get(r.tmId)!.push(r);
-        });
-        setTmPreferencesByTm(prefByTm);
-        const pairByTm = new Map<string, any[]>();
-        pairAffinityRows.forEach((r: any) => {
-          if (!pairByTm.has(r.tmId)) pairByTm.set(r.tmId, []);
-          pairByTm.get(r.tmId)!.push(r);
-        });
-        setTmPairAffinitiesByTm(pairByTm);
-        const accByTm = new Map<string, any[]>();
-        accommodationRows.forEach((r: any) => {
-          if (!accByTm.has(r.tmId)) accByTm.set(r.tmId, []);
-          accByTm.get(r.tmId)!.push(r);
-        });
-        setTmAccommodationsByTm(accByTm);
+        // Session-stable data (engineConfig, skills, prefs, pairings,
+        // accommodations, difficulty) is handled by the stable effect above —
+        // no need to process it here. Only update day-varying derived state.
         setRecentZoneHistory(recentHistory);
 
-        // Build sets for fast lookup
-        const pmOverlapIds = new Set(pmOverlapMembers.map((m: any) => m.id));
-        const amOverlapIds = new Set(amOverlapMembers.map((m: any) => m.id));
-
+        // Derive isPMOverlap / isAMOverlap directly from grave_pool — the
+        // authoritative source. (The pmOverlapMembers / amOverlapMembers lists
+        // are still loaded for any downstream use but are no longer the flag source.)
         setGraveRoster(
           graveMembers.map((m: any) => ({
             ...m,
             isOnWeek: weekOnScheduleSet.has(m.id),
-            isPMOverlap: pmOverlapIds.has(m.id),
-            isAMOverlap: amOverlapIds.has(m.id),
+            isPMOverlap: m.gravePool === 'PM',
+            isAMOverlap: m.gravePool === 'AM',
           }))
         ); // For the GRAVE shift filter toggle, enriched with week-level + real overlap data
 
@@ -3299,12 +3553,13 @@ export default function ShiftBuilder() {
           tmId,
           isLocked,
         });
+        setLastSavedAt(new Date());
       } catch (e: any) {
         console.error("[shiftbuilder] persist failed for", uiKey, e);
         showToast(`Couldn't save ${uiKey}: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast]
+    [resolveNightIdForDate, showToast, setLastSavedAt]
   );
 
   const persistLock = React.useCallback(
@@ -3773,6 +4028,9 @@ export default function ShiftBuilder() {
               }));
 
               let onThisNight, alreadyDeployed, porters, pmOverlaps, amOverlaps, regularGravePool;
+              let scheduledUnplacedGraves: any[] = [];
+              let scheduledUnplacedPM: any[] = [];
+              let scheduledUnplacedAM: any[] = [];
 
               const isPorter = (tm: any) => (tm.primarySection || '').toLowerCase().includes('porter');
 
@@ -3787,11 +4045,32 @@ export default function ShiftBuilder() {
 
                 const notAssignedThisNight = notCalledOff.filter((t: any) => !t.isOnSchedule);
 
+                // Scheduled-tonight-unplaced: ADP schedule says they're working but no zone yet.
+                // Only active when schedule data has been imported for tonight.
+                const hasScheduleData = scheduledTmIdsTonight.size > 0;
+                const scheduledUnplaced = hasScheduleData
+                  ? notAssignedThisNight.filter((t: any) => scheduledTmIdsTonight.has(t.id))
+                  : [];
+                const scheduledUnplacedIds = new Set(scheduledUnplaced.map((t: any) => t.id));
+
+                scheduledUnplacedGraves = scheduledUnplaced.filter(
+                  (t: any) => !isPorter(t) && t.gravePool === 'Full'
+                );
+                scheduledUnplacedPM = scheduledUnplaced.filter((t: any) => t.isPMOverlap);
+                scheduledUnplacedAM = scheduledUnplaced.filter(
+                  (t: any) => t.isAMOverlap && !t.isPMOverlap
+                );
+
+                // Remaining unplaced — exclude TMs already shown in the scheduled section
+                const remaining = hasScheduleData
+                  ? notAssignedThisNight.filter((t: any) => !scheduledUnplacedIds.has(t.id))
+                  : notAssignedThisNight;
+
                 // Porters first (any role containing "porter")
-                porters = notAssignedThisNight.filter((t: any) => isPorter(t));
+                porters = remaining.filter((t: any) => isPorter(t));
 
                 // Then overlaps from non-porters
-                const nonPorters = notAssignedThisNight.filter((t: any) => !isPorter(t));
+                const nonPorters = remaining.filter((t: any) => !isPorter(t));
 
                 pmOverlaps = nonPorters.filter((t: any) => t.isPMOverlap);
                 amOverlaps = nonPorters.filter((t: any) => t.isAMOverlap && !t.isPMOverlap);
@@ -3862,6 +4141,30 @@ export default function ShiftBuilder() {
                   )
                 : regularGravePool;
 
+              const filteredSchedGraves = filterTerm
+                ? scheduledUnplacedGraves.filter((tm: any) =>
+                    tm.name.toLowerCase().includes(filterTerm) ||
+                    tm.id.toLowerCase().includes(filterTerm) ||
+                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
+                  )
+                : scheduledUnplacedGraves;
+
+              const filteredSchedPM = filterTerm
+                ? scheduledUnplacedPM.filter((tm: any) =>
+                    tm.name.toLowerCase().includes(filterTerm) ||
+                    tm.id.toLowerCase().includes(filterTerm) ||
+                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
+                  )
+                : scheduledUnplacedPM;
+
+              const filteredSchedAM = filterTerm
+                ? scheduledUnplacedAM.filter((tm: any) =>
+                    tm.name.toLowerCase().includes(filterTerm) ||
+                    tm.id.toLowerCase().includes(filterTerm) ||
+                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
+                  )
+                : scheduledUnplacedAM;
+
               return (
                 <>
                   {/* 0. Called Off — TMs explicitly removed from tonight's schedule. */}
@@ -3908,6 +4211,97 @@ export default function ShiftBuilder() {
                         </div>
                       ))}
                       <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
+                    </>
+                  )}
+
+                  {/* 0b. Scheduled Tonight — Not Yet Placed (Graves / PM / AM) */}
+                  {graveOnly && scheduledTmIdsTonight.size > 0 && (filteredSchedGraves.length > 0 || filteredSchedPM.length > 0 || filteredSchedAM.length > 0) && (
+                    <>
+                      {/* Section label */}
+                      <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+                        <div className="flex-1 h-px bg-amber-500/25" />
+                        <span className="text-[9px] uppercase tracking-[1.2px] text-amber-600/80 font-semibold whitespace-nowrap">
+                          On Schedule — Not Placed
+                        </span>
+                        <div className="flex-1 h-px bg-amber-500/25" />
+                      </div>
+
+                      {/* Graves sub-group */}
+                      {filteredSchedGraves.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setScheduledGravesExpanded(v => !v)}
+                            aria-expanded={scheduledGravesExpanded}
+                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                              Graves
+                            </span>
+                            <span className="tabular-nums">{filteredSchedGraves.length}{filterTerm ? ` / ${scheduledUnplacedGraves.length}` : ""}</span>
+                          </button>
+                          {scheduledGravesExpanded && filteredSchedGraves.map((tm: any) => {
+                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                          })}
+                        </>
+                      )}
+
+                      {/* PM Overlaps sub-group */}
+                      {filteredSchedPM.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setScheduledPMExpanded(v => !v)}
+                            aria-expanded={scheduledPMExpanded}
+                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                              PM Overlaps (out at 1:00am)
+                            </span>
+                            <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
+                          </button>
+                          {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
+                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                          })}
+                        </>
+                      )}
+
+                      {/* AM Overlaps sub-group */}
+                      {filteredSchedAM.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setScheduledAMExpanded(v => !v)}
+                            aria-expanded={scheduledAMExpanded}
+                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                              AM Overlaps (in 5:00–5:30am)
+                            </span>
+                            <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
+                          </button>
+                          {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
+                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                          })}
+                        </>
+                      )}
+
+                      <div className="h-px bg-amber-500/20 mx-1 my-1" />
                     </>
                   )}
 
@@ -4689,8 +5083,58 @@ export default function ShiftBuilder() {
                       suppressContentEditableWarning
                       spellCheck={false}
                       onInput={handleNotesInput}
-                      className="notes-pad flex-1 min-h-0 outline-none border border-[#E5E5E7] rounded-[3px] bg-white"
+                      onKeyDown={(e) => {
+                        if (e.key === "Tab" && notesCompletion.ghostText) {
+                          e.preventDefault();
+                          acceptNotesSuggestion();
+                          return;
+                        }
+                        if (e.key === "Escape" && notesCompletion.ghostText) {
+                          notesCompletion.dismiss();
+                          return;
+                        }
+                      }}
+                      className={`notes-pad flex-1 min-h-0 outline-none border border-[#E5E5E7] bg-white ${
+                        (notesCompletion.ghostText || notesCompletion.isLoading)
+                          ? "rounded-t-[3px] rounded-b-none"
+                          : "rounded-[3px]"
+                      }`}
                     />
+                    {/* AI ghost-text suggestion bar — shown while loading and when suggestion ready */}
+                    {(notesCompletion.ghostText || notesCompletion.isLoading) && (
+                      <div
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-b-[3px] bg-amber-50/80 border border-t-0 border-amber-200/70 text-[11px] select-none no-print"
+                        style={{ animation: "fadeInDown 120ms ease both" }}
+                      >
+                        {notesCompletion.isLoading && !notesCompletion.ghostText ? (
+                          /* Loading shimmer */
+                          <>
+                            <span className="text-amber-300 animate-pulse">✦</span>
+                            <span className="flex-1 h-2.5 rounded bg-amber-200/60 animate-pulse" />
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-amber-400">✦</span>
+                            <span className="text-amber-700/80 italic truncate flex-1">
+                              {notesCompletion.ghostText}
+                            </span>
+                            <kbd
+                              onClick={acceptNotesSuggestion}
+                              className="cursor-pointer px-1 py-0.5 rounded bg-amber-100 border border-amber-300/60 text-amber-600 font-mono text-[10px] hover:bg-amber-200/60 transition-colors"
+                            >
+                              Tab
+                            </kbd>
+                            <button
+                              onClick={notesCompletion.dismiss}
+                              className="text-amber-400/70 hover:text-amber-600 transition-colors leading-none"
+                              aria-label="Dismiss suggestion"
+                            >
+                              ×
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </section>
                 </>
               ) : (
@@ -5001,9 +5445,10 @@ export default function ShiftBuilder() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
           </button>
 
-          {/* Day arrows — cross GRAVE week boundaries (Thu → next Fri, etc.) */}
-          <button onClick={goPrevDay} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Previous day">‹</button>
-          <button onClick={goNextDay} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Next day">›</button>
+          {/* Day arrows — cross GRAVE week boundaries (Thu → next Fri, etc.)
+              w-11 h-11 = 44×44px satisfies Apple HIG minimum touch target. */}
+          <button onClick={goPrevDay} className="w-11 h-11 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95 text-base" title="Previous day">‹</button>
+          <button onClick={goNextDay} className="w-11 h-11 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95 text-base" title="Next day">›</button>
 
           {/* Calendar */}
           <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Calendar — pick any day">
@@ -5022,31 +5467,57 @@ export default function ShiftBuilder() {
         </div>
       )}
 
-      {/* === Floating status pill — bottom-right. Replaces the old full-width
-          status strip. Same content for now (the "Draft • Last saved" text is
-          still a placeholder pending real pending-write tracking; "Engine
-          ready" is also static). Matches brand chip + zoom chip visual
-          treatment for a consistent floating-chrome system. */}
-      <div
-        className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-4 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93]"
-        style={{
-          background: "rgba(255,255,255,0.85)",
-          backdropFilter: "blur(20px) saturate(160%)",
-          WebkitBackdropFilter: "blur(20px) saturate(160%)",
-        }}
-      >
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#FF9500]" aria-hidden="true" />
-          <span className="font-medium">Draft</span>
-          <span className="text-[#C8C8CC]">·</span>
-          <span>Last saved moments ago</span>
-        </div>
-        <span className="text-[#C8C8CC]">|</span>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#34C759]" aria-hidden="true" />
-          <span>Engine ready</span>
-        </div>
-      </div>
+      {/* === Floating status pill — bottom-right. Shows real last-saved time
+          sourced from `lastSavedAt` (updated by every successful persist call).
+          Dot is green when at least one save has happened, orange until then. */}
+      {(() => {
+        // Compute relative label inline so it reflects current time on every
+        // render. No interval needed — any user action causes a re-render.
+        let savedAgo = "Not yet saved";
+        if (lastSavedAt) {
+          const secs = Math.floor((Date.now() - lastSavedAt.getTime()) / 1000);
+          if (secs < 60) savedAgo = "Just now";
+          else {
+            const mins = Math.floor(secs / 60);
+            savedAgo = mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+          }
+        }
+        return (
+          <div
+            className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-4 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93]"
+            style={{
+              background: "rgba(255,255,255,0.85)",
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }}
+                aria-hidden="true"
+              />
+              <span className="font-medium">{isDraftMode ? "Draft" : "Live"}</span>
+              <span className="text-[#C8C8CC]">·</span>
+              <span>{savedAgo}</span>
+            </div>
+            <span className="text-[#C8C8CC]">|</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34C759]" aria-hidden="true" />
+              <span>Engine ready</span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* xAI Sphere — Master Ops AI Agent (Phase 1 visual shell)
+          Lives on the right, above the status pill. Persistent Supabase-backed
+          operational co-pilot. No intelligence yet — just the beautiful presence. */}
+      <XAISphere
+        open={xaiSphereOpen}
+        onToggle={() => setXaiSphereOpen((v) => !v)}
+        weekStart={weekStart}
+      />
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of
@@ -5211,6 +5682,7 @@ export default function ShiftBuilder() {
         onRemoveFromSlot={unassign}
         onToggleLock={toggleLock}
         onAssign={assign}
+        catalog={catalog}
         onAddTask={async (uiKeys: string | string[], taskLabel: string) => {
           if (!nightId) {
             showToast("No active night selected", "error");
@@ -5233,12 +5705,16 @@ export default function ShiftBuilder() {
               });
             }
 
-            // Refresh all tasks for the night so every affected card updates
+            // Refresh all tasks for the night so every affected card updates.
+            // getNightSlotTasks returns DB-format slot keys (e.g. "zone_1") but
+            // card renderers key selectedTasks by Golden UI keys ("Z1", "MRR8", …).
+            // Convert every row with dbToUi before bucketing so lookups succeed.
             const fresh = await getNightSlotTasks(nightId);
             const byKey: Record<string, NightSlotTask[]> = {};
             for (const t of fresh) {
-              if (!byKey[t.slotKey]) byKey[t.slotKey] = [];
-              byKey[t.slotKey].push(t);
+              const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+              if (!byKey[uiKey]) byKey[uiKey] = [];
+              byKey[uiKey].push(t);
             }
             setSelectedTasks(byKey);
           } catch (e) {
@@ -5279,12 +5755,40 @@ export default function ShiftBuilder() {
         whyWarnings={draftEngineWarnings}
         whyAvailable={isDraftMode && Object.keys(draftBreakdown).length > 0}
         onOpenSudo={() => setSudoOpen(true)}
+        completionDay={selectedDay.name}
+        completionScheduledUnplaced={
+          Array.from(scheduledTmIdsTonight)
+            .filter((id) => !Object.values(assignments).some((a: any) => a?.tmId === id))
+            .map((id) => {
+              const tm = realRoster.find((t: any) => t.id === id);
+              return tm?.name || tm?.fullName || id;
+            })
+            .filter(Boolean)
+            .slice(0, 12)
+        }
+        completionAssignments={Object.fromEntries(
+          Object.entries(assignments).map(([k, v]: [string, any]) => [
+            k,
+            { tmId: v?.tmId, tmName: v?.tmName },
+          ])
+        )}
       />
 
       <SudoWindow
         open={sudoOpen}
         onClose={() => setSudoOpen(false)}
-        onDataChanged={() => setTMCommandEpoch((e) => e + 1)}
+        onDataChanged={async () => {
+          // Refresh anything the sudo window might have mutated
+          setTMCommandEpoch((e) => e + 1);
+
+          // Also refresh the live engine config (weights, placement method, grok reasoning effort)
+          try {
+            const fresh = await getActiveEngineConfig();
+            setEngineConfig(fresh);
+          } catch (e) {
+            console.warn("[sudo] failed to refresh engineConfig after change", e);
+          }
+        }}
       />
     </div>
   );

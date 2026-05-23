@@ -16,12 +16,14 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users } from "lucide-react";
+import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SchedulesTab } from "./SchedulesTab";
 import { TeamTab } from "./TeamTab";
+import { EngineConfigTab } from "./EngineConfigTab";
+import { TasksTab } from "./TasksTab";
 
-type SudoTab = "schedules" | "team" | "sql" | "edge" | "logs";
+type SudoTab = "schedules" | "team" | "tasks" | "engine" | "sql" | "edge" | "logs";
 
 const TABS: Array<{
   id: SudoTab;
@@ -31,6 +33,8 @@ const TABS: Array<{
 }> = [
   { id: "schedules", label: "Schedules", icon: FileSpreadsheet, status: "ready" },
   { id: "team", label: "Team", icon: Users, status: "ready" },
+  { id: "tasks", label: "Tasks", icon: ListTodo, status: "ready" },   // above Engine per operator request
+  { id: "engine", label: "Engine Config", icon: Settings2, status: "ready" },
   { id: "sql", label: "SQL Runner", icon: Database, status: "coming-soon" },
   { id: "edge", label: "Edge Functions", icon: Code2, status: "coming-soon" },
   { id: "logs", label: "Logs", icon: ScrollText, status: "coming-soon" },
@@ -166,6 +170,8 @@ export function SudoWindow({ open, onClose, onDataChanged }: SudoWindowProps) {
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeTab === "schedules" && <SchedulesTab onDataChanged={onDataChanged} />}
             {activeTab === "team" && <TeamTab onDataChanged={onDataChanged} />}
+            {activeTab === "tasks" && <TasksTab onDataChanged={onDataChanged} />}
+            {activeTab === "engine" && <EngineConfigTab onDataChanged={onDataChanged} />}
             {activeTab === "sql" && <ComingSoonPanel feature="SQL Runner" />}
             {activeTab === "edge" && <ComingSoonPanel feature="Edge Functions" />}
             {activeTab === "logs" && <ComingSoonPanel feature="Logs" />}
