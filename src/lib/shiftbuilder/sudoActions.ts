@@ -1,3 +1,5 @@
+"use server";
+
 /**
  * Privileged write actions surfaced from the SUDO window.
  *
@@ -9,6 +11,7 @@
 
 import { supabase } from "../supabase";
 import type { NightStatusUpsert } from "./adpSchedule";
+import type { PlacementMethod, GrokReasoningEffort } from "./engineConfig";
 
 export interface NightStatusUpsertResult {
   /** Total rows successfully written (count of (tm_id, night_id) pairs) */
@@ -496,12 +499,12 @@ function deriveTmId(displayName: string): string {
 }
 
 /** Soft-delete a TM (active=false). History rows are preserved. */
-export async function softDeleteTM(tmId: string): Promise<void> {
+export async function softDeleteTM(tmId: string, reason: "separated" | "LOA" | "transferred" | "other" = "separated"): Promise<void> {
   const { error } = await supabase
     .from("tm_profiles")
     .update({
       active: false,
-      status: "inactive",
+      status: reason, // must be one of: 'active' | 'LOA' | 'transferred' | 'separated' | 'other'
       status_date: new Date().toISOString().slice(0, 10),
       updated_at: new Date().toISOString(),
     })
@@ -703,3 +706,57 @@ export async function createTMFromUnmatched(adpRawName: string): Promise<string>
     status: "active",
   });
 }
+
+/**
+ * Updates (or creates) the currently active engine_config row.
+ * Used by the Sudo > Engine Config tab to let operators switch between
+ * deterministic vs grok-hybrid and tune Grok 4.3 reasoning depth.
+ */
+export async function updateActiveEngineConfig(updates: {
+  placementMethod?: PlacementMethod;
+  grokReasoningEffort?: GrokReasoningEffort;
+  notes?: string | null;
+}): Promise<void> {
+  // Find the current active row (most recent is_active = true)
+  const { data: activeRows, error: findErr } = await supabase
+    .from("engine_config")
+    .select("id")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (findErr) {
+    throw new Error(`Could not find active engine_config: ${findErr.message}`);
+  }
+
+  const payload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.placementMethod) payload.placement_method = updates.placementMethod;
+  if (updates.grokReasoningEffort) payload.grok_reasoning_effort = updates.grokReasoningEffort;
+  if (updates.notes !== undefined) payload.notes = updates.notes;
+
+  if (activeRows && activeRows.length > 0) {
+    // Update existing active row in place (simple & safe for dev)
+    const { error: updErr } = await supabase
+      .from("engine_config")
+      .update(payload)
+      .eq("id", activeRows[0].id);
+
+    if (updErr) throw new Error(`Failed to update engine_config: ${updErr.message}`);
+  } else {
+    // No active row — create one (seed with defaults + our changes)
+    const { error: insErr } = await supabase.from("engine_config").insert({
+      ...payload,
+      is_active: true,
+      weights: {},
+      thresholds: {},
+      slot_priority: {},
+      created_at: new Date().toISOString(),
+    });
+
+    if (insErr) throw new Error(`Failed to create engine_config row: ${insErr.message}`);
+  }
+}
+

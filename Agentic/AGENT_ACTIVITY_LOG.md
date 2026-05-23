@@ -188,26 +188,31 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 - `src/app/shiftbuilder/ShiftBuilderClient.tsx` (task dnd, grip, onDragEnd task handler, TM swap bug fix, prefs wiring, prop passing)
 - `src/app/shiftbuilder/CommandPalette.tsx` (catalog quick-picks in Tasks flow)
 
-**Preflight complete**: `npx tsc --noEmit --skipLibCheck` passed cleanly (after fixing prop scoping for the new task drag feature).
+**Ship executed successfully** (user approved "yes do it"):
 
-**Proposed Conventional Commit** (for user approval):
+- Commit: `bc68fec` - `feat(sudo): add Tasks tab as central hub for card responsibilities + cross-card drag`
+- Tag: `deploy/2026-05-22-214050`
+- Pushed to `main` (GitHub will trigger Railway build)
 
-```
-feat(sudo): add Tasks tab as central hub for card responsibilities + cross-card drag
+**Build failure diagnosed & fixed** (user said "scan and push"):
 
-- New Sudo → Tasks tab (positioned above Engine Config per operator request)
-- Full catalog management (add/edit/reorder/delete with usage guard)
-- UX customization panel (drag toggle, handles, compact mode) persisted via localStorage
-- Real dnd-kit cross-card task drag on the main canvas (grip ⠿ on task rows when enabled)
-- Command Palette Tasks action now surfaces curated catalog quick-picks
-- Critical bug fix: TM move/swap no longer leaves both slots empty after refresh (coordinated night row creation in swap path)
+Railway Turbopack build failed because several files that existed locally were never added to git during the selective Tasks feature commit:
 
-This completes the task responsibility layer for GRAVE sheets.
-```
+- XAISphere.tsx
+- useShiftCompletion.ts
+- EngineConfigTab.tsx
+- useCommandActions.tsx (the active implementation)
+- Supporting Ghost components, grok client files, and API route
 
-Tag suggestion: lightweight `deploy/2026-05-22-...`
+Scanned all recent imports in ShiftBuilderClient, CommandPalette, SudoWindow, and TasksTab.
 
-Ready for `git add` of the core files + commit + push when approved.
+Added the missing modules + ran final tsc check (clean).
+
+New commit: `dd59df8` — "fix(build): add missing modules required for Railway deployment"
+
+Pushed to main. New deployment should start shortly.
+
+Next Railway build should succeed (or surface any remaining issues).
 
 ---
 
