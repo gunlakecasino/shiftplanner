@@ -535,6 +535,11 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
     (el) => onCardClick(def.key, el),
   );
 
+  const zoneCoverageTasks = (selectedTasks[def.key] || []).filter(t => t.isCoverage);
+  const coverageBodyPb = zoneCoverageTasks.length > 0
+    ? zoneCoverageTasks.length * COVERAGE_BAR_H + 2
+    : 6; // default pb-1.5 ≈ 6px
+
   return (
     <div
       ref={setRef}
@@ -553,7 +558,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
         }
       }}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
+      className={`assignment-card relative overflow-hidden cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && {
@@ -585,7 +590,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       </div>
 
       {/* Body: large TM name + optional location lines */}
-      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">
+      <div className="flex flex-col flex-1 px-2 pt-1.5" style={{ paddingBottom: coverageBodyPb }}>
         {loading && !hasTM ? (
           <div className="h-[18px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
         ) : isDraftMode && draftInfo ? (
@@ -915,6 +920,10 @@ function expandCoverageToKeys(uiKey: string): string[] {
  * that the TM is pulling double duty covering another slot.
  * Background is the accent color of the SOURCE slot.
  */
+// Height of one coverage bar in px — used by cards to add matching bottom padding
+// so tasks are never obscured. Keep in sync with paddingTop/paddingBottom below.
+const COVERAGE_BAR_H = 17;
+
 const CoverageBar: React.FC<{
   task: NightSlotTask;
   slotKey: string;
@@ -925,8 +934,18 @@ const CoverageBar: React.FC<{
 
   return (
     <div
-      className="group relative flex items-center justify-between px-2 flex-shrink-0 select-none"
-      style={{ background: bg, borderRadius: '0 0 3px 3px', paddingTop: 5, paddingBottom: 5 }}
+      className="group flex items-center justify-between px-2 select-none"
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: bg,
+        borderRadius: '0 0 3px 3px',
+        paddingTop: 4,
+        paddingBottom: 4,
+        zIndex: 2,
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={task.taskLabel}
@@ -1148,7 +1167,7 @@ const RRCard: React.FC<RRCardProps> = ({
   return (
     <div
       onPointerMove={handleSpotlightMove}
-      className={`assignment-card relative flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
+      className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
       style={{ 
         ["--card-accent" as any]: color,
         ...(borderColor && {
@@ -1170,7 +1189,10 @@ const RRCard: React.FC<RRCardProps> = ({
           {def.label}
         </span>
       </div>
-      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">
+      <div
+        className="flex flex-col flex-1 px-2 pt-1.5"
+        style={{ paddingBottom: rrCoverageTasks.length > 0 ? rrCoverageTasks.length * COVERAGE_BAR_H + 2 : 6 }}
+      >
         {isDraftMode && draftInfo && (
           <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
         )}
@@ -1982,6 +2004,10 @@ export default function ShiftBuilder() {
   // in layout.tsx before hydration. Manual toggle writes to localStorage and
   // also listens for system prefers-color-scheme changes.
   const [isDark, setIsDark] = useState(false);
+  // Raw break_assignments rows for the current night — used to render the
+  // break sheet from the authoritative source rather than from zone_assignments,
+  // so all 23 TMs always appear regardless of who is actually placed tonight.
+  const [nightBreakRows, setNightBreakRows] = useState<Array<{ tmId: string; groupNum: number; slotRef: string | null }>>([]);
   useEffect(() => {
     // Read the state the no-flash script already applied
     setIsDark(document.documentElement.classList.contains("dark"));
@@ -3644,6 +3670,14 @@ export default function ShiftBuilder() {
           }
         });
 
+        // Store the raw break rows so the break sheet can render all TMs
+        // from break_assignments directly (not just those placed tonight).
+        setNightBreakRows(
+          (breakRows as any[])
+            .filter((r: any) => r.groupNum && r.groupNum > 0)
+            .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
+        );
+
         // Translate DB rows → UI shape. The slot-keys translator owns the
         // mapping; everything downstream just sees Golden keys.
         const ui: Record<string, any> = {};
@@ -5253,7 +5287,7 @@ export default function ShiftBuilder() {
                         {ZONE_DEFS.filter(d => !!assignments[d.key]?.tmName).length} / 10 FILLED
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "135px" }}>
+                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "minmax(135px, auto)" }}>
                       {ZONE_DEFS.map((def) => (
                         <ZoneCard
                           key={def.key}
@@ -5287,7 +5321,7 @@ export default function ShiftBuilder() {
                         }, 0)} / 10 FILLED
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "112px" }}>
+                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "minmax(112px, auto)" }}>
                       {RR_DEFS.map((def) => (
                         <RRCard
                           key={def.num}
@@ -5323,7 +5357,7 @@ export default function ShiftBuilder() {
                       className="grid gap-1.5"
                       style={{
                         gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
-                        gridAutoRows: "112px",
+                        gridAutoRows: "minmax(112px, auto)",
                       }}
                     >
                       {auxDefs.map((def) => (
@@ -5419,10 +5453,46 @@ export default function ShiftBuilder() {
                 <>
                   {/* 3 Break Wave Columns — Golden tight layout */}
                   <div className="grid grid-cols-3 gap-1 mb-1.5">
-                    {[1, 2, 3].map((wave) => {
-                      const waveAssignments = Object.values(assignments).filter(
-                        (a: any) => a.breakGroup === wave
-                      );
+                    {(() => {
+                      // Build a tmId → placed-assignment reverse lookup so we can show
+                      // each TM's actual tonight-slot even when rendering from break_assignments.
+                      const tmToAssignment: Record<string, any> = {};
+                      Object.values(assignments).forEach((a: any) => {
+                        if (a.tmId) tmToAssignment[a.tmId] = a;
+                      });
+
+                      // Derive slot type from a slotRef string (e.g. "Z3" → zone, "MRR7" → rr)
+                      const slotRefType = (ref: string | null): 'zone' | 'rr' | 'aux' => {
+                        if (!ref) return 'zone';
+                        if (ref.startsWith('MRR') || ref.startsWith('WRR')) return 'rr';
+                        if (/^Z\d+$/.test(ref)) return 'zone'; // Z1–Z10 only (not Z9SR)
+                        return 'aux';
+                      };
+
+                      return [1, 2, 3].map((wave) => {
+                      // Use nightBreakRows as the authoritative TM list so ALL scheduled
+                      // TMs appear in every night's break sheet, not just those placed tonight.
+                      const waveRows = nightBreakRows.filter(r => r.groupNum === wave);
+
+                      // Build display-ready objects — prefer the actual tonight assignment
+                      // (for correct slot chip), fall back to slotRef from break_assignments.
+                      const waveAssignments = waveRows.map(r => {
+                        const actual = tmToAssignment[r.tmId];
+                        const tm = (realRoster as any[]).find((m: any) => m.id === r.tmId);
+                        const tmName = actual?.tmName ?? tm?.name ?? tm?.fullName ?? r.tmId;
+                        if (actual) return { ...actual, tmName };
+                        // TM not placed tonight — use template slotRef for chip
+                        const slotKey = r.slotRef ?? null;
+                        return {
+                          tmId: r.tmId,
+                          tmName,
+                          slotKey,
+                          type: slotRefType(slotKey),
+                          breakGroup: wave,
+                          notPlaced: true,
+                        };
+                      });
+
                       const count = waveAssignments.length;
                       const waveColor =
                         wave === 1 ? "#1a2332" : wave === 2 ? "#5a6b7d" : "#c8d3dc";
@@ -5537,7 +5607,8 @@ export default function ShiftBuilder() {
                           </div>
                         </div>
                       );
-                    })}
+                    }); // end [1,2,3].map
+                    })() /* end IIFE */}
                   </div>
 
                   {/* OVERLAPS — Golden: full-width section at bottom, two rows
