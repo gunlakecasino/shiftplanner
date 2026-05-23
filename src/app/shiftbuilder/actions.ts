@@ -9,7 +9,21 @@ import {
   type GrokMessage,
   type GrokBoardSnapshot,
   type GrokStructuredResponse,
+  type ReasoningEffort,
 } from "@/lib/xai";
+
+// Vercel AI SDK (Phase 3 migration) — structured output + official xAI provider
+import { generateObject } from "ai";
+import {
+  createGrokEngineModel,
+  createGrokSuggestionModel,
+} from "@/lib/shiftbuilder/grokClient";
+import {
+  GrokEngineResponseSchema,
+  GrokStructuredResponseSchema,
+} from "@/lib/shiftbuilder/grokSchemas";
+
+import type { GrokReasoningEffort } from "@/lib/shiftbuilder/engineConfig";
 import type { TeamMember } from "@/lib/shiftbuilder/data";
 import {
   buildGrokEngineSystemPrompt,
@@ -61,7 +75,8 @@ Give me smart suggestions for what we should do with this person right now (best
 
   try {
     const result = await callGrok(messages, {
-      model: "grok-3-mini",
+      model: "grok-4.3",
+      reasoningEffort: "low", // fast interactive suggestions from Command Palette
       temperature: 0.6,
       maxTokens: 600,
     });
@@ -127,34 +142,47 @@ Remember the output contract: first a single clean JSON block with "explanation"
   ];
 
   try {
-    const raw = await callGrok(messages, {
-      model: "grok-3-mini",
-      temperature: 0.5, // slightly lower for more consistent structure
-      maxTokens: 900,
-    });
+    const model = createGrokSuggestionModel();
 
-    const parseResult = parseGrokStructuredResponse(raw);
+    // Use the official Vercel AI SDK structured output.
+    // This gives us a validated, typed object instead of fragile regex parsing.
+    const { object: parsed } = await generateObject({
+      model,
+      schema: GrokStructuredResponseSchema,
+      messages,
+      temperature: 0.5,
+      maxTokens: 900,
+      providerOptions: {
+        xai: {
+          reasoningEffort: "low", // fast & responsive for interactive palette use
+        },
+      },
+    });
 
     let finalStructured: GrokStructuredResponse | undefined;
     let warnings: string[] = [];
 
-    if (parseResult.structured) {
+    if (parsed) {
       // Run the authoritative guard (this is what would have prevented the May 21 screenshot disasters)
       const guardResult = guardGrokActions(
-        parseResult.structured.actions,
+        parsed.actions,
         rosterForGuard,
         snapshot.currentAssignments
       );
 
       finalStructured = {
-        explanation: parseResult.structured.explanation,
+        explanation: parsed.explanation,
         actions: guardResult.validActions,
       };
       warnings = guardResult.warnings;
     }
 
+    // For the `text` field (shown in the palette), return a clean JSON representation.
+    // This is more reliable than the old raw model text.
+    const textForUI = JSON.stringify(parsed, null, 2);
+
     return {
-      text: raw,
+      text: textForUI,
       structured: finalStructured,
       warnings,
       usedStructured: !!finalStructured,
@@ -204,23 +232,37 @@ in the system prompt.`;
   ];
 
   try {
-    const raw = await callGrok(messages, {
-      model: "grok-3-mini",
-      // Low temperature so the engine is near-deterministic; same snapshot
-      // should produce near-identical picks every time.
+    // Effort comes live from the SUDO > Engine Config tab via the DB
+    const effort = snapshot.grokReasoningEffort ?? "medium";
+
+    const model = createGrokEngineModel();
+
+    const { object: parsed } = await generateObject({
+      model,
+      schema: GrokEngineResponseSchema,
+      messages,
       temperature: 0.2,
       maxTokens: 1500,
+      // Reasoning effort is passed via providerOptions at call time (the official way)
+      providerOptions: {
+        xai: {
+          reasoningEffort: effort,
+        },
+      },
     });
 
-    const parsed = parseGrokEngineResponse(raw);
     const guard = guardGrokEnginePicks(parsed.picks, snapshot);
+
+    // For debugging / "Why?" panel we store the structured result as JSON.
+    // (In a follow-up we can also capture the original text via response if needed.)
+    const rawTextForDebug = JSON.stringify(parsed, null, 2);
 
     return {
       picks: guard.validPicks,
       explanation: parsed.explanation,
       warnings: guard.warnings,
       usedGrok: guard.validPicks.length > 0,
-      rawText: raw,
+      rawText: rawTextForDebug,
     };
   } catch (err) {
     console.error("[actions] askGrokEngineDraft failed:", err);

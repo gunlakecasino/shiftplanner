@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-05-22 ~21:30 UTC — by Claude Sonnet 4.6 after shipping all 7 Wave 1+2 code fixes
+**Last Updated**: 2026-05-22 ~22:30 UTC — by Claude Sonnet 4.6 after shipping iPad + Apple Pencil Pro 2 fix suite (5 fixes)
 **Status**: Active / In Progress  
 **Current Epic**: Wave 2 follow-ups + Wave 3 architecture from ATTACK_PLAN_2026-05-22.md
 
@@ -78,6 +78,13 @@ All new implementation plans will be placed in `Plans/active/` and archived when
 7. ✅ **cmdk value-prop filtering leak**: Action items now use `item.label` only as value — no more "jessica" matching "Jeff" keywords.
 8. ✅ **Grok post-response UX**: After response, `setInputValue("?")` — query cleared, mode stays active, roster not cluttered.
 9. ✅ **Day nav tap targets**: `w-11 h-11` (44×44px) on both day arrow buttons — Apple HIG compliant.
+
+### ✅ Done — iPad + Apple Pencil Pro 2 Suite (Session 2):
+- ✅ **Fix A**: `touch-none` on ZoneCard, RRSide, AuxCard, OverlapSlot outer divs
+- ✅ **Fix B**: Sensor tuning — PointerSensor `distance:4`, TouchSensor `delay:250 tolerance:8`
+- ✅ **Fix C**: `autoScroll={false}` on DndContext
+- ✅ **Fix D**: `usePencilHover` hook → gold ring (`ring-[#FFD60A]`) on pen hover for all card types
+- ✅ **Fix E**: Barrel button (`pointerType=pen, button===2`) on all cards → opens ⌘K for that slot
 
 ### Now (Wave 2 remaining + Wave 3):
 - Fix `useShiftHistory` hook identity (causing excessive re-renders on every action).

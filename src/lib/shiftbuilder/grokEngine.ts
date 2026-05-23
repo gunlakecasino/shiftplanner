@@ -54,6 +54,8 @@ export interface GrokEngineSnapshot {
   weights: EngineConfig["weights"];
   /** Engine config thresholds (rotation_weeks, fatigue_window_days, ...) */
   thresholds: EngineConfig["thresholds"];
+  /** Desired Grok 4.3 reasoning depth for this engine run (only meaningful for grok-hybrid) */
+  grokReasoningEffort?: EngineConfig["grokReasoningEffort"];
 }
 
 export interface GrokEnginePick {
@@ -167,6 +169,7 @@ export function buildGrokEngineSnapshot(args: {
     recentHistory: flatHistory.slice(0, 50),
     weights: config.weights,
     thresholds: config.thresholds,
+    grokReasoningEffort: config.grokReasoningEffort,
   };
 }
 

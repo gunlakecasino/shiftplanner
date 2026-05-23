@@ -341,15 +341,21 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
 // =====================================================================
 
 function PoolPill({ pool }: { pool: string | null }) {
-  if (!pool) return <span className="text-zinc-600 text-[10px] font-mono">none</span>;
+  if (!pool) return <span className="text-zinc-600 text-[10px] font-mono">—</span>;
   const p = pool.toUpperCase();
+  const label =
+    p === "FULL" ? "Graves"
+    : p === "PM"  ? "PM Overlap"
+    : p === "AM"  ? "AM Overlap"
+    : p === "OTHER" ? "Other"
+    : p;
   const color =
     p === "FULL"
-      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-      : p === "AM"
-      ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+      ? "bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/20"
       : p === "PM"
-      ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+      ? "bg-[#AF52DE]/10 text-[#AF52DE] border-[#AF52DE]/20"
+      : p === "AM"
+      ? "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20"
       : "bg-zinc-800 text-zinc-400 border-zinc-700";
   return (
     <span
@@ -358,22 +364,28 @@ function PoolPill({ pool }: { pool: string | null }) {
         color
       )}
     >
-      {p}
+      {label}
     </span>
   );
 }
 
 function StatusPill({ active, status }: { active: boolean; status: string }) {
   if (!active) {
+    const color =
+      status === "LOA"
+        ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
+        : status === "transferred"
+        ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
+        : "bg-zinc-800 text-zinc-500 border-zinc-700";
     return (
-      <span className="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border bg-zinc-800 text-zinc-500 border-zinc-700">
-        inactive
+      <span className={cn("text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border", color)}>
+        {status || "inactive"}
       </span>
     );
   }
   return (
     <span className="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
-      {status || "active"}
+      active
     </span>
   );
 }
@@ -400,6 +412,12 @@ function TMEditDrawer({
   const [tab, setTab] = React.useState<DrawerTab>("identity");
   const [form, setForm] = React.useState<TMRecord>(tm);
   const [saving, setSaving] = React.useState(false);
+  const [drawerToast, setDrawerToast] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+
+  const flashDrawer = React.useCallback((kind: "ok" | "err", msg: string) => {
+    setDrawerToast({ kind, msg });
+    setTimeout(() => setDrawerToast(null), 5000);
+  }, []);
   const [detail, setDetail] = React.useState<{
     preferences: TMPreference[];
     accommodations: TMAccommodation[];
@@ -455,10 +473,13 @@ function TMEditDrawer({
         slotPreference: form.slotPreference,
         notes: form.notes,
       });
+      flashDrawer("ok", `Saved ${form.displayName}`);
       onFlash("ok", `Saved ${form.displayName}`);
       await onSaved();
     } catch (err) {
-      onFlash("err", err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      flashDrawer("err", msg);
+      onFlash("err", msg);
     } finally {
       setSaving(false);
     }
@@ -475,7 +496,9 @@ function TMEditDrawer({
       await onSaved();
       onClose();
     } catch (err) {
-      onFlash("err", err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      flashDrawer("err", msg);
+      onFlash("err", msg);
     } finally {
       setSaving(false);
     }
@@ -485,10 +508,13 @@ function TMEditDrawer({
     setSaving(true);
     try {
       await restoreTM(form.tmId);
+      flashDrawer("ok", `${form.displayName} restored`);
       onFlash("ok", `${form.displayName} restored`);
       await onSaved();
     } catch (err) {
-      onFlash("err", err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      flashDrawer("err", msg);
+      onFlash("err", msg);
     } finally {
       setSaving(false);
     }
@@ -534,6 +560,20 @@ function TMEditDrawer({
             </button>
           ))}
         </div>
+
+        {/* In-drawer toast */}
+        {drawerToast && (
+          <div
+            className={cn(
+              "mx-4 mt-2 rounded-lg px-3 py-2 text-[12px] border",
+              drawerToast.kind === "ok"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+                : "bg-red-500/10 border-red-500/30 text-red-200"
+            )}
+          >
+            {drawerToast.msg}
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-auto px-5 py-4 space-y-4">
@@ -654,6 +694,53 @@ function IdentityForm({
       <Field label="tm_id (immutable)">
         <input type="text" value={form.tmId} readOnly disabled className={cn(inputCx, "opacity-60")} />
       </Field>
+      <Field label="Active status">
+        <div className="flex gap-1.5 items-center">
+          {([true, false] as const).map((opt) => (
+            <button
+              key={String(opt)}
+              type="button"
+              onClick={() =>
+                setForm((f) => ({
+                  ...f,
+                  active: opt,
+                  // valid status values: 'active' | 'LOA' | 'transferred' | 'separated' | 'other'
+                  status: opt
+                    ? "active"
+                    : f.status === "active"
+                    ? "separated"
+                    : f.status,
+                }))
+              }
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border transition-colors",
+                form.active === opt
+                  ? opt
+                    ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+                    : "bg-zinc-700 text-zinc-300 border-zinc-600"
+                  : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+              )}
+            >
+              {opt ? "active" : "inactive"}
+            </button>
+          ))}
+          {!form.active && (
+            <select
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+              className="ml-2 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+            >
+              <option value="separated">separated</option>
+              <option value="LOA">LOA</option>
+              <option value="transferred">transferred</option>
+              <option value="other">other</option>
+            </select>
+          )}
+        </div>
+        <p className="text-[10px] text-zinc-600 mt-1">
+          Inactive TMs are hidden from the engine roster and the active filter. Hit Save to persist.
+        </p>
+      </Field>
       <Field label="Notes">
         <textarea
           rows={4}
@@ -676,24 +763,34 @@ function GraveForm({
   return (
     <div className="space-y-3">
       <Field label="Grave Pool">
-        <div className="flex gap-1.5">
-          {([null, "Full", "AM", "PM"] as Array<string | null>).map((opt) => (
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            { value: null,    label: "None",       active: "bg-zinc-700 text-zinc-200 border-zinc-500" },
+            { value: "Full",  label: "Graves",     active: "bg-[#007AFF]/20 text-[#60aaff] border-[#007AFF]/40" },
+            { value: "PM",    label: "PM Overlap", active: "bg-[#AF52DE]/20 text-[#d084f0] border-[#AF52DE]/40" },
+            { value: "AM",    label: "AM Overlap", active: "bg-[#34C759]/20 text-[#5ddf7d] border-[#34C759]/40" },
+            { value: "Other", label: "Other",      active: "bg-zinc-700 text-zinc-200 border-zinc-500" },
+          ] as Array<{ value: string | null; label: string; active: string }>).map(({ value, label, active }) => (
             <button
-              key={String(opt)}
-              onClick={() => setForm((f) => ({ ...f, gravePool: opt }))}
+              key={String(value)}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, gravePool: value }))}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border transition-colors",
-                form.gravePool === opt
-                  ? "bg-red-500/20 text-red-200 border-red-500/40"
-                  : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200"
+                "px-3 py-1.5 rounded-lg text-[11px] font-mono tracking-wider border transition-colors",
+                form.gravePool === value
+                  ? active
+                  : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
               )}
             >
-              {opt ?? "none"}
+              {label}
             </button>
           ))}
         </div>
-        <div className="text-[10px] text-zinc-500 mt-1">
-          Full = full grave roster · AM = AM overlap (Day sheet) · PM = PM overlap (Swings sheet) · none = not on grave shift
+        <div className="text-[10px] text-zinc-500 mt-1.5 leading-relaxed">
+          <span className="text-[#60aaff]">Graves</span> = full 11pm–7am shift ·{" "}
+          <span className="text-[#d084f0]">PM Overlap</span> = out at ~1am ·{" "}
+          <span className="text-[#5ddf7d]">AM Overlap</span> = in at 5am–5:15am (on next day's ADP schedule) ·{" "}
+          <span className="text-zinc-400">None</span> = not on grave shift
         </div>
       </Field>
       <Field label="Primary Section">
@@ -724,14 +821,6 @@ function GraveForm({
               tieBreakRank: e.target.value === "" ? null : Number(e.target.value),
             }))
           }
-          className={inputCx}
-        />
-      </Field>
-      <Field label="Status">
-        <input
-          type="text"
-          value={form.status ?? ""}
-          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
           className={inputCx}
         />
       </Field>

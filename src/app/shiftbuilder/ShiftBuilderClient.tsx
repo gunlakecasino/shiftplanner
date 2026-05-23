@@ -236,6 +236,7 @@ const DEFAULT_AUX_DEFS: AuxDef[] = [
   { key: "TR1",  label: "TRASH 1",   locations: ["West Trash Run"]  },
   { key: "TR2",  label: "TRASH 2",   locations: ["East Trash Run"]  },
   { key: "SP1",  label: "SUPPORT 1", locations: ["Float Support"]   },
+  { key: "SP2",  label: "SUPPORT 2", locations: ["Float Support"]   },
 ];
 
 // Fallback accents for operator-added AUX slots (cycle through these so they
@@ -437,6 +438,23 @@ function useSlotDnd(slotKey: string, slotType: "zone" | "rr" | "aux" | "overlap"
   return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM };
 }
 
+// ─── Pencil hover hook ────────────────────────────────────────────────────────
+// Detects Apple Pencil Pro 2 hover (pointerType === "pen") so cards can show
+// a gold ring before contact — giving operators a clean "aim" target.
+// Also used by barrel-button detection (button === 2 on pointerdown).
+function usePencilHover() {
+  const [isPenHovering, setIsPenHovering] = useState(false);
+  const penHoverHandlers = {
+    onPointerEnter: (e: React.PointerEvent) => {
+      if (e.pointerType === "pen") setIsPenHovering(true);
+    },
+    onPointerLeave: (e: React.PointerEvent) => {
+      if (e.pointerType === "pen") setIsPenHovering(false);
+    },
+  };
+  return { isPenHovering, penHoverHandlers };
+}
+
 interface ZoneCardProps {
   def: any;
   assignments: any;
@@ -475,18 +493,25 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
 
   const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading;
+  const { isPenHovering, penHoverHandlers } = usePencilHover();
 
   return (
     <div
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-
+      onPointerDown={(e) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(def.key, e.currentTarget as HTMLElement);
+        }
+      }}
+      {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
-      style={{ 
+      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      style={{
         ["--card-accent" as any]: color,
         ...(borderColor && {
           border: `2px solid ${borderColor}`,
@@ -868,16 +893,23 @@ const RRSide: React.FC<{
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "rr", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
+  const { isPenHovering, penHoverHandlers } = usePencilHover();
 
   return (
     <div
       ref={setRef}
       onClick={(e) => onClick(slotKey, e.currentTarget, e)}
-
+      onPointerDown={(e) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onClick(slotKey, e.currentTarget as HTMLElement);
+        }
+      }}
+      {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""}`}
+      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
     >
       {/* Label + badge row */}
       <div className="flex items-center justify-between mb-1">
@@ -912,7 +944,7 @@ const RRSide: React.FC<{
       {/* Per-side selected tasks. Smaller type to fit the half-card width. */}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-1 text-[10px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`mt-0.5 text-[9.5px] leading-[1.25] ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -923,7 +955,7 @@ const RRSide: React.FC<{
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
-              textSize="text-[10px]"
+              textSize="text-[9.5px]"
               textColorClass={hasTM ? "text-[#374151]" : "text-[#6B7280]"}
             />
           ))}
@@ -1054,18 +1086,25 @@ const AuxCard: React.FC<AuxCardProps> = ({
 
   const icon = getAuxIcon(def.key);
   const isEmpty = !hasTM && !loading;
+  const { isPenHovering, penHoverHandlers } = usePencilHover();
 
   return (
     <div
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-
+      onPointerDown={(e) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(def.key, e.currentTarget as HTMLElement);
+        }
+      }}
+      {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""}`}
-      style={{ 
+      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      style={{
         ["--card-accent" as any]: color,
         ...(borderColor && {
           border: `2px solid ${borderColor}`,
@@ -1442,18 +1481,25 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
   const tasks = selectedTasks[slotKey];
+  const { isPenHovering, penHoverHandlers } = usePencilHover();
 
   return (
     <div
       ref={setRef}
       onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
-
+      onPointerDown={(e) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(slotKey, e.currentTarget as HTMLElement);
+        }
+      }}
+      {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all ${
+      className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""}`}
+      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
     >
       {loading && !hasTM ? (
         <div className="h-[12px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
@@ -3054,9 +3100,14 @@ export default function ShiftBuilder() {
   // (unassign), card → nowhere (also unassign). Pointer + Touch + Keyboard
   // sensors give us mouse, iPad, and a11y parity from a single source.
   // ────────────────────────────────────────────────────────────────────────
+  // iPad + Apple Pencil Pro 2 sensor tuning:
+  // • PointerSensor distance reduced to 4px so Pencil drags activate sooner.
+  // • TouchSensor delay raised to 250ms / tolerance 8px — gives finger a brief
+  //   moment to distinguish tap from drag without feeling sluggish.
+  // • KeyboardSensor for a11y parity.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor),
   );
 
@@ -3897,7 +3948,9 @@ export default function ShiftBuilder() {
         </select>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
+          fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} autoScroll={false}>
       {/* The roster used to be a 268px flex sibling. It's now a floating
          Liquid Glass panel anchored to the left, position:fixed inside this
          relative container so the canvas can take the full width. When the

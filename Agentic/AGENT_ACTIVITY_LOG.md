@@ -6,6 +6,41 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-22 (Session 2) — Claude (Cowork/Sonnet 4.6) — iPad + Apple Pencil Pro 2 Fix Suite (5 fixes)
+
+**Status**: ✅ Complete — `tsc --noEmit` 0 errors
+
+### Fixes Applied (`ShiftBuilderClient.tsx`)
+
+**New Hook — `usePencilHover()`** (added just before `interface ZoneCardProps`):
+- Returns `{ isPenHovering, penHoverHandlers }` — tracks `pointerType === "pen"` enter/leave
+- Reused across all 4 card types for D.R.Y. pen awareness
+
+**Fix A — `touch-none` on all card wrappers**:
+Added Tailwind `touch-none` to outer div className of:
+- `ZoneCard` (line ~506) — prevents iOS/iPadOS scroll claiming pointer events before dnd-kit
+- `RRSide` (line ~905)
+- `AuxCard` (line ~1099)
+- `OverlapSlot` (line ~1493)
+
+**Fix B — Sensor tuning**:
+`PointerSensor: { distance: 5 }` → `{ distance: 4 }` (Pencil activates faster)
+`TouchSensor: { delay: 180, tolerance: 6 }` → `{ delay: 250, tolerance: 8 }` (finger tap vs. drag feels cleaner)
+
+**Fix C — `autoScroll={false}` on DndContext**:
+Prevents dnd-kit's built-in scroll from fighting the canvas scroll container during iPad drag
+
+**Fix D — Pencil hover gold ring**:
+Each card calls `usePencilHover()` and adds `isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""` to className — gives operator a visible aim target before Pencil contact
+
+**Fix E — Barrel button opens ⌘K**:
+Each card outer div has `onPointerDown` that checks `e.pointerType === "pen" && e.button === 2` → calls `onCardClick` / `onClick` for that slot key → opens Command Palette for that card
+
+**Artifacts modified**:
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx`
+
+---
+
 ## 2026-05-22 — Claude (Cowork/Sonnet 4.6) — Wave 1 + Wave 2 Code Fixes (7 bugs shipped)
 
 **Task**: Implement fixes 2–8 from ATTACK_PLAN_2026-05-22.md. Brian applied fix 1 (DB migration) himself.

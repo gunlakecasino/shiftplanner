@@ -1211,7 +1211,7 @@ export function CommandPalette({
                     // Restrooms — Men's and Women's sides use their full Golden UI keys
                     'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
                     // Auxiliary
-                    'ADM','TR1','TR2','SP1','SP2','SP3',
+                    'ADM','TR1','TR2','SP1','SP2',
                     // AM / PM Overlaps
                     'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
                     'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
@@ -1270,7 +1270,7 @@ export function CommandPalette({
                   {[
                     'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
                     'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
-                    'ADM','TR1','TR2','SP1','SP2','SP3',
+                    'ADM','TR1','TR2','SP1','SP2',
                     // AM / PM Overlaps (optional but available)
                     'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
                     'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',

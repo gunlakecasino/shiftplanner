@@ -1,8 +1,12 @@
 /**
- * xAI Grok helper for the Command Palette
- * 
- * Uses native fetch against the xAI OpenAI-compatible endpoint.
- * All calls should go through Server Actions to keep the API key server-only.
+ * xAI Grok helper (server-only)
+ *
+ * Uses native fetch against the xAI OpenAI-compatible /v1/chat/completions endpoint.
+ * All Grok calls for the ShiftBuilder (Command Palette + Grok-hybrid engine) flow through here.
+ *
+ * Current production model: grok-4.3 (May 2026 flagship).
+ * We tune per workload using the `reasoning_effort` parameter for the best
+ * intelligence / latency / cost tradeoff.
  */
 
 export type GrokMessage = {
@@ -24,12 +28,19 @@ export type GrokSuggestion = {
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 
+export type ReasoningEffort = "none" | "low" | "medium" | "high";
+
 export async function callGrok(
   messages: GrokMessage[],
   options?: {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    /** Controls how deeply Grok 4.3 reasons before answering.
+     *  "low" = fast & cheap for interactive palette suggestions
+     *  "medium" / "high" = stronger judgment for the core placement engine
+     */
+    reasoningEffort?: ReasoningEffort;
   }
 ): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
@@ -38,18 +49,24 @@ export async function callGrok(
     throw new Error("XAI_API_KEY is not set in environment variables");
   }
 
+  const body: Record<string, any> = {
+    model: options?.model ?? "grok-4.3",
+    messages,
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.maxTokens ?? 800,
+  };
+
+  if (options?.reasoningEffort) {
+    body.reasoning_effort = options.reasoningEffort;
+  }
+
   const response = await fetch(XAI_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: options?.model ?? "grok-3-mini", // Fast model - adjust as needed
-      messages,
-      temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.maxTokens ?? 800,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
