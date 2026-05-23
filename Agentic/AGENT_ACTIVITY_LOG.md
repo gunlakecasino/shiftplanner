@@ -6,6 +6,26 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Post-push handler ordering fix + Agentic docs + CSS animation
+
+**Context**: Follow-up to `dc0f1c1` (Visual group + Grok + Tasks tab + Railway fixes). User requested "Check again and do another push now".
+
+**Changes**:
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx`: Fixed critical event ordering for Apple Pencil Pro 2 barrel button (squeeze) + dnd-kit drag coexistence.
+  - Moved `{...penHoverHandlers}`, listeners, and attributes **before** the custom `onPointerDown`.
+  - Barrel button (pen + button 2) now correctly opens Command Palette **without** clobbering drag listeners.
+  - Added safe forwarding: `if (hasTM && listeners) listeners.onPointerDown(e)`.
+- `src/app/globals.css`: Added `@keyframes fadeInDown` for Grok ghost-text / suggestion bar polish.
+- `README.md` + `SCHEDULING_MASTERLIST.md`: Updated links and references to the new `Agentic/` Command Post structure.
+
+**Rationale**: Previous barrel-button implementation in the Pencil Pro suite had the `onPointerDown` before the dnd-kit spreads, so drags on occupied cards were broken after the palette-open feature landed. This restores full drag + barrel-squeeze UX.
+
+**Status**: ✅ Clean diff (only 4 production files + log). Ready for `git push` → Railway build.
+
+**Next for operator**: Run `railway logs --build` after push and paste any errors.
+
+---
+
 ## 2026-05-22 (Session 2) — Claude (Cowork/Sonnet 4.6) — iPad + Apple Pencil Pro 2 Fix Suite (5 fixes)
 
 **Status**: ✅ Complete — `tsc --noEmit` 0 errors

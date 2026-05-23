@@ -33,6 +33,7 @@ The app expects a Supabase project with the ZDS GRAVE schema (tm_profiles, zone_
   - `grokIntelligence.ts` + `grokEngine.ts` — Structured Grok context + guarded suggestions
   - `data.ts` — All Supabase access (roster, preferences, breaks, tasks, ADP import)
 - `SCHEDULING_MASTERLIST.md` — The full vision and phased roadmap for a world-class system
+- `Agentic/` — AI Agentic Command Post (THIS_IS_WHAT_WE_ARE_DOING.md + agent log + Memories/Key-Information/Plans for any AI). Start here in every new chat: "Read the Agentic folder in the project root."
 
 ## Philosophy
 

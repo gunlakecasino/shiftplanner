@@ -7,7 +7,7 @@
 **Status**: Living document (v1.0 — May 2026)  
 **Owner**: Grok + Operator + Engineering  
 **Location**: Project root (this file)  
-**Related**: `plan.md` (session), `COMMAND_PALETTE_UPGRADE_PLAN.md`, `src/lib/shiftbuilder/placement.ts`, `scoring.ts`, `engineConfig.ts`, `grokEngine.ts`, `grokIntelligence.ts`
+**Related**: `plan.md` (session), `Agentic/Plans/active/COMMAND_PALETTE_UPGRADE_PLAN.md` (active Command Palette work), `Agentic/` (AI Agentic Command Post — always read first in new sessions), `src/lib/shiftbuilder/placement.ts`, `scoring.ts`, `engineConfig.ts`, `grokEngine.ts`, `grokIntelligence.ts`
 
 ---
 

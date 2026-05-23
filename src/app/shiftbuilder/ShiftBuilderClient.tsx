@@ -500,15 +500,22 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-      onPointerDown={(e) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(def.key, e.currentTarget as HTMLElement);
-        }
-      }}
       {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
+        // Barrel button (Pencil Pro 2 squeeze) → open ⌘K for this slot.
+        // Must come AFTER listeners spread so we own the final onPointerDown.
+        // For normal pointer events, forward to dnd-kit so drag still works.
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(def.key, e.currentTarget as HTMLElement);
+          return;
+        }
+        if (hasTM && (listeners as any)?.onPointerDown) {
+          (listeners as any).onPointerDown(e);
+        }
+      }}
       data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
       style={{
@@ -899,15 +906,19 @@ const RRSide: React.FC<{
     <div
       ref={setRef}
       onClick={(e) => onClick(slotKey, e.currentTarget, e)}
-      onPointerDown={(e) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onClick(slotKey, e.currentTarget as HTMLElement);
-        }
-      }}
       {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onClick(slotKey, e.currentTarget as HTMLElement);
+          return;
+        }
+        if (hasTM && (listeners as any)?.onPointerDown) {
+          (listeners as any).onPointerDown(e);
+        }
+      }}
       data-slot-key={slotKey}
       className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
     >
@@ -1093,15 +1104,19 @@ const AuxCard: React.FC<AuxCardProps> = ({
       ref={setRef}
       onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
       onPointerMove={handleSpotlightMove}
-      onPointerDown={(e) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(def.key, e.currentTarget as HTMLElement);
-        }
-      }}
       {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(def.key, e.currentTarget as HTMLElement);
+          return;
+        }
+        if (hasTM && (listeners as any)?.onPointerDown) {
+          (listeners as any).onPointerDown(e);
+        }
+      }}
       data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
       style={{
@@ -1487,15 +1502,19 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
     <div
       ref={setRef}
       onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
-      onPointerDown={(e) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(slotKey, e.currentTarget as HTMLElement);
-        }
-      }}
       {...penHoverHandlers}
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
+      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === "pen" && e.button === 2) {
+          e.preventDefault();
+          onCardClick(slotKey, e.currentTarget as HTMLElement);
+          return;
+        }
+        if (hasTM && (listeners as any)?.onPointerDown) {
+          (listeners as any).onPointerDown(e);
+        }
+      }}
       data-slot-key={slotKey}
       className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
         isOver ? "drop-target-active" : ""

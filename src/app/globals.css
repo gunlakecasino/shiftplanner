@@ -758,6 +758,18 @@ body {
   border-color: #A1A1A6 !important;
 }
 
+/* Ghost-text suggestion bar fade-in */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ==========================================================================
    PRINT — WYSIWYG against the on-screen artboard.
    The artboard is already 1056×816 (11×8.5" @ 96dpi), so with a matching
