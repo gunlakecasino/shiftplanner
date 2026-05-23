@@ -423,7 +423,21 @@ export async function getOrCreateNightForDate(
     throw new Error(`Failed to create night for ${localDateIso(date)}: ${nErr?.message ?? "unknown"}`);
   }
 
-  return newNight.id;
+  const newNightId = newNight.id;
+
+  // Auto-seed default tasks and break template in parallel — fire-and-forget
+  // so a seeding failure never blocks night creation. Errors are logged but
+  // do not propagate; the operator can always add tasks/breaks manually.
+  Promise.all([
+    seedDefaultTasksForNight(newNightId).catch((e) =>
+      console.warn('[shiftbuilder/data] getOrCreateNightForDate: task seed failed', e)
+    ),
+    seedDefaultBreaksForNight(newNightId).catch((e) =>
+      console.warn('[shiftbuilder/data] getOrCreateNightForDate: break seed failed', e)
+    ),
+  ]);
+
+  return newNightId;
 }
 
 // ============================================================================
@@ -698,6 +712,7 @@ export interface NightSlotTask {
   catalogTaskId: string | null;
   sortOrder: number;
   color: string | null; // per-task highlight color (hex) for the colored sphere
+  isCoverage: boolean;  // true for "Add Coverage" bars — distinct from regular tasks
 }
 
 /**
@@ -746,7 +761,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
 
   const { data, error } = await supabase
     .from('night_slot_tasks')
-    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color')
+    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color, is_coverage')
     .eq('night_id', nightId)
     .order('sort_order', { ascending: true })
     .order('task_label', { ascending: true });
@@ -766,6 +781,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     catalogTaskId: r.catalog_task_id,
     sortOrder: r.sort_order ?? 0,
     color: r.color ?? null,
+    isCoverage: r.is_coverage ?? false,
   }));
 }
 
@@ -783,6 +799,7 @@ export interface AddTaskParams {
   catalogTaskId?: string | null;
   sortOrder?: number;
   color?: string | null; // optional highlight color for the task sphere
+  isCoverage?: boolean;  // true for "Add Coverage" bars
 }
 
 export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
@@ -791,6 +808,7 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     rrSide = null, taskLabel,
     catalogTaskId = null, sortOrder = 0,
     color = null,
+    isCoverage = false,
   } = params;
 
   if (!nightId || !slotKey || !taskLabel) {
@@ -812,6 +830,7 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
       catalog_task_id: catalogTaskId,
       sort_order: sortOrder,
       color,
+      is_coverage: isCoverage,
     });
 
   if (error) {
@@ -1206,6 +1225,58 @@ export async function seedDefaultTasksForNight(nightId: string): Promise<number>
   }
 
   return seeded;
+}
+
+/**
+ * Seed a night's break_assignments from the break_template table.
+ * Called automatically by getOrCreateNightForDate — safe to also call
+ * manually from the TasksTab "Apply defaults" button.
+ * Idempotent: skips rows where (night_id, tm_id) already exists.
+ */
+export async function seedDefaultBreaksForNight(nightId: string): Promise<number> {
+  if (!nightId) return 0;
+
+  const { data: template, error: tErr } = await supabase
+    .from('break_template')
+    .select('tm_id, group_num, break_wave, slot_ref, sort_order')
+    .order('group_num', { ascending: true })
+    .order('sort_order', { ascending: true });
+
+  if (tErr) {
+    console.error('[shiftbuilder/data] seedDefaultBreaksForNight fetch failed:', tErr);
+    throw new Error(`Failed to load break template: ${tErr.message}`);
+  }
+
+  if (!template || template.length === 0) return 0;
+
+  // Get existing TM IDs for this night so we don't double-insert
+  const { data: existing } = await supabase
+    .from('break_assignments')
+    .select('tm_id')
+    .eq('night_id', nightId);
+
+  const existingTmIds = new Set((existing || []).map((r: any) => r.tm_id));
+
+  const toInsert = template
+    .filter((r: any) => !existingTmIds.has(r.tm_id))
+    .map((r: any) => ({
+      night_id: nightId,
+      tm_id: r.tm_id,
+      group_num: r.group_num,
+      break_wave: r.break_wave,
+      slot_ref: r.slot_ref,
+      sort_order: r.sort_order,
+    }));
+
+  if (toInsert.length === 0) return 0;
+
+  const { error: iErr } = await supabase.from('break_assignments').insert(toInsert);
+  if (iErr) {
+    console.error('[shiftbuilder/data] seedDefaultBreaksForNight insert failed:', iErr);
+    throw new Error(`Failed to seed break assignments: ${iErr.message}`);
+  }
+
+  return toInsert.length;
 }
 
 // ============================================================================

@@ -20,6 +20,34 @@ import type { DisplayNameConflict } from "@/lib/shiftbuilder/tmCommands";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 
+// Coverage slot picker — all assignable zones and RR pairs.
+// RR entries use the MRR key (canonical); when a user picks one the
+// handler expands it to both MRR and WRR before writing tasks.
+const COVERAGE_SLOTS: { key: string; label: string; group: 'Zone' | 'Restroom' }[] = [
+  { key: 'Z1',   label: 'Zone 1',      group: 'Zone' },
+  { key: 'Z2',   label: 'Zone 2',      group: 'Zone' },
+  { key: 'Z3',   label: 'Zone 3',      group: 'Zone' },
+  { key: 'Z4',   label: 'Zone 4',      group: 'Zone' },
+  { key: 'Z5',   label: 'Zone 5',      group: 'Zone' },
+  { key: 'Z6',   label: 'Zone 6',      group: 'Zone' },
+  { key: 'Z7',   label: 'Zone 7',      group: 'Zone' },
+  { key: 'Z8',   label: 'Zone 8',      group: 'Zone' },
+  { key: 'Z9',   label: 'Zone 9',      group: 'Zone' },
+  { key: 'Z9SR', label: 'Zone 9SR',    group: 'Zone' },
+  { key: 'Z10',  label: 'Zone 10',     group: 'Zone' },
+  { key: 'MRR1', label: 'Restroom 1',  group: 'Restroom' },
+  { key: 'MRR6', label: 'Restroom 6',  group: 'Restroom' },
+  { key: 'MRR7', label: 'Restroom 7',  group: 'Restroom' },
+  { key: 'MRR8', label: 'Restroom 8',  group: 'Restroom' },
+  { key: 'MRR10', label: 'Restroom 10', group: 'Restroom' },
+];
+
+// Normalize an RR key (MRR7 or WRR7) → "MRR7" for deduplication in coverage source checks
+function normalizeToMRR(key: string): string {
+  if (key.startsWith('WRR')) return 'MRR' + key.slice(3);
+  return key;
+}
+
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -101,6 +129,10 @@ interface CommandPaletteProps {
   /** Fired when the operator types `sudo` and presses Enter / accepts. */
   onOpenSudo?: () => void;
 
+  // === Coverage ===
+  /** Called when a coverage pair is confirmed (source → target). Source is a single UI key; target may expand to M+W for RR pairs. */
+  onAddCoverage?: (sourceKey: string, targetKey: string) => Promise<void>;
+
   // === AI auto-completion context ===
   /** Names of TMs scheduled tonight but not yet placed — used by command completion */
   completionScheduledUnplaced?: string[];
@@ -152,15 +184,19 @@ export function CommandPalette({
   completionScheduledUnplaced,
   completionAssignments,
   completionDay,
+  onAddCoverage,
 }: CommandPaletteProps) {
   // === Multi-step contextual state for powerful workflows ===
   const [selectedPerson, setSelectedPerson] = React.useState<any | null>(null);
   const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
-  const [contextStep, setContextStep] = React.useState<'root' | 'person-to-slot' | 'slot-to-person' | 'tasks-select-zone' | 'tasks-enter-label'>('root');
+  const [contextStep, setContextStep] = React.useState<'root' | 'person-to-slot' | 'slot-to-person' | 'tasks-select-zone' | 'tasks-enter-label' | 'coverage-select-source' | 'coverage-select-target'>('root');
 
   // For the Tasks flow
   const [selectedTaskSlot, setSelectedTaskSlot] = React.useState<string | null>(null);
   const [multiTaskSlots, setMultiTaskSlots] = React.useState<string[]>([]);
+
+  // For the Coverage flow
+  const [coverageSourceKey, setCoverageSourceKey] = React.useState<string | null>(null);
 
   // Border mode states
   const [borderStep, setBorderStep] = React.useState<'idle' | 'select-card' | 'select-color'>('idle');
@@ -318,7 +354,10 @@ export function CommandPalette({
       // Reset tasks flow state
       setSelectedTaskSlot(null);
       setMultiTaskSlots([]);
-      if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
+      // Reset coverage flow state
+      setCoverageSourceKey(null);
+      if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label' ||
+          contextStep === 'coverage-select-source' || contextStep === 'coverage-select-target') {
         setContextStep('root');
       }
     }
@@ -1103,6 +1142,10 @@ export function CommandPalette({
                       ? "Select a zone / slot for the task..."
                       : contextStep === 'tasks-enter-label'
                       ? "Describe the task (free text)..."
+                      : contextStep === 'coverage-select-source'
+                      ? "Which card is the coverage source?"
+                      : contextStep === 'coverage-select-target'
+                      ? "Which slot are they also covering?"
                       : placeholder
                   }
                   className={cn(
@@ -1430,8 +1473,66 @@ export function CommandPalette({
                 </>
               )}
 
+              {/* Coverage flow: pick source card (when no slot pre-selected) */}
+              {!isCommandMode && contextStep === 'coverage-select-source' && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
+                    Which card needs coverage?
+                  </div>
+                  {COVERAGE_SLOTS.map((slot) => (
+                    <CommandPrimitive.Item
+                      key={`cov-src-${slot.key}`}
+                      value={`coverage source ${slot.label}`}
+                      onSelect={() => {
+                        setCoverageSourceKey(slot.key);
+                        setContextStep('coverage-select-target');
+                        setInputValue('');
+                      }}
+                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
+                    >
+                      <span className="text-[10px] font-medium text-zinc-400 w-[60px]">{slot.group}</span>
+                      <span className="font-medium">{slot.label}</span>
+                    </CommandPrimitive.Item>
+                  ))}
+                </>
+              )}
+
+              {/* Coverage flow: pick target card */}
+              {!isCommandMode && contextStep === 'coverage-select-target' && coverageSourceKey && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
+                    Covering which slot? (will add bar to both cards)
+                  </div>
+                  {COVERAGE_SLOTS
+                    .filter((slot) => normalizeToMRR(slot.key) !== normalizeToMRR(coverageSourceKey))
+                    .map((slot) => (
+                      <CommandPrimitive.Item
+                        key={`cov-tgt-${slot.key}`}
+                        value={`coverage target ${slot.label}`}
+                        onSelect={async () => {
+                          if (!onAddCoverage || !coverageSourceKey) return;
+                          try {
+                            await onAddCoverage(coverageSourceKey, slot.key);
+                          } catch (err) {
+                            console.error('[CommandPalette] coverage add failed:', err);
+                          }
+                          setCoverageSourceKey(null);
+                          setContextStep('root');
+                          setInputValue('');
+                          onOpenChange(false);
+                        }}
+                        className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
+                      >
+                        <span className="text-[10px] font-medium text-zinc-400 w-[60px]">{slot.group}</span>
+                        <span className="font-medium">{slot.label}</span>
+                      </CommandPrimitive.Item>
+                    ))
+                  }
+                </>
+              )}
+
               {/* Normal grouped content (only when not in special modes) */}
-              {!isCommandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label'].includes(contextStep) && grouped.map(([groupName, items]) => (
+              {!isCommandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label', 'coverage-select-source', 'coverage-select-target'].includes(contextStep) && grouped.map(([groupName, items]) => (
                 <CommandPrimitive.Group
                   key={groupName}
                   id={`group-${groupName.toLowerCase()}`}
@@ -1497,6 +1598,20 @@ export function CommandPalette({
                           setContextStep('tasks-select-zone');
                           setSelectedTaskSlot(null);
                           setMultiTaskSlots([]);
+                          setInputValue('');
+                          return;
+                        }
+
+                        // Coverage flow
+                        if (item.id === "coverage") {
+                          if (selectedSlot) {
+                            // Card already selected — skip source selection
+                            setCoverageSourceKey(selectedSlot);
+                            setContextStep('coverage-select-target');
+                          } else {
+                            setCoverageSourceKey(null);
+                            setContextStep('coverage-select-source');
+                          }
                           setInputValue('');
                           return;
                         }

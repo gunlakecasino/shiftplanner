@@ -23,6 +23,7 @@ import {
   ArrowLeftRight,
   Coffee,
   Lock,
+  GitMerge,
 } from "lucide-react";
 
 // Types for the master command palette (Phase 2 core)
@@ -313,6 +314,18 @@ export function useCommandActions({
       icon: <ClipboardList size={15} className="opacity-60" />,
       handler: () => {
         // Handled specially in CommandPalette for multi-step zone + free text flow
+      },
+      keepOpen: true,
+    });
+
+    result.push({
+      id: "coverage",
+      label: "Add Coverage",
+      keywords: ["coverage", "cover", "double", "pair", "and zone", "and restroom", "also"],
+      group: "Actions",
+      icon: <GitMerge size={15} className="opacity-60" />,
+      handler: () => {
+        // Handled specially in CommandPalette — opens coverage slot picker
       },
       keepOpen: true,
     });

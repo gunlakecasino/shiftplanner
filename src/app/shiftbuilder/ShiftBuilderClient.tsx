@@ -625,8 +625,22 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} onSetTaskColor={onSetTaskColor} onEditTask={onEditTask} />
+        <ZoneTaskList
+          tasks={(selectedTasks[def.key] || []).filter(t => !t.isCoverage)}
+          hasTM={hasTM}
+          slotKey={def.key}
+          onRemoveTask={onRemoveTask}
+          onSetTaskColor={onSetTaskColor}
+          onEditTask={onEditTask}
+        />
       </div>
+      {/* Coverage bars — rendered outside the padded body so they span full card width */}
+      {(selectedTasks[def.key] || [])
+        .filter(t => t.isCoverage)
+        .map(t => (
+          <CoverageBar key={t.id} task={t} slotKey={def.key} onRemoveTask={onRemoveTask} />
+        ))
+      }
     </div>
   );
 };
@@ -864,6 +878,88 @@ const TaskRow: React.FC<TaskRowProps> = ({
   );
 };
 
+// ============================================================================
+// Coverage helpers — support "Add Coverage" command
+// ============================================================================
+
+/** Returns the accent hex for any UI slot key (zone, RR side, aux). */
+function getSlotAccentColor(uiKey: string): string {
+  if (uiKey.startsWith('MRR') || uiKey.startsWith('WRR')) {
+    const num = parseInt(uiKey.replace(/^[MW]RR/, ''), 10);
+    return getRRAccent(num);
+  }
+  if (uiKey.startsWith('Z')) return getZoneColor(uiKey);
+  return '#6B7280';
+}
+
+/** Returns a human-readable label for a slot (e.g. "Zone 3", "Restroom 7"). */
+function getSlotCoverageLabel(uiKey: string): string {
+  if (uiKey === 'Z9SR') return 'Zone 9SR';
+  if (uiKey.startsWith('Z')) return `Zone ${uiKey.slice(1)}`;
+  if (uiKey.startsWith('MRR') || uiKey.startsWith('WRR')) {
+    return `Restroom ${uiKey.replace(/^[MW]RR/, '')}`;
+  }
+  return uiKey;
+}
+
+/** For an RR key (MRR7, WRR7, or MRR7 canonical) return both M and W keys.
+ *  For zone keys return [key]. */
+function expandCoverageToKeys(uiKey: string): string[] {
+  if (uiKey.startsWith('MRR')) return [uiKey, `WRR${uiKey.slice(3)}`];
+  if (uiKey.startsWith('WRR')) return [`MRR${uiKey.slice(3)}`, uiKey];
+  return [uiKey];
+}
+
+/**
+ * CoverageBar — rendered at the very bottom of a zone or RR card to show
+ * that the TM is pulling double duty covering another slot.
+ * Background is the accent color of the SOURCE slot.
+ */
+const CoverageBar: React.FC<{
+  task: NightSlotTask;
+  slotKey: string;
+  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+}> = ({ task, slotKey, onRemoveTask }) => {
+  const [hovered, setHovered] = React.useState(false);
+  const bg = task.color || '#6B7280';
+
+  return (
+    <div
+      className="group relative flex items-center justify-between px-2 flex-shrink-0 select-none"
+      style={{ background: bg, borderRadius: '0 0 3px 3px', paddingTop: 5, paddingBottom: 5 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={task.taskLabel}
+    >
+      <span
+        className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
+        style={{ fontSize: 8.5, fontFamily: 'var(--font-atkinson)' }}
+      >
+        {task.taskLabel}
+      </span>
+      {onRemoveTask && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveTask(slotKey, task.taskLabel);
+          }}
+          className="ml-1 leading-none font-bold flex-shrink-0 transition-opacity"
+          style={{
+            color: 'rgba(255,255,255,0.45)',
+            fontSize: 14,
+            opacity: hovered ? 1 : 0.45,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.45)')}
+          title="Remove coverage"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+};
+
 // Compact list of selected tasks shown at the bottom of a Zone / AUX card.
 // Replaces the static `def.locations` strings we used to render. When empty,
 // renders nothing so the card collapses gracefully.
@@ -1033,6 +1129,22 @@ const RRCard: React.FC<RRCardProps> = ({
   const wEmpty = !assignments[wKey]?.tmName;
   const bothEmpty = mEmpty && wEmpty && !loading;
 
+  // Separate coverage tasks from regular tasks so coverage bars span the full
+  // card width rather than sitting inside one narrow gender column.
+  // Deduplicate by taskLabel since both M and W sides carry identical records.
+  const mTasks = selectedTasks[mKey] || [];
+  const wTasks = selectedTasks[wKey] || [];
+  const mRegular = mTasks.filter(t => !t.isCoverage);
+  const wRegular = wTasks.filter(t => !t.isCoverage);
+  const rrCoverageTasks: NightSlotTask[] = [];
+  const seenCoverageLabels = new Set<string>();
+  for (const t of [...mTasks, ...wTasks]) {
+    if (t.isCoverage && !seenCoverageLabels.has(t.taskLabel)) {
+      seenCoverageLabels.add(t.taskLabel);
+      rrCoverageTasks.push(t);
+    }
+  }
+
   return (
     <div
       onPointerMove={handleSpotlightMove}
@@ -1067,7 +1179,7 @@ const RRCard: React.FC<RRCardProps> = ({
             slotKey={mKey}
             label="MEN&rsquo;S"
             assignment={assignments[mKey]}
-            tasks={selectedTasks[mKey]}
+            tasks={mRegular}
             setBreakGroupForSlot={setBreakGroupForSlot}
             onClick={onGenderClick}
             loading={loading}
@@ -1079,7 +1191,7 @@ const RRCard: React.FC<RRCardProps> = ({
             slotKey={wKey}
             label="WOMEN’S"
             assignment={assignments[wKey]}
-            tasks={selectedTasks[wKey]}
+            tasks={wRegular}
             setBreakGroupForSlot={setBreakGroupForSlot}
             onClick={onGenderClick}
             loading={loading}
@@ -1089,6 +1201,10 @@ const RRCard: React.FC<RRCardProps> = ({
           />
         </div>
       </div>
+      {/* Coverage bars span the full RR card width — deduplicated across M+W sides */}
+      {rrCoverageTasks.map(t => (
+        <CoverageBar key={t.id} task={t} slotKey={mKey} onRemoveTask={onRemoveTask} />
+      ))}
     </div>
   );
 };
@@ -3852,6 +3968,7 @@ export default function ShiftBuilder() {
           catalogTaskId: catalogTask.id,
           sortOrder: catalogTask.sortOrder,
           color: null,
+          isCoverage: false,
         };
         persistAddTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask);
         return { ...prev, [uiKey]: [...existing, optimistic] };
@@ -5934,6 +6051,51 @@ export default function ShiftBuilder() {
             { tmId: v?.tmId, tmName: v?.tmName },
           ])
         )}
+        onAddCoverage={async (sourceKey: string, targetKey: string) => {
+          if (!nightId) { showToast("No active night selected", "error"); return; }
+
+          // Determine the accent color of the source card
+          const accentColor = getSlotAccentColor(sourceKey);
+
+          // Human-readable label for the slot being covered (shown in the bar)
+          const targetLabel = getSlotCoverageLabel(targetKey);
+
+          // For RR sources, expand to both M and W so the bar spans the full card
+          const sourceKeys = expandCoverageToKeys(sourceKey);
+
+          try {
+            // Only write the bar on the SOURCE card(s) — the covering TM's card
+            // shows "And Restroom 7" or "And Zone 3"; the covered card stays clean.
+            // For RR sources, write to both M and W sides so the bar spans the full card.
+            for (const sk of sourceKeys) {
+              const { slot_key, slot_type, rr_side } = uiToDb(sk);
+              await addNightSlotTask({
+                nightId,
+                slotKey: slot_key,
+                slotType: slot_type,
+                rrSide: rr_side,
+                taskLabel: `And ${targetLabel}`,
+                isCoverage: true,
+                color: accentColor,
+                sortOrder: 99,
+              });
+            }
+
+            // Refresh selectedTasks
+            const fresh = await getNightSlotTasks(nightId);
+            const byKey: Record<string, NightSlotTask[]> = {};
+            for (const t of fresh) {
+              const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+              if (!byKey[uiKey]) byKey[uiKey] = [];
+              byKey[uiKey].push(t);
+            }
+            setSelectedTasks(byKey);
+            showToast(`Coverage added: And ${targetLabel}`, "success");
+          } catch (e) {
+            console.error('[ShiftBuilder] addCoverage failed:', e);
+            showToast("Failed to add coverage", "error");
+          }
+        }}
       />
 
       <SudoWindow

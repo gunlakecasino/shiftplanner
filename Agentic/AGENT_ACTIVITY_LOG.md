@@ -6,6 +6,27 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Coverage command in palette (TM covering two slots) + supporting UI
+
+**Context**: User said "Commit and push all again" after implementing the new Coverage flow.
+
+**Major addition**:
+- New "Add Coverage" action in Command Palette (hotword `coverage` or via Actions group).
+- Two-step flow: pick source card → pick target slot the TM will also cover.
+- Special handling for RR pairs (MRR + WRR both get the coverage bar).
+- New `CoverageBar` component rendered at bottom of Zone/RR cards showing the coverage label (colored by source).
+- `isCoverage` flag on NightSlotTask to separate normal tasks from coverage bars.
+- `onAddCoverage` prop wired from ShiftBuilderClient through to CommandPalette.
+- New helper functions in data layer and slot-key utilities for coverage.
+
+**Why**: Operators often need one TM to cover two adjacent areas (e.g. Zone 3 + Zone 4, or a pair of restrooms). This gives a clean visual + data model for it without duplicating the TM assignment.
+
+**Files changed**: CommandPalette.tsx (big flow + UI), ShiftBuilderClient.tsx (rendering + persistence), data.ts, useCommandActions.tsx.
+
+**Status**: Feature complete enough for commit. Clean selective staging only.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Dark mode hardening on Break Sheet header + overlap type fix
 
 **Context**: User said "Commit and push all again".
