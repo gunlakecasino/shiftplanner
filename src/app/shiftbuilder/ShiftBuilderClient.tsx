@@ -706,6 +706,8 @@ const TaskRow: React.FC<TaskRowProps> = ({
   const [isColorExpanded, setIsColorExpanded] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState('');
+  // Touch devices have no hover — a tap on the row pins/unpins the toolbar.
+  const [toolbarPinned, setToolbarPinned] = React.useState(false);
 
   // dnd-kit support for dragging this task to a different card (when the
   // Sudo > Tasks tab has the feature enabled).
@@ -746,6 +748,14 @@ const TaskRow: React.FC<TaskRowProps> = ({
   return (
     <div
       className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
+      onPointerUp={(e) => {
+        // Touch tap on a task row: pin/unpin the toolbar instead of opening
+        // the card palette. stopPropagation prevents the card onClick from firing.
+        if (e.pointerType === 'touch') {
+          e.stopPropagation();
+          setToolbarPinned((p) => !p);
+        }
+      }}
     >
       {effectiveDraggable && (
         <div
@@ -794,7 +804,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
       {/* Compact hover toolbar — collapsed by default for maximum density.
           Color control can be clicked to expand the full palette. */}
       {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
-        <div className="absolute right-0.5 top-0.5 hidden group-hover/task:flex items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10">
+        <div className={`absolute right-0.5 top-0.5 items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10 ${toolbarPinned ? 'flex' : 'hidden group-hover/task:flex'}`}>
           {/* Color control — collapsed until clicked */}
           {onSetTaskColor && (
             <>
@@ -869,6 +879,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                setToolbarPinned(false);
                 onRemoveTask(slotKey, task.taskLabel);
               }}
               className="text-red-400 hover:text-red-500 text-[12px] leading-none font-bold"

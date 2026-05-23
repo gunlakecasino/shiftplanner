@@ -6,6 +6,25 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Touch toolbar pinning + robust ADP import (auto-create nights/weeks)
+
+**Context**: User said "commit and push now" after further refinements.
+
+**Changes**:
+- `ShiftBuilderClient.tsx`:
+  - Task rows now support touch devices: tap on a task row pins/unpins the hover toolbar (since no hover exists on touch).
+  - `toolbarPinned` state + onPointerUp handler (only for pointerType === 'touch').
+  - Auto-hides toolbar on remove when pinned.
+- `SchedulesTab.tsx`:
+  - Schedule upload now intelligently determines `week_ending` by actually parsing the XLSX date columns (via parseWorkbook) instead of fragile filename regex. Falls back to filename heuristic only on parse failure. Much more reliable for real ADP exports.
+- `sudoActions.ts`:
+  - New `ensureNightsExist()` + shift-week helpers (Grave weeks are Fri–Thu, correct day_num/page_num).
+  - `upsertNightTmStatusBatch` now auto-creates any missing `nights` (and parent `weeks`) for dates coming from an ADP import before doing the batch upsert. Prevents silent failures when importing a fresh schedule.
+
+**Status**: Important robustness and mobile usability improvements. Only real source + log staged.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Coverage command in palette (TM covering two slots) + supporting UI
 
 **Context**: User said "Commit and push all again" after implementing the new Coverage flow.

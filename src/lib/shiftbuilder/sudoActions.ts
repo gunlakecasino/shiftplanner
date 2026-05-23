@@ -32,6 +32,97 @@ export interface NightStatusUpsertResult {
  *
  * Uses upsert on (night_id, tm_id) so re-running the import is idempotent.
  */
+// ---------------------------------------------------------------------------
+// Shift-week helpers (server-side, UTC-safe for ISO date strings)
+// Grave shift weeks run Friday → Thursday.
+// ---------------------------------------------------------------------------
+const DAY_NAMES_UTC = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * day_num / page_num within a shift week: Friday=1 … Thursday=7.
+ * Formula: ((dow + 2) % 7) + 1, where dow = getUTCDay() (0=Sun … 6=Sat).
+ */
+function shiftDayNum(dow: number): number {
+  return ((dow + 2) % 7) + 1;
+}
+
+function shiftWeekEnding(iso: string): string {
+  const d = new Date(iso + 'T12:00:00Z');
+  const dow = d.getUTCDay();
+  const daysSinceFri = (dow + 2) % 7;
+  const end = new Date(d);
+  end.setUTCDate(d.getUTCDate() - daysSinceFri + 6);
+  return end.toISOString().slice(0, 10);
+}
+
+/**
+ * For each ISO date in `dates`, ensure a `nights` row exists.
+ * Creates the parent `weeks` row if needed (Fri–Thu window).
+ * Safe to call with dates that already have nights — they'll be skipped.
+ */
+async function ensureNightsExist(dates: string[]): Promise<void> {
+  if (dates.length === 0) return;
+
+  // Group dates by their shift week_ending
+  const byWeek = new Map<string, { weekEnding: string; dates: string[] }>();
+  for (const iso of dates) {
+    const weekEnding = shiftWeekEnding(iso);
+    if (!byWeek.has(weekEnding)) {
+      byWeek.set(weekEnding, { weekEnding, dates: [] });
+    }
+    byWeek.get(weekEnding)!.dates.push(iso);
+  }
+
+  for (const { weekEnding, dates: weekDates } of byWeek.values()) {
+    // Find or create the weeks row (weeks table has: week_ending, label, status, schedule_path)
+    let weekId: string | null = null;
+    {
+      const { data: existing } = await supabase
+        .from('weeks')
+        .select('id')
+        .eq('week_ending', weekEnding)
+        .maybeSingle();
+      weekId = (existing as any)?.id ?? null;
+    }
+    if (!weekId) {
+      const { data: newWeek, error: wErr } = await supabase
+        .from('weeks')
+        .insert({ week_ending: weekEnding, label: `Week ending ${weekEnding}`, status: 'draft' })
+        .select('id')
+        .single();
+      if (wErr || !newWeek) {
+        console.warn(`[ensureNightsExist] couldn't create week ${weekEnding}:`, wErr?.message);
+        continue;
+      }
+      weekId = (newWeek as any).id;
+    }
+
+    // Create nights for any dates in this week that are missing.
+    // nights requires: week_id, night_date, day_name, day_num, page_num (all NOT NULL).
+    for (const iso of weekDates) {
+      const d = new Date(iso + 'T12:00:00Z');
+      const dow = d.getUTCDay();
+      const dayName = DAY_NAMES_UTC[dow];
+      const dayNum = shiftDayNum(dow); // Fri=1 … Thu=7
+      const { error: nErr } = await supabase
+        .from('nights')
+        .insert({
+          week_id: weekId,
+          night_date: iso,
+          day_name: dayName,
+          day_num: dayNum,
+          page_num: dayNum, // matches existing pattern: page_num === day_num
+          status: 'draft',
+          is_locked: false,
+        });
+      // Ignore unique-constraint errors — night already exists
+      if (nErr && !nErr.message.includes('duplicate') && !nErr.message.includes('unique')) {
+        console.warn(`[ensureNightsExist] couldn't create night ${iso}:`, nErr.message);
+      }
+    }
+  }
+}
+
 export async function upsertNightTmStatusBatch(
   upserts: NightStatusUpsert[]
 ): Promise<NightStatusUpsertResult> {
@@ -53,10 +144,23 @@ export async function upsertNightTmStatusBatch(
     dateToNightId.set(String(r.night_date), String(r.id));
   });
 
+  // Auto-create nights (and parent weeks) for any dates not yet in the DB,
+  // then re-resolve them so the upsert below can write all rows.
   const unresolvedDates = distinctDates.filter((d) => !dateToNightId.has(d));
+  if (unresolvedDates.length > 0) {
+    await ensureNightsExist(unresolvedDates);
+    // Re-fetch the newly created nights
+    const { data: newNightRows } = await supabase
+      .from("nights")
+      .select("id, night_date")
+      .in("night_date", unresolvedDates);
+    (newNightRows ?? []).forEach((r: any) => {
+      dateToNightId.set(String(r.night_date), String(r.id));
+    });
+  }
 
-  // Build the row payload — skip rows for nights we couldn't resolve.
-  // Also dedupe by (night_id, tm_id) — Postgres rejects an upsert that
+  // Build the row payload.
+  // Dedupe by (night_id, tm_id) — Postgres rejects an upsert that
   // tries to affect the same row twice in a single statement, and ADP
   // exports occasionally have the same TM on two lines that both
   // fuzzy-match to the same tm_id.

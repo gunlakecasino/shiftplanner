@@ -346,20 +346,34 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
             onUpload={async (file) => {
               setBusy("__upload__");
               try {
-                const blob = new Blob([await file.arrayBuffer()], { type: file.type });
-                await uploadScheduleFile(file.name, blob);
-                // Try to infer week_ending from the filename — best effort
-                const m =
-                  file.name.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})/) ??
-                  file.name.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+                const arrayBuffer = await file.arrayBuffer();
+                const blob = new Blob([arrayBuffer], { type: file.type });
+
+                // Determine week_ending from the XLSX date range, not the filename.
+                // parseWorkbook with an empty roster is cheap and gives us dateColumns.
                 let weekEnding = new Date().toISOString().slice(0, 10);
-                if (m) {
-                  // both formats handled by Date constructor below
-                  const parsed = new Date(m[0].replace(/-/g, "/"));
-                  if (!isNaN(parsed.getTime())) {
-                    weekEnding = parsed.toISOString().slice(0, 10);
+                try {
+                  const wb = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
+                  const quickParsed = parseWorkbook(wb, file.name, []);
+                  if (quickParsed.dateColumns.length > 0) {
+                    // Last date in the schedule is the canonical week_ending
+                    weekEnding = quickParsed.dateColumns[quickParsed.dateColumns.length - 1].iso;
+                  }
+                } catch (parseErr) {
+                  // Parsing failed — fall back to filename heuristic
+                  console.warn("[upload] XLSX date parse failed, falling back to filename", parseErr);
+                  const m =
+                    file.name.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})/) ??
+                    file.name.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+                  if (m) {
+                    const parsed = new Date(m[0].replace(/-/g, "/"));
+                    if (!isNaN(parsed.getTime())) {
+                      weekEnding = parsed.toISOString().slice(0, 10);
+                    }
                   }
                 }
+
+                await uploadScheduleFile(file.name, blob);
                 await linkScheduleToWeek({
                   weekEnding,
                   schedulePath: file.name,
