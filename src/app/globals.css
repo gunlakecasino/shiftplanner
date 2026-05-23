@@ -758,6 +758,163 @@ body {
   border-color: #A1A1A6 !important;
 }
 
+/* ==========================================================================
+   DARK MODE — Dim/charcoal palette. Casino floor, low-light operational.
+   Applied when <html> has the `.dark` class (set by no-flash script + toggle).
+   The print artboard is kept white in @media print regardless of this class.
+   ========================================================================== */
+
+/* ── Canvas / paper surface ── */
+.dark .print-artboard {
+  background: #2C2C2E;
+  box-shadow:
+    0 0 0 1px #3A3A3C,
+    0 25px 80px -20px rgba(0, 0, 0, 0.55),
+    0 12px 32px -10px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Sheet header & date elements ── */
+.dark .sheet-header {
+  border-bottom-color: #3A3A3C;
+}
+.dark .sheet-date-num {
+  color: #F2F2F4;
+}
+.dark .sheet-date-label {
+  color: #D1D1D6;
+}
+.dark .sheet-shift-meta {
+  color: #8E8E93;
+}
+.dark .sheet-section-header .label {
+  color: #8E8E93;
+}
+.dark .sheet-section-header .divider {
+  background: #3A3A3C;
+}
+.dark .sheet-section-header .count {
+  color: #8E8E93;
+}
+
+/* ── Assignment cards ── */
+.dark .assignment-card {
+  background: #3A3A3C;
+  border-color: #52525A;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  color: #F2F2F4;
+}
+/* Spotlight blend-mode flips to screen so the accent glow is additive on dark */
+.dark .assignment-card::before {
+  mix-blend-mode: screen;
+}
+.dark .assignment-card:hover {
+  border-color: color-mix(in srgb, var(--card-accent) 65%, #52525A);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 8px 20px -6px color-mix(in srgb, var(--card-accent) 30%, transparent);
+}
+.dark .assignment-card.empty {
+  background: #2C2C2E;
+  border-color: #48484A;
+}
+.dark .assignment-card.empty:hover {
+  background: #323234;
+  border-color: #5A5A5E;
+}
+.dark .assignment-card.drop-target-active,
+.dark .drop-target-active {
+  background: #1A2A44 !important;
+  border-color: #0A84FF !important;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.3), 0 0 10px -4px rgba(10, 132, 255, 0.4) !important;
+}
+
+/* ── Card inner header & name ── */
+.dark .card-header {
+  background: #3A3A3C;
+  border-bottom-color: #48484A;
+}
+.dark .card-name {
+  color: #F2F2F4;
+}
+.dark .card-name.empty {
+  color: #8E8E93;
+}
+.dark .card-subtext {
+  color: #AEAEB2;
+}
+.dark .card-subtext::before {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 10px,
+    #48484A 10px,
+    #48484A 11px
+  );
+}
+
+/* ── Restroom cards ── */
+.dark .rr-pair-grid {
+  background: #2C2C2E;
+}
+.dark .rr-gender {
+  background: #3A3A3C;
+  border-right-color: #48484A;
+}
+.dark .rr-gender-label {
+  color: #8E8E93;
+}
+.dark .rr-gender-name {
+  color: #F2F2F4;
+}
+.dark .rr-gender-sub {
+  color: #8E8E93;
+}
+
+/* ── Sheet footer ── */
+.dark .sheet-footer {
+  border-top-color: #3A3A3C;
+  color: #6C6C72;
+}
+
+/* ── Notes pad ── */
+.dark .notes-pad {
+  background-color: #1C1C1E;
+  color: #D1D1D6;
+  caret-color: #D1D1D6;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 21px,
+    #3A3A3C 21px,
+    #3A3A3C 22px
+  );
+  background-position: 0 6px;
+}
+
+/* ── Roster drop zone ── */
+.dark .roster-drop-active {
+  background: #3A1A1A !important;
+  box-shadow: inset 0 0 0 2px rgba(255, 59, 48, 0.3);
+}
+
+/* ── Break badge (dark background badge) ── */
+.dark .card-badge {
+  background: #F2F2F4;
+  color: #1C1C1E;
+}
+
+/* ── Card meta overlay ── */
+.dark .card-meta {
+  background: rgba(30, 30, 32, 0.9);
+  color: #FF9F0A;
+}
+
+/* ── Drag preview ── */
+.dark .drag-preview {
+  background: #3A3A3C;
+  border-color: #0A84FF;
+}
+
 /* Ghost-text suggestion bar fade-in */
 @keyframes fadeInDown {
   from {

@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-05-22 ~22:30 UTC — by Claude Sonnet 4.6 after shipping iPad + Apple Pencil Pro 2 fix suite (5 fixes)
+**Last Updated**: 2026-05-23 ~04:30 UTC — by Claude Sonnet 4.6 after shipping dark mode (system + manual toggle, dim/charcoal)
 **Status**: Active / In Progress  
 **Current Epic**: Wave 2 follow-ups + Wave 3 architecture from ATTACK_PLAN_2026-05-22.md
 
@@ -86,9 +86,16 @@ All new implementation plans will be placed in `Plans/active/` and archived when
 - ✅ **Fix D**: `usePencilHover` hook → gold ring (`ring-[#FFD60A]`) on pen hover for all card types
 - ✅ **Fix E**: Barrel button (`pointerType=pen, button===2`) on all cards → opens ⌘K for that slot
 
+### ✅ Done — Dark Mode (Session 3):
+- ✅ **`layout.tsx`**: No-flash `<head>` script + `dark:` body classes
+- ✅ **`globals.css`**: Full `.dark` component override block (artboard, cards, RRs, header, footer, notes)
+- ✅ **`ShiftBuilderClient.tsx`**: `isDark` state, `toggleTheme`, sun/moon toggle in zoom chip, all structural `dark:` variants on floating chips, roster panel, canvas stage, status pill
+- ✅ **Long-hover delay**: 3500ms (per user — "3s4c, 600ms is far too quick")
+
 ### Now (Wave 2 remaining + Wave 3):
 - Fix `useShiftHistory` hook identity (causing excessive re-renders on every action).
 - Architecture evolution: slot-keys centralization, placement engine refactor (Wave 3).
+- Optional: tune card task text readability in dark mode (`.card-meta` amber is very subtle).
 
 **If you are an AI reading this for the first time**: Read `Plans/active/ATTACK_PLAN_2026-05-22.md` for the full roadmap. The log has the complete session history. Ask Brian what to tackle next.
 

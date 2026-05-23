@@ -39,7 +39,16 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${atkinson.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#F8F8F9] text-[#1C1C1E] dark:bg-[#0A0A0B] dark:text-[#F2F2F4]">
+      {/* Runs before React hydration — prevents flash of wrong theme on load.
+          Reads localStorage('oms-theme') first; falls back to system preference. */}
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('oms-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&s)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className="min-h-full bg-[#F8F8F9] text-[#1C1C1E] dark:bg-[#111113] dark:text-[#F2F2F4]">
         {children}
       </body>
     </html>

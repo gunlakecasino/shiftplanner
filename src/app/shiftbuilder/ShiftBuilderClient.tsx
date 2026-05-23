@@ -389,7 +389,7 @@ const AssignmentLine: React.FC<{ tmName?: string | null; placeholder?: string; s
     );
   }
   return (
-    <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[#111]" : "text-[#C8C8CC]"}`}>
+    <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[#111] dark:text-[#F2F2F4]" : "text-[#C8C8CC] dark:text-[#48484A]"}`}>
       {isLocked && tmName && (
         <svg width={size === "sm" ? 8 : 10} height={size === "sm" ? 8 : 10} viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
           <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
@@ -452,7 +452,7 @@ function useSlotDnd(slotKey: string, slotType: "zone" | "rr" | "aux" | "overlap"
 // the pending palette-open when the user makes contact instead of hovering.
 function usePencilHover(
   onLongHover?: (el: HTMLElement) => void,
-  longHoverDelay = 600,
+  longHoverDelay = 3500,
 ) {
   const [isPenHovering, setIsPenHovering] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -591,7 +591,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
         ) : isDraftMode && draftInfo ? (
           <div className="flex flex-col min-w-0">
             <span
-              className="font-bold tracking-[-0.3px] text-[#111] truncate"
+              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 18, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {draftInfo.proposedTmName}
@@ -613,7 +613,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
               </svg>
             )}
             <span
-              className="font-bold tracking-[-0.3px] text-[#111] truncate"
+              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 20, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {a.tmName}
@@ -667,7 +667,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
   onSetTaskColor,
   onEditTask,
   textSize = "text-[11px]",
-  textColorClass = "text-[#374151]",
+  textColorClass = "text-[#374151] dark:text-[#C7C7CC]",
   draggable = false,
 }) => {
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
@@ -726,7 +726,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
 
   return (
     <div
-      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 ${textSize} ${textColorClass}`}
+      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
     >
       {effectiveDraggable && (
         <div
@@ -754,7 +754,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
               if (e.key === 'Enter') saveEdit();
               if (e.key === 'Escape') cancelEdit();
             }}
-            className="w-full bg-white border border-[#007AFF]/40 rounded px-1 py-0.5 text-inherit focus:outline-none"
+            className="w-full bg-white dark:bg-[#2C2C2E] border border-[#007AFF]/40 rounded px-1 py-0.5 text-inherit focus:outline-none"
             autoFocus
           />
         ) : (
@@ -775,7 +775,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
       {/* Compact hover toolbar — collapsed by default for maximum density.
           Color control can be clicked to expand the full palette. */}
       {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
-        <div className="absolute right-0.5 top-0.5 hidden group-hover/task:flex items-center gap-1 bg-white/95 rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 z-10">
+        <div className="absolute right-0.5 top-0.5 hidden group-hover/task:flex items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10">
           {/* Color control — collapsed until clicked */}
           {onSetTaskColor && (
             <>
@@ -877,7 +877,7 @@ const ZoneTaskList: React.FC<{
   taskDragEnabled?: boolean;
 }> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
-  const textColor = hasTM ? "text-[#374151]" : "text-[#6B7280]";
+  const textColor = hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
   return (
     <div
       className={`mt-auto pt-1 text-[11px] leading-tight ${textColor}`}
@@ -974,7 +974,7 @@ const RRSide: React.FC<{
               </svg>
             )}
             <span
-              className="font-bold tracking-[-0.2px] text-[#111] truncate"
+              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {a.tmName}
@@ -1001,7 +1001,7 @@ const RRSide: React.FC<{
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
               textSize="text-[9.5px]"
-              textColorClass={hasTM ? "text-[#374151]" : "text-[#6B7280]"}
+              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
             />
           ))}
         </div>
@@ -1182,7 +1182,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
         ) : isDraftMode && draftInfo ? (
           <div className="flex flex-col min-w-0">
             <span
-              className="font-bold tracking-[-0.2px] text-[#111] truncate"
+              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {draftInfo.proposedTmName}
@@ -1199,7 +1199,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
         ) : isDraftMode && draftInfo ? (
           <div className="flex flex-col min-w-0">
             <span
-              className="font-bold tracking-[-0.2px] text-[#111] truncate"
+              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {draftInfo.proposedTmName}
@@ -1221,7 +1221,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
               </svg>
             )}
             <span
-              className="font-bold tracking-[-0.2px] text-[#111] truncate"
+              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
               style={{ fontSize: 18, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
             >
               {a.tmName}
@@ -1560,7 +1560,7 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
             </svg>
           )}
           <span
-            className="font-bold tracking-[-0.2px] text-[#111] truncate"
+            className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
             style={{ fontSize: 12, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
           >
             {a.tmName}
@@ -1588,7 +1588,7 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
               textSize="text-[9px]"
-              textColorClass={hasTM ? "text-[#374151]" : "text-[#6B7280]"}
+              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
             />
           ))}
         </div>
@@ -1860,6 +1860,32 @@ export default function ShiftBuilder() {
   // the first client paint, so SSR output is stable and hydration succeeds.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // === Dark mode state ======================================================
+  // Syncs with <html class="dark"> which is set by the no-flash inline script
+  // in layout.tsx before hydration. Manual toggle writes to localStorage and
+  // also listens for system prefers-color-scheme changes.
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    // Read the state the no-flash script already applied
+    setIsDark(document.documentElement.classList.contains("dark"));
+    // Watch system preference changes — only apply if user hasn't overridden
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem("oms-theme")) {
+        document.documentElement.classList.toggle("dark", e.matches);
+        setIsDark(e.matches);
+      }
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  const toggleTheme = useCallback(() => {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("oms-theme", next ? "dark" : "light");
+  }, [isDark]);
 
   // Roster: "Other TMs" (not on schedule for this night) is collapsed by
   // default to keep the panel focused on TMs the operator actually has to
@@ -3945,14 +3971,14 @@ export default function ShiftBuilder() {
   );
 
   return (
-    <div className="h-screen flex flex-col bg-[#F8F8F9] text-[#1C1C1E] overflow-hidden relative">
+    <div className="h-screen flex flex-col bg-[#F8F8F9] text-[#1C1C1E] dark:bg-[#111113] dark:text-[#F2F2F4] overflow-hidden relative">
       {/* === Floating brand chip — replaces the sticky header. Top-left,
           identity-only. The roster panel sits below it (starts at top-14)
           so the two never overlap. */}
       <div
-        className="fixed top-3 left-3 z-40 flex items-center gap-2 px-3 h-9 rounded-full border border-white/60 shadow-lg shadow-black/10"
+        className="fixed top-3 left-3 z-40 flex items-center gap-2 px-3 h-9 rounded-full border border-white/60 dark:border-white/10 shadow-lg shadow-black/10"
         style={{
-          background: "rgba(255,255,255,0.85)",
+          background: isDark ? "rgba(44,44,46,0.92)" : "rgba(255,255,255,0.85)",
           backdropFilter: "blur(20px) saturate(160%)",
           WebkitBackdropFilter: "blur(20px) saturate(160%)",
         }}
@@ -3960,23 +3986,23 @@ export default function ShiftBuilder() {
         <div className="w-5 h-5 rounded-md bg-black flex items-center justify-center">
           <span className="text-white text-[10px] font-semibold tracking-[-0.5px]">Z</span>
         </div>
-        <div className="text-[12.5px] font-semibold tracking-[-0.2px]">ZDS Forge</div>
-        <span className="text-[#C8C8CC] mx-0.5">·</span>
-        <div className="text-[11.5px] text-[#6B7280]">Shift Planner</div>
+        <div className="text-[12.5px] font-semibold tracking-[-0.2px] dark:text-[#F2F2F4]">ZDS Forge</div>
+        <span className="text-[#C8C8CC] dark:text-[#48484A] mx-0.5">·</span>
+        <div className="text-[11.5px] text-[#6B7280] dark:text-[#8E8E93]">Shift Planner</div>
       </div>
 
       {/* === Floating zoom chip — replaces the inline zoom selector. Top-right.
           Operator's only inline "view state" control; everything else lives in
           the command palette (Cmd+K) or the bottom pill cluster. */}
       <div
-        className="fixed top-3 right-3 z-40 flex items-center gap-1.5 h-9 px-3 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[12.5px] text-[#1C1C1E]"
+        className="fixed top-3 right-3 z-40 flex items-center gap-1.5 h-9 px-3 rounded-full border border-white/60 dark:border-white/10 shadow-lg shadow-black/10 text-[12.5px] text-[#1C1C1E] dark:text-[#F2F2F4]"
         style={{
-          background: "rgba(255,255,255,0.85)",
+          background: isDark ? "rgba(44,44,46,0.92)" : "rgba(255,255,255,0.85)",
           backdropFilter: "blur(20px) saturate(160%)",
           WebkitBackdropFilter: "blur(20px) saturate(160%)",
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#6B7280]">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#6B7280] dark:text-[#8E8E93]">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
@@ -3986,7 +4012,7 @@ export default function ShiftBuilder() {
             const v = e.target.value;
             setZoomMode(v === "fit" ? "fit" : (Number(v) as 0.5 | 0.75 | 1 | 1.25));
           }}
-          className="bg-transparent outline-none border-none pr-0.5 cursor-pointer font-medium"
+          className="bg-transparent outline-none border-none pr-0.5 cursor-pointer font-medium dark:text-[#F2F2F4]"
           title="Zoom"
         >
           <option value="fit">{mounted && zoomMode === "fit" ? `Fit · ${Math.round(fitScale * 100)}%` : "Fit"}</option>
@@ -3995,6 +4021,35 @@ export default function ShiftBuilder() {
           <option value="1">100%</option>
           <option value="1.25">125%</option>
         </select>
+        {/* Divider */}
+        <span className="w-px h-4 bg-[#E5E5E7] dark:bg-[#3A3A3C] mx-0.5 flex-shrink-0" />
+        {/* Dark mode toggle — sun (light) / moon (dark) */}
+        <button
+          onClick={toggleTheme}
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          className="flex items-center justify-center w-6 h-6 rounded-full text-[#6B7280] dark:text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-[#F2F2F4] transition-colors"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {isDark ? (
+            /* Sun icon */
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          ) : (
+            /* Moon icon */
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
@@ -4014,11 +4069,12 @@ export default function ShiftBuilder() {
         */}
         <div
           aria-hidden={!rosterOpen}
-          className="fixed left-3 top-14 bottom-3 w-[280px] z-30 rounded-2xl border border-white/60 bg-white/80 shadow-2xl shadow-black/10 overflow-hidden flex flex-col"
+          className="fixed left-3 top-14 bottom-3 w-[280px] z-30 rounded-2xl border border-white/60 dark:border-white/10 shadow-2xl shadow-black/10 overflow-hidden flex flex-col"
           style={{
             // Genie-out origin: where the collapsed sphere sits (left edge,
             // vertically centered). Spring spec mirrors the day-pill cluster
             // for visual consistency.
+            background: isDark ? "rgba(36,36,38,0.95)" : "rgba(255,255,255,0.80)",
             transformOrigin: "0% 50%",
             transform: rosterOpen ? "scale(1)" : "scale(0.15)",
             opacity: rosterOpen ? 1 : 0,
@@ -4033,7 +4089,7 @@ export default function ShiftBuilder() {
           <button
             type="button"
             onClick={() => setRosterOpen(false)}
-            className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full hover:bg-black/5 active:bg-black/10 transition-colors flex items-center justify-center text-[#6B7280] hover:text-[#1C1C1E]"
+            className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:bg-black/10 dark:active:bg-white/15 transition-colors flex items-center justify-center text-[#6B7280] dark:text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-[#F2F2F4]"
             aria-label="Collapse roster"
             title="Collapse roster"
           >
@@ -4046,10 +4102,10 @@ export default function ShiftBuilder() {
           {/* Strategic GRAVE-first header. pt-4 + pr-10 leaves space for the
              floating-panel collapse chevron in the top-right corner. */}
           <div className="px-5 pt-4 pb-3 pr-10 flex-shrink-0">
-            <div className="text-[13px] font-semibold tracking-[0.6px] text-[#1C1C1E] uppercase" style={{ fontFamily: "var(--font-atkinson)" }}>
+            <div className="text-[13px] font-semibold tracking-[0.6px] text-[#1C1C1E] dark:text-[#F2F2F4] uppercase" style={{ fontFamily: "var(--font-atkinson)" }}>
               {graveOnly ? "GRAVE Available" : "Available Team Members"}
             </div>
-            <div className="text-[10px] text-[#6B7280] mt-0.5 tracking-[0.2px]">
+            <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5 tracking-[0.2px]">
               {graveOnly 
                 ? `11pm–6:55am eligible pool — ${graveRoster.length} TMs` 
                 : "All active TMs • Drag to any slot"}
@@ -4065,7 +4121,7 @@ export default function ShiftBuilder() {
                 value={rosterSearch}
                 onChange={(e) => setRosterSearch(e.target.value)}
                 placeholder={graveOnly ? "Search GRAVE pool…" : "Search team members…"}
-                className="w-full bg-white border border-[#E5E5E7] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#C7C7CC] transition-colors"
+                className="w-full bg-white dark:bg-[#2C2C2E] dark:text-[#F2F2F4] border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[#9CA3AF] dark:placeholder:text-[#636366] focus:outline-none focus:border-[#C7C7CC] dark:focus:border-[#636366] transition-colors"
                 style={{ fontFamily: "var(--font-geist-sans)" }}
               />
               <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
@@ -4077,23 +4133,23 @@ export default function ShiftBuilder() {
             </div>
 
             {/* Stronger GRAVE toggle — printed tool aesthetic, not subtle UI widget */}
-            <div className="flex border border-[#D1D1D6] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-white">
+            <div className="flex border border-[#D1D1D6] dark:border-[#3A3A3C] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-white dark:bg-[#2C2C2E]">
               <button
                 onClick={() => setGraveOnly(false)}
                 className={`flex-1 px-3 py-1.5 transition-all active:scale-[0.985] ${
                   !graveOnly
                     ? "bg-[#1C1C1E] text-white shadow-inner"
-                    : "text-[#3C3C43] hover:bg-[#F8F8F9]"
+                    : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
                 }`}
               >
                 All
               </button>
               <button
                 onClick={() => setGraveOnly(true)}
-                className={`flex-1 px-3 py-1.5 border-l border-[#D1D1D6] transition-all active:scale-[0.985] ${
+                className={`flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] transition-all active:scale-[0.985] ${
                   graveOnly
                     ? "bg-[#1C1C1E] text-white shadow-inner"
-                    : "text-[#3C3C43] hover:bg-[#F8F8F9]"
+                    : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
                 }`}
                 title="Only TMs with grave_pool availability for 11pm–6:55am"
               >
@@ -4830,7 +4886,7 @@ export default function ShiftBuilder() {
            actually painted, not the un-scaled layout box. */}
         <div
           ref={stageHostRef}
-          className="flex-1 overflow-auto bg-[#F2F2F4] flex items-center justify-center transition-[padding] duration-300"
+          className="flex-1 overflow-auto bg-[#F2F2F4] dark:bg-[#0D0D0F] flex items-center justify-center transition-[padding] duration-300"
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome:
@@ -5196,7 +5252,7 @@ export default function ShiftBuilder() {
                           return;
                         }
                       }}
-                      className={`notes-pad flex-1 min-h-0 outline-none border border-[#E5E5E7] bg-white ${
+                      className={`notes-pad flex-1 min-h-0 outline-none border border-[#E5E5E7] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] dark:text-[#D1D1D6] ${
                         (notesCompletion.ghostText || notesCompletion.isLoading)
                           ? "rounded-t-[3px] rounded-b-none"
                           : "rounded-[3px]"
@@ -5480,9 +5536,9 @@ export default function ShiftBuilder() {
         onClick={() => setControlsExpanded(v => !v)}
         aria-label={controlsExpanded ? "Collapse controls" : "Expand controls"}
         title={controlsExpanded ? "Collapse centered controls" : "Open controls (roster, refresh, print, day picker, calendar...)"}
-        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] w-14 h-14 rounded-full border border-white/60 shadow-2xl shadow-black/15 flex items-center justify-center text-[#1C1C1E] hover:scale-105 active:scale-95 transition-all"
+        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] w-14 h-14 rounded-full border border-white/60 dark:border-white/10 shadow-2xl shadow-black/15 flex items-center justify-center text-[#1C1C1E] dark:text-[#F2F2F4] hover:scale-105 active:scale-95 transition-all"
         style={{
-          background: "rgba(255,255,255,0.92)",
+          background: isDark ? "rgba(44,44,46,0.95)" : "rgba(255,255,255,0.92)",
           backdropFilter: "blur(24px) saturate(180%)",
           WebkitBackdropFilter: "blur(24px) saturate(180%)",
           opacity: rosterOpen ? 0.3 : 1,
@@ -5508,8 +5564,9 @@ export default function ShiftBuilder() {
       {controlsExpanded && !rosterOpen && (
         <div
           id="centered-controls-cluster"
-          className="fixed bottom-[78px] left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-3xl border border-white/70 bg-white/95 p-2 shadow-2xl shadow-black/10 backdrop-blur-xl transition-all"
+          className="fixed bottom-[78px] left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-3xl border border-white/70 dark:border-white/10 p-2 shadow-2xl shadow-black/10 backdrop-blur-xl transition-all"
           style={{
+            background: isDark ? "rgba(44,44,46,0.97)" : "rgba(255,255,255,0.95)",
             transform: "translateX(-50%) scale(1)",
             opacity: 1,
           }}
@@ -5518,7 +5575,7 @@ export default function ShiftBuilder() {
           {/* Roster button inside the drawer — opens the left roster panel */}
           <button
             onClick={() => { setRosterOpen(true); setControlsExpanded(false); }}
-            className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95"
+            className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95"
             title="Open roster"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C1C1E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -5530,7 +5587,7 @@ export default function ShiftBuilder() {
           </button>
 
           {/* Refresh */}
-          <button onClick={() => window.location.reload()} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Refresh (remembers day & view)">
+          <button onClick={() => window.location.reload()} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Refresh (remembers day & view)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
           </button>
 
@@ -5538,22 +5595,22 @@ export default function ShiftBuilder() {
           <button onClick={() => {
             const isMac = navigator.platform.toUpperCase().includes('MAC');
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: isMac, ctrlKey: !isMac, bubbles: true }));
-          }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Command Palette (⌘K)">
+          }} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Command Palette (⌘K)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
           </button>
 
           {/* Print */}
-          <button onClick={() => handlePrintBothPages()} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Print both pages">
+          <button onClick={() => handlePrintBothPages()} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Print both pages">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
           </button>
 
           {/* Day arrows — cross GRAVE week boundaries (Thu → next Fri, etc.)
               w-11 h-11 = 44×44px satisfies Apple HIG minimum touch target. */}
-          <button onClick={goPrevDay} className="w-11 h-11 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95 text-base" title="Previous day">‹</button>
-          <button onClick={goNextDay} className="w-11 h-11 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95 text-base" title="Next day">›</button>
+          <button onClick={goPrevDay} className="w-11 h-11 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] dark:text-[#F2F2F4] hover:bg-white dark:hover:bg-[#48484A] active:scale-95 text-base" title="Previous day">‹</button>
+          <button onClick={goNextDay} className="w-11 h-11 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] dark:text-[#F2F2F4] hover:bg-white dark:hover:bg-[#48484A] active:scale-95 text-base" title="Next day">›</button>
 
           {/* Calendar */}
-          <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 shadow flex items-center justify-center bg-white/90 hover:bg-white active:scale-95" title="Calendar — pick any day">
+          <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Calendar — pick any day">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
           </button>
 
@@ -5586,9 +5643,9 @@ export default function ShiftBuilder() {
         }
         return (
           <div
-            className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-4 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93]"
+            className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-4 rounded-full border border-white/60 dark:border-white/10 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93] dark:text-[#636366]"
             style={{
-              background: "rgba(255,255,255,0.85)",
+              background: isDark ? "rgba(44,44,46,0.92)" : "rgba(255,255,255,0.85)",
               backdropFilter: "blur(20px) saturate(160%)",
               WebkitBackdropFilter: "blur(20px) saturate(160%)",
             }}
@@ -5600,10 +5657,10 @@ export default function ShiftBuilder() {
                 aria-hidden="true"
               />
               <span className="font-medium">{isDraftMode ? "Draft" : "Live"}</span>
-              <span className="text-[#C8C8CC]">·</span>
+              <span className="text-[#C8C8CC] dark:text-[#3A3A3C]">·</span>
               <span>{savedAgo}</span>
             </div>
-            <span className="text-[#C8C8CC]">|</span>
+            <span className="text-[#C8C8CC] dark:text-[#3A3A3C]">|</span>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#34C759]" aria-hidden="true" />
               <span>Engine ready</span>

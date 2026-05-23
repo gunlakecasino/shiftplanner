@@ -6,6 +6,71 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Dark mode completion + long-hover delay + full UI coverage (review & push)
+
+**Context**: User said "review and push again" after local dark mode work on top of the previous Pencil long-hover push (`6e8a249`).
+
+**Changes reviewed & shipped**:
+- `src/app/layout.tsx`: Added no-flash `<head>` script (reads `localStorage('oms-theme')` + system preference before hydration). Body dark classes aligned to #111113.
+- `src/app/globals.css`: Large `.dark` block completed (artboard, cards, RR sides, headers, notes, roster drop zones, meta overlays, drag preview, etc.). Casino-floor low-light aesthetic.
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx`:
+  - Full `isDark` + `toggleTheme()` with localStorage persistence + system listener.
+  - Sun/moon toggle button added to the floating zoom chip (top-right).
+  - Hundreds of targeted `dark:` Tailwind variants across brand chip, roster panel, GRAVE toggle, search, cards, task rows, status elements.
+  - Long-hover delay raised from 600ms → 3500ms (user: "3s4c, 600ms is far too quick").
+- `Agentic/THIS_IS_WHAT_WE_ARE_DOING.md`: Updated last-updated + added Dark Mode and delay notes.
+
+**Review notes**:
+- No-flash script is correctly placed and minimal.
+- Dark palette is consistent and respects the printed artboard (print styles remain white).
+- Toggle placement in the zoom chip is good operator UX.
+- 3500ms long-hover is intentional per explicit feedback (prevents accidental palette opens while drawing with Pencil).
+
+**Status**: ✅ Clean, high-signal, production-ready. Only 5 files touched.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 — Dark Mode implementation (system + manual toggle)
+
+**Context**: Session 3 — resumed from context compaction mid-dark-mode work. All iPad/Pencil fixes already shipped. Picked up exactly where the last session left off.
+
+**Files changed**:
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx` — major dark mode wiring
+- `src/app/layout.tsx` — no-flash `<head>` script + body dark: classes (completed in prior session)
+- `src/app/globals.css` — full `.dark` component override block (completed in prior session)
+
+**What was implemented**:
+
+**`layout.tsx`** (prior session):
+- Inline script in `<head>` reads `localStorage('oms-theme')` before React hydration — prevents flash of wrong theme on load
+- Body: `dark:bg-[#111113] dark:text-[#F2F2F4]`
+
+**`globals.css`** (prior session):
+- Full `.dark` override block: `.dark .print-artboard`, `.dark .assignment-card`, `.dark .assignment-card::before` (`mix-blend-mode: screen` for glow on dark bg), `.dark .card-header`, `.dark .rr-pair-grid`, `.dark .rr-gender*`, `.dark .sheet-date-num`, `.dark .sheet-footer`, `.dark .notes-pad`, `.dark .roster-drop-active`, `.dark .card-badge`, `.dark .card-meta`, `.dark .drag-preview`
+
+**`ShiftBuilderClient.tsx`** (this session):
+- `isDark` state + system-preference MediaQueryList listener + `toggleTheme` callback with `localStorage` persistence
+- **Dark mode toggle button** added to floating zoom chip (top-right): moon icon → click → sun icon, fires `toggleTheme`
+- **Structural `dark:` Tailwind variants**:
+  - Outer wrapper: `dark:bg-[#111113] dark:text-[#F2F2F4]`
+  - Canvas stage: `dark:bg-[#0D0D0F]`
+  - Brand chip (top-left): `dark:border-white/10`, `isDark` inline background
+  - Zoom chip (top-right): `dark:border-white/10`, `isDark` inline background, sun/moon toggle button
+  - Roster panel: `dark:border-white/10`, `isDark` inline background (charcoal glass)
+  - Roster collapse button, header text, search input, GRAVE toggle: all dark: variants
+  - Bottom control orb + expanded cluster: `isDark` inline backgrounds
+  - Status pill (bottom-right): `isDark` inline background, `dark:text-[#636366]`
+
+**Long-hover delay**: 3500ms (changed from 600ms per user request — "like 3s4c, 600ms is far too quick")
+
+**Validation**: `tsc --noEmit` → clean. Browser screenshots confirm:
+- Light mode: untouched (all original white glass chips intact)
+- Dark mode: charcoal artboard (#2C2C2E), deep canvas surround (#0D0D0F), dark glass chips, zone color headers retained, sun toggle visible
+
+**Status**: ✅ Dark mode fully shipped — both system-preference + manual toggle paths working. `localStorage('oms-theme')` persists across reloads.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Pencil long-hover palette trigger (web replacement for squeeze)
 
 **Context**: User said "do it one more time" after the previous push (`0ea0d43`).
