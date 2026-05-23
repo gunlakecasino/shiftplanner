@@ -6,6 +6,32 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Nightwatch canvas refinements (Pencil eraser, real DB strokes, delete/clear, long-hover)
+
+**Context**: Follow-up to the big Nightwatch + Defaults push (`3f47388`). User said "Alright commit and push everything again".
+
+**Changes**:
+- `NightwatchClient.tsx`:
+  - Observations and strokes now initialize empty (real persisted DB data instead of mocks).
+  - Added `deleteCanvasStroke` + `clearCanvasStrokes` imports and handlers.
+  - New `handleEraseDbStroke` and `handleClearStrokes` callbacks.
+  - `handleStrokeCommit` now returns the DB id (Promise<string | null>).
+  - Wired Pencil long-hover (3500ms) to open the FAB.
+- `FreeformCanvas.tsx`:
+  - Full Tool system (`'draw' | 'erase'`).
+  - Pressure-sensitive width (`pressureToWidth`).
+  - Robust path hit-testing for eraser (`pathHit`).
+  - Reused/adapted `usePencilHover` hook (consistent with main ShiftBuilder).
+  - Eraser radius + visual feedback.
+- `Widgets.tsx` + `nightwatch.css`: Minor supporting updates for the new erase/clear flows.
+- `db.ts`: New `deleteCanvasStroke(id)` and `clearCanvasStrokes(nightId)` persistence functions.
+
+**Why**: Makes the freeform canvas truly usable with Apple Pencil Pro — draw, erase individual strokes, clear the whole canvas, all persisted to Supabase and surviving refresh. Mocks removed so the UI reflects real operator work.
+
+**Status**: ✅ Incremental polish on the new Nightwatch feature. Clean 5-file diff.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Nightwatch feature debut + Default Daily Tasks system + supporting fixes (big push)
 
 **Context**: User said "Find all file changes and commit and push all throughout the codebase" after the default tasks work and concurrent Nightwatch development.

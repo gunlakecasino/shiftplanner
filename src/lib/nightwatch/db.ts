@@ -218,9 +218,14 @@ export async function fetchZoneData(nightId: string): Promise<{
     }
   }
 
-  // Zone assignments (slot_type = 'zone')
-  const zones: ZoneAssignment[] = rows
-    .filter(r => r.slot_type === 'zone')
+  // Zone assignments (slot_type = 'zone') — deduplicate by slot_key (last write wins)
+  // Duplicate rows can appear when ShiftBuilder writes an edit without removing the old record.
+  const zoneMap = new Map<string, typeof rows[0]>();
+  for (const r of rows.filter(r => r.slot_type === 'zone')) {
+    zoneMap.set(r.slot_key, r); // last occurrence per slot_key wins
+  }
+
+  const zones: ZoneAssignment[] = Array.from(zoneMap.values())
     .map(r => ({
       zone: parseInt(r.slot_key.replace('zone_', ''), 10),
       tmId: r.tm_id,
@@ -346,18 +351,37 @@ export async function fetchCanvasStrokes(nightId: string): Promise<CommittedStro
   }));
 }
 
+export async function deleteCanvasStroke(strokeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('canvas_strokes')
+    .delete()
+    .eq('id', strokeId);
+  if (error) console.error('[nightwatch] deleteCanvasStroke error:', error);
+}
+
+export async function clearCanvasStrokes(nightId: string): Promise<void> {
+  const { error } = await supabase
+    .from('canvas_strokes')
+    .delete()
+    .eq('night_id', nightId);
+  if (error) console.error('[nightwatch] clearCanvasStrokes error:', error);
+}
+
 export async function saveCanvasStroke(
   nightId: string,
   stroke: { pathData: string; color: string; width: number }
-): Promise<void> {
-  const { error } = await supabase
+): Promise<string | null> {
+  const { data, error } = await supabase
     .from('canvas_strokes')
     .insert({
       night_id: nightId,
       path_data: stroke.pathData,
       color: stroke.color,
       stroke_width: stroke.width,
-    });
+    })
+    .select('id')
+    .single();
 
-  if (error) console.error('[nightwatch] saveCanvasStroke error:', error);
+  if (error) { console.error('[nightwatch] saveCanvasStroke error:', error); return null; }
+  return data?.id ?? null;
 }

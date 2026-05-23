@@ -18,10 +18,13 @@ interface TaskBoardProps {
   mode: ShiftMode;
 }
 
+const LANE_META: Record<string, { label: string; color: string }> = {
+  overdue:  { label: 'OVERDUE',  color: '#FF3B30' },
+  today:    { label: 'TONIGHT',  color: '#FFD60A' },
+  upcoming: { label: 'UPCOMING', color: '#636366' },
+};
+
 export function TaskBoard({ tasks, onToggle, onAddTask, mode }: TaskBoardProps) {
-  const overdue  = tasks.filter(t => t.lane === 'overdue');
-  const today    = tasks.filter(t => t.lane === 'today');
-  const upcoming = tasks.filter(t => t.lane === 'upcoming').slice(0, 3);
   const [newTask, setNewTask] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -29,84 +32,61 @@ export function TaskBoard({ tasks, onToggle, onAddTask, mode }: TaskBoardProps) 
     if (newTask.trim()) { onAddTask(newTask.trim()); setNewTask(''); }
   };
 
-  const todayLabel =
-    mode === 'past'   ? 'THAT NIGHT' :
-    mode === 'future' ? 'SCHEDULED FOR THIS SHIFT' :
-    'TODAY · TONIGHT';
+  // Build a flat ordered list: overdue → today → upcoming (capped at 3)
+  const ordered: TaskItem[] = [
+    ...tasks.filter(t => t.lane === 'overdue'),
+    ...tasks.filter(t => t.lane === 'today'),
+    ...tasks.filter(t => t.lane === 'upcoming').slice(0, 3),
+  ];
 
   return (
     <div className="nw-taskboard">
-      <Swimlane lane="overdue" label="OVERDUE · CARRYOVER" color="#FF3B30" items={overdue} onToggle={onToggle} mode={mode} />
-      <Swimlane lane="today"    label={todayLabel} color="#FFD60A" items={today} onToggle={onToggle} mode={mode}
-        footer={mode === 'live' ? (
-          <form className="nw-quickadd" onSubmit={handleSubmit}>
-            <span className="nw-quickadd-plus">+</span>
-            <input
-              type="text"
-              placeholder="Add task to tonight…"
-              value={newTask}
-              onChange={e => setNewTask(e.target.value)}
-            />
-            <kbd>↵</kbd>
-          </form>
-        ) : null}
-      />
-      <Swimlane lane="upcoming" label="UPCOMING · NEXT 3" color="#636366" items={upcoming} onToggle={onToggle} mode={mode} />
-    </div>
-  );
-}
-
-interface SwimlaneProps {
-  lane: string;
-  label: string;
-  color: string;
-  items: TaskItem[];
-  onToggle: (id: string) => void;
-  mode: ShiftMode;
-  footer?: React.ReactNode;
-}
-
-function Swimlane({ lane, label, color, items, onToggle, mode, footer }: SwimlaneProps) {
-  return (
-    <section className={`nw-lane nw-lane--${lane}`} style={{ ['--lane' as string]: color }}>
-      <header className="nw-lane-head">
-        <span className="nw-lane-stripe" />
-        <div className="nw-lane-title">
-          <span className="nw-lane-label">{label}</span>
-          <span className="nw-lane-count">{items.length}</span>
-        </div>
-      </header>
-      <ul className="nw-lane-list">
-        {items.length === 0 && (
-          <li className="nw-task nw-task--empty">No tasks in this lane.</li>
+      <ul className="nw-tasklist">
+        {ordered.length === 0 && (
+          <li className="nw-task nw-task--empty">No open tasks.</li>
         )}
-        {items.map(t => (
-          <li key={t.id} className={`nw-task${t.done ? ' is-done' : ''}`}>
-            <button
-              className="nw-check"
-              role="checkbox"
-              aria-checked={t.done}
-              onClick={() => mode !== 'past' && onToggle(t.id)}
-              disabled={mode === 'past' && !t.done && lane !== 'overdue'}
-            >
-              {t.done && (
-                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 8.5l3 3 7-7"/>
-                </svg>
-              )}
-            </button>
-            <div className="nw-task-body">
-              <div className="nw-task-text">{t.text}</div>
-              <div className="nw-task-meta">
-                <span className="nw-task-due">DUE {t.due}</span>
-                {lane === 'overdue' && <span className="nw-pill nw-pill--danger">CARRYOVER</span>}
+        {ordered.map(t => {
+          const meta = LANE_META[t.lane] ?? LANE_META.upcoming;
+          return (
+            <li key={t.id} className={`nw-task nw-task--flat${t.done ? ' is-done' : ''}`}
+                style={{ ['--lane' as string]: meta.color }}>
+              <button
+                className="nw-check"
+                role="checkbox"
+                aria-checked={t.done}
+                onClick={() => mode !== 'past' && onToggle(t.id)}
+              >
+                {t.done && (
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 8.5l3 3 7-7"/>
+                  </svg>
+                )}
+              </button>
+              <div className="nw-task-body">
+                <div className="nw-task-text">{t.text}</div>
+                <div className="nw-task-meta">
+                  <span className="nw-task-lane-badge" style={{ color: meta.color }}>{meta.label}</span>
+                  <span className="nw-task-due">· {t.due}</span>
+                  {t.lane === 'overdue' && <span className="nw-pill nw-pill--danger">CARRYOVER</span>}
+                </div>
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
-      {footer}
-    </section>
+      {mode === 'live' && (
+        <form className="nw-quickadd" onSubmit={handleSubmit}>
+          <span className="nw-quickadd-plus">+</span>
+          <input
+            type="text"
+            placeholder="Add task to tonight…"
+            value={newTask}
+            onChange={e => setNewTask(e.target.value)}
+          />
+          <kbd>↵</kbd>
+        </form>
+      )}
+    </div>
   );
 }
 

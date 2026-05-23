@@ -24,6 +24,8 @@ import {
   addTaskToNight,
   saveShiftNote,
   saveCanvasStroke,
+  deleteCanvasStroke,
+  clearCanvasStrokes,
 } from '@/lib/nightwatch/db';
 
 import PageHeader from './components/PageHeader';
@@ -79,12 +81,14 @@ export default function NightwatchClient() {
   const [todayNightId, setTodayNightId]   = useState<string | null>(null);
 
   // ── Widget data ────────────────────────────────────────────
+  // Tasks/zones start with mock data so the UI isn't blank while DB loads.
+  // Canvas starts empty — fills only from real DB strokes + observations.
   const [tasks, setTasks]           = useState<TaskItem[]>(MOCK_TASKS);
   const [zones, setZones]           = useState<ZoneAssignment[]>(MOCK_ZONES);
   const [rrRows, setRrRows]         = useState<RRRow[]>(MOCK_RR);
   const [roster, setRoster]         = useState<RosterMember[]>(MOCK_ROSTER);
-  const [observations, setObservations] = useState<Observation[]>(MOCK_OBS);
-  const [strokes, setStrokes]       = useState<CommittedStroke[]>(MOCK_STROKES);
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [strokes, setStrokes]       = useState<CommittedStroke[]>([]);
 
   // ── UI state ───────────────────────────────────────────────
   const [selectedObsId, setSelectedObsId] = useState<string | null>(null);
@@ -231,11 +235,24 @@ export default function NightwatchClient() {
     }
   }, [currentMin, todayNightId]);
 
-  const handleStrokeCommit = useCallback((pathData: string, color: string, width: number) => {
+  const handleStrokeCommit = useCallback((pathData: string, color: string, width: number): Promise<string | null> => {
     if (todayNightId && mode === 'live') {
-      saveCanvasStroke(todayNightId, { pathData, color, width }).catch(console.error);
+      return saveCanvasStroke(todayNightId, { pathData, color, width });
     }
+    return Promise.resolve(null);
   }, [todayNightId, mode]);
+
+  const handleEraseDbStroke = useCallback((id: string) => {
+    setStrokes(prev => prev.filter(s => s.id !== id));
+    deleteCanvasStroke(id).catch(console.error);
+  }, []);
+
+  const handleClearStrokes = useCallback(() => {
+    setStrokes([]);
+    if (todayNightId) {
+      clearCanvasStrokes(todayNightId).catch(console.error);
+    }
+  }, [todayNightId]);
 
   // ── KPIs ──────────────────────────────────────────────────
   const openTasks = tasks.filter(t => !t.done && t.lane !== 'upcoming').length;
@@ -344,6 +361,9 @@ export default function NightwatchClient() {
           selectedObsId={selectedObsId}
           onSelectObs={setSelectedObsId}
           onStrokeCommit={handleStrokeCommit}
+          onEraseDbStroke={handleEraseDbStroke}
+          onClearStrokes={handleClearStrokes}
+          onLongHoverCanvas={mode === 'live' ? () => setFabOpen(true) : undefined}
           inkColor="#F2F2F4"
           bgPattern="dots"
           showGuides={false}
