@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ShiftMode, NightSummary, TaskItem, Observation, CommittedStroke, ZoneAssignment, RRRow, RosterMember } from '@/lib/nightwatch/types';
+import type { ShiftMode, NightSummary, TaskItem, Observation, CommittedStroke, ZoneAssignment, RRRow, RosterMember, UIEvent } from '@/lib/nightwatch/types';
 import {
   ZONE_COLORS,
   TASKS as MOCK_TASKS,
   ZONE_ASSIGN as MOCK_ZONES,
   RR_ASSIGN as MOCK_RR,
   ROSTER as MOCK_ROSTER,
-  UI_EVENTS,
   OBSERVATIONS as MOCK_OBS,
   STROKES as MOCK_STROKES,
   WEEK as MOCK_WEEK,
@@ -19,6 +18,7 @@ import {
   fetchTasks,
   fetchZoneData,
   fetchShiftNotes,
+  fetchShiftEvents,
   fetchCanvasStrokes,
   updateTaskStatus,
   addTaskToNight,
@@ -89,6 +89,7 @@ export default function NightwatchClient() {
   const [roster, setRoster]         = useState<RosterMember[]>(MOCK_ROSTER);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [strokes, setStrokes]       = useState<CommittedStroke[]>([]);
+  const [shiftEvents, setShiftEvents] = useState<UIEvent[]>([]);
 
   // ── UI state ───────────────────────────────────────────────
   const [selectedObsId, setSelectedObsId] = useState<string | null>(null);
@@ -126,11 +127,12 @@ export default function NightwatchClient() {
       const resolvedNightId = nightId ?? null;
 
       // 2. All queries in parallel
-      const [dbTasks, dbZone, dbNotes, dbStrokes] = await Promise.all([
+      const [dbTasks, dbZone, dbNotes, dbStrokes, dbEvents] = await Promise.all([
         fetchTasks(),
         resolvedNightId ? fetchZoneData(resolvedNightId) : null,
         resolvedNightId ? fetchShiftNotes(resolvedNightId) : null,
         resolvedNightId ? fetchCanvasStrokes(resolvedNightId) : null,
+        resolvedNightId ? fetchShiftEvents(resolvedNightId) : null,
       ]);
 
       if (dbTasks.length > 0)        setTasks(dbTasks);
@@ -139,6 +141,7 @@ export default function NightwatchClient() {
       if (dbZone?.roster.length)     setRoster(dbZone.roster);
       if (dbNotes && dbNotes.length > 0) setObservations(dbNotes);
       if (dbStrokes && dbStrokes.length > 0) setStrokes(dbStrokes);
+      if (dbEvents) setShiftEvents(dbEvents);
 
       setDbReady(true);
     }
@@ -149,16 +152,18 @@ export default function NightwatchClient() {
   useEffect(() => {
     if (!dbReady || activeNightId === todayNightId) return; // tonight already loaded
     async function loadNight() {
-      const [dbZone, dbNotes, dbStrokes] = await Promise.all([
+      const [dbZone, dbNotes, dbStrokes, dbEvents] = await Promise.all([
         fetchZoneData(activeNightId),
         fetchShiftNotes(activeNightId),
         fetchCanvasStrokes(activeNightId),
+        fetchShiftEvents(activeNightId),
       ]);
       if (dbZone.zones.length)      setZones(dbZone.zones);
       if (dbZone.rr.length)         setRrRows(dbZone.rr);
       if (dbZone.roster.length)     setRoster(dbZone.roster);
       setObservations(dbNotes);
       setStrokes(dbStrokes);
+      setShiftEvents(dbEvents);
     }
     loadNight();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,7 +351,7 @@ export default function NightwatchClient() {
             </div>
           </header>
           <div className="nw-widget-body">
-            <EventsCard events={UI_EVENTS} currentMin={currentMin} />
+            <EventsCard events={shiftEvents} currentMin={currentMin} />
           </div>
         </div>
       </div>

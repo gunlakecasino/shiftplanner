@@ -4,7 +4,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   NightSummary, TaskItem, ZoneAssignment, RRRow, RosterMember,
-  Observation, CommittedStroke,
+  Observation, CommittedStroke, UIEvent,
 } from '@/lib/nightwatch/types';
 
 // ── Shift-aware date helpers ──────────────────────────────────
@@ -330,6 +330,30 @@ export async function saveShiftNote(
     linkedEntityType: data.linked_entity_type as 'zone' | 'tm' | 'rr' | null ?? null,
     linkedEntityId: data.linked_entity_id ?? null,
   };
+}
+
+// ── fetchShiftEvents ──────────────────────────────────────
+
+export async function fetchShiftEvents(nightId: string): Promise<UIEvent[]> {
+  const { data, error } = await supabase
+    .from('shift_events')
+    .select('id, event_time, label, location, priority')
+    .eq('night_id', nightId)
+    .order('event_time');
+
+  if (error || !data) return [];
+
+  return data.map(e => {
+    const d = new Date(e.event_time);
+    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return {
+      id: e.id,
+      time,
+      label: e.label,
+      location: e.location,
+      priority: e.priority as 'low' | 'normal' | 'high',
+    };
+  });
 }
 
 // ── fetchCanvasStrokes ────────────────────────────────────────

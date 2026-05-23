@@ -6,6 +6,27 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Nightwatch Events widget goes real (DB-backed shift_events)
+
+**Context**: User said "Commit and push again" after further Nightwatch iteration following the previous canvas polish.
+
+**Changes**:
+- Replaced mock `UI_EVENTS` with live data from new `shift_events` table.
+- Added `UIEvent` type in `types.ts`.
+- New `fetchShiftEvents(nightId)` in `db.ts` (queries `shift_events`, formats time as HH:MM, maps priority).
+- `NightwatchClient.tsx`:
+  - Loads `shiftEvents` on initial night load and on night switch.
+  - Passes real `shiftEvents` to `<EventsCard>` instead of the static mock.
+  - Removed old mock import.
+- `Widgets.tsx`: Added empty state for EventsCard ("No events logged for this shift.").
+- `nightwatch.css`: Styling for the empty state.
+
+**Why**: Continuing the "remove mocks, use real persisted data" direction started in the previous push. The Events timeline is now a proper operator-logged feed that survives refresh.
+
+**Status**: ✅ Clean 5-file diff. Nightwatch becoming production-viable.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Nightwatch canvas refinements (Pencil eraser, real DB strokes, delete/clear, long-hover)
 
 **Context**: Follow-up to the big Nightwatch + Defaults push (`3f47388`). User said "Alright commit and push everything again".

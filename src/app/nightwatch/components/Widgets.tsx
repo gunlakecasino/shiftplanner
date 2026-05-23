@@ -3,9 +3,8 @@
 import { useState, useMemo } from 'react';
 import type {
   TaskItem, ZoneAssignment, ZoneColor, RosterMember,
-  RosterState, RRRow, ShiftMode,
+  RosterState, RRRow, ShiftMode, UIEvent,
 } from '@/lib/nightwatch/types';
-import type { UIEvent } from '../mockData';
 
 /* ================================================================
    TaskBoard
@@ -264,6 +263,14 @@ export function EventsCard({ events, currentMin }: EventsCardProps) {
     if (mins < 0) mins += 24 * 60;
     return mins;
   };
+
+  if (events.length === 0) {
+    return (
+      <div className="nw-events-empty">
+        <span>No events logged for this shift.</span>
+      </div>
+    );
+  }
 
   return (
     <ul className="nw-events">

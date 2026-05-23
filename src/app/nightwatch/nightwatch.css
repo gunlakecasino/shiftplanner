@@ -784,6 +784,8 @@
   cursor: default;
 }
 
+.nw-events-empty { display: flex; align-items: center; justify-content: center; height: 100%; padding: 20px; font-size: 11px; color: var(--nw-ink-4); font-style: italic; text-align: center; }
+
 .nw-toolbar-divider {
   width: 1px;
   height: 18px;

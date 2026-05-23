@@ -92,6 +92,16 @@ export interface ZoneColor {
   label: string;
 }
 
+// ---- Shift event UI shape (used by EventsCard) ---------------------
+
+export interface UIEvent {
+  id: string;
+  time: string;        // "HH:MM" 24-hour local time
+  label: string;
+  location: string;
+  priority: 'low' | 'normal' | 'high';
+}
+
 // ---- Canvas observation (UI state only, persisted via ShiftNote) ----
 
 export interface Observation {
