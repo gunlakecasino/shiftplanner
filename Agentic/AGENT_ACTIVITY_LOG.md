@@ -6,6 +6,27 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — TM drag race fix + new Reports tab (Zone Frequency)
+
+**Context**: User said "do it sgain" (again) after further local work.
+
+**Key changes**:
+- `ShiftBuilderClient.tsx`:
+  - Critical race-condition fix in TM drag/swap logic: Read `movingTmId` and `displacedTmId` **before** the `setAssignments` updater (React batches state, so reading inside the updater was too late and caused DELETEs instead of upserts on drag-to-empty or swaps).
+  - Small dark mode tweak on the day-picker button for Break view.
+- `SudoWindow.tsx`:
+  - Added new "Reports" tab (with BarChart2 icon) between Tasks and Engine Config.
+  - Imported and rendered new `ReportsTab`.
+- `data.ts`:
+  - New `getZoneFrequencyReport(days)` function + supporting types (`ZoneFrequencyEntry`, `ZoneFrequencyReport`).
+  - Aggregates real zone placement history from `zone_assignments` over the last N days, per TM (counts per Z1–Z10, total shifts, last date). Powers the new Reports tab.
+
+**Why this matters**: The drag bug was causing real data loss on TM moves/swaps. The Reports tab gives operators visibility into zone placement patterns.
+
+**Status**: High-signal changes. Only real source + log staged.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Dark mode polish on Break Sheet + follow-up push
 
 **Context**: User said "commit and push again" after small local edits.
@@ -17,6 +38,43 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 - `Agentic/AGENT_ACTIVITY_LOG.md`: Prepended this entry (and the prior Claude DB constraint fix entry was already present).
 
 **Status**: Small, targeted dark mode hardening. Only real source + log staged.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 (Cowork) — Drag persist fix (real root cause) + day number dark mode
+
+**Task**: TM drag still not persisting after DB constraint fix; day number button light in dark mode.
+
+**Drag bug — real root cause** (`ShiftBuilderClient.tsx` ~line 3283):
+`movingTmId` and `displacedTmId` were declared as `let` vars and set *inside* the `setAssignments` updater callback. React calls function updaters lazily during reconciliation, NOT synchronously when `setAssignments` is invoked. So when the async persist IIFE read those vars moments later, they were still `null`. `persistAssign(null tmId)` triggers DELETE — that's why the destination slot cleared on reload. Fix: read `assignments[fromKey]?.tmId` and `assignments[toKey]?.tmId` synchronously BEFORE calling `setAssignments`, then pass those captured values into the IIFE.
+
+**Day number button dark mode** (`ShiftBuilderClient.tsx` line 5618):
+Breaks-view button had hardcoded `backgroundColor: "#fff"` and `color: selectedDay.color` with no dark path. Fix: `isDark` ternaries — dark mode now uses `rgba(44,44,46,0.95)` background and `#F2F2F4` text, keeping the colored border for day identity.
+
+**Validation**: `tsc --noEmit` exits 0. One file touched.
+
+**Status**: ✅ Complete.
+
+---
+
+## 2026-05-23 — Claude Sonnet 4.6 (Cowork) — Reports tab (Phase 1: zone frequency)
+
+**Task**: New Reports tab in SudoWindow — zone placement frequency per TM over a rolling date window.
+
+**Files created/modified**:
+- `src/lib/shiftbuilder/data.ts` — new `getZoneFrequencyReport(days)` + `ZoneFrequencyEntry` / `ZoneFrequencyReport` types
+- `src/app/shiftbuilder/sudo/ReportsTab.tsx` — new component (TM-first + Zone-first views, CSS frequency bars, 14/30/60d toggle)
+- `src/app/shiftbuilder/sudo/SudoWindow.tsx` — added `"reports"` tab type, `BarChart2` icon import, `ReportsTab` import + render between Tasks and Engine Config
+
+**Design decisions**:
+- Bar colors match the exact Golden ShiftBuilder zone card palette (ZONE_COLORS duplicated inline — not exported from ShiftBuilderClient)
+- TM-first view: left rail = TM list with top-zone color dot + shift count; right panel = zone bars sorted by frequency DESC; "Not worked" section for unworked zones
+- Zone-first view: left rail = zone list with TM count; right panel = TM bars using the zone's color, hover reveals last-seen date
+- Data: zones only (slot_type='zone'), RR/AUX/overlaps excluded
+- Auto-selects first TM / Z1 on load so right panel is never blank
+- `tsc --noEmit` exits 0
+
+**Status**: ✅ Complete. Phase 2 (card badges in main ShiftBuilder) tracked in plan file.
 
 ---
 

@@ -3280,14 +3280,17 @@ export default function ShiftBuilder() {
         const captureDate = selectedDay.date;
         const captureDayName = selectedDay.name;
 
-        let movingTmId: string | null = null;
-        let displacedTmId: string | null = null;
+        // Read TM IDs BEFORE setAssignments — React calls the updater lazily
+        // during reconciliation, not synchronously. If we set these inside the
+        // updater and then read them in the async IIFE below, they are still
+        // null when persistAssign runs, causing a DELETE instead of an upsert.
+        const movingTmId: string | null = assignments[fromKey]?.tmId ?? null;
+        const displacedTmId: string | null = assignments[toKey]?.tmId ?? null;
+
         setAssignments((prev: any) => {
           const next = { ...prev };
           const moving = next[fromKey];
           const displaced = next[toKey];
-          movingTmId = moving?.tmId ?? null;
-          displacedTmId = displaced?.tmId ?? null;
           if (displaced) next[fromKey] = { ...displaced, slotKey: fromKey };
           else delete next[fromKey];
           next[toKey] = { ...moving, slotKey: toKey };
@@ -5615,7 +5618,7 @@ export default function ShiftBuilder() {
           </button>
 
           {/* Colored day number */}
-          <button onClick={() => setDayPickerOpen(true)} className="w-9 h-9 rounded-full border shadow flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: currentView === "breaks" ? "#fff" : selectedDay.color, borderColor: currentView === "breaks" ? selectedDay.color : "transparent", color: currentView === "breaks" ? selectedDay.color : "#fff", borderWidth: currentView === "breaks" ? "1.5px" : 0 }} title={`${selectedDay.name} ${selectedDay.dateNum}`}>
+          <button onClick={() => setDayPickerOpen(true)} className="w-9 h-9 rounded-full border shadow flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: currentView === "breaks" ? (isDark ? "rgba(44,44,46,0.95)" : "#fff") : selectedDay.color, borderColor: currentView === "breaks" ? selectedDay.color : "transparent", color: currentView === "breaks" ? (isDark ? "#F2F2F4" : selectedDay.color) : "#fff", borderWidth: currentView === "breaks" ? "1.5px" : 0 }} title={`${selectedDay.name} ${selectedDay.dateNum}`}>
             {selectedDay.dateNum}
           </button>
 

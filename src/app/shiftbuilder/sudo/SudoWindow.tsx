@@ -16,14 +16,15 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo } from "lucide-react";
+import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SchedulesTab } from "./SchedulesTab";
 import { TeamTab } from "./TeamTab";
 import { EngineConfigTab } from "./EngineConfigTab";
 import { TasksTab } from "./TasksTab";
+import { ReportsTab } from "./ReportsTab";
 
-type SudoTab = "schedules" | "team" | "tasks" | "engine" | "sql" | "edge" | "logs";
+type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "sql" | "edge" | "logs";
 
 const TABS: Array<{
   id: SudoTab;
@@ -31,13 +32,14 @@ const TABS: Array<{
   icon: React.ComponentType<{ className?: string }>;
   status: "ready" | "coming-soon";
 }> = [
-  { id: "schedules", label: "Schedules", icon: FileSpreadsheet, status: "ready" },
-  { id: "team", label: "Team", icon: Users, status: "ready" },
-  { id: "tasks", label: "Tasks", icon: ListTodo, status: "ready" },   // above Engine per operator request
-  { id: "engine", label: "Engine Config", icon: Settings2, status: "ready" },
-  { id: "sql", label: "SQL Runner", icon: Database, status: "coming-soon" },
-  { id: "edge", label: "Edge Functions", icon: Code2, status: "coming-soon" },
-  { id: "logs", label: "Logs", icon: ScrollText, status: "coming-soon" },
+  { id: "schedules", label: "Schedules",    icon: FileSpreadsheet, status: "ready" },
+  { id: "team",      label: "Team",         icon: Users,           status: "ready" },
+  { id: "tasks",     label: "Tasks",        icon: ListTodo,        status: "ready" },
+  { id: "reports",   label: "Reports",      icon: BarChart2,       status: "ready" },
+  { id: "engine",    label: "Engine Config",icon: Settings2,       status: "ready" },
+  { id: "sql",       label: "SQL Runner",   icon: Database,        status: "coming-soon" },
+  { id: "edge",      label: "Edge Functions",icon: Code2,          status: "coming-soon" },
+  { id: "logs",      label: "Logs",         icon: ScrollText,      status: "coming-soon" },
 ];
 
 export interface SudoWindowProps {
@@ -170,12 +172,13 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId }: Sud
           {/* Content area */}
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeTab === "schedules" && <SchedulesTab onDataChanged={onDataChanged} />}
-            {activeTab === "team" && <TeamTab onDataChanged={onDataChanged} />}
-            {activeTab === "tasks" && <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />}
-            {activeTab === "engine" && <EngineConfigTab onDataChanged={onDataChanged} />}
-            {activeTab === "sql" && <ComingSoonPanel feature="SQL Runner" />}
-            {activeTab === "edge" && <ComingSoonPanel feature="Edge Functions" />}
-            {activeTab === "logs" && <ComingSoonPanel feature="Logs" />}
+            {activeTab === "team"      && <TeamTab onDataChanged={onDataChanged} />}
+            {activeTab === "tasks"     && <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />}
+            {activeTab === "reports"   && <ReportsTab />}
+            {activeTab === "engine"    && <EngineConfigTab onDataChanged={onDataChanged} />}
+            {activeTab === "sql"       && <ComingSoonPanel feature="SQL Runner" />}
+            {activeTab === "edge"      && <ComingSoonPanel feature="Edge Functions" />}
+            {activeTab === "logs"      && <ComingSoonPanel feature="Logs" />}
           </div>
         </div>
 

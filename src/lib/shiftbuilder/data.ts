@@ -1686,3 +1686,134 @@ export async function getRecentZoneHistory(
   });
   return out;
 }
+
+// ============================================================================
+// Zone Frequency Report — powers the Reports tab in SudoWindow
+// ============================================================================
+
+export interface ZoneFrequencyEntry {
+  tmId: string;
+  tmName: string;
+  /** UI key (Z1…Z10) → number of times placed in that zone in the window. */
+  zoneCounts: Record<string, number>;
+  /** Distinct nights this TM had any zone assignment. */
+  totalShifts: number;
+  /** ISO date string of the most recent assignment in the window. */
+  lastDate: string;
+}
+
+export interface ZoneFrequencyReport {
+  byTm: ZoneFrequencyEntry[];
+  dateRange: { from: string; to: string };
+  /** Distinct nights that exist in the DB for the window. */
+  totalNights: number;
+}
+
+/**
+ * Aggregate zone placement frequency per TM for the last `days` calendar days.
+ * Only slot_type='zone' rows are counted — RR, AUX, and overlaps are excluded.
+ * Returns byTm sorted by totalShifts DESC.
+ */
+export async function getZoneFrequencyReport(days: number): Promise<ZoneFrequencyReport> {
+  const client = getSupabaseClient();
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - days);
+
+  const todayIso = today.toISOString().slice(0, 10);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  const empty: ZoneFrequencyReport = {
+    byTm: [],
+    dateRange: { from: cutoffIso, to: todayIso },
+    totalNights: 0,
+  };
+
+  // Step 1: Resolve night IDs in the date window.
+  const { data: nightRows, error: nightErr } = await client
+    .from("nights")
+    .select("id, night_date")
+    .gte("night_date", cutoffIso)
+    .lte("night_date", todayIso);
+
+  if (nightErr) {
+    console.warn("[data] getZoneFrequencyReport nights failed:", nightErr.message);
+    return empty;
+  }
+  if (!nightRows || nightRows.length === 0) return empty;
+
+  const nightIdToDate = new Map<string, string>();
+  (nightRows as any[]).forEach((n) => nightIdToDate.set(n.id, n.night_date));
+
+  // Step 2: Fetch zone-only assignments (excludes rr, aux, overlap).
+  const { data: assignmentRows, error: assignErr } = await client
+    .from("zone_assignments")
+    .select("night_id, slot_key, tm_id")
+    .in("night_id", Array.from(nightIdToDate.keys()))
+    .eq("slot_type", "zone")
+    .not("tm_id", "is", null);
+
+  if (assignErr) {
+    console.warn("[data] getZoneFrequencyReport assignments failed:", assignErr.message);
+    return { ...empty, totalNights: nightRows.length };
+  }
+  if (!assignmentRows || assignmentRows.length === 0) {
+    return { ...empty, totalNights: nightRows.length };
+  }
+
+  // Step 3: Aggregate counts per (tmId, uiZoneKey).
+  // DB key "zone_N" → UI key "ZN" — zones only, simple regex, no slot-keys import needed.
+  const dbZoneToUi = (dbKey: string): string => {
+    const m = dbKey.match(/^zone_(\d+)$/);
+    return m ? `Z${m[1]}` : dbKey;
+  };
+
+  const tmMap = new Map<string, {
+    zoneCounts: Record<string, number>;
+    nightDates: Set<string>;
+    lastDate: string;
+  }>();
+
+  (assignmentRows as any[]).forEach((row) => {
+    const nightDate = nightIdToDate.get(row.night_id) ?? "";
+    const uiKey = dbZoneToUi(row.slot_key);
+    const tmId: string = row.tm_id;
+
+    if (!tmMap.has(tmId)) {
+      tmMap.set(tmId, { zoneCounts: {}, nightDates: new Set(), lastDate: "" });
+    }
+    const entry = tmMap.get(tmId)!;
+    entry.zoneCounts[uiKey] = (entry.zoneCounts[uiKey] ?? 0) + 1;
+    entry.nightDates.add(nightDate);
+    if (nightDate > entry.lastDate) entry.lastDate = nightDate;
+  });
+
+  // Step 4: Batch-fetch display names.
+  const tmIds = Array.from(tmMap.keys());
+  const { data: profiles } = await client
+    .from("tm_profiles")
+    .select("tm_id, display_name, full_name")
+    .in("tm_id", tmIds);
+
+  const nameMap = new Map<string, string>();
+  (profiles ?? []).forEach((p: any) => {
+    nameMap.set(p.tm_id, p.display_name || p.full_name || p.tm_id);
+  });
+
+  // Step 5: Shape output, sort by totalShifts DESC.
+  const byTm: ZoneFrequencyEntry[] = Array.from(tmMap.entries())
+    .map(([tmId, data]) => ({
+      tmId,
+      tmName: nameMap.get(tmId) ?? tmId,
+      zoneCounts: data.zoneCounts,
+      totalShifts: data.nightDates.size,
+      lastDate: data.lastDate,
+    }))
+    .sort((a, b) => b.totalShifts - a.totalShifts);
+
+  return {
+    byTm,
+    dateRange: { from: cutoffIso, to: todayIso },
+    totalNights: nightRows.length,
+  };
+}
