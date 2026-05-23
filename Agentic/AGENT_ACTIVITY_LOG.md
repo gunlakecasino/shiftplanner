@@ -6,6 +6,28 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Pencil long-hover palette trigger (web replacement for squeeze)
+
+**Context**: User said "do it one more time" after the previous push (`0ea0d43`).
+
+**Major changes in `src/app/shiftbuilder/ShiftBuilderClient.tsx`**:
+- Rewrote `usePencilHover()` into a much more capable hook:
+  - Accepts optional `onLongHover(el)` callback + configurable delay (default 600ms).
+  - Long-hover timer only arms during true hover (`buttons === 0`, Pencil floating above glass).
+  - Exports `clearLongHoverTimer()` so cards can cancel pending palette open on actual contact (prevents fighting dnd-kit drag).
+  - Added `onPointerCancel` handler for OS interruptions (Scribble, multitasking, calls).
+- All four card types (ZoneCard, RRSide, AuxCard, OverlapSlot) now pass an `onLongHover` handler that opens the Command Palette for that slot.
+- Removed the old `button === 2` barrel-button hacks entirely (they were unreliable and don't work in real Safari web apps).
+- Added `animate-pulse` to the gold hover ring for stronger visual feedback.
+- Added `useCallback` import.
+
+**Why this matters**:
+Apple Pencil Pro "squeeze" is consumed at the iPadOS system level and **never reaches** a web app. Long-hover (Pencil hovering 600ms without touching) is the correct, accessible web substitute. This gives operators a reliable way to summon ⌘K on any card using only the Pencil.
+
+**Status**: ✅ High-signal change, only 1 production file touched. Clean for Railway.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — Post-push handler ordering fix + Agentic docs + CSS animation
 
 **Context**: Follow-up to `dc0f1c1` (Visual group + Grok + Tasks tab + Railway fixes). User requested "Check again and do another push now".

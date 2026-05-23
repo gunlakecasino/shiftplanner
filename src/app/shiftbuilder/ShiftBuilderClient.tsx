@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal, flushSync } from "react-dom";
 import {
   DndContext,
@@ -439,20 +439,58 @@ function useSlotDnd(slotKey: string, slotType: "zone" | "rr" | "aux" | "overlap"
 }
 
 // ─── Pencil hover hook ────────────────────────────────────────────────────────
-// Detects Apple Pencil Pro 2 hover (pointerType === "pen") so cards can show
-// a gold ring before contact — giving operators a clean "aim" target.
-// Also used by barrel-button detection (button === 2 on pointerdown).
-function usePencilHover() {
+// Detects Apple Pencil Pro 2 hover (pointerType === "pen", buttons === 0)
+// so cards show a gold ring before contact — giving operators a clean aim target.
+//
+// Also fires onLongHover(element) after `longHoverDelay` ms of uninterrupted
+// hover — this is the web-accessible substitute for the squeeze gesture.
+// (Apple Pencil Pro squeeze is consumed by iPadOS at the system level and
+// NEVER reaches a Safari web app — it requires native UIPencilInteraction /
+// onPencilSqueeze SwiftUI API. The `button === 2` hack does not work.)
+//
+// clearLongHoverTimer is exported so the card's onPointerDown can cancel
+// the pending palette-open when the user makes contact instead of hovering.
+function usePencilHover(
+  onLongHover?: (el: HTMLElement) => void,
+  longHoverDelay = 600,
+) {
   const [isPenHovering, setIsPenHovering] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLongHoverTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   const penHoverHandlers = {
-    onPointerEnter: (e: React.PointerEvent) => {
-      if (e.pointerType === "pen") setIsPenHovering(true);
+    onPointerEnter: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.pointerType !== "pen") return;
+      setIsPenHovering(true);
+      // Only arm long-hover during true hover (Pencil above glass, not touching).
+      // When touching, buttons === 1; hover pointer has buttons === 0.
+      if (e.buttons === 0 && onLongHover) {
+        const el = e.currentTarget; // capture DOM ref before React async-nulls it
+        clearLongHoverTimer();
+        timerRef.current = setTimeout(() => onLongHover(el), longHoverDelay);
+      }
     },
     onPointerLeave: (e: React.PointerEvent) => {
-      if (e.pointerType === "pen") setIsPenHovering(false);
+      if (e.pointerType !== "pen") return;
+      setIsPenHovering(false);
+      clearLongHoverTimer();
+    },
+    // pointercancel fires on OS interruption (Scribble, multitask, incoming call).
+    // Without this the hover ring and timer would freeze in the "active" state.
+    onPointerCancel: (e: React.PointerEvent) => {
+      if (e.pointerType !== "pen") return;
+      setIsPenHovering(false);
+      clearLongHoverTimer();
     },
   };
-  return { isPenHovering, penHoverHandlers };
+
+  return { isPenHovering, penHoverHandlers, clearLongHoverTimer };
 }
 
 interface ZoneCardProps {
@@ -493,7 +531,9 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
 
   const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers } = usePencilHover();
+  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
+    (el) => onCardClick(def.key, el),
+  );
 
   return (
     <div
@@ -504,20 +544,16 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        // Barrel button (Pencil Pro 2 squeeze) → open ⌘K for this slot.
-        // Must come AFTER listeners spread so we own the final onPointerDown.
-        // For normal pointer events, forward to dnd-kit so drag still works.
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(def.key, e.currentTarget as HTMLElement);
-          return;
-        }
+        // Contact cancels any pending long-hover palette open (user is dragging).
+        // NOTE: Pencil Pro squeeze is NOT web-accessible — it is consumed by
+        // iPadOS at the system level. Long-hover is the web replacement for squeeze.
+        clearLongHoverTimer();
         if (hasTM && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && {
@@ -900,7 +936,9 @@ const RRSide: React.FC<{
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "rr", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers } = usePencilHover();
+  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
+    (el) => onClick(slotKey, el),
+  );
 
   return (
     <div
@@ -910,17 +948,13 @@ const RRSide: React.FC<{
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onClick(slotKey, e.currentTarget as HTMLElement);
-          return;
-        }
+        clearLongHoverTimer();
         if (hasTM && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
       data-slot-key={slotKey}
-      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
     >
       {/* Label + badge row */}
       <div className="flex items-center justify-between mb-1">
@@ -1097,7 +1131,9 @@ const AuxCard: React.FC<AuxCardProps> = ({
 
   const icon = getAuxIcon(def.key);
   const isEmpty = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers } = usePencilHover();
+  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
+    (el) => onCardClick(def.key, el),
+  );
 
   return (
     <div
@@ -1108,17 +1144,13 @@ const AuxCard: React.FC<AuxCardProps> = ({
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(def.key, e.currentTarget as HTMLElement);
-          return;
-        }
+        clearLongHoverTimer();
         if (hasTM && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && {
@@ -1496,7 +1528,9 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
   const tasks = selectedTasks[slotKey];
-  const { isPenHovering, penHoverHandlers } = usePencilHover();
+  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
+    (el) => onCardClick(slotKey, el),
+  );
 
   return (
     <div
@@ -1506,11 +1540,7 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
       {...(hasTM ? listeners : {})}
       {...(hasTM ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.pointerType === "pen" && e.button === 2) {
-          e.preventDefault();
-          onCardClick(slotKey, e.currentTarget as HTMLElement);
-          return;
-        }
+        clearLongHoverTimer();
         if (hasTM && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
@@ -1518,7 +1548,7 @@ const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInf
       data-slot-key={slotKey}
       className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1" : ""}`}
+      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
     >
       {loading && !hasTM ? (
         <div className="h-[12px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
