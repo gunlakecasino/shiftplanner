@@ -41,6 +41,9 @@ export interface EngineThresholds {
 
 export type PlacementMethod = "greedy" | "weighted" | "grok-hybrid";
 
+/** Controls how much chain-of-thought Grok 4.3 spends when running the hybrid engine. */
+export type GrokReasoningEffort = "none" | "low" | "medium" | "high";
+
 export interface EngineConfig {
   id: string;
   isActive: boolean;
@@ -48,6 +51,8 @@ export interface EngineConfig {
   thresholds: EngineThresholds;
   slotPriority: Record<string, number>; // slot → priority override
   placementMethod: PlacementMethod;
+  /** Grok 4.3 reasoning depth used only when placementMethod === "grok-hybrid" */
+  grokReasoningEffort: GrokReasoningEffort;
   notes: string | null;
   createdAt: string;
   createdBy: string | null;
@@ -81,6 +86,8 @@ export const DEFAULT_THRESHOLDS: Required<EngineThresholds> = {
   override_difficulty_threshold: 6.0,
 };
 
+export const DEFAULT_GROK_REASONING_EFFORT: GrokReasoningEffort = "medium";
+
 export const FALLBACK_CONFIG: EngineConfig = {
   id: "fallback",
   isActive: true,
@@ -88,6 +95,7 @@ export const FALLBACK_CONFIG: EngineConfig = {
   thresholds: { ...DEFAULT_THRESHOLDS },
   slotPriority: {},
   placementMethod: "weighted",
+  grokReasoningEffort: DEFAULT_GROK_REASONING_EFFORT,
   notes: "Synthesized fallback — no active engine_config row found.",
   createdAt: new Date().toISOString(),
   createdBy: null,
@@ -118,7 +126,7 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
   const { data, error } = await supabase
     .from("engine_config")
     .select(
-      "id, is_active, weights, thresholds, slot_priority, placement_method, notes, created_at, created_by"
+      "id, is_active, weights, thresholds, slot_priority, placement_method, grok_reasoning_effort, notes, created_at, created_by"
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false })
@@ -136,6 +144,11 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
 
   const row = data[0] as any;
   const method = (row.placement_method ?? "weighted") as string;
+  const reasoning = (row.grok_reasoning_effort ?? DEFAULT_GROK_REASONING_EFFORT) as string;
+  const validReasoning: GrokReasoningEffort = (["none", "low", "medium", "high"].includes(reasoning)
+    ? reasoning
+    : DEFAULT_GROK_REASONING_EFFORT) as GrokReasoningEffort;
+
   return {
     id: row.id,
     isActive: !!row.is_active,
@@ -145,6 +158,7 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
     placementMethod: (["greedy", "weighted", "grok-hybrid"].includes(method)
       ? method
       : "weighted") as PlacementMethod,
+    grokReasoningEffort: validReasoning,
     notes: row.notes ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
