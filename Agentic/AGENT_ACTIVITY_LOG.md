@@ -6,6 +6,21 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-23 — Grok 4.3 — Dark mode hardening on Break Sheet header + overlap type fix
+
+**Context**: User said "Commit and push all again".
+
+**Changes**:
+- `ShiftBuilderClient.tsx`:
+  - Fixed overlap slot key detection in task assignment (now correctly recognizes "OL-" prefix as `type: "overlap"`).
+  - Extensive dark mode polish on the header area when viewing the Break Sheet:
+    - Day number button, title, date meta, "BREAKS" / "IN ROTATION" labels, break wave pills, and "BY BREAK WAVE" section now respect `isDark` for proper contrast.
+    - Stroke and fill colors adjusted for dark backgrounds on the large day number.
+
+**Status**: Small but important visual and correctness polish. Only real source + log staged.
+
+---
+
 ## 2026-05-23 — Grok 4.3 — TM drag race fix + new Reports tab (Zone Frequency)
 
 **Context**: User said "do it sgain" (again) after further local work.

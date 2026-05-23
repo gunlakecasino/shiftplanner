@@ -2852,7 +2852,7 @@ export default function ShiftBuilder() {
         tmId,
         tmName,
         breakGroup: prev[slotKey]?.breakGroup ?? 0,
-        type: slotKey.startsWith("Z") ? "zone" : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr" : "aux",
+        type: slotKey.startsWith("Z") ? "zone" : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr" : slotKey.startsWith("OL-") ? "overlap" : "aux",
         slotKey,
       },
     }));
@@ -4941,13 +4941,13 @@ export default function ShiftBuilder() {
                       fontSize: 58,
                       letterSpacing: '-3px',
                       fontFamily: 'var(--font-atkinson)',
-                      // Solid black on deployment, outlined (no-fill + 1.5px stroke) on break sheet
-                      // for contrast against the red "Break Sheet" title.
+                      // Solid on deployment, outlined on break sheet for contrast with title.
+                      // In dark mode use a lighter stroke/fill so the number is actually visible.
                       ...(currentView === "deployment"
-                        ? { color: '#1C1C1E' }
+                        ? { color: isDark ? '#E5E5E7' : '#1C1C1E' }
                         : {
                             color: 'transparent',
-                            WebkitTextStroke: '1.5px #1C1C1E',
+                            WebkitTextStroke: `1.5px ${isDark ? '#9CA3AF' : '#1C1C1E'}`,
                             textShadow: 'none',
                           }),
                     }}
@@ -4961,20 +4961,20 @@ export default function ShiftBuilder() {
                     >
                       {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
                     </div>
-                    <div className="text-[11px] text-[#4B5563] mt-0.5 leading-none">
+                    <div className="text-[11px] mt-0.5 leading-none" style={{ color: isDark ? '#9CA3AF' : '#4B5563' }}>
                       {currentView === "deployment"
                         ? `${selectedDay.monthYear} · Day ${selectedDayIndex + 1} of 7`
                         : `${selectedDay.name} · ${selectedDay.monthYear}`}
                     </div>
                     {currentView === "deployment" ? (
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
+                        <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
                         <div className="flex gap-[2px]">
                           {[1, 2, 3].map((g) => (
                             <div
                               key={g}
-                              className="w-[14px] h-[14px] rounded-full bg-[#1C1C1E] text-white text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
-                              style={{ fontFamily: 'var(--font-atkinson)' }}
+                              className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
+                              style={{ background: isDark ? '#E5E5E7' : '#1C1C1E', color: isDark ? '#1C1C1E' : '#fff', fontFamily: 'var(--font-atkinson)' }}
                               title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
                             >
                               {breakCounts[g as 1 | 2 | 3] || ""}
@@ -4984,15 +4984,15 @@ export default function ShiftBuilder() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[10px] font-bold tabular-nums text-[#111]">{inRotationCount}</span>
-                        <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: 'var(--font-atkinson)' }}>IN ROTATION</span>
-                        <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E] ml-1.5" style={{ fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
+                        <span className="text-[10px] font-bold tabular-nums" style={{ color: isDark ? '#F2F2F4' : '#111' }}>{inRotationCount}</span>
+                        <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>IN ROTATION</span>
+                        <span className="text-[8.5px] font-bold tracking-[1px] ml-1.5" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
                         <div className="flex gap-[2px]">
                           {[1, 2, 3].map((g) => (
                             <div
                               key={g}
-                              className="w-[14px] h-[14px] rounded-full bg-[#1C1C1E] text-white text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
-                              style={{ fontFamily: 'var(--font-atkinson)' }}
+                              className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
+                              style={{ background: isDark ? '#E5E5E7' : '#1C1C1E', color: isDark ? '#1C1C1E' : '#fff', fontFamily: 'var(--font-atkinson)' }}
                               title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
                             >
                               {breakCounts[g as 1 | 2 | 3] || ""}
@@ -5015,7 +5015,7 @@ export default function ShiftBuilder() {
                   {currentView === "breaks" && (
                     <div
                       className="text-[9.5px] font-bold tracking-[1.2px] uppercase"
-                      style={{ color: '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}
+                      style={{ color: isDark ? '#9CA3AF' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}
                     >
                       BY BREAK WAVE
                     </div>
@@ -5032,7 +5032,7 @@ export default function ShiftBuilder() {
                           className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px] cursor-pointer"
                           style={{
                             background: isActive ? d.color : 'transparent',
-                            color: isActive ? '#fff' : '#6B7280',
+                            color: isActive ? '#fff' : (isDark ? '#9CA3AF' : '#6B7280'),
                             fontFamily: 'var(--font-atkinson)',
                           }}
                           title={d.name}
