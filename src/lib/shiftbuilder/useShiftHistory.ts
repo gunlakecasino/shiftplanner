@@ -36,6 +36,9 @@ export interface UseShiftHistoryReturn {
  * Designed for one-tab session use. Snapshots are cheap because
  * the assignments map + auxDefs array is small.
  */
+
+const MAX_HISTORY = 50; // cap prevents unbounded memory growth over long sessions
+
 export function useShiftHistory(): UseShiftHistoryReturn {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
@@ -89,7 +92,11 @@ export function useShiftHistory(): UseShiftHistoryReturn {
         after,
       };
 
-      setHistory((prev) => [...prev, entry]);
+      setHistory((prev) => {
+        const next = [...prev, entry];
+        // Trim to MAX_HISTORY — drop oldest entries first
+        return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
+      });
       setRedoStack([]); // clear redo on new action
     },
     []

@@ -391,6 +391,53 @@ export async function clearCanvasStrokes(nightId: string): Promise<void> {
   if (error) console.error('[nightwatch] clearCanvasStrokes error:', error);
 }
 
+// ── addShiftEvent ─────────────────────────────────────────────
+
+export async function addShiftEvent(
+  nightId: string,
+  event: {
+    label: string;
+    location: string;
+    priority: 'low' | 'normal' | 'high';
+    time: string; // "HH:MM" 24-hour
+  }
+): Promise<UIEvent | null> {
+  // Build a full ISO timestamp from the HH:MM string.
+  // Post-midnight hours (00-06) stay on today's date; 23:xx uses today.
+  const [hStr, mStr] = event.time.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const eventDate = new Date();
+  eventDate.setHours(h, m, 0, 0);
+
+  const { data, error } = await supabase
+    .from('shift_events')
+    .insert({
+      night_id: nightId,
+      event_time: eventDate.toISOString(),
+      label: event.label,
+      location: event.location || '',
+      priority: event.priority,
+    })
+    .select('id, event_time, label, location, priority')
+    .single();
+
+  if (error || !data) {
+    console.error('[nightwatch] addShiftEvent error:', error);
+    return null;
+  }
+
+  const d = new Date(data.event_time);
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return {
+    id: data.id,
+    time,
+    label: data.label,
+    location: data.location,
+    priority: data.priority as 'low' | 'normal' | 'high',
+  };
+}
+
 export async function saveCanvasStroke(
   nightId: string,
   stroke: { pathData: string; color: string; width: number }

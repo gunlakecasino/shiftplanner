@@ -1,8 +1,8 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-05-23 ~04:30 UTC — by Claude Sonnet 4.6 after shipping dark mode (system + manual toggle, dim/charcoal)
+**Last Updated**: 2026-05-24 — by Claude Sonnet 4.6 (Agentic Command Post audit + full status sync)
 **Status**: Active / In Progress  
-**Current Epic**: Wave 2 follow-ups + Wave 3 architecture from ATTACK_PLAN_2026-05-22.md
+**Current Epic**: Wave 2 remaining cleanup (W2-1/6/7/8/9/10/11) → Wave 3 architecture + Nightwatch evolution
 
 ---
 
@@ -14,26 +14,24 @@ Build the internal GRAVE scheduling system that ZDS operators actively brag abou
 
 ## Current High-Level Objective
 
-**Phase A (Immediate)**: Stand up the **AI Agentic Command Post** (`Agentic/`) so every future AI session (new chat or not) begins with perfect orientation using the single instruction *"Start by reading the Agentic folder in the project root."*
+**Phase A (Complete)**: ✅ AI Agentic Command Post (`Agentic/`) is live. Any new AI session boots with full context from the magic one-liner.
 
 **Phase B (Ongoing)**: Continue evolving the ShiftBuilder (the 1056×816 Golden artboard) with:
-- World-class Command Palette (iPad Pro + Pencil Pro + Mac keyboard power users)
-- Improved roster rail, drag/drop, draft mode safety, task/break assignment
-- Deeper Grok intelligence (hybrid deterministic + LLM judgment) with guardrails
+- Wave 2 remaining code quality + perf fixes (`useShiftHistory`, `applyDraft`, and quick wins — last open items before Wave 3)
+- Wave 3 architecture: ShiftBuilderClient.tsx monolith split, real Coverage Planner, Grok WhyPanel reasoning surface
+- Nightwatch evolution (real event logging, timeline UX, canvas maturity)
 - Laying groundwork for the eventual **Master Operational AI Agent ("xAI Sphere")**
 
 ---
 
 ## Active Plan
 
-- **PRIMARY**: `Plans/active/ATTACK_PLAN_2026-05-22.md` — **READ THIS FIRST.** Comprehensive bug kills + UX hardening roadmap. Wave 1 = ship-blocking bugs. Wave 2 = UX/code quality. Wave 3 = architecture evolution.
-- **Supporting**: `Plans/active/CODEBASE_CRITIQUE_2026-05-22.md` — full static analysis findings with code excerpts
-- **Migration NEEDS APPLYING**: `supabase/migrations/20260522_engine_config_grok_column.sql` — add `grok_reasoning_effort` column to `engine_config`. Currently causing 400 errors on every page load.
-- **Previous**: `Plans/active/COMMAND_PALETTE_UPGRADE_PLAN.md` (Command Palette Phases 1–3.5 all complete)
-- **Related Vision**: `SCHEDULING_MASTERLIST.md` (the long-term "Scheduling System Operators Revere")
-- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, Key-Information/ops-agent-data-model.md (Master Agent / xAI Sphere groundwork)
+- **PRIMARY**: `Plans/active/ATTACK_PLAN_2026-05-22.md` — Master bug kill + UX roadmap. Has inline completion status table at the top. The only remaining open items are Wave 2 cleanup and Wave 3 architecture.
+- **Related Vision**: `SCHEDULING_MASTERLIST.md` (long-term north star)
+- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, `Key-Information/ops-agent-data-model.md` (Master Agent / xAI Sphere groundwork)
+- **Archive**: `Plans/archive/` — all prior plans (Command Palette, Codebase Critique, Reports Tab, Tasks Tab, Agentic Bootstrap) are done and filed.
 
-All new implementation plans will be placed in `Plans/active/` and archived when complete.
+All new implementation plans go in `Plans/active/` and are archived when complete.
 
 ---
 
@@ -50,10 +48,11 @@ All new implementation plans will be placed in `Plans/active/` and archived when
 
 ## Key Hotspots (Current Code Focus)
 
-- `src/app/shiftbuilder/ShiftBuilderClient.tsx` + `CommandPalette.tsx`
-- `src/lib/shiftbuilder/` — `placement.ts`, `scoring.ts`, `grokEngine.ts`, `grokIntelligence.ts`, `data.ts`, `engineConfig.ts`
-- `src/app/shiftbuilder/sudo/` — configuration surface
-- Supabase migrations in `supabase/migrations/`
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx` — `useShiftHistory` hook identity fix (W2-1), `applyDraft` batch fix (W2-6), quick wins (W2-7/8/9/10/11)
+- `src/lib/shiftbuilder/useShiftHistory.ts` — identity instability (new object every render) + no `MAX_HISTORY` cap
+- `src/app/nightwatch/` — Nightwatch is new and evolving; NightwatchClient.tsx + FreeformCanvas, Widgets, db.ts
+- `src/lib/shiftbuilder/placement.ts` — `runCoveragePlanner` stub + `validatePlacementOrder` dead code (Wave 3)
+- `src/app/shiftbuilder/sudo/` — All tabs now live: Tasks, Reports, BatchPlanner, Schedules, Team, EngineConfig
 
 ---
 
@@ -68,35 +67,53 @@ All new implementation plans will be placed in `Plans/active/` and archived when
 
 ## Immediate Next Goals (as of last update)
 
-### ✅ Done — Wave 1 + Wave 2 (all shipped):
-1. ✅ **Migration applied by Brian**: `supabase/migrations/20260522_engine_config_grok_column.sql` — clears 400 errors.
-2. ✅ **Task drag fix**: Moved `if (a.type === "task")` to top-level in `onDragEnd` — was unreachable inside assigned block.
-3. ✅ **RR border keys**: `'RR1','RR6'…` → `'MRR1','WRR1','MRR6','WRR6'…` in both border flows.
-4. ✅ **onAddTask key format**: Now uses `dbToUi(t.slotKey, t.slotType, t.rrSide)` in refresh loop — tasks appear on cards immediately.
-5. ✅ **Live status pill**: `lastSavedAt` state + `persistAssign` stamps it — shows "Just now", "3m ago", etc. Dot green after first save.
-6. ✅ **Session-stable query split**: 6 queries moved to `[tmCommandEpoch]` effect — day switches fire 13 queries, not 19 (32% fewer round-trips).
-7. ✅ **cmdk value-prop filtering leak**: Action items now use `item.label` only as value — no more "jessica" matching "Jeff" keywords.
-8. ✅ **Grok post-response UX**: After response, `setInputValue("?")` — query cleared, mode stays active, roster not cluttered.
-9. ✅ **Day nav tap targets**: `w-11 h-11` (44×44px) on both day arrow buttons — Apple HIG compliant.
+### ✅ All Shipped (as of 2026-05-23):
 
-### ✅ Done — iPad + Apple Pencil Pro 2 Suite (Session 2):
-- ✅ **Fix A**: `touch-none` on ZoneCard, RRSide, AuxCard, OverlapSlot outer divs
-- ✅ **Fix B**: Sensor tuning — PointerSensor `distance:4`, TouchSensor `delay:250 tolerance:8`
-- ✅ **Fix C**: `autoScroll={false}` on DndContext
-- ✅ **Fix D**: `usePencilHover` hook → gold ring (`ring-[#FFD60A]`) on pen hover for all card types
-- ✅ **Fix E**: Barrel button (`pointerType=pen, button===2`) on all cards → opens ⌘K for that slot
+**Wave 1 — Critical bugs**: DB migration, task drag fix, RR border keys, onAddTask key format, null guard. All done.
 
-### ✅ Done — Dark Mode (Session 3):
-- ✅ **`layout.tsx`**: No-flash `<head>` script + `dark:` body classes
-- ✅ **`globals.css`**: Full `.dark` component override block (artboard, cards, RRs, header, footer, notes)
-- ✅ **`ShiftBuilderClient.tsx`**: `isDark` state, `toggleTheme`, sun/moon toggle in zoom chip, all structural `dark:` variants on floating chips, roster panel, canvas stage, status pill
-- ✅ **Long-hover delay**: 3500ms (per user — "3s4c, 600ms is far too quick")
+**Wave 2 (partial)**: Live status pill, session-stable query split (32% fewer round-trips), cmdk value-prop fix, Grok post-response UX. Done.
 
-### Now (Wave 2 remaining + Wave 3):
-- Fix `useShiftHistory` hook identity (causing excessive re-renders on every action).
-- Architecture evolution: slot-keys centralization, placement engine refactor (Wave 3).
-- Optional: tune card task text readability in dark mode (`.card-meta` amber is very subtle).
+**iPad + Apple Pencil Pro 2 Suite**: `touch-none`, sensor tuning, autoScroll fix, `usePencilHover` gold ring, long-hover palette trigger (3500ms). Done.
 
-**If you are an AI reading this for the first time**: Read `Plans/active/ATTACK_PLAN_2026-05-22.md` for the full roadmap. The log has the complete session history. Ask Brian what to tackle next.
+**Dark Mode**: No-flash system detection + manual toggle, full `.dark` CSS override, sun/moon toggle in zoom chip. Done.
+
+**Sudo Tabs — all built and wired**:
+- `TasksTab.tsx` (520 lines) — full CRUD on `slot_task_catalog`, drag reorder, edit/delete with usage count guard, Default Daily Tasks toggle + seed button
+- `ReportsTab.tsx` — zone frequency per TM, TM-first + zone-first views, 14/30/60d window, CSS bars
+- `BatchPlannerTab.tsx` — run weighted placement engine across entire week, per-night status, skip-filled option
+
+**Coverage command** — new palette action: pick source card → pick target → `CoverageBar` renders on both cards, `isCoverage` flag in data model. Done.
+
+**Touch toolbar pinning** — task row toolbar pins/unpins on touch tap (no hover on iPad). ADP import now auto-creates nights/weeks. Done.
+
+**Nightwatch** (`/nightwatch` route) — FreeformCanvas (pressure-sensitive Pencil, eraser, DB-persisted strokes), TimelineStrip, ShiftStrip, QuickStamp, Widgets, real `shift_events` table. Early but functional.
+
+**DB fix** — `zone_assignments` unique constraint changed to `NULLS NOT DISTINCT` (Postgres 15+). Ghost row dedup applied. Drag/swap persistence now correct.
+
+---
+
+### 🔴 Open — Wave 2 Remaining (quick wins, do before any Wave 3):
+
+- **W2-1** · `useShiftHistory` hook identity — plain object returned from hook = new reference every render = effect fires every render. Fix: stabilize with `useRef` wrapper or depend on individual memoized fn refs.
+- **W2-6** · `applyDraft` — N serial history entries + N serial Supabase upserts → one `recordAtomicChange` + one batch upsert.
+- **W2-7** · `assignedThisNight` O(n²) — replace `Object.values(assignments).some(a => a.tmId === id)` × 20 with `assignedThisNight.has(id)` (Set already exists in scope).
+- **W2-8** · Dead outer `filterTerm` at line 1931 — delete it.
+- **W2-9** · `AuxCard` duplicated `draftInfo` render block — extract `<DraftBadge>`.
+- **W2-10** · `OverlapSlot`/`ZoneTaskList` stale closure on `taskDragEnabled` — pass as explicit prop.
+- **W2-11** · History stack unbounded — add `MAX_HISTORY = 50` trim.
+
+### 🔵 Wave 3 (Architecture — When Wave 2 is Clear):
+- **W3-5** (highest leverage, highest risk): Split `ShiftBuilderClient.tsx` into `useShiftData`, `useDragDrop`, section components — feature branch + Playwright smoke tests required.
+- **W3-1**: `runCoveragePlanner` real implementation (currently delegates to `runWeightedPlanner`).
+- **W3-3**: Surface Grok chain-of-thought in WhyPanel after `?` queries.
+- **W3-4**: Server-side `isEligible()` re-check before committing Grok-suggested assignments.
+- **W3-6**: Real Supabase Realtime connection status in status pill.
+
+### 🟡 Nightwatch Evolution (parallel track):
+Nightwatch is early. Natural next: real event add UI (currently DB-seeded only), improved Timeline UX, canvas layer management, linking events to specific TM/zone assignments.
+
+---
+
+**If you are an AI reading this for the first time**: Read `Plans/active/ATTACK_PLAN_2026-05-22.md` (status table at the top shows what's done/open). Read the last 10–15 log entries to know what just shipped. Ask Brian what to tackle next.
 
 This file is the heartbeat. Keep it alive and accurate.

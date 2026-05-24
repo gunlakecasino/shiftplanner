@@ -254,44 +254,123 @@ export function GraveRoster({ roster, state }: GraveRosterProps) {
 interface EventsCardProps {
   events: UIEvent[];
   currentMin: number;
+  mode: ShiftMode;
+  currentMinClock: string; // "HH:MM" for default time in the add form
+  onAdd?: (event: { label: string; location: string; priority: 'low' | 'normal' | 'high'; time: string }) => void;
 }
 
-export function EventsCard({ events, currentMin }: EventsCardProps) {
-  const elapsed = (time: string): number => {
-    const [h, m] = time.split(':').map(Number);
+const EVENT_PRIORITIES: Array<{ value: 'low' | 'normal' | 'high'; label: string }> = [
+  { value: 'low',    label: 'LOW' },
+  { value: 'normal', label: 'STD' },
+  { value: 'high',   label: 'HIGH' },
+];
+
+export function EventsCard({ events, currentMin, mode, currentMinClock, onAdd }: EventsCardProps) {
+  const [label, setLabel]       = useState('');
+  const [location, setLocation] = useState('');
+  const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
+  const [time, setTime]         = useState(currentMinClock);
+
+  // Keep the time field in sync with the live clock when the field is empty
+  // (i.e., operator hasn't manually set a time yet).
+  const [timeDirty, setTimeDirty] = useState(false);
+  if (!timeDirty && time !== currentMinClock) setTime(currentMinClock);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim() || !onAdd) return;
+    onAdd({ label: label.trim(), location: location.trim(), priority, time });
+    setLabel('');
+    setLocation('');
+    setPriority('normal');
+    setTimeDirty(false);
+  };
+
+  const elapsed = (t: string): number => {
+    const [h, m] = t.split(':').map(Number);
     let mins = h * 60 + m - 23 * 60;
     if (mins < 0) mins += 24 * 60;
     return mins;
   };
 
-  if (events.length === 0) {
-    return (
-      <div className="nw-events-empty">
-        <span>No events logged for this shift.</span>
-      </div>
-    );
-  }
-
   return (
-    <ul className="nw-events">
-      {events.map(e => {
-        const eMin = elapsed(e.time);
-        const done = eMin < currentMin;
-        const live = Math.abs(eMin - currentMin) < 15;
-        return (
-          <li key={e.id} className={`nw-event${done ? ' is-done' : ''}${live ? ' is-live' : ''} is-${e.priority}`}>
-            <div className="nw-event-time">
-              <span className="nw-event-clock">{e.time}</span>
-              {live && <span className="nw-event-now">NOW</span>}
+    <div className="nw-eventscard">
+      {events.length === 0 ? (
+        <div className="nw-events-empty">
+          <span>No events logged for this shift.</span>
+        </div>
+      ) : (
+        <ul className="nw-events">
+          {events.map(e => {
+            const eMin = elapsed(e.time);
+            const done = eMin < currentMin;
+            const live = Math.abs(eMin - currentMin) < 15;
+            return (
+              <li key={e.id} className={`nw-event${done ? ' is-done' : ''}${live ? ' is-live' : ''} is-${e.priority}`}>
+                <div className="nw-event-time">
+                  <span className="nw-event-clock">{e.time}</span>
+                  {live && <span className="nw-event-now">NOW</span>}
+                </div>
+                <div className="nw-event-body">
+                  <div className="nw-event-label">{e.label}</div>
+                  <div className="nw-event-loc">{e.location}</div>
+                </div>
+                {e.priority === 'high' && <span className="nw-event-prio">!</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {mode === 'live' && onAdd && (
+        <form className="nw-event-quickadd" onSubmit={handleSubmit}>
+          <div className="nw-event-quickadd-row">
+            <input
+              type="text"
+              className="nw-event-input nw-event-input--label"
+              placeholder="Event label…"
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+            />
+            <input
+              type="text"
+              className="nw-event-input nw-event-input--time"
+              value={time}
+              onChange={e => { setTime(e.target.value); setTimeDirty(true); }}
+              placeholder="HH:MM"
+              maxLength={5}
+            />
+          </div>
+          <div className="nw-event-quickadd-row">
+            <input
+              type="text"
+              className="nw-event-input nw-event-input--loc"
+              placeholder="Location…"
+              value={location}
+              onChange={e => setLocation(e.target.value)}
+            />
+            <div className="nw-event-prio-seg">
+              {EVENT_PRIORITIES.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  className={`nw-event-prio-btn is-${p.value}${priority === p.value ? ' is-active' : ''}`}
+                  onClick={() => setPriority(p.value)}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
-            <div className="nw-event-body">
-              <div className="nw-event-label">{e.label}</div>
-              <div className="nw-event-loc">{e.location}</div>
-            </div>
-            {e.priority === 'high' && <span className="nw-event-prio">!</span>}
-          </li>
-        );
-      })}
-    </ul>
+            <button
+              type="submit"
+              className="nw-event-add-btn"
+              disabled={!label.trim()}
+            >
+              LOG
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

@@ -1,17 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ShiftMode, NightSummary, TaskItem, Observation, CommittedStroke, ZoneAssignment, RRRow, RosterMember, UIEvent } from '@/lib/nightwatch/types';
-import {
-  ZONE_COLORS,
-  TASKS as MOCK_TASKS,
-  ZONE_ASSIGN as MOCK_ZONES,
-  RR_ASSIGN as MOCK_RR,
-  ROSTER as MOCK_ROSTER,
-  OBSERVATIONS as MOCK_OBS,
-  STROKES as MOCK_STROKES,
-  WEEK as MOCK_WEEK,
-} from './mockData';
+import type { ShiftMode, NightSummary, TaskItem, Observation, CommittedStroke, ZoneAssignment, RRRow, RosterMember, UIEvent, RosterState } from '@/lib/nightwatch/types';
+import { ZONE_COLORS } from './mockData';
 
 import {
   fetchCurrentWeekNights,
@@ -26,11 +17,12 @@ import {
   saveCanvasStroke,
   deleteCanvasStroke,
   clearCanvasStrokes,
+  addShiftEvent,
 } from '@/lib/nightwatch/db';
 
 import PageHeader from './components/PageHeader';
 import ShiftStrip from './components/ShiftStrip';
-import { TaskBoard, ZoneDeployment, RRAssignments, EventsCard } from './components/Widgets';
+import { TaskBoard, ZoneDeployment, RRAssignments, GraveRoster, EventsCard } from './components/Widgets';
 import FreeformCanvas from './components/FreeformCanvas';
 import TimelineStrip from './components/TimelineStrip';
 import QuickStamp from './components/QuickStamp';
@@ -73,28 +65,25 @@ export default function NightwatchClient() {
   const [currentMin, setCurrentMin] = useState(computeCurrentMin);
 
   // ── Night / week ───────────────────────────────────────────
-  const [week, setWeek]                   = useState<NightSummary[]>(MOCK_WEEK);
-  // Start on the mock 'live' night; will be replaced by real DB ID on load
-  const [activeNightId, setActiveNightId] = useState<string>(
-    () => MOCK_WEEK.find(n => n.state === 'live')?.id ?? MOCK_WEEK[0].id
-  );
+  const [week, setWeek]                   = useState<NightSummary[]>([]);
+  const [activeNightId, setActiveNightId] = useState<string>('');
   const [todayNightId, setTodayNightId]   = useState<string | null>(null);
 
-  // ── Widget data ────────────────────────────────────────────
-  // Tasks/zones start with mock data so the UI isn't blank while DB loads.
-  // Canvas starts empty — fills only from real DB strokes + observations.
-  const [tasks, setTasks]           = useState<TaskItem[]>(MOCK_TASKS);
-  const [zones, setZones]           = useState<ZoneAssignment[]>(MOCK_ZONES);
-  const [rrRows, setRrRows]         = useState<RRRow[]>(MOCK_RR);
-  const [roster, setRoster]         = useState<RosterMember[]>(MOCK_ROSTER);
+  // ── Widget data — start empty, fill from DB ────────────────
+  const [tasks, setTasks]               = useState<TaskItem[]>([]);
+  const [zones, setZones]               = useState<ZoneAssignment[]>([]);
+  const [rrRows, setRrRows]             = useState<RRRow[]>([]);
+  const [roster, setRoster]             = useState<RosterMember[]>([]);
+  const [rosterState, setRosterState]   = useState<RosterState>({});
   const [observations, setObservations] = useState<Observation[]>([]);
-  const [strokes, setStrokes]       = useState<CommittedStroke[]>([]);
-  const [shiftEvents, setShiftEvents] = useState<UIEvent[]>([]);
+  const [strokes, setStrokes]           = useState<CommittedStroke[]>([]);
+  const [shiftEvents, setShiftEvents]   = useState<UIEvent[]>([]);
 
   // ── UI state ───────────────────────────────────────────────
   const [selectedObsId, setSelectedObsId] = useState<string | null>(null);
   const [fabOpen, setFabOpen]             = useState(false);
   const [dbReady, setDbReady]             = useState(false);
+  const [loading, setLoading]             = useState(true);
 
   // ── Derive mode from active night ──────────────────────────
   const activeNight = week.find(n => n.id === activeNightId) ?? week[0];
@@ -114,36 +103,38 @@ export default function NightwatchClient() {
   // ── Initial data load ─────────────────────────────────────
   useEffect(() => {
     async function load() {
-      // 1. Week nights (determines which night is live)
-      const { nights, todayNightId: nightId } = await fetchCurrentWeekNights();
-      if (nights.length > 0) {
-        setWeek(nights);
-        if (nightId) {
-          setTodayNightId(nightId);
-          setActiveNightId(nightId);
+      try {
+        // 1. Week nights (determines which night is live)
+        const { nights, todayNightId: nightId } = await fetchCurrentWeekNights();
+        if (nights.length > 0) {
+          setWeek(nights);
+          const liveId = nightId ?? nights.find(n => n.state === 'live')?.id ?? nights[0].id;
+          setActiveNightId(liveId);
+          if (nightId) setTodayNightId(nightId);
         }
+
+        const resolvedNightId = nightId ?? null;
+
+        // 2. All queries in parallel
+        const [dbTasks, dbZone, dbNotes, dbStrokes, dbEvents] = await Promise.all([
+          fetchTasks(),
+          resolvedNightId ? fetchZoneData(resolvedNightId) : null,
+          resolvedNightId ? fetchShiftNotes(resolvedNightId) : null,
+          resolvedNightId ? fetchCanvasStrokes(resolvedNightId) : null,
+          resolvedNightId ? fetchShiftEvents(resolvedNightId) : null,
+        ]);
+
+        setTasks(dbTasks);
+        if (dbZone?.zones.length)  setZones(dbZone.zones);
+        if (dbZone?.rr.length)     setRrRows(dbZone.rr);
+        if (dbZone?.roster.length) setRoster(dbZone.roster);
+        if (dbNotes?.length)       setObservations(dbNotes);
+        if (dbStrokes?.length)     setStrokes(dbStrokes);
+        if (dbEvents)              setShiftEvents(dbEvents);
+      } finally {
+        setLoading(false);
+        setDbReady(true);
       }
-
-      const resolvedNightId = nightId ?? null;
-
-      // 2. All queries in parallel
-      const [dbTasks, dbZone, dbNotes, dbStrokes, dbEvents] = await Promise.all([
-        fetchTasks(),
-        resolvedNightId ? fetchZoneData(resolvedNightId) : null,
-        resolvedNightId ? fetchShiftNotes(resolvedNightId) : null,
-        resolvedNightId ? fetchCanvasStrokes(resolvedNightId) : null,
-        resolvedNightId ? fetchShiftEvents(resolvedNightId) : null,
-      ]);
-
-      if (dbTasks.length > 0)        setTasks(dbTasks);
-      if (dbZone?.zones.length)      setZones(dbZone.zones);
-      if (dbZone?.rr.length)         setRrRows(dbZone.rr);
-      if (dbZone?.roster.length)     setRoster(dbZone.roster);
-      if (dbNotes && dbNotes.length > 0) setObservations(dbNotes);
-      if (dbStrokes && dbStrokes.length > 0) setStrokes(dbStrokes);
-      if (dbEvents) setShiftEvents(dbEvents);
-
-      setDbReady(true);
     }
     load();
   }, []);
@@ -200,6 +191,35 @@ export default function NightwatchClient() {
     }
   }, [todayNightId]);
 
+  // ── Shift events ─────────────────────────────────────────
+  const handleAddEvent = useCallback((eventData: {
+    label: string;
+    location: string;
+    priority: 'low' | 'normal' | 'high';
+    time: string;
+  }) => {
+    const nightId = todayNightId;
+    // Optimistic add
+    const optimisticEvent: UIEvent = {
+      id: `ev${Date.now()}`,
+      ...eventData,
+    };
+    setShiftEvents(prev => [...prev, optimisticEvent].sort((a, b) => a.time.localeCompare(b.time)));
+
+    if (nightId) {
+      addShiftEvent(nightId, eventData)
+        .then(saved => {
+          if (saved) {
+            setShiftEvents(prev =>
+              prev.map(e => e.id === optimisticEvent.id ? saved : e)
+                  .sort((a, b) => a.time.localeCompare(b.time))
+            );
+          }
+        })
+        .catch(console.error);
+    }
+  }, [todayNightId]);
+
   const saveObservation = useCallback((data: {
     text: string;
     urgency: 'low' | 'normal' | 'urgent';
@@ -209,8 +229,12 @@ export default function NightwatchClient() {
     const h24 = Math.floor(((23 * 60 + currentMin) % (24 * 60)) / 60);
     const m   = (23 * 60 + currentMin) % 60;
     const ts  = `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    const x   = 200 + Math.random() * 800;
-    const y   = 100 + Math.random() * 350;
+    // Deterministic grid placement — 4-column grid, rows spaced 120px apart
+    const idx = observations.length;
+    const col = idx % 4;
+    const row = Math.floor(idx / 4);
+    const x   = 140 + col * 230;
+    const y   = 60  + row * 120;
 
     // Optimistic update
     const optimisticObs: Observation = {
@@ -268,6 +292,25 @@ export default function NightwatchClient() {
     { label: 'Roster',       value: `${roster.length} on floor`,             tone: 'ok'   as const },
     { label: 'Open Tasks',   value: String(openTasks),                        tone: 'warn' as const },
   ];
+
+  // ── currentMinClock helper (for EventsCard default time) ──
+  const currentMinClock = (() => {
+    const h24 = Math.floor(((23 * 60 + currentMin) % (24 * 60)) / 60);
+    const m   = (23 * 60 + currentMin) % 60;
+    return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  })();
+
+  // ── Loading state ─────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="nw-app" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div className="nw-loading">
+          <div className="nw-loading-spinner" />
+          <span className="nw-loading-label">Loading shift data…</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="nw-app">
@@ -341,6 +384,23 @@ export default function NightwatchClient() {
           </div>
         </div>
 
+        {/* RR Roster — col 3, row 2 */}
+        <div className="nw-widget nw-widget--roster" style={{ ['--accent' as string]: '#7d5cff' }}>
+          <div className="nw-widget-accent" />
+          <header className="nw-widget-head">
+            <div className="nw-widget-titleblock">
+              <div className="nw-eyebrow nw-widget-eyebrow">PERSONNEL</div>
+              <h3 className="nw-widget-title">Grave Roster</h3>
+            </div>
+            <div className="nw-widget-actions">
+              <span className="nw-widget-meta">{roster.length} on shift</span>
+            </div>
+          </header>
+          <div className="nw-widget-body">
+            <GraveRoster roster={roster} state={rosterState} />
+          </div>
+        </div>
+
         {/* Shift Events — col 4, rows 1-2 */}
         <div className="nw-widget nw-widget--events" style={{ ['--accent' as string]: '#FF3B30' }}>
           <div className="nw-widget-accent" />
@@ -349,9 +409,18 @@ export default function NightwatchClient() {
               <div className="nw-eyebrow nw-widget-eyebrow">BEO / FLOOR</div>
               <h3 className="nw-widget-title">Shift Events</h3>
             </div>
+            <div className="nw-widget-actions">
+              <span className="nw-widget-meta">{shiftEvents.length} logged</span>
+            </div>
           </header>
           <div className="nw-widget-body">
-            <EventsCard events={shiftEvents} currentMin={currentMin} />
+            <EventsCard
+              events={shiftEvents}
+              currentMin={currentMin}
+              mode={mode}
+              currentMinClock={currentMinClock}
+              onAdd={mode === 'live' ? handleAddEvent : undefined}
+            />
           </div>
         </div>
       </div>

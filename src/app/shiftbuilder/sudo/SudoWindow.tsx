@@ -16,7 +16,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2, Zap } from "lucide-react";
+import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2, Zap, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SchedulesTab } from "./SchedulesTab";
 import { TeamTab } from "./TeamTab";
@@ -24,8 +24,9 @@ import { EngineConfigTab } from "./EngineConfigTab";
 import { TasksTab } from "./TasksTab";
 import { ReportsTab } from "./ReportsTab";
 import { BatchPlannerTab } from "./BatchPlannerTab";
+import { DefaultsTab } from "./DefaultsTab";
 
-type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "planner" | "sql" | "edge" | "logs";
+type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "planner" | "defaults" | "sql" | "edge" | "logs";
 
 const TABS: Array<{
   id: SudoTab;
@@ -39,6 +40,7 @@ const TABS: Array<{
   { id: "reports",   label: "Reports",      icon: BarChart2,       status: "ready" },
   { id: "engine",    label: "Engine Config",icon: Settings2,       status: "ready" },
   { id: "planner",   label: "Batch Planner",icon: Zap,             status: "ready" },
+  { id: "defaults",  label: "Card Defaults",icon: Layers,          status: "ready" },
   { id: "sql",       label: "SQL Runner",   icon: Database,        status: "coming-soon" },
   { id: "edge",      label: "Edge Functions",icon: Code2,          status: "coming-soon" },
   { id: "logs",      label: "Logs",         icon: ScrollText,      status: "coming-soon" },
@@ -51,10 +53,12 @@ export interface SudoWindowProps {
    *  cares about (schedule Apply / Unapply / Delete). Parent should
    *  bump its load epoch to refresh roster + night_tm_status state. */
   onDataChanged?: () => void;
-  currentNightId?: string | null;   // passed down so TasksTab can offer "Apply defaults"
+  currentNightId?: string | null;   // passed down so TasksTab / DefaultsTab can offer push-today
+  /** Friday that starts the current GRAVE week — used by DefaultsTab push-to-week. */
+  weekStart?: Date | null;
 }
 
-export function SudoWindow({ open, onClose, onDataChanged, currentNightId }: SudoWindowProps) {
+export function SudoWindow({ open, onClose, onDataChanged, currentNightId, weekStart }: SudoWindowProps) {
   const [activeTab, setActiveTab] = React.useState<SudoTab>("schedules");
 
   // Close on Escape.
@@ -179,6 +183,7 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId }: Sud
             {activeTab === "reports"   && <ReportsTab />}
             {activeTab === "engine"    && <EngineConfigTab onDataChanged={onDataChanged} />}
             {activeTab === "planner"   && <BatchPlannerTab onDataChanged={onDataChanged} />}
+            {activeTab === "defaults"  && <DefaultsTab onDataChanged={onDataChanged} currentNightId={currentNightId} weekStart={weekStart} />}
             {activeTab === "sql"       && <ComingSoonPanel feature="SQL Runner" />}
             {activeTab === "edge"      && <ComingSoonPanel feature="Edge Functions" />}
             {activeTab === "logs"      && <ComingSoonPanel feature="Logs" />}

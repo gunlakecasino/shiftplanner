@@ -15,6 +15,9 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+// NOTE: useDraggable/useDroppable are still used inline by ZoneCard, RRCard, AuxCard,
+// OverlapSlot — they'll be removed from this import during Phase 3 when those
+// components are extracted to components/ and import useSlotDnd from lib instead.
 import {
   getNightIdForDate,
   getOrCreateNightForDate,
@@ -43,6 +46,7 @@ import {
   getNightBreakAssignments,
   upsertBreakAssignment,
   deleteBreakAssignment,
+  batchApplyDraftAssignments,
   type CatalogTask,
   type NightSlotTask,
 } from "@/lib/shiftbuilder/data";
@@ -94,236 +98,37 @@ import { askGrokEngineDraft } from "./actions";
 import { SudoWindow } from "./sudo/SudoWindow";
 import { XAISphere } from "./xai/XAISphere";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
+// ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
+import {
+  startOfShiftWeek, currentShiftDate, daysBetween, addDays, sameDay,
+  formatWeekLabel, SHIFT_DAY_COLORS, MONTH_SHORT, MONTH_LONG, DAY_LONG,
+  buildDayDefs, type DayDef,
+} from "@/lib/shiftbuilder/dateUtils";
+import {
+  ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS, EXTRA_AUX_COLORS,
+  ZONE_ICONS, RR_ICONS, AUX_ICONS, getAuxIcon,
+  ZONE_COLORS, getZoneColor, RR_COLORS, getRRAccent, AUX_COLORS, getAuxAccent,
+  type BreakGroup, nextBreakGroup, COVERAGE_BAR_H,
+} from "@/lib/shiftbuilder/constants";
+import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
+import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
+import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
+// ── Phase 2 extractions — primitive UI components ─────────────────────────────
+import BreakBadge from "./components/BreakBadge";
+import AssignmentLine from "./components/AssignmentLine";
+import TaskRow, { TASK_COLOR_SPHERES } from "./components/TaskRow";
+import CoverageBar from "./components/CoverageBar";
+import ZoneTaskList from "./components/ZoneTaskList";
+import ZoneCard from "./components/ZoneCard";
+import RRCard from "./components/RRCard";
+import AuxCard from "./components/AuxCard";
+import OverlapSlot from "./components/OverlapSlot";
+// Phase 4 — extracted hooks
+import { useTheme } from "./hooks/useTheme";
+import { useRosterPanels } from "./hooks/useRosterPanels";
+import { useToast } from "./hooks/useToast";
+import { useZoom, NATURAL_WIDTH, NATURAL_HEIGHT } from "./hooks/useZoom";
 
-
-// === Golden-exact data definitions (restored) ===
-
-// ── Date model ─────────────────────────────────────────────────────────────
-// The operational "shift week" runs Friday → Thursday. A shift is named after
-// the night it begins (Friday's grave = Fri 11p → Sat 7a). All date logic in
-// this file flows from `weekStart` (a Friday) + a day index 0..6.
-const SHIFT_WEEK_START_DOW = 5; // 0 = Sun, 5 = Fri
-
-function startOfShiftWeek(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // distance back to the most recent Friday (inclusive)
-  const back = (d.getDay() + 7 - SHIFT_WEEK_START_DOW) % 7;
-  d.setDate(d.getDate() - back);
-  return d;
-}
-
-// === Shift-aware "today" =====================================================
-// A grave shift runs 11pm → 7am and is named after the day it BEGINS. So
-// Friday's grave shift runs Fri 11pm → Sat 7am. At 6:30am Saturday morning the
-// operator is still finishing Friday's deployment — the picker should still
-// show Friday selected, not Saturday.
-//
-// SHIFT_ROLLOVER_HOUR/MINUTE define when "today" advances to the next calendar
-// date. Before the rollover (midnight → 8:30am), we return *yesterday's*
-// calendar date as the active shift date. After the rollover, we return
-// today's calendar date.
-const SHIFT_ROLLOVER_HOUR = 8;
-const SHIFT_ROLLOVER_MINUTE = 30;
-
-function currentShiftDate(now: Date = new Date()): Date {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const beforeRollover =
-    hour < SHIFT_ROLLOVER_HOUR ||
-    (hour === SHIFT_ROLLOVER_HOUR && minute < SHIFT_ROLLOVER_MINUTE);
-  if (beforeRollover) {
-    d.setDate(d.getDate() - 1);
-  }
-  return d;
-}
-
-// Whole-day difference between two midnight-anchored Date values.
-function daysBetween(from: Date, to: Date): number {
-  const ms = to.getTime() - from.getTime();
-  return Math.round(ms / (24 * 60 * 60 * 1000));
-}
-
-function addDays(date: Date, n: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-
-function sameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const MONTH_LONG  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const DAY_LONG    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-
-function formatWeekLabel(start: Date): string {
-  const end = addDays(start, 6);
-  if (start.getMonth() === end.getMonth()) {
-    return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${end.getDate()}, ${end.getFullYear()}`;
-  }
-  return `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
-}
-
-// Per-day accent colors (cycle through the 7 nights of the operational week).
-const SHIFT_DAY_COLORS = ["#C13A14", "#0065bf", "#4d1a8a", "#1f7a3d", "#b8860b", "#8b4513", "#2f4f4f"];
-
-interface DayDef {
-  index: number;
-  date: Date;
-  short: string;
-  name: string;
-  dateNum: number;
-  monthYear: string;
-  color: string;
-  meta: string;
-  isToday: boolean;
-}
-
-function buildDayDefs(weekStart: Date, today: Date): DayDef[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(weekStart, i);
-    const name = DAY_LONG[date.getDay()];
-    return {
-      index: i,
-      date,
-      short: name.charAt(0),
-      name,
-      dateNum: date.getDate(),
-      monthYear: `${MONTH_LONG[date.getMonth()]} ${date.getFullYear()}`,
-      color: SHIFT_DAY_COLORS[i],
-      meta: "11p – 7a",
-      isToday: sameDay(date, today),
-    };
-  });
-}
-
-// Placement order is now imported from @/lib/shiftbuilder/placement
-// (single source of truth for the Coverage Planner)
-
-// Zone identities — labels are rendered uppercase in the card per the Golden
-const ZONE_DEFS = [
-  { key: "Z1",  label: "ZONE 1",  locations: ["Main Entry North"] },
-  { key: "Z2",  label: "ZONE 2",  locations: ["Main Entry South"] },
-  { key: "Z3",  label: "ZONE 3",  locations: ["Food Court North"] },
-  { key: "Z4",  label: "ZONE 4",  locations: ["Food Court South"] },
-  { key: "Z5",  label: "ZONE 5",  locations: ["Slots West"] },
-  { key: "Z6",  label: "ZONE 6",  locations: ["Slots East"] },
-  { key: "Z7",  label: "ZONE 7",  locations: ["High Limit"] },
-  { key: "Z8",  label: "ZONE 8",  locations: ["Table Games North"] },
-  { key: "Z9",  label: "ZONE 9",  locations: ["Table Games South"] },
-  { key: "Z10", label: "ZONE 10", locations: ["Poker"] },
-];
-
-// Restrooms — labels match the Golden ("RR 1+2", "RR 6", etc.)
-const RR_DEFS = [
-  { num: 1,  label: "RR 1+2", mensLoc: "Main Entry",  womensLoc: "Main Entry"  },
-  { num: 6,  label: "RR 6",   mensLoc: "Slots",       womensLoc: "Slots"       },
-  { num: 7,  label: "RR 7",   mensLoc: "High Limit",  womensLoc: "High Limit"  },
-  { num: 8,  label: "RR 8",   mensLoc: "Table Games", womensLoc: "Table Games" },
-  { num: 10, label: "RR 10",  mensLoc: "Poker",       womensLoc: "Poker"       },
-];
-
-// Auxiliary / Support slots
-// NOTE: The first four (Z9SR, ADM, TR1, TR2) have **fixed positions** in PLACEMENT_ORDER.
-// Any additional support slots the operator adds should be appended after TR2.
-const DEFAULT_AUX_DEFS: AuxDef[] = [
-  { key: "Z9SR", label: "Z9 SR",     locations: ["Z9 Smoking Room"] },
-  { key: "ADM",  label: "ADMIN",     locations: ["Floor Admin"]     },
-  { key: "TR1",  label: "TRASH 1",   locations: ["West Trash Run"]  },
-  { key: "TR2",  label: "TRASH 2",   locations: ["East Trash Run"]  },
-  { key: "SP1",  label: "SUPPORT 1", locations: ["Float Support"]   },
-  { key: "SP2",  label: "SUPPORT 2", locations: ["Float Support"]   },
-];
-
-// Fallback accents for operator-added AUX slots (cycle through these so they
-// don't all collapse to the same gray).
-const EXTRA_AUX_COLORS = ["#6B7280", "#0EA5E9", "#A855F7", "#16A34A", "#DC2626"];
-
-// Per-zone identity glyphs — match the Golden's symbol-per-zone treatment.
-// Each zone has a unique shape rendered in the zone's accent color in the
-// card header, giving operators a non-verbal visual anchor while scanning.
-const ZONE_ICONS: Record<string, string> = {
-  Z1:  "★", // ★ star
-  Z2:  "◆", // ◆ diamond
-  Z3:  "▲", // ▲ triangle up
-  Z4:  "■", // ■ square
-  Z5:  "⬟", // ⬟ black pentagon
-  Z6:  "♥", // ♥ heart
-  Z7:  "●", // ● circle
-  Z8:  "◐", // ◐ half-disc
-  Z9:  "☾", // ☾ moon
-  Z10: "✚", // ✚ heavy cross
-};
-
-// RR cards reuse the zone glyph of the area they serve.
-const RR_ICONS: Record<number, string> = {
-  1:  "★", // ★ — RR 1+2 paired with the Z1/Z2 zone identity
-  6:  "♥", // ♥
-  7:  "●", // ●
-  8:  "◐", // ◐
-  10: "✚", // ✚
-};
-
-// AUX glyphs — chosen to evoke each AUX role without conflicting with the
-// zone glyphs. Operator-added AUX slots fall back to a generic ✦.
-const AUX_ICONS: Record<string, string> = {
-  Z9SR: "☾", // ☾ moon (mirrors Z9)
-  ADM:  "❖", // ❖ four-pointed-star (admin / paperwork)
-  TR1:  "✖", // ✖ heavy cross (trash route)
-  TR2:  "✖",
-  SP1:  "✦", // ✦ four-pointed star
-  SP2:  "✦",
-};
-const getAuxIcon = (key: string) => AUX_ICONS[key] || "✦";
-
-// Exact Golden palette (eyeballed from friday_golden_zoneCardSheet.png)
-const ZONE_COLORS: Record<string, string> = {
-  Z1:  '#B89708', // gold
-  Z2:  '#B89708', // gold — matches Z1 (Main Entry area)
-  Z3:  '#E53935', // red
-  Z4:  '#E53935', // red
-  Z5:  '#E53935', // red
-  Z6:  '#B7679A', // magenta
-  Z7:  '#1976D2', // blue
-  Z8:  '#6B5346', // brown
-  Z9:  '#E53935', // red
-  Z10: '#43A047', // green
-};
-
-const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
-
-// RR accent — mirrors the zone color of the area each RR serves
-const RR_COLORS: Record<number, string> = {
-  1:  '#B89708', // RR 1+2 — gold (Main Entry, paired with Z1/Z2)
-  6:  '#B7679A', // RR 6  — magenta (Slots East, matches Z6)
-  7:  '#1976D2', // RR 7  — blue (High Limit, matches Z7)
-  8:  '#6B5346', // RR 8  — brown (Table Games, paired with Z8)
-  10: '#43A047', // RR 10 — green (Poker, paired with Z10)
-};
-const getRRAccent = (num: number) => RR_COLORS[num] || '#6B7280';
-
-// AUX accent palette
-const AUX_COLORS: Record<string, string> = {
-  Z9SR: '#E53935', // red    (same as Z9)
-  ADM:  '#B7679A', // magenta
-  TR1:  '#FB8C00', // orange
-  TR2:  '#FB8C00', // orange
-  SP1:  '#1976D2', // blue
-  SP2:  '#1976D2', // blue (kept in palette; SP2 is still a valid key if added back)
-};
-// Operator-added slots (keys like "AUX6", "AUX7") fall through to a stable
-// color derived from the trailing digits so each added slot is visually
-// distinct without needing a color picker yet.
-const getAuxAccent = (key: string): string => {
-  if (AUX_COLORS[key]) return AUX_COLORS[key];
-  const m = key.match(/(\d+)$/);
-  const idx = m ? parseInt(m[1], 10) : 0;
-  return EXTRA_AUX_COLORS[idx % EXTRA_AUX_COLORS.length];
-};
 
 // =============================================================================
 // CARD RENDERERS — Golden-faithful (matches ZDS Goldens/*.png anatomy):
@@ -336,563 +141,7 @@ const getAuxAccent = (key: string): string => {
 //     quick-action fan
 // =============================================================================
 
-// Small black break-group badge used on every card type. Click cycles 1→2→3.
-// Hit area extends beyond the visible glyph via padding+negative-margin so the
-// chip stays at Golden-density visually but is comfortably tappable on iPad
-// (28×24 effective hit area, satisfies the 24pt-minimum guidance for dense UI).
-// Break-group state model:
-//   0 (or no row) = off the break sheet this shift ("–" badge) — used for overlaps
-//                   and anyone deliberately not put on the break rotation.
-//   1/2/3         = numeric break group.
-// Cycle order is 1 → 2 → 3 → – → 1. Choosing "–" removes the break record.
-type BreakGroup = 0 | 1 | 2 | 3;
-const nextBreakGroup = (cur: BreakGroup): BreakGroup => {
-  // 1→2, 2→3, 3→0 (off), 0→1
-  if (cur === 0) return 1;
-  if (cur === 3) return 0;
-  return ((cur + 1) as BreakGroup);
-};
-
-// BreakBadge: value 0 (or missing) = off the break sheet ("–") for this shift.
-// Values 1/2/3 = the break wave. Cycle order 1→2→3→–→1. "-" deletes the DB record.
-const BreakBadge: React.FC<{ value: number; onCycle: () => void; size?: "sm" | "md" }> = ({ value, onCycle, size = "md" }) => {
-  const visual = size === "sm" ? "w-[18px] h-[14px] text-[9px]" : "w-[22px] h-[16px] text-[10.5px]";
-  const label = value === 0 ? "Off the break sheet — tap to cycle" : `Break Group ${value} — tap to cycle`;
-  const isOff = value === 0;
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      onPointerDown={(e) => e.stopPropagation()}
-      className="-m-1.5 p-1.5 inline-flex items-center justify-center shrink-0"
-      title={label}
-      aria-label={label}
-    >
-      <span
-        className={`${visual} ${isOff ? "bg-[#9CA3AF]" : "bg-[#1C1C1E]"} text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none`}
-        style={{ fontFamily: 'var(--font-atkinson)' }}
-      >
-        {isOff ? "–" : value}
-      </span>
-    </button>
-  );
-};
-
-// Dashed assignment line — TM name rides on top, or empty when unfilled.
-const AssignmentLine: React.FC<{ tmName?: string | null; placeholder?: string; size?: "sm" | "md"; isLocked?: boolean; loading?: boolean }> = ({ tmName, placeholder = "", size = "md", isLocked = false, loading = false }) => {
-  const text = size === "sm" ? "text-[9px]" : "text-[11px]";
-  if (loading) {
-    return (
-      <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight`}>
-        <span className="inline-block h-[10px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
-      </div>
-    );
-  }
-  return (
-    <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[#111] dark:text-[#F2F2F4]" : "text-[#C8C8CC] dark:text-[#48484A]"}`}>
-      {isLocked && tmName && (
-        <svg width={size === "sm" ? 8 : 10} height={size === "sm" ? 8 : 10} viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-          <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-        </svg>
-      )}
-      <span className="truncate">{tmName || placeholder || " "}</span>
-    </div>
-  );
-};
-
-// Spotlight cursor tracker — attached to every .assignment-card via
-// onPointerMove. Updates --mouse-x/--mouse-y CSS variables directly on the
-// DOM node (no React re-render) so the spotlight radial gradient defined in
-// .assignment-card::before follows the cursor smoothly. The card's accent
-// color comes from a separate inline style (--card-accent) so the glow
-// inherits whatever the zone/RR/AUX color is.
-const handleSpotlightMove = (e: React.PointerEvent<HTMLElement>) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty("--mouse-x", `${e.clientX - r.left}px`);
-  e.currentTarget.style.setProperty("--mouse-y", `${e.clientY - r.top}px`);
-};
-
-// Shared hook: turn a slot key into a "card is both droppable AND draggable"
-// node. Draggable only activates when the card is filled, so empty cards just
-// receive drops; filled cards can be picked up and moved/swapped/unassigned.
-function useSlotDnd(slotKey: string, slotType: "zone" | "rr" | "aux" | "overlap", tm: { tmId?: string | null; tmName?: string | null }) {
-  const { setNodeRef: setDropRef, isOver, active } = useDroppable({
-    id: `slot:${slotKey}`,
-    data: { type: "slot", slotKey, slotType },
-  });
-  const hasTM = !!tm.tmName;
-  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-    id: `assigned:${slotKey}`,
-    data: { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName },
-    disabled: !hasTM,
-  });
-  const setRef = (el: HTMLElement | null) => {
-    setDropRef(el);
-    setDragRef(el);
-  };
-  // Only count as "valid drop target" when an incoming drag is a TM or an
-  // assigned card from a different slot (don't highlight when hovering itself).
-  const incomingFromOther =
-    isOver && active && active.data.current?.type !== undefined &&
-    !(active.data.current?.type === "assigned" && active.data.current?.fromSlot === slotKey);
-  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM };
-}
-
-// ─── Pencil hover hook ────────────────────────────────────────────────────────
-// Detects Apple Pencil Pro 2 hover (pointerType === "pen", buttons === 0)
-// so cards show a gold ring before contact — giving operators a clean aim target.
-//
-// Also fires onLongHover(element) after `longHoverDelay` ms of uninterrupted
-// hover — this is the web-accessible substitute for the squeeze gesture.
-// (Apple Pencil Pro squeeze is consumed by iPadOS at the system level and
-// NEVER reaches a Safari web app — it requires native UIPencilInteraction /
-// onPencilSqueeze SwiftUI API. The `button === 2` hack does not work.)
-//
-// clearLongHoverTimer is exported so the card's onPointerDown can cancel
-// the pending palette-open when the user makes contact instead of hovering.
-function usePencilHover(
-  onLongHover?: (el: HTMLElement) => void,
-  longHoverDelay = 3500,
-) {
-  const [isPenHovering, setIsPenHovering] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearLongHoverTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  const penHoverHandlers = {
-    onPointerEnter: (e: React.PointerEvent<HTMLElement>) => {
-      if (e.pointerType !== "pen") return;
-      setIsPenHovering(true);
-      // Only arm long-hover during true hover (Pencil above glass, not touching).
-      // When touching, buttons === 1; hover pointer has buttons === 0.
-      if (e.buttons === 0 && onLongHover) {
-        const el = e.currentTarget; // capture DOM ref before React async-nulls it
-        clearLongHoverTimer();
-        timerRef.current = setTimeout(() => onLongHover(el), longHoverDelay);
-      }
-    },
-    onPointerLeave: (e: React.PointerEvent) => {
-      if (e.pointerType !== "pen") return;
-      setIsPenHovering(false);
-      clearLongHoverTimer();
-    },
-    // pointercancel fires on OS interruption (Scribble, multitask, incoming call).
-    // Without this the hover ring and timer would freeze in the "active" state.
-    onPointerCancel: (e: React.PointerEvent) => {
-      if (e.pointerType !== "pen") return;
-      setIsPenHovering(false);
-      clearLongHoverTimer();
-    },
-  };
-
-  return { isPenHovering, penHoverHandlers, clearLongHoverTimer };
-}
-
-interface ZoneCardProps {
-  def: any;
-  assignments: any;
-  selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
-  onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
-  loading?: boolean;
-  borderColor?: string;
-  isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}
-
-const ZoneCard: React.FC<ZoneCardProps> = ({ 
-  def, 
-  assignments, 
-  selectedTasks, 
-  setBreakGroupForSlot, 
-  onCardClick, 
-  loading = false, 
-  borderColor,
-  isDraftMode = false,
-  draftInfo,
-  onRemoveTask,
-  onSetTaskColor,
-  onEditTask 
-}) => {
-  const a = assignments[def.key] || {};
-  const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
-  const color = getZoneColor(def.key);
-  const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "zone", { tmId: a.tmId, tmName: a.tmName });
-
-  const icon = ZONE_ICONS[def.key] ?? "●";
-  const isEmpty = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(def.key, el),
-  );
-
-  const zoneCoverageTasks = (selectedTasks[def.key] || []).filter(t => t.isCoverage);
-  const coverageBodyPb = zoneCoverageTasks.length > 0
-    ? zoneCoverageTasks.length * COVERAGE_BAR_H + 2
-    : 6; // default pb-1.5 ≈ 6px
-
-  return (
-    <div
-      ref={setRef}
-      onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
-      onPointerMove={handleSpotlightMove}
-      {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        // Contact cancels any pending long-hover palette open (user is dragging).
-        // NOTE: Pencil Pro squeeze is NOT web-accessible — it is consumed by
-        // iPadOS at the system level. Long-hover is the web replacement for squeeze.
-        clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
-      data-slot-key={def.key}
-      className={`assignment-card relative overflow-hidden cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
-      style={{
-        ["--card-accent" as any]: color,
-        ...(borderColor && {
-          border: `2px solid ${borderColor}`,
-          boxShadow: `0 0 0 1px ${borderColor}33`
-        })
-      }}
-    >
-      {/* Colored top stripe */}
-      <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
-
-      {/* Header: icon + label + break badge.
-         The bottom border uses the zone color at low alpha to delineate
-         the header from the body without competing with the top stripe. */}
-      <div
-        className="flex items-start justify-between gap-1 px-2 pt-1 pb-1"
-        style={{ borderBottom: `1px solid ${color}33` }}
-      >
-        <div className="flex items-center gap-1 leading-none" style={{ color }}>
-          <span className="text-[11px] leading-none">{icon}</span>
-          <span
-            className="font-extrabold tracking-[0.4px] uppercase"
-            style={{ fontSize: 10.5, fontFamily: "var(--font-atkinson)" }}
-          >
-            {def.label}
-          </span>
-        </div>
-        <BreakBadge value={currentBreak} onCycle={cycleBreak} />
-      </div>
-
-      {/* Body: large TM name + optional location lines */}
-      <div className="flex flex-col flex-1 px-2 pt-1.5" style={{ paddingBottom: coverageBodyPb }}>
-        {loading && !hasTM ? (
-          <div className="h-[18px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
-        ) : isDraftMode && draftInfo ? (
-          <div className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 18, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {draftInfo.proposedTmName}
-            </span>
-            {draftInfo.previousTmName && (
-              <span 
-                className="text-[10px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-atkinson)" }}
-              >
-                was: {draftInfo.previousTmName}
-              </span>
-            )}
-          </div>
-        ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-                <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-              </svg>
-            )}
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 20, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {a.tmName}
-            </span>
-          </div>
-        ) : (
-          <div className="unassigned-label mt-0.5 text-[#6B7280] font-medium tracking-[0.4px] text-[10.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>
-            — Unassigned —
-          </div>
-        )}
-
-        <ZoneTaskList
-          tasks={(selectedTasks[def.key] || []).filter(t => !t.isCoverage)}
-          hasTM={hasTM}
-          slotKey={def.key}
-          onRemoveTask={onRemoveTask}
-          onSetTaskColor={onSetTaskColor}
-          onEditTask={onEditTask}
-        />
-      </div>
-      {/* Coverage bars — rendered outside the padded body so they span full card width */}
-      {(selectedTasks[def.key] || [])
-        .filter(t => t.isCoverage)
-        .map(t => (
-          <CoverageBar key={t.id} task={t} slotKey={def.key} onRemoveTask={onRemoveTask} />
-        ))
-      }
-    </div>
-  );
-};
-
-// ============================================================================
-// TaskRow — shared per-task line with always-visible color sphere + hover picker
-// Used by Zone cards, RR sides, and Overlap slots. The sphere prints because
-// it is real DOM content (backgroundColor on a div).
-// ============================================================================
-
-const TASK_COLOR_SPHERES = [
-  { name: 'Gold',    hex: '#B89708' },
-  { name: 'Red',     hex: '#E53935' },
-  { name: 'Magenta', hex: '#B7679A' },
-  { name: 'Blue',    hex: '#1976D2' },
-  { name: 'Brown',   hex: '#6B5346' },
-  { name: 'Green',   hex: '#43A047' },
-  { name: 'Orange',  hex: '#FB8C00' },
-] as const;
-
-interface TaskRowProps {
-  task: NightSlotTask;
-  slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  // Slight visual tweaks per context (Zone vs tight RR/Overlap)
-  textSize?: string;
-  textColorClass?: string;
-  /** When true (from Sudo Tasks tab prefs), render a drag grip and make the row draggable for cross-card reassign */
-  draggable?: boolean;
-}
-
-const TaskRow: React.FC<TaskRowProps> = ({
-  task,
-  slotKey,
-  onRemoveTask,
-  onSetTaskColor,
-  onEditTask,
-  textSize = "text-[11px]",
-  textColorClass = "text-[#374151] dark:text-[#C7C7CC]",
-  draggable = false,
-}) => {
-  // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
-  // The Sudo Tasks tab writes to the same localStorage key.
-  const effectiveDraggable = React.useMemo(() => {
-    if (typeof window === 'undefined') return draggable;
-    try {
-      const raw = localStorage.getItem('shiftbuilder:taskUxPrefs');
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (typeof p.dragEnabled === 'boolean') return p.dragEnabled;
-      }
-    } catch {}
-    return draggable;
-  }, [draggable]);
-  const hasColor = !!task.color;
-  const [isColorExpanded, setIsColorExpanded] = React.useState(false);
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editValue, setEditValue] = React.useState('');
-  // Touch devices have no hover — a tap on the row pins/unpins the toolbar.
-  const [toolbarPinned, setToolbarPinned] = React.useState(false);
-
-  // dnd-kit support for dragging this task to a different card (when the
-  // Sudo > Tasks tab has the feature enabled).
-  const {
-    attributes: taskDragAttributes,
-    listeners: taskDragListeners,
-    setNodeRef: setTaskDragRef,
-  } = useDraggable({
-    id: `task:${slotKey}:${task.taskLabel}`,
-    data: {
-      type: "task",
-      fromSlot: slotKey,
-      taskLabel: task.taskLabel,
-      catalogTaskId: task.catalogTaskId ?? null,
-      color: task.color ?? null,
-    },
-    disabled: !effectiveDraggable,
-  });
-
-  const startEditing = () => {
-    setIsEditing(true);
-    setEditValue(task.taskLabel);
-    setIsColorExpanded(false);
-  };
-
-  const saveEdit = () => {
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== task.taskLabel) {
-      onEditTask?.(slotKey, task.taskLabel, trimmed);
-    }
-    setIsEditing(false);
-  };
-
-  const cancelEdit = () => {
-    setIsEditing(false);
-  };
-
-  return (
-    <div
-      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
-      onPointerUp={(e) => {
-        // Touch tap on a task row: pin/unpin the toolbar instead of opening
-        // the card palette. stopPropagation prevents the card onClick from firing.
-        if (e.pointerType === 'touch') {
-          e.stopPropagation();
-          setToolbarPinned((p) => !p);
-        }
-      }}
-    >
-      {effectiveDraggable && (
-        <div
-          ref={setTaskDragRef}
-          {...taskDragListeners}
-          {...taskDragAttributes}
-          className="mt-px mr-1 cursor-grab text-[#9CA3AF] opacity-60 group-hover/task:opacity-100 active:cursor-grabbing select-none touch-none"
-          title="Drag this task to another card to reassign it"
-        >
-          ⠿
-        </div>
-      )}
-      {/* Label area — supports inline editing + hanging indent for wrapping.
-          When a highlight color is set, we apply a left border + subtle background
-          tint directly to the text block so the highlight extends the full length
-          of the task label (including wrapped lines). No separate sphere. */}
-      <div className="min-w-0 flex-1 leading-snug">
-        {isEditing ? (
-          <input
-            type="text"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={saveEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveEdit();
-              if (e.key === 'Escape') cancelEdit();
-            }}
-            className="w-full bg-white dark:bg-[#2C2C2E] border border-[#007AFF]/40 rounded px-1 py-0.5 text-inherit focus:outline-none"
-            autoFocus
-          />
-        ) : (
-          <span
-            className={`block rounded-sm transition-colors ${hasColor ? '' : 'pl-[13px] -indent-[13px]'}`}
-            style={hasColor ? {
-              backgroundColor: `${task.color}15`,
-              borderLeft: `3px solid ${task.color}`,
-              paddingLeft: '9px',
-              marginLeft: '-1px'
-            } : undefined}
-          >
-            {task.taskLabel}
-          </span>
-        )}
-      </div>
-
-      {/* Compact hover toolbar — collapsed by default for maximum density.
-          Color control can be clicked to expand the full palette. */}
-      {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
-        <div className={`absolute right-0.5 top-0.5 items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10 ${toolbarPinned ? 'flex' : 'hidden group-hover/task:flex'}`}>
-          {/* Color control — collapsed until clicked */}
-          {onSetTaskColor && (
-            <>
-              {!isColorExpanded ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsColorExpanded(true);
-                  }}
-                  className="flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-black/20 hover:ring-black/40"
-                  style={{ backgroundColor: hasColor ? task.color! : '#E5E5E7' }}
-                  title="Change task color"
-                >
-                  <span className="text-[7px] leading-none text-white/70">●</span>
-                </button>
-              ) : (
-                /* Expanded color palette */
-                <div className="flex items-center gap-1">
-                  {TASK_COLOR_SPHERES.map((c) => (
-                    <button
-                      key={c.hex}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSetTaskColor(slotKey, task.taskLabel, c.hex);
-                        setIsColorExpanded(false);
-                      }}
-                      className="w-2.5 h-2.5 rounded-full ring-1 ring-black/15 hover:ring-black/40"
-                      style={{ backgroundColor: c.hex }}
-                      title={c.name}
-                    />
-                  ))}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSetTaskColor(slotKey, task.taskLabel, null);
-                      setIsColorExpanded(false);
-                    }}
-                    className="w-2.5 h-2.5 rounded-full bg-white ring-1 ring-black/20 text-[7px] text-[#9CA3AF]"
-                    title="Remove color"
-                  >
-                    ×
-                  </button>
-                  {/* Collapse button */}
-                  <button
-                    onClick={() => setIsColorExpanded(false)}
-                    className="ml-0.5 text-[10px] text-[#9CA3AF] hover:text-[#6B7280]"
-                    title="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Edit (pencil) */}
-          {onEditTask && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                startEditing();
-              }}
-              className="text-[#6B7280] hover:text-[#007AFF] text-[11px] leading-none"
-              title="Edit task"
-            >
-              ✎
-            </button>
-          )}
-
-          {/* Delete */}
-          {onRemoveTask && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setToolbarPinned(false);
-                onRemoveTask(slotKey, task.taskLabel);
-              }}
-              className="text-red-400 hover:text-red-500 text-[12px] leading-none font-bold"
-              title="Remove task"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+// BreakBadge, AssignmentLine, ZoneCard, RRCard, AuxCard, OverlapSlot now imported from components/ above.
 
 // ============================================================================
 // Coverage helpers — support "Add Coverage" command
@@ -931,462 +180,7 @@ function expandCoverageToKeys(uiKey: string): string[] {
  * that the TM is pulling double duty covering another slot.
  * Background is the accent color of the SOURCE slot.
  */
-// Height of one coverage bar in px — used by cards to add matching bottom padding
-// so tasks are never obscured. Keep in sync with paddingTop/paddingBottom below.
-const COVERAGE_BAR_H = 17;
-
-const CoverageBar: React.FC<{
-  task: NightSlotTask;
-  slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-}> = ({ task, slotKey, onRemoveTask }) => {
-  const [hovered, setHovered] = React.useState(false);
-  const bg = task.color || '#6B7280';
-
-  return (
-    <div
-      className="group flex items-center justify-between px-2 select-none"
-      style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: bg,
-        borderRadius: '0 0 3px 3px',
-        paddingTop: 4,
-        paddingBottom: 4,
-        zIndex: 2,
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={task.taskLabel}
-    >
-      <span
-        className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
-        style={{ fontSize: 8.5, fontFamily: 'var(--font-atkinson)' }}
-      >
-        {task.taskLabel}
-      </span>
-      {onRemoveTask && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemoveTask(slotKey, task.taskLabel);
-          }}
-          className="ml-1 leading-none font-bold flex-shrink-0 transition-opacity"
-          style={{
-            color: 'rgba(255,255,255,0.45)',
-            fontSize: 14,
-            opacity: hovered ? 1 : 0.45,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.45)')}
-          title="Remove coverage"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
-};
-
-// Compact list of selected tasks shown at the bottom of a Zone / AUX card.
-// Replaces the static `def.locations` strings we used to render. When empty,
-// renders nothing so the card collapses gracefully.
-const ZoneTaskList: React.FC<{
-  tasks: NightSlotTask[] | undefined;
-  hasTM: boolean;
-  slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
-  if (!tasks || tasks.length === 0) return null;
-  const textColor = hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
-  return (
-    <div
-      className={`mt-auto pt-1 text-[11px] leading-tight ${textColor}`}
-      style={{ fontFamily: "var(--font-atkinson)" }}
-    >
-      {tasks.map((t) => (
-        <TaskRow
-          key={t.id}
-          task={t}
-          slotKey={slotKey}
-          onRemoveTask={onRemoveTask}
-          onSetTaskColor={onSetTaskColor}
-          onEditTask={onEditTask}
-          textSize="text-[11px]"
-          textColorClass={textColor}
-        />
-      ))}
-    </div>
-  );
-};
-
-interface RRCardProps {
-  def: any;
-  assignments: any;
-  selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
-  onGenderClick: (k: string, el: HTMLElement) => void;
-  loading?: boolean;
-  borderColor?: string;
-  isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}
-
-// One gender side of an RR card is its own droppable/draggable so a TM can be
-// dropped on M's or W's individually. Lifted into its own component so it
-// can call the hooks (rules-of-hooks).
-const RRSide: React.FC<{
-  slotKey: string;
-  label: string;
-  assignment: any;
-  tasks: NightSlotTask[] | undefined;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
-  onClick: (k: string, el: HTMLElement, e?: React.MouseEvent) => void;
-  loading?: boolean;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask }) => {
-  const a = assignment || {};
-  const breakNum = (a.breakGroup ?? 0) as BreakGroup;
-  const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "rr", { tmId: a.tmId, tmName: a.tmName });
-  const dim = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onClick(slotKey, el),
-  );
-
-  return (
-    <div
-      ref={setRef}
-      onClick={(e) => onClick(slotKey, e.currentTarget, e)}
-      {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
-      data-slot-key={slotKey}
-      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
-    >
-      {/* Label + badge row */}
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[8px] font-bold tracking-[0.5px] text-[#1C1C1E]" style={{ fontFamily: 'var(--font-atkinson)' }}>{label}</span>
-        <BreakBadge value={breakNum} onCycle={cycle} size="sm" />
-      </div>
-      {/* Name immediately under label (not pushed to bottom) — mirrors
-         Zone/AUX cards' large-name treatment. */}
-      <div className="min-w-0">
-        {loading && !hasTM ? (
-          <div className="h-[14px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
-        ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-                <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-              </svg>
-            )}
-            <span
-              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {a.tmName}
-            </span>
-          </div>
-        ) : (
-          <div className="unassigned-label mt-px text-[#6B7280] font-medium tracking-[0.3px] text-[9.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>
-            — Unassigned —
-          </div>
-        )}
-      </div>
-      {/* Per-side selected tasks. Smaller type to fit the half-card width. */}
-      {tasks && tasks.length > 0 && (
-        <div
-          className={`mt-0.5 text-[9.5px] leading-[1.25] ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          {tasks.map((t) => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              slotKey={slotKey}
-              onRemoveTask={onRemoveTask}
-              onSetTaskColor={onSetTaskColor}
-              onEditTask={onEditTask}
-              textSize="text-[9.5px]"
-              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const RRCard: React.FC<RRCardProps> = ({ 
-  def, 
-  assignments, 
-  selectedTasks, 
-  setBreakGroupForSlot, 
-  onGenderClick, 
-  loading = false, 
-  borderColor,
-  isDraftMode = false,
-  draftInfo,
-  onRemoveTask,
-  onSetTaskColor,
-  onEditTask 
-}) => {
-  const mKey = `MRR${def.num}`;
-  const wKey = `WRR${def.num}`;
-  const color = getRRAccent(def.num);
-  const icon = RR_ICONS[def.num] ?? "●";
-  // The whole RR card dims only when BOTH halves are empty.
-  const mEmpty = !assignments[mKey]?.tmName;
-  const wEmpty = !assignments[wKey]?.tmName;
-  const bothEmpty = mEmpty && wEmpty && !loading;
-
-  // Separate coverage tasks from regular tasks so coverage bars span the full
-  // card width rather than sitting inside one narrow gender column.
-  // Deduplicate by taskLabel since both M and W sides carry identical records.
-  const mTasks = selectedTasks[mKey] || [];
-  const wTasks = selectedTasks[wKey] || [];
-  const mRegular = mTasks.filter(t => !t.isCoverage);
-  const wRegular = wTasks.filter(t => !t.isCoverage);
-  const rrCoverageTasks: NightSlotTask[] = [];
-  const seenCoverageLabels = new Set<string>();
-  for (const t of [...mTasks, ...wTasks]) {
-    if (t.isCoverage && !seenCoverageLabels.has(t.taskLabel)) {
-      seenCoverageLabels.add(t.taskLabel);
-      rrCoverageTasks.push(t);
-    }
-  }
-
-  return (
-    <div
-      onPointerMove={handleSpotlightMove}
-      className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
-      style={{ 
-        ["--card-accent" as any]: color,
-        ...(borderColor && {
-          border: `2px solid ${borderColor}`,
-          boxShadow: `0 0 0 1px ${borderColor}33`
-        })
-      }}
-    >
-      <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
-      <div
-        className="flex items-center gap-1 px-2 pt-1 pb-1 leading-none"
-        style={{ color, borderBottom: `1px solid ${color}33` }}
-      >
-        <span className="text-[11px] leading-none">{icon}</span>
-        <span
-          className="font-extrabold tracking-[0.4px] uppercase"
-          style={{ fontSize: 10.5, fontFamily: "var(--font-atkinson)" }}
-        >
-          {def.label}
-        </span>
-      </div>
-      <div
-        className="flex flex-col flex-1 px-2 pt-1.5"
-        style={{ paddingBottom: rrCoverageTasks.length > 0 ? rrCoverageTasks.length * COVERAGE_BAR_H + 2 : 6 }}
-      >
-        {isDraftMode && draftInfo && (
-          <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
-        )}
-        <div className="grid grid-cols-2 gap-2 flex-1">
-          <RRSide
-            slotKey={mKey}
-            label="MEN&rsquo;S"
-            assignment={assignments[mKey]}
-            tasks={mRegular}
-            setBreakGroupForSlot={setBreakGroupForSlot}
-            onClick={onGenderClick}
-            loading={loading}
-            onRemoveTask={onRemoveTask}
-            onSetTaskColor={onSetTaskColor}
-            onEditTask={onEditTask}
-          />
-          <RRSide
-            slotKey={wKey}
-            label="WOMEN’S"
-            assignment={assignments[wKey]}
-            tasks={wRegular}
-            setBreakGroupForSlot={setBreakGroupForSlot}
-            onClick={onGenderClick}
-            loading={loading}
-            onRemoveTask={onRemoveTask}
-            onSetTaskColor={onSetTaskColor}
-            onEditTask={onEditTask}
-          />
-        </div>
-      </div>
-      {/* Coverage bars span the full RR card width — deduplicated across M+W sides */}
-      {rrCoverageTasks.map(t => (
-        <CoverageBar key={t.id} task={t} slotKey={mKey} onRemoveTask={onRemoveTask} />
-      ))}
-    </div>
-  );
-};
-
-interface AuxCardProps {
-  def: any;
-  assignments: any;
-  selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
-  onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
-  loading?: boolean;
-  borderColor?: string;
-  isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}
-
-const AuxCard: React.FC<AuxCardProps> = ({ 
-  def, 
-  assignments, 
-  selectedTasks, 
-  setBreakGroupForSlot, 
-  onCardClick, 
-  loading = false, 
-  borderColor,
-  isDraftMode = false,
-  draftInfo,
-  onRemoveTask,
-  onSetTaskColor,
-  onEditTask 
-}) => {
-  const a = assignments[def.key] || {};
-  const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
-  const color = getAuxAccent(def.key);
-  const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "aux", { tmId: a.tmId, tmName: a.tmName });
-
-  const icon = getAuxIcon(def.key);
-  const isEmpty = !hasTM && !loading;
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(def.key, el),
-  );
-
-  return (
-    <div
-      ref={setRef}
-      onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
-      onPointerMove={handleSpotlightMove}
-      {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
-      data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
-      style={{
-        ["--card-accent" as any]: color,
-        ...(borderColor && {
-          border: `2px solid ${borderColor}`,
-          boxShadow: `0 0 0 1px ${borderColor}33`
-        })
-      }}
-    >
-      <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
-      <div
-        className="flex items-start justify-between gap-1 px-2 pt-1 pb-1"
-        style={{ borderBottom: `1px solid ${color}33` }}
-      >
-        <div className="flex items-center gap-1 leading-none min-w-0" style={{ color }}>
-          <span className="text-[11px] leading-none shrink-0">{icon}</span>
-          <span
-            className="font-extrabold tracking-[0.4px] uppercase truncate"
-            style={{ fontSize: 10, fontFamily: "var(--font-atkinson)" }}
-          >
-            {def.label}
-          </span>
-        </div>
-        <BreakBadge value={currentBreak} onCycle={cycleBreak} />
-      </div>
-
-      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">
-        {loading && !hasTM ? (
-          <div className="h-[16px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
-        ) : isDraftMode && draftInfo ? (
-          <div className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {draftInfo.proposedTmName}
-            </span>
-            {draftInfo.previousTmName && (
-              <span 
-                className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-atkinson)" }}
-              >
-                was: {draftInfo.previousTmName}
-              </span>
-            )}
-          </div>
-        ) : isDraftMode && draftInfo ? (
-          <div className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {draftInfo.proposedTmName}
-            </span>
-            {draftInfo.previousTmName && (
-              <span 
-                className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-atkinson)" }}
-              >
-                was: {draftInfo.previousTmName}
-              </span>
-            )}
-          </div>
-        ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-                <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-              </svg>
-            )}
-            <span
-              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 18, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
-            >
-              {a.tmName}
-            </span>
-          </div>
-        ) : (
-          <div className="unassigned-label mt-0.5 text-[#6B7280] font-medium tracking-[0.4px] text-[10.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>
-            — Unassigned —
-          </div>
-        )}
-
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} onSetTaskColor={onSetTaskColor} onEditTask={onEditTask} />
-      </div>
-    </div>
-  );
-};
+// RRCard, AuxCard, OverlapSlot (and their sub-components) now imported from components/ above.
 
 // Roster row — useDraggable when not already assigned. When assigned we
 // disable the drag handle but still render so the operator can see "in use".
@@ -1655,96 +449,7 @@ const CustomTaskInput: React.FC<{ uiKey: string; onAdd: (uiKey: string, label: s
   );
 };
 
-// One overlap cell (Break Sheet view) — a small assignable card. Backed by
-// zone_assignments rows with slot_type='overlap', so it uses the same
-// race-free persist path as zones / RRs / aux.
-//
-// SlotKey shape is OL-PM-0..5 and OL-AM-0..5. uiToDb / dbToUi know how to
-// translate these.
-interface OverlapSlotProps {
-  slotKey: string;
-  assignments: any;
-  selectedTasks: Record<string, NightSlotTask[]>;
-  onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
-  loading?: boolean;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  taskDragEnabled?: boolean;
-}
-const OverlapSlot: React.FC<OverlapSlotProps & { isDraftMode?: boolean; draftInfo?: { proposedTmName: string; previousTmName?: string } }> = ({ slotKey, assignments, selectedTasks, onCardClick, loading = false, isDraftMode = false, draftInfo, onRemoveTask, onSetTaskColor, onEditTask }) => {
-  const a = assignments[slotKey] || {};
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
-  const dim = !hasTM && !loading;
-  const tasks = selectedTasks[slotKey];
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(slotKey, el),
-  );
-
-  return (
-    <div
-      ref={setRef}
-      onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
-      {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
-      data-slot-key={slotKey}
-      className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
-        isOver ? "drop-target-active" : ""
-      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
-    >
-      {loading && !hasTM ? (
-        <div className="h-[12px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
-      ) : hasTM ? (
-        <div className="flex items-center gap-1 min-w-0">
-          {a.isLocked && (
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-              <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-            </svg>
-          )}
-          <span
-            className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-            style={{ fontSize: 12, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
-          >
-            {a.tmName}
-          </span>
-        </div>
-      ) : (
-        <div
-          className="text-[9.5px] text-[#9CA3AF] font-medium tracking-[0.3px]"
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          — Unassigned —
-        </div>
-      )}
-      {tasks && tasks.length > 0 && (
-        <div
-          className={`mt-0.5 text-[9px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          {tasks.map((t) => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              slotKey={slotKey}
-              onRemoveTask={onRemoveTask}
-              onSetTaskColor={onSetTaskColor}
-              onEditTask={onEditTask}
-              textSize="text-[9px]"
-              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+// OverlapSlot now imported from components/ above.
 
 // Collapsible-pill behavior — used by the week stepper, day picker, and view
 // toggle so they default to showing just the active value and expand inline
@@ -1949,6 +654,12 @@ export default function ShiftBuilder() {
   // Session undo/redo (in-memory, one tab)
   const shiftHistory = useShiftHistory();
 
+  // Stable ref to recordChange so the history effect below doesn't depend on
+  // the shiftHistory object (which is a new reference every render) — prevents
+  // the effect firing on every render instead of only when state actually changes.
+  const recordChangeRef = useRef(shiftHistory.recordChange);
+  useEffect(() => { recordChangeRef.current = shiftHistory.recordChange; });
+
   const positioningRef = useRef<HTMLDivElement>(null);
 
   // Undo/Redo recording coordination
@@ -2011,63 +722,31 @@ export default function ShiftBuilder() {
   useEffect(() => { setMounted(true); }, []);
 
   // === Dark mode state ======================================================
-  // Syncs with <html class="dark"> which is set by the no-flash inline script
-  // in layout.tsx before hydration. Manual toggle writes to localStorage and
-  // also listens for system prefers-color-scheme changes.
-  const [isDark, setIsDark] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
   // Raw break_assignments rows for the current night — used to render the
   // break sheet from the authoritative source rather than from zone_assignments,
   // so all 23 TMs always appear regardless of who is actually placed tonight.
   const [nightBreakRows, setNightBreakRows] = useState<Array<{ tmId: string; groupNum: number; slotRef: string | null }>>([]);
-  useEffect(() => {
-    // Read the state the no-flash script already applied
-    setIsDark(document.documentElement.classList.contains("dark"));
-    // Watch system preference changes — only apply if user hasn't overridden
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem("oms-theme")) {
-        document.documentElement.classList.toggle("dark", e.matches);
-        setIsDark(e.matches);
-      }
-    };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  const toggleTheme = useCallback(() => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("oms-theme", next ? "dark" : "light");
-  }, [isDark]);
 
-  // Roster: "Other TMs" (not on schedule for this night) is collapsed by
-  // default to keep the panel focused on TMs the operator actually has to
-  // place. Click the header to reveal the off-schedule list.
-  // Phase 2: Persisted to localStorage so the operator's preference sticks.
-  const [otherTmsExpanded, setOtherTmsExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const saved = localStorage.getItem("oms_roster_other_expanded");
-    return saved === "true";
-  });
-
-  // Persist the expanded state
-  useEffect(() => {
-    localStorage.setItem("oms_roster_other_expanded", String(otherTmsExpanded));
-  }, [otherTmsExpanded]);
-
-  // === Floating Roster open/close state ===================================
-  // The roster lives as a floating Liquid Glass panel anchored to the left
-  // edge. The operator can collapse it to a small sphere to maximize canvas
-  // focus. Defaults to closed so the 1056×816 canvas is the primary focal
-  // point on launch (consistent with the Command Palette + canvas-first direction).
-  const [rosterOpen, setRosterOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const saved = localStorage.getItem("oms_roster_open");
-    return saved === null ? false : saved === "true";
-  });
-  useEffect(() => {
-    localStorage.setItem("oms_roster_open", String(rosterOpen));
-  }, [rosterOpen]);
+  // === Roster panel UI state (extracted to useRosterPanels) =================
+  const {
+    otherTmsExpanded, setOtherTmsExpanded,
+    rosterOpen, setRosterOpen,
+    calledOffExpanded, setCalledOffExpanded,
+    sudoOpen, setSudoOpen,
+    xaiSphereOpen, setXaiSphereOpen,
+    deployedExpanded, setDeployedExpanded,
+    pmOverlapsExpanded, setPmOverlapsExpanded,
+    amOverlapsExpanded, setAmOverlapsExpanded,
+    portersExpanded, setPortersExpanded,
+    scheduledGravesExpanded, setScheduledGravesExpanded,
+    scheduledPMExpanded, setScheduledPMExpanded,
+    scheduledAMExpanded, setScheduledAMExpanded,
+    rosterSearch, setRosterSearch,
+    graveOnly, setGraveOnly,
+    cmdkOpen, setCmdkOpen,
+    cmdkInitialContext, setCmdkInitialContext,
+  } = useRosterPanels();
 
   // Persist the exact selected GRAVE day (calendar date) so refresh restores
   // both the correct weekStart and the day index within that week.
@@ -2086,19 +765,12 @@ export default function ShiftBuilder() {
 
   // Called-off TMs for the currently selected night (from `call_offs` table)
   const [calledOffIds, setCalledOffIds] = useState<Set<string>>(new Set());
-  const [calledOffExpanded, setCalledOffExpanded] = useState(true);
 
   // TMs explicitly marked as scheduled to work this specific night (from
   // `night_tm_status`, populated by the SUDO Schedules tab when an ADP
   // export is imported). Empty when no schedule data exists for the night
   // — the engine filter only applies when this set is non-empty.
   const [scheduledTmIdsTonight, setScheduledTmIdsTonight] = useState<Set<string>>(new Set());
-
-  // === Sudo window ===
-  const [sudoOpen, setSudoOpen] = useState(false);
-
-  // === xAI Sphere (Master Ops AI Agent) — Phase 1 shell ===
-  const [xaiSphereOpen, setXaiSphereOpen] = useState(false);
 
   // === Engine config + reference data (Phase 1 weighted scoring) ===
   const [engineConfig, setEngineConfig] = useState<EngineConfig | null>(null);
@@ -2116,34 +788,6 @@ export default function ShiftBuilder() {
   const [draftEngineWarnings, setDraftEngineWarnings] = useState<string[]>([]);
   // Bumps when a `make`/`remove` command lands so the load effect refetches.
   const [tmCommandEpoch, setTMCommandEpoch] = useState(0);
-
-  // "Already Deployed" (assigned on other nights this week) — collapsed by default
-  // when viewing GRAVE so the focus stays on the current night + pure pool.
-  const [deployedExpanded, setDeployedExpanded] = useState(false);
-
-  // New overlap pools for GRAVE edge coverage
-  const [pmOverlapsExpanded, setPmOverlapsExpanded] = useState(false);
-  const [amOverlapsExpanded, setAmOverlapsExpanded] = useState(false);
-  const [portersExpanded, setPortersExpanded] = useState(false);
-
-  // Scheduled-tonight-unplaced groups — default expanded (these are the priority view)
-  const [scheduledGravesExpanded, setScheduledGravesExpanded] = useState(true);
-  const [scheduledPMExpanded, setScheduledPMExpanded] = useState(true);
-  const [scheduledAMExpanded, setScheduledAMExpanded] = useState(true);
-
-  // Roster search/filter (Phase 1)
-  const [rosterSearch, setRosterSearch] = useState("");
-
-  // GRAVE shift filter (YOLO Phase 2 improvement)
-  // When true, only show TMs who have availability in the 11pm–6:55am window.
-  const [graveOnly, setGraveOnly] = useState(true); // Default ON for GRAVE nights — very useful for operators
-  const [cmdkOpen, setCmdkOpen] = useState(false);
-
-  // Phase 1: Context passed to the command palette when opening via card tap
-  const [cmdkInitialContext, setCmdkInitialContext] = useState<{
-    type: 'slot' | 'person';
-    value: string;
-  } | null>(null);
 
   // Card borders for attention / marking (visual only)
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
@@ -2189,19 +833,6 @@ export default function ShiftBuilder() {
     }
   };
 
-  // When the GRAVE filter is active, collapse the "Already Deployed", overlap pools,
-  // and "GRAVE Pool" by default. This keeps the roster focused on people scheduled for *this*
-  // specific 11pm–6:55am night.
-  useEffect(() => {
-    if (graveOnly) {
-      setDeployedExpanded(false);
-      setPortersExpanded(false);
-      setPmOverlapsExpanded(false);
-      setAmOverlapsExpanded(false);
-      setOtherTmsExpanded(false);
-    }
-  }, [graveOnly]);
-
   // Live break counts — one TM per (slot, break_group). Powers the three
   // small badges in the artboard header so operators can see at a glance
   // how balanced the wave loads are. Recomputes whenever assignments shift.
@@ -2218,7 +849,13 @@ export default function ShiftBuilder() {
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
 
   // === Roster filtering (Phase 1 + GRAVE Phase 2) ============================
-  const filterTerm = rosterSearch.trim().toLowerCase();
+  // Component-level Set for O(1) "is this TM already on the board?" checks.
+  // Replaces the O(n) Object.values().some() pattern used across the roster rail
+  // and the completionScheduledUnplaced filter.
+  const assignedThisNight = React.useMemo(
+    () => new Set(Object.values(assignments).map((a: any) => a?.tmId).filter(Boolean)),
+    [assignments]
+  );
 
   // GRAVE shift filter (11pm–6:55am)
   const baseRoster = graveOnly ? graveRoster : realRoster;
@@ -2250,7 +887,7 @@ export default function ShiftBuilder() {
         ])
       ),
       scheduledUnplaced: Array.from(scheduledTmIdsTonight)
-        .filter((id) => !Object.values(assignments).some((a: any) => a?.tmId === id))
+        .filter((id) => !assignedThisNight.has(id))
         .slice(0, 12),
     },
   });
@@ -2259,26 +896,8 @@ export default function ShiftBuilder() {
   // `showToast` are declared. Defining it here would TDZ on those bindings
   // in the deps array.
 
-  // Toast queue — bottom-right notifications for persist failures (and any
-  // other operator-visible feedback). Auto-dismiss after 5s; manual dismiss
-  // via the X. Replaces the silent console.error in persist* helpers.
-  type ToastKind = "error" | "info" | "success";
-  interface ToastItem { id: number; message: string; kind: ToastKind; }
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  // Tracks the last time any assignment/task/break was successfully persisted
-  // to Supabase. Drives the live status pill in the bottom-right corner.
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const toastIdRef = useRef(0);
-  const showToast = React.useCallback((message: string, kind: ToastKind = "error") => {
-    const id = ++toastIdRef.current;
-    setToasts((prev) => [...prev, { id, message, kind }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  }, []);
-  const dismissToast = (id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  // Toast queue — extracted to useToast
+  const { toasts, lastSavedAt, setLastSavedAt, showToast, dismissToast } = useToast();
 
   // === Dynamic AUX slots ===
   // Defaults to 5; operator can append from the overflow menu. Keys are
@@ -2458,27 +1077,71 @@ export default function ShiftBuilder() {
     setIsDraftMode(true);
   };
 
-  const applyDraft = () => {
+  const applyDraft = async () => {
     if (!isDraftMode || Object.keys(draftAssignments).length === 0) return;
 
     if (!confirm("Apply the draft assignments and save them permanently? This cannot be undone automatically.")) {
       return;
     }
 
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: "Apply Engine Draft", before };
+    // Snapshot before state for undo
+    const before: Snapshot = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
 
-    Object.entries(draftAssignments).forEach(([slotKey, info]) => {
+    // Compute the full new assignments state in one pass — no N separate setAssignments calls
+    const newAssignments = { ...assignments };
+    for (const [slotKey, info] of Object.entries(draftAssignments)) {
       if (info.proposedClear) {
-        unassign(slotKey);
+        delete newAssignments[slotKey];
       } else if (info.proposedTmId) {
-        assign(slotKey, info.proposedTmId, info.proposedTmName);
+        newAssignments[slotKey] = {
+          ...newAssignments[slotKey],
+          tmId: info.proposedTmId,
+          tmName: info.proposedTmName,
+          breakGroup: newAssignments[slotKey]?.breakGroup ?? 0,
+          type: slotKey.startsWith("Z") ? "zone"
+            : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr"
+            : slotKey.startsWith("OL-") ? "overlap"
+            : "aux",
+          slotKey,
+        };
       }
-    });
+    }
 
-    // Exit draft mode
+    // Single state update + one atomic history entry (we have before & after explicitly
+    // so we skip the pendingHistoryRef pattern entirely)
+    setAssignments(newAssignments);
+    const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
+    recordChangeRef.current("Apply Engine Draft", before, after);
+
+    // Exit draft mode immediately (UI feels instant)
     setIsDraftMode(false);
     setDraftAssignments({});
+
+    // Resolve night once, then batch-persist the whole draft in a single call
+    let nid = nightId;
+    if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+    if (!nid) {
+      showToast("Draft applied locally but couldn't save — no night context. Reload and try again.");
+      return;
+    }
+
+    try {
+      const slots = Object.entries(draftAssignments).map(([slotKey, info]) => {
+        const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
+        return {
+          slotKey: slot_key,
+          slotType: slot_type,
+          rrSide: rr_side,
+          tmId: info.proposedClear ? null : (info.proposedTmId ?? null),
+        };
+      });
+
+      await batchApplyDraftAssignments(nid, slots);
+      setLastSavedAt(new Date());
+    } catch (e: any) {
+      console.error("[shiftbuilder] batchApplyDraft failed", e);
+      showToast(`Draft saved locally but DB write failed: ${e?.message ?? "unknown error"}`);
+    }
   };
 
   const discardDraft = () => {
@@ -2671,6 +1334,10 @@ export default function ShiftBuilder() {
   };
 
   // === History recording effect (must be after auxDefs / assignments are declared) ===
+  // Deps: assignments + auxDefs only — these are the actual triggers.
+  // recordChangeRef holds the stable fn pointer so we don't put shiftHistory
+  // (new object every render) in the dep array, which would fire this effect
+  // on every render regardless of whether state actually changed.
   useEffect(() => {
     if (pendingHistoryRef.current) {
       const { description, before } = pendingHistoryRef.current;
@@ -2678,10 +1345,10 @@ export default function ShiftBuilder() {
         assignments: { ...assignments },
         auxDefs: [...auxDefs],
       };
-      shiftHistory.recordChange(description, before, after);
+      recordChangeRef.current(description, before, after);
       pendingHistoryRef.current = null;
     }
-  }, [assignments, auxDefs, shiftHistory]);
+  }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcuts for undo/redo (one tab session)
   useEffect(() => {
@@ -2732,29 +1399,6 @@ export default function ShiftBuilder() {
   }, [cmdkOpen]);
 
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
-  const goPrevWeek = () => setWeekStart((w) => addDays(w, -7));
-  const goNextWeek = () => setWeekStart((w) => addDays(w, 7));
-  const goThisWeek = () => setWeekStart(startOfShiftWeek(todayDate));
-
-  // Day navigation that correctly crosses GRAVE week boundaries (Thu index 6 → next Fri = new week index 0)
-  const goPrevDay = () => {
-    if (selectedDayIndex === 0) {
-      setWeekStart(addDays(weekStart, -7));
-      setSelectedDayIndex(6);
-      setDayPickerOpen(false);
-    } else {
-      setSelectedDayIndex(selectedDayIndex - 1);
-    }
-  };
-  const goNextDay = () => {
-    if (selectedDayIndex === 6) {
-      setWeekStart(addDays(weekStart, 7));
-      setSelectedDayIndex(0);
-      setDayPickerOpen(false);
-    } else {
-      setSelectedDayIndex(selectedDayIndex + 1);
-    }
-  };
 
   // Each pill group collapses to its active value by default and expands
   // inline on tap. Click-outside or ESC dismisses; selecting collapses with
@@ -2763,89 +1407,8 @@ export default function ShiftBuilder() {
   // (no more bottom floating pill cluster). The old collapsible pill hooks
   // are retired with the bottom UI.
 
-  // === Zoom & centering ===
-  // The artboard is locked at 1056×816 (the print contract). zoomMode controls
-  // how we present that fixed rectangle inside the on-screen scroll area.
-  //   "fit" → auto-scale to fit the available area (never larger than 100%)
-  //   number → explicit scale factor (0.5 / 0.75 / 1 / 1.25)
-  type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.25;
-  const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
-  // Start with a safe, viewport-derived value so the artboard is always visible
-  // at a usable size on first paint, even before any measurement effects run.
-  const [fitScale, setFitScale] = useState(() => {
-    if (typeof window === 'undefined') return 0.85;
-    const w = window.innerWidth - 268 - 80;
-    const h = window.innerHeight - 90;
-    return Math.max(0.35, Math.min(1, Math.min(w / 1056, h / 816)));
-  });
-  const stageHostRef = useRef<HTMLDivElement>(null);
-
-  // Natural content footprint inside the scroll area: just the artboard now —
-  // the pill cluster floats absolutely over the bottom of the artboard, so it
-  // doesn't add to the layout height. 1056 × 816 = 11" × 8.5" at 96 dpi.
-  const NATURAL_WIDTH = 1056;
-  const NATURAL_HEIGHT = 816;
-
-  // Robust scale computer: prefers measuring the actual stage host, falls back
-  // to viewport math so the artboard is *never* invisible/tiny after async
-  // Supabase loads or initial layout jitter.
-  const recomputeScale = React.useCallback(() => {
-    const el = stageHostRef.current;
-    let availW = 0;
-    let availH = 0;
-
-    if (el && el.clientWidth > 50 && el.clientHeight > 50) {
-      availW = el.clientWidth - 24;
-      availH = el.clientHeight - 24;
-    } else {
-      // Fallback: estimate from window (header ~48px + outer paddings + safe margin)
-      availW = window.innerWidth - 268 - 80; // 268 = fixed roster rail + gaps
-      availH = window.innerHeight - 90;       // header + top/bottom chrome
-    }
-
-    const next = Math.min(1, availW / NATURAL_WIDTH, availH / NATURAL_HEIGHT);
-    setFitScale(Math.max(0.25, next));
-  }, []);
-
-  useEffect(() => {
-    // Multiple attempts to catch the layout after the full shell (header + flex-1)
-    // has settled. This guarantees the 1056×816 paper is visible even if the
-    // very first measurement happens before the viewport sizes are final.
-    const t1 = requestAnimationFrame(recomputeScale);
-    const t2 = window.setTimeout(recomputeScale, 80);
-    const t3 = window.setTimeout(recomputeScale, 220);
-
-    const ro = stageHostRef.current
-      ? new ResizeObserver(recomputeScale)
-      : null;
-    if (ro && stageHostRef.current) ro.observe(stageHostRef.current);
-
-    const onResize = () => recomputeScale();
-    window.addEventListener("resize", onResize);
-
-    return () => {
-      cancelAnimationFrame(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      window.removeEventListener("resize", onResize);
-      if (ro) ro.disconnect();
-    };
-  }, [recomputeScale]);
-
-  // The canvas's available width changes when the floating roster opens or
-  // closes (we adjust padding-left). Re-fit the artboard whenever that flips
-  // so the "Fit" zoom mode lands on the new visible area. Run it after the
-  // CSS transition completes so the measurement reflects the final width.
-  useEffect(() => {
-    const t1 = requestAnimationFrame(recomputeScale);
-    const t2 = window.setTimeout(recomputeScale, 320); // matches the 280ms panel transition + buffer
-    return () => {
-      cancelAnimationFrame(t1);
-      clearTimeout(t2);
-    };
-  }, [rosterOpen, recomputeScale]);
-
-  const scale = zoomMode === "fit" ? fitScale : zoomMode;
+  // === Zoom & centering (extracted to useZoom) ===
+  const { zoomMode, setZoomMode, fitScale, stageHostRef, scale, recomputeScale } = useZoom({ rosterOpen });
 
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
@@ -2878,6 +1441,29 @@ export default function ShiftBuilder() {
   }, [openPaletteForSlot]);
 
   const selectedDay = DAY_DEFS[selectedDayIndex];
+
+  // Day arrow navigation — cross GRAVE week boundaries seamlessly.
+  const goPrevDay = React.useCallback(() => {
+    if (selectedDayIndex > 0) {
+      setSelectedDayIndex(selectedDayIndex - 1);
+    } else {
+      // Cross into previous GRAVE week (Fri–Thu): jump to Thu (index 6)
+      const prevWeek = addDays(weekStart, -7);
+      setWeekStart(prevWeek);
+      setSelectedDayIndex(6);
+    }
+  }, [selectedDayIndex, weekStart]);
+
+  const goNextDay = React.useCallback(() => {
+    if (selectedDayIndex < 6) {
+      setSelectedDayIndex(selectedDayIndex + 1);
+    } else {
+      // Cross into next GRAVE week: jump to Fri (index 0)
+      const nextWeek = addDays(weekStart, 7);
+      setWeekStart(nextWeek);
+      setSelectedDayIndex(0);
+    }
+  }, [selectedDayIndex, weekStart]);
 
   // === Notes debounce handler ============================================
   // Defined here (rather than alongside notesRef/notesSaveTimerRef earlier)
@@ -3174,12 +1760,6 @@ export default function ShiftBuilder() {
       // Restore visibility of the live artboard (it will be hidden again
       // by the printing-dual-mode class right before window.print).
       if (liveArtboard) liveArtboard.style.visibility = '';
-
-      // Debug visibility — operators can open Web Inspector and verify the
-      // captures actually contain different content.
-      console.log("[print] deployment capture length:", deploymentHTML.length);
-      console.log("[print] breaks capture length:", breaksHTML.length);
-      console.log("[print] captures identical?", deploymentHTML === breaksHTML);
 
       if (!deploymentHTML || !breaksHTML) {
         console.warn("[shiftbuilder] dual-page print failed to capture views; falling back");
@@ -4337,14 +2917,7 @@ export default function ShiftBuilder() {
               // Respect GRAVE shift filter when enabled (Option B - data backed)
               const rawRoster = graveOnly ? graveRoster : realRoster;
 
-              // Best judgment: compute "on this night" from live assignments
-              // so the GRAVE pool shows a useful "On this GRAVE shift" vs "Available" split.
-              const assignedThisNight = new Set(
-                Object.values(assignments)
-                  .map((a: any) => a?.tmId)
-                  .filter(Boolean)
-              );
-
+              // assignedThisNight is computed at component level (useMemo) — use it directly.
               const sourceRoster = rawRoster.map((tm: any) => ({
                 ...tm,
                 isOnSchedule: assignedThisNight.has(tm.id),
@@ -4568,7 +3141,7 @@ export default function ShiftBuilder() {
                             <span className="tabular-nums">{filteredSchedGraves.length}{filterTerm ? ` / ${scheduledUnplacedGraves.length}` : ""}</span>
                           </button>
                           {scheduledGravesExpanded && filteredSchedGraves.map((tm: any) => {
-                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            const isAssigned = assignedThisNight.has(tm.id);
                             return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
                           })}
                         </>
@@ -4593,7 +3166,7 @@ export default function ShiftBuilder() {
                             <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
                           </button>
                           {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
-                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            const isAssigned = assignedThisNight.has(tm.id);
                             return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
                           })}
                         </>
@@ -4618,7 +3191,7 @@ export default function ShiftBuilder() {
                             <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
                           </button>
                           {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
-                            const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                            const isAssigned = assignedThisNight.has(tm.id);
                             return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
                           })}
                         </>
@@ -4662,7 +3235,7 @@ export default function ShiftBuilder() {
                         </span>
                       </button>
                       {deployedExpanded && filteredOnThisNight.map((tm: any) => {
-                        const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                        const isAssigned = assignedThisNight.has(tm.id);
                         return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
                       })}
                     </>
@@ -4702,7 +3275,7 @@ export default function ShiftBuilder() {
                         </span>
                       </button>
                       {portersExpanded && filteredPorters.map((tm: any) => {
-                        const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                        const isAssigned = assignedThisNight.has(tm.id);
                         return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
                       })}
                     </>
@@ -4742,7 +3315,7 @@ export default function ShiftBuilder() {
                         </span>
                       </button>
                       {amOverlapsExpanded && filteredAMOverlaps.map((tm: any) => {
-                        const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                        const isAssigned = assignedThisNight.has(tm.id);
                         return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
                       })}
                     </>
@@ -4782,7 +3355,7 @@ export default function ShiftBuilder() {
                         </span>
                       </button>
                       {pmOverlapsExpanded && filteredPMOverlaps.map((tm: any) => {
-                        const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                        const isAssigned = assignedThisNight.has(tm.id);
                         return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
                       })}
                     </>
@@ -4822,7 +3395,7 @@ export default function ShiftBuilder() {
                         </span>
                       </button>
                       {otherTmsExpanded && filteredRegularGrave.map((tm: any) => {
-                        const isAssigned = Object.values(assignments).some((a: any) => a.tmId === tm.id);
+                        const isAssigned = assignedThisNight.has(tm.id);
                         return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
                       })}
                     </>
@@ -6119,7 +4692,7 @@ export default function ShiftBuilder() {
         completionDay={selectedDay.name}
         completionScheduledUnplaced={
           Array.from(scheduledTmIdsTonight)
-            .filter((id) => !Object.values(assignments).some((a: any) => a?.tmId === id))
+            .filter((id) => !assignedThisNight.has(id))
             .map((id) => {
               const tm = realRoster.find((t: any) => t.id === id);
               return tm?.name || tm?.fullName || id;
@@ -6184,6 +4757,7 @@ export default function ShiftBuilder() {
         open={sudoOpen}
         onClose={() => setSudoOpen(false)}
         currentNightId={nightId}
+        weekStart={weekStart}
         onDataChanged={async () => {
           // Refresh anything the sudo window might have mutated
           setTMCommandEpoch((e) => e + 1);
