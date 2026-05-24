@@ -6,6 +6,39 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-24 — Grok 4.3 — Plan archiving + final monolith split push
+
+**Context**: User said "it did not push" followed by "do it again".
+
+**Actions taken**:
+- Archived several completed plans (Sudo Tasks Tab, Reports Tab, Codebase Critique, Command Palette Upgrade) by moving them from `active/` to `archive/`.
+- Updated `ATTACK_PLAN_2026-05-22.md` status in previous step.
+- The big monolith split commit (`81d1027`) that extracted all the new components and hooks was local-only; this push will finally deliver it to origin.
+- Cleaned up .gitignore and other minor tracked files.
+
+**Decision**: Only staged real source + Agentic docs. All screenshots, .playwright-mcp recordings, Nightwatch design mocks, experimental migrations, and scripts were left untracked.
+
+**Status**: The monolith split (major architectural improvement) is now on remote. Repository history is clean.
+
+---
+
+## 2026-05-24 — Grok 4.3 — Monolith split: extracting components & hooks from ShiftBuilderClient
+
+**Context**: User said "do it again" after more extraction work on the giant client file.
+
+**Major changes**:
+- New `src/app/shiftbuilder/components/` — extracted card components (ZoneCard, RRCard, AuxCard, OverlapSlot, TaskRow, CoverageBar, BreakBadge, AssignmentLine, ZoneTaskList, etc.).
+- New `src/app/shiftbuilder/hooks/` — extracted focused hooks (useToast, useTheme, useRosterPanels, useZoom, etc.).
+- Continued cleanup of `ShiftBuilderClient.tsx` (now delegating heavily to the new modules).
+- Plan housekeeping: several completed plans moved to `archive/`.
+- Minor supporting updates in CommandPalette, data.ts, Nightwatch CSS.
+
+**Why**: This is the core of the SHIFTBUILDER_MONOLITH_SPLIT effort — turning one 5000+ line file into a clean, maintainable structure.
+
+**Status**: Significant architectural progress. Only real source + Agentic docs staged.
+
+---
+
 ## 2026-05-24 — Grok 4.3 — Incremental polish: Nightwatch Events layout + CommandPalette coverage + plan updates
 
 **Context**: User said "do it again" after more local refinements.
