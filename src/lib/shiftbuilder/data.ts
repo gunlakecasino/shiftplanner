@@ -612,6 +612,74 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
 }
 
 /**
+ * Apply an engine draft in a single round-trip (instead of N individual upserts).
+ *
+ * Splits the draft into two groups:
+ *   - toUpsert: rows where a TM is being assigned → single batch .upsert()
+ *   - toDelete: rows being cleared → parallel .delete() calls
+ *     (Supabase doesn't support batch delete with per-row differing WHERE, so we
+ *     fan out deletes in parallel — still fast vs. the previous serial approach.)
+ */
+export async function batchApplyDraftAssignments(
+  nightId: string,
+  slots: Array<{
+    slotKey: string;    // DB format e.g. "zone_1"
+    slotType: string;   // e.g. "zone" | "rr" | "aux"
+    rrSide: string | null;
+    tmId: string | null; // null → clear the slot
+  }>
+): Promise<void> {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  const toUpsert = slots.filter((s) => s.tmId !== null);
+  const toDelete = slots.filter((s) => s.tmId === null);
+  const errors: string[] = [];
+
+  // Single batch upsert for all assignments
+  if (toUpsert.length > 0) {
+    const rows = toUpsert.map((s) => ({
+      night_id: nightId,
+      slot_key: s.slotKey,
+      slot_type: s.slotType,
+      rr_side: s.rrSide,
+      tm_id: s.tmId,
+      is_filled: true,
+      is_locked: false,
+      updated_at: now,
+    }));
+
+    const { error } = await client
+      .from('zone_assignments')
+      .upsert(rows, { onConflict: 'night_id,slot_type,slot_key,rr_side' });
+
+    if (error) errors.push(`batch upsert failed: ${error.message}`);
+  }
+
+  // Parallel deletes for cleared slots
+  if (toDelete.length > 0) {
+    const results = await Promise.allSettled(
+      toDelete.map(async (s) => {
+        let q = client
+          .from('zone_assignments')
+          .delete()
+          .eq('night_id', nightId)
+          .eq('slot_key', s.slotKey)
+          .eq('slot_type', s.slotType);
+        if (s.rrSide) q = q.eq('rr_side', s.rrSide);
+        const { error } = await q;
+        if (error) throw new Error(`delete ${s.slotKey}: ${error.message}`);
+      })
+    );
+    results.forEach((r) => {
+      if (r.status === 'rejected') errors.push(r.reason?.message ?? 'delete failed');
+    });
+  }
+
+  if (errors.length > 0) throw new Error(`batchApplyDraftAssignments: ${errors.join('; ')}`);
+}
+
+/**
  * Toggle the is_locked flag on an existing assignment row.
  * If the row does not exist yet, this is a no-op (caller should assign first).
  */
@@ -747,7 +815,7 @@ export async function getSlotTaskCatalog(): Promise<CatalogTask[]> {
     return [];
   }
 
-  return (data || []).map((r: any) => ({
+  const mapped = (data || []).map((r: any) => ({
     id: r.id,
     slotKey: r.slot_key,
     slotType: r.slot_type,
@@ -756,6 +824,7 @@ export async function getSlotTaskCatalog(): Promise<CatalogTask[]> {
     sortOrder: r.sort_order ?? 0,
     isDefaultOnNewNight: r.is_default_on_new_night ?? false,
   }));
+  return mapped;
 }
 
 /**
@@ -1893,4 +1962,350 @@ export async function getZoneFrequencyReport(days: number): Promise<ZoneFrequenc
     dateRange: { from: cutoffIso, to: todayIso },
     totalNights: nightRows.length,
   };
+}
+
+// ============================================================================
+// Slot Defaults — per-slot default break groups and task chips
+// ============================================================================
+//
+// slot_defaults   : one row per (slot_key, rr_side) → default_break_group (0–3)
+// slot_default_tasks : N rows per (slot_key, rr_side) → task chips to seed
+//
+// Push operations:
+//   - Push breaks → read slot_defaults, look up which TM is assigned to each
+//     slot for the target night, upsert a break_assignment for that TM.
+//   - Push tasks → for each slot, delete existing night_slot_tasks rows for
+//     that night+slot, then insert fresh rows from slot_default_tasks.
+//   - Week variants iterate over all nights in the GRAVE week (Fri–Thu) that
+//     already have a row in the `nights` table.
+
+export interface SlotDefault {
+  slotKey: string;           // DB key e.g. "zone_1", "rr_1_2", "admin"
+  slotType: 'zone' | 'rr' | 'aux';
+  rrSide: string;            // '' for non-RR; 'mens'|'womens' for RR
+  defaultBreakGroup: 0 | 1 | 2 | 3;
+}
+
+export interface SlotDefaultTask {
+  id: string;
+  slotKey: string;
+  slotType: 'zone' | 'rr' | 'aux';
+  rrSide: string;
+  taskLabel: string;
+  taskColor: string | null;
+  isCoverage: boolean;
+  sortOrder: number;
+}
+
+// ── Readers ─────────────────────────────────────────────────────────────────
+
+export async function getSlotDefaults(): Promise<SlotDefault[]> {
+  const { data, error } = await supabase
+    .from('slot_defaults')
+    .select('slot_key, slot_type, rr_side, default_break_group')
+    .order('slot_key', { ascending: true });
+
+  if (error) {
+    console.error('[shiftbuilder/data] getSlotDefaults error:', error);
+    return [];
+  }
+
+  return (data || []).map((r: any) => ({
+    slotKey: r.slot_key,
+    slotType: r.slot_type,
+    rrSide: r.rr_side ?? '',
+    defaultBreakGroup: r.default_break_group ?? 0,
+  }));
+}
+
+export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
+  const { data, error } = await supabase
+    .from('slot_default_tasks')
+    .select('id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order')
+    .order('sort_order', { ascending: true })
+    .order('task_label', { ascending: true });
+
+  if (error) {
+    console.error('[shiftbuilder/data] getSlotDefaultTasks error:', error);
+    return [];
+  }
+
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    slotKey: r.slot_key,
+    slotType: r.slot_type,
+    rrSide: r.rr_side ?? '',
+    taskLabel: r.task_label,
+    taskColor: r.task_color ?? null,
+    isCoverage: r.is_coverage ?? false,
+    sortOrder: r.sort_order ?? 0,
+  }));
+}
+
+// ── Writers ──────────────────────────────────────────────────────────────────
+
+/** Upsert the break group default for a single slot. */
+export async function upsertSlotDefault(params: {
+  slotKey: string;
+  slotType: 'zone' | 'rr' | 'aux';
+  rrSide?: string;
+  defaultBreakGroup: 0 | 1 | 2 | 3;
+}): Promise<void> {
+  const { slotKey, slotType, rrSide = '', defaultBreakGroup } = params;
+
+  const { error } = await supabase
+    .from('slot_defaults')
+    .upsert(
+      {
+        slot_key: slotKey,
+        slot_type: slotType,
+        rr_side: rrSide,
+        default_break_group: defaultBreakGroup,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'slot_key,rr_side' }
+    );
+
+  if (error) {
+    console.error('[shiftbuilder/data] upsertSlotDefault error:', error);
+    throw new Error(`Failed to save slot default: ${(error as any).message ?? 'unknown'}`);
+  }
+}
+
+/** Add a task chip default for a slot. Silently dedupes on (slot_key, rr_side, task_label). */
+export async function addSlotDefaultTask(params: {
+  slotKey: string;
+  slotType: 'zone' | 'rr' | 'aux';
+  rrSide?: string;
+  taskLabel: string;
+  taskColor?: string | null;
+  isCoverage?: boolean;
+  sortOrder?: number;
+}): Promise<void> {
+  const {
+    slotKey, slotType, rrSide = '',
+    taskLabel, taskColor = null,
+    isCoverage = false, sortOrder = 0,
+  } = params;
+
+  const { error } = await supabase
+    .from('slot_default_tasks')
+    .upsert(
+      {
+        slot_key: slotKey,
+        slot_type: slotType,
+        rr_side: rrSide,
+        task_label: taskLabel,
+        task_color: taskColor,
+        is_coverage: isCoverage,
+        sort_order: sortOrder,
+      },
+      { onConflict: 'slot_key,rr_side,task_label' }
+    );
+
+  if (error) {
+    console.error('[shiftbuilder/data] addSlotDefaultTask error:', error);
+    throw new Error(`Failed to add default task: ${(error as any).message ?? 'unknown'}`);
+  }
+}
+
+/** Remove a task chip default by id. */
+export async function removeSlotDefaultTask(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('slot_default_tasks')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[shiftbuilder/data] removeSlotDefaultTask error:', error);
+    throw new Error(`Failed to remove default task: ${(error as any).message ?? 'unknown'}`);
+  }
+}
+
+// ── Push helpers (shared) ────────────────────────────────────────────────────
+
+/**
+ * Resolve all night IDs for the GRAVE week that contains `weekStart` (Fri).
+ * Only returns nights that already exist in the DB — we never auto-create rows.
+ */
+async function resolveWeekNightIds(weekStart: Date): Promise<string[]> {
+  // Build ISO dates Fri–Thu (7 nights)
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    dates.push(localDateIso(d));
+  }
+
+  const { data, error } = await supabase
+    .from('nights')
+    .select('id')
+    .in('night_date', dates);
+
+  if (error) {
+    console.error('[shiftbuilder/data] resolveWeekNightIds error:', error);
+    return [];
+  }
+
+  return (data || []).map((r: any) => r.id);
+}
+
+// ── Push breaks ──────────────────────────────────────────────────────────────
+
+/**
+ * For each slot that has a non-zero break default AND has a TM assigned on the
+ * target night, upsert a break_assignment for that TM.
+ * Slots with no TM or group=0 are skipped.
+ */
+export async function pushBreakDefaultsToNight(nightId: string): Promise<{ applied: number }> {
+  if (!nightId) return { applied: 0 };
+
+  const [defaults, assignments] = await Promise.all([
+    getSlotDefaults(),
+    // Fetch current zone_assignments for the night
+    supabase
+      .from('zone_assignments')
+      .select('slot_key, rr_side, tm_id')
+      .eq('night_id', nightId)
+      .not('tm_id', 'is', null),
+  ]);
+
+  if (assignments.error) {
+    console.error('[shiftbuilder/data] pushBreakDefaultsToNight fetch error:', assignments.error);
+    throw new Error(`Failed to load assignments: ${(assignments.error as any).message}`);
+  }
+
+  // Build map: "slot_key|rr_side" → tm_id
+  const assignMap = new Map<string, string>();
+  for (const row of (assignments.data || [])) {
+    const key = `${row.slot_key}|${row.rr_side ?? ''}`;
+    if (row.tm_id) assignMap.set(key, row.tm_id);
+  }
+
+  let applied = 0;
+  const upserts: Promise<void>[] = [];
+
+  for (const def of defaults) {
+    if (!def.defaultBreakGroup) continue; // 0 = unset, skip
+
+    const mapKey = `${def.slotKey}|${def.rrSide}`;
+    const tmId = assignMap.get(mapKey);
+    if (!tmId) continue; // nobody assigned here tonight
+
+    upserts.push(
+      upsertBreakAssignment({
+        nightId,
+        tmId,
+        groupNum: def.defaultBreakGroup,
+        slotRef: def.slotKey,
+      })
+    );
+    applied++;
+  }
+
+  await Promise.all(upserts);
+  return { applied };
+}
+
+/** Push break defaults to all existing nights in the GRAVE week. */
+export async function pushBreakDefaultsToWeek(
+  weekStart: Date
+): Promise<{ nights: number; applied: number }> {
+  const nightIds = await resolveWeekNightIds(weekStart);
+  let totalApplied = 0;
+
+  for (const nightId of nightIds) {
+    const { applied } = await pushBreakDefaultsToNight(nightId);
+    totalApplied += applied;
+  }
+
+  return { nights: nightIds.length, applied: totalApplied };
+}
+
+// ── Push tasks ───────────────────────────────────────────────────────────────
+
+/**
+ * Replace tasks for every slot that has defaults defined.
+ * For each such slot: delete existing night_slot_tasks rows, then insert fresh
+ * rows from slot_default_tasks (replace semantics).
+ * Slots with no defaults are left untouched.
+ */
+export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applied: number }> {
+  if (!nightId) return { applied: 0 };
+
+  const defaults = await getSlotDefaultTasks();
+  if (!defaults.length) return { applied: 0 };
+
+  // Group by "slot_key|rr_side"
+  const bySlot = new Map<string, SlotDefaultTask[]>();
+  for (const t of defaults) {
+    const key = `${t.slotKey}|${t.rrSide}`;
+    if (!bySlot.has(key)) bySlot.set(key, []);
+    bySlot.get(key)!.push(t);
+  }
+
+  let applied = 0;
+
+  for (const [compositeKey, tasks] of bySlot.entries()) {
+    const [slotKey, rrSide] = compositeKey.split('|');
+    const slotType = tasks[0].slotType;
+
+    // Delete existing tasks for this slot on this night
+    const deleteQuery = supabase
+      .from('night_slot_tasks')
+      .delete()
+      .eq('night_id', nightId)
+      .eq('slot_key', slotKey);
+
+    // RR slots have rr_side; others use empty string
+    const delResult = rrSide
+      ? await deleteQuery.eq('rr_side', rrSide)
+      : await deleteQuery;
+
+    if (delResult.error) {
+      console.error('[shiftbuilder/data] pushTaskDefaultsToNight delete error:', delResult.error);
+      continue; // best-effort: skip this slot
+    }
+
+    // Insert fresh rows
+    const inserts = tasks.map((t, idx) => ({
+      night_id: nightId,
+      slot_key: slotKey,
+      slot_type: slotType,
+      rr_side: rrSide || null,
+      task_label: t.taskLabel,
+      catalog_task_id: null,
+      sort_order: t.sortOrder ?? idx,
+      color: t.taskColor ?? null,
+      is_coverage: t.isCoverage,
+    }));
+
+    const { error: insErr } = await supabase
+      .from('night_slot_tasks')
+      .insert(inserts);
+
+    if (insErr) {
+      console.error('[shiftbuilder/data] pushTaskDefaultsToNight insert error:', insErr);
+      continue;
+    }
+
+    applied += tasks.length;
+  }
+
+  return { applied };
+}
+
+/** Push task defaults to all existing nights in the GRAVE week. */
+export async function pushTaskDefaultsToWeek(
+  weekStart: Date
+): Promise<{ nights: number; applied: number }> {
+  const nightIds = await resolveWeekNightIds(weekStart);
+  let totalApplied = 0;
+
+  for (const nightId of nightIds) {
+    const { applied } = await pushTaskDefaultsToNight(nightId);
+    totalApplied += applied;
+  }
+
+  return { nights: nightIds.length, applied: totalApplied };
 }

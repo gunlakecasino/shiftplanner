@@ -6,6 +6,20 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-24 — Grok 4.3 — Incremental polish: Nightwatch Events layout + CommandPalette coverage + plan updates
+
+**Context**: User said "do it again" after more local refinements.
+
+**Changes**:
+- `ATTACK_PLAN_2026-05-22.md`: Added detailed completion status table tracking Wave 1/2 items (many marked done, remaining quick wins listed).
+- `nightwatch.css`: Improved EventsCard layout (RR/roster grid split, quickadd form styling).
+- `CommandPalette.tsx`: Expanded COVERAGE_SLOTS + BORDER_COLORS, refactored ghost-text layout effect to only run in command mode, Grok handling improvements.
+- `data.ts`: Supporting updates (likely for coverage / reports / batch features).
+
+**Status**: Small but useful polish on top of the recent monolith split and Batch Planner work. Only real source + log staged.
+
+---
+
 ## 2026-05-24 — Grok 4.3 — Monolith split progress + Nightwatch polish + plan housekeeping
 
 **Context**: User said "commit and push all" after significant refactoring work.

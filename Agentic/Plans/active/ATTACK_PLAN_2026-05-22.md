@@ -6,6 +6,36 @@
 
 ---
 
+## ✅ Completion Status (Updated 2026-05-24)
+
+| Item | Description | Status |
+|---|---|---|
+| W1-1 | DB Migration `grok_reasoning_effort` | ✅ Applied by Brian |
+| W1-2 | Task drag unreachable code | ✅ Fixed |
+| W1-3 | `onAddTask` key format mismatch | ✅ Fixed |
+| W1-4 | RR border key strings | ✅ Fixed |
+| W1-5 | `handleSetTaskColor` null guard | ✅ Fixed |
+| W2-1 | `useShiftHistory` hook identity (excessive re-renders) | 🔴 **Open** |
+| W2-2 | Live status pill `lastSavedAt` | ✅ Done |
+| W2-3 | Grok post-response UX (clear field after response) | ✅ Done |
+| W2-4 | cmdk value-prop filtering leak | ✅ Done |
+| W2-5 | Session-stable query split (32% fewer round-trips) | ✅ Done |
+| W2-6 | `applyDraft` N-serial history + N-serial upserts | 🔴 **Open** |
+| W2-7 | Roster O(n²) `assignedThisNight` lookup | 🔴 **Open** |
+| W2-8 | `filterTerm` shadow variable | 🔴 **Open** |
+| W2-9 | `AuxCard` duplicated `draftInfo` block | 🔴 **Open** |
+| W2-10 | `OverlapSlot`/`ZoneTaskList` stale closure | 🔴 **Open** |
+| W2-11 | History stack unbounded memory growth | 🔴 **Open** |
+| iPad Fix A-E | Touch sensors, pencil hover, barrel button | ✅ Done |
+| Dark Mode | System + manual toggle, dim/charcoal | ✅ Done |
+| Wave 3 | Architecture evolution (W3-1 through W3-8) | 🟡 Future |
+
+**Remaining quick wins (≤30 min each)**: QW-1 dead `filterTerm`, QW-2 `assignedThisNight.has()`, QW-3 `MAX_HISTORY=50`, QW-7 `applyDraft` batch.
+
+---
+
+---
+
 ## Executive Summary
 
 The ShiftBuilder is fundamentally working. The Grok integration fires correctly, card-click context flows work, the command palette search and hot-word engine are functional, and the artboard renders cleanly. However, there are **5 confirmed bugs** (3 caught live in the running app), **1 missing DB migration** that causes 400 errors on every single page load, and a cluster of high-value UX and architecture improvements that would take this from "working" to "world-class."

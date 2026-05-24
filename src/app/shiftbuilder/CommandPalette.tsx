@@ -42,6 +42,18 @@ const COVERAGE_SLOTS: { key: string; label: string; group: 'Zone' | 'Restroom' }
   { key: 'MRR10', label: 'Restroom 10', group: 'Restroom' },
 ];
 
+const ALL_SLOTS = ['Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR','MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10','ADM','TR1','TR2','SP1','SP2','OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5','OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5'];
+const TASK_SLOTS = ['Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR','MRR1','MRR6','MRR7','MRR8','MRR10','WRR1','WRR6','WRR7','WRR8','WRR10','ADM','TR1','TR2','OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5','OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5'];
+const BORDER_COLORS = [
+  { name: 'Gold (Z1/Z2)',     value: '#B89708' },
+  { name: 'Red (Z3–Z5, Z9)',  value: '#E53935' },
+  { name: 'Magenta (Z6)',     value: '#B7679A' },
+  { name: 'Blue (Z7)',        value: '#1976D2' },
+  { name: 'Brown (Z8)',       value: '#6B5346' },
+  { name: 'Green (Z10)',      value: '#43A047' },
+  { name: 'Orange (TR1/TR2)', value: '#FB8C00' },
+];
+
 // Normalize an RR key (MRR7 or WRR7) → "MRR7" for deduplication in coverage source checks
 function normalizeToMRR(key: string): string {
   if (key.startsWith('WRR')) return 'MRR' + key.slice(3);
@@ -245,21 +257,6 @@ export function CommandPalette({
   const cmdMirrorRef = React.useRef<HTMLSpanElement>(null);
   const [cmdGhostLeft, setCmdGhostLeft] = React.useState(0);
 
-  React.useLayoutEffect(() => {
-    if (!cmdMirrorRef.current) return;
-    const input = cmdInputRef.current;
-    if (input) {
-      const cs = window.getComputedStyle(input);
-      const span = cmdMirrorRef.current;
-      span.style.fontFamily = cs.fontFamily;
-      span.style.fontSize = cs.fontSize;
-      span.style.fontWeight = cs.fontWeight;
-      span.style.letterSpacing = cs.letterSpacing;
-      span.style.paddingLeft = cs.paddingLeft;
-    }
-    setCmdGhostLeft(cmdMirrorRef.current.offsetWidth);
-  }, [inputValue]);
-
   const [commandStatus, setCommandStatus] = React.useState<
     "idle" | "executing" | "success" | "error"
   >("idle");
@@ -292,6 +289,22 @@ export function CommandPalette({
   }, [inputValue, parseCtx]);
 
   const isCommandMode = !!commandState && commandState.kind !== null;
+
+  React.useLayoutEffect(() => {
+    if (!isCommandMode) return;
+    if (!cmdMirrorRef.current) return;
+    const input = cmdInputRef.current;
+    if (input) {
+      const cs = window.getComputedStyle(input);
+      const span = cmdMirrorRef.current;
+      span.style.fontFamily = cs.fontFamily;
+      span.style.fontSize = cs.fontSize;
+      span.style.fontWeight = cs.fontWeight;
+      span.style.letterSpacing = cs.letterSpacing;
+      span.style.paddingLeft = cs.paddingLeft;
+    }
+    setCmdGhostLeft(cmdMirrorRef.current.offsetWidth);
+  }, [inputValue, isCommandMode]);
 
   // === Grok free-text query mode — activated by typing "?" or "ask " prefix ===
   const trimmedInput = inputValue.trimStart();
@@ -414,7 +427,7 @@ export function CommandPalette({
     };
   }, [isGrokQueryMode, grokQueryText, requestGrokStructuredSuggestions]);
 
-  const handleAskGrok = async () => {
+  const handleAskGrok = React.useCallback(async () => {
     if (!selectedSlot && !selectedPerson) return;
 
     setGrokLoading(true);
@@ -423,7 +436,6 @@ export function CommandPalette({
     setGrokWarnings([]);
     setGrokUsedStructured(false);
 
-    // Prefer the powerful new structured path when the parent provides it
     if (requestGrokStructuredSuggestions) {
       try {
         const focus = selectedSlot
@@ -436,7 +448,7 @@ export function CommandPalette({
           setGrokStructured(result.structured);
           setGrokWarnings(result.warnings || []);
           setGrokUsedStructured(true);
-          setGrokResponse(result.text); // keep raw as fallback
+          setGrokResponse(result.text);
         } else {
           setGrokResponse(result.text);
         }
@@ -449,7 +461,6 @@ export function CommandPalette({
       return;
     }
 
-    // Fallback to legacy text-only path
     try {
       const context = selectedSlot
         ? {
@@ -471,16 +482,40 @@ export function CommandPalette({
     } finally {
       setGrokLoading(false);
     }
-  };
+  }, [selectedSlot, selectedPerson, selectedSlotAssignment, requestGrokStructuredSuggestions]);
 
   // New rich structured path (Grok Intelligence v2)
   // The parent (ShiftBuilderClient) is expected to pass onApplyGrokSuggestions
   // and eventually the data to build a full snapshot.
-  const handleApplyGrokActions = (actions: any[]) => {
+  const handleApplyGrokActions = React.useCallback((actions: any[]) => {
     if (!onApplyGrokSuggestions || actions.length === 0) return;
     onApplyGrokSuggestions(actions);
-    // Keep palette open so operator can review / ask again on the updated draft
-  };
+  }, [onApplyGrokSuggestions]);
+
+  const handleAnalyzeFullBoard = React.useCallback(async () => {
+    if (!requestGrokStructuredSuggestions) return;
+    setGrokLoading(true);
+    setGrokResponse(null);
+    setGrokStructured(null);
+    setGrokWarnings([]);
+    setGrokUsedStructured(false);
+
+    try {
+      const result = await requestGrokStructuredSuggestions({ type: "board" });
+      if (result.usedStructured && result.structured) {
+        setGrokStructured(result.structured);
+        setGrokWarnings(result.warnings || []);
+        setGrokUsedStructured(true);
+        setGrokResponse(result.text);
+      } else {
+        setGrokResponse(result.text || "Grok analyzed the board.");
+      }
+    } catch (e) {
+      setGrokResponse("Grok board analysis failed. Try again.");
+    } finally {
+      setGrokLoading(false);
+    }
+  }, [requestGrokStructuredSuggestions]);
 
   // === Command-mode handlers ===
 
@@ -759,30 +794,7 @@ export function CommandPalette({
         {requestGrokStructuredSuggestions && (
           <div className="px-4 pt-2 pb-2 border-b border-white/60 bg-white/40 dark:bg-zinc-950/40">
             <button
-              onClick={async () => {
-                if (!requestGrokStructuredSuggestions) return;
-                setGrokLoading(true);
-                setGrokResponse(null);
-                setGrokStructured(null);
-                setGrokWarnings([]);
-                setGrokUsedStructured(false);
-
-                try {
-                  const result = await requestGrokStructuredSuggestions({ type: "board" });
-                  if (result.usedStructured && result.structured) {
-                    setGrokStructured(result.structured);
-                    setGrokWarnings(result.warnings || []);
-                    setGrokUsedStructured(true);
-                    setGrokResponse(result.text);
-                  } else {
-                    setGrokResponse(result.text || "Grok analyzed the board.");
-                  }
-                } catch (e) {
-                  setGrokResponse("Grok board analysis failed. Try again.");
-                } finally {
-                  setGrokLoading(false);
-                }
-              }}
+              onClick={handleAnalyzeFullBoard}
               disabled={grokLoading}
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#007AFF]/40 bg-[#007AFF]/10 py-2 text-sm font-medium tracking-[0.3px] text-[#007AFF] hover:bg-[#007AFF]/15 active:bg-[#007AFF]/20 disabled:opacity-60 transition-all"
               style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
@@ -1248,17 +1260,7 @@ export function CommandPalette({
               {!isCommandMode && borderStep === 'select-card' && (
                 <>
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to border</div>
-                  {[
-                    // Zones (Z1–Z10) + Z9 Smoking Room
-                    'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    // Restrooms — Men's and Women's sides use their full Golden UI keys
-                    'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
-                    // Auxiliary
-                    'ADM','TR1','TR2','SP1','SP2',
-                    // AM / PM Overlaps
-                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
-                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
-                  ].map((slot) => (
+                  {ALL_SLOTS.map((slot) => (
                     <CommandPrimitive.Item
                       key={slot}
                       value={slot}
@@ -1310,14 +1312,7 @@ export function CommandPalette({
               {!isCommandMode && removeBorderStep === 'select-card' && (
                 <>
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to remove border from</div>
-                  {[
-                    'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    'MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10',
-                    'ADM','TR1','TR2','SP1','SP2',
-                    // AM / PM Overlaps (optional but available)
-                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
-                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
-                  ].map((slot) => (
+                  {ALL_SLOTS.map((slot) => (
                     <CommandPrimitive.Item
                       key={`remove-${slot}`}
                       value={slot}
@@ -1343,15 +1338,7 @@ export function CommandPalette({
                   <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
                     Select cards for the same task (click to toggle)
                   </div>
-                  {[
-                    'Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR',
-                    'MRR1','MRR6','MRR7','MRR8','MRR10',
-                    'WRR1','WRR6','WRR7','WRR8','WRR10',
-                    'ADM','TR1','TR2',
-                    // AM / PM Overlaps (6 slots each)
-                    'OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5',
-                    'OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5',
-                  ].map((slot) => {
+                  {TASK_SLOTS.map((slot) => {
                     const isSelected = multiTaskSlots.includes(slot);
                     return (
                       <div
@@ -1682,7 +1669,7 @@ export function CommandPalette({
  * bug that made every roster row render blank — every property resolved to
  * undefined. Match the canonical shape and fall back gracefully.
  */
-function RosterItemRow({ item }: { item: CommandItem }) {
+const RosterItemRow = React.memo(function RosterItemRow({ item }: { item: CommandItem }) {
   const tm = item.metadata?.tm;
   if (!tm) return <div>{item.label}</div>;
 
@@ -1691,9 +1678,6 @@ function RosterItemRow({ item }: { item: CommandItem }) {
 
   return (
     <div className="flex items-center gap-3 w-full min-w-0 py-2.5">
-      {/* Dominant primary name — Cupertino paragraph treatment + Atkinson priority.
-          Secondary metadata (section, current slot) is intentionally de-emphasized
-          per Phase 2 direction to reduce visual noise on iPad. */}
       <div className="flex-1 min-w-0">
         <div 
           className="font-semibold text-[15px] tracking-[-0.2px] leading-[1.35] truncate text-zinc-900 dark:text-zinc-50"
@@ -1701,9 +1685,6 @@ function RosterItemRow({ item }: { item: CommandItem }) {
         >
           {displayName}
         </div>
-        {/* Very subtle secondary line — only shows current assignment when relevant.
-            Section info is now carried primarily by badges. This eliminates the
-            previously distracting "section · id · on Zx" micro-text. */}
         {current && (
           <div 
             className="text-[11px] text-zinc-500/70 dark:text-zinc-400/70 mt-px tracking-[-0.1px]"
@@ -1714,8 +1695,6 @@ function RosterItemRow({ item }: { item: CommandItem }) {
         )}
       </div>
 
-      {/* Badges — mutually exclusive eligibility tier: PM > AM > G (Porter separate).
-          A TM is either a PM overlap, AM overlap, or a full-grave — never multiple. */}
       <div className="flex gap-1.5 shrink-0 items-center">
         {item.metadata?.isScheduledUnplaced && (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-600 font-semibold tracking-[0.5px] border border-amber-400/30" title="On schedule tonight — not yet placed">
@@ -1734,16 +1713,15 @@ function RosterItemRow({ item }: { item: CommandItem }) {
       </div>
     </div>
   );
-}
+});
 
 /**
  * Token chips that visualize the parsed state of a `make` / `remove` command.
  * Each filled slot becomes a chip; the in-flight slot is a dashed placeholder.
  */
-function CommandChipBar({ state }: { state: CommandState }) {
+const CommandChipBar = React.memo(function CommandChipBar({ state }: { state: CommandState }) {
   const chips: { label: string; tone: "verb" | "tm" | "action" | "arg" | "pending" | "sudo"; muted?: boolean }[] = [];
 
-  // sudo has no arguments — render a clean "sudo · open admin window" bar.
   if (state.kind === "sudo") {
     chips.push({ label: "sudo", tone: "sudo" });
     return (
@@ -1812,7 +1790,7 @@ function CommandChipBar({ state }: { state: CommandState }) {
       )}
     </div>
   );
-}
+});
 
 /**
  * Why? panel — explains the engine's per-slot picks side-by-side with Grok's.
@@ -1824,7 +1802,7 @@ function CommandChipBar({ state }: { state: CommandState }) {
  *
  * The visual goal is dense but scannable: each slot is one collapsible row.
  */
-function WhyPanel({
+const WhyPanel = React.memo(function WhyPanel({
   breakdown,
   reasoning,
   grokExplanation,
@@ -1936,13 +1914,13 @@ function WhyPanel({
       </div>
     </div>
   );
-}
+});
 
 /**
  * Suggestion list for command mode. Each item is a real cmdk item so the
  * keyboard nav (↑↓) works exactly the same as the rest of the palette.
  */
-function CommandSuggestionList({
+const CommandSuggestionList = React.memo(function CommandSuggestionList({
   state,
   onPick,
 }: {
@@ -2003,4 +1981,4 @@ function CommandSuggestionList({
       ))}
     </CommandPrimitive.Group>
   );
-}
+});
