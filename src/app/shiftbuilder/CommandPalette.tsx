@@ -161,7 +161,7 @@ interface CommandPaletteProps {
  * Heavily customized for Golden PDF calm + Apple-grade precision.
  * No reliance on shadcn CommandDialog so we have full visual control.
  */
-export function CommandPalette({
+function CommandPaletteInner({
   open,
   onOpenChange,
   actions,
@@ -236,8 +236,14 @@ export function CommandPalette({
   // Debounce timer for the Grok free-text query mode
   const grokQueryDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Debounce timer for command-state parsing (keeps parser off the hot input path)
+  const cmdParseDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // === Natural-language command mode (make / remove) ===
   const [inputValue, setInputValue] = React.useState("");
+  // Deferred copy of inputValue used for parsing — updated after a 40ms debounce
+  // so the parser never runs synchronously on the keystroke microtask.
+  const [deferredInput, setDeferredInput] = React.useState("");
 
   // AI ghost-text completion for command mode free-text.
   // Only active when isCommandMode so it doesn't interfere with roster search.
@@ -276,35 +282,60 @@ export function CommandPalette({
     };
   }, [commandRoster, commandShiftDate, commandWeekDays]);
 
-  // Run the parser on every input change. Falls back to a no-op state when
-  // ctx isn't provided.
+  // Debounce the input → deferredInput pipeline so the parser doesn't run
+  // synchronously on every keystroke. 40ms is imperceptible to the operator
+  // but keeps the hot keystroke path free of regex/fuzzy work.
+  React.useEffect(() => {
+    if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
+    cmdParseDebounceRef.current = setTimeout(() => setDeferredInput(inputValue), 40);
+    return () => {
+      if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
+    };
+  }, [inputValue]);
+
+  // Run the parser on the debounced input. Falls back to null when ctx isn't provided.
   const commandState: CommandState | null = React.useMemo(() => {
     if (!parseCtx) return null;
-    const trimmed = inputValue.trimStart().toLowerCase();
+    const trimmed = deferredInput.trimStart().toLowerCase();
     // Only parse if the input clearly looks like a command (starts with
     // make / remove or one of their prefixes). Avoids hijacking normal
     // fuzzy search.
     if (!/^(m|r|s|ma|re|su|mak|rem|sud|make|remove|sudo)\b/.test(trimmed)) return null;
-    return parseCommand(inputValue, parseCtx);
-  }, [inputValue, parseCtx]);
+    return parseCommand(deferredInput, parseCtx);
+  }, [deferredInput, parseCtx]);
 
   const isCommandMode = !!commandState && commandState.kind !== null;
 
-  React.useLayoutEffect(() => {
-    if (!isCommandMode) return;
-    if (!cmdMirrorRef.current) return;
+  // Mirror the input's computed styles onto the hidden span once when command
+  // mode first activates (styles don't change after that).
+  const cmdStylesSyncedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!isCommandMode) { cmdStylesSyncedRef.current = false; return; }
+    if (cmdStylesSyncedRef.current) return;
     const input = cmdInputRef.current;
-    if (input) {
-      const cs = window.getComputedStyle(input);
-      const span = cmdMirrorRef.current;
-      span.style.fontFamily = cs.fontFamily;
-      span.style.fontSize = cs.fontSize;
-      span.style.fontWeight = cs.fontWeight;
-      span.style.letterSpacing = cs.letterSpacing;
-      span.style.paddingLeft = cs.paddingLeft;
-    }
-    setCmdGhostLeft(cmdMirrorRef.current.offsetWidth);
-  }, [inputValue, isCommandMode]);
+    const span = cmdMirrorRef.current;
+    if (!input || !span) return;
+    const cs = window.getComputedStyle(input);
+    span.style.fontFamily = cs.fontFamily;
+    span.style.fontSize = cs.fontSize;
+    span.style.fontWeight = cs.fontWeight;
+    span.style.letterSpacing = cs.letterSpacing;
+    span.style.paddingLeft = cs.paddingLeft;
+    cmdStylesSyncedRef.current = true;
+  }, [isCommandMode]);
+
+  // Measure ghost-text offset via ResizeObserver so we never call offsetWidth
+  // synchronously on the keystroke path (which forces a layout/reflow).
+  React.useEffect(() => {
+    const span = cmdMirrorRef.current;
+    if (!span) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setCmdGhostLeft(entry.contentRect.width);
+    });
+    ro.observe(span);
+    return () => ro.disconnect();
+  }, []);
 
   // === Grok free-text query mode — activated by typing "?" or "ask " prefix ===
   const trimmedInput = inputValue.trimStart();
@@ -314,6 +345,23 @@ export function CommandPalette({
   const grokQueryText = isGrokQueryMode
     ? (trimmedInput.startsWith("?") ? trimmedInput.slice(1) : trimmedInput.slice(4)).trim()
     : "";
+
+  // === Task shorthand mode — "task Z1 [Mop floors]" quick entry in root mode ===
+  // Detects "task <slotKey> [optional label]" typed from root. The slot key must
+  // exactly match one of TASK_SLOTS (case-insensitive). When a label is present
+  // we show a one-tap save item; when absent we show a slot-pre-selected entry
+  // that jumps straight to the tasks-enter-label step.
+  const taskShorthand = React.useMemo(() => {
+    if (contextStep !== 'root' || isCommandMode || isGrokQueryMode) return null;
+    const trimmed = inputValue.trim();
+    const m = trimmed.match(/^task\s+([A-Za-z0-9-]+)(?:\s+(.+))?$/i);
+    if (!m) return null;
+    const rawSlot = m[1].toUpperCase();
+    const slot = TASK_SLOTS.find(s => s === rawSlot) ?? null;
+    const label = m[2]?.trim() ?? '';
+    return slot ? { slot, label } : null;
+  }, [inputValue, contextStep, isCommandMode, isGrokQueryMode]);
+  const isTaskShorthandMode = !!taskShorthand;
 
   // Reset context when palette closes
   React.useEffect(() => {
@@ -325,14 +373,16 @@ export function CommandPalette({
       setRemoveBorderStep('idle');
       setBorderTarget(null);
       setInputValue("");
+      setDeferredInput("");
       setCommandStatus("idle");
       setCommandError(null);
       setNameConflict(null);
       setConflictChecking(false);
       setWhyOpen(false);
       setActiveGroupFilter(null);
-      // Cancel any pending Grok query debounce
+      // Cancel any pending debounces
       if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
+      if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
     }
   }, [open]);
 
@@ -695,8 +745,9 @@ export function CommandPalette({
       className="fixed inset-0 z-[9999] flex items-start justify-center pt-[12vh]"
       onClick={() => onOpenChange(false)}
     >
-      {/* Backdrop with strong Liquid Glass blur */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl" />
+      {/* Backdrop — backdrop-blur-md keeps the compositor layer count low.
+          backdrop-blur-2xl triggers expensive multi-pass blur on every frame. */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-md" />
 
       {/* Main Palette Card — Cupertino Liquid Glass + Golden calm. */}
       <div
@@ -705,12 +756,20 @@ export function CommandPalette({
           "border border-white/60 dark:border-white/10",
           "bg-white/90 dark:bg-zinc-950/90",
           "shadow-2xl shadow-black/20",
-          "backdrop-blur-3xl",
-          "animate-in fade-in zoom-in-95 duration-200",
+          "backdrop-blur-xl",
+          // GPU-only animation: transform + opacity — no layout properties animated.
+          // This keeps the open transition on the compositor thread.
+          "animate-in fade-in zoom-in-95 duration-150",
           // Cupertino Liquid Glass material: subtle inner highlight
           "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
         )}
-        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+        style={{
+          fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
+          // CSS containment: layout changes inside the palette don't bubble up
+          // and cause repaints on the artboard behind it.
+          contain: "layout style",
+          willChange: "transform, opacity",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Floating category pills — Launchpad-inspired, large touch targets for iPad Pencil.
@@ -1054,8 +1113,37 @@ export function CommandPalette({
         <div className="flex items-center px-4 py-3 bg-white/60 dark:bg-zinc-950/60">
           <CommandPrimitive
             className="w-full"
-            shouldFilter={!isCommandMode && !isGrokQueryMode}
+            shouldFilter={!isCommandMode && !isGrokQueryMode && contextStep !== 'tasks-enter-label' && !isTaskShorthandMode}
             onKeyDown={(e) => {
+              // Task label entry: Enter directly saves without requiring the user to
+              // click the list item. shouldFilter is disabled in this step so the
+              // input is free-text — Enter is the natural confirmation gesture.
+              if (contextStep === 'tasks-enter-label' && e.key === 'Enter') {
+                const label = inputValue.trim();
+                const targets = multiTaskSlots.length > 0
+                  ? multiTaskSlots
+                  : selectedTaskSlot ? [selectedTaskSlot] : [];
+                if (label && onAddTask && targets.length > 0) {
+                  e.preventDefault();
+                  void (async () => {
+                    try {
+                      await (onAddTask as any)(
+                        targets.length === 1 ? targets[0] : targets,
+                        label
+                      );
+                    } catch (err) {
+                      console.error('[CommandPalette] task save from Enter failed:', err);
+                    } finally {
+                      onOpenChange(false);
+                      setSelectedTaskSlot(null);
+                      setMultiTaskSlots([]);
+                      setContextStep('root');
+                      setInputValue('');
+                    }
+                  })();
+                  return;
+                }
+              }
               if (isCommandMode && commandState) {
                 if (e.key === "Tab" && !e.shiftKey) {
                   e.preventDefault();
@@ -1148,6 +1236,10 @@ export function CommandPalette({
                         : "Keep typing or review results below"
                       : isCommandMode
                       ? "Type a command — Tab to complete, Enter to run"
+                      : isTaskShorthandMode && taskShorthand?.label
+                      ? `↵ to add "${taskShorthand.label}" to ${taskShorthand.slot}`
+                      : isTaskShorthandMode
+                      ? `Type task label for ${taskShorthand?.slot}...`
                       : contextStep === "person-to-slot"
                       ? "Type slot (e.g. Z10, MRR2)..."
                       : contextStep === 'tasks-select-zone'
@@ -1232,7 +1324,10 @@ export function CommandPalette({
               </div>
             )}
 
-            <CommandPrimitive.List className="max-h-[420px] overflow-y-auto px-1 py-2 no-scrollbar">
+            <CommandPrimitive.List
+              className="max-h-[420px] overflow-y-auto px-1 py-2 no-scrollbar"
+              style={{ contain: "content", willChange: "scroll-position" }}
+            >
               <CommandPrimitive.Empty className={cn("py-8 text-center text-sm text-zinc-500", isGrokQueryMode && "hidden")}>
                 <div className="space-y-2 px-4">
                   <div>No results found.</div>
@@ -1518,8 +1613,64 @@ export function CommandPalette({
                 </>
               )}
 
+              {/* Task shorthand quick-entry — shown when user types "task Z1 [label]" in root mode */}
+              {!isCommandMode && isTaskShorthandMode && taskShorthand && borderStep === 'idle' && removeBorderStep === 'idle' && (
+                <>
+                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
+                    Quick add task
+                  </div>
+                  {taskShorthand.label ? (
+                    /* "task Z1 Mop floors" — label already present, one-tap save */
+                    <CommandPrimitive.Item
+                      key="task-shorthand-save"
+                      value={`task-shorthand-save-${taskShorthand.slot}`}
+                      onSelect={async () => {
+                        if (!onAddTask || !taskShorthand) return;
+                        try {
+                          await onAddTask(taskShorthand.slot, taskShorthand.label);
+                        } catch (err) {
+                          console.error('[CommandPalette] task shorthand save failed:', err);
+                        } finally {
+                          onOpenChange(false);
+                          setInputValue('');
+                        }
+                      }}
+                      className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
+                    >
+                      <div className="font-medium flex-1">
+                        Add to{" "}
+                        <span className="text-[#007AFF] font-bold">{taskShorthand.slot}</span>
+                        {": "}
+                        <span className="italic text-zinc-700 dark:text-zinc-300">{taskShorthand.label}</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 shrink-0">↵ save</div>
+                    </CommandPrimitive.Item>
+                  ) : (
+                    /* "task Z1" — slot known, jump to label entry */
+                    <CommandPrimitive.Item
+                      key="task-shorthand-slot"
+                      value={`task-shorthand-slot-${taskShorthand.slot}`}
+                      onSelect={() => {
+                        if (!taskShorthand) return;
+                        setMultiTaskSlots([taskShorthand.slot]);
+                        setContextStep('tasks-enter-label');
+                        setInputValue('');
+                      }}
+                      className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
+                    >
+                      <div className="font-medium flex-1">
+                        Add task to{" "}
+                        <span className="text-[#007AFF] font-bold">{taskShorthand.slot}</span>
+                        <span className="text-zinc-400 text-[12px] ml-1.5">— then type label</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 shrink-0">↵ to continue</div>
+                    </CommandPrimitive.Item>
+                  )}
+                </>
+              )}
+
               {/* Normal grouped content (only when not in special modes) */}
-              {!isCommandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label', 'coverage-select-source', 'coverage-select-target'].includes(contextStep) && grouped.map(([groupName, items]) => (
+              {!isCommandMode && !isTaskShorthandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label', 'coverage-select-source', 'coverage-select-target'].includes(contextStep) && grouped.map(([groupName, items]) => (
                 <CommandPrimitive.Group
                   key={groupName}
                   id={`group-${groupName.toLowerCase()}`}
@@ -1649,6 +1800,10 @@ export function CommandPalette({
           <div className="opacity-70">
             {isGrokQueryMode
               ? "✦ Grok Query Mode · type ? or ask to start · esc to cancel"
+              : isTaskShorthandMode
+              ? "task <slot> <label> · ↵ to save · esc to clear"
+              : contextStep === 'tasks-enter-label'
+              ? "Type task description · ↵ to save · esc to back"
               : contextStep !== 'root'
               ? "Tab to switch • ↑↓ navigate · ↵ select · esc back"
               : "↑↓ navigate · ↵ select · esc close · ? for Grok"}
@@ -1661,6 +1816,14 @@ export function CommandPalette({
 
   return createPortal(content, document.body);
 }
+
+/**
+ * Memoized export — skips re-rendering when props haven't changed.
+ * Most important for when `open` is false: SBC renders frequently (every
+ * assignment change, every roster update) and the palette should pay zero
+ * reconciliation cost while it's closed.
+ */
+export const CommandPalette = React.memo(CommandPaletteInner);
 
 /* Rich row for team members in the palette.
  *

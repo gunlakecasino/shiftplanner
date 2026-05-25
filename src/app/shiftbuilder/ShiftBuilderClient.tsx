@@ -563,6 +563,9 @@ export default function ShiftBuilder() {
   // (roster icon is now inside the "drawer"/cluster). Expands from the center, stays centered.
   const [controlsExpanded, setControlsExpanded] = useState(false);
 
+  // Zone legend — collapsible floating pill below the zoom chip.
+  const [legendOpen, setLegendOpen] = useState(false);
+
   // Close day picker on outside click or Escape (same pattern as the retired pill hooks).
   useEffect(() => {
     if (!dayPickerOpen) return;
@@ -1819,6 +1822,35 @@ export default function ShiftBuilder() {
   }, [currentView]);
 
   // === Master Command Palette (Phase 2 core) ===
+  // Stable callbacks for useCommandActions — keeping these out of the call-site
+  // so useCommandActions can detect actual changes (not new references every render).
+  const cmdActionRunEngine = React.useCallback(() => {
+    if (isDraftMode) applyDraft(); else enterDraftMode();
+  }, [isDraftMode, applyDraft, enterDraftMode]);
+
+  const cmdActionPrint = React.useCallback(() => handlePrintBothPages(), []);
+
+  const cmdActionUndo = React.useCallback(() => {
+    const prev = shiftHistory.undo();
+    if (prev) applySnapshot(prev);
+  }, [shiftHistory, applySnapshot]);
+
+  const cmdActionRedo = React.useCallback(() => {
+    const next = shiftHistory.redo();
+    if (next) applySnapshot(next);
+  }, [shiftHistory, applySnapshot]);
+
+  const cmdActionCycleBreak = React.useCallback(
+    (slotKey: string) => {
+      const current = assignments[slotKey]?.breakGroup ?? 0;
+      const next = (current % 3) + 1;
+      setBreakGroupForSlot(slotKey, next as any);
+    },
+    [assignments, setBreakGroupForSlot]
+  );
+
+  const cmdActionClearBorders = React.useCallback(() => setCardBorders({}), []);
+
   const commandActions = useCommandActions({
     graveRoster,
     realRoster,
@@ -1832,23 +1864,11 @@ export default function ShiftBuilder() {
     onSetSelectedDayIndex: setSelectedDayIndex,
     onAddAuxSlot: addAuxSlot,
     onRemoveLastAuxSlot: removeLastAuxSlot,
-    onRunEngine: () => {
-      if (isDraftMode) {
-        applyDraft();
-      } else {
-        enterDraftMode();
-      }
-    },
+    onRunEngine: cmdActionRunEngine,
     onDiscardDraft: discardDraft,
-    onPrint: () => handlePrintBothPages(),
-    onUndo: () => {
-      const prev = shiftHistory.undo();
-      if (prev) applySnapshot(prev);
-    },
-    onRedo: () => {
-      const next = shiftHistory.redo();
-      if (next) applySnapshot(next);
-    },
+    onPrint: cmdActionPrint,
+    onUndo: cmdActionUndo,
+    onRedo: cmdActionRedo,
     assign,
     isDraftMode,
     scheduledTmIdsTonight,
@@ -1858,17 +1878,174 @@ export default function ShiftBuilder() {
     // Phase 3 hot-word callbacks
     onRemoveFromSlot: unassign,
     onToggleLock: toggleLock,
-    onCycleBreak: (slotKey: string) => {
-      const current = assignments[slotKey]?.breakGroup ?? 0;
-      const next = (current % 3) + 1;
-      setBreakGroupForSlot(slotKey, next as any);
-    },
+    onCycleBreak: cmdActionCycleBreak,
     onOpenPaletteForSlot: openPaletteForSlot,
-    onClearAllBorders: () => setCardBorders({}),
+    onClearAllBorders: cmdActionClearBorders,
   });
 
   // handleCardClick and dismissQuickFan removed in Phase 1 (Command Palette Upgrade).
   // Card taps now use openPaletteForSlot / openPaletteForPerson directly.
+
+  // =========================================================================
+  // Stable CommandPalette prop callbacks
+  // =========================================================================
+  // All palette callbacks are defined here with useCallback so they get stable
+  // references across SBC renders. Passing inline arrow functions directly in
+  // the JSX prop list causes CommandPalette to re-render on every SBC render
+  // (even when the palette is closed) because every new function reference
+  // invalidates React's shallow-equality check. These callbacks are the primary
+  // source of choppiness when typing in the palette.
+
+  const handleCmdkAddTask = React.useCallback(
+    async (uiKeys: string | string[], taskLabel: string) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        return;
+      }
+      const keys = Array.isArray(uiKeys) ? uiKeys : [uiKeys];
+      if (keys.length === 0 || !taskLabel?.trim()) return;
+
+      try {
+        for (const uiKey of keys) {
+          const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+          await addNightSlotTask({
+            nightId,
+            slotKey: slot_key,
+            slotType: slot_type,
+            rrSide: rr_side,
+            taskLabel: taskLabel.trim(),
+            sortOrder: 50,
+          });
+        }
+        const fresh = await getNightSlotTasks(nightId);
+        const byKey: Record<string, NightSlotTask[]> = {};
+        for (const t of fresh) {
+          const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+          if (!byKey[uiKey]) byKey[uiKey] = [];
+          byKey[uiKey].push(t);
+        }
+        setSelectedTasks(byKey);
+      } catch (e) {
+        console.error("Failed to add task from palette (multi)", e);
+        showToast("Failed to save task to one or more cards", "error");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nightId, showToast]
+  );
+
+  const handleCmdkCycleBreak = React.useCallback(
+    (slotKey: string) => {
+      const current = assignments[slotKey]?.breakGroup ?? 0;
+      const next = (current % 3) + 1;
+      setBreakGroupForSlot(slotKey, next as any);
+    },
+    [assignments, setBreakGroupForSlot]
+  );
+
+  const handleCmdkSetGravePool = React.useCallback(
+    async (tmId: string, value: "Full" | "AM" | "PM" | null) => {
+      await setTMGravePool(tmId, value);
+      setTMCommandEpoch((e) => e + 1);
+    },
+    [setTMCommandEpoch]
+  );
+
+  const handleCmdkSetDisplayName = React.useCallback(
+    async (tmId: string, newName: string) => {
+      await setTMDisplayName(tmId, newName);
+      setTMCommandEpoch((e) => e + 1);
+    },
+    [setTMCommandEpoch]
+  );
+
+  const handleCmdkRemoveFromSchedule = React.useCallback(
+    async (tmId: string, date: Date) => {
+      if (!nightId) throw new Error("No night context — pick a day first");
+      await removeTMFromSchedule({ tmId, nightId, nightDate: date });
+      setTMCommandEpoch((e) => e + 1);
+    },
+    [nightId, setTMCommandEpoch]
+  );
+
+  const handleCmdkAddCoverage = React.useCallback(
+    async (sourceKey: string, targetKey: string) => {
+      if (!nightId) { showToast("No active night selected", "error"); return; }
+
+      const accentColor = getSlotAccentColor(sourceKey);
+      const targetLabel = getSlotCoverageLabel(targetKey);
+      const sourceKeys = expandCoverageToKeys(sourceKey);
+
+      try {
+        for (const sk of sourceKeys) {
+          const { slot_key, slot_type, rr_side } = uiToDb(sk);
+          await addNightSlotTask({
+            nightId,
+            slotKey: slot_key,
+            slotType: slot_type,
+            rrSide: rr_side,
+            taskLabel: `And ${targetLabel}`,
+            isCoverage: true,
+            color: accentColor,
+            sortOrder: 99,
+          });
+        }
+        const fresh = await getNightSlotTasks(nightId);
+        const byKey: Record<string, NightSlotTask[]> = {};
+        for (const t of fresh) {
+          const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+          if (!byKey[uiKey]) byKey[uiKey] = [];
+          byKey[uiKey].push(t);
+        }
+        setSelectedTasks(byKey);
+        showToast(`Coverage added: And ${targetLabel}`, "success");
+      } catch (err) {
+        console.error("[SBC] coverage add failed:", err);
+        showToast("Failed to add coverage bar", "error");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nightId, showToast]
+  );
+
+  // Stable computed arrays/objects for the palette — new references only when
+  // the underlying data actually changes, not on every SBC render.
+  const cmdkWeekDays = React.useMemo(
+    () => DAY_DEFS.map((d) => ({ date: d.date, name: d.name, short: d.short })),
+    [DAY_DEFS]
+  );
+
+  const cmdkCompletionUnplaced = React.useMemo(
+    () =>
+      Array.from(scheduledTmIdsTonight)
+        .filter((id) => !assignedThisNight.has(id))
+        .map((id) => {
+          const tm = realRoster.find((t: any) => t.id === id);
+          return tm?.name || tm?.fullName || id;
+        })
+        .filter(Boolean)
+        .slice(0, 12) as string[],
+    [scheduledTmIdsTonight, assignedThisNight, realRoster]
+  );
+
+  const cmdkCompletionAssignments = React.useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(assignments).map(([k, v]: [string, any]) => [
+          k,
+          { tmId: v?.tmId, tmName: v?.tmName },
+        ])
+      ),
+    [assignments]
+  );
+
+  const cmdkSelectedSlotAssignment = React.useMemo(
+    () =>
+      cmdkInitialContext?.type === "slot"
+        ? assignments[cmdkInitialContext.value]
+        : null,
+    [cmdkInitialContext, assignments]
+  );
 
   const handleGenderClick = (slotKey: string, element?: HTMLElement, event?: React.MouseEvent) => {
     openPaletteForSlot(slotKey);
@@ -2795,6 +2972,129 @@ export default function ShiftBuilder() {
             </svg>
           )}
         </button>
+      </div>
+
+      {/* === Zone legend — collapsible key below the zoom chip.
+          Collapsed: small info icon. Expanded: compact panel explaining badge/ring language. */}
+      <div className="fixed top-14 right-3 z-[39] flex flex-col items-end gap-1.5">
+        {/* Toggle button — h-8 w-8 so it's comfortably clickable */}
+        <button
+          type="button"
+          onClick={() => setLegendOpen((v) => !v)}
+          title={legendOpen ? "Close legend" : "Show artboard legend"}
+          aria-label={legendOpen ? "Close legend" : "Show artboard legend"}
+          className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shadow-md border transition-colors text-[11px] font-medium"
+          style={{
+            background: isDark
+              ? legendOpen ? "rgba(60,60,62,0.98)" : "rgba(44,44,46,0.92)"
+              : legendOpen ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.90)",
+            backdropFilter: "blur(16px) saturate(150%)",
+            WebkitBackdropFilter: "blur(16px) saturate(150%)",
+            borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
+            color: isDark ? "#8E8E93" : "#6B7280",
+          }}
+        >
+          {legendOpen ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          )}
+          <span style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+            Legend
+          </span>
+        </button>
+
+        {/* Legend panel */}
+        {legendOpen && (
+          <div
+            className="rounded-xl shadow-xl border text-[11px] overflow-hidden"
+            style={{
+              background: isDark ? "rgba(28,28,30,0.97)" : "rgba(255,255,255,0.97)",
+              backdropFilter: "blur(24px) saturate(160%)",
+              WebkitBackdropFilter: "blur(24px) saturate(160%)",
+              borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)",
+              width: 188,
+              fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
+            }}
+          >
+            <div
+              className="px-3 py-2 text-[9.5px] font-semibold tracking-[0.7px] uppercase"
+              style={{ color: isDark ? "#636366" : "#8E8E93", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}
+            >
+              Artboard Legend
+            </div>
+            <div className="px-3 py-2 flex flex-col gap-2">
+
+              {/* Break waves */}
+              <div>
+                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Break Wave</div>
+                <div className="flex flex-col gap-0.5">
+                  {([0, 1, 2, 3] as const).map((g) => (
+                    <div key={g} className="flex items-center gap-2">
+                      <span
+                        className="w-[22px] h-[16px] rounded-[2px] flex items-center justify-center text-[10px] font-bold text-white leading-none shrink-0"
+                        style={{ background: g === 0 ? "#9CA3AF" : "#1C1C1E" }}
+                      >
+                        {g === 0 ? "–" : g}
+                      </span>
+                      <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>
+                        {g === 0 ? "Off break sheet" : `Wave ${g} — goes ${g === 1 ? "first" : g === 2 ? "second" : "third"}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status rings */}
+              <div>
+                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Card Ring</div>
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ outline: "1.5px solid rgba(52,199,89,0.7)", outlineOffset: "-1px" }} />
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Tasks assigned</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ outline: "1.5px solid rgba(255,149,0,0.65)", outlineOffset: "-1px" }} />
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>No tasks yet</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: isDark ? "#2C2C2E" : "#E5E5E7" }} />
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Empty slot</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card badges */}
+              <div>
+                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Badges</div>
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#FF9500" className="shrink-0">
+                      <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
+                    </svg>
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Locked — engine won't move</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1 py-px rounded text-[8px] font-semibold tracking-wider bg-amber-100 text-amber-700 shrink-0 leading-tight">DRAFT</span>
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Engine proposal — not live</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1 py-px rounded text-[8px] font-semibold bg-[#FFD60A] text-[#1C1C1E] shrink-0 leading-tight">✦</span>
+                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Apple Pencil hover</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
       </div>
 
       {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
@@ -4418,13 +4718,35 @@ export default function ShiftBuilder() {
         }
         return (
           <div
-            className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-4 rounded-full border border-white/60 dark:border-white/10 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93] dark:text-[#636366]"
+            className="fixed bottom-3 right-3 z-40 flex items-center gap-3 h-9 px-3 rounded-full border border-white/60 dark:border-white/10 shadow-lg shadow-black/10 text-[11.5px] text-[#8E8E93] dark:text-[#636366]"
             style={{
               background: isDark ? "rgba(44,44,46,0.92)" : "rgba(255,255,255,0.85)",
               backdropFilter: "blur(20px) saturate(160%)",
               WebkitBackdropFilter: "blur(20px) saturate(160%)",
             }}
           >
+            {/* Page-turn toggle — switches between deployment (P1) and breaks (P2) views */}
+            <button
+              type="button"
+              onClick={() => setCurrentView((v) => v === "deployment" ? "breaks" : "deployment")}
+              title={currentView === "deployment" ? "Switch to Break Sheet — Page 2" : "Switch to Deployment — Page 1"}
+              className="flex items-center gap-1 group shrink-0"
+              aria-label={currentView === "deployment" ? "Page 1 — switch to break sheet" : "Page 2 — switch to deployment"}
+            >
+              {/* Folded-corner page icon */}
+              <svg
+                width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                className="text-[#8E8E93] dark:text-[#636366] group-hover:text-[#1C1C1E] dark:group-hover:text-[#F2F2F4] transition-colors"
+              >
+                <path d="M3 2h7l3 3v9H3V2z" />
+                <path d="M10 2v3h3" />
+              </svg>
+              <span className="font-mono font-bold text-[10.5px] text-[#8E8E93] dark:text-[#636366] group-hover:text-[#1C1C1E] dark:group-hover:text-[#F2F2F4] transition-colors leading-none">
+                {currentView === "deployment" ? "P1" : "P2"}
+              </span>
+            </button>
+            <span className="text-[#C8C8CC] dark:text-[#3A3A3C]">|</span>
             <div className="flex items-center gap-1.5">
               <span
                 className="w-1.5 h-1.5 rounded-full"
@@ -4617,71 +4939,19 @@ export default function ShiftBuilder() {
         onToggleLock={toggleLock}
         onAssign={assign}
         catalog={catalog}
-        onAddTask={async (uiKeys: string | string[], taskLabel: string) => {
-          if (!nightId) {
-            showToast("No active night selected", "error");
-            return;
-          }
-          const keys = Array.isArray(uiKeys) ? uiKeys : [uiKeys];
-          if (keys.length === 0 || !taskLabel?.trim()) return;
-
-          try {
-            // Apply the same task label to every selected card
-            for (const uiKey of keys) {
-              const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
-              await addNightSlotTask({
-                nightId,
-                slotKey: slot_key,
-                slotType: slot_type,
-                rrSide: rr_side,
-                taskLabel: taskLabel.trim(),
-                sortOrder: 50,
-              });
-            }
-
-            // Refresh all tasks for the night so every affected card updates.
-            // getNightSlotTasks returns DB-format slot keys (e.g. "zone_1") but
-            // card renderers key selectedTasks by Golden UI keys ("Z1", "MRR8", …).
-            // Convert every row with dbToUi before bucketing so lookups succeed.
-            const fresh = await getNightSlotTasks(nightId);
-            const byKey: Record<string, NightSlotTask[]> = {};
-            for (const t of fresh) {
-              const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-              if (!byKey[uiKey]) byKey[uiKey] = [];
-              byKey[uiKey].push(t);
-            }
-            setSelectedTasks(byKey);
-          } catch (e) {
-            console.error("Failed to add task from palette (multi)", e);
-            showToast("Failed to save task to one or more cards", "error");
-          }
-        }}
-        onCycleBreak={(slotKey) => {
-          const current = assignments[slotKey]?.breakGroup ?? 0;
-          const next = (current % 3) + 1; // simple cycle 1->2->3->1
-          setBreakGroupForSlot(slotKey, next as any);
-        }}
-        selectedSlotAssignment={cmdkInitialContext?.type === 'slot' ? assignments[cmdkInitialContext.value] : null}
+        onAddTask={handleCmdkAddTask}
+        onCycleBreak={handleCmdkCycleBreak}
+        selectedSlotAssignment={cmdkSelectedSlotAssignment}
         isDraftMode={isDraftMode}
         onApplyGrokSuggestions={applyGrokSuggestions}
         requestGrokStructuredSuggestions={requestGrokStructuredSuggestions}
         onTriggerGrokBoardAnalysis={triggerGrokBoardAnalysis}
         commandRoster={realRoster}
         commandShiftDate={selectedDay.date}
-        commandWeekDays={DAY_DEFS.map(d => ({ date: d.date, name: d.name, short: d.short }))}
-        onSetGravePool={async (tmId, value) => {
-          await setTMGravePool(tmId, value);
-          setTMCommandEpoch(e => e + 1);
-        }}
-        onSetDisplayName={async (tmId, newName) => {
-          await setTMDisplayName(tmId, newName);
-          setTMCommandEpoch(e => e + 1);
-        }}
-        onRemoveFromSchedule={async (tmId, date) => {
-          if (!nightId) throw new Error("No night context — pick a day first");
-          await removeTMFromSchedule({ tmId, nightId, nightDate: date });
-          setTMCommandEpoch(e => e + 1);
-        }}
+        commandWeekDays={cmdkWeekDays}
+        onSetGravePool={handleCmdkSetGravePool}
+        onSetDisplayName={handleCmdkSetDisplayName}
+        onRemoveFromSchedule={handleCmdkRemoveFromSchedule}
         onCheckDisplayNameConflict={checkDisplayNameConflict}
         whyBreakdown={draftBreakdown}
         whyReasoning={draftGrokReasoning}
@@ -4690,68 +4960,71 @@ export default function ShiftBuilder() {
         whyAvailable={isDraftMode && Object.keys(draftBreakdown).length > 0}
         onOpenSudo={() => setSudoOpen(true)}
         completionDay={selectedDay.name}
-        completionScheduledUnplaced={
-          Array.from(scheduledTmIdsTonight)
-            .filter((id) => !assignedThisNight.has(id))
-            .map((id) => {
-              const tm = realRoster.find((t: any) => t.id === id);
-              return tm?.name || tm?.fullName || id;
-            })
-            .filter(Boolean)
-            .slice(0, 12)
-        }
-        completionAssignments={Object.fromEntries(
-          Object.entries(assignments).map(([k, v]: [string, any]) => [
-            k,
-            { tmId: v?.tmId, tmName: v?.tmName },
-          ])
-        )}
-        onAddCoverage={async (sourceKey: string, targetKey: string) => {
-          if (!nightId) { showToast("No active night selected", "error"); return; }
-
-          // Determine the accent color of the source card
-          const accentColor = getSlotAccentColor(sourceKey);
-
-          // Human-readable label for the slot being covered (shown in the bar)
-          const targetLabel = getSlotCoverageLabel(targetKey);
-
-          // For RR sources, expand to both M and W so the bar spans the full card
-          const sourceKeys = expandCoverageToKeys(sourceKey);
-
-          try {
-            // Only write the bar on the SOURCE card(s) — the covering TM's card
-            // shows "And Restroom 7" or "And Zone 3"; the covered card stays clean.
-            // For RR sources, write to both M and W sides so the bar spans the full card.
-            for (const sk of sourceKeys) {
-              const { slot_key, slot_type, rr_side } = uiToDb(sk);
-              await addNightSlotTask({
-                nightId,
-                slotKey: slot_key,
-                slotType: slot_type,
-                rrSide: rr_side,
-                taskLabel: `And ${targetLabel}`,
-                isCoverage: true,
-                color: accentColor,
-                sortOrder: 99,
-              });
-            }
-
-            // Refresh selectedTasks
-            const fresh = await getNightSlotTasks(nightId);
-            const byKey: Record<string, NightSlotTask[]> = {};
-            for (const t of fresh) {
-              const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-              if (!byKey[uiKey]) byKey[uiKey] = [];
-              byKey[uiKey].push(t);
-            }
-            setSelectedTasks(byKey);
-            showToast(`Coverage added: And ${targetLabel}`, "success");
-          } catch (e) {
-            console.error('[ShiftBuilder] addCoverage failed:', e);
-            showToast("Failed to add coverage", "error");
-          }
-        }}
+        completionScheduledUnplaced={cmdkCompletionUnplaced}
+        completionAssignments={cmdkCompletionAssignments}
+        onAddCoverage={handleCmdkAddCoverage}
       />
+
+      {/* Night picker edge arrows — a thin visible tab at rest, expands on hover.
+          Left arrow hidden when roster panel is open (it occupies that edge).
+          z-[35] keeps them below all fixed chrome (status pill, sphere, zoom chip). */}
+      {!rosterOpen && (
+        <button
+          type="button"
+          onClick={goPrevDay}
+          title="Previous day"
+          aria-label="Previous day"
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-[35] h-32 w-9 flex items-center justify-start transition-opacity duration-200 group"
+        >
+          {/* Visible tab at rest; wider pill with chevron on hover */}
+          <div
+            className="flex items-center justify-center shadow-md transition-all duration-200 group-hover:w-9 group-hover:h-14 group-hover:rounded-r-2xl"
+            style={{
+              width: 6,
+              height: 40,
+              borderRadius: "0 6px 6px 0",
+              background: isDark ? "rgba(72,72,74,0.85)" : "rgba(200,200,204,0.85)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+          >
+            <svg
+              width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </div>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={goNextDay}
+        title="Next day"
+        aria-label="Next day"
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-[35] h-32 w-9 flex items-center justify-end transition-opacity duration-200 group"
+      >
+        <div
+          className="flex items-center justify-center shadow-md transition-all duration-200 group-hover:w-9 group-hover:h-14 group-hover:rounded-l-2xl"
+          style={{
+            width: 6,
+            height: 40,
+            borderRadius: "6px 0 0 6px",
+            background: isDark ? "rgba(72,72,74,0.85)" : "rgba(200,200,204,0.85)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
+        >
+          <svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+            style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}
+          >
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </div>
+      </button>
 
       <SudoWindow
         open={sudoOpen}

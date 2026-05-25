@@ -1,8 +1,8 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-05-24 — by Claude Sonnet 4.6 (Agentic Command Post audit + full status sync)
+**Last Updated**: 2026-05-25 — by Grok 4.3 (Native-first direction locked)
 **Status**: Active / In Progress  
-**Current Epic**: Wave 2 remaining cleanup (W2-1/6/7/8/9/10/11) → Wave 3 architecture + Nightwatch evolution
+**Current Epic**: Native-first flagship iPad app (`opsApp` — SwiftUI + PencilKit) + continued webapp support
 
 ---
 
@@ -16,20 +16,26 @@ Build the internal GRAVE scheduling system that ZDS operators actively brag abou
 
 **Phase A (Complete)**: ✅ AI Agentic Command Post (`Agentic/`) is live. Any new AI session boots with full context from the magic one-liner.
 
-**Phase B (Ongoing)**: Continue evolving the ShiftBuilder (the 1056×816 Golden artboard) with:
-- Wave 2 remaining code quality + perf fixes (`useShiftHistory`, `applyDraft`, and quick wins — last open items before Wave 3)
-- Wave 3 architecture: ShiftBuilderClient.tsx monolith split, real Coverage Planner, Grok WhyPanel reasoning surface
-- Nightwatch evolution (real event logging, timeline UX, canvas maturity)
-- Laying groundwork for the eventual **Master Operational AI Agent ("xAI Sphere")**
+**Phase B (Ongoing)**: Foundational webapp work (monolith split complete, Wave 2 cleanup largely done, Nightwatch real, multiple Sudo tabs shipped).
+
+**Phase C (New Primary Focus — 2026-05-25 onward)**: Execute native-first strategy.
+- Build `opsApp` (SwiftUI + PencilKit) in `/opsApp` as the **leading, world-class Apple Pencil Pro 2 iPad experience** for GRAVE operators.
+- Make the native app the flagship "Apple-grade in calm and beauty" surface.
+- Webapp becomes the important secondary surface (browser, Mac, lighter workflows, fallback).
+- Use XcodeBuildMCP aggressively for native development velocity.
+- Maintain Golden artboard fidelity and domain rules across both surfaces.
+
+See `Agentic/Plans/active/OPSAPP_NATIVE_FIRST_2026-05-25.md` for the detailed plan.
 
 ---
 
 ## Active Plan
 
-- **PRIMARY**: `Plans/active/ATTACK_PLAN_2026-05-22.md` — Master bug kill + UX roadmap. Has inline completion status table at the top. The only remaining open items are Wave 2 cleanup and Wave 3 architecture.
+- **PRIMARY (New)**: `Plans/active/OPSAPP_NATIVE_FIRST_2026-05-25.md` — Native-first iPad app (`opsApp`) with SwiftUI + PencilKit as the leading GRAVE experience.
+- **Supporting**: `Plans/active/ATTACK_PLAN_2026-05-22.md` (webapp Wave 2/3 items) + `Plans/active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` (already largely complete).
 - **Related Vision**: `SCHEDULING_MASTERLIST.md` (long-term north star)
-- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, `Key-Information/ops-agent-data-model.md` (Master Agent / xAI Sphere groundwork)
-- **Archive**: `Plans/archive/` — all prior plans (Command Palette, Codebase Critique, Reports Tab, Tasks Tab, Agentic Bootstrap) are done and filed.
+- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, `Key-Information/ops-agent-data-model.md`
+- **Archive**: `Plans/archive/` — previous plans filed.
 
 All new implementation plans go in `Plans/active/` and are archived when complete.
 
@@ -37,22 +43,27 @@ All new implementation plans go in `Plans/active/` and are archived when complet
 
 ## Non-Negotiables (Sacred Rules — Never Violate)
 
-1. **coding-engineer 7-Phase Workflow** — Every coding change follows Plan → Implement → Multi-Review (security/perf/a11y/code) → Live Browser Validation (Playwright + Chrome DevTools) → Fix → Preview → Document. See `.grok/skills/coding-engineer/SKILL.md`.
-2. **Live Browser is King** — Any visual or interaction change must be validated in the real running app against the Golden PDF spec.
-3. **Supabase Security First** — RLS policies designed before implementation. Never expose cross-tenant or over-privileged data.
-4. **Golden Artboard Contract** — 1056×816 logical canvas. Atkinson typography, liquid glass aesthetics, zero visual noise. See `Key-Information/golden-visual-spec.md`.
-5. **Operator Always in Control** — Draft Mode + perfect history + explainability for every assignment.
+1. **Diligently & Systematically** — Major initiatives (especially `opsApp`) follow proper planning, phased execution, and real-device validation. No hero coding.
+2. **Pencil Pro 2 is the Differentiator** (new) — For `opsApp`, every significant interaction decision must demonstrably improve the Apple Pencil Pro 2 experience over what is possible on the web.
+3. **Golden Artboard Contract** — 1056×816 logical canvas. Atkinson typography, liquid glass aesthetics, zero visual noise. This contract applies to both the webapp and `opsApp`.
+4. **Operator Always in Control** — Draft Mode + perfect history + explainability for every assignment (native implementation must match or exceed the webapp bar).
+5. **Supabase Security First** — RLS policies designed before implementation. Never expose cross-tenant or over-privileged data. Applies to both surfaces.
 6. **Log Here** — Every agent appends to `AGENT_ACTIVITY_LOG.md` at key milestones.
+7. **Real Device + Pencil Validation** (new for opsApp) — Critical Pencil interactions must be validated on actual iPad Pro hardware with Pencil Pro 2, not only simulators. XcodeBuildMCP is the primary tool for this.
+
+The original "coding-engineer + Live Browser is King" rules continue to apply to all webapp changes.
 
 ---
 
 ## Key Hotspots (Current Code Focus)
 
-- `src/app/shiftbuilder/ShiftBuilderClient.tsx` — `useShiftHistory` hook identity fix (W2-1), `applyDraft` batch fix (W2-6), quick wins (W2-7/8/9/10/11)
-- `src/lib/shiftbuilder/useShiftHistory.ts` — identity instability (new object every render) + no `MAX_HISTORY` cap
-- `src/app/nightwatch/` — Nightwatch is new and evolving; NightwatchClient.tsx + FreeformCanvas, Widgets, db.ts
-- `src/lib/shiftbuilder/placement.ts` — `runCoveragePlanner` stub + `validatePlacementOrder` dead code (Wave 3)
-- `src/app/shiftbuilder/sudo/` — All tabs now live: Tasks, Reports, BatchPlanner, Schedules, Team, EngineConfig
+- **New Primary**: `/opsApp/` — New native SwiftUI + PencilKit iPad app (flagship Pencil Pro 2 experience)
+- `src/app/shiftbuilder/` (webapp) — Maintenance + parity work only going forward
+- `src/app/nightwatch/` (webapp) — Continued evolution as the web reference surface
+- `src/lib/shiftbuilder/` — Core domain logic (shared conceptually with opsApp)
+- `Key-Information/ops-agent-data-model.md` — Authoritative data model for both surfaces
+
+Webapp work is now secondary to `opsApp` execution.
 
 ---
 
