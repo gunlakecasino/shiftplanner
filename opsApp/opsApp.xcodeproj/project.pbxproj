@@ -1,0 +1,685 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXFileReference section */
+		111473172FC36F0F00797571 /* opsApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = opsApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		111474BA2FC371DB00797571 /* Exceptions for "opsApp" folder in "opsApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"supabase-swift-main/.editorconfig",
+				"supabase-swift-main/.env.example",
+				"supabase-swift-main/.gitattributes",
+				"supabase-swift-main/.github/CODEOWNERS",
+				"supabase-swift-main/.github/copilot-instructions.md",
+				"supabase-swift-main/.github/dependabot.yml",
+				"supabase-swift-main/.github/ISSUE_TEMPLATE/bug_report.yml",
+				"supabase-swift-main/.github/ISSUE_TEMPLATE/feature_request.yml",
+				"supabase-swift-main/.github/workflows/api-stability.yml",
+				"supabase-swift-main/.github/workflows/block-merge.yml",
+				"supabase-swift-main/.github/workflows/ci.yml",
+				"supabase-swift-main/.github/workflows/conventional-commits.yml",
+				"supabase-swift-main/.github/workflows/label-issues.yml",
+				"supabase-swift-main/.github/workflows/release.yml",
+				"supabase-swift-main/.github/workflows/stale.yml",
+				"supabase-swift-main/.gitignore",
+				"supabase-swift-main/.release-please-manifest.json",
+				"supabase-swift-main/.serena/.gitignore",
+				"supabase-swift-main/.spi.yml",
+				"supabase-swift-main/.vscode/settings.json",
+				"supabase-swift-main/AGENTS.md",
+				"supabase-swift-main/CHANGELOG.md",
+				"supabase-swift-main/CLAUDE.md",
+				"supabase-swift-main/docs/migrations/RealtimeV2 Migration Guide.md",
+				"supabase-swift-main/Examples",
+				"supabase-swift-main/LICENSE",
+				"supabase-swift-main/Makefile",
+				"supabase-swift-main/Package.resolved",
+				"supabase-swift-main/Package.swift",
+				"supabase-swift-main/README.md",
+				"supabase-swift-main/release-please-config.json",
+				"supabase-swift-main/RELEASE.md",
+				"supabase-swift-main/scripts/check-for-breaking-api-changes.sh",
+				"supabase-swift-main/scripts/generate-coverage.sh",
+				"supabase-swift-main/scripts/load_env.sh",
+				"supabase-swift-main/scripts/run-on-linux.sh",
+				"supabase-swift-main/Sources/Auth/AuthAdmin.swift",
+				"supabase-swift-main/Sources/Auth/AuthAdminOAuth.swift",
+				"supabase-swift-main/Sources/Auth/AuthClient.swift",
+				"supabase-swift-main/Sources/Auth/AuthClientConfiguration.swift",
+				"supabase-swift-main/Sources/Auth/AuthError.swift",
+				"supabase-swift-main/Sources/Auth/AuthMFA.swift",
+				"supabase-swift-main/Sources/Auth/AuthStateChangeListener.swift",
+				"supabase-swift-main/Sources/Auth/Defaults.swift",
+				"supabase-swift-main/Sources/Auth/Deprecated.swift",
+				"supabase-swift-main/Sources/Auth/Exports.swift",
+				"supabase-swift-main/Sources/Auth/Internal/APIClient.swift",
+				"supabase-swift-main/Sources/Auth/Internal/CodeVerifierStorage.swift",
+				"supabase-swift-main/Sources/Auth/Internal/Constants.swift",
+				"supabase-swift-main/Sources/Auth/Internal/Dependencies.swift",
+				"supabase-swift-main/Sources/Auth/Internal/EventEmitter.swift",
+				"supabase-swift-main/Sources/Auth/Internal/FixedWidthInteger+Random.swift",
+				"supabase-swift-main/Sources/Auth/Internal/Helpers.swift",
+				"supabase-swift-main/Sources/Auth/Internal/JWK+RSA.swift",
+				"supabase-swift-main/Sources/Auth/Internal/JWTAlgorithm.swift",
+				"supabase-swift-main/Sources/Auth/Internal/Keychain.swift",
+				"supabase-swift-main/Sources/Auth/Internal/PKCE.swift",
+				"supabase-swift-main/Sources/Auth/Internal/SessionManager.swift",
+				"supabase-swift-main/Sources/Auth/Internal/SessionStorage.swift",
+				"supabase-swift-main/Sources/Auth/Internal/URLOpener.swift",
+				"supabase-swift-main/Sources/Auth/Storage/AuthLocalStorage.swift",
+				"supabase-swift-main/Sources/Auth/Storage/KeychainLocalStorage.swift",
+				"supabase-swift-main/Sources/Auth/Storage/WinCredLocalStorage.swift",
+				"supabase-swift-main/Sources/Auth/Types.swift",
+				"supabase-swift-main/Sources/Functions/Exports.swift",
+				"supabase-swift-main/Sources/Functions/FunctionsClient.swift",
+				"supabase-swift-main/Sources/Functions/Types.swift",
+				"supabase-swift-main/Sources/Helpers/_Clock.swift",
+				"supabase-swift-main/Sources/Helpers/AnyJSON/AnyJSON.swift",
+				"supabase-swift-main/Sources/Helpers/AnyJSON/AnyJSON+Codable.swift",
+				"supabase-swift-main/Sources/Helpers/AsyncValueSubject.swift",
+				"supabase-swift-main/Sources/Helpers/Base64URL.swift",
+				"supabase-swift-main/Sources/Helpers/Codable.swift",
+				"supabase-swift-main/Sources/Helpers/DateFormatter.swift",
+				"supabase-swift-main/Sources/Helpers/EventEmitter.swift",
+				"supabase-swift-main/Sources/Helpers/FoundationExtensions.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/HTTPClient.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/HTTPFields.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/HTTPRequest.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/HTTPResponse.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/LoggerInterceptor.swift",
+				"supabase-swift-main/Sources/Helpers/HTTP/RetryRequestInterceptor.swift",
+				"supabase-swift-main/Sources/Helpers/JWT.swift",
+				"supabase-swift-main/Sources/Helpers/Logger/OSLogSupabaseLogger.swift",
+				"supabase-swift-main/Sources/Helpers/Logger/SupabaseLogger.swift",
+				"supabase-swift-main/Sources/Helpers/SharedModels/HTTPError.swift",
+				"supabase-swift-main/Sources/Helpers/SharedModels/PostgrestError.swift",
+				"supabase-swift-main/Sources/Helpers/Task+withTimeout.swift",
+				"supabase-swift-main/Sources/Helpers/TaskLocalHelpers.swift",
+				"supabase-swift-main/Sources/Helpers/URLSession+AsyncAwait.swift",
+				"supabase-swift-main/Sources/Helpers/Version.swift",
+				"supabase-swift-main/Sources/PostgREST/Defaults.swift",
+				"supabase-swift-main/Sources/PostgREST/Deprecated.swift",
+				"supabase-swift-main/Sources/PostgREST/Exports.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestBuilder.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestClient.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestFilterBuilder.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestFilterValue.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestQueryBuilder.swift",
+				"supabase-swift-main/Sources/PostgREST/PostgrestTransformBuilder.swift",
+				"supabase-swift-main/Sources/PostgREST/Types.swift",
+				"supabase-swift-main/Sources/Realtime/CallbackManager.swift",
+				"supabase-swift-main/Sources/Realtime/ChannelStateManager.swift",
+				"supabase-swift-main/Sources/Realtime/ConnectionManager.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/Defaults.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/Delegated.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/Deprecated.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/HeartbeatTimer.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/PhoenixTransport.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/Presence.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/Push.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/RealtimeChannel.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/RealtimeClient.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/RealtimeMessage.swift",
+				"supabase-swift-main/Sources/Realtime/Deprecated/TimeoutTimer.swift",
+				"supabase-swift-main/Sources/Realtime/Exports.swift",
+				"supabase-swift-main/Sources/Realtime/PostgresAction.swift",
+				"supabase-swift-main/Sources/Realtime/PostgresActionData.swift",
+				"supabase-swift-main/Sources/Realtime/PresenceAction.swift",
+				"supabase-swift-main/Sources/Realtime/PushV2.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeChannel+AsyncAwait.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeChannelV2.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeClientV2.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeError.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeJoinConfig.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeLifecycleManager.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeMessageV2.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimePostgresFilter.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimePostgresFilterValue.swift",
+				"supabase-swift-main/Sources/Realtime/RealtimeSerializer.swift",
+				"supabase-swift-main/Sources/Realtime/Types.swift",
+				"supabase-swift-main/Sources/Realtime/WebSocket/URLSessionWebSocket.swift",
+				"supabase-swift-main/Sources/Realtime/WebSocket/WebSocket.swift",
+				"supabase-swift-main/Sources/Storage/BucketOptions.swift",
+				"supabase-swift-main/Sources/Storage/Codable.swift",
+				"supabase-swift-main/Sources/Storage/Deprecated.swift",
+				"supabase-swift-main/Sources/Storage/Exports.swift",
+				"supabase-swift-main/Sources/Storage/Helpers.swift",
+				"supabase-swift-main/Sources/Storage/MultipartFormData.swift",
+				"supabase-swift-main/Sources/Storage/StorageApi.swift",
+				"supabase-swift-main/Sources/Storage/StorageBucketApi.swift",
+				"supabase-swift-main/Sources/Storage/StorageError.swift",
+				"supabase-swift-main/Sources/Storage/StorageFileApi.swift",
+				"supabase-swift-main/Sources/Storage/StorageHTTPClient.swift",
+				"supabase-swift-main/Sources/Storage/SupabaseStorage.swift",
+				"supabase-swift-main/Sources/Storage/TransformOptions.swift",
+				"supabase-swift-main/Sources/Storage/Types.swift",
+				"supabase-swift-main/Sources/Supabase/Constants.swift",
+				"supabase-swift-main/Sources/Supabase/Deprecated.swift",
+				"supabase-swift-main/Sources/Supabase/Exports.swift",
+				"supabase-swift-main/Sources/Supabase/SupabaseClient.swift",
+				"supabase-swift-main/Sources/Supabase/Types.swift",
+				"supabase-swift-main/Sources/TestHelpers/AsyncSequence.swift",
+				"supabase-swift-main/Sources/TestHelpers/Exports.swift",
+				"supabase-swift-main/Sources/TestHelpers/HTTPClientMock.swift",
+				"supabase-swift-main/Sources/TestHelpers/InMemoryLocalStorage.swift",
+				"supabase-swift-main/Sources/TestHelpers/MockExtensions.swift",
+				"supabase-swift-main/Sources/TestHelpers/URLRequestSnapshot.swift",
+				"supabase-swift-main/Sources/TestHelpers/WithMainSerialExecutor+Windows.swift",
+				"supabase-swift-main/Supabase.xcworkspace",
+				"supabase-swift-main/supabase/.gitignore",
+				"supabase-swift-main/supabase/config.toml",
+				"supabase-swift-main/supabase/migrations/20240327182636_init_key_value_storage_schema.sql",
+				"supabase-swift-main/supabase/migrations/20251009000000_examples_schema.sql",
+				"supabase-swift-main/supabase/seed.sql",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testDeleteUser.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testGetLinkIdentityURL.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAChallenge.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAChallengePhone.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAEnrollLegacy.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAEnrollPhone.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAEnrollTotp.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAUnenroll.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testMFAVerify.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testReauthenticate.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testRefreshSession.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testResendEmail.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testResendPhone.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testResetPasswordForEmail.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSessionFromURL.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSetSessionWithAExpiredToken.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSetSessionWithAFutureExpirationDate.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInAnonymously.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithEmailAndPassword.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithIdToken.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithOTPUsingEmail.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithOTPUsingPhone.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithPhoneAndPassword.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithSSOUsingDomain.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignInWithSSOUsingProviderId.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignOut.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignOutWithLocalScope.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignOutWithOthersScope.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignUpWithEmailAndPassword.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testSignUpWithPhoneAndPassword.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testUnlinkIdentity.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testUpdateUser.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testVerifyOTPUsingEmail.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testVerifyOTPUsingPhone.1.txt",
+				"supabase-swift-main/Tests/AuthTests/__Snapshots__/RequestsTests/testVerifyOTPUsingTokenHash.1.txt",
+				"supabase-swift-main/Tests/AuthTests/AuthAdminOAuthTests.swift",
+				"supabase-swift-main/Tests/AuthTests/AuthClientMultipleInstancesTests.swift",
+				"supabase-swift-main/Tests/AuthTests/AuthClientTests.swift",
+				"supabase-swift-main/Tests/AuthTests/AuthErrorTests.swift",
+				"supabase-swift-main/Tests/AuthTests/AuthResponseTests.swift",
+				"supabase-swift-main/Tests/AuthTests/ExtractParamsTests.swift",
+				"supabase-swift-main/Tests/AuthTests/JWTCryptoTests.swift",
+				"supabase-swift-main/Tests/AuthTests/MockHelpers.swift",
+				"supabase-swift-main/Tests/AuthTests/Mocks/Mocks.swift",
+				"supabase-swift-main/Tests/AuthTests/PKCETests.swift",
+				"supabase-swift-main/Tests/AuthTests/RequestsTests.swift",
+				"supabase-swift-main/Tests/AuthTests/Resources/anonymous-sign-in-response.json",
+				"supabase-swift-main/Tests/AuthTests/Resources/list-users-response.json",
+				"supabase-swift-main/Tests/AuthTests/Resources/local-storage.json",
+				"supabase-swift-main/Tests/AuthTests/Resources/session.json",
+				"supabase-swift-main/Tests/AuthTests/Resources/signup-response.json",
+				"supabase-swift-main/Tests/AuthTests/Resources/user.json",
+				"supabase-swift-main/Tests/AuthTests/SessionManagerTests.swift",
+				"supabase-swift-main/Tests/AuthTests/StoredSessionTests.swift",
+				"supabase-swift-main/Tests/AuthTests/URLOpenerTests.swift",
+				"supabase-swift-main/Tests/FunctionsTests/__Snapshots__/RequestTests/testInvokeWithBody.1.txt",
+				"supabase-swift-main/Tests/FunctionsTests/__Snapshots__/RequestTests/testInvokeWithCustomHeader.1.txt",
+				"supabase-swift-main/Tests/FunctionsTests/__Snapshots__/RequestTests/testInvokeWithCustomMethod.1.txt",
+				"supabase-swift-main/Tests/FunctionsTests/__Snapshots__/RequestTests/testInvokeWithCustomRegion.1.txt",
+				"supabase-swift-main/Tests/FunctionsTests/__Snapshots__/RequestTests/testInvokeWithDefaultOptions.1.txt",
+				"supabase-swift-main/Tests/FunctionsTests/FunctionInvokeOptionsTests.swift",
+				"supabase-swift-main/Tests/FunctionsTests/FunctionsClientTests.swift",
+				"supabase-swift-main/Tests/FunctionsTests/FunctionsErrorTests.swift",
+				"supabase-swift-main/Tests/FunctionsTests/RequestTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/AnyJSONTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/AsyncValueSubjectTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/DateFormatterTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/EventEmitterTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/HTTPErrorTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/JWTTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/LoggerInterceptorTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/ObservationTokenTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/PostgrestErrorTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/RetryRequestInterceptorTests.swift",
+				"supabase-swift-main/Tests/HelpersTests/WithTimeoutTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/.vscode/extensions.json",
+				"supabase-swift-main/Tests/IntegrationTests/.vscode/settings.json",
+				"supabase-swift-main/Tests/IntegrationTests/AuthClientIntegrationTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/DotEnv.swift",
+				"supabase-swift-main/Tests/IntegrationTests/Fixtures/Upload/file-2.txt",
+				"supabase-swift-main/Tests/IntegrationTests/Fixtures/Upload/sadcat.jpg",
+				"supabase-swift-main/Tests/IntegrationTests/Postgrest/PostgrestBasicTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/Postgrest/PostgrestFilterTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/Postgrest/PostgresTransformsTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/Postgrest/PostgrestResourceEmbeddingTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/PostgrestIntegrationTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/RealtimeIntegrationTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/StorageClientIntegrationTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/StorageFileIntegrationTests.swift",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/.branches/_current_branch",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/.gitignore",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/.temp/cli-latest",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/config.toml",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/migrations/20240101000000_initial_schema.sql",
+				"supabase-swift-main/Tests/IntegrationTests/supabase/seed.sql",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.bulk-insert-users.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.bulk-upsert.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.call-rpc-with-filter.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.call-rpc-without-parameter.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.call-rpc.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.containedBy-using-array.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.containedBy-using-json.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.containedBy-using-range.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.filter-starting-with-non-alphanumeric.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.filter-using-Date.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.iLikeAllOf.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.iLikeAnyOf.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.insert-new-user.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.likeAllOf.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.likeAnyOf.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.query-if-nil-value.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.query-non-default-schema.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.query-with-character.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.query-with-timestampz.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.rpc-call-with-get-and-params.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.rpc-call-with-get.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.rpc-call-with-head.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.select-after-an-insert.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.select-after-bulk-upsert.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.select-all-users-where-email-ends-with-supabase-co.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-all-filters-and-count.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-contains-filter-with-array.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-contains-filter-with-dictionary.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-in-filter.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-or-filter-with-referenced-table.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-upsert-ignoring-duplicates.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/__Snapshots__/BuildURLRequestTests/testBuildRequest.test-upsert-not-ignoring-duplicates.txt",
+				"supabase-swift-main/Tests/PostgRESTTests/BuildURLRequestTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/JSONTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgresQueryTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestBuilderTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestFilterBuilderTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestFilterValueTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestQueryBuilderTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestResponseTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestRpcBuilderTests.swift",
+				"supabase-swift-main/Tests/PostgRESTTests/PostgrestTransformBuilderTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/_PushTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/CallbackManagerTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/ChannelStateManagerTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/ConnectionManagerTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/ExportsTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/FakeWebSocket.swift",
+				"supabase-swift-main/Tests/RealtimeTests/PostgresActionTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/PostgresJoinConfigTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/PresenceActionTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/PushV2Tests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeChannelBroadcastTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeChannelTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeErrorTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeJoinConfigTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeLifecycleTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeMessageV2Tests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimePostgresFilterTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimePostgresFilterValueTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeSerializerTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/RealtimeTests.swift",
+				"supabase-swift-main/Tests/RealtimeTests/WebSocketTests.swift",
+				"supabase-swift-main/Tests/StorageTests/__Snapshots__/StorageBucketAPITests/StorageBucketAPITests-testCreateBucket.1.txt",
+				"supabase-swift-main/Tests/StorageTests/BucketOptionsTests.swift",
+				"supabase-swift-main/Tests/StorageTests/FileOptionsTests.swift",
+				"supabase-swift-main/Tests/StorageTests/Fixtures/file.txt",
+				"supabase-swift-main/Tests/StorageTests/MultipartFormDataTests.swift",
+				"supabase-swift-main/Tests/StorageTests/sadcat.jpg",
+				"supabase-swift-main/Tests/StorageTests/StorageBucketAPITests.swift",
+				"supabase-swift-main/Tests/StorageTests/StorageErrorTests.swift",
+				"supabase-swift-main/Tests/StorageTests/StorageFileAPITests.swift",
+				"supabase-swift-main/Tests/StorageTests/SupabaseStorageClient+Test.swift",
+				"supabase-swift-main/Tests/StorageTests/SupabaseStorageTests.swift",
+				"supabase-swift-main/Tests/StorageTests/TransformOptionsTests.swift",
+				"supabase-swift-main/Tests/SupabaseTests/SupabaseClientTests.swift",
+			);
+			target = 111473162FC36F0F00797571 /* opsApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		111473192FC36F0F00797571 /* opsApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				111474BA2FC371DB00797571 /* Exceptions for "opsApp" folder in "opsApp" target */,
+			);
+			path = opsApp;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		111473142FC36F0F00797571 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1114730E2FC36F0F00797571 = {
+			isa = PBXGroup;
+			children = (
+				111473192FC36F0F00797571 /* opsApp */,
+				111473182FC36F0F00797571 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		111473182FC36F0F00797571 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				111473172FC36F0F00797571 /* opsApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		111473162FC36F0F00797571 /* opsApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 111473222FC36F1100797571 /* Build configuration list for PBXNativeTarget "opsApp" */;
+			buildPhases = (
+				111473132FC36F0F00797571 /* Sources */,
+				111473142FC36F0F00797571 /* Frameworks */,
+				111473152FC36F0F00797571 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				111473192FC36F0F00797571 /* opsApp */,
+			);
+			name = opsApp;
+			packageProductDependencies = (
+			);
+			productName = opsApp;
+			productReference = 111473172FC36F0F00797571 /* opsApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1114730F2FC36F0F00797571 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					111473162FC36F0F00797571 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+				};
+			};
+			buildConfigurationList = 111473122FC36F0F00797571 /* Build configuration list for PBXProject "opsApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1114730E2FC36F0F00797571;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 111473182FC36F0F00797571 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				111473162FC36F0F00797571 /* opsApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		111473152FC36F0F00797571 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		111473132FC36F0F00797571 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		111473202FC36F1100797571 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 56J8ZW9WAK;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		111473212FC36F1100797571 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 56J8ZW9WAK;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		111473232FC36F1100797571 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 56J8ZW9WAK;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = briankillian.opsApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		111473242FC36F1100797571 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 56J8ZW9WAK;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = briankillian.opsApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		111473122FC36F0F00797571 /* Build configuration list for PBXProject "opsApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				111473202FC36F1100797571 /* Debug */,
+				111473212FC36F1100797571 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		111473222FC36F1100797571 /* Build configuration list for PBXNativeTarget "opsApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				111473232FC36F1100797571 /* Debug */,
+				111473242FC36F1100797571 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1114730F2FC36F0F00797571 /* Project object */;
+}

@@ -53,6 +53,9 @@ _tmp_*
 *.tmp
 *.log
 
+# Playwright MCP browser snapshots (see Agentic/AGENT_ACTIVITY_LOG — leave untracked)
+.playwright-mcp/
+
 # IDE / editor
 .vscode/
 .idea/

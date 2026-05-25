@@ -158,18 +158,6 @@ const RRCard: React.FC<RRCardProps> = ({
     }
   }
 
-  // Status ring — outline, not box-shadow, to avoid conflicting with globals.css hover shadow.
-  const mHasTM = !mEmpty;
-  const wHasTM = !wEmpty;
-  const eitherHasTM = mHasTM || wHasTM;
-  const allWithTMHaveTasks =
-    (!mHasTM || mRegular.length > 0) && (!wHasTM || wRegular.length > 0);
-  const statusOutline = eitherHasTM
-    ? allWithTMHaveTasks
-      ? "1.5px solid rgba(52,199,89,0.7)"
-      : "1.5px solid rgba(255,149,0,0.55)"
-    : undefined;
-
   return (
     <div
       onPointerMove={handleSpotlightMove}
@@ -177,7 +165,6 @@ const RRCard: React.FC<RRCardProps> = ({
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
-        ...(statusOutline && { outline: statusOutline, outlineOffset: "-1px" }),
       }}
     >
       <div className="h-[3px] w-full shrink-0" style={{ background: color }} />

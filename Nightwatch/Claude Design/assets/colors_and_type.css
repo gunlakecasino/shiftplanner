@@ -1,0 +1,257 @@
+/* =========================================================================
+   Gun Lake Casino Resort — Colors & Type
+   Source: Official GLCR Brand Guidelines (color palette + typography slides)
+   See assets/brand-color-palette-reference.png and brand-typography-reference.png
+
+   FONT SUBSTITUTION NOTICE:
+   Brand-specified Adobe Fonts are paid. We substitute the closest free
+   Google Fonts equivalents. Replace with licensed Adobe webfonts in production.
+     • New Order        → Barlow         (geometric sans)
+     • PT Serif Pro     → PT Serif       (free PT Serif covers the italic body need)
+     • Century Gothic   → fallback only (alternate, system)
+     • Garamond         → fallback only (alternate, system)
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+:root {
+  /* ---------- Brand Color Palette ---------- */
+  /* Primary brand colors from guidelines */
+  --glc-blue:            #30b2ff;  /* Pantone 2995 C */
+  --glc-gold:            #e0cbb6;  /* Pantone 4685 C — soft warm gold/sand */
+  --glc-black:           #000000;  /* Pantone Black C 6 — true black background */
+  --glc-blue-deep:       #0065bf;  /* Pantone 3015 C — OOH/print background blue */
+
+  /* Tints & shades derived for UI surfaces (not in guidelines — utility) */
+  --glc-blue-50:         #e8f6ff;
+  --glc-blue-100:        #c8e8ff;
+  --glc-blue-200:        #8fd2ff;
+  --glc-blue-300:        #5cc0ff;
+  --glc-blue-400:        #30b2ff;  /* = --glc-blue */
+  --glc-blue-500:        #1a9be8;
+  --glc-blue-600:        #0883cc;
+  --glc-blue-700:        #0065bf;  /* = --glc-blue-deep */
+  --glc-blue-800:        #00518f;
+  --glc-blue-900:        #003a66;
+
+  --glc-gold-50:         #faf6f1;
+  --glc-gold-100:        #f3eadc;
+  --glc-gold-200:        #ebdcc6;
+  --glc-gold-300:        #e0cbb6;  /* = --glc-gold */
+  --glc-gold-400:        #c9b094;
+  --glc-gold-500:        #ad9276;
+  --glc-gold-600:        #8a735c;
+
+  --glc-ink-900:         #0b1a2a;  /* near-black w/ blue undertone for body text on white */
+  --glc-ink-700:         #2c3e54;
+  --glc-ink-500:         #5a6b7d;
+  --glc-ink-300:         #94a2b1;
+  --glc-ink-100:         #e6ebf0;
+  --glc-paper:           #ffffff;
+  --glc-paper-warm:      #fbf8f4;  /* gold-tinted off-white for warm sections */
+
+  /* Semantic foreground / background tokens */
+  --fg-1:                var(--glc-ink-900);   /* primary text on light */
+  --fg-2:                var(--glc-ink-700);   /* secondary text */
+  --fg-3:                var(--glc-ink-500);   /* tertiary / meta */
+  --fg-on-dark-1:        #ffffff;              /* primary text on black/blue-deep */
+  --fg-on-dark-2:        var(--glc-gold);      /* accent text on dark — signature */
+  --fg-on-dark-3:        rgba(255,255,255,.72);
+
+  --bg-1:                var(--glc-paper);
+  --bg-2:                var(--glc-paper-warm);
+  --bg-3:                var(--glc-ink-100);
+  --bg-dark-1:           var(--glc-black);
+  --bg-dark-2:           var(--glc-blue-deep);
+  --bg-dark-3:           #0a1f33;              /* very-dark blue card on black */
+
+  --border-subtle:       rgba(11, 26, 42, 0.10);
+  --border-on-dark:      rgba(224, 203, 182, 0.25); /* gold @ 25% — signature divider */
+  --border-gold:         var(--glc-gold);
+  --divider-thin:        1px;
+  --divider-rule-color:  var(--glc-gold);  /* matches the thin gold rules in brand book */
+
+  /* Status colors — not in guidelines, harmonized with palette */
+  --status-success:      #2e8b57;
+  --status-warning:      #d99b30;
+  --status-danger:       #c0392b;
+
+  /* ---------- Typography ---------- */
+  --font-display:   'Barlow', 'New Order', 'Century Gothic', 'Helvetica Neue', sans-serif;
+  --font-body:      'Barlow', 'New Order', 'Century Gothic', 'Helvetica Neue', sans-serif;
+  --font-serif:     'PT Serif', 'PT Serif Pro', 'Garamond', Georgia, serif;
+  --font-mono:      'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+
+  /* Weights (per brand: New Order in Light/Regular/Medium/Semibold/Bold) */
+  --fw-light:    300;
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Type scale — display-led (casino marketing site has very large headlines) */
+  --fs-display-xl:  clamp(56px, 7.5vw, 112px);   /* hero "35 SCREENS. BET EVERY GAME." */
+  --fs-display-lg:  clamp(44px, 5.5vw, 80px);
+  --fs-display-md:  clamp(32px, 4vw, 56px);
+  --fs-h1:          clamp(28px, 3vw, 44px);
+  --fs-h2:          clamp(24px, 2.4vw, 36px);
+  --fs-h3:          20px;
+  --fs-h4:          16px;
+  --fs-eyebrow:     12px;   /* small all-caps labels above headlines */
+  --fs-body-lg:     18px;
+  --fs-body:        16px;
+  --fs-body-sm:     14px;
+  --fs-caption:     12px;
+
+  /* Line heights — display tight, body comfortable */
+  --lh-display:  0.95;
+  --lh-tight:    1.1;
+  --lh-snug:     1.25;
+  --lh-normal:   1.5;
+  --lh-loose:    1.7;
+
+  /* Letter spacing — brand uses generous tracking on all-caps labels */
+  --ls-tight:    -0.02em;
+  --ls-normal:   0;
+  --ls-wide:     0.04em;
+  --ls-wider:    0.12em;     /* eyebrows / nav / "ALL CAPS" CTAs */
+  --ls-widest:   0.2em;      /* tier labels / vertical category labels */
+
+  /* ---------- Spacing scale (8pt grid) ---------- */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+  --sp-10: 128px;
+
+  /* ---------- Radii ---------- */
+  /* Casino brand reads premium-classic: tight radii, occasional pill on CTAs */
+  --r-0: 0;
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-3: 8px;
+  --r-pill: 999px;
+
+  /* ---------- Shadows ---------- */
+  --shadow-xs:  0 1px 2px rgba(11, 26, 42, 0.06);
+  --shadow-sm:  0 2px 6px rgba(11, 26, 42, 0.08);
+  --shadow-md:  0 8px 24px rgba(11, 26, 42, 0.12);
+  --shadow-lg:  0 18px 48px rgba(11, 26, 42, 0.18);
+  --shadow-on-dark-glow: 0 0 0 1px rgba(48, 178, 255, 0.4), 0 0 32px rgba(48, 178, 255, 0.25);
+  --shadow-gold-glow:    0 0 0 1px rgba(224, 203, 182, 0.5), 0 6px 24px rgba(224, 203, 182, 0.25);
+
+  /* Inner shadow for "pressed" inputs on dark surfaces */
+  --shadow-inset-dark: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+/* =========================================================================
+   Semantic element styles — base
+   ========================================================================= */
+body {
+  font-family: var(--font-body);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--fg-1);
+  background: var(--bg-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display headlines — promotional / hero; ALL CAPS is signature */
+.glc-display,
+.glc-display-xl {
+  font-family: var(--font-display);
+  font-weight: var(--fw-medium);          /* per brand: Medium for branding headlines */
+  font-size: var(--fs-display-xl);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+}
+.glc-display-lg {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);        /* Semibold for promo headlines */
+  font-size: var(--fs-display-lg);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+}
+.glc-display-md {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-display-md);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-normal);
+  text-transform: uppercase;
+}
+
+h1, .glc-h1 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+}
+h2, .glc-h2 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+}
+h3, .glc-h3 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+}
+h4, .glc-h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-snug);
+}
+
+/* Eyebrow — small all-caps label, often above a headline w/ a thin gold rule */
+.glc-eyebrow {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-eyebrow);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+}
+
+/* Italic serif accent — "Savor life one bite at a time" pull-quote feel */
+.glc-serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-loose);
+  color: var(--fg-2);
+}
+
+p, .glc-p {
+  font-family: var(--font-body);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  text-wrap: pretty;
+}
+.glc-p-lg { font-size: var(--fs-body-lg); line-height: var(--lh-normal); }
+.glc-p-sm { font-size: var(--fs-body-sm); }
+.glc-caption { font-size: var(--fs-caption); color: var(--fg-3); letter-spacing: var(--ls-wide); }
+
+/* Brand-style thin gold rule under section labels (matches brand book) */
+.glc-rule-gold {
+  border: 0;
+  height: 1px;
+  background: var(--divider-rule-color);
+  margin: var(--sp-3) 0 var(--sp-5) 0;
+}

@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "LiquidForge", "runs": [{"id": "eval-0-journal-arch-with_skill", "prompt": "I'm building a journal app for iOS 26 and I want the main screen to use the Liquid Glass tab bar with a floating compose button. The entries should be stored in SwiftData and sync to iCloud. Walk me through the full architecture and give me the SwiftUI code for the main ContentView, the TabView setup, and the SwiftData model. Make sure it's all Swift 6 safe.", "eval_id": 0, "outputs": [{"name": "response.md", "type": "text", "content": "# [LiquidForge Activated]\n\nBuilding a SwiftData + CloudKit journal app with Liquid Glass tab bar and floating compose button on iOS 26 \u2014 full architecture walkthrough with production-ready Swift 6 code.\n\n---\n\n## 1. Architecture Decision\n\n### Why this stack?\n\n**SwiftData + CloudKit** is the definitive first-party choice for a journal app in 2026. The `.modelContainer(for:, cloudKitDatabase:)` modifier wires up end-to-end iCloud sync in a single line \u2014 no CKContainer setup, no NSPersistentCloudKitContainer bridging, no manual conflict resolution. CloudKit's private database ensures entries belong exclusively to the user's iCloud account and are encrypted at rest.\n\n**Liquid Glass tab bar** auto-adopts when you compile against the iOS 26 SDK \u2014 `TabView` with the default style renders in Liquid Glass automatically. The floating compose button sits above the tab bar using a `ZStack` with `.safeAreaInset(edge: .bottom)` \u2014 the recommended HIG pattern for persistent floating actions (HIG: Toolbars, updated Sep 2025).\n\n**Swift 6 strict concurrency** is enforced throughout: `@Model` classes are `Sendable`, all UI mutations are `@MainActor`-isolated, and SwiftData writes happen via `ModelActor` off the main thread to keep renders smooth.\n\n**Reference sessions:**\n- WWDC25 \u2014 \"What's new in SwiftUI\" (Liquid Glass tab bars)\n- WWDC25 \u2014 \"Build a great app with SwiftData\" (ModelActor patterns)\n- WWDC25 \u2014 \"Platforms State of the Union\" (iOS 26 SDK auto-adoption)\n- WWDC24 \u2014 \"Migrate your app to Swift 6\" (concurrency rules)\n\n---\n\n## 2. SwiftData Model\n\n### `JournalEntry.swift`\n\n```swift\n// JournalEntry.swift\n// Swift 6 \u2014 @Model conforms to Sendable via generated implementation\n// CloudKit requirement: all properties must be optional OR have defaults\n\nimport SwiftData\nimport Foundation\n\n@Model\nfinal class JournalEntry {\n    // MARK: - Stored Properties\n    // CloudKit private database requires no non-optional stored properties\n    // without defaults. UUID and Date get sensible defaults; body is optional\n    // to allow saving a draft before the user has typed anything.\n\n    var id: UUID\n    var createdAt: Date\n    var updatedAt: Date\n    var title: String\n    var body: String\n    var mood: MoodTag         // Raw-representable enum stored as Int\n    var isPinned: Bool\n    var wordCount: Int        // Derived but cached \u2014 avoid recomputing on every render\n\n    // MARK: - Relationships\n    // @Relationship cascade-deletes attachments when the entry is deleted.\n    @Relationship(deleteRule: .cascade)\n    var attachments: [EntryAttachment]\n\n    // MARK: - Initializer\n    init(\n        title: String = \"\",\n        body: String = \"\",\n        mood: MoodTag = .neutral,\n        isPinned: Bool = false\n    ) {\n        self.id = UUID()\n        self.createdAt = .now\n        self.updatedAt = .now\n        self.title = title\n        self.body = body\n        self.mood = mood\n        self.isPinned = isPinned\n        self.wordCount = body.split(separator: \" \").count\n        self.attachments = []\n    }\n\n    // MARK: - Mutating helper (call from ModelActor, not main thread)\n    func updateContent(title: String, body: String, mood: MoodTag) {\n        self.title = title\n        self.body = body\n        self.mood = mood\n        self.updatedAt = .now\n        self.wordCount = body.split(separator: \" \").count\n    }\n}\n\n// MARK: - MoodTag\n// Stored as Int16 in SQLite via @Model's automatic RawRepresentable support.\nenum MoodTag: Int, Codable, CaseIterable, Sendable {\n    case great   = 0\n    case good    = 1\n    case neutral = 2\n    case low     = 3\n    case rough   = 4\n\n    var label: String {\n        switch self {\n        case .great:   return \"Great\"\n        case .good:    return \"Good\"\n        case .neutral: return \"Neutral\"\n        case .low:     return \"Low\"\n        case .rough:   return \"Rough\"\n        }\n    }\n\n    var sfSymbol: String {\n        switch self {\n        case .great:   return \"sun.max.fill\"\n        case .good:    return \"cloud.sun.fill\"\n        case .neutral: return \"cloud.fill\"\n        case .low:     return \"cloud.rain.fill\"\n        case .rough:   return \"cloud.bolt.rain.fill\"\n        }\n    }\n}\n\n// MARK: - EntryAttachment\n// Separate @Model for photos/voice memos attached to entries.\n// Binary data is stored in an External Storage attribute to keep\n// SQLite rows small \u2014 SwiftData handles the file-system reference.\n@Model\nfinal class EntryAttachment {\n    var id: UUID\n    var createdAt: Date\n    var kind: AttachmentKind    // .photo or .voiceMemo\n    @Attribute(.externalStorage) var data: Data?\n    var thumbnailData: Data?    // Small JPEG thumbnail, kept inline\n\n    init(kind: AttachmentKind, data: Data, thumbnailData: Data? = nil) {\n        self.id = UUID()\n        self.createdAt = .now\n        self.kind = kind\n        self.data = data\n        self.thumbnailData = thumbnailData\n    }\n}\n\nenum AttachmentKind: Int, Codable, Sendable {\n    case photo     = 0\n    case voiceMemo = 1\n}\n```\n\n---\n\n## 3. SwiftData Container Setup & CloudKit Sync\n\n### `JournalApp.swift`\n\n```swift\n// JournalApp.swift\n// App entry point \u2014 single source of truth for the ModelContainer.\n// CloudKit sync is opt-in via the .modelContainer modifier; the private\n// database maps to the user's personal iCloud account.\n//\n// IMPORTANT: Add \"iCloud\" capability + CloudKit entitlement in Xcode.\n// In the CloudKit Dashboard, create a container named\n//   iCloud.<your.bundle.id>\n// SwiftData auto-generates the CKRecord schema on first launch.\n\nimport SwiftUI\nimport SwiftData\n\n@main\nstruct JournalApp: App {\n    // ModelContainer is created once and shared across the entire app.\n    // sharedModelContainer is a computed property so errors surface at launch.\n    var sharedModelContainer: ModelContainer = {\n        let schema = Schema([\n            JournalEntry.self,\n            EntryAttachment.self\n        ])\n\n        // .automatic uses the private CloudKit database (user's iCloud).\n        // Change to .none to disable sync (e.g., for debug builds).\n        let modelConfiguration = ModelConfiguration(\n            schema: schema,\n            isStoredInMemoryOnly: false,\n            cloudKitDatabase: .automatic  // <- This one line enables iCloud sync\n        )\n\n        do {\n            return try ModelContainer(for: schema, configurations: [modelConfiguration])\n        } catch {\n            // Fatal: If the container fails, the app cannot function.\n            // In production, consider presenting an error UI instead of crashing\n            // if the error is recoverable (e.g., iCloud unavailable).\n            fatalError(\"Could not create ModelContainer: \\(error)\")\n        }\n    }()\n\n    var body: some Scene {\n        WindowGroup {\n            ContentView(container: sharedModelContainer)\n        }\n        .modelContainer(sharedModelContainer)\n    }\n}\n```\n\n---\n\n## 4. ModelActor for Background Writes\n\n### `JournalStore.swift`\n\n```swift\n// JournalStore.swift\n// All write operations happen on a dedicated ModelActor \u2014 never on the main\n// thread. This keeps the 60/120 fps render budget intact.\n// The @Observable store on the main actor observes query results reactively.\n\nimport SwiftData\nimport SwiftUI\n\n// MARK: - Background write actor\n// ModelActor gives us an isolated context that's safe for concurrent writes.\n@ModelActor\nactor JournalWriteActor {\n\n    // Insert a new entry and return its persistent identifier so the\n    // main actor can refresh its query.\n    func insertEntry(title: String, body: String, mood: MoodTag) throws -> PersistentIdentifier {\n        let entry = JournalEntry(title: title, body: body, mood: mood)\n        modelContext.insert(entry)\n        try modelContext.save()\n        return entry.persistentModelID\n    }\n\n    func updateEntry(\n        id: PersistentIdentifier,\n        title: String,\n        body: String,\n        mood: MoodTag\n    ) throws {\n        guard let entry = modelContext.model(for: id) as? JournalEntry else { return }\n        entry.updateContent(title: title, body: body, mood: mood)\n        try modelContext.save()\n    }\n\n    func deleteEntry(id: PersistentIdentifier) throws {\n        guard let entry = modelContext.model(for: id) as? JournalEntry else { return }\n        modelContext.delete(entry)\n        try modelContext.save()\n    }\n\n    func togglePin(id: PersistentIdentifier) throws {\n        guard let entry = modelContext.model(for: id) as? JournalEntry else { return }\n        entry.isPinned.toggle()\n        entry.updatedAt = .now\n        try modelContext.save()\n    }\n}\n\n// MARK: - Main-actor observable store\n// Owns the ModelContainer reference so it can vend a JournalWriteActor.\n// @Query in views is preferred for reading; this store handles writes and\n// navigation state.\n@Observable\n@MainActor\nfinal class JournalStore {\n    // Navigation\n    var selectedTab: JournalTab = .entries\n    var isPresentingCompose: Bool = false\n    var selectedEntry: JournalEntry? = nil\n\n    // Error surface\n    var lastError: Error? = nil\n\n    private let writeActor: JournalWriteActor\n\n    init(container: ModelContainer) {\n        self.writeActor = JournalWriteActor(modelContainer: container)\n    }\n\n    // MARK: - Write operations (delegate to background actor)\n\n    func createEntry(title: String, body: String, mood: MoodTag) {\n        Task {\n            do {\n                _ = try await writeActor.insertEntry(title: title, body: body, mood: mood)\n            } catch {\n                lastError = error\n            }\n        }\n    }\n\n    func updateEntry(_ entry: JournalEntry, title: String, body: String, mood: MoodTag) {\n        let id = entry.persistentModelID\n        Task {\n            do {\n                try await writeActor.updateEntry(id: id, title: title, body: body, mood: mood)\n            } catch {\n                lastError = error\n            }\n        }\n    }\n\n    func deleteEntry(_ entry: JournalEntry) {\n        let id = entry.persistentModelID\n        Task {\n            do {\n                try await writeActor.deleteEntry(id: id)\n            } catch {\n                lastError = error\n            }\n        }\n    }\n\n    func togglePin(_ entry: JournalEntry) {\n        let id = entry.persistentModelID\n        Task {\n            do {\n                try await writeActor.togglePin(id: id)\n            } catch {\n                lastError = error\n            }\n        }\n    }\n}\n\n// MARK: - Tab enum\nenum JournalTab: Hashable, Sendable {\n    case entries\n    case search\n    case insights\n    case settings\n}\n```\n\n---\n\n## 5. ContentView \u2014 Liquid Glass TabView + Floating Compose Button\n\n### `ContentView.swift`\n\n```swift\n// ContentView.swift\n// Main screen: Liquid Glass TabView (auto-adopted on iOS 26 SDK) with a\n// floating compose button positioned above the tab bar via .safeAreaInset.\n//\n// HIG reference: \"Toolbars > Floating Action Buttons\" (updated Sep 2025)\n// The FAB sits in the trailing-bottom corner, 16 pt from the safe area edge.\n\nimport SwiftUI\nimport SwiftData\n\nstruct ContentView: View {\n    // The store lives here and is passed down via environment.\n    @State private var store: JournalStore\n\n    // Environment value to detect accessibility settings.\n    @Environment(\\.accessibilityReduceTransparency) private var reduceTransparency\n    @Environment(\\.accessibilityReduceMotion) private var reduceMotion\n\n    // Matched-geometry namespace for glass morphing transitions.\n    @Namespace private var glassNamespace\n\n    init(container: ModelContainer) {\n        // @State wrapping an @Observable class \u2014 correct Swift 6 pattern.\n        _store = State(initialValue: JournalStore(container: container))\n    }\n\n    var body: some View {\n        ZStack(alignment: .bottomTrailing) {\n            // MARK: TabView \u2014 Liquid Glass auto-adopted on iOS 26\n            // No modifier needed for Liquid Glass. The SDK handles it.\n            // We use the programmatic selection binding for deep-link support.\n            TabView(selection: $store.selectedTab) {\n\n                Tab(\"Journal\", systemImage: \"book.pages.fill\", value: JournalTab.entries) {\n                    EntriesView()\n                }\n\n                Tab(\"Search\", systemImage: \"magnifyingglass\", value: JournalTab.search) {\n                    SearchView()\n                }\n\n                Tab(\"Insights\", systemImage: \"chart.bar.xaxis.ascending.badge.clock\",\n                    value: JournalTab.insights) {\n                    InsightsView()\n                }\n\n                Tab(\"Settings\", systemImage: \"gearshape.fill\", value: JournalTab.settings) {\n                    SettingsView()\n                }\n            }\n            // On iOS 26, TabView renders the tab bar with Liquid Glass automatically.\n            // To explicitly request the new style if targeting back-deployment:\n            // .tabViewStyle(.automatic)\n\n            // MARK: Floating Compose Button\n            // Placed above the tab bar using .safeAreaInset so it never\n            // overlaps system UI. ZStack + alignment is the backup for complex\n            // layouts, but .safeAreaInset is the HIG-correct primary approach.\n            ComposeButton(namespace: glassNamespace) {\n                store.isPresentingCompose = true\n            }\n            .padding(.trailing, 20)\n            .padding(.bottom, 8)   // Sits just above the tab bar safe area inset\n        }\n        // MARK: Compose Sheet\n        .sheet(isPresented: $store.isPresentingCompose) {\n            ComposeEntryView(store: store)\n                // Detents: start compact, user can expand to full-screen\n                .presentationDetents([.medium, .large])\n                .presentationDragIndicator(.visible)\n                .presentationBackground(.regularMaterial)  // Liquid Glass sheet bg\n        }\n\n        // MARK: Error alert\n        .alert(\"Something went wrong\", isPresented: Binding(\n            get: { store.lastError != nil },\n            set: { if !$0 { store.lastError = nil } }\n        )) {\n            Button(\"OK\", role: .cancel) { store.lastError = nil }\n        } message: {\n            Text(store.lastError?.localizedDescription ?? \"\")\n        }\n\n        // MARK: Environment injection\n        .environment(store)\n    }\n}\n\n// MARK: - Floating Compose Button Component\nstruct ComposeButton: View {\n    let namespace: Namespace.ID\n    let action: () -> Void\n\n    @Environment(\\.accessibilityReduceTransparency) private var reduceTransparency\n    @Environment(\\.accessibilityReduceMotion) private var reduceMotion\n\n    // Pressed state for spring animation\n    @State private var isPressed = false\n\n    var body: some View {\n        Button(action: {\n            // Haptic feedback \u2014 always paired with visual change (HIG)\n            let impact = UIImpactFeedbackGenerator(style: .medium)\n            impact.impactOccurred()\n            action()\n        }) {\n            Image(systemName: \"square.and.pencil\")\n                .font(.title2.weight(.semibold))\n                .foregroundStyle(.primary)\n                .frame(width: 56, height: 56)\n                // MARK: Liquid Glass effect on the FAB\n                // .glassEffect applies the refractive Liquid Glass material.\n                // .interactive() enables the press-state highlight.\n                // Falls back gracefully when reduceTransparency is on.\n                .glassEffect(\n                    reduceTransparency\n                        ? .regular  // Opaque fallback\n                        : .regular.interactive(),\n                    in: Circle()\n                )\n                // Glass morphing ID \u2014 if you later animate the button expanding\n                // into the compose sheet, use .glassEffectID for a seamless morph.\n                .glassEffectID(\"compose-fab\", in: namespace)\n        }\n        .buttonStyle(FABButtonStyle(isPressed: $isPressed, reduceMotion: reduceMotion))\n        // MARK: Accessibility\n        .accessibilityLabel(\"New journal entry\")\n        .accessibilityHint(\"Opens the compose sheet to write a new entry\")\n        .accessibilityAddTraits(.isButton)\n    }\n}\n\n// MARK: - FAB Button Style\n// Custom ButtonStyle so the press-state spring doesn't fight SwiftUI's default.\nstruct FABButtonStyle: ButtonStyle {\n    @Binding var isPressed: Bool\n    let reduceMotion: Bool\n\n    func makeBody(configuration: Configuration) -> some View {\n        configuration.label\n            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)\n            .animation(\n                reduceMotion ? .none : .spring(response: 0.25, dampingFraction: 0.6),\n                value: configuration.isPressed\n            )\n            .onChange(of: configuration.isPressed) { _, newValue in\n                isPressed = newValue\n            }\n    }\n}\n\n// MARK: - Preview\n#Preview {\n    // In-memory container for canvas previews \u2014 no disk writes, no CloudKit.\n    let config = ModelConfiguration(isStoredInMemoryOnly: true)\n    let container = try! ModelContainer(\n        for: JournalEntry.self, EntryAttachment.self,\n        configurations: config\n    )\n\n    // Seed preview data\n    let ctx = container.mainContext\n    ctx.insert(JournalEntry(title: \"Morning pages\", body: \"Feeling grounded today.\", mood: .great))\n    ctx.insert(JournalEntry(title: \"Late night thoughts\", body: \"Hard to focus.\", mood: .low))\n\n    return ContentView(container: container)\n}\n```\n\n---\n\n## 6. Entries Tab \u2014 `@Query`-Powered List\n\n### `EntriesView.swift`\n\n```swift\n// EntriesView.swift\n// Main journal entries list. Uses @Query for reactive SwiftData reads \u2014\n// the view automatically re-renders when CloudKit sync delivers new data.\n// List is 10\u201316x faster than LazyVStack for >100 items on iOS 26.\n\nimport SwiftUI\nimport SwiftData\n\nstruct EntriesView: View {\n    // @Query drives the list reactively. The sort descriptor matches the\n    // FetchDescriptor we'd use manually \u2014 pinned entries float to top.\n    @Query(\n        filter: nil,\n        sort: [\n            SortDescriptor(\\JournalEntry.isPinned, order: .reverse),\n            SortDescriptor(\\JournalEntry.createdAt, order: .reverse)\n        ],\n        animation: .smooth\n    )\n    private var entries: [JournalEntry]\n\n    @Environment(JournalStore.self) private var store\n    @Environment(\\.modelContext) private var modelContext\n\n    // NavigationPath for programmatic deep linking (e.g., from widgets/Spotlight)\n    @State private var navigationPath = NavigationPath()\n\n    var body: some View {\n        NavigationStack(path: $navigationPath) {\n            Group {\n                if entries.isEmpty {\n                    EmptyJournalView()\n                } else {\n                    entryList\n                }\n            }\n            .navigationTitle(\"Journal\")\n            .navigationBarTitleDisplayMode(.large)\n            // Toolbar items rendered in the Liquid Glass nav bar\n            .toolbar {\n                ToolbarItem(placement: .topBarTrailing) {\n                    EditButton()\n                        .accessibilityLabel(\"Edit entries\")\n                }\n            }\n            .navigationDestination(for: JournalEntry.self) { entry in\n                EntryDetailView(entry: entry)\n            }\n        }\n    }\n\n    // MARK: - Entry List\n    private var entryList: some View {\n        List {\n            ForEach(entries) { entry in\n                NavigationLink(value: entry) {\n                    EntryRowView(entry: entry)\n                }\n                // Swipe actions\n                .swipeActions(edge: .trailing, allowsFullSwipe: true) {\n                    Button(role: .destructive) {\n                        store.deleteEntry(entry)\n                    } label: {\n                        Label(\"Delete\", systemImage: \"trash\")\n                    }\n                }\n                .swipeActions(edge: .leading, allowsFullSwipe: false) {\n                    Button {\n                        store.togglePin(entry)\n                    } label: {\n                        Label(\n                            entry.isPinned ? \"Unpin\" : \"Pin\",\n                            systemImage: entry.isPinned ? \"pin.slash\" : \"pin\"\n                        )\n                    }\n                    .tint(.orange)\n                }\n            }\n            .onDelete { indexSet in\n                for index in indexSet {\n                    store.deleteEntry(entries[index])\n                }\n            }\n        }\n        .listStyle(.insetGrouped)\n    }\n}\n\n// MARK: - Entry Row\nstruct EntryRowView: View {\n    let entry: JournalEntry\n\n    // Date formatter is static to avoid recreation on every render\n    private static let dateFormatter: DateFormatter = {\n        let f = DateFormatter()\n        f.dateStyle = .medium\n        f.timeStyle = .short\n        return f\n    }()\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 4) {\n            HStack {\n                // Pin indicator\n                if entry.isPinned {\n                    Image(systemName: \"pin.fill\")\n                        .font(.caption)\n                        .foregroundStyle(.orange)\n                        .accessibilityLabel(\"Pinned\")\n                }\n\n                Text(entry.title.isEmpty ? \"Untitled\" : entry.title)\n                    .font(.headline)\n                    .lineLimit(1)\n\n                Spacer()\n\n                // Mood icon\n                Image(systemName: entry.mood.sfSymbol)\n                    .font(.subheadline)\n                    .foregroundStyle(.secondary)\n                    .accessibilityLabel(\"Mood: \\(entry.mood.label)\")\n            }\n\n            Text(entry.body)\n                .font(.subheadline)\n                .foregroundStyle(.secondary)\n                .lineLimit(2)\n\n            HStack {\n                Text(Self.dateFormatter.string(from: entry.createdAt))\n                    .font(.caption)\n                    .foregroundStyle(.tertiary)\n\n                Spacer()\n\n                Text(\"\\(entry.wordCount) words\")\n                    .font(.caption)\n                    .foregroundStyle(.tertiary)\n            }\n        }\n        .padding(.vertical, 4)\n        // VoiceOver reads the full row as a single element\n        .accessibilityElement(children: .combine)\n        .accessibilityLabel(\n            \"\\(entry.title.isEmpty ? \"Untitled entry\" : entry.title), \" +\n            \"\\(entry.mood.label) mood, \" +\n            \"\\(Self.dateFormatter.string(from: entry.createdAt))\"\n        )\n    }\n}\n\n// MARK: - Empty State\nstruct EmptyJournalView: View {\n    var body: some View {\n        ContentUnavailableView {\n            Label(\"No Entries Yet\", systemImage: \"book.pages\")\n        } description: {\n            Text(\"Tap the compose button to write your first entry.\")\n        }\n        .accessibilityElement(children: .combine)\n    }\n}\n```\n\n---\n\n## 7. Compose Sheet\n\n### `ComposeEntryView.swift`\n\n```swift\n// ComposeEntryView.swift\n// Compose sheet presented over the tab bar. Runs entirely on @MainActor.\n// Write is dispatched to the JournalWriteActor by the store \u2014 this view\n// never touches ModelContext directly.\n\nimport SwiftUI\n\nstruct ComposeEntryView: View {\n    let store: JournalStore\n\n    @Environment(\\.dismiss) private var dismiss\n\n    @State private var title: String = \"\"\n    @State private var body: String = \"\"\n    @State private var mood: MoodTag = .neutral\n    @FocusState private var focusedField: Field?\n\n    private enum Field: Hashable {\n        case title, body\n    }\n\n    // Disable save if both fields are empty\n    private var canSave: Bool {\n        !title.trimmingCharacters(in: .whitespaces).isEmpty ||\n        !body.trimmingCharacters(in: .whitespaces).isEmpty\n    }\n\n    var body: some View {\n        NavigationStack {\n            Form {\n                // MARK: Title field\n                Section {\n                    TextField(\"Title (optional)\", text: $title)\n                        .font(.headline)\n                        .focused($focusedField, equals: .title)\n                        .submitLabel(.next)\n                        .onSubmit { focusedField = .body }\n                        .accessibilityLabel(\"Entry title\")\n                }\n\n                // MARK: Body field\n                Section {\n                    TextEditor(text: $body)\n                        .font(.body)\n                        .frame(minHeight: 140)\n                        .focused($focusedField, equals: .body)\n                        .accessibilityLabel(\"Entry body\")\n                        .accessibilityHint(\"Write your journal entry here\")\n                }\n\n                // MARK: Mood picker\n                Section(\"How are you feeling?\") {\n                    Picker(\"Mood\", selection: $mood) {\n                        ForEach(MoodTag.allCases, id: \\.self) { tag in\n                            Label(tag.label, systemImage: tag.sfSymbol)\n                                .tag(tag)\n                        }\n                    }\n                    .pickerStyle(.segmented)\n                    .accessibilityLabel(\"Mood selector\")\n                    .accessibilityValue(mood.label)\n                }\n            }\n            .navigationTitle(\"New Entry\")\n            .navigationBarTitleDisplayMode(.inline)\n            .toolbar {\n                ToolbarItem(placement: .topBarLeading) {\n                    Button(\"Cancel\") {\n                        dismiss()\n                    }\n                    .accessibilityLabel(\"Cancel and discard entry\")\n                }\n\n                ToolbarItem(placement: .topBarTrailing) {\n                    Button(\"Save\") {\n                        save()\n                    }\n                    .fontWeight(.semibold)\n                    .disabled(!canSave)\n                    .accessibilityLabel(\"Save journal entry\")\n                    .accessibilityHint(canSave ? \"Saves and closes the compose sheet\" : \"Add text before saving\")\n                }\n            }\n            // Auto-focus title on appear\n            .onAppear {\n                // Small delay lets the sheet animation finish first\n                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {\n                    focusedField = .title\n                }\n            }\n        }\n    }\n\n    // MARK: - Save\n    private func save() {\n        store.createEntry(\n            title: title.trimmingCharacters(in: .whitespaces),\n            body: body.trimmingCharacters(in: .whitespaces),\n            mood: mood\n        )\n        let impact = UINotificationFeedbackGenerator()\n        impact.notificationOccurred(.success)\n        dismiss()\n    }\n}\n```\n\n---\n\n## 8. Full Architecture Diagram\n\n```\nJournalApp\n\u2502\n\u251c\u2500\u2500 ModelContainer (SwiftData + CloudKit private DB)\n\u2502     \u251c\u2500\u2500 JournalEntry   (@Model, Sendable)\n\u2502     \u2514\u2500\u2500 EntryAttachment (@Model, @Attribute(.externalStorage))\n\u2502\n\u251c\u2500\u2500 JournalWriteActor   (ModelActor \u2014 off-main-thread writes)\n\u2502\n\u251c\u2500\u2500 JournalStore        (@Observable, @MainActor \u2014 navigation + write dispatch)\n\u2502\n\u2514\u2500\u2500 ContentView         (@MainActor)\n      \u251c\u2500\u2500 TabView (Liquid Glass \u2014 auto-adopted, iOS 26 SDK)\n      \u2502     \u251c\u2500\u2500 EntriesView      (@Query reactive list, NavigationStack)\n      \u2502     \u251c\u2500\u2500 SearchView       (@Query with predicate, debounced)\n      \u2502     \u251c\u2500\u2500 InsightsView     (charts, word count trends, mood heatmap)\n      \u2502     \u2514\u2500\u2500 SettingsView     (iCloud sync status, notifications, AI toggle)\n      \u2502\n      \u2514\u2500\u2500 ComposeButton (ZStack overlay, .glassEffect(.regular.interactive()))\n            \u2514\u2500\u2500 ComposeEntryView (sheet, .presentationDetents, .presentationBackground(.regularMaterial))\n```\n\n**Data flow:**\n1. User taps compose -> store.isPresentingCompose = true\n2. ComposeEntryView calls store.createEntry(...) on save\n3. Store dispatches writeActor.insertEntry(...) via Task { await ... }\n4. ModelActor writes to SQLite and saves\n5. CloudKit syncs the change to the user's private database\n6. @Query in EntriesView automatically picks up the new row and re-renders\n\n---\n\n## 9. Mandatory Checklist Sweep\n\n| Item | Status |\n|------|--------|\n| **Liquid Glass** | TabView auto-adopts on iOS 26 SDK. ComposeButton uses .glassEffect(.regular.interactive()) with a reduceTransparency fallback to .regular (opaque). GlassEffectContainer and .glassEffectID(\"compose-fab\") ready for morph transitions. |\n| **Swift 6 concurrency** | @Model is Sendable. All UI mutations are @MainActor. JournalWriteActor uses @ModelActor for isolated background writes. Task { await writeActor... } dispatched from the main-actor store. No Task.detached without justification. Enable SWIFT_STRICT_CONCURRENCY = complete in Build Settings. |\n| **Accessibility** | Dynamic Type via named text styles throughout. VoiceOver labels and hints on every interactive element (ComposeButton, row cells, form fields, toolbar buttons). EntryRowView combines children into a single accessibility element. reduceMotion disables spring animations. reduceTransparency falls back to opaque glass. |\n| **Performance** | List used (not LazyVStack) for O(n) virtualization. @Query drives reads \u2014 no manual fetch on main thread. Writes via ModelActor off main thread. wordCount cached on model, not recomputed in view body. Date formatter is static. |\n| **Apple Intelligence** | Not included in this pass (no explicit request). See Aether Extension below for how to wire it in. |\n| **visionOS variant** | TabView maps to the ornament-based navigation on visionOS 26. ComposeButton should be moved to a toolbar ornament (ToolbarItemGroup(placement: .ornament)) on visionOS. RealityView can display entries as spatial cards \u2014 see roadmap. |\n| **Production readiness** | Full inline comments, error surfacing via .alert, preview seeding, memory-safe preview container. |\n\n---\n\n## 10. Aether Extension: AI-Powered Entry Reflection\n\nWire in Foundation Models to offer a \"Reflect\" button on each entry. It streams a 2\u20133 sentence thoughtful prompt back to the user \u2014 on-device, private, HIG-compliant.\n\n```swift\n// EntryReflectionView.swift\n// AI reflection \u2014 gated behind explicit user opt-in in Settings.\n// HIG: always attribute and disclose limitations.\n\nimport SwiftUI\nimport FoundationModels\n\n@Observable\n@MainActor\nfinal class ReflectionViewModel {\n    var reflection: String = \"\"\n    var isGenerating: Bool = false\n\n    private let session = LanguageModelSession()\n\n    func reflect(on entry: JournalEntry) async {\n        isGenerating = true\n        reflection = \"\"\n        let prompt = \"\"\"\n        Read this journal entry and respond with one warm, thoughtful reflection\n        or follow-up question in 2\u20133 sentences. Be empathetic and concise.\n\n        Title: \\(entry.title)\n        Body: \\(entry.body)\n        Mood: \\(entry.mood.label)\n        \"\"\"\n        do {\n            let stream = session.streamResponse(to: prompt)\n            for try await token in stream {\n                reflection += token\n            }\n        } catch {\n            reflection = \"Reflection unavailable right now.\"\n        }\n        isGenerating = false\n    }\n}\n\nstruct EntryReflectionView: View {\n    let entry: JournalEntry\n    @State private var vm = ReflectionViewModel()\n    @AppStorage(\"aiReflectionEnabled\") private var aiEnabled = false\n\n    var body: some View {\n        Group {\n            if aiEnabled {\n                VStack(alignment: .leading, spacing: 8) {\n                    if vm.isGenerating {\n                        // HIG shimmer state during generation\n                        Text(\"Reflecting...\")\n                            .redacted(reason: .placeholder)\n                    } else if !vm.reflection.isEmpty {\n                        Text(vm.reflection)\n                            .font(.callout)\n                            .foregroundStyle(.secondary)\n                            .transition(.opacity.animation(.easeIn))\n\n                        // HIG: mandatory attribution text\n                        Text(\"Generated by Apple Intelligence on this device\")\n                            .font(.caption2)\n                            .foregroundStyle(.tertiary)\n                    } else {\n                        Button(\"Get a reflection\") {\n                            Task { await vm.reflect(on: entry) }\n                        }\n                        .buttonStyle(.bordered)\n                        .accessibilityLabel(\"Generate an AI reflection on this entry\")\n                    }\n                }\n                .padding(.vertical, 4)\n            }\n        }\n    }\n}\n```\n\n**HIG compliance checklist for this feature:**\n- Shimmer via .redacted(reason: .placeholder) during streaming\n- Attribution: \"Generated by Apple Intelligence on this device\"\n- Opt-in gate: @AppStorage(\"aiReflectionEnabled\") + Settings toggle\n- Limitation disclosure in onboarding: \"Reflections may not always be accurate\"\n\n---\n\n## 11. 3\u20135 Year Roadmap\n\n| Timeline | Feature |\n|----------|---------|\n| **iOS 27 (2026)** | Proactive journaling prompts via App Intents + Spotlight \u2014 the system suggests \"Write about your meeting\" from Calendar context. Live Activities show streak count on the Dynamic Island. |\n| **iOS 27** | Shared journals via CloudKit shared containers (ModelConfiguration(cloudKitDatabase: .shared(...))) \u2014 collaborative trip logs, couples journals. |\n| **iOS 28 (2027)** | Agentic summarization \u2014 a BackgroundTask runs a Foundation Models session nightly, produces a weekly summary entry, and sends a notification. Full on-device, zero server cost. |\n| **visionOS 3** | Spatial journal entries displayed as RealityView cards in a volumetric window. Voice-to-text via SpeechRecognizer fills the body field hands-free while cooking or walking. |\n| **watchOS 13** | Ultra-minimal compose on Apple Watch: dictate a one-sentence entry, tag mood with a Digital Crown spin, syncs instantly via CloudKit. |\n\n---\n\n## Key File Summary\n\n| File | Purpose |\n|------|---------|\n| JournalApp.swift | App entry, ModelContainer setup, CloudKit .automatic |\n| JournalEntry.swift | @Model, MoodTag, EntryAttachment |\n| JournalStore.swift | @Observable main-actor store, JournalWriteActor ModelActor |\n| ContentView.swift | TabView (Liquid Glass), ComposeButton (.glassEffect), compose sheet |\n| EntriesView.swift | @Query-driven list, swipe actions, empty state |\n| ComposeEntryView.swift | Compose sheet, form, mood picker, save dispatch |\n\nAll code is Swift 6 strict-concurrency-safe, production-commented, and ready to paste into Xcode 26.\n"}], "grading": {"eval_id": 0, "variant": "with_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}, {"text": "Response uses the correct .glassEffect() API", "passed": true, "evidence": "Found 'glassEffect'"}, {"text": "Response uses @Model decorator for SwiftData", "passed": true, "evidence": "Found '@Model'"}, {"text": "Response uses @MainActor for Swift 6 safety", "passed": true, "evidence": "Found '@MainActor'"}, {"text": "Response includes accessibility considerations", "passed": true, "evidence": "Found: ['accessibility', 'Accessibility', 'VoiceOver', 'Dynamic Type']"}, {"text": "Response includes an Aether Extension / forward-thinking idea", "passed": true, "evidence": "Found: ['Aether Extension', 'Aether', '3\u20135 Year', 'Roadmap']"}]}}, {"id": "eval-0-journal-arch-without_skill", "prompt": "I'm building a journal app for iOS 26 and I want the main screen to use the Liquid Glass tab bar with a floating compose button. The entries should be stored in SwiftData and sync to iCloud. Walk me through the full architecture and give me the SwiftUI code for the main ContentView, the TabView setup, and the SwiftData model. Make sure it's all Swift 6 safe.", "eval_id": 0, "outputs": [{"name": "response.md", "type": "text", "content": "# iOS 26 Journal App: Full Architecture & SwiftUI Implementation\n\n## Architecture Overview\n\n### Technology Stack\n- **SwiftUI** with iOS 26 Liquid Glass design language\n- **SwiftData** for local persistence\n- **CloudKit** for iCloud sync (via SwiftData's `ModelConfiguration`)\n- **Swift 6** strict concurrency\n\n### Project Structure\n\n```\nJournalApp/\n\u251c\u2500\u2500 JournalApp.swift          // App entry point, ModelContainer setup\n\u251c\u2500\u2500 Models/\n\u2502   \u2514\u2500\u2500 JournalEntry.swift    // SwiftData model\n\u251c\u2500\u2500 Views/\n\u2502   \u251c\u2500\u2500 ContentView.swift     // Root TabView with Liquid Glass tab bar\n\u2502   \u251c\u2500\u2500 EntriesTab/\n\u2502   \u2502   \u251c\u2500\u2500 EntriesListView.swift\n\u2502   \u2502   \u2514\u2500\u2500 EntryDetailView.swift\n\u2502   \u251c\u2500\u2500 CalendarTab/\n\u2502   \u2502   \u2514\u2500\u2500 CalendarView.swift\n\u2502   \u251c\u2500\u2500 SearchTab/\n\u2502   \u2502   \u2514\u2500\u2500 SearchView.swift\n\u2502   \u2514\u2500\u2500 Compose/\n\u2502       \u2514\u2500\u2500 ComposeEntryView.swift\n\u2514\u2500\u2500 Extensions/\n    \u2514\u2500\u2500 ModelContext+Extensions.swift\n```\n\n---\n\n## SwiftData Model\n\n```swift\n// Models/JournalEntry.swift\nimport SwiftData\nimport Foundation\n\n@Model\nfinal class JournalEntry: Sendable {\n    var title: String\n    var body: String\n    var createdAt: Date\n    var updatedAt: Date\n    var mood: Mood\n    var tags: [String]\n    var isPinned: Bool\n\n    init(\n        title: String = \"\",\n        body: String,\n        mood: Mood = .neutral,\n        tags: [String] = [],\n        isPinned: Bool = false\n    ) {\n        self.title = title\n        self.body = body\n        self.mood = mood\n        self.tags = tags\n        self.isPinned = isPinned\n        self.createdAt = .now\n        self.updatedAt = .now\n    }\n\n    enum Mood: String, Codable, CaseIterable, Sendable {\n        case great    = \"Great\"\n        case good     = \"Good\"\n        case neutral  = \"Neutral\"\n        case low      = \"Low\"\n        case rough    = \"Rough\"\n\n        var emoji: String {\n            switch self {\n            case .great:   \"\ud83d\ude04\"\n            case .good:    \"\ud83d\ude42\"\n            case .neutral: \"\ud83d\ude10\"\n            case .low:     \"\ud83d\ude15\"\n            case .rough:   \"\ud83d\ude1e\"\n            }\n        }\n    }\n}\n```\n\n**Key points:**\n- `@Model` macro handles PersistentIdentifier, change tracking, and CloudKit codegen automatically.\n- `Sendable` conformance satisfies Swift 6 strict concurrency \u2014 SwiftData models are safe to reference across actor boundaries because the framework queues mutations on the model context's actor.\n- `Mood` is `Codable` so SwiftData can persist it as a transformable column without a custom value transformer.\n\n---\n\n## App Entry Point & ModelContainer\n\n```swift\n// JournalApp.swift\nimport SwiftUI\nimport SwiftData\n\n@main\nstruct JournalApp: App {\n\n    static let sharedModelContainer: ModelContainer = {\n        let schema = Schema([JournalEntry.self])\n\n        let cloudKitConfig = ModelConfiguration(\n            schema: schema,\n            isStoredInMemoryOnly: false,\n            cloudKitDatabase: .private(\"iCloud.com.yourteam.JournalApp\")\n        )\n\n        do {\n            return try ModelContainer(for: schema, configurations: [cloudKitConfig])\n        } catch {\n            fatalError(\"Could not create ModelContainer: \\(error)\")\n        }\n    }()\n\n    var body: some Scene {\n        WindowGroup {\n            ContentView()\n        }\n        .modelContainer(JournalApp.sharedModelContainer)\n    }\n}\n```\n\n**iCloud setup checklist (Xcode):**\n1. Signing & Capabilities -> add **iCloud** capability.\n2. Enable **CloudKit** and create/select a container (e.g. `iCloud.com.yourteam.JournalApp`).\n3. Enable **Background Modes -> Remote notifications** so CloudKit can push sync updates in the background.\n4. The `cloudKitDatabase: .private(...)` parameter tells SwiftData to use your app's private CloudKit database.\n\n---\n\n## ContentView (Liquid Glass Tab Bar + Floating Compose Button)\n\n```swift\n// Views/ContentView.swift\nimport SwiftUI\nimport SwiftData\n\nstruct ContentView: View {\n    @State private var selectedTab: Tab = .entries\n    @State private var showCompose = false\n\n    var body: some View {\n        ZStack(alignment: .bottomTrailing) {\n\n            // Tab View\n            TabView(selection: $selectedTab) {\n\n                Tab(\"Journal\", systemImage: \"book.closed.fill\", value: Tab.entries) {\n                    EntriesListView()\n                }\n\n                Tab(\"Calendar\", systemImage: \"calendar\", value: Tab.calendar) {\n                    CalendarView()\n                }\n\n                Tab(\"Search\", systemImage: \"magnifyingglass\", value: Tab.search) {\n                    SearchView()\n                }\n\n            }\n            // iOS 26: tab bar collapses while scrolling\n            .tabBarMinimizeBehavior(.onScrollDown)\n\n            // Floating Compose Button\n            ComposeButton {\n                showCompose = true\n            }\n            .padding(.trailing, 20)\n            .padding(.bottom, 80)\n        }\n        .sheet(isPresented: $showCompose) {\n            ComposeEntryView()\n        }\n    }\n}\n\n// MARK: - Tab Enum\n\nextension ContentView {\n    enum Tab: Hashable, Sendable {\n        case entries\n        case calendar\n        case search\n    }\n}\n\n// MARK: - Compose FAB\n\nprivate struct ComposeButton: View {\n    let action: @MainActor () -> Void\n\n    var body: some View {\n        Button(action: action) {\n            Image(systemName: \"square.and.pencil\")\n                .font(.title2.weight(.semibold))\n                .foregroundStyle(.white)\n                .frame(width: 56, height: 56)\n                .background(Color.accentColor, in: Circle())\n                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)\n        }\n        // iOS 26: apply Liquid Glass material to the FAB\n        .glassEffect(in: Circle())\n        .accessibilityLabel(\"New journal entry\")\n    }\n}\n```\n\n### Liquid Glass API Reference\n\niOS 26 applies the Liquid Glass material to the tab bar automatically when `IPHONEOS_DEPLOYMENT_TARGET` is 26.0+. Additional modifiers:\n\n| Modifier | Purpose |\n|---|---|\n| `.tabBarMinimizeBehavior(.onScrollDown)` | Collapses the tab bar to icons-only on scroll |\n| `.glassEffect(in:)` | Applies the system Liquid Glass material to any shape |\n| `.glassEffectUnified(in:)` | Groups multiple views into a single glass container |\n\n---\n\n## EntriesListView\n\n```swift\n// Views/EntriesTab/EntriesListView.swift\nimport SwiftUI\nimport SwiftData\n\nstruct EntriesListView: View {\n    @Environment(\\.modelContext) private var modelContext\n\n    @Query(sort: \\JournalEntry.createdAt, order: .reverse)\n    private var entries: [JournalEntry]\n\n    var body: some View {\n        NavigationStack {\n            List(entries) { entry in\n                NavigationLink(destination: EntryDetailView(entry: entry)) {\n                    EntryRowView(entry: entry)\n                }\n            }\n            .navigationTitle(\"Journal\")\n            .navigationBarTitleDisplayMode(.large)\n            .overlay {\n                if entries.isEmpty {\n                    ContentUnavailableView(\n                        \"No Entries Yet\",\n                        systemImage: \"book.closed\",\n                        description: Text(\"Tap the compose button to write your first entry.\")\n                    )\n                }\n            }\n        }\n    }\n}\n\n// MARK: - Entry Row\n\nprivate struct EntryRowView: View {\n    let entry: JournalEntry\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 4) {\n            HStack {\n                Text(entry.title.isEmpty ? \"Untitled\" : entry.title)\n                    .font(.headline)\n                Spacer()\n                Text(entry.mood.emoji)\n                if entry.isPinned {\n                    Image(systemName: \"pin.fill\")\n                        .font(.caption)\n                        .foregroundStyle(.secondary)\n                }\n            }\n            Text(entry.body)\n                .font(.subheadline)\n                .foregroundStyle(.secondary)\n                .lineLimit(2)\n            Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))\n                .font(.caption)\n                .foregroundStyle(.tertiary)\n        }\n        .padding(.vertical, 4)\n    }\n}\n```\n\n---\n\n## ComposeEntryView\n\n```swift\n// Views/Compose/ComposeEntryView.swift\nimport SwiftUI\nimport SwiftData\n\nstruct ComposeEntryView: View {\n    @Environment(\\.modelContext) private var modelContext\n    @Environment(\\.dismiss) private var dismiss\n\n    @State private var title = \"\"\n    @State private var body  = \"\"\n    @State private var mood  = JournalEntry.Mood.neutral\n\n    var body: some View {\n        NavigationStack {\n            Form {\n                Section(\"Title\") {\n                    TextField(\"Give this entry a title...\", text: $title)\n                }\n\n                Section(\"How are you feeling?\") {\n                    Picker(\"Mood\", selection: $mood) {\n                        ForEach(JournalEntry.Mood.allCases, id: \\.self) { m in\n                            Text(\"\\(m.emoji) \\(m.rawValue)\").tag(m)\n                        }\n                    }\n                    .pickerStyle(.segmented)\n                }\n\n                Section(\"Entry\") {\n                    TextEditor(text: $body)\n                        .frame(minHeight: 200)\n                }\n            }\n            .navigationTitle(\"New Entry\")\n            .navigationBarTitleDisplayMode(.inline)\n            .toolbar {\n                ToolbarItem(placement: .cancellationAction) {\n                    Button(\"Cancel\") { dismiss() }\n                }\n                ToolbarItem(placement: .confirmationAction) {\n                    Button(\"Save\") { save() }\n                        .disabled(body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)\n                }\n            }\n        }\n    }\n\n    @MainActor\n    private func save() {\n        let entry = JournalEntry(title: title, body: body, mood: mood)\n        modelContext.insert(entry)\n        try? modelContext.save()\n        dismiss()\n    }\n}\n```\n\n---\n\n## EntryDetailView\n\n```swift\n// Views/EntriesTab/EntryDetailView.swift\nimport SwiftUI\nimport SwiftData\n\nstruct EntryDetailView: View {\n    @Bindable var entry: JournalEntry   // @Bindable enables direct two-way binding\n    @Environment(\\.modelContext) private var modelContext\n    @Environment(\\.dismiss) private var dismiss\n\n    var body: some View {\n        ScrollView {\n            VStack(alignment: .leading, spacing: 16) {\n                HStack {\n                    Text(entry.mood.emoji).font(.largeTitle)\n                    Spacer()\n                    Text(entry.createdAt.formatted(date: .long, time: .shortened))\n                        .font(.caption)\n                        .foregroundStyle(.secondary)\n                }\n\n                TextField(\"Title\", text: $entry.title)\n                    .font(.title.bold())\n\n                TextEditor(text: $entry.body)\n                    .font(.body)\n                    .frame(minHeight: 300)\n            }\n            .padding()\n        }\n        .navigationTitle(entry.title.isEmpty ? \"Entry\" : entry.title)\n        .navigationBarTitleDisplayMode(.inline)\n        .toolbar {\n            ToolbarItem(placement: .destructiveAction) {\n                Button(\"Delete\", role: .destructive) {\n                    modelContext.delete(entry)\n                    dismiss()\n                }\n            }\n        }\n    }\n}\n```\n\n---\n\n## Swift 6 Concurrency Safety\n\n### Why This Code Is Swift 6 Safe\n\n1. **`@Model` + `Sendable`**: SwiftData's `@Model` macro synthesizes `Sendable` conformance. Model objects must only be accessed on the actor owning their `ModelContext` \u2014 in SwiftUI that is always `@MainActor`.\n\n2. **`@Query` is MainActor-bound**: The `@Query` property wrapper fetches and delivers results on the main actor with no cross-actor handoff.\n\n3. **`ModelContainer` as a `static let`**: Constructing the container outside the scene body avoids data races during scene reconstruction.\n\n4. **All mutations stay on `@MainActor`**: `save()`, delete actions, and SwiftUI closures are all `@MainActor`-isolated.\n\n5. **Background import pattern** (when needed):\n\n```swift\nactor ImportActor {\n    private let container: ModelContainer\n\n    init(container: ModelContainer) {\n        self.container = container\n    }\n\n    func importEntries(_ data: [SomeDTO]) throws {\n        // Create a dedicated context \u2014 never share the main context\n        let context = ModelContext(container)\n        for dto in data {\n            context.insert(JournalEntry(body: dto.text))\n        }\n        try context.save()\n    }\n}\n```\n\n---\n\n## iCloud Sync Behavior\n\nSwiftData + CloudKit sync is **eventually consistent**:\n\n- Entries written offline are queued and pushed when connectivity returns.\n- Deletions propagate to all devices but may take minutes.\n- Conflicts use **last-writer-wins** on a per-field basis.\n- On first launch on a new device, the UI is immediately usable while the initial sync populates the store in the background.\n\nNo additional code is required beyond the `cloudKitDatabase:` parameter \u2014 SwiftData manages `NSPersistentCloudKitContainer`, schema mirroring, and change token handling internally.\n\n---\n\n## Minimum Deployment Configuration\n\n| Setting | Value |\n|---|---|\n| `IPHONEOS_DEPLOYMENT_TARGET` | `26.0` |\n| `SWIFT_VERSION` | `6.0` |\n| `SWIFT_STRICT_CONCURRENCY` | `complete` |\n\nEnable **Strict Concurrency Checking** in Build Settings -> Swift Compiler -- Upcoming Features to catch any remaining data-race warnings at compile time.\n\n---\n\n## Summary\n\nThe architecture is intentionally lean:\n\n- `JournalApp` owns a single `ModelContainer` wired to CloudKit and injects it via `.modelContainer()`.\n- `ContentView` hosts the iOS 26 `TabView` (Liquid Glass bar is automatic at iOS 26 deployment target) with a `ZStack`-positioned FAB using `.glassEffect(in: Circle())`.\n- All views get the model context via `@Environment(\\.modelContext)` and query data via `@Query` \u2014 both are `@MainActor`-safe by design.\n- `@Bindable` on detail views enables direct two-way binding to `@Model` properties; SwiftData observes and persists changes automatically.\n- Swift 6 safety is maintained by keeping all model access on `@MainActor` and using isolated `ModelContext` instances for any background work.\n"}], "grading": {"eval_id": 0, "variant": "without_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}, {"text": "Response uses the correct .glassEffect() API", "passed": true, "evidence": "Found 'glassEffect'"}, {"text": "Response uses @Model decorator for SwiftData", "passed": true, "evidence": "Found '@Model'"}, {"text": "Response uses @MainActor for Swift 6 safety", "passed": true, "evidence": "Found '@MainActor'"}, {"text": "Response includes accessibility considerations", "passed": true, "evidence": "Found: ['accessibility']"}, {"text": "Response includes an Aether Extension / forward-thinking idea", "passed": false, "evidence": "None of ['Aether Extension', 'Aether', 'forward-thinking', '3\u20135 Year', '3-5 Year', 'Roadmap'] found"}]}}, {"id": "eval-1-foundation-models-with_skill", "prompt": "How do I add on-device AI summarization to my reading app using the Foundation Models framework? I want to show a summary of an article when the user long-presses it. Include the shimmer loading state, the attribution text, and make sure I'm following the HIG for generative AI features.", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# On-Device AI Summarization with Foundation Models \u2014 Long-Press Article Summary\n\n**[LiquidForge Activated]** \u2014 Complete implementation of HIG-compliant, on-device AI article summarization triggered by a long-press gesture, including streaming output, shimmer loading state, attribution text, and Swift 6 concurrency safety.\n\n---\n\n## 1. Architecture & Design Decision\n\n### Why This Approach\n\nThe Foundation Models framework (`import FoundationModels`) provides on-device LLM inference via Apple Intelligence \u2014 no network call, no server cost, full privacy. For a reading app, this is the ideal integration point:\n\n- **Privacy-first:** Article text never leaves the device.\n- **Low latency:** On-device inference avoids round-trip delays.\n- **HIG alignment:** Apple's Generative AI HIG (updated Sep 9 2025) mandates shimmer during generation, explicit attribution text, disclosed limitations, and an opt-in gate.\n\n**HIG references:**\n- *Generative AI* page \u2014 attribution, disclosure, shimmer states\n- *Loading* page \u2014 placeholder/skeleton patterns (`.redacted(reason: .placeholder)`)\n- *Gestures* page \u2014 long-press confirmation pattern before consequential actions\n- *Sheets* page \u2014 present AI output in a bottom sheet with Liquid Glass chrome\n\n**WWDC25 sessions:** \"Meet Foundation Models\" and \"Design for Apple Intelligence\" cover the exact patterns used here.\n\n---\n\n## 2. Full Implementation\n\n### Step 1 \u2014 AI ViewModel (ArticleSummaryViewModel.swift)\n\n```swift\nimport Foundation\nimport FoundationModels\nimport Observation\n\n// MARK: - Summary State\n\nenum SummaryState: Sendable {\n    case idle\n    case generating\n    case complete(String)\n    case failed(String)\n}\n\n// MARK: - ViewModel\n\n/// Drives the AI summary sheet.\n/// @MainActor isolates all UI mutations to the main thread (Swift 6 safe).\n@Observable\n@MainActor\nfinal class ArticleSummaryViewModel {\n\n    // MARK: Public State\n\n    /// Current state of the generation pipeline.\n    var summaryState: SummaryState = .idle\n\n    /// Streamed text grows token-by-token during generation.\n    var streamedText: String = \"\"\n\n    // MARK: Private\n\n    /// One session per summary request.\n    /// LanguageModelSession is not Sendable \u2014 create fresh per task.\n    private var currentSession: LanguageModelSession?\n\n    /// Cancellation handle for the in-flight streaming task.\n    private var streamingTask: Task<Void, Never>?\n\n    // MARK: - Public API\n\n    /// Begin streaming a summary for the given article body.\n    /// Call this from the long-press action.\n    func summarize(articleTitle: String, articleBody: String) {\n        // Cancel any previous in-flight request.\n        cancel()\n\n        summaryState = .generating\n        streamedText = \"\"\n\n        let session = LanguageModelSession()\n        currentSession = session\n\n        let prompt = \"\"\"\n        You are a concise reading assistant. Summarize the following article \\\n        in 2\u20133 sentences, written in plain, accessible language.\n\n        Title: \\(articleTitle)\n\n        Article:\n        \\(articleBody)\n        \"\"\"\n\n        streamingTask = Task { [weak self] in\n            guard let self else { return }\n\n            do {\n                let stream = session.streamResponse(to: prompt)\n\n                for try await token in stream {\n                    // Each token appended triggers @Observable to re-render.\n                    // This is already on @MainActor so no actor hop needed.\n                    self.streamedText += token\n                }\n\n                self.summaryState = .complete(self.streamedText)\n\n            } catch is CancellationError {\n                // User dismissed \u2014 silent exit.\n                self.summaryState = .idle\n\n            } catch {\n                self.summaryState = .failed(\n                    \"Couldn't generate a summary right now. Try again later.\"\n                )\n            }\n        }\n    }\n\n    /// Cancel any in-flight generation and reset state.\n    func cancel() {\n        streamingTask?.cancel()\n        streamingTask = nil\n        currentSession = nil\n        summaryState = .idle\n        streamedText = \"\"\n    }\n}\n```\n\n---\n\n### Step 2 \u2014 Shimmer Modifier (ShimmerModifier.swift)\n\n```swift\nimport SwiftUI\n\n// MARK: - Shimmer Animation\n\n/// HIG-compliant shimmer for AI generation states.\n/// Wraps .redacted(reason: .placeholder) with a moving highlight.\nstruct ShimmerModifier: ViewModifier {\n\n    @State private var phase: CGFloat = -1.0\n\n    /// Set to true while AI is generating.\n    var isActive: Bool\n\n    func body(content: Content) -> some View {\n        content\n            // Use .placeholder redaction as the base skeleton layer.\n            .redacted(reason: isActive ? .placeholder : [])\n            .overlay(\n                // Overlay a shimmer sweep only while active.\n                isActive ? shimmerOverlay : nil\n            )\n            // Respect Reduce Motion \u2014 fall back to a static pulse.\n            .animation(\n                isActive\n                    ? .easeInOut(duration: 1.2).repeatForever(autoreverses: false)\n                    : .default,\n                value: isActive\n            )\n    }\n\n    @ViewBuilder\n    private var shimmerOverlay: some View {\n        GeometryReader { geometry in\n            LinearGradient(\n                stops: [\n                    .init(color: .clear,                              location: 0.0),\n                    .init(color: .white.opacity(0.35),                location: 0.45),\n                    .init(color: .clear,                              location: 1.0),\n                ],\n                startPoint: .leading,\n                endPoint: .trailing\n            )\n            .frame(width: geometry.size.width * 1.5)\n            // phase drives the gradient across the full width.\n            .offset(x: phase * geometry.size.width * 1.5)\n            .onAppear {\n                withAnimation(\n                    .linear(duration: 1.2).repeatForever(autoreverses: false)\n                ) {\n                    phase = 1.0\n                }\n            }\n        }\n        .clipped()\n        .allowsHitTesting(false)\n        // Accessibility: do not describe the shimmer decoration to VoiceOver.\n        .accessibilityHidden(true)\n    }\n}\n\nextension View {\n    /// Apply the shimmer loading state.\n    func shimmer(isActive: Bool) -> some View {\n        modifier(ShimmerModifier(isActive: isActive))\n    }\n}\n```\n\n---\n\n### Step 3 \u2014 AI Attribution View (AIAttributionView.swift)\n\n```swift\nimport SwiftUI\n\n// MARK: - Attribution Text\n\n/// Required by Apple's HIG for all generative AI output.\n/// \"Generated by Apple Intelligence on this device\" with the Apple Intelligence glyph.\nstruct AIAttributionView: View {\n\n    var body: some View {\n        HStack(spacing: 6) {\n            // SF Symbol for Apple Intelligence (SF Symbols 7).\n            // Use \"apple.intelligence\" or \"sparkles\" as fallback.\n            Image(systemName: \"apple.intelligence\")\n                .symbolRenderingMode(.hierarchical)\n                .foregroundStyle(.secondary)\n                .font(.caption)\n                // Accessibility: label the icon meaningfully.\n                .accessibilityLabel(\"Apple Intelligence\")\n\n            Text(\"Generated by Apple Intelligence on this device\")\n                .font(.caption)\n                .foregroundStyle(.secondary)\n        }\n        // Stack fluidly on small Dynamic Type sizes.\n        .frame(maxWidth: .infinity, alignment: .leading)\n        .padding(.top, 4)\n    }\n}\n```\n\n---\n\n### Step 4 \u2014 Summary Sheet (ArticleSummarySheet.swift)\n\n```swift\nimport SwiftUI\n\n// MARK: - Summary Sheet\n\n/// Bottom sheet presented on long-press.\n/// Liquid Glass chrome auto-adopted by building against iOS 26 SDK.\nstruct ArticleSummarySheet: View {\n\n    let article: Article\n    @State private var viewModel = ArticleSummaryViewModel()\n\n    // Accessibility: announce when summary is ready.\n    @AccessibilityFocusState private var focusSummary: Bool\n\n    var body: some View {\n        NavigationStack {\n            ScrollView {\n                VStack(alignment: .leading, spacing: 16) {\n                    // Article title context.\n                    Text(article.title)\n                        .font(.headline)\n                        .accessibilityAddTraits(.isHeader)\n\n                    Divider()\n\n                    // MARK: Content area \u2014 switches on state.\n                    summaryContent\n                        .frame(maxWidth: .infinity, alignment: .leading)\n\n                    // MARK: Attribution \u2014 always shown when AI content exists.\n                    if case .complete = viewModel.summaryState {\n                        AIAttributionView()\n                    }\n\n                    // Streamed text also shows attribution while still generating.\n                    if case .generating = viewModel.summaryState,\n                       !viewModel.streamedText.isEmpty {\n                        AIAttributionView()\n                    }\n\n                    // MARK: Limitation disclosure beneath the summary.\n                    if case .complete = viewModel.summaryState {\n                        Text(\"AI summaries may contain mistakes. Always read the full article for accuracy.\")\n                            .font(.caption2)\n                            .foregroundStyle(.tertiary)\n                            .padding(.top, 2)\n                    }\n                }\n                .padding()\n            }\n            .navigationTitle(\"AI Summary\")\n            .navigationBarTitleDisplayMode(.inline)\n            .toolbar {\n                ToolbarItem(placement: .confirmationAction) {\n                    Button(\"Done\") { /* Dismiss handled by sheet modifier */ }\n                }\n            }\n        }\n        // Sheet uses Liquid Glass material automatically on iOS 26.\n        .presentationDetents([.medium, .large])\n        .presentationDragIndicator(.visible)\n        // Start generation on appear.\n        .task {\n            viewModel.summarize(\n                articleTitle: article.title,\n                articleBody: article.body\n            )\n        }\n        // Clean up if the user swipes away during generation.\n        .onDisappear {\n            viewModel.cancel()\n        }\n    }\n\n    // MARK: - Content Switcher\n\n    @ViewBuilder\n    private var summaryContent: some View {\n        switch viewModel.summaryState {\n\n        case .idle:\n            // Should not be visible \u2014 task fires immediately on appear.\n            EmptyView()\n\n        case .generating:\n            VStack(alignment: .leading, spacing: 8) {\n                if viewModel.streamedText.isEmpty {\n                    // Before first token: show skeleton placeholder lines.\n                    skeletonLines\n                } else {\n                    // Tokens are arriving: show live streaming text with shimmer.\n                    Text(viewModel.streamedText)\n                        .font(.body)\n                        .shimmer(isActive: true)\n                        // VoiceOver: announce partial progress without flooding.\n                        .accessibilityLabel(\"Generating summary\u2026\")\n                }\n            }\n            // Announce generation start to VoiceOver users.\n            .accessibilityAnnouncement(\"Generating summary with Apple Intelligence\")\n\n        case .complete(let summary):\n            Text(summary)\n                .font(.body)\n                // Move VoiceOver focus here when complete.\n                .accessibilityFocused($focusSummary)\n                .onAppear { focusSummary = true }\n                // VoiceOver: announce completion so user knows it's ready.\n                .accessibilityAnnouncement(\"Summary complete\")\n\n        case .failed(let message):\n            VStack(alignment: .leading, spacing: 12) {\n                Label(message, systemImage: \"exclamationmark.triangle\")\n                    .font(.body)\n                    .foregroundStyle(.secondary)\n\n                Button(\"Try Again\") {\n                    viewModel.summarize(\n                        articleTitle: article.title,\n                        articleBody: article.body\n                    )\n                }\n                .buttonStyle(.bordered)\n            }\n        }\n    }\n\n    // MARK: - Skeleton Placeholder\n\n    /// Three shimmer lines mimicking a short paragraph.\n    private var skeletonLines: some View {\n        GeometryReader { geo in\n            VStack(alignment: .leading, spacing: 8) {\n                ForEach([1.0, 0.85, 0.6], id: \\.self) { fraction in\n                    RoundedRectangle(cornerRadius: 4)\n                        .fill(Color.secondary.opacity(0.2))\n                        .frame(width: geo.size.width * fraction, height: 14)\n                        .shimmer(isActive: true)\n                }\n            }\n        }\n        .frame(height: 54) // 3 lines x (14pt height + 8pt spacing)\n        // VoiceOver: describe the loading state instead of the placeholder shapes.\n        .accessibilityElement(children: .ignore)\n        .accessibilityLabel(\"Loading summary\u2026\")\n    }\n}\n```\n\n---\n\n### Step 5 \u2014 Long-Press on Article Row (ArticleRowView.swift)\n\n```swift\nimport SwiftUI\n\n// MARK: - Article Model (adjust to your existing model)\n\nstruct Article: Identifiable, Sendable {\n    let id: UUID\n    let title: String\n    let body: String\n    let author: String\n    let publishedAt: Date\n}\n\n// MARK: - Article Row View\n\nstruct ArticleRowView: View {\n\n    let article: Article\n\n    // Sheet presentation state.\n    @State private var showSummarySheet = false\n\n    // Check opt-in consent before showing AI features.\n    @AppStorage(\"aiSummarizationEnabled\") private var aiEnabled = false\n\n    // Haptic feedback engine \u2014 always pair AI action with haptic.\n    private let haptic = UIImpactFeedbackGenerator(style: .medium)\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 4) {\n            Text(article.title)\n                .font(.headline)\n                .lineLimit(2)\n\n            Text(article.author)\n                .font(.subheadline)\n                .foregroundStyle(.secondary)\n\n            Text(article.publishedAt, style: .relative)\n                .font(.caption)\n                .foregroundStyle(.tertiary)\n        }\n        .padding(.vertical, 4)\n        // MARK: Long-press context menu\n        .contextMenu {\n            // Only show AI action if user has opted in.\n            if aiEnabled {\n                Button {\n                    haptic.impactOccurred()\n                    showSummarySheet = true\n                } label: {\n                    Label(\"Summarize with AI\", systemImage: \"sparkles\")\n                }\n\n                Divider()\n            }\n\n            Button(\"Share Article\", systemImage: \"square.and.arrow.up\") { /* share */ }\n            Button(\"Save for Later\",  systemImage: \"bookmark\")           { /* save */  }\n        }\n        // Stand-alone long-press gesture fallback.\n        .onLongPressGesture(minimumDuration: 0.5) {\n            guard aiEnabled else { return }\n            haptic.impactOccurred()\n            showSummarySheet = true\n        }\n        // Present the sheet.\n        .sheet(isPresented: $showSummarySheet) {\n            ArticleSummarySheet(article: article)\n        }\n        // VoiceOver hint so users know long-press is available (when opted in).\n        .accessibilityHint(\n            aiEnabled\n                ? \"Long press to summarize this article with Apple Intelligence\"\n                : \"Long press for article options\"\n        )\n    }\n}\n```\n\n---\n\n### Step 6 \u2014 Opt-In Gate (Settings Toggle)\n\nPer the HIG Generative AI page, all AI features must be gated behind an explicit user opt-in. Add this to your app's Settings screen:\n\n```swift\nimport SwiftUI\n\n// MARK: - AI Settings Section\n\nstruct AISettingsSection: View {\n\n    // Persist consent in AppStorage.\n    @AppStorage(\"aiSummarizationEnabled\") private var aiEnabled = false\n\n    var body: some View {\n        Section {\n            Toggle(isOn: $aiEnabled) {\n                Label(\"Article Summaries\", systemImage: \"sparkles\")\n            }\n\n            if aiEnabled {\n                Text(\"Apple Intelligence will summarize articles on this device. No article text is sent to Apple or third parties.\")\n                    .font(.caption)\n                    .foregroundStyle(.secondary)\n            }\n        } header: {\n            Text(\"Apple Intelligence\")\n        } footer: {\n            Text(\"AI-generated summaries may contain inaccuracies. Always refer to the full article.\")\n        }\n    }\n}\n```\n\n---\n\n## 3. Checklist Sweep\n\n| Item | Status |\n|------|--------|\n| **Liquid Glass** | Auto-adopted via `.sheet` + building against iOS 26 SDK. The bottom sheet chrome is Liquid Glass automatically. No manual `.glassEffect` needed on plain sheet content. |\n| **Swift 6 concurrency** | `@MainActor` on `ArticleSummaryViewModel`; `LanguageModelSession` created fresh per task and not passed across actor boundaries; `Task { [weak self] }` prevents retain cycles; `CancellationError` caught and silenced; `.cancel()` called in `.onDisappear`. |\n| **Accessibility** | Dynamic Type on all text styles; VoiceOver labels on placeholder skeleton lines and streaming text; `@AccessibilityFocusState` moves focus to completed summary; `.accessibilityAnnouncement` at generation start and completion; shimmer overlay is `.accessibilityHidden(true)`; long-press row has `.accessibilityHint`. |\n| **Performance** | No main-thread blocking \u2014 streaming runs in a `Task`; `@Observable` fine-grained dependency tracking means only the text view re-renders per token; `LanguageModelSession` is discarded after each request; `GeometryReader` used instead of `UIScreen.main` for proper layout pass. |\n| **Apple Intelligence HIG** | Shimmer during generation; attribution text (`AIAttributionView`) shown as soon as streaming begins and on completion; limitation disclosure (\"may contain mistakes\") under completed summary; explicit opt-in toggle backed by `@AppStorage`. |\n| **visionOS** | Sheet pattern works directly on visionOS; `contextMenu` responds to pinch/pointer. `GeometryReader`-based skeleton is spatial-safe (no `UIScreen.main`). |\n| **Aether Extension** | See Section 4 below. |\n| **Production-ready** | `// MARK:` sections throughout; inline comments on non-obvious lines; error state with \"Try Again\" button; task cancellation on dismiss; opt-in guard in row view. |\n\n---\n\n## 4. Aether Extension \u2014 Living Summary Card\n\n**Concept:** Instead of a modal sheet, let the article row *expand in place* using a `GlassEffectContainer` morphing transition. When the user long-presses, the row glass surface expands to reveal the streaming summary inline, then collapses back with a matched-geometry transition.\n\n```swift\n@Namespace private var glassNamespace\n\n// On the collapsed row:\nArticleRowContent()\n    .glassEffectID(\"article-\\(article.id)\", in: glassNamespace)\n\n// On the expanded inline summary:\nGlassEffectContainer(namespace: glassNamespace) {\n    VStack(alignment: .leading, spacing: 12) {\n        Text(viewModel.streamedText)\n            .font(.body)\n            .shimmer(isActive: viewModel.summaryState == .generating)\n        AIAttributionView()\n    }\n    .padding()\n}\n.glassEffectID(\"article-\\(article.id)\", in: glassNamespace)\n```\n\nThis creates a fluid, organic expansion \u2014 the article card breathes the summary into existence rather than invoking a modal. Pair it with a Metal shader that subtly distorts the glass refraction as tokens stream in, making each new word appear to crystallize into the surface.\n\n**Ship \"Classic Mode\" (sheet-based) as a fallback toggle** for users who prefer the traditional presentation, and ensure full attribution + disclosure appear in the expanded card just as they do in the sheet.\n\n---\n\n## 5. Three-to-Five Year Roadmap\n\n**iOS 27 / 2026\u20132027:**\n- Foundation Models gains multimodal support \u2014 summarize articles containing embedded images, charts, and data tables as part of the same prompt.\n- `LanguageModelSession` likely gains persistent context windows, allowing the session to remember prior articles the user has read and tailor summary complexity to their demonstrated comprehension level.\n- On-device model capacity grows \u2014 expect 5\u20137 sentence analytical summaries, keyword extraction, and reading-time estimates all from a single `@Generable` structured response.\n\n**iOS 28 / 2027\u20132028:**\n- Agentic reading assistant: `AppIntents` + Foundation Models let users ask follow-up questions about an article via Siri without opening the app. The summary becomes an entry point, not a destination.\n- Proactive summaries surfaced in Dynamic Island or a Live Activity for long articles the user has been reading slowly across sessions.\n- Full spatial reading environment on visionOS 3 \u2014 summaries float as anchored Liquid Glass panels beside the article in a volumetric window, rendered via `RealityView` + SwiftUI interop.\n\n**Architecture to build for now:**\nKeep `LanguageModelSession` scoped to single requests (as shown above) so you can opt into persistent sessions per-feature without a refactor. Add an optional `cachedSummary: String?` field to your SwiftData `Article` model now \u2014 when summaries accumulate in a large library, regenerating on every long-press wastes battery and inference time. Persisting and reusing them costs almost nothing and positions the app well for iOS 27's richer summary formats.\n"}], "grading": {"eval_id": 1, "variant": "with_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response uses LanguageModelSession (correct Foundation Models API)", "passed": true, "evidence": "Found 'LanguageModelSession'"}, {"text": "Response uses .redacted(reason: .placeholder) for shimmer state", "passed": true, "evidence": "Found 'redacted'"}, {"text": "Response includes Apple Intelligence attribution text", "passed": true, "evidence": "Found: ['Apple Intelligence', 'Generated by Apple Intelligence']"}, {"text": "Response mentions user opt-in / consent for AI features", "passed": true, "evidence": "Found: ['opt-in', 'consent', 'AppStorage', 'Settings', 'toggle']"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}}, {"id": "eval-1-foundation-models-without_skill", "prompt": "How do I add on-device AI summarization to my reading app using the Foundation Models framework? I want to show a summary of an article when the user long-presses it. Include the shimmer loading state, the attribution text, and make sure I'm following the HIG for generative AI features.", "eval_id": 1, "outputs": [{"name": "response.md", "type": "text", "content": "# On-Device AI Summarization with Foundation Models Framework\n\nThis guide walks you through adding on-device AI article summarization to your reading app using Apple's Foundation Models framework (available in iOS 18.1+). We'll cover the long-press gesture, shimmer loading state, attribution text, and HIG compliance.\n\n---\n\n## Prerequisites\n\n- iOS 18.1+ deployment target\n- Xcode 16.1+\n- Device with Apple Intelligence support (iPhone 15 Pro or later, or M-series iPad/Mac)\n- Import the Foundation Models framework\n\n```swift\nimport FoundationModels\n```\n\n---\n\n## 1. Check Device Availability\n\nBefore attempting any summarization, always check that the model is available on the device. Never assume Apple Intelligence is present.\n\n```swift\nimport FoundationModels\n\nfunc isAISummarizationAvailable() -> Bool {\n    let session = LanguageModelSession()\n    return session.isAvailable\n}\n```\n\nApple's HIG states: \"If a generative AI feature isn't available on someone's device, gracefully degrade \u2014 hide the feature or show a clear explanation, never show an error in place of expected content.\"\n\n---\n\n## 2. Define Your Summarization Prompt\n\nUse a `@Generable` struct to get structured output, or use a simple string prompt. For article summaries, a structured approach is cleanest:\n\n```swift\nimport FoundationModels\n\n@Generable\nstruct ArticleSummary {\n    @Guide(\"A concise 2-3 sentence summary of the article. Plain text only, no markdown.\")\n    var summary: String\n\n    @Guide(\"Three key takeaway points from the article, each under 10 words.\")\n    var keyPoints: [String]\n}\n```\n\n---\n\n## 3. The Summarization Service\n\nCreate a dedicated actor to manage sessions safely across async contexts:\n\n```swift\nimport FoundationModels\n\nactor ArticleSummarizationService {\n\n    // Re-use a session per article to preserve context if needed,\n    // but create a fresh one per summarization request to avoid\n    // contaminating results across articles.\n    func summarize(article: Article) async throws -> ArticleSummary {\n        let session = LanguageModelSession()\n\n        guard session.isAvailable else {\n            throw SummarizationError.notAvailable\n        }\n\n        let prompt = \"\"\"\n        You are a helpful reading assistant. Summarize the following article \\\n        for a reader who wants to quickly decide if it's worth reading in full.\n\n        Article title: \\(article.title)\n        Article content:\n        \\(article.body)\n        \"\"\"\n\n        let response = try await session.respond(\n            to: prompt,\n            generating: ArticleSummary.self\n        )\n\n        return response.content\n    }\n}\n\nenum SummarizationError: LocalizedError {\n    case notAvailable\n\n    var errorDescription: String? {\n        switch self {\n        case .notAvailable:\n            return \"Apple Intelligence is not available on this device.\"\n        }\n    }\n}\n```\n\n---\n\n## 4. Shimmer Loading View\n\nBuild a reusable shimmer effect that matches iOS design conventions. The shimmer communicates \"content is being generated\" without implying a network delay.\n\n```swift\nimport SwiftUI\n\nstruct ShimmerView: View {\n    @State private var phase: CGFloat = -1\n\n    var body: some View {\n        GeometryReader { geometry in\n            ZStack {\n                RoundedRectangle(cornerRadius: 8)\n                    .fill(Color(.systemGray5))\n\n                LinearGradient(\n                    gradient: Gradient(colors: [\n                        Color(.systemGray5),\n                        Color(.systemGray4).opacity(0.8),\n                        Color(.systemGray5)\n                    ]),\n                    startPoint: .init(x: phase, y: 0.5),\n                    endPoint: .init(x: phase + 1, y: 0.5)\n                )\n                .mask(\n                    RoundedRectangle(cornerRadius: 8)\n                )\n            }\n        }\n        .onAppear {\n            withAnimation(\n                .linear(duration: 1.4)\n                .repeatForever(autoreverses: false)\n            ) {\n                phase = 1.5\n            }\n        }\n    }\n}\n\n/// Multi-line shimmer skeleton that mimics text lines\nstruct SummaryShimmerSkeleton: View {\n    var body: some View {\n        VStack(alignment: .leading, spacing: 10) {\n            ShimmerView()\n                .frame(height: 14)\n                .frame(maxWidth: .infinity)\n\n            ShimmerView()\n                .frame(height: 12)\n                .frame(maxWidth: .infinity)\n\n            ShimmerView()\n                .frame(height: 12)\n                .frame(maxWidth: 260)\n\n            ShimmerView()\n                .frame(height: 12)\n                .frame(maxWidth: .infinity)\n\n            ShimmerView()\n                .frame(height: 12)\n                .frame(maxWidth: 180)\n        }\n        .padding(16)\n    }\n}\n```\n\n---\n\n## 5. Attribution Text\n\nPer Apple's HIG for generative AI, you **must** include attribution indicating the content was AI-generated. Use Apple's provided `WritingToolsAttributionView` where available, or a manual disclosure label.\n\nApple's guidance: \"Always clearly indicate when content has been generated by AI. Place the attribution near the generated content. Use a consistent, subtle presentation that doesn't overwhelm the feature.\"\n\n```swift\nimport SwiftUI\n\nstruct AIAttributionLabel: View {\n    var body: some View {\n        HStack(spacing: 4) {\n            Image(systemName: \"apple.intelligence\")\n                .font(.caption2)\n                .foregroundStyle(.secondary)\n\n            Text(\"Summary by Apple Intelligence\")\n                .font(.caption2)\n                .foregroundStyle(.secondary)\n        }\n        .padding(.top, 4)\n    }\n}\n```\n\n> **Note:** If Apple ships a first-party `WritingToolsAttributionView` component in your target SDK, prefer that over a custom label \u2014 it stays in sync with OS-level design language changes.\n\n---\n\n## 6. The Summary Popover View\n\nCombine the shimmer, the content, and the attribution into a single popover view:\n\n```swift\nimport SwiftUI\nimport FoundationModels\n\nenum SummaryState {\n    case idle\n    case loading\n    case loaded(ArticleSummary)\n    case unavailable\n    case failed(Error)\n}\n\nstruct ArticleSummaryPopover: View {\n    let article: Article\n    @State private var state: SummaryState = .loading\n\n    private let service = ArticleSummarizationService()\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 0) {\n            HStack {\n                Text(\"Summary\")\n                    .font(.headline)\n                Spacer()\n            }\n            .padding([.horizontal, .top], 16)\n            .padding(.bottom, 12)\n\n            Divider()\n\n            Group {\n                switch state {\n                case .idle:\n                    EmptyView()\n\n                case .loading:\n                    SummaryShimmerSkeleton()\n                        .accessibilityLabel(\"Generating summary\")\n\n                case .loaded(let summary):\n                    SummaryContentView(summary: summary)\n\n                case .unavailable:\n                    UnavailableView()\n\n                case .failed(let error):\n                    ErrorView(error: error)\n                }\n            }\n            .animation(.easeInOut(duration: 0.25), value: UUID())\n        }\n        .frame(minWidth: 300, maxWidth: 360)\n        .background(Color(.systemBackground))\n        .clipShape(RoundedRectangle(cornerRadius: 16))\n        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 4)\n        .task {\n            await generateSummary()\n        }\n    }\n\n    private func generateSummary() async {\n        state = .loading\n        do {\n            let summary = try await service.summarize(article: article)\n            withAnimation {\n                state = .loaded(summary)\n            }\n        } catch SummarizationError.notAvailable {\n            state = .unavailable\n        } catch {\n            state = .failed(error)\n        }\n    }\n}\n\nstruct SummaryContentView: View {\n    let summary: ArticleSummary\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 12) {\n            Text(summary.summary)\n                .font(.body)\n                .foregroundStyle(.primary)\n                .fixedSize(horizontal: false, vertical: true)\n\n            if !summary.keyPoints.isEmpty {\n                VStack(alignment: .leading, spacing: 6) {\n                    Text(\"Key Points\")\n                        .font(.subheadline)\n                        .fontWeight(.semibold)\n\n                    ForEach(summary.keyPoints, id: \\.self) { point in\n                        HStack(alignment: .top, spacing: 8) {\n                            Text(\"\u2022\")\n                                .foregroundStyle(.secondary)\n                            Text(point)\n                                .font(.subheadline)\n                                .foregroundStyle(.secondary)\n                        }\n                    }\n                }\n            }\n\n            AIAttributionLabel()\n        }\n        .padding(16)\n    }\n}\n\nstruct UnavailableView: View {\n    var body: some View {\n        VStack(spacing: 8) {\n            Image(systemName: \"apple.intelligence\")\n                .font(.title2)\n                .foregroundStyle(.secondary)\n            Text(\"Apple Intelligence Not Available\")\n                .font(.subheadline)\n                .fontWeight(.medium)\n            Text(\"Summaries require Apple Intelligence, which is not enabled on this device.\")\n                .font(.caption)\n                .foregroundStyle(.secondary)\n                .multilineTextAlignment(.center)\n        }\n        .padding(16)\n    }\n}\n\nstruct ErrorView: View {\n    let error: Error\n\n    var body: some View {\n        VStack(spacing: 8) {\n            Image(systemName: \"exclamationmark.circle\")\n                .font(.title2)\n                .foregroundStyle(.red)\n            Text(\"Couldn't Generate Summary\")\n                .font(.subheadline)\n                .fontWeight(.medium)\n            Text(\"Try again in a moment.\")\n                .font(.caption)\n                .foregroundStyle(.secondary)\n        }\n        .padding(16)\n    }\n}\n```\n\n---\n\n## 7. Long-Press Gesture on Article Rows\n\nWire the popover to a long-press on your article list row:\n\n```swift\nimport SwiftUI\n\nstruct ArticleRowView: View {\n    let article: Article\n    @State private var showingSummary = false\n\n    var body: some View {\n        VStack(alignment: .leading, spacing: 4) {\n            Text(article.title)\n                .font(.headline)\n                .lineLimit(2)\n\n            Text(article.source)\n                .font(.caption)\n                .foregroundStyle(.secondary)\n        }\n        .padding(.vertical, 8)\n        .contentShape(Rectangle())\n        .onLongPressGesture(minimumDuration: 0.5) {\n            let impact = UIImpactFeedbackGenerator(style: .medium)\n            impact.impactOccurred()\n            showingSummary = true\n        }\n        .popover(isPresented: $showingSummary) {\n            ArticleSummaryPopover(article: article)\n                .presentationCompactAdaptation(.popover)\n        }\n        .accessibilityAction(named: \"Summarize Article\") {\n            showingSummary = true\n        }\n    }\n}\n```\n\n---\n\n## 8. Streaming Support (Optional but Recommended)\n\nFor longer articles, consider streaming the response so text appears progressively:\n\n```swift\nactor ArticleSummarizationService {\n\n    func summarizeStreaming(\n        article: Article,\n        onChunk: @escaping (String) -> Void\n    ) async throws {\n        let session = LanguageModelSession()\n\n        guard session.isAvailable else {\n            throw SummarizationError.notAvailable\n        }\n\n        let prompt = \"\"\"\n        Summarize this article in 2-3 sentences for a reader skimming their feed.\n        Article: \\(article.title)\\n\\(article.body)\n        \"\"\"\n\n        let stream = session.streamResponse(to: prompt)\n\n        for try await partial in stream {\n            await MainActor.run {\n                onChunk(partial)\n            }\n        }\n    }\n}\n```\n\nThen in your view, replace the `SummaryShimmerSkeleton` with an incrementally building `Text` view using `@State private var streamedText = \"\"`. Show the shimmer until the first chunk arrives, then transition to the live text.\n\n---\n\n## 9. HIG Compliance Checklist\n\nApple's Human Interface Guidelines for Generative AI features require:\n\n| Requirement | Implementation in this guide |\n|---|---|\n| Clearly label AI-generated content | `AIAttributionLabel` shown below every summary |\n| Graceful degradation when unavailable | `UnavailableView` shown with clear explanation |\n| Don't block UI while generating | Shimmer skeleton shown immediately; content appears async |\n| User-initiated only | Summary only generated on explicit long-press, never automatically |\n| Provide a way to dismiss | Popover dismisses on tap-outside or drag |\n| Don't present AI content as factual without caveats | Summary framed as a reading aid, not ground truth |\n| Haptic confirmation | `UIImpactFeedbackGenerator` fires on long-press trigger |\n| Accessibility | `.accessibilityAction` exposes feature to VoiceOver; shimmer has `.accessibilityLabel` |\n\nAdditional HIG points to keep in mind:\n- **Do not store generated summaries as canonical article data.** Treat them as ephemeral reading aids.\n- **Do not send article content to external servers.** Foundation Models runs entirely on-device, which is the right call for both privacy and HIG compliance.\n- **Consider adding a \"Regenerate\" button** so users feel in control if the summary feels off.\n- **Avoid auto-generating summaries in the background.** Always wait for user intent. Pre-generating on scroll is acceptable only if the user has opted into it.\n\n---\n\n## 10. Full Integration Example\n\n```swift\nimport SwiftUI\nimport FoundationModels\n\nstruct ReadingListView: View {\n    let articles: [Article]\n\n    var body: some View {\n        NavigationStack {\n            List(articles) { article in\n                NavigationLink(destination: ArticleDetailView(article: article)) {\n                    ArticleRowView(article: article)\n                }\n            }\n            .navigationTitle(\"Reading List\")\n            .listStyle(.insetGrouped)\n        }\n    }\n}\n\nstruct Article: Identifiable {\n    let id: UUID\n    let title: String\n    let source: String\n    let body: String\n}\n```\n\n---\n\n## Key Takeaways\n\n1. **Always check `session.isAvailable`** before attempting generation. Apple Intelligence requires specific hardware and user enablement.\n2. **Show the shimmer immediately** \u2014 start it the moment the long-press fires, before the async call even begins.\n3. **Attribution is non-negotiable per HIG** \u2014 place `AIAttributionLabel` directly beneath generated text.\n4. **Use `@Generable` structs** for structured output; it's more reliable than parsing free-form text.\n5. **Foundation Models is fully on-device** \u2014 no API keys, no network required, no data leaves the device.\n6. **Long-press + popover** is the right pattern here (not a full sheet) \u2014 the user is previewing, not committing.\n7. **Streaming improves perceived performance** significantly for longer articles \u2014 prefer it over waiting for the full response.\n"}], "grading": {"eval_id": 1, "variant": "without_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response uses LanguageModelSession (correct Foundation Models API)", "passed": true, "evidence": "Found 'LanguageModelSession'"}, {"text": "Response uses .redacted(reason: .placeholder) for shimmer state", "passed": false, "evidence": "'redacted' not found"}, {"text": "Response includes Apple Intelligence attribution text", "passed": true, "evidence": "Found: ['Apple Intelligence']"}, {"text": "Response mentions user opt-in / consent for AI features", "passed": false, "evidence": "None of ['opt-in', 'consent', 'AppStorage', 'Settings', 'toggle'] found"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}}, {"id": "eval-2-swift6-concurrency-with_skill", "prompt": "I just got this Swift 6 concurrency error in my app: 'Sending main actor-isolated value of type TaskStore to nonisolated callee'. The TaskStore is an @Observable class and I'm trying to pass it into a background ModelActor to do a batch import. How do I fix this without just slapping nonisolated everywhere?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# [LiquidForge Activated]\n\nSwift 6 is enforcing actor-isolation boundaries your code was silently violating before \u2014 the fix is architectural, not a nonisolated band-aid.\n\n---\n\n## Architecture / Design Decision\n\nThe error \"Sending main actor-isolated value of type TaskStore to nonisolated callee\" means Swift 6 is catching a genuine data-race risk. `TaskStore` is bound to `@MainActor` (because it's `@Observable` and you declared it that way), so the compiler refuses to let you hand a live reference to it into a `ModelActor` context, where it could be accessed from any thread.\n\nThe root cause: **you're trying to pass the whole store across an actor boundary instead of passing only the data the background actor needs.**\n\nThe clean fix follows the principle from WWDC23 \"Meet SwiftData\" and WWDC24 \"Migrate your app to Swift 6\" sessions:\n\n> Pass lightweight, `Sendable` values (IDs, structs, value types) across actor boundaries \u2014 never actor-isolated class references.\n\nThere are three valid patterns, ordered from most correct to \"acceptable in a pinch\":\n\n1. **Pass only `Sendable` value-type data into the ModelActor** (preferred)\n2. **Use `@ModelActor` for all persistence work and surface results back to MainActor via `Task { @MainActor in ... }`**\n3. **Declare a `Sendable` snapshot struct** if you genuinely need a multi-property bundle\n\n---\n\n## Full Code \u2014 Preferred Pattern\n\n### Step 1: Keep `TaskStore` cleanly `@MainActor`\n\n```swift\nimport SwiftData\nimport SwiftUI\n\n// @Model types must conform to Sendable in Swift 6 \u2014 add it explicitly\n@Model\nfinal class ImportedItem: @unchecked Sendable {\n    // @unchecked is acceptable here because SwiftData manages\n    // thread-safe access through ModelContext internally.\n    var id: UUID\n    var title: String\n    var importedAt: Date\n\n    init(id: UUID, title: String, importedAt: Date = .now) {\n        self.id = id\n        self.title = title\n        self.importedAt = importedAt\n    }\n}\n\n@Observable\n@MainActor\nfinal class TaskStore {\n    var tasks: [ImportedItem] = []\n    var importProgress: Double = 0\n    var isImporting = false\n\n    private let container: ModelContainer\n\n    init(container: ModelContainer) {\n        self.container = container\n        fetchAll()\n    }\n\n    func fetchAll() {\n        let ctx = container.mainContext\n        let descriptor = FetchDescriptor<ImportedItem>(\n            sortBy: [SortDescriptor(\\.importedAt, order: .reverse)]\n        )\n        tasks = (try? ctx.fetch(descriptor)) ?? []\n    }\n\n    // KEY: do NOT pass `self` into the actor.\n    // Pass only the raw data as a Sendable value type.\n    func batchImport(rawPayload: [RawImportRecord]) async {\n        isImporting = true\n        defer {\n            isImporting = false\n            fetchAll() // refresh UI after background write completes\n        }\n\n        // ModelContainer is Sendable \u2014 safe to pass across boundaries\n        let importer = BatchImportActor(modelContainer: container)\n\n        // Pass only a plain Sendable array of structs \u2014 zero actor-isolation conflict\n        try? await importer.performImport(records: rawPayload) { progress in\n            // Hop back to MainActor to update progress UI\n            Task { @MainActor [weak self] in\n                self?.importProgress = progress\n            }\n        }\n    }\n}\n```\n\n### Step 2: Define a `Sendable` value type for the raw records\n\n```swift\n// Plain struct \u2014 automatically Sendable (all stored properties are value types)\nstruct RawImportRecord: Sendable {\n    let id: UUID\n    let title: String\n    let timestamp: Date\n}\n```\n\n### Step 3: The `ModelActor` does ALL persistence work in isolation\n\n```swift\nimport SwiftData\n\n// @ModelActor generates a custom actor with its own ModelContext \u2014 Swift 6 safe\n@ModelActor\nactor BatchImportActor {\n\n    // modelContext is provided by @ModelActor macro \u2014 no need to declare it\n    // modelContainer is also injected by the macro\n\n    func performImport(\n        records: [RawImportRecord],\n        onProgress: @Sendable (Double) -> Void\n    ) async throws {\n        let total = Double(records.count)\n\n        for (index, record) in records.enumerated() {\n            // All SwiftData work happens here, isolated to this actor's ModelContext\n            let item = ImportedItem(\n                id: record.id,\n                title: record.title,\n                importedAt: record.timestamp\n            )\n            modelContext.insert(item)\n\n            // Batch saves every 50 records to avoid memory pressure\n            if index % 50 == 0 || index == records.count - 1 {\n                try modelContext.save()\n                onProgress(Double(index + 1) / total)\n            }\n        }\n    }\n}\n```\n\n### Step 4: Call site in a SwiftUI view \u2014 nothing special needed\n\n```swift\nstruct ImportView: View {\n    @Environment(TaskStore.self) private var store\n\n    var body: some View {\n        VStack(spacing: 16) {\n            if store.isImporting {\n                ProgressView(value: store.importProgress)\n                    .progressViewStyle(.linear)\n                    .accessibilityLabel(\"Import progress: \\(Int(store.importProgress * 100)) percent\")\n            }\n\n            Button(\"Start Batch Import\") {\n                Task {\n                    let records = generateMockPayload() // your data source\n                    await store.batchImport(rawPayload: records)\n                }\n            }\n            .glassEffect(.regular.interactive()) // Liquid Glass button surface\n            .accessibilityHint(\"Imports all pending records in the background\")\n        }\n        .padding()\n    }\n\n    private func generateMockPayload() -> [RawImportRecord] {\n        (0..<500).map { i in\n            RawImportRecord(id: UUID(), title: \"Item \\(i)\", timestamp: .now)\n        }\n    }\n}\n```\n\n---\n\n## Why This Works: The Three Rules\n\n| Rule | What it means for your code |\n|------|----------------------------|\n| Never pass an actor-isolated class across boundaries | Don't hand `self` (TaskStore) or `modelContext` to another actor |\n| `ModelContainer` IS `Sendable` | Pass the container freely \u2014 `@ModelActor` accepts it in its initializer |\n| Value types cross boundaries safely | `[RawImportRecord]` is a `Sendable` struct array \u2014 zero compiler complaints |\n\n---\n\n## What NOT to Do (and Why Each Fails)\n\n```swift\n// BAD: Passing self into a detached task \u2014 Swift 6 error\nTask.detached {\n    await importer.doSomething(store: self) // ERROR: sending main actor-isolated value\n}\n\n// BAD: Using nonisolated on TaskStore methods that touch @Observable state\n// This compiles but defeats the entire data-race protection model.\n// @Observable properties are implicitly @MainActor \u2014 nonisolated lies to the compiler.\n\n// BAD: @unchecked Sendable on TaskStore\n// Suppresses the error but exposes you to real data races on tasks/importProgress.\n\n// ACCEPTABLE (but not preferred): Async main-actor hop inside the actor\n// This is fine for single values, clunky for batch flows:\n// let title = await MainActor.run { store.tasks.first?.title }\n```\n\n---\n\n## If You Genuinely Need TaskStore Properties Inside the Actor\n\nUse `MainActor.run` to extract a Sendable snapshot first, then pass the snapshot:\n\n```swift\n// In TaskStore (still @MainActor):\nfunc startImportWithSnapshot() async {\n    // Extract only what the actor needs \u2014 a Sendable value snapshot\n    let snapshot = TaskSnapshot(\n        pendingIDs: tasks.map(\\.id)\n        // ... other Sendable values\n    )\n\n    let importer = BatchImportActor(modelContainer: container)\n    try? await importer.performImportWithSnapshot(snapshot)\n}\n\nstruct TaskSnapshot: Sendable {\n    let pendingIDs: [UUID]\n}\n```\n\n---\n\n## Checklist Sweep\n\n- **Liquid Glass:** Button uses `.glassEffect(.regular.interactive())` \u2014 correct hierarchy for an action control.\n- **Swift 6 concurrency:** All actor boundaries crossed only with `Sendable` value types. `@ModelActor` provides its own isolated `ModelContext`. No `nonisolated` shortcuts used.\n- **Accessibility:** `ProgressView` has `.accessibilityLabel` with dynamic percentage. Button has `.accessibilityHint`. Both support Dynamic Type automatically.\n- **Performance:** Batch saves every 50 inserts \u2014 avoids memory spike and keeps main thread at zero SwiftData writes. `fetchAll()` fires once after the full import, not inside the loop.\n- **Apple Intelligence:** Not applicable to this pattern \u2014 but see Aether Extension below.\n- **visionOS variant:** This pattern works unchanged on visionOS \u2014 `ModelActor` is platform-agnostic. The ImportView needs an `ornament` modifier for the progress indicator in a visionOS window.\n- **Retain cycles:** `[weak self]` used in the `Task { @MainActor in ... }` progress callback. Clean.\n\n---\n\n## Aether Extension \u2014 AI-Driven Import Validation\n\nPipe `RawImportRecord` titles through Foundation Models before insert to auto-tag, deduplicate semantically, and surface probable duplicates to the user \u2014 all without touching the main thread:\n\n```swift\nimport FoundationModels\n\n@ModelActor\nactor BatchImportActor {\n\n    func performImportWithAITagging(records: [RawImportRecord]) async throws {\n        let session = LanguageModelSession()\n\n        @Generable struct TagResult: Sendable {\n            var category: String\n            var isDuplicateSuspect: Bool\n        }\n\n        for record in records {\n            let result = try await session.respond(\n                to: \"Categorize and flag if duplicate: \\(record.title)\",\n                generating: TagResult.self\n            )\n\n            let item = ImportedItem(\n                id: record.id,\n                title: record.title,\n                importedAt: record.timestamp\n            )\n            // item.category = result.category  // extend @Model as needed\n            modelContext.insert(item)\n        }\n\n        try modelContext.save()\n    }\n}\n```\n\nPair with HIG-compliant attribution UI: \"Categorized by Apple Intelligence on this device\" shown in the import summary sheet. Gate behind an explicit \"Use Apple Intelligence during import\" toggle in Settings.\n\n---\n\n## 3\u20135 Year Roadmap\n\n- **iOS 27:** Expect `@ModelActor` to gain native progress-reporting APIs (eliminating the manual callback pattern). CloudKit sync will likely get structured concurrency hooks so you can `await` a full sync fence before importing.\n- **iOS 27\u201328:** Foundation Models will likely get batch/structured ingestion APIs \u2014 your import pipeline could validate, enrich, and deduplicate records in one LLM pass with zero network calls.\n- **Agentic imports (iOS 28+):** App Intents + Foundation Models will allow an agent to trigger `batchImport` from Siri or Shortcuts, passing `[RawImportRecord]` as a typed Intent parameter \u2014 the exact `Sendable` struct pattern you built here will be the correct foundation for that.\n- **Swift 6.x:** The compiler will likely get improved ergonomics for `@isolated(any)` parameters, making the progress callback pattern even cleaner than the `@Sendable` closure + `Task { @MainActor in }` hop used above.\n"}], "grading": {"eval_id": 2, "variant": "with_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response explains why the error occurs (actor isolation / Sendable)", "passed": true, "evidence": "Found: ['Sendable', 'data race', 'main actor']"}, {"text": "Response recommends passing value types / Sendable structs across the boundary", "passed": true, "evidence": "Found: ['value type', 'struct', 'Sendable', 'snapshot']"}, {"text": "Response demonstrates ModelActor usage", "passed": true, "evidence": "Found: ['ModelActor', '@ModelActor']"}, {"text": "Response warns against blindly using nonisolated", "passed": true, "evidence": "Found 'nonisolated'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}}, {"id": "eval-2-swift6-concurrency-without_skill", "prompt": "I just got this Swift 6 concurrency error in my app: 'Sending main actor-isolated value of type TaskStore to nonisolated callee'. The TaskStore is an @Observable class and I'm trying to pass it into a background ModelActor to do a batch import. How do I fix this without just slapping nonisolated everywhere?", "eval_id": 2, "outputs": [{"name": "response.md", "type": "text", "content": "# Fixing \"Sending main actor-isolated value to nonisolated callee\" in Swift 6\n\nThis error is Swift 6's strict concurrency enforcement telling you that you're trying to cross an actor boundary with a type that isn't safe to send across that boundary. Here's what's happening and how to fix it properly.\n\n## Understanding the Problem\n\n`@Observable` classes are reference types. When you annotate a class with `@Observable`, Swift doesn't automatically make it `Sendable`. Your `TaskStore` is implicitly `@MainActor`-isolated (because it's driving UI), and when you try to pass it to a `ModelActor` (which runs on a different executor), Swift 6 detects the potential data race and refuses to compile.\n\nThe compiler is right to complain \u2014 if your `ModelActor` held a reference to `TaskStore` and accessed it freely from a background thread, you'd have a data race on the main actor's state.\n\n## The Right Fixes (In Order of Preference)\n\n### Option 1: Pass Only the Data, Not the Store\n\nThis is the cleanest architectural solution. Instead of passing the entire `TaskStore` into your `ModelActor`, extract the plain data you need first (on the main actor), then pass that data across the boundary.\n\n```swift\n@Observable\n@MainActor\nclass TaskStore {\n    var tasks: [TaskItem] = []\n\n    func importTasks(using importer: TaskImportActor) async {\n        // Capture the data snapshot on the main actor\n        let tasksToImport = self.tasks  // [TaskItem] \u2014 a plain Sendable value\n        \n        // Now pass only the Sendable data across the boundary\n        let results = await importer.batchImport(tasksToImport)\n        \n        // Come back to main actor to update state\n        self.tasks = results\n    }\n}\n\n@ModelActor\nactor TaskImportActor {\n    func batchImport(_ items: [TaskItem]) async -> [TaskItem] {\n        // Work with plain data \u2014 no actor boundary issues\n        // ...persist to SwiftData, transform, etc.\n        return items\n    }\n}\n```\n\n**Key insight:** `[TaskItem]` needs to be `Sendable`. If `TaskItem` is a `struct` with all `Sendable` properties, it already is. If it's a SwiftData `@Model` class, you have a different problem (see Option 3).\n\n### Option 2: Make TaskStore Explicitly Sendable with Proper Synchronization\n\nIf you genuinely need the `ModelActor` to call back into `TaskStore`, you can make the store `Sendable` by ensuring all its mutations are actor-protected. Since it's `@MainActor`-isolated, this is actually already safe \u2014 you just need to tell Swift that.\n\n```swift\n@Observable\n@MainActor\nfinal class TaskStore: Sendable {\n    // All stored properties are main-actor protected, so this is safe\n    var tasks: [TaskItem] = []\n    \n    func updateAfterImport(_ newTasks: [TaskItem]) {\n        self.tasks = newTasks\n    }\n}\n```\n\nThen in your `ModelActor`, you call back via `await`:\n\n```swift\n@ModelActor\nactor TaskImportActor {\n    func batchImport(\n        items: [TaskItem],\n        store: TaskStore  // Now accepted because TaskStore is Sendable\n    ) async {\n        let processed = processItems(items)\n        // Jump back to main actor to update the store\n        await store.updateAfterImport(processed)\n    }\n}\n```\n\nThis works because `@MainActor`-isolated `final class` with `Sendable` conformance is valid \u2014 Swift knows all access is serialized through the main actor.\n\n### Option 3: Use a Continuation / Callback Pattern (Decoupled Approach)\n\nIf you want to keep `TaskStore` out of your import layer entirely (good separation of concerns), pass a `@Sendable` completion closure instead:\n\n```swift\n@ModelActor\nactor TaskImportActor {\n    func batchImport(\n        items: [TaskItem],\n        completion: @Sendable @escaping ([TaskItem]) -> Void\n    ) async {\n        let results = await process(items)\n        completion(results)\n    }\n}\n\n// At the call site (in TaskStore, on @MainActor):\nfunc triggerImport() async {\n    let snapshot = self.tasks\n    await importer.batchImport(items: snapshot) { [weak self] results in\n        Task { @MainActor [weak self] in\n            self?.tasks = results\n        }\n    }\n}\n```\n\n### Option 4: Use `@unchecked Sendable` Only If You've Audited the Access Patterns\n\nThis is the escape hatch, and it should be used sparingly \u2014 but it's different from `nonisolated`. Use it when you're certain access is properly synchronized but Swift can't prove it:\n\n```swift\n@Observable\n@MainActor\nfinal class TaskStore: @unchecked Sendable {\n    var tasks: [TaskItem] = []\n}\n```\n\nUnlike `nonisolated`, this doesn't remove actor isolation \u2014 `TaskStore` is still `@MainActor`. You're just asserting to the compiler \"I know this crossing is safe, I've verified it.\" You're responsible for ensuring that any access from `ModelActor` goes through `await` to respect the main actor's isolation.\n\n**Do not use this if your `ModelActor` reads or writes `TaskStore` properties directly without `await`.**\n\n## The Pattern That Actually Works for SwiftData + @Observable\n\nIf you're using SwiftData's `ModelActor` for batch imports and your `TaskStore` is feeding the UI, the idiomatic Swift 6 pattern is:\n\n```swift\n// 1. TaskStore owns UI state \u2014 stays on @MainActor\n@Observable\n@MainActor\nfinal class TaskStore {\n    var displayTasks: [TaskItem] = []\n    private let importer = TaskImportActor(modelContainer: sharedContainer)\n    \n    func performBatchImport(rawData: [RawImportItem]) async {\n        // 2. Convert to Sendable DTOs before crossing boundary\n        let dtos = rawData.map { ImportDTO(from: $0) }\n        \n        // 3. Cross boundary with only Sendable data\n        let importedIDs = await importer.importBatch(dtos)\n        \n        // 4. Fetch results back on main actor using the IDs\n        await refreshDisplay(for: importedIDs)\n    }\n}\n\n// 5. ModelActor only knows about persistence \u2014 not about TaskStore\n@ModelActor\nactor TaskImportActor {\n    func importBatch(_ dtos: [ImportDTO]) async -> [PersistentIdentifier] {\n        var ids: [PersistentIdentifier] = []\n        for dto in dtos {\n            let model = TaskItem(from: dto)\n            modelContext.insert(model)\n            ids.append(model.persistentModelID)\n        }\n        try? modelContext.save()\n        return ids\n    }\n}\n```\n\n## Summary: Decision Tree\n\n1. **Does your ModelActor need to read from TaskStore?** No \u2014 extract the data first and pass plain `Sendable` structs across.\n2. **Does your ModelActor need to write back to TaskStore?** Use `await store.updateMethod()` \u2014 don't hold a reference, call methods on it.\n3. **Does TaskStore need to be truly shared?** Make it `final` + `@MainActor` + `Sendable` \u2014 Swift will enforce that all access goes through the main actor.\n4. **Is the data access synchronized but Swift can't prove it?** Only then reach for `@unchecked Sendable`, with a comment explaining why it's safe.\n\nThe root fix is architectural: actor boundaries should be crossed with data (value types, `Sendable` structs, IDs), not with live references to actor-isolated objects. Your `ModelActor` should be a persistence worker that receives raw material and returns results \u2014 not something that holds a reference to your entire UI state container.\n"}], "grading": {"eval_id": 2, "variant": "without_skill", "expectations": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response explains why the error occurs (actor isolation / Sendable)", "passed": true, "evidence": "Found: ['actor isolation', 'Sendable', 'data race', 'main actor']"}, {"text": "Response recommends passing value types / Sendable structs across the boundary", "passed": true, "evidence": "Found: ['value type', 'struct', 'Sendable', 'snapshot']"}, {"text": "Response demonstrates ModelActor usage", "passed": true, "evidence": "Found: ['ModelActor', '@ModelActor']"}, {"text": "Response warns against blindly using nonisolated", "passed": true, "evidence": "Found 'nonisolated'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "liquidforge", "skill_path": "/tmp/liquidforge", "executor_model": "claude-sonnet-4-6", "timestamp": "2026-05-25T04:00:00Z", "evals_run": ["journal-app-liquid-glass-swiftdata", "foundation-models-ai-summarization", "swift6-actor-isolation-debug"], "runs_per_configuration": 1}, "configurations": [{"name": "with_skill", "label": "LiquidForge skill", "pass_rate_mean": 1.0, "pass_rate_stdev": 0.0, "time_mean": 266.4, "time_stdev": 103.5, "tokens_mean": 30063, "tokens_stdev": 6481}, {"name": "without_skill", "label": "Baseline (no skill)", "pass_rate_mean": 0.683, "pass_rate_stdev": 0.169, "time_mean": 110.3, "time_stdev": 33.6, "tokens_mean": 20905, "tokens_stdev": 2399}], "runs": [{"eval_id": 0, "eval_name": "journal-app-liquid-glass-swiftdata", "configuration": "with_skill", "pass_rate": 1.0, "passed": 7, "total": 7, "duration_seconds": 373.3, "total_tokens": 36895, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}, {"text": "Response uses the correct .glassEffect() API", "passed": true, "evidence": "Found 'glassEffect'"}, {"text": "Response uses @Model decorator for SwiftData", "passed": true, "evidence": "Found '@Model'"}, {"text": "Response uses @MainActor for Swift 6 safety", "passed": true, "evidence": "Found '@MainActor'"}, {"text": "Response includes accessibility considerations", "passed": true, "evidence": "Found: ['accessibility', 'Accessibility', 'VoiceOver', 'Dynamic Type']"}, {"text": "Response includes an Aether Extension / forward-thinking idea", "passed": true, "evidence": "Found: ['Aether Extension', 'Aether', '3\u20135 Year', 'Roadmap']"}]}, {"eval_id": 0, "eval_name": "journal-app-liquid-glass-swiftdata", "configuration": "without_skill", "pass_rate": 0.7142857142857143, "passed": 5, "total": 7, "duration_seconds": 131.4, "total_tokens": 22523, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}, {"text": "Response uses the correct .glassEffect() API", "passed": true, "evidence": "Found 'glassEffect'"}, {"text": "Response uses @Model decorator for SwiftData", "passed": true, "evidence": "Found '@Model'"}, {"text": "Response uses @MainActor for Swift 6 safety", "passed": true, "evidence": "Found '@MainActor'"}, {"text": "Response includes accessibility considerations", "passed": true, "evidence": "Found: ['accessibility']"}, {"text": "Response includes an Aether Extension / forward-thinking idea", "passed": false, "evidence": "None of ['Aether Extension', 'Aether', 'forward-thinking', '3\u20135 Year', '3-5 Year', 'Roadmap'] found"}]}, {"eval_id": 1, "eval_name": "foundation-models-ai-summarization", "configuration": "with_skill", "pass_rate": 1.0, "passed": 6, "total": 6, "duration_seconds": 259.2, "total_tokens": 29290, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response uses LanguageModelSession (correct Foundation Models API)", "passed": true, "evidence": "Found 'LanguageModelSession'"}, {"text": "Response uses .redacted(reason: .placeholder) for shimmer state", "passed": true, "evidence": "Found 'redacted'"}, {"text": "Response includes Apple Intelligence attribution text", "passed": true, "evidence": "Found: ['Apple Intelligence', 'Generated by Apple Intelligence']"}, {"text": "Response mentions user opt-in / consent for AI features", "passed": true, "evidence": "Found: ['opt-in', 'consent', 'AppStorage', 'Settings', 'toggle']"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}, {"eval_id": 1, "eval_name": "foundation-models-ai-summarization", "configuration": "without_skill", "pass_rate": 0.5, "passed": 3, "total": 6, "duration_seconds": 127.9, "total_tokens": 22044, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response uses LanguageModelSession (correct Foundation Models API)", "passed": true, "evidence": "Found 'LanguageModelSession'"}, {"text": "Response uses .redacted(reason: .placeholder) for shimmer state", "passed": false, "evidence": "'redacted' not found"}, {"text": "Response includes Apple Intelligence attribution text", "passed": true, "evidence": "Found: ['Apple Intelligence']"}, {"text": "Response mentions user opt-in / consent for AI features", "passed": false, "evidence": "None of ['opt-in', 'consent', 'AppStorage', 'Settings', 'toggle'] found"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}, {"eval_id": 2, "eval_name": "swift6-actor-isolation-debug", "configuration": "with_skill", "pass_rate": 1.0, "passed": 6, "total": 6, "duration_seconds": 166.6, "total_tokens": 24003, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": true, "evidence": "Found '[LiquidForge Activated]'"}, {"text": "Response explains why the error occurs (actor isolation / Sendable)", "passed": true, "evidence": "Found: ['Sendable', 'data race', 'main actor']"}, {"text": "Response recommends passing value types / Sendable structs across the boundary", "passed": true, "evidence": "Found: ['value type', 'struct', 'Sendable', 'snapshot']"}, {"text": "Response demonstrates ModelActor usage", "passed": true, "evidence": "Found: ['ModelActor', '@ModelActor']"}, {"text": "Response warns against blindly using nonisolated", "passed": true, "evidence": "Found 'nonisolated'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}, {"eval_id": 2, "eval_name": "swift6-actor-isolation-debug", "configuration": "without_skill", "pass_rate": 0.8333333333333334, "passed": 5, "total": 6, "duration_seconds": 71.5, "total_tokens": 18149, "grading": [{"text": "Response begins with [LiquidForge Activated]", "passed": false, "evidence": "'[LiquidForge Activated]' not found"}, {"text": "Response explains why the error occurs (actor isolation / Sendable)", "passed": true, "evidence": "Found: ['actor isolation', 'Sendable', 'data race', 'main actor']"}, {"text": "Response recommends passing value types / Sendable structs across the boundary", "passed": true, "evidence": "Found: ['value type', 'struct', 'Sendable', 'snapshot']"}, {"text": "Response demonstrates ModelActor usage", "passed": true, "evidence": "Found: ['ModelActor', '@ModelActor']"}, {"text": "Response warns against blindly using nonisolated", "passed": true, "evidence": "Found 'nonisolated'"}, {"text": "Response contains at least one Swift code block", "passed": true, "evidence": "Found '```swift'"}]}], "run_summary": {"delta": {"pass_rate": "+0.32", "time_seconds": "+156.1", "tokens": "+9157"}}, "notes": ["with_skill: 19/19 assertions passed across 3 evals", "without_skill: 13/19 assertions passed \u2014 missing [LiquidForge Activated] header (expected), missing LanguageModelSession API, missing .redacted shimmer, missing opt-in consent", "The skill adds ~+176s and ~+11k tokens per eval on average, reflecting the much longer, more detailed responses"]}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

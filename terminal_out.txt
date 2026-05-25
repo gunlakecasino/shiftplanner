@@ -1,0 +1,724 @@
+async-http-client-3c9c1259.json
+combine-schedulers-c18510e7.json
+hummingbird-071c355f.json
+supabase-swift-8b136d3f.json
+swift-algorithms-6ceae3e2.json
+swift-asn1-3864de10.json
+swift-async-algorithms-01056528.json
+swift-atomics-89473788.json
+swift-case-paths-d1b3866a.json
+swift-certificates-2c5f9ec1.json
+swift-clocks-4a7015d6.json
+swift-collections-7bbf4661.json
+swift-composable-architecture-3a086533.json
+swift-concurrency-extras-7bbaa55b.json
+swift-configuration-e71f64d0.json
+swift-crypto-b62eca9d.json
+swift-custom-dump-c338dd45.json
+swift-dependencies-16fa9721.json
+swift-distributed-tracing-02142e36.json
+swift-http-structured-headers-e15d2080.json
+swift-http-types-870eab6d.json
+swift-identified-collections-46dde402.json
+swift-log-c78879b6.json
+swift-metrics-8be5fc8a.json
+swift-navigation-5637333a.json
+swift-nio-15e42564.json
+swift-nio-extras-5a8a314e.json
+swift-nio-http2-c2d9fc9e.json
+swift-nio-ssl-dd497dc0.json
+swift-nio-transport-services-dead9718.json
+swift-numerics-7702f5dc.json
+swift-perception-b5218c9e.json
+swift-service-context-d9da79c2.json
+swift-service-lifecycle-e98fbda4.json
+swift-sharing-0a7c97b1.json
+swift-syntax-240d6e22.json
+swift-system-5218e463.json
+xctest-dynamic-overlay-beec524f.json
+{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.32.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "2fc4652fb4689eb24af10e55cabaa61d8ba774fd",
+          "origin" : "https://github.com/swift-server/async-http-client.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.2.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "dcccb979a2183b8df3334237e3dc1ae2b4116a86",
+          "origin" : "https://github.com/pointfreeco/combine-schedulers"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.20.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "328a211b3bdc8bdd41a40a3d4112ed6b79358fa4",
+          "origin" : "https://github.com/hummingbird-project/hummingbird.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.46.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "dd29b624b9ceea87612d0b00457e1400f7d22c2e",
+          "origin" : "https://github.com/supabase/supabase-swift"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.2.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
+          "origin" : "https://github.com/apple/swift-algorithms.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.5.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "810496cf121e525d660cd0ea89a758740476b85f",
+          "origin" : "https://github.com/apple/swift-asn1.git"
+        }
+      }
+    },
+    "1.7.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "eb50cbd14606a9161cbc5d452f18797c90ef0bab",
+          "origin" : "https://github.com/apple/swift-asn1.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.1.2" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "2971dd5d9f6e0515664b01044826bcea16e59fac",
+          "origin" : "https://github.com/apple/swift-async-algorithms.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.3.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "b601256eab081c0f92f059e12818ac1d4f178ff7",
+          "origin" : "https://github.com/apple/swift-atomics.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.7.3" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "206cbce3882b4de9aee19ce62ac5b7306cadd45b",
+          "origin" : "https://github.com/pointfreeco/swift-case-paths"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.18.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "24ccdeeeed4dfaae7955fcac9dbf5489ed4f1a25",
+          "origin" : "https://github.com/apple/swift-certificates.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.0.6" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "cc46202b53476d64e824e0b6612da09d84ffde8e",
+          "origin" : "https://github.com/pointfreeco/swift-clocks"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.3.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "7b847a3b7008b2dc2f47ca3110d8c782fb2e5c7e",
+          "origin" : "https://github.com/apple/swift-collections.git"
+        }
+      }
+    },
+    "1.5.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
+          "origin" : "https://github.com/apple/swift-collections"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.25.5" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "1eaa6fa2ee57ac42843283b9fd3457af408c858d",
+          "origin" : "https://github.com/pointfreeco/swift-composable-architecture"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.3.2" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "5a3825302b1a0d744183200915a47b508c828e6f",
+          "origin" : "https://github.com/pointfreeco/swift-concurrency-extras"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.1.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "1bb939fe7bbb00b8f8bab664cc90020c035c08d9",
+          "origin" : "https://github.com/apple/swift-configuration.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "4.2.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "6f70fa9eab24c1fd982af18c281c4525d05e3095",
+          "origin" : "https://github.com/apple/swift-crypto.git"
+        }
+      }
+    },
+    "4.5.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "1b6b2e274e85105bfa155183145a1dcfd63331f1",
+          "origin" : "https://github.com/apple/swift-crypto.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.5.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "06c57924455064182d6b217f06ebc05d00cb2990",
+          "origin" : "https://github.com/pointfreeco/swift-custom-dump"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.12.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "706feb7858a7f6c242879d137b8ee30926aa5b26",
+          "origin" : "https://github.com/pointfreeco/swift-dependencies"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.4.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "e109d8b5308d0e05201d9a1dd1c475446a946a11",
+          "origin" : "https://github.com/apple/swift-distributed-tracing.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.6.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "76d7627bd88b47bf5a0f8497dd244885960dde0b",
+          "origin" : "https://github.com/apple/swift-http-structured-headers.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.5.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "45eb0224913ea070ec4fba17291b9e7ecf4749ca",
+          "origin" : "https://github.com/apple/swift-http-types.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.1.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
+          "origin" : "https://github.com/pointfreeco/swift-identified-collections"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.10.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "bbd81b6725ae874c69e9b8c8804d462356b55523",
+          "origin" : "https://github.com/apple/swift-log.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.8.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "f17c111cec972c2a4922cef38cf64f76f7e87886",
+          "origin" : "https://github.com/apple/swift-metrics.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.8.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "32f35241b8be0719c4c7f00eb27713b1cadb6248",
+          "origin" : "https://github.com/pointfreeco/swift-navigation"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.95.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "e932d3c4d8f77433c8f7093b5ebcbf91463948a0",
+          "origin" : "https://github.com/apple/swift-nio.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.32.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "3df009d563dc9f21a5c85b33d8c2e34d2e4f8c3b",
+          "origin" : "https://github.com/apple/swift-nio-extras.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.40.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "b6571f3db40799df5a7fc0e92c399aa71c883edd",
+          "origin" : "https://github.com/apple/swift-nio-http2.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.36.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "173cc69a058623525a58ae6710e2f5727c663793",
+          "origin" : "https://github.com/apple/swift-nio-ssl.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.26.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "60c3e187154421171721c1a38e800b390680fb5d",
+          "origin" : "https://github.com/apple/swift-nio-transport-services.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.1.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
+          "origin" : "https://github.com/apple/swift-numerics.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.0.10" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "25ac73741c3436605d61eceb5207e896973918e7",
+          "origin" : "https://github.com/pointfreeco/swift-perception"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.3.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "d0997351b0c7779017f88e7a93bc30a1878d7f29",
+          "origin" : "https://github.com/apple/swift-service-context.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.10.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "89888196dd79c61c50bca9a103d8114f32e1e598",
+          "origin" : "https://github.com/swift-server/swift-service-lifecycle.git"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "2.8.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "bc27f8322bc30f6ce7d864d137dc77a6de8b57eb",
+          "origin" : "https://github.com/pointfreeco/swift-sharing"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "603.0.1" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "9de99a78f099e59caf2b2beec65a4c45d54b2081",
+          "origin" : "https://github.com/swiftlang/swift-syntax"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.6.4" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
+          "origin" : "https://github.com/apple/swift-system"
+        }
+      }
+    }
+  }
+}{
+  "version" : 2,
+  "versionFingerprints" : {
+    "1.9.0" : {
+      "sourceControl" : {
+        "sourceCode" : {
+          "contentType" : {
+            "sourceCode" : {
+
+            }
+          },
+          "fingerprint" : "dfd70507def84cb5fb821278448a262c6ff2bbad",
+          "origin" : "https://github.com/pointfreeco/xctest-dynamic-overlay"
+        }
+      }
+    }
+  }
+}DONE
