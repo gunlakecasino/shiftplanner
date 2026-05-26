@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Use a recent Node 20 image (this bypasses Railway's old nixpkgs Node problem)
+# Force rebuild: 2026-05-26 - watchPatterns update + startCommand removal
 FROM node:20.12-bookworm-slim AS base
 
 # Install dependencies only when needed
