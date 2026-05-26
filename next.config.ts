@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+
+  // Enable standalone output for smaller Docker images
+  output: 'standalone',
 };
 
 export default nextConfig;
