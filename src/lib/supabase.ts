@@ -23,8 +23,23 @@ export function getSupabaseClient(): SupabaseClient {
     const key = serviceKey || anonKey;
 
     if (!url || !key) {
+      const isProd = process.env.NODE_ENV === 'production';
+      const missing = [];
+      if (!url) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+      if (!serviceKey && !anonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY (or SERVICE_ROLE_KEY)');
+
+      console.error('[supabase] Initialization failed in', isProd ? 'PRODUCTION' : 'development', {
+        hasUrl: !!url,
+        hasAnonKey: !!anonKey,
+        hasServiceKey: !!serviceKey,
+        nodeEnv: process.env.NODE_ENV,
+      });
+
       throw new Error(
-        'NEXT_PUBLIC_SUPABASE_URL and (NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be set in .env.local'
+        `Supabase config missing: ${missing.join(', ')}. ` +
+        (isProd
+          ? 'Make sure NEXT_PUBLIC_SUPABASE_* variables are set in Railway (they must be available at build time for NEXT_PUBLIC_ vars).'
+          : 'Set them in .env.local')
       );
     }
 
