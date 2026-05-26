@@ -1,0 +1,60 @@
+# .dockerignore
+# Keeps the Railway/Nixpacks/Docker build context small and clean.
+# Critical for preventing secret leakage (especially XAI_API_KEY from .env.local)
+# and avoiding Nixpacks mis-detecting the Deno Edge Function.
+
+# Dependencies & build output
+node_modules
+.next
+out
+build
+dist
+
+# Environment files (never ship secrets into the image)
+.env
+.env.*
+.env.*.local
+
+# Supabase Edge Functions (Deno) — deployed separately via Supabase CLI
+supabase/functions
+supabase/.temp
+
+# Agentic / Grok tooling (local only)
+.grok
+.playwright-mcp
+.grok/
+
+# Temporary / debug artifacts
+_tmp_*
+*.tmp
+*.log
+terminal_out.txt
+YOLO-log.md
+after-esc.png
+*.html
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git & misc
+.git
+.gitignore
+Dockerfile*
+docker-compose*
+nixpacks.toml   # (we have one, but no need to copy it into the image)
+
+# Large assets not needed at runtime
+ZDS Goldens
+casinoIcons
+Nightwatch
+opsApp_Codebase_Analysis.md
+opsApp_UIUX_Checklist.docx
+liquidforge-eval-review.html
+xcode-opsapp-eval-review.html

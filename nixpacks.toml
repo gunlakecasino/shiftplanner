@@ -1,0 +1,21 @@
+# nixpacks.toml
+# Forces Railway to use Node 20 + pnpm for the ShiftBuilder web app.
+# This overrides Nixpacks' tendency to detect the Deno Edge Function
+# in supabase/functions/ and break the pnpm build.
+
+[phases.setup]
+nixPkgs = ['nodejs_20', 'pnpm']
+
+[phases.install]
+cmds = ['pnpm install --frozen-lockfile']
+
+[phases.build]
+cmds = ['pnpm build']
+
+[start]
+cmd = 'pnpm start'
+
+[build]
+# Exclude the Deno Edge Functions directory from the web build context.
+# These are deployed separately via the Supabase CLI.
+exclude = ["supabase/functions"]
