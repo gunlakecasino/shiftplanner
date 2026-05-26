@@ -9,11 +9,14 @@
       "app/**",
       "components/**",
       "lib/**",
+      "**/*.toml",
+      "**/.dockerignore",
       "package.json",
       "pnpm-lock.yaml",
-      "next.config.ts",
+      "next.config.*",
       "tailwind.config.*",
-      "postcss.config.*"
+      "postcss.config.*",
+      "railway.json"
     ]
   },
   "deploy": {
