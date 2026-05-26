@@ -524,6 +524,52 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
   }));
 }
 
+/**
+ * Phase 1: Unified assignments read via the new transition view.
+ * This is the preferred path for new Ops Hub and agent features.
+ * Falls back gracefully if view is not yet populated.
+ */
+export async function getUnifiedCurrentAssignments(graveShiftId: string): Promise<ZoneAssignmentRow[]> {
+  const { data: rows, error } = await supabase
+    .from('v_current_assignments')
+    .select('*')
+    .eq('grave_shift_id', graveShiftId)
+    .order('slot_key', { ascending: true });
+
+  if (error) {
+    console.warn('[shiftbuilder/data] v_current_assignments not available or error, falling back:', error.message);
+    // Fallback to legacy for safety during transition
+    return getNightAssignments(graveShiftId);
+  }
+
+  if (!rows || rows.length === 0) return [];
+
+  const tmIds = Array.from(new Set(rows.map((r: any) => r.tm_id).filter(Boolean)));
+  const nameMap = new Map<string, string>();
+
+  if (tmIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('tm_profiles')
+      .select('tm_id, display_name, full_name')
+      .in('tm_id', tmIds);
+
+    (profiles || []).forEach((p: any) => {
+      nameMap.set(p.tm_id, p.display_name || p.full_name || p.tm_id);
+    });
+  }
+
+  return rows.map((row: any) => ({
+    slotKey: row.slot_key,
+    tmId: row.tm_id || null,
+    tmName: row.tm_id ? nameMap.get(row.tm_id) : undefined,
+    slotType: row.slot_type || row.category || 'zone',
+    rrSide: null, // normalized in view if needed later
+    isLocked: !!row.is_locked,
+    isFilled: !!row.is_filled,
+    updatedAt: row.updated_at,
+  }));
+}
+
 // ============================================================================
 // Write-back (immediate persistence)
 // ============================================================================

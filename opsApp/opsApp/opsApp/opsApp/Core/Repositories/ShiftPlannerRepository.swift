@@ -85,6 +85,22 @@ actor ShiftPlannerRepository {
 
     // MARK: - Nights
 
+    // =========================================================================
+    // Phase 1 Note (Unified Operational Core)
+    // -------------------------------------------------------------------------
+    // The backend has introduced grave_shifts + shift_activities as the new
+    // canonical model. Legacy "nights" + fragmented assignment tables remain
+    // for compatibility during transition.
+    //
+    // Future: This repository will gain:
+    //   - fetchGraveShift(...)
+    //   - recordShiftActivity(...)
+    //   - fetchUnifiedAssignments(...) via v_current_assignments or RPC
+    //
+    // For now, we maintain dual-read capability and prepare models.
+    // See Phase1_Data_Migration_Strategy.md for full plan.
+    // =========================================================================
+
     /// Creates a draft night record for the given date and returns it.
     func createNight(date: Date) async throws -> Night {
         do {

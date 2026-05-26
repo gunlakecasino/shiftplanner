@@ -1716,8 +1716,12 @@ export default function ShiftBuilder() {
       // Capture deployment view.
       flushSync(() => { setCurrentView("deployment"); });
       await nextFrames(2);
+      // Strip the temporary visibility:hidden we applied above so the captured
+      // snapshot renders correctly inside the print-dual-container.
+      if (liveArtboard) liveArtboard.style.visibility = '';
       const deploymentHTML =
         (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
+      if (liveArtboard) liveArtboard.style.visibility = 'hidden';
 
       // Capture breaks view
       flushSync(() => { setCurrentView("breaks"); });
@@ -1778,31 +1782,64 @@ export default function ShiftBuilder() {
       container.innerHTML = deploymentHTML + breaksHTML;
       document.body.appendChild(container);
 
-      // Post-process the breaks artboard (second one) to force the overlaps
-      // section all the way to the bottom of the 816px page.
-      // This is more reliable than relying only on capture-time height.
+      // Post-process the breaks artboard (second one) to pin the overlaps
+      // section directly above the footer.
+      //
+      // Layout contract we enforce here:
+      //   .print-artboard (flex-col, 816px)
+      //     .sheet-header      (flex-shrink: 0)
+      //     .content-area      (flex: 1 1 0%, flex-col, overflow: hidden)
+      //       .wave-grid       (flex: 1 1 0%, min-h: 0, overflow: hidden)
+      //                        → takes remaining space; clips if waves are tall
+      //       .overlaps-section (flex-shrink: 0, margin-top: 0)
+      //                        → always visible, pinned just above the footer
+      //     .sheet-footer      (flex-shrink: 0)
       const breaksArtboard = container.querySelectorAll('.print-artboard')[1];
       if (breaksArtboard) {
-        const overlaps = breaksArtboard.querySelector('.overlaps-section') as HTMLElement | null;
-        if (overlaps) {
-          overlaps.style.marginTop = 'auto';
-          overlaps.style.flexShrink = '0';
-        }
-
-        // Ensure the content area above the overlaps behaves as a flex column
-        // so the waves grow and overlaps get pushed down.
+        // Content area: ensure it's a flex column so children can use flex sizing.
         const contentArea = breaksArtboard.querySelector('.flex-1.min-h-0.overflow-hidden.flex.flex-col') as HTMLElement | null;
         if (contentArea) {
           contentArea.style.display = 'flex';
           contentArea.style.flexDirection = 'column';
           contentArea.style.flex = '1 1 0%';
           contentArea.style.minHeight = '0';
+          contentArea.style.overflow = 'hidden';
+        }
+
+        // Wave grid (first child of content area): take available space but
+        // never push the overlaps section below the visible area.
+        const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
+        if (waveGrid && waveGrid !== contentArea?.querySelector('.overlaps-section')) {
+          waveGrid.style.flex = '1 1 0%';
+          waveGrid.style.minHeight = '0';
+          waveGrid.style.overflow = 'hidden';
+          waveGrid.style.alignContent = 'start';
+        }
+
+        // Overlaps: never shrink, never pushed off-screen, pinned at the bottom
+        // of the flex column just above the footer.
+        const overlaps = breaksArtboard.querySelector('.overlaps-section') as HTMLElement | null;
+        if (overlaps) {
+          overlaps.style.flexShrink = '0';
+          overlaps.style.marginTop = '0';
         }
       }
 
-      // body class so print CSS knows to hide the live artboard and show
-      // only the dual container.
+      // body class so print CSS knows to show the dual container.
       document.body.classList.add("printing-dual-mode");
+
+      // Hide every other direct body child (the Next.js app root, any injected
+      // scripts/portals, etc.) with display:none so they produce zero layout
+      // in the print flow and can't generate a blank first page. We save and
+      // restore each element's previous inline display value.
+      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
+      Array.from(document.body.children).forEach((child) => {
+        const el = child as HTMLElement;
+        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
+          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
+          el.style.display = "none";
+        }
+      });
 
       // Trigger the dialog. window.print() is synchronous-ish in Chrome
       // (returns after the dialog closes) and async in Safari (returns
@@ -1811,6 +1848,9 @@ export default function ShiftBuilder() {
       try {
         window.print();
       } finally {
+        hiddenBodyChildren.forEach(({ el, prevDisplay }) => {
+          el.style.display = prevDisplay;
+        });
         document.body.classList.remove("printing-dual-mode");
         container.remove();
       }
@@ -1821,6 +1861,150 @@ export default function ShiftBuilder() {
     }
   }, [currentView]);
 
+  // Prints all 7 days in the active week: 14 pages (deployment + break sheet per day).
+  // Cycles through each day, waits for Supabase data to load, captures both views,
+  // then prints the full batch in one window.print() call.
+  const handlePrintWeek = React.useCallback(async () => {
+    const originalDayIndex = selectedDayIndex;
+    const originalView = currentView;
+
+    const nextFrames = (n: number) =>
+      new Promise<void>((resolve) => {
+        let count = 0;
+        const tick = () => { count++; if (count >= n) resolve(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+
+    // Wait for loadingAssignments to go true then false (data fully loaded for this day).
+    // The 200ms head-start gives the useEffect time to set loadingAssignments=true before
+    // we start polling.
+    const waitForLoad = (timeoutMs = 15000) =>
+      new Promise<void>((resolve, reject) => {
+        const start = Date.now();
+        let seenLoading = false;
+        const check = () => {
+          if (loadingAssignmentsRef.current) seenLoading = true;
+          if (seenLoading && !loadingAssignmentsRef.current) { resolve(); return; }
+          if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
+          setTimeout(check, 60);
+        };
+        setTimeout(check, 200);
+      });
+
+    // Shared post-processing for breaks artboards: pin overlaps above footer.
+    const postProcessBreaksArtboard = (artboard: Element) => {
+      const el = artboard as HTMLElement;
+      const contentArea = el.querySelector(".flex-1.min-h-0.overflow-hidden.flex.flex-col") as HTMLElement | null;
+      if (contentArea) {
+        contentArea.style.display = "flex";
+        contentArea.style.flexDirection = "column";
+        contentArea.style.flex = "1 1 0%";
+        contentArea.style.minHeight = "0";
+        contentArea.style.overflow = "hidden";
+      }
+      const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
+      if (waveGrid && !waveGrid.classList.contains("overlaps-section")) {
+        waveGrid.style.flex = "1 1 0%";
+        waveGrid.style.minHeight = "0";
+        waveGrid.style.overflow = "hidden";
+        waveGrid.style.alignContent = "start";
+      }
+      const overlaps = el.querySelector(".overlaps-section") as HTMLElement | null;
+      if (overlaps) { overlaps.style.flexShrink = "0"; overlaps.style.marginTop = "0"; }
+    };
+
+    showToast(`Preparing week print… 0 / ${DAY_DEFS.length}`, "info");
+
+    const allPages: string[] = [];
+
+    try {
+      for (let dayIdx = 0; dayIdx < DAY_DEFS.length; dayIdx++) {
+        // Switch day and wait for Supabase data to settle.
+        flushSync(() => setSelectedDayIndex(dayIdx));
+        await waitForLoad();
+        await nextFrames(4); // Extra frames for React to fully commit all derived state
+
+        const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
+        if (!liveArtboard) continue;
+
+        // ── Deployment capture ────────────────────────────────────────
+        flushSync(() => setCurrentView("deployment"));
+        await nextFrames(2);
+        liveArtboard.style.visibility = "";
+        const deploymentHTML = liveArtboard.outerHTML;
+        liveArtboard.style.visibility = "hidden";
+
+        // ── Breaks capture ────────────────────────────────────────────
+        flushSync(() => setCurrentView("breaks"));
+        await nextFrames(2);
+
+        const prevH   = liveArtboard.style.height;
+        const prevMH  = liveArtboard.style.minHeight;
+        const prevD   = liveArtboard.style.display;
+        const prevFD  = liveArtboard.style.flexDirection;
+        liveArtboard.style.height        = "816px";
+        liveArtboard.style.minHeight     = "816px";
+        liveArtboard.style.display       = "flex";
+        liveArtboard.style.flexDirection = "column";
+        liveArtboard.getBoundingClientRect();
+        await nextFrames(1);
+        liveArtboard.style.visibility = "";
+        const breaksHTML = liveArtboard.outerHTML;
+        // Restore inline overrides
+        liveArtboard.style.height        = prevH  || "";
+        liveArtboard.style.minHeight     = prevMH || "";
+        liveArtboard.style.display       = prevD  || "";
+        liveArtboard.style.flexDirection = prevFD || "";
+        liveArtboard.style.visibility    = "";
+
+        if (deploymentHTML && breaksHTML) allPages.push(deploymentHTML, breaksHTML);
+
+        showToast(`Preparing week print… ${dayIdx + 1} / ${DAY_DEFS.length}`, "info");
+      }
+
+      if (allPages.length === 0) { showToast("Nothing to print.", "error"); return; }
+
+      // ── Build print container ─────────────────────────────────────
+      const container = document.createElement("div");
+      container.className = "print-dual-container";
+      container.innerHTML = allPages.join("");
+      document.body.appendChild(container);
+
+      // Post-process every even-indexed artboard (index 1, 3, 5… = breaks pages).
+      container.querySelectorAll(".print-artboard").forEach((ab, i) => {
+        if (i % 2 === 1) postProcessBreaksArtboard(ab);
+      });
+
+      document.body.classList.add("printing-dual-mode");
+      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
+      Array.from(document.body.children).forEach((child) => {
+        const el = child as HTMLElement;
+        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
+          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
+          el.style.display = "none";
+        }
+      });
+
+      try {
+        window.print();
+      } finally {
+        hiddenBodyChildren.forEach(({ el, prevDisplay }) => { el.style.display = prevDisplay; });
+        document.body.classList.remove("printing-dual-mode");
+        container.remove();
+      }
+    } catch (e) {
+      console.error("[shiftbuilder] week print error", e);
+      showToast("Week print failed — try again.", "error");
+      document.body.classList.remove("printing-dual-mode");
+      document.querySelector(".print-dual-container")?.remove();
+    } finally {
+      // Always restore the operator's original day and view.
+      flushSync(() => setSelectedDayIndex(originalDayIndex));
+      await waitForLoad().catch(() => {});
+      flushSync(() => setCurrentView(originalView));
+    }
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast]);
+
   // === Master Command Palette (Phase 2 core) ===
   // Stable callbacks for useCommandActions — keeping these out of the call-site
   // so useCommandActions can detect actual changes (not new references every render).
@@ -1829,6 +2013,7 @@ export default function ShiftBuilder() {
   }, [isDraftMode, applyDraft, enterDraftMode]);
 
   const cmdActionPrint = React.useCallback(() => handlePrintBothPages(), []);
+  const cmdActionPrintWeek = React.useCallback(() => handlePrintWeek(), [handlePrintWeek]);
 
   const cmdActionUndo = React.useCallback(() => {
     const prev = shiftHistory.undo();
@@ -1867,6 +2052,7 @@ export default function ShiftBuilder() {
     onRunEngine: cmdActionRunEngine,
     onDiscardDraft: discardDraft,
     onPrint: cmdActionPrint,
+    onPrintWeek: cmdActionPrintWeek,
     onUndo: cmdActionUndo,
     onRedo: cmdActionRedo,
     assign,
@@ -2274,6 +2460,8 @@ export default function ShiftBuilder() {
   // Combined with persistAssign capturing nightId at action time, this kills
   // the entire family of "wrong day got written" races.
   const loadEpochRef = useRef<number>(0);
+  // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
+  const loadingAssignmentsRef = useRef<boolean>(false);
 
   // === Session-stable data loader ===========================================
   //
@@ -2351,6 +2539,7 @@ export default function ShiftBuilder() {
     }
 
     setLoadingAssignments(true);
+    loadingAssignmentsRef.current = true;
     (async () => {
       try {
         const id = await getNightIdForDate(selectedDay.date);
@@ -2541,6 +2730,7 @@ export default function ShiftBuilder() {
       } finally {
         if (loadEpochRef.current === epoch) {
           setLoadingAssignments(false);
+          loadingAssignmentsRef.current = false;
           // Belt-and-suspenders: after the Supabase pull mutates roster/assignments
           // (which can cause sibling DOM to affect the measured size of the
           // artboard stage host), force an immediate re-measure so the

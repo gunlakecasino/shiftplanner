@@ -1,0 +1,14 @@
+{
+  "session_id": "grave-ops-hub-yolo-2026-05-25",
+  "started_at": "2026-05-25T09:01:11Z",
+  "mode": "disciplined-yolo",
+  "trigger": "systematically carefully diligently /yolo",
+  "primary_objective": "Execute approved GRAVE Ops Shift Hub Backend-First Plan",
+  "current_phase": "Plan Phase 0 - Deep Supabase Audit",
+  "lead_skills": ["apple-dev (LiquidForge)", "coding-engineer"],
+  "browser_engine": "chrome-devtools (secondary for now)",
+  "denylist_active": true,
+  "plan_file": "/Users/briankillian/.grok/sessions/%2FUsers%2Fbriankillian/019e5f1a-23de-72c2-ae12-24442bb3dbc3/plan.md",
+  "log_file": "YOLO-log.md",
+  "status": "in_progress"
+}

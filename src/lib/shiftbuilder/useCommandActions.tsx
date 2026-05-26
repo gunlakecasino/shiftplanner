@@ -90,6 +90,7 @@ interface UseCommandActionsProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onPrint?: () => void;
+  onPrintWeek?: () => void;
 
   // Real assignment support
   assign?: (slotKey: string, tmId: string, tmName: string) => void;
@@ -143,6 +144,7 @@ export function useCommandActions({
   onUndo,
   onRedo,
   onPrint,
+  onPrintWeek,
   assign,
   isDraftMode = false,
   scheduledTmIdsTonight = new Set(),
@@ -407,6 +409,17 @@ export function useCommandActions({
       });
     }
 
+    if (onPrintWeek) {
+      result.push({
+        id: "action-print-week",
+        label: "Print Entire Week",
+        keywords: ["print", "week", "all", "all days", "full week", "book", "pdf", "export", "14 pages"],
+        group: "Actions",
+        icon: <Printer size={15} className="opacity-60" />,
+        handler: onPrintWeek,
+      });
+    }
+
     // ========== PHASE 3: HOT-WORD ACTIONS (dynamic per filled slot) ==========
     // Generate one block of searchable actions for every slot that currently has
     // a TM assigned. This powers natural commands like "clear z3", "swap zone 6",
@@ -550,6 +563,7 @@ export function useCommandActions({
     onUndo,
     onRedo,
     onPrint,
+    onPrintWeek,
     assign,
     draftMode,
     scheduledTmIdsTonight,

@@ -1,18 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Clean Supabase client for OMS / Shift Builder.
- * 
- * Follows the zds-home pattern:
- * - Prefers NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY for dev (bypasses RLS, full write access).
- * - Falls back to anon key.
- * - Singleton lazy client (safe for Next.js).
- * - Never persists sessions (stateless for this board).
- * 
- * For production, move writes behind server actions / API routes that use the non-public service key.
+ * GRAVE Ops Shift Hub — Supabase Client (Phase 0 Hardened)
+ *
+ * Security & Best Practices (coding-engineer Supabase branch):
+ * - Service role key is **strongly discouraged** from the browser.
+ * - In production builds, service role usage will throw to prevent accidental leaks.
+ * - Prefer anon key + proper RLS + server actions / Edge Functions for privileged writes.
+ * - This client is the foundation for both the web app and (eventually) shared types with the native opsApp.
  */
 
 let _supabaseClient: SupabaseClient | null = null;
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export function getSupabaseClient(): SupabaseClient {
   if (!_supabaseClient) {
@@ -29,9 +29,18 @@ export function getSupabaseClient(): SupabaseClient {
     }
 
     const usingService = !!serviceKey;
+
+    // === PHASE 0 HARDENING ===
     if (usingService) {
-      // eslint-disable-next-line no-console
-      console.log('[oms-supabase] Using SERVICE ROLE key (dev only — full read/write, bypasses RLS)');
+      if (IS_PRODUCTION) {
+        throw new Error(
+          '[SECURITY] Service role key is forbidden in production browser builds. Use server actions or Edge Functions.'
+        );
+      }
+      console.warn(
+        '[oms-supabase] ⚠️  WARNING: Using SERVICE ROLE key in browser (dev only). This bypasses ALL RLS. ' +
+        'This will be blocked in production. Prefer RLS + anon key or move privileged logic server-side.'
+      );
     }
 
     _supabaseClient = createClient(url, key, {
@@ -42,7 +51,7 @@ export function getSupabaseClient(): SupabaseClient {
       global: {
         headers: usingService ? { 'X-Client-Info': 'oms-shiftbuilder-dev' } : {},
       },
-      // Realtime will be configured per-subscription for specific nights
+      // Realtime configured per-subscription for specific nights / entities
     });
   }
 
@@ -50,8 +59,7 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 /**
- * Proxy export so you can do `import { supabase } from '@/lib/supabase'` and call .from() etc directly.
- * Access is lazy.
+ * Proxy export for ergonomic usage: `import { supabase } from '@/lib/supabase'`
  */
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop: string | symbol) {

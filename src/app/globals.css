@@ -935,7 +935,7 @@ body {
 
 @page {
   size: 11in 8.5in landscape;
-  margin: 0;
+  margin: 0.15in;
 }
 
 @media print {
@@ -974,15 +974,19 @@ body {
   /* Strip screen-only chrome from the paper itself and dock it to the
      page origin. `position: fixed` anchors to the print page in Chromium,
      which avoids the on-screen `mx-auto w-[1056px] relative` wrapper
-     leaving the artboard centered in the gray scroll area on paper. */
+     leaving the artboard centered in the gray scroll area on paper.
+     zoom: 0.965 scales 11×8.5in → ≈10.61×8.20in, fitting the
+     10.7×8.2in printable area inside the 0.15in page margins.
+     left/top nudge centers the scaled artboard within the printable area. */
   .print-artboard {
     position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
+    left: 0.19in !important;
+    top: 0.15in !important;
     margin: 0 !important;
     transform: none !important;
     width: 11in !important;
     height: 8.5in !important;
+    zoom: 0.965 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     border: none !important;
@@ -1025,9 +1029,8 @@ body {
    * Duplex / double-sided is the operator's choice in the print dialog —
    * CSS cannot force it, but landscape is the default via @page above.
    */
-  body.printing-dual-mode .print-stage,
-  body.printing-dual-mode .print-stage * {
-    visibility: hidden !important;
+  body.printing-dual-mode .print-stage {
+    display: none !important;
   }
 
   .print-dual-container {
@@ -1037,13 +1040,21 @@ body {
   }
   .print-dual-container .print-artboard {
     /* Override the single-page position:fixed model — we need normal flow
-       so page breaks can split the two captures across pages. */
+       so page breaks can split the two captures across pages.
+       zoom: 0.965 scales 11×8.5in → ≈10.61×8.20in, fitting within the
+       10.7×8.2in printable area left by the 0.15in page margins.
+       margin: 0 auto centers the scaled artboard horizontally on the page.
+       display: flex + flex-direction: column preserve the artboard's own
+       flex layout (header / content-area / footer) so the footer stays
+       pinned to the bottom and flex-1 on the content area still works. */
     position: static !important;
     visibility: visible !important;
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
     width: 11in !important;
     height: 8.5in !important;
-    margin: 0 !important;
+    zoom: 0.965 !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     border: none !important;
