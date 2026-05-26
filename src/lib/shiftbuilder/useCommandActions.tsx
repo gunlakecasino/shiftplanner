@@ -117,6 +117,8 @@ interface UseCommandActionsProps {
   onOpenPaletteForSlot?: (slotKey: string) => void;
   /** Wipe all card border colors at once ("Reset All Card Borders"). */
   onClearAllBorders?: () => void;
+  /** Open the Print Command Center overlay. */
+  onOpenPrintCenter?: () => void;
 }
 
 /**
@@ -156,6 +158,7 @@ export function useCommandActions({
   onCycleBreak,
   onOpenPaletteForSlot,
   onClearAllBorders,
+  onOpenPrintCenter,
 }: UseCommandActionsProps): CommandItem[] {
   // Defensive local alias — prevents Fast Refresh / closure issues when the hook
   // is used across many re-renders during heavy development (matches the errors seen in logs).
@@ -398,11 +401,22 @@ export function useCommandActions({
     // anyway (parent's onTrigger only called setCmdkOpen, which the palette's
     // own onSelect then closed).
 
+    if (onOpenPrintCenter) {
+      result.push({
+        id: "action-print-center",
+        label: "Print Command Center",
+        keywords: ["print", "pdf", "export", "command center", "configure", "days", "margins", "layout", "book", "week", "tonight", "all", "paper"],
+        group: "Actions",
+        icon: <Printer size={15} className="opacity-60" />,
+        handler: onOpenPrintCenter,
+      });
+    }
+
     if (onPrint) {
       result.push({
         id: "action-print",
-        label: "Print Deployment Sheet",
-        keywords: ["print", "pdf", "export", "paper"],
+        label: "Print Tonight",
+        keywords: ["print", "pdf", "export", "paper", "tonight", "today", "quick"],
         group: "Actions",
         icon: <Printer size={15} className="opacity-60" />,
         handler: onPrint,
@@ -573,6 +587,7 @@ export function useCommandActions({
     onCycleBreak,
     onOpenPaletteForSlot,
     onClearAllBorders,
+    onOpenPrintCenter,
   ]);
 
   return items;

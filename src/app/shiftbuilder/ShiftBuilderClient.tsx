@@ -97,6 +97,12 @@ import {
 import { askGrokEngineDraft } from "./actions";
 import { SudoWindow } from "./sudo/SudoWindow";
 import { XAISphere } from "./xai/XAISphere";
+import {
+  PrintCommandCenter,
+  type PrintConfig,
+  MARGIN_VALUES,
+  MARGIN_ZOOM,
+} from "./components/PrintCommandCenter";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 // ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
 import {
@@ -511,6 +517,174 @@ const RosterDropZone: React.FC<{ children: React.ReactNode; className?: string }
   );
 };
 
+// ── Print Command Center — Overview & Cover Page HTML Generators ──────────────
+// Module-level so they don't get recreated on every render and can be called
+// directly from handlePrintWithConfig's async pipeline.
+
+/** Matches SHIFT_DAY_COLORS order (Fri → Thu). */
+const _OVW_DAY_COLORS = ["#C13A14","#0065bf","#4d1a8a","#1f7a3d","#b8860b","#8b4513","#2f4f4f"];
+
+interface OverviewNight {
+  dayIndex: number;
+  assignments: Record<string, { tmId: string; tmName: string } | null>;
+}
+
+/**
+ * Generates a landscape .print-artboard HTML string for the Weekly Overview.
+ * Shows all selected nights as columns and all slots (Zones, RRs, Aux) as rows.
+ */
+function buildOverviewArtboardHTML(
+  overviewNights: OverviewNight[],
+  dayDefs: DayDef[],
+): string {
+  const nights = [...overviewNights].sort((a, b) => a.dayIndex - b.dayIndex);
+  const N = nights.length;
+
+  // All slot rows with section grouping
+  const slotRows: { key: string; label: string; section: string; accent: string }[] = [];
+  ZONE_DEFS.forEach(z => slotRows.push({ key: z.key, label: z.label, section: "ZONES", accent: ZONE_COLORS[z.key] ?? "#6B7280" }));
+  RR_DEFS.forEach(rr => {
+    slotRows.push({ key: `MRR${rr.num}`, label: `${rr.label} M`, section: "RESTROOMS", accent: RR_COLORS[rr.num] ?? "#6B7280" });
+    slotRows.push({ key: `WRR${rr.num}`, label: `${rr.label} W`, section: "RESTROOMS", accent: RR_COLORS[rr.num] ?? "#6B7280" });
+  });
+  DEFAULT_AUX_DEFS.forEach(a => slotRows.push({ key: a.key, label: a.label, section: "SUPPORT", accent: AUX_COLORS[a.key] ?? "#6B7280" }));
+
+  const ROW_H = 24;
+  const SEC_H = 20;
+  const SLOT_W = 96;
+
+  const nightDefs = nights.map(n => ({
+    night: n,
+    def: dayDefs[n.dayIndex] ?? { name: `Day ${n.dayIndex}`, short: "?", color: "#6B7280", dateNum: 0, monthYear: "" } as DayDef,
+  }));
+
+  // Column header cells
+  const colHeaderCells = nightDefs.map(({ def }) =>
+    `<div style="flex:1;text-align:center;font-size:10px;font-weight:700;color:${def.color};` +
+    `padding:4px 2px;letter-spacing:0.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
+    `border-left:1px solid #E5E5EA;">${def.name.slice(0,3).toUpperCase()} ${def.dateNum}</div>`
+  ).join("");
+
+  // Table rows grouped by section
+  let tableRowsHTML = "";
+  (["ZONES", "RESTROOMS", "SUPPORT"] as const).forEach(sec => {
+    const rows = slotRows.filter(r => r.section === sec);
+    if (!rows.length) return;
+    tableRowsHTML +=
+      `<div style="display:flex;align-items:center;height:${SEC_H}px;background:#F2F2F7;` +
+      `border-top:1px solid #C8C8CC;flex-shrink:0;">` +
+      `<div style="width:${SLOT_W}px;padding:0 8px;font-size:8.5px;font-weight:800;color:#6B7280;` +
+      `letter-spacing:0.09em;text-transform:uppercase;">${sec}</div>` +
+      `<div style="flex:1;"></div></div>`;
+
+    rows.forEach((slot, ri) => {
+      const bg = ri % 2 === 0 ? "#FFFFFF" : "#F9F9FB";
+      const cells = nightDefs.map(({ night }) => {
+        const asgn = night.assignments[slot.key];
+        const name = asgn?.tmName ?? "—";
+        const disp = name.length > 15 ? name.slice(0, 14) + "…" : name;
+        const filled = !!asgn?.tmId;
+        return `<div style="flex:1;height:${ROW_H}px;line-height:${ROW_H}px;padding:0 5px;` +
+          `font-size:9.5px;font-weight:${filled ? "600" : "400"};color:${filled ? "#1C1C1E" : "#AEAEB2"};` +
+          `overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;">${disp}</div>`;
+      }).join("");
+      tableRowsHTML +=
+        `<div style="display:flex;align-items:center;height:${ROW_H}px;background:${bg};` +
+        `border-top:1px solid #F2F2F7;flex-shrink:0;">` +
+        `<div style="width:${SLOT_W}px;height:${ROW_H}px;line-height:${ROW_H}px;padding:0 8px;` +
+        `font-size:9.5px;font-weight:700;color:${slot.accent};overflow:hidden;text-overflow:ellipsis;` +
+        `white-space:nowrap;border-right:1px solid #E5E5EA;">${slot.label}</div>${cells}</div>`;
+    });
+  });
+
+  const stripeHTML = _OVW_DAY_COLORS.map(c => `<div style="flex:1;height:4px;background:${c};"></div>`).join("");
+  const firstDef = nightDefs[0]?.def;
+  const lastDef  = nightDefs[nightDefs.length - 1]?.def;
+  const rangeLabel = firstDef && lastDef
+    ? `${firstDef.name.slice(0,3)} ${firstDef.dateNum} – ${lastDef.name.slice(0,3)} ${lastDef.dateNum}`
+    : "Week Overview";
+
+  return (
+    `<div class="print-artboard" style="padding:0;display:flex;flex-direction:column;overflow:hidden;background:#FFFFFF;">` +
+    `<div style="display:flex;flex-shrink:0;">${stripeHTML}</div>` +
+    `<div style="background:linear-gradient(135deg,#1C1C1E 0%,#2C2C2E 100%);padding:9px 20px 7px;` +
+    `flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">` +
+    `<div><div style="font-size:13px;font-weight:800;color:#FFFFFF;letter-spacing:0.05em;text-transform:uppercase;">Week Overview</div>` +
+    `<div style="font-size:9px;font-weight:500;color:#8E8E93;margin-top:1px;">${rangeLabel} · ${N} night${N !== 1 ? "s" : ""} · ${slotRows.length} slots</div></div>` +
+    `<div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:0.02em;">GLCR GRAVE SHIFT</div></div>` +
+    `<div style="display:flex;background:#F8F8FB;border-bottom:2px solid #C8C8CC;flex-shrink:0;">` +
+    `<div style="width:${SLOT_W}px;padding:4px 8px;font-size:9px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:0.06em;">Slot</div>` +
+    `${colHeaderCells}</div>` +
+    `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column;">${tableRowsHTML}</div>` +
+    `</div>`
+  );
+}
+
+/**
+ * Generates a dark-themed cover page artboard HTML string.
+ * Shows week label, contents breakdown, total pages, and GLCR branding.
+ */
+function buildCoverPageArtboardHTML(
+  dayDefs: DayDef[],
+  config: PrintConfig,
+  totalPages: number,
+): string {
+  const deployCount = config.days.filter(d => d.printDeploy).length;
+  const breaksCount = config.days.filter(d => d.printBreaks).length;
+  const ovwCount    = config.includeOverview ? 1 : 0;
+
+  const contents: { label: string; pages: number; color: string }[] = [];
+  if (deployCount) contents.push({ label: "Deployment Sheets", pages: deployCount, color: "#34C759" });
+  if (breaksCount) contents.push({ label: "Break Sheets",       pages: breaksCount, color: "#FF9F0A" });
+  if (ovwCount)    contents.push({ label: "Week Overview",       pages: 1,           color: "#5856D6" });
+
+  const activeDefs = config.days
+    .filter(d => d.printDeploy || d.printBreaks)
+    .map(d => dayDefs[d.dayIndex])
+    .filter((d): d is DayDef => !!d);
+  const firstDef = activeDefs[0];
+  const lastDef  = activeDefs[activeDefs.length - 1];
+  const weekRange = firstDef && lastDef
+    ? `${firstDef.name} ${firstDef.dateNum} – ${lastDef.name} ${lastDef.dateNum}, ${firstDef.monthYear.split(" ")[1] ?? firstDef.monthYear}`
+    : "Shift Week";
+
+  const stripeHTML = _OVW_DAY_COLORS.map(c => `<div style="flex:1;background:${c};"></div>`).join("");
+
+  const contentsHTML = contents.map(c =>
+    `<div style="display:flex;align-items:center;gap:14px;padding:6px 0;border-bottom:1px solid #2C2C2E;">` +
+    `<div style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>` +
+    `<div style="flex:1;font-size:13px;font-weight:500;color:#EBEBF5;">${c.label}</div>` +
+    `<div style="font-size:13px;font-weight:600;color:#8E8E93;">${c.pages} page${c.pages !== 1 ? "s" : ""}</div></div>`
+  ).join("");
+
+  const nightChips = activeDefs.map(def =>
+    `<div style="padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;color:#FFFFFF;background:${def.color};letter-spacing:0.03em;">${def.name.slice(0,3).toUpperCase()} ${def.dateNum}</div>`
+  ).join("");
+
+  const printedDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  return (
+    `<div class="print-artboard" style="padding:0;display:flex;flex-direction:column;overflow:hidden;background:#1C1C1E;">` +
+    `<div style="display:flex;height:6px;flex-shrink:0;">${stripeHTML}</div>` +
+    `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 80px;">` +
+    `<div style="font-size:11px;font-weight:700;color:#636366;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Gun Lake Casino Resort</div>` +
+    `<div style="font-size:46px;font-weight:900;color:#FFFFFF;text-align:center;line-height:1.05;letter-spacing:-0.01em;margin-bottom:4px;">GRAVE SHIFT</div>` +
+    `<div style="font-size:46px;font-weight:900;color:#FFFFFF;text-align:center;line-height:1.05;letter-spacing:-0.01em;margin-bottom:20px;">PRINT BOOK</div>` +
+    `<div style="font-size:16px;font-weight:600;color:#8E8E93;margin-bottom:24px;letter-spacing:0.01em;">${weekRange}</div>` +
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:36px;">${nightChips}</div>` +
+    `<div style="width:380px;background:#2C2C2E;border-radius:10px;padding:16px 20px;">` +
+    `<div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Contents</div>` +
+    `${contentsHTML}` +
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;margin-top:4px;">` +
+    `<div style="font-size:12px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:0.06em;">Total Pages</div>` +
+    `<div style="font-size:22px;font-weight:800;color:#FFFFFF;">${totalPages}</div></div></div></div>` +
+    `<div style="padding:10px 28px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #2C2C2E;flex-shrink:0;">` +
+    `<div style="font-size:9px;color:#48484A;letter-spacing:0.06em;text-transform:uppercase;">Confidential · Internal Use Only</div>` +
+    `<div style="font-size:9px;color:#48484A;letter-spacing:0.06em;">Printed ${printedDate}</div></div>` +
+    `</div>`
+  );
+}
+
 export default function ShiftBuilder() {
   // Default the day picker to the active shift date. `currentShiftDate()`
   // returns yesterday's calendar date until 8:30am local time (so the operator
@@ -791,6 +965,11 @@ export default function ShiftBuilder() {
   const [draftEngineWarnings, setDraftEngineWarnings] = useState<string[]>([]);
   // Bumps when a `make`/`remove` command lands so the load effect refetches.
   const [tmCommandEpoch, setTMCommandEpoch] = useState(0);
+
+  // === Print Command Center ===
+  const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printProgress, setPrintProgress] = useState<{ current: number; total: number; label: string } | null>(null);
 
   // Card borders for attention / marking (visual only)
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
@@ -2005,6 +2184,305 @@ export default function ShiftBuilder() {
     }
   }, [DAY_DEFS, selectedDayIndex, currentView, showToast]);
 
+  // === Print Command Center — generalized multi-day, multi-config print handler ===
+  //
+  // Generalizes handlePrintWeek: iterates only the days/pages requested in config,
+  // assembles them in the specified page order, and applies dynamic @page margins
+  // + zoom so the output matches exactly what the Print Command Center previewed.
+  const handlePrintWithConfig = React.useCallback(async (config: PrintConfig) => {
+    const originalDayIndex = selectedDayIndex;
+    const originalView = currentView;
+
+    const nextFrames = (n: number) =>
+      new Promise<void>((resolve) => {
+        let count = 0;
+        const tick = () => { count++; if (count >= n) resolve(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+
+    const waitForLoad = (timeoutMs = 15000) =>
+      new Promise<void>((resolve, reject) => {
+        const start = Date.now();
+        let seenLoading = false;
+        const check = () => {
+          if (loadingAssignmentsRef.current) seenLoading = true;
+          if (seenLoading && !loadingAssignmentsRef.current) { resolve(); return; }
+          if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
+          setTimeout(check, 60);
+        };
+        setTimeout(check, 200);
+      });
+
+    const postProcessBreaksArtboard = (artboard: Element) => {
+      const el = artboard as HTMLElement;
+      const contentArea = el.querySelector(".flex-1.min-h-0.overflow-hidden.flex.flex-col") as HTMLElement | null;
+      if (contentArea) {
+        contentArea.style.display = "flex";
+        contentArea.style.flexDirection = "column";
+        contentArea.style.flex = "1 1 0%";
+        contentArea.style.minHeight = "0";
+        contentArea.style.overflow = "hidden";
+      }
+      const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
+      if (waveGrid && !waveGrid.classList.contains("overlaps-section")) {
+        waveGrid.style.flex = "1 1 0%";
+        waveGrid.style.minHeight = "0";
+        waveGrid.style.overflow = "hidden";
+        waveGrid.style.alignContent = "start";
+      }
+      const overlaps = el.querySelector(".overlaps-section") as HTMLElement | null;
+      if (overlaps) { overlaps.style.flexShrink = "0"; overlaps.style.marginTop = "0"; }
+    };
+
+    const activeDays = config.days.filter(d => d.printDeploy || d.printBreaks);
+    const overviewDays = config.includeOverview ? config.days.filter(d => d.inOverview) : [];
+    const hasOverview = config.includeOverview && overviewDays.length > 0;
+    const hasCover    = config.includeCoverPage;
+
+    if (activeDays.length === 0 && !hasOverview) {
+      showToast("No pages selected to print.", "error");
+      return;
+    }
+
+    // Custom queue order injected by PrintCommandCenter via a loose property
+    const customQueueOrder = ((config as unknown as Record<string, unknown>)._customQueueOrder ?? null) as string[] | null;
+
+    // Unique sorted day indices we need to load/capture
+    const dayIndices = [...new Set(activeDays.map(d => d.dayIndex))].sort((a, b) => a - b);
+    // Total steps: capture days + (1 if overview) + (1 for assembly)
+    const totalSteps = dayIndices.length + (hasOverview ? 1 : 0);
+
+    setIsPrinting(true);
+    setPrintProgress({ current: 0, total: totalSteps, label: "Preparing…" });
+
+    // captured[dayIndex] = { deployHTML?, breaksHTML? }
+    const capturedPages = new Map<number, { deployHTML?: string; breaksHTML?: string }>();
+
+    try {
+      for (let i = 0; i < dayIndices.length; i++) {
+        const dayIdx = dayIndices[i];
+        const dayConf = activeDays.find(d => d.dayIndex === dayIdx)!;
+        const dayName = DAY_DEFS[dayIdx]?.name ?? `Day ${dayIdx}`;
+
+        setPrintProgress({ current: i, total: totalSteps, label: `Loading ${dayName}…` });
+
+        flushSync(() => setSelectedDayIndex(dayIdx));
+        await waitForLoad();
+        await nextFrames(4);
+
+        const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
+        if (!liveArtboard) continue;
+
+        const captured: { deployHTML?: string; breaksHTML?: string } = {};
+
+        if (dayConf.printDeploy) {
+          flushSync(() => setCurrentView("deployment"));
+          await nextFrames(2);
+          liveArtboard.style.visibility = "";
+          captured.deployHTML = liveArtboard.outerHTML;
+          liveArtboard.style.visibility = "hidden";
+        }
+
+        if (dayConf.printBreaks) {
+          flushSync(() => setCurrentView("breaks"));
+          await nextFrames(2);
+          const prevH = liveArtboard.style.height;
+          const prevMH = liveArtboard.style.minHeight;
+          const prevD = liveArtboard.style.display;
+          const prevFD = liveArtboard.style.flexDirection;
+          liveArtboard.style.height = "816px";
+          liveArtboard.style.minHeight = "816px";
+          liveArtboard.style.display = "flex";
+          liveArtboard.style.flexDirection = "column";
+          liveArtboard.getBoundingClientRect();
+          await nextFrames(1);
+          liveArtboard.style.visibility = "";
+          captured.breaksHTML = liveArtboard.outerHTML;
+          liveArtboard.style.height = prevH || "";
+          liveArtboard.style.minHeight = prevMH || "";
+          liveArtboard.style.display = prevD || "";
+          liveArtboard.style.flexDirection = prevFD || "";
+          liveArtboard.style.visibility = "";
+        }
+
+        capturedPages.set(dayIdx, captured);
+        setPrintProgress({ current: i + 1, total: totalSteps, label: `Captured ${dayName}` });
+      }
+
+      // ── Phase 2: fetch overview data directly from Supabase ──────────────────
+      let overviewHTML: string | null = null;
+      let coverHTML: string | null = null;
+
+      if (hasOverview) {
+        const ovwStep = dayIndices.length;
+        setPrintProgress({ current: ovwStep, total: totalSteps, label: "Building overview…" });
+        try {
+          const allTms = await getActiveTeamMembers();
+          const tmNames = new Map(allTms.map(tm => [tm.id, tm.name || tm.id]));
+
+          const overviewNights: OverviewNight[] = [];
+          for (const dayConf of overviewDays.slice().sort((a, b) => a.dayIndex - b.dayIndex)) {
+            const def = DAY_DEFS[dayConf.dayIndex];
+            const nightId = def ? await getNightIdForDate(def.date) : null;
+            const assignments: Record<string, { tmId: string; tmName: string } | null> = {};
+            if (nightId) {
+              const rows = await getNightAssignments(nightId);
+              rows.forEach(row => {
+                try {
+                  const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
+                  if (row.tmId) {
+                    assignments[uiKey] = {
+                      tmId: row.tmId,
+                      tmName: row.tmName || tmNames.get(row.tmId) || row.tmId,
+                    };
+                  }
+                } catch { /* unmappable slot — skip */ }
+              });
+            }
+            overviewNights.push({ dayIndex: dayConf.dayIndex, assignments });
+          }
+          overviewHTML = buildOverviewArtboardHTML(overviewNights, DAY_DEFS);
+        } catch (ovwErr) {
+          console.warn("[shiftbuilder] overview fetch error — skipping overview page", ovwErr);
+          overviewHTML = null;
+        }
+        setPrintProgress({ current: ovwStep + 1, total: totalSteps, label: "Overview ready" });
+      }
+
+      // ── Build cover page HTML (no async needed) ───────────────────────────────
+      if (hasCover) {
+        const deployCount = activeDays.filter(d => d.printDeploy).length;
+        const breaksCount = activeDays.filter(d => d.printBreaks).length;
+        const pageCountForCover = deployCount + breaksCount + (overviewHTML ? 1 : 0);
+        coverHTML = buildCoverPageArtboardHTML(DAY_DEFS, config, pageCountForCover + 1 /* +1 for the cover itself */);
+      }
+
+      // ── Assemble pages ────────────────────────────────────────────────────────
+      const allPageHTML: string[] = [];
+      const allPageIsBreaks: boolean[] = [];
+
+      if (customQueueOrder && customQueueOrder.length > 0) {
+        // Custom drag-to-reorder: respect the queue exactly as the operator arranged it
+        const pageMap = new Map<string, { html: string; isBreaks: boolean }>();
+        if (coverHTML)    pageMap.set("__cover",    { html: coverHTML,    isBreaks: false });
+        if (overviewHTML) pageMap.set("__overview", { html: overviewHTML, isBreaks: false });
+        for (const d of activeDays) {
+          const c = capturedPages.get(d.dayIndex);
+          if (!c) continue;
+          if (d.printDeploy && c.deployHTML) pageMap.set(`${d.dayIndex}-d`, { html: c.deployHTML, isBreaks: false });
+          if (d.printBreaks && c.breaksHTML) pageMap.set(`${d.dayIndex}-b`, { html: c.breaksHTML, isBreaks: true  });
+        }
+        for (const queueId of customQueueOrder) {
+          const page = pageMap.get(queueId);
+          if (page) { allPageHTML.push(page.html); allPageIsBreaks.push(page.isBreaks); }
+        }
+      } else {
+        // Default positional assembly: cover (if first), then day pages, then cover (if last)
+        const insertSpecial = (pos: "first" | "last" | null, html: string | null, isBreaks: boolean) => {
+          if (html && pos === "first") { allPageHTML.push(html); allPageIsBreaks.push(isBreaks); }
+        };
+        const appendSpecial = (pos: "first" | "last" | null, html: string | null, isBreaks: boolean) => {
+          if (html && pos === "last") { allPageHTML.push(html); allPageIsBreaks.push(isBreaks); }
+        };
+
+        insertSpecial(hasCover    ? config.coverPagePosition    : null, coverHTML,    false);
+        insertSpecial(overviewHTML ? config.overviewPosition : null, overviewHTML, false);
+
+        // Day pages in selected order
+        if (config.pageOrder === "paired") {
+          for (const d of activeDays) {
+            const c = capturedPages.get(d.dayIndex);
+            if (!c) continue;
+            if (d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
+            if (d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true);  }
+          }
+        } else if (config.pageOrder === "deploy-first") {
+          for (const d of activeDays) {
+            const c = capturedPages.get(d.dayIndex);
+            if (c && d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
+          }
+          for (const d of activeDays) {
+            const c = capturedPages.get(d.dayIndex);
+            if (c && d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true); }
+          }
+        } else { // breaks-first
+          for (const d of activeDays) {
+            const c = capturedPages.get(d.dayIndex);
+            if (c && d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true);  }
+          }
+          for (const d of activeDays) {
+            const c = capturedPages.get(d.dayIndex);
+            if (c && d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
+          }
+        }
+
+        appendSpecial(overviewHTML ? config.overviewPosition : null, overviewHTML, false);
+        appendSpecial(hasCover     ? config.coverPagePosition : null, coverHTML,    false);
+      }
+
+      if (allPageHTML.length === 0) { showToast("Nothing to print.", "error"); return; }
+
+      setPrintProgress({ current: totalSteps, total: totalSteps, label: "Sending to printer…" });
+
+      // Build container
+      const container = document.createElement("div");
+      container.className = "print-dual-container";
+      container.innerHTML = allPageHTML.join("");
+      document.body.appendChild(container);
+
+      // Post-process breaks artboards
+      container.querySelectorAll(".print-artboard").forEach((ab, i) => {
+        if (allPageIsBreaks[i]) postProcessBreaksArtboard(ab);
+      });
+
+      // Inject dynamic @page margin + zoom override
+      const marginValue = MARGIN_VALUES[config.margins];
+      const zoomValue = MARGIN_ZOOM[config.margins];
+      const dynamicStyle = document.createElement("style");
+      dynamicStyle.id = "__pcc-print-override";
+      dynamicStyle.textContent = `
+        @page { margin: ${marginValue} !important; }
+        @media print {
+          .print-dual-container .print-artboard { zoom: ${zoomValue} !important; }
+        }
+      `;
+      document.head.appendChild(dynamicStyle);
+
+      // Hide other body children (prevents blank first page)
+      document.body.classList.add("printing-dual-mode");
+      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
+      Array.from(document.body.children).forEach((child) => {
+        const el = child as HTMLElement;
+        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
+          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
+          el.style.display = "none";
+        }
+      });
+
+      try {
+        window.print();
+      } finally {
+        hiddenBodyChildren.forEach(({ el, prevDisplay }) => { el.style.display = prevDisplay; });
+        document.body.classList.remove("printing-dual-mode");
+        container.remove();
+        document.getElementById("__pcc-print-override")?.remove();
+      }
+    } catch (e) {
+      console.error("[shiftbuilder] print-with-config error", e);
+      showToast("Print failed — try again.", "error");
+      document.body.classList.remove("printing-dual-mode");
+      document.querySelector(".print-dual-container")?.remove();
+      document.getElementById("__pcc-print-override")?.remove();
+    } finally {
+      flushSync(() => setSelectedDayIndex(originalDayIndex));
+      await waitForLoad().catch(() => {});
+      flushSync(() => setCurrentView(originalView));
+      setIsPrinting(false);
+      setPrintProgress(null);
+      setIsPrintCenterOpen(false);
+    }
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast]);
+
   // === Master Command Palette (Phase 2 core) ===
   // Stable callbacks for useCommandActions — keeping these out of the call-site
   // so useCommandActions can detect actual changes (not new references every render).
@@ -2012,8 +2490,10 @@ export default function ShiftBuilder() {
     if (isDraftMode) applyDraft(); else enterDraftMode();
   }, [isDraftMode, applyDraft, enterDraftMode]);
 
-  const cmdActionPrint = React.useCallback(() => handlePrintBothPages(), []);
+  // Print button opens Command Center; direct "print tonight" shortcut still available via palette
+  const cmdActionPrint = React.useCallback(() => setIsPrintCenterOpen(true), []);
   const cmdActionPrintWeek = React.useCallback(() => handlePrintWeek(), [handlePrintWeek]);
+  const cmdActionOpenPrintCenter = React.useCallback(() => setIsPrintCenterOpen(true), []);
 
   const cmdActionUndo = React.useCallback(() => {
     const prev = shiftHistory.undo();
@@ -2067,6 +2547,7 @@ export default function ShiftBuilder() {
     onCycleBreak: cmdActionCycleBreak,
     onOpenPaletteForSlot: openPaletteForSlot,
     onClearAllBorders: cmdActionClearBorders,
+    onOpenPrintCenter: cmdActionOpenPrintCenter,
   });
 
   // handleCardClick and dismissQuickFan removed in Phase 1 (Command Palette Upgrade).
@@ -4875,8 +5356,8 @@ export default function ShiftBuilder() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
           </button>
 
-          {/* Print */}
-          <button onClick={() => handlePrintBothPages()} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Print both pages">
+          {/* Print — opens Command Center for full control */}
+          <button onClick={() => setIsPrintCenterOpen(true)} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Print Command Center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
           </button>
 
@@ -5226,6 +5707,18 @@ export default function ShiftBuilder() {
           </svg>
         </div>
       </button>
+
+      {/* Print Command Center — full overlay with day selection, page order, margins */}
+      <PrintCommandCenter
+        open={isPrintCenterOpen}
+        onClose={() => setIsPrintCenterOpen(false)}
+        onPrint={handlePrintWithConfig}
+        DAY_DEFS={DAY_DEFS}
+        selectedDayIndex={selectedDayIndex}
+        isPrinting={isPrinting}
+        printProgress={printProgress}
+        isDark={isDark}
+      />
 
       <SudoWindow
         open={sudoOpen}
