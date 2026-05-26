@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Atkinson_Hyperlegible } from "next/font/google";
+import {
+  Atkinson_Hyperlegible,
+  Bricolage_Grotesque,
+  Inter_Tight,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -21,6 +26,28 @@ const atkinson = Atkinson_Hyperlegible({
   style: ["normal", "italic"],
 });
 
+// Bricolage Grotesque — Velvet display font (logo, large headings, date numerals)
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "800"],
+  axes: ["opsz"],
+});
+
+// Inter Tight — Velvet UI body font (top bar, labels, buttons, roster)
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+// JetBrains Mono — Velvet mono font (time codes, slot keys, counts, kbd hints)
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "OMS — Operations Management System",
   description: "ZDS Forge • Shift Builder — Operational planning for ZDS.",
@@ -37,7 +64,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${atkinson.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${atkinson.variable} ${bricolage.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       {/* Runs before React hydration — prevents flash of wrong theme on load.
