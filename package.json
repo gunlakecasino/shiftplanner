@@ -7,6 +7,7 @@
     "url": "https://github.com/gunlakecasino/shiftplanner.git"
   },
   "description": "ShiftPlanner — Production-grade GRAVE shift scheduling & assignment system for ZDS operations. Strict placement engine, weighted multi-signal scoring, Grok Intelligence, Command Palette control surface, Draft Mode safety, tasks, breaks, and the full world-class scheduling vision.",
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20.9.0"
   },
