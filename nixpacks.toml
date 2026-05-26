@@ -3,6 +3,11 @@
 # This overrides Nixpacks' tendency to detect the Deno Edge Function
 # in supabase/functions/ and break the pnpm build.
 
+[env]
+# Force a recent Node 20.x version. The default nixpkgs snapshot Railway uses
+# often only has very old patches (e.g. 20.6.1), which is too old for Next.js 16.
+NIXPACKS_NODE_VERSION = "20.12.2"
+
 [phases.setup]
 nixPkgs = ['nodejs_20']
 
