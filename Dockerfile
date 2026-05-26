@@ -18,6 +18,9 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 WORKDIR /app
 
+# Enable pnpm in this stage too (Corepack activation doesn't carry over from deps)
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
