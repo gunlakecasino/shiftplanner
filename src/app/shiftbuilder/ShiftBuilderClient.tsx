@@ -2485,6 +2485,17 @@ export default function ShiftBuilder() {
         nightTaskRows.forEach((row) => {
           const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
           if (uiKey.startsWith("UNK:")) {
+            // Defensive fallback: handle legacy group-level overlap keys written
+            // by early migrations (slot_key='overlap_pm' or 'overlap_am', no card
+            // index). Distribute the task to all 6 per-card slots in that window
+            // so it appears on every overlap card rather than being silently lost.
+            if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
+              const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
+              for (let i = 0; i < 6; i++) {
+                (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
+              }
+              return;
+            }
             console.warn("[shiftbuilder] unrecognized DB slot for task, skipping:", row);
             return;
           }
