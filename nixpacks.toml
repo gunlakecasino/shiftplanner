@@ -4,10 +4,14 @@
 # in supabase/functions/ and break the pnpm build.
 
 [phases.setup]
-nixPkgs = ['nodejs_20', 'pnpm']
+nixPkgs = ['nodejs_20']
 
 [phases.install]
-cmds = ['pnpm install --frozen-lockfile']
+cmds = [
+  'corepack enable',
+  'corepack prepare pnpm@latest --activate',
+  'pnpm install --frozen-lockfile'
+]
 
 [phases.build]
 cmds = ['pnpm build']
