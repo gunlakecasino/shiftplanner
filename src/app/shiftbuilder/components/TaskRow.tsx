@@ -29,7 +29,8 @@ export interface TaskRowProps {
   // Slight visual tweaks per context (Zone vs tight RR/Overlap)
   textSize?: string;
   textColorClass?: string;
-  /** When true (from Sudo Tasks tab prefs), render a drag grip and make the row draggable for cross-card reassign */
+  /** When true (default), render a drag grip and make the row draggable for cross-card reassign.
+   *  Can be overridden via localStorage key shiftbuilder:taskUxPrefs { dragEnabled: false }. */
   draggable?: boolean;
 }
 
@@ -41,7 +42,7 @@ const TaskRow: React.FC<TaskRowProps> = ({
   onEditTask,
   textSize = "text-[11px]",
   textColorClass = "text-[#374151] dark:text-[#C7C7CC]",
-  draggable = false,
+  draggable = true,
 }) => {
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
   // The Sudo Tasks tab writes to the same localStorage key.
@@ -117,6 +118,13 @@ const TaskRow: React.FC<TaskRowProps> = ({
           ref={setTaskDragRef}
           {...taskDragListeners}
           {...taskDragAttributes}
+          // Stop the pointer event from bubbling to the card wrapper.
+          // Without this the card's own useDraggable listeners also fire,
+          // causing two simultaneous dnd-kit drags that conflict with each other.
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            (taskDragListeners as any)?.onPointerDown?.(e);
+          }}
           className="mt-px mr-1 cursor-grab text-[#9CA3AF] opacity-60 group-hover/task:opacity-100 active:cursor-grabbing select-none touch-none"
           title="Drag this task to another card to reassign it"
         >

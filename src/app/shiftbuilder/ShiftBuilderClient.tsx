@@ -2731,13 +2731,18 @@ export default function ShiftBuilder() {
     useSensor(KeyboardSensor),
   );
 
-  const [activeDrag, setActiveDrag] = useState<{ tmName: string; fromSlot?: string } | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{
+    kind: "tm" | "assigned" | "task";
+    label: string;
+    fromSlot?: string;
+  } | null>(null);
 
   const onDragStart = (event: DragStartEvent) => {
     const d = event.active.data.current as any;
     if (!d) return;
-    if (d.type === "tm") setActiveDrag({ tmName: d.tmName });
-    else if (d.type === "assigned") setActiveDrag({ tmName: d.tmName, fromSlot: d.fromSlot });
+    if (d.type === "tm") setActiveDrag({ kind: "tm", label: d.tmName });
+    else if (d.type === "assigned") setActiveDrag({ kind: "assigned", label: d.tmName, fromSlot: d.fromSlot });
+    else if (d.type === "task") setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot });
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -5412,12 +5417,31 @@ export default function ShiftBuilder() {
          Rendered outside the artboard so it isn't clipped by overflow:hidden. */}
       <DragOverlay dropAnimation={null}>
         {activeDrag ? (
-          <div className="rounded-md bg-[#1C1C1E] text-white px-3 py-1.5 text-sm font-semibold shadow-lg pointer-events-none whitespace-nowrap">
-            {activeDrag.tmName}
-            {activeDrag.fromSlot && (
-              <span className="opacity-60 ml-2 text-[11px]">from {activeDrag.fromSlot}</span>
-            )}
-          </div>
+          activeDrag.kind === "task" ? (
+            <div
+              className="rounded-md px-2.5 py-1 text-[11px] font-semibold shadow-lg pointer-events-none whitespace-nowrap flex items-center gap-1.5"
+              style={{
+                background: isDark ? "rgba(44,44,46,0.97)" : "rgba(255,255,255,0.97)",
+                color: isDark ? "#F2F2F4" : "#1C1C1E",
+                border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
+                backdropFilter: "blur(12px)",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}
+            >
+              <span className="text-[#9CA3AF]">⠿</span>
+              <span>{activeDrag.label}</span>
+              {activeDrag.fromSlot && (
+                <span className="opacity-50 text-[10px] ml-1">from {activeDrag.fromSlot}</span>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-md bg-[#1C1C1E] text-white px-3 py-1.5 text-sm font-semibold shadow-lg pointer-events-none whitespace-nowrap">
+              {activeDrag.label}
+              {activeDrag.fromSlot && (
+                <span className="opacity-60 ml-2 text-[11px]">from {activeDrag.fromSlot}</span>
+              )}
+            </div>
+          )
         ) : null}
       </DragOverlay>
       </DndContext>
