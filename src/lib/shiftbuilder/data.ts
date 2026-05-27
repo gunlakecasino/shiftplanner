@@ -1,4 +1,5 @@
 import { supabase, getSupabaseClient } from '../supabase';
+import { dbToUi } from './slot-keys';
 
 /**
  * Shift Builder Data Layer — Real Supabase backed.
@@ -2025,6 +2026,242 @@ export async function getZoneFrequencyReport(days: number): Promise<ZoneFrequenc
     byTm,
     dateRange: { from: cutoffIso, to: todayIso },
     totalNights: nightRows.length,
+  };
+}
+
+// ============================================================================
+// Zone Detail Report — full per-TM placement history with date arrays + DOW
+// ============================================================================
+
+export type ReportWindow = 14 | 30 | 60 | "this-week" | "last-4-weeks";
+
+export interface ZoneDetailEntry {
+  tmId: string;
+  tmName: string;
+  /** zone key → dates sorted newest-first */
+  zoneDates: Record<string, string[]>;
+  /** zone key → count (derived from zoneDates) */
+  zoneCounts: Record<string, number>;
+  /** total zone placements in window */
+  totalAssignments: number;
+  /** distinct nights with any zone assignment */
+  totalNights: number;
+  /** most recent assignment date (ISO) */
+  lastDate: string;
+  /** zone key → [Sun,Mon,Tue,Wed,Thu,Fri,Sat] counts */
+  zoneDow: Record<string, number[]>;
+}
+
+export interface ZoneDetailReport {
+  entries: ZoneDetailEntry[];
+  dateRange: { from: string; to: string };
+  totalNights: number;
+}
+
+/** Compute Fri–Thu grave week boundaries. */
+function graveWeekRange(which: "this-week" | "last-4-weeks"): { from: string; to: string } {
+  const today = new Date();
+  const daysSinceFri = (today.getDay() + 2) % 7; // 0=Fri, 1=Sat, 2=Sun, …, 6=Thu
+  const thisFri = new Date(today);
+  thisFri.setDate(today.getDate() - daysSinceFri);
+
+  if (which === "this-week") {
+    const thu = new Date(thisFri);
+    thu.setDate(thisFri.getDate() + 6);
+    return { from: thisFri.toISOString().slice(0, 10), to: thu.toISOString().slice(0, 10) };
+  }
+  // last-4-weeks: 4 complete Fri–Thu weeks ending the day before this Friday
+  const to = new Date(thisFri);
+  to.setDate(thisFri.getDate() - 1);
+  const from = new Date(to);
+  from.setDate(to.getDate() - 27);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+/**
+ * Rich zone placement report retaining full per-TM per-zone date history.
+ * Supports rolling calendar windows (14/30/60 days) and Fri–Thu grave weeks.
+ * Only slot_type='zone' rows are counted (no RR, AUX, overlaps).
+ */
+export async function getZoneDetailReport(reportWindow: ReportWindow): Promise<ZoneDetailReport> {
+  const client = getSupabaseClient();
+
+  let from: string, to: string;
+  if (typeof reportWindow === "number") {
+    const today = new Date();
+    const cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() - reportWindow);
+    from = cutoff.toISOString().slice(0, 10);
+    to = today.toISOString().slice(0, 10);
+  } else {
+    ({ from, to } = graveWeekRange(reportWindow));
+  }
+
+  const empty: ZoneDetailReport = { entries: [], dateRange: { from, to }, totalNights: 0 };
+
+  const { data: nightRows, error: nightErr } = await client
+    .from("nights")
+    .select("id, night_date")
+    .gte("night_date", from)
+    .lte("night_date", to);
+
+  if (nightErr || !nightRows?.length) return empty;
+
+  const nightIdToDate = new Map<string, string>();
+  (nightRows as any[]).forEach((n) => nightIdToDate.set(n.id, n.night_date));
+
+  const { data: assignmentRows, error: assignErr } = await client
+    .from("zone_assignments")
+    .select("night_id, slot_key, slot_type, rr_side, tm_id")
+    .in("night_id", Array.from(nightIdToDate.keys()))
+    .not("slot_type", "eq", "overlap")
+    .not("tm_id", "is", null);
+
+  if (assignErr || !assignmentRows?.length) {
+    return { ...empty, totalNights: nightRows.length };
+  }
+
+  const tmMap = new Map<string, {
+    zoneDates: Record<string, string[]>;
+    nightDates: Set<string>;
+    lastDate: string;
+  }>();
+
+  for (const row of assignmentRows as any[]) {
+    const d = nightIdToDate.get(row.night_id) ?? "";
+    if (!d) continue;
+    const z = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
+    if (z.startsWith("UNK:")) continue;
+    const id: string = row.tm_id;
+    if (!tmMap.has(id)) tmMap.set(id, { zoneDates: {}, nightDates: new Set(), lastDate: "" });
+    const e = tmMap.get(id)!;
+    if (!e.zoneDates[z]) e.zoneDates[z] = [];
+    e.zoneDates[z].push(d);
+    e.nightDates.add(d);
+    if (d > e.lastDate) e.lastDate = d;
+  }
+
+  const tmIds = Array.from(tmMap.keys());
+  const { data: profiles } = await client
+    .from("tm_profiles")
+    .select("tm_id, display_name, full_name")
+    .in("tm_id", tmIds);
+
+  const nameMap = new Map<string, string>();
+  (profiles ?? []).forEach((p: any) =>
+    nameMap.set(p.tm_id, p.display_name || p.full_name || p.tm_id)
+  );
+
+  const entries: ZoneDetailEntry[] = Array.from(tmMap.entries())
+    .map(([tmId, data]) => {
+      const zoneCounts: Record<string, number> = {};
+      const zoneDow: Record<string, number[]> = {};
+      let totalAssignments = 0;
+
+      for (const [zKey, dates] of Object.entries(data.zoneDates)) {
+        dates.sort((a, b) => b.localeCompare(a)); // newest-first
+        zoneCounts[zKey] = dates.length;
+        totalAssignments += dates.length;
+        const dow = [0, 0, 0, 0, 0, 0, 0];
+        for (const d of dates) dow[new Date(d + "T12:00:00").getDay()]++;
+        zoneDow[zKey] = dow;
+      }
+
+      return {
+        tmId,
+        tmName: nameMap.get(tmId) ?? tmId,
+        zoneDates: data.zoneDates,
+        zoneCounts,
+        totalAssignments,
+        totalNights: data.nightDates.size,
+        lastDate: data.lastDate,
+        zoneDow,
+      };
+    })
+    .sort((a, b) => b.totalAssignments - a.totalAssignments);
+
+  return { entries, dateRange: { from, to }, totalNights: nightRows.length };
+}
+
+/**
+ * Placement history for a single TM across all slot types (zone, rr, aux).
+ * Used by MarkerPad to show the mini history widget when a TM is assigned.
+ * Returns null when no data exists in the window.
+ */
+export async function getTmPlacementHistory(
+  tmId: string,
+  days = 30
+): Promise<ZoneDetailEntry | null> {
+  const client = getSupabaseClient();
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - days);
+  const from = cutoff.toISOString().slice(0, 10);
+  const to   = today.toISOString().slice(0, 10);
+
+  const { data: nightRows } = await client
+    .from("nights")
+    .select("id, night_date")
+    .gte("night_date", from)
+    .lte("night_date", to);
+
+  if (!nightRows?.length) return null;
+
+  const nightIdToDate = new Map<string, string>();
+  (nightRows as any[]).forEach((n) => nightIdToDate.set(n.id, n.night_date));
+
+  const { data: rows } = await client
+    .from("zone_assignments")
+    .select("night_id, slot_key, slot_type, rr_side")
+    .in("night_id", Array.from(nightIdToDate.keys()))
+    .eq("tm_id", tmId)
+    .not("slot_type", "eq", "overlap");
+
+  if (!rows?.length) return null;
+
+  const zoneDates: Record<string, string[]> = {};
+  const nightDates = new Set<string>();
+  let lastDate = "";
+
+  for (const row of rows as any[]) {
+    const d = nightIdToDate.get(row.night_id) ?? "";
+    if (!d) continue;
+    const z = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
+    if (z.startsWith("UNK:")) continue;
+    if (!zoneDates[z]) zoneDates[z] = [];
+    zoneDates[z].push(d);
+    nightDates.add(d);
+    if (d > lastDate) lastDate = d;
+  }
+
+  const zoneCounts: Record<string, number> = {};
+  const zoneDow: Record<string, number[]> = {};
+  let totalAssignments = 0;
+
+  for (const [zKey, dates] of Object.entries(zoneDates)) {
+    dates.sort((a, b) => b.localeCompare(a));
+    zoneCounts[zKey] = dates.length;
+    totalAssignments += dates.length;
+    const dow = [0, 0, 0, 0, 0, 0, 0];
+    for (const d of dates) dow[new Date(d + "T12:00:00").getDay()]++;
+    zoneDow[zKey] = dow;
+  }
+
+  const { data: profile } = await client
+    .from("tm_profiles")
+    .select("display_name, full_name")
+    .eq("tm_id", tmId)
+    .single();
+
+  return {
+    tmId,
+    tmName: (profile as any)?.display_name || (profile as any)?.full_name || tmId,
+    zoneDates,
+    zoneCounts,
+    totalAssignments,
+    totalNights: nightDates.size,
+    lastDate,
+    zoneDow,
   };
 }
 

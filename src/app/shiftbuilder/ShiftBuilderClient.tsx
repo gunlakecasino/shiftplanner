@@ -3155,6 +3155,9 @@ export default function ShiftBuilder() {
         // would risk Day A's stale entries persisting through if the
         // clear-then-load contract is ever violated.
         setAssignments(ui);
+        // Mark as "saved" now that we've loaded fresh data from DB — prevents
+        // the dock from showing "Not saved" when the data is actually current.
+        setLastSavedAt(new Date());
 
         // Translate loaded night_slot_tasks rows into UI-keyed buckets so the
         // card renderers can read them by Golden slot key (Z1, MRR1, etc.).
@@ -5185,17 +5188,20 @@ export default function ShiftBuilder() {
 
       {/* ═══════════════════════════════════════════════════════════
           VELVET BOTTOM DOCK — reference-faithful centered glass pill
-          ← | − zoom% + | undo redo | Deployment Breaks | → | 🟢 · Ask AI
+          − zoom% + | undo redo ‹ › | Deployment Breaks | ↑4 · ↓4 | 🟢 · saved
           Height: 44px. Liquid glass. Replaces old status pill.
           ═══════════════════════════════════════════════════════════ */}
       {(() => {
-        let savedAgo = "Not saved";
+        let savedAgo = "Loading…";
         if (lastSavedAt) {
           const secs = Math.floor((Date.now() - lastSavedAt.getTime()) / 1000);
-          if (secs < 60) savedAgo = "Just now";
+          if (secs < 10)  savedAgo = "Saved";
+          else if (secs < 60) savedAgo = "Just now";
           else {
             const mins = Math.floor(secs / 60);
-            savedAgo = mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+            savedAgo = mins < 120
+              ? `${mins}m ago`
+              : `${Math.floor(mins / 60)}h ago`;
           }
         }
 
@@ -5266,7 +5272,7 @@ export default function ShiftBuilder() {
               </button>
             </div>
 
-            {/* Undo / Redo / ← prev day */}
+            {/* Undo / Redo / ← → */}
             <div className="flex items-center h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
               <button
                 type="button"
@@ -5289,19 +5295,28 @@ export default function ShiftBuilder() {
                 <span className="ms" style={{ fontSize: 20, fontVariationSettings: '"FILL" 0, "wght" 300' }}>redo</span>
               </button>
 
-              {/* ← prev day */}
+              {/* ← → day navigation (grouped together) */}
               <button
                 type="button"
                 onClick={goPrevDay}
                 title="Previous day"
-                className="flex items-center justify-center h-full px-3 transition-colors"
+                className="flex items-center justify-center h-full px-2.5 transition-colors"
                 style={{ color: dockText, borderLeft: `1px solid ${dockSep}` }}
               >
                 <span className="ms" style={{ fontSize: 20 }}>chevron_left</span>
               </button>
+              <button
+                type="button"
+                onClick={goNextDay}
+                title="Next day"
+                className="flex items-center justify-center h-full px-2.5 transition-colors"
+                style={{ color: dockText }}
+              >
+                <span className="ms" style={{ fontSize: 20 }}>chevron_right</span>
+              </button>
             </div>
 
-            {/* Deployment / Breaks / Tasks tabs */}
+            {/* Deployment / Breaks view tabs */}
             <div className="flex items-center gap-0 h-full px-1" style={{ borderRight: `1px solid ${dockSep}` }}>
               {(["deployment", "breaks"] as const).map(view => (
                 <button
@@ -5318,28 +5333,18 @@ export default function ShiftBuilder() {
                   }}
                 >{view.charAt(0).toUpperCase() + view.slice(1)}</button>
               ))}
-              <button
-                type="button"
-                onClick={() => setCmdkOpen(true)}
-                className="flex items-center justify-center h-[32px] px-3 rounded-full text-[12px] font-bold transition-all mx-0.5"
-                style={{ color: dockText, border: "1px solid transparent" }}
-              >Tasks</button>
             </div>
-
-            {/* → next day */}
-            <button
-              type="button"
-              onClick={goNextDay}
-              title="Next day"
-              className="flex items-center justify-center h-full px-3 transition-colors"
-              style={{ color: dockText, borderRight: `1px solid ${dockSep}` }}
-            >
-              <span className="ms" style={{ fontSize: 20 }}>chevron_right</span>
-            </button>
 
             {/* Save indicator */}
             <div className="flex items-center gap-2 px-3">
-              <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }} />
+              <span
+                className="w-[7px] h-[7px] rounded-full shrink-0"
+                style={{
+                  background: lastSavedAt
+                    ? (Date.now() - lastSavedAt.getTime() < 120_000 ? "#34C759" : "#FF9F0A")
+                    : "#8E8E93",
+                }}
+              />
               <span className="text-[11px]" style={{ color: dockText }}>{savedAgo}</span>
             </div>
           </div>
@@ -5512,6 +5517,9 @@ export default function ShiftBuilder() {
         onClose={() => setMarkerSlotKey(null)}
         auxDefs={auxDefs}
         isDark={isDark}
+        tmGender={markerSlotKey && assignments[markerSlotKey]?.tmId
+          ? (realRoster.find((r: any) => r.id === assignments[markerSlotKey].tmId)?.gender ?? null)
+          : null}
       />
 
       {/* Master Command Palette — Phase 2 core */}

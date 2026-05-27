@@ -18,7 +18,8 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
+import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
@@ -27,6 +28,7 @@ import {
   getZoneColor, getRRAccent, getAuxAccent,
   nextBreakGroup,
 } from "@/lib/shiftbuilder/constants";
+import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 
 export interface TmEntry {
   tmId: string;
@@ -50,6 +52,7 @@ export interface MarkerPadProps {
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   onClose: () => void;
   isDark?: boolean;
+  tmGender?: string | null;    // "M" | "F" | null — used for gender-aware RR filtering in history
 }
 
 // ── Slot metadata lookup ─────────────────────────────────────────────────────
@@ -371,6 +374,313 @@ const CoveragePicker: React.FC<{
   );
 };
 
+// ── Recency helpers ───────────────────────────────────────────────────────────
+
+function recencyColor(daysAgo: number): string {
+  if (daysAgo <= 7)  return "#34C759";
+  if (daysAgo <= 14) return "#FFD60A";
+  if (daysAgo <= 30) return "#FF9F0A";
+  return "#FF3B30";
+}
+
+function daysAgoFrom(isoDate: string): number {
+  return Math.floor(
+    (Date.now() - new Date(isoDate + "T12:00:00").getTime()) / 86_400_000
+  );
+}
+
+function fmtShortDate(isoDate: string): string {
+  return new Date(isoDate + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short", day: "numeric",
+  });
+}
+
+// ── MiniHistorySection ────────────────────────────────────────────────────────
+
+/** Filter out slots irrelevant to this TM's gender (opposite RR side). */
+function genderFilter(uiKey: string, gender: string | null | undefined): boolean {
+  if (!gender) return true;
+  if (/^WRR/.test(uiKey) && gender === "M") return false;
+  if (/^MRR/.test(uiKey) && gender === "F") return false;
+  return true;
+}
+
+const MiniHistorySection: React.FC<{
+  history: ZoneDetailEntry | null;
+  loading: boolean;
+  isDark: boolean;
+  tmGender?: string | null;
+  onViewAll: () => void;
+}> = ({ history, loading, isDark, tmGender, onViewAll }) => {
+  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
+  const textMuted   = isDark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.38)";
+  const divBorder   = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+
+  const wrapStyle: React.CSSProperties = {
+    borderTop: `1px solid ${divBorder}`,
+    paddingTop: 8,
+    display: "flex", flexDirection: "column", gap: 5,
+  };
+
+  if (loading) {
+    return (
+      <div style={wrapStyle}>
+        <span style={{ fontSize: 9.5, color: textMuted, fontFamily: "var(--font-jetbrains, monospace)" }}>
+          Loading history…
+        </span>
+      </div>
+    );
+  }
+
+  if (!history || history.totalAssignments === 0) return null;
+
+  // Gender-aware sorted list — exclude opposite-gender RR sides
+  const eligible = Object.entries(history.zoneCounts)
+    .filter(([uiKey]) => genderFilter(uiKey, tmGender))
+    .sort(([, a], [, b]) => b - a);
+
+  if (eligible.length === 0) return null;
+
+  const TAKE = 4;
+  const top = eligible.slice(0, TAKE);
+  // Bottom-4: last N entries reversed so least-frequent is first
+  const bot = eligible.length > TAKE
+    ? eligible.slice(-Math.min(TAKE, Math.floor(eligible.length / 2) || 1)).reverse()
+    : [];
+
+  const SlotRow = ({ uiKey, count, accent: _accent }: { uiKey: string; count: number; accent?: string }) => {
+    const { accent } = getSlotMeta(uiKey);
+    const dates = history.zoneDates[uiKey] ?? [];
+    const last  = dates[0];
+    const ago   = last ? daysAgoFrom(last) : null;
+
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{
+          fontSize: 8, fontWeight: 800, padding: "2px 5px", borderRadius: 4,
+          background: `${accent}22`, border: `1px solid ${accent}50`, color: accent,
+          fontFamily: "var(--font-atkinson)", letterSpacing: "0.2px", flexShrink: 0,
+        }}>{uiKey}</span>
+
+        <span style={{
+          fontSize: 10.5, fontWeight: 600, color: textPrimary, flex: 1,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+        }}>{slotKeyToLabel(uiKey)}</span>
+
+        <span style={{
+          display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+          fontSize: 9, color: textMuted,
+          fontFamily: "var(--font-jetbrains, monospace)",
+        }}>
+          <span>{count}×</span>
+          {ago !== null && (
+            <span style={{ color: recencyColor(ago) }}>{ago}d</span>
+          )}
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div style={wrapStyle}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: "1.1px",
+          textTransform: "uppercase", color: textMuted,
+          fontFamily: "var(--font-atkinson)",
+        }}>30d History</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onViewAll(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            fontSize: 9, fontWeight: 600, letterSpacing: "0.2px",
+            color: "var(--sb-gold-bright, #E9B948)",
+            background: "none", border: "none", cursor: "pointer",
+            padding: "1px 4px",
+            fontFamily: "var(--font-atkinson)",
+          }}
+        >View All →</button>
+      </div>
+
+      {/* Most frequent — up to 4 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 1 }}>
+        <span style={{ fontSize: 8, color: "#34C759", fontFamily: "var(--font-jetbrains, monospace)", flexShrink: 0 }}>▲ most</span>
+      </div>
+      {top.map(([uiKey, count]) => (
+        <SlotRow key={uiKey} uiKey={uiKey} count={count} />
+      ))}
+
+      {/* Least frequent — only show if we have enough data */}
+      {bot.length > 0 && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, marginBottom: 1 }}>
+            <span style={{ fontSize: 8, color: "#FF9F0A", fontFamily: "var(--font-jetbrains, monospace)", flexShrink: 0 }}>▼ least</span>
+          </div>
+          {bot.map(([uiKey, count]) => (
+            <SlotRow key={uiKey} uiKey={uiKey} count={count} />
+          ))}
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── HistoryOverlay ────────────────────────────────────────────────────────────
+
+const HistoryOverlay: React.FC<{
+  history: ZoneDetailEntry;
+  isDark: boolean;
+  onClose: () => void;
+}> = ({ history, isDark, onClose }) => {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const textPrimary = isDark ? "rgba(255,255,255,0.88)" : "rgba(0,0,0,0.85)";
+  const textMuted   = isDark ? "rgba(255,255,255,0.40)" : "rgba(0,0,0,0.40)";
+  const panelBg     = isDark ? "rgba(16,16,18,0.97)" : "rgba(250,250,248,0.98)";
+  const rowBgBase   = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)";
+  const rowBorderBase = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)";
+
+  const sorted = Object.entries(history.zoneCounts)
+    .sort(([, a], [, b]) => b - a);
+
+  return (
+    <div
+      style={{
+        position: "absolute", inset: 0, borderRadius: 20, zIndex: 20,
+        background: panelBg,
+        backdropFilter: "blur(48px) saturate(180%)",
+        WebkitBackdropFilter: "blur(48px) saturate(180%)",
+        display: "flex", flexDirection: "column",
+        padding: "14px 14px 10px",
+        animation: "sb-slide-right-in var(--sb-dur-fast, 0.18s) cubic-bezier(0.16,1,0.3,1) both",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexShrink: 0 }}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            width: 26, height: 26, borderRadius: "50%",
+            background: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)",
+            border: isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.12)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: textMuted, cursor: "pointer", flexShrink: 0, fontSize: 15, lineHeight: 1,
+          }}
+          aria-label="Back"
+        >←</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 11.5, fontWeight: 800, letterSpacing: "-0.2px", color: textPrimary,
+            fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{history.tmName}</div>
+          <div style={{
+            fontSize: 9, color: textMuted,
+            fontFamily: "var(--font-jetbrains, monospace)",
+          }}>
+            {history.totalAssignments} placements · {history.totalNights} nights · 30d
+          </div>
+        </div>
+      </div>
+
+      {/* Slot list */}
+      <div
+        className="no-scrollbar"
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}
+      >
+        {sorted.map(([uiKey, count]) => {
+          const { accent } = getSlotMeta(uiKey);
+          const dates = history.zoneDates[uiKey] ?? [];
+          const last  = dates[0];
+          const ago   = last ? daysAgoFrom(last) : null;
+          const isExpanded = expandedKey === uiKey;
+
+          return (
+            <div key={uiKey}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setExpandedKey(isExpanded ? null : uiKey); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 8px", borderRadius: 10, textAlign: "left",
+                  background: isExpanded
+                    ? (isDark ? `${accent}18` : `${accent}12`)
+                    : rowBgBase,
+                  border: `1px solid ${isExpanded ? accent + "44" : rowBorderBase}`,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                {/* Short key badge */}
+                <span style={{
+                  fontSize: 8, fontWeight: 800, padding: "2px 5px", borderRadius: 4,
+                  background: `${accent}22`, border: `1px solid ${accent}44`, color: accent,
+                  fontFamily: "var(--font-atkinson)", letterSpacing: "0.2px", flexShrink: 0,
+                }}>{uiKey}</span>
+
+                {/* Full label */}
+                <span style={{
+                  flex: 1, fontSize: 10.5, fontWeight: 600, color: textPrimary,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                }}>{slotKeyToLabel(uiKey)}</span>
+
+                {/* Count */}
+                <span style={{
+                  fontSize: 9, fontWeight: 700, color: accent, flexShrink: 0,
+                  fontFamily: "var(--font-jetbrains, monospace)",
+                }}>{count}×</span>
+
+                {/* Recency */}
+                {ago !== null && (
+                  <span style={{
+                    fontSize: 8.5, flexShrink: 0,
+                    color: recencyColor(ago),
+                    fontFamily: "var(--font-jetbrains, monospace)",
+                  }}>{ago}d</span>
+                )}
+
+                {/* Chevron */}
+                <span style={{ fontSize: 8, color: textMuted, flexShrink: 0 }}>
+                  {isExpanded ? "▲" : "▼"}
+                </span>
+              </button>
+
+              {/* Expanded date chips */}
+              {isExpanded && (
+                <div style={{
+                  display: "flex", flexWrap: "wrap", gap: 3,
+                  padding: "5px 8px 6px",
+                  borderLeft: `2px solid ${accent}44`,
+                  marginLeft: 8, marginTop: 2, marginBottom: 2,
+                }}>
+                  {dates.map((d, i) => {
+                    const chipAgo = daysAgoFrom(d);
+                    const chipColor = recencyColor(chipAgo);
+                    return (
+                      <span key={i} style={{
+                        fontSize: 8.5, padding: "2px 6px", borderRadius: 4,
+                        background: `${chipColor}18`, border: `1px solid ${chipColor}44`,
+                        color: chipColor, fontFamily: "var(--font-jetbrains, monospace)",
+                      }}>{fmtShortDate(d)}</span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ── TmPicker ──────────────────────────────────────────────────────────────────
 
 const TmPicker: React.FC<{
@@ -515,6 +825,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   onAddCoverage,
   onClose,
   isDark,
+  tmGender,
 }) => {
   const [taskInput, setTaskInput] = useState("");
   const [coverageMode, setCoverageMode] = useState(false);
@@ -524,6 +835,26 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // TM history widget — derive tmId before hooks so it can be a dependency
+  const currentTmId: string | null = slotKey ? (assignments[slotKey]?.tmId ?? null) : null;
+  const [tmHistory, setTmHistory] = useState<ZoneDetailEntry | null>(null);
+  const [tmHistoryLoading, setTmHistoryLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    if (!currentTmId) {
+      setTmHistory(null);
+      setTmHistoryLoading(false);
+      setHistoryOpen(false);
+      return;
+    }
+    setTmHistoryLoading(true);
+    setHistoryOpen(false);
+    getTmPlacementHistory(currentTmId, 30)
+      .then(h => { setTmHistory(h); setTmHistoryLoading(false); })
+      .catch(() => { setTmHistory(null); setTmHistoryLoading(false); });
+  }, [currentTmId]);
+
   // Reset all local state when the slot changes
   useEffect(() => {
     setTaskInput("");
@@ -531,6 +862,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     setCoverageConfirmed(false);
     setAssignMode(false);
     setAssignConfirmed(false);
+    setHistoryOpen(false);
     if (slotKey) {
       const t = setTimeout(() => inputRef.current?.focus(), 120);
       return () => clearTimeout(t);
@@ -876,6 +1208,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
               ))}
             </div>
           )}
+
+          {/* Mini TM placement history — shown when a TM is assigned */}
+          {a.tmId && (tmHistory || tmHistoryLoading) && (
+            <MiniHistorySection
+              history={tmHistory}
+              loading={tmHistoryLoading}
+              isDark={isDarkPanel}
+              tmGender={tmGender}
+              onViewAll={() => setHistoryOpen(true)}
+            />
+          )}
         </div>
       )}
 
@@ -968,6 +1311,14 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
           >Clear</button>
         )}
       </div>
+      {/* ── Full history overlay (position:absolute, fills panel) ─────── */}
+      {historyOpen && tmHistory && (
+        <HistoryOverlay
+          history={tmHistory}
+          isDark={isDarkPanel}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -1,63 +1,113 @@
 "use client";
 
 /**
- * ReportsTab — zone placement frequency over a rolling date window.
+ * ReportsTab — placement history across zones, restrooms, and aux slots.
  *
- * Two views (togglable):
- *   TM-first  — pick a TM, see how often they've landed in each zone.
- *   Zone-first — pick a zone, see which TMs have worked it most.
+ * Views:
+ *   TM View    — left rail (searchable) + right panel with expandable slot history.
+ *               "By Day" toggle shows DOW bias per slot in Fri–Thu grave order.
+ *   Slot View  — left rail (all slots) + right panel with per-TM frequency + dates.
+ *   Matrix     — full-width recency grid: TM rows × all-slot columns.
  *
- * Data source: zone_assignments history via getZoneFrequencyReport().
- * Only slot_type='zone' rows are counted (no RR, AUX, overlaps).
- * Colors match the Golden ShiftBuilder zone card palette exactly.
+ * Time windows: 14d / 30d / 60d / This Grave Week / Last 4 Grave Weeks.
  */
 
 import React from "react";
 import { cn } from "@/lib/utils";
 import {
-  getZoneFrequencyReport,
-  type ZoneFrequencyEntry,
-  type ZoneFrequencyReport,
+  ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS,
+  ZONE_ICONS, RR_ICONS, AUX_ICONS,
+  getZoneColor, getRRAccent, getAuxAccent,
+} from "@/lib/shiftbuilder/constants";
+import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
+import {
+  getZoneDetailReport,
+  type ZoneDetailEntry,
+  type ZoneDetailReport,
+  type ReportWindow,
 } from "@/lib/shiftbuilder/data";
 
 // ---------------------------------------------------------------------------
-// Zone constants — mirrors ShiftBuilderClient.tsx (not exported from there)
+// Slot helpers (work for zone / rr / aux keys)
 // ---------------------------------------------------------------------------
 
-const ZONE_DEFS = [
-  { key: "Z1",  label: "Zone 1"  },
-  { key: "Z2",  label: "Zone 2"  },
-  { key: "Z3",  label: "Zone 3"  },
-  { key: "Z4",  label: "Zone 4"  },
-  { key: "Z5",  label: "Zone 5"  },
-  { key: "Z6",  label: "Zone 6"  },
-  { key: "Z7",  label: "Zone 7"  },
-  { key: "Z8",  label: "Zone 8"  },
-  { key: "Z9",  label: "Zone 9"  },
-  { key: "Z10", label: "Zone 10" },
-];
+function getSlotColor(uiKey: string): string {
+  if (/^Z\d+$/.test(uiKey)) return getZoneColor(uiKey);
+  const rr = uiKey.match(/^[MW]RR(\d+)$/);
+  if (rr) return getRRAccent(parseInt(rr[1]));
+  return getAuxAccent(uiKey);
+}
 
-const ZONE_COLORS: Record<string, string> = {
-  Z1: "#B89708", Z2: "#B89708",
-  Z3: "#E53935", Z4: "#E53935", Z5: "#E53935",
-  Z6: "#B7679A",
-  Z7: "#1976D2",
-  Z8: "#6B5346",
-  Z9: "#E53935",
-  Z10: "#43A047",
-};
+function getSlotIcon(uiKey: string): string {
+  if (ZONE_ICONS[uiKey]) return ZONE_ICONS[uiKey];
+  const rr = uiKey.match(/^[MW]RR(\d+)$/);
+  if (rr) return RR_ICONS[parseInt(rr[1])] ?? "●";
+  return AUX_ICONS[uiKey] ?? "✦";
+}
 
-const ZONE_ICONS: Record<string, string> = {
-  Z1: "★", Z2: "◆", Z3: "▲", Z4: "■", Z5: "⬟",
-  Z6: "♥", Z7: "●", Z8: "◐", Z9: "☾", Z10: "✚",
-};
+function getSlotShortLabel(uiKey: string): string {
+  // Zones already short: Z1…Z10
+  if (/^Z\d+$/.test(uiKey)) return uiKey;
+  // RR: MRR1 → "RR 1+2 M", WRR7 → "RR 7 W"
+  const rr = uiKey.match(/^([MW])RR(\d+)$/);
+  if (rr) {
+    const num = parseInt(rr[2]);
+    const base = num === 1 ? "RR 1+2" : `RR ${num}`;
+    return `${base} ${rr[1]}`;
+  }
+  // Aux: use slotKeyToLabel but keep it compact
+  return slotKeyToLabel(uiKey);
+}
 
-const zoneColor = (key: string) => ZONE_COLORS[key] ?? "#6B7280";
-const zoneIcon  = (key: string) => ZONE_ICONS[key]  ?? "✦";
+/** Canonical sort order: zones → men's RR → women's RR → aux */
+function sortedSlotKeys(keys: string[]): string[] {
+  const zoneNum = (k: string) => { const m = k.match(/^Z(\d+)$/); return m ? parseInt(m[1]) : null; };
+  const rrNum   = (k: string) => { const m = k.match(/^[MW]RR(\d+)$/); return m ? parseInt(m[1]) : null; };
+  const isMens  = (k: string) => k.startsWith("M");
+
+  return [...keys].sort((a, b) => {
+    const za = zoneNum(a), zb = zoneNum(b);
+    if (za !== null && zb !== null) return za - zb;
+    if (za !== null) return -1;
+    if (zb !== null) return 1;
+
+    const ra = rrNum(a), rb = rrNum(b);
+    if (ra !== null && rb !== null) {
+      if (ra !== rb) return ra - rb;
+      // M before W for same number
+      return isMens(a) ? -1 : 1;
+    }
+    if (ra !== null) return -1;
+    if (rb !== null) return 1;
+
+    return a.localeCompare(b);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Static slot column list (zones + RR pairs + default aux)
+// ---------------------------------------------------------------------------
+
+const ALL_SLOT_KEYS: string[] = sortedSlotKeys([
+  ...ZONE_DEFS.map((z) => z.key),
+  ...RR_DEFS.flatMap((r) => [`MRR${r.num}`, `WRR${r.num}`]),
+  ...DEFAULT_AUX_DEFS.map((a) => a.key),
+]);
+
+/** Left-rail slot list entry */
+const ALL_SLOT_DEFS = ALL_SLOT_KEYS.map((key) => ({
+  key,
+  label: slotKeyToLabel(key),
+  color: getSlotColor(key),
+  icon:  getSlotIcon(key),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const GRAVE_DOW_IDX    = [5, 6, 0, 1, 2, 3, 4];
+const GRAVE_DOW_LABELS = ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu"];
 
 function formatDate(iso: string): string {
   if (!iso) return "—";
@@ -65,80 +115,503 @@ function formatDate(iso: string): string {
   return `${parseInt(m)}/${parseInt(d)}/${y.slice(2)}`;
 }
 
-/** Derive zone-first data from the TM list: zone → sorted TM entries. */
-function buildZoneView(
-  byTm: ZoneFrequencyEntry[]
-): Record<string, Array<{ tmId: string; tmName: string; count: number; lastDate: string }>> {
-  const out: Record<string, Array<{ tmId: string; tmName: string; count: number; lastDate: string }>> = {};
-  for (const tm of byTm) {
-    for (const [zKey, count] of Object.entries(tm.zoneCounts)) {
-      if (!out[zKey]) out[zKey] = [];
-      out[zKey].push({ tmId: tm.tmId, tmName: tm.tmName, count, lastDate: tm.lastDate });
-    }
-  }
-  // Sort each zone's TM list by count DESC
-  for (const key of Object.keys(out)) {
-    out[key].sort((a, b) => b.count - a.count);
-  }
-  return out;
+function daysSince(iso: string): number {
+  if (!iso) return Infinity;
+  return Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86_400_000);
+}
+
+function recencyColor(days: number): string {
+  if (days <= 7)  return "#34C759";
+  if (days <= 14) return "#FFD60A";
+  if (days <= 30) return "#FF9500";
+  return "#FF453A";
+}
+
+function csvExport(entries: ZoneDetailEntry[], dr: { from: string; to: string }) {
+  // Use the slots actually present in data so the CSV is meaningful
+  const keys = sortedSlotKeys(
+    Array.from(new Set(entries.flatMap((e) => Object.keys(e.zoneCounts))))
+  );
+  const header = [
+    "TM", "Total Placements", "Nights in Window", "Last Date",
+    ...keys.map((k) => `${k} Count`),
+    ...keys.map((k) => `${k} Last Date`),
+  ];
+  const rows = entries.map((tm) => [
+    tm.tmName,
+    tm.totalAssignments,
+    tm.totalNights,
+    formatDate(tm.lastDate),
+    ...keys.map((k) => tm.zoneCounts[k] ?? 0),
+    ...keys.map((k) => {
+      const d = tm.zoneDates[k]?.[0];
+      return d ? formatDate(d) : "—";
+    }),
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((c) => `"${c}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `placement-report-${dr.from}-to-${dr.to}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** A single horizontal frequency bar row. */
-function FreqBar({
-  label,
-  icon,
-  count,
-  maxCount,
-  color,
-  sub,
+/** Expandable slot row — date chips expand on click. */
+function SlotHistoryRow({
+  slotKey, count, maxCount, dates,
 }: {
-  label: string;
-  icon?: string;
-  count: number;
-  maxCount: number;
-  color: string;
-  sub?: string;
+  slotKey: string; count: number; maxCount: number; dates: string[];
 }) {
-  const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+  const [open, setOpen] = React.useState(false);
+  const color = getSlotColor(slotKey);
+  const pct   = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+  const ago   = dates[0] ? daysSince(dates[0]) : null;
+
   return (
-    <div className="flex items-center gap-2 py-[5px] group">
-      {/* Icon + label */}
-      <div className="w-[88px] flex-shrink-0 flex items-center gap-1.5 min-w-0">
-        {icon && (
+    <div className="border-b border-zinc-800/60 last:border-0">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2.5 py-2.5 px-1 rounded hover:bg-zinc-800/40 transition-colors text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="w-[72px] flex-shrink-0 flex items-center gap-1.5">
           <span className="text-[11px] leading-none flex-shrink-0" style={{ color }}>
-            {icon}
+            {getSlotIcon(slotKey)}
           </span>
-        )}
-        <span className="text-[11px] font-semibold text-zinc-200 truncate tracking-[-0.1px]">
-          {label}
+          <span className="text-[11px] font-bold leading-tight" style={{ color }}>
+            {getSlotShortLabel(slotKey)}
+          </span>
+        </div>
+        <div className="flex-1 h-[10px] rounded-full bg-zinc-800 relative overflow-hidden">
+          <div
+            className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+            style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
+          />
+        </div>
+        <span className="text-[12px] font-bold tabular-nums w-8 text-right flex-shrink-0" style={{ color }}>
+          {count}×
         </span>
-      </div>
-
-      {/* Bar track */}
-      <div className="flex-1 h-[6px] rounded-full bg-zinc-800 relative overflow-hidden">
-        <div
-          className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
-          style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
-        />
-      </div>
-
-      {/* Count */}
-      <div className="w-7 text-right flex-shrink-0">
-        <span className="text-[11px] font-bold tabular-nums" style={{ color }}>
-          {count}x
+        <span
+          className="text-[10px] font-semibold w-[52px] text-right flex-shrink-0"
+          style={{ color: ago !== null ? recencyColor(ago) : "#52525b" }}
+        >
+          {ago !== null ? `${ago}d ago` : "—"}
         </span>
-      </div>
-
-      {/* Optional sub-label (e.g. last seen date) */}
-      {sub && (
-        <span className="text-[9px] text-zinc-600 w-12 text-right flex-shrink-0 hidden group-hover:block">
-          {sub}
+        <span
+          className="ms text-zinc-600 flex-shrink-0 transition-transform duration-150"
+          style={{ fontSize: 14, transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          chevron_right
         </span>
+      </button>
+      {open && (
+        <div className="pb-3 pt-1 pl-[80px] pr-2 flex flex-wrap gap-1.5">
+          {dates.map((d) => (
+            <span
+              key={d}
+              className="text-[10px] px-2 py-0.5 rounded-full border font-mono"
+              style={{ borderColor: `${color}55`, color: `${color}cc`, background: `${color}12` }}
+            >
+              {formatDate(d)}
+            </span>
+          ))}
+        </div>
       )}
+    </div>
+  );
+}
+
+/** Expandable TM row inside a slot's detail panel. */
+function SlotTmRow({
+  tm, color, maxCount,
+}: {
+  tm: { tmId: string; tmName: string; count: number; dates: string[] };
+  color: string;
+  maxCount: number;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const pct = maxCount > 0 ? Math.round((tm.count / maxCount) * 100) : 0;
+  const ago = tm.dates[0] ? daysSince(tm.dates[0]) : null;
+
+  return (
+    <div className="border-b border-zinc-800/60 last:border-0">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2.5 py-2.5 px-1 rounded hover:bg-zinc-800/40 transition-colors text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="text-[12px] font-medium text-zinc-300 w-[140px] flex-shrink-0 truncate">
+          {tm.tmName}
+        </span>
+        <div className="flex-1 h-[10px] rounded-full bg-zinc-800 relative overflow-hidden">
+          <div
+            className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+            style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
+          />
+        </div>
+        <span className="text-[12px] font-bold tabular-nums w-8 text-right flex-shrink-0" style={{ color }}>
+          {tm.count}×
+        </span>
+        <span
+          className="text-[10px] font-semibold w-[52px] text-right flex-shrink-0"
+          style={{ color: ago !== null ? recencyColor(ago) : "#52525b" }}
+        >
+          {ago !== null ? `${ago}d ago` : "—"}
+        </span>
+        <span
+          className="ms text-zinc-600 flex-shrink-0 transition-transform duration-150"
+          style={{ fontSize: 14, transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          chevron_right
+        </span>
+      </button>
+      {open && (
+        <div className="pb-3 pt-1 px-3 flex flex-wrap gap-1.5">
+          {tm.dates.map((d) => (
+            <span
+              key={d}
+              className="text-[10px] px-2 py-0.5 rounded-full border font-mono"
+              style={{ borderColor: `${color}55`, color: `${color}cc`, background: `${color}12` }}
+            >
+              {formatDate(d)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 7-bar DOW mini-chart in Fri–Thu grave order. */
+function DowChart({ dow, color }: { dow: number[]; color: string }) {
+  const max = Math.max(...GRAVE_DOW_IDX.map((i) => dow[i] ?? 0), 1);
+  return (
+    <div className="flex items-end gap-[3px]" style={{ height: 28 }}>
+      {GRAVE_DOW_IDX.map((dayIdx, col) => {
+        const n = dow[dayIdx] ?? 0;
+        const h = Math.max(2, Math.round((n / max) * 24));
+        return (
+          <div
+            key={col}
+            className="rounded-sm flex-shrink-0"
+            style={{
+              width: 10, height: h,
+              backgroundColor: n > 0 ? color : "#27272a",
+              opacity: n > 0 ? 0.85 : 1,
+            }}
+            title={`${GRAVE_DOW_LABELS[col]}: ${n}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TM Detail panel
+// ---------------------------------------------------------------------------
+
+function TmDetail({ tm }: { tm: ZoneDetailEntry }) {
+  const [showDow, setShowDow] = React.useState(false);
+  const ago = daysSince(tm.lastDate);
+
+  const slots = sortedSlotKeys(Object.keys(tm.zoneCounts))
+    .map((key) => ({
+      key,
+      count:  tm.zoneCounts[key] ?? 0,
+      dates:  tm.zoneDates[key]  ?? [],
+      dow:    tm.zoneDow[key]    ?? [0, 0, 0, 0, 0, 0, 0],
+    }))
+    .filter((s) => s.count > 0);
+
+  const maxCount = slots[0]?.count ?? 1;
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[17px] font-bold text-zinc-100 tracking-[-0.3px] leading-snug">
+            {tm.tmName}
+          </div>
+          <div className="mt-1 space-y-0.5">
+            <div className="text-[11px] text-zinc-500">
+              {tm.totalAssignments} placement{tm.totalAssignments !== 1 ? "s" : ""} ·{" "}
+              {tm.totalNights} night{tm.totalNights !== 1 ? "s" : ""} in window
+            </div>
+            {tm.lastDate && (
+              <div
+                className="text-[11px] font-semibold"
+                style={{ color: ago < Infinity ? recencyColor(ago) : "#52525b" }}
+              >
+                last: {formatDate(tm.lastDate)} ({ago}d ago)
+              </div>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDow((v) => !v)}
+          className={cn(
+            "flex-shrink-0 text-[10px] px-2.5 py-1 rounded border font-semibold tracking-wide transition-colors",
+            showDow
+              ? "bg-zinc-700 border-zinc-600 text-zinc-200"
+              : "border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600"
+          )}
+        >
+          {showDow ? "← History" : "By Day →"}
+        </button>
+      </div>
+
+      {slots.length === 0 ? (
+        <div className="text-[12px] text-zinc-600">No assignments in this window.</div>
+      ) : showDow ? (
+        /* DOW view */
+        <div>
+          <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600 mb-3">
+            Day-of-Week Pattern (Fri → Thu)
+          </div>
+          {/* Column header */}
+          <div className="flex items-center gap-2.5 px-1 mb-1">
+            <div className="w-[72px] flex-shrink-0" />
+            <div className="flex-1" />
+            <div className="flex gap-[3px] flex-shrink-0">
+              {GRAVE_DOW_LABELS.map((l) => (
+                <div key={l} className="text-[8px] text-zinc-600 text-center" style={{ width: 10 }}>
+                  {l[0]}
+                </div>
+              ))}
+            </div>
+            <div className="w-8" />
+            <div className="w-[52px]" />
+            <div style={{ width: 14 }} />
+          </div>
+          {slots.map((s) => {
+            const color = getSlotColor(s.key);
+            const ago   = s.dates[0] ? daysSince(s.dates[0]) : null;
+            return (
+              <div
+                key={s.key}
+                className="flex items-center gap-2.5 py-2 px-1 border-b border-zinc-800/60 last:border-0"
+              >
+                <div className="w-[72px] flex-shrink-0 flex items-center gap-1.5">
+                  <span className="text-[11px] leading-none" style={{ color }}>
+                    {getSlotIcon(s.key)}
+                  </span>
+                  <span className="text-[11px] font-bold leading-tight" style={{ color }}>
+                    {getSlotShortLabel(s.key)}
+                  </span>
+                </div>
+                <div className="flex-1" />
+                <DowChart dow={s.dow} color={color} />
+                <span className="text-[12px] font-bold tabular-nums w-8 text-right flex-shrink-0" style={{ color }}>
+                  {s.count}×
+                </span>
+                <span
+                  className="text-[10px] font-semibold w-[52px] text-right flex-shrink-0"
+                  style={{ color: ago !== null ? recencyColor(ago) : "#52525b" }}
+                >
+                  {ago !== null ? `${ago}d ago` : "—"}
+                </span>
+                <div style={{ width: 14 }} />
+              </div>
+            );
+          })}
+          {/* Footer labels */}
+          <div className="flex items-center gap-2.5 px-1 mt-1">
+            <div className="w-[72px] flex-shrink-0" />
+            <div className="flex-1" />
+            <div className="flex gap-[3px] flex-shrink-0">
+              {GRAVE_DOW_LABELS.map((l) => (
+                <div key={l} className="text-[8px] text-zinc-600 text-center" style={{ width: 10 }}>
+                  {l.slice(0, 2)}
+                </div>
+              ))}
+            </div>
+            <div className="w-8" />
+            <div className="w-[52px]" />
+            <div style={{ width: 14 }} />
+          </div>
+        </div>
+      ) : (
+        /* History view */
+        <div>
+          <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600 mb-1">
+            Placement History · tap row to expand dates
+          </div>
+          {slots.map((s) => (
+            <SlotHistoryRow
+              key={s.key}
+              slotKey={s.key}
+              count={s.count}
+              maxCount={maxCount}
+              dates={s.dates}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Slot Detail panel
+// ---------------------------------------------------------------------------
+
+function SlotDetail({ slotKey, entries }: { slotKey: string; entries: ZoneDetailEntry[] }) {
+  const color = getSlotColor(slotKey);
+  const tms   = entries
+    .filter((tm) => (tm.zoneCounts[slotKey] ?? 0) > 0)
+    .map((tm) => ({
+      tmId:   tm.tmId,
+      tmName: tm.tmName,
+      count:  tm.zoneCounts[slotKey]!,
+      dates:  tm.zoneDates[slotKey] ?? [],
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const maxCount = tms[0]?.count ?? 1;
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <span className="text-[28px] leading-none" style={{ color }}>
+          {getSlotIcon(slotKey)}
+        </span>
+        <div>
+          <div className="text-[17px] font-bold text-zinc-100 tracking-[-0.3px]">
+            {slotKeyToLabel(slotKey)}
+          </div>
+          <div className="text-[11px] text-zinc-500 mt-0.5">
+            {tms.length} TM{tms.length !== 1 ? "s" : ""} worked this slot in window
+          </div>
+        </div>
+      </div>
+
+      {tms.length === 0 ? (
+        <div className="text-[12px] text-zinc-600">No assignments in this slot for the selected window.</div>
+      ) : (
+        <div>
+          <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600 mb-1">
+            Times Assigned · tap row to expand dates
+          </div>
+          {tms.map((tm) => (
+            <SlotTmRow key={tm.tmId} tm={tm} color={color} maxCount={maxCount} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Matrix View
+// ---------------------------------------------------------------------------
+
+function MatrixView({ entries }: { entries: ZoneDetailEntry[] }) {
+  // Build dynamic column set from actual data so operator-added slots appear
+  const allKeysInData = sortedSlotKeys(
+    Array.from(new Set(entries.flatMap((e) => Object.keys(e.zoneCounts))))
+  );
+
+  const LEGEND = [
+    { label: "≤7d",   color: "#34C759" },
+    { label: "8–14d", color: "#FFD60A" },
+    { label: "15–30d",color: "#FF9500" },
+    { label: ">30d",  color: "#FF453A" },
+  ];
+
+  return (
+    <div className="flex-1 min-h-0 overflow-auto px-5 py-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600">
+          Rotation Fairness Matrix — Days Since Last Placement
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {LEGEND.map(({ label, color }) => (
+            <span key={label} className="flex items-center gap-1 text-[10px] text-zinc-500">
+              <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
+              {label}
+            </span>
+          ))}
+          <span className="text-[10px] text-zinc-600">·{" "}<span className="text-zinc-700">—</span> not in window</span>
+        </div>
+      </div>
+
+      <table className="text-[11px] border-collapse" style={{ minWidth: "100%" }}>
+        <thead>
+          <tr className="border-b border-zinc-800">
+            <th
+              className="text-left text-zinc-500 font-semibold py-2 pr-4 sticky left-0 bg-zinc-950"
+              style={{ minWidth: 130 }}
+            >
+              Team Member
+            </th>
+            {allKeysInData.map((k) => (
+              <th
+                key={k}
+                className="text-center font-bold py-2 px-1.5"
+                style={{ color: getSlotColor(k), minWidth: 46 }}
+                title={slotKeyToLabel(k)}
+              >
+                {/* Short label in header: Z1, RR7M, ADM etc */}
+                <span className="block text-[9px]">{getSlotShortLabel(k)}</span>
+              </th>
+            ))}
+            <th
+              className="text-right text-zinc-500 font-semibold py-2 pl-4"
+              style={{ minWidth: 50 }}
+            >
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((tm) => (
+            <tr
+              key={tm.tmId}
+              className="border-b border-zinc-800/40 hover:bg-zinc-800/25 transition-colors"
+            >
+              <td className="py-2.5 pr-4 font-medium text-zinc-300 sticky left-0 bg-zinc-950 max-w-[130px] truncate">
+                {tm.tmName}
+              </td>
+              {allKeysInData.map((k) => {
+                const lastDate = tm.zoneDates[k]?.[0];
+                const count    = tm.zoneCounts[k] ?? 0;
+                const ago      = lastDate ? daysSince(lastDate) : null;
+                const color    = ago !== null ? recencyColor(ago) : null;
+                return (
+                  <td key={k} className="py-2.5 px-1.5 text-center">
+                    {color ? (
+                      <span
+                        className="inline-block rounded px-1 py-0.5 text-[10px] font-bold tabular-nums"
+                        style={{ color, background: `${color}1a` }}
+                        title={`${tm.tmName} / ${slotKeyToLabel(k)}: last ${formatDate(lastDate!)} · ${count}×`}
+                      >
+                        {ago}d
+                      </span>
+                    ) : (
+                      <span className="text-zinc-700">—</span>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="py-2.5 pl-4 text-right font-bold text-zinc-400 tabular-nums">
+                {tm.totalAssignments}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -147,28 +620,39 @@ function FreqBar({
 // Main component
 // ---------------------------------------------------------------------------
 
-type View = "tm" | "zone";
-type DayRange = 14 | 30 | 60;
+type ReportView = "tm" | "slot" | "matrix";
+
+const VIEW_OPTS: { label: string; value: ReportView; icon: string }[] = [
+  { label: "By TM",   value: "tm",     icon: "person"      },
+  { label: "By Slot", value: "slot",   icon: "location_on" },
+  { label: "Matrix",  value: "matrix", icon: "grid_on"     },
+];
+
+const WINDOW_OPTS: { label: string; value: ReportWindow }[] = [
+  { label: "14d",         value: 14             },
+  { label: "30d",         value: 30             },
+  { label: "60d",         value: 60             },
+  { label: "This Wk",    value: "this-week"    },
+  { label: "Last 4 Wks", value: "last-4-weeks" },
+];
 
 export function ReportsTab() {
-  const [view, setView]         = React.useState<View>("tm");
-  const [days, setDays]         = React.useState<DayRange>(30);
-  const [report, setReport]     = React.useState<ZoneFrequencyReport | null>(null);
-  const [loading, setLoading]   = React.useState(false);
-  const [error, setError]       = React.useState<string | null>(null);
-  const [selectedTm, setSelectedTm]     = React.useState<string | null>(null);
-  const [selectedZone, setSelectedZone] = React.useState<string | null>(null);
-  const [search, setSearch]     = React.useState("");
+  const [reportView,   setReportView]   = React.useState<ReportView>("tm");
+  const [reportWin,    setReportWin]    = React.useState<ReportWindow>(30);
+  const [report,       setReport]       = React.useState<ZoneDetailReport | null>(null);
+  const [loading,      setLoading]      = React.useState(false);
+  const [error,        setError]        = React.useState<string | null>(null);
+  const [selectedTm,   setSelectedTm]   = React.useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = React.useState<string>(ALL_SLOT_KEYS[0] ?? "Z1");
+  const [search,       setSearch]       = React.useState("");
 
-  const load = React.useCallback(async (d: DayRange) => {
+  const load = React.useCallback(async (w: ReportWindow) => {
     setLoading(true);
     setError(null);
     try {
-      const r = await getZoneFrequencyReport(d);
+      const r = await getZoneDetailReport(w);
       setReport(r);
-      // Auto-select first item so the right panel isn't blank
-      if (r.byTm.length > 0) setSelectedTm(r.byTm[0].tmId);
-      setSelectedZone("Z1");
+      if (r.entries.length > 0) setSelectedTm(r.entries[0].tmId);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load report");
     } finally {
@@ -176,108 +660,93 @@ export function ReportsTab() {
     }
   }, []);
 
-  React.useEffect(() => { load(days); }, [days, load]);
+  React.useEffect(() => { void load(reportWin); }, [reportWin, load]);
 
-  // Derived data
-  const zoneView = React.useMemo(
-    () => (report ? buildZoneView(report.byTm) : {}),
-    [report]
-  );
-
-  const filteredTms = React.useMemo(() => {
+  const filteredEntries = React.useMemo(() => {
     if (!report) return [];
     const q = search.trim().toLowerCase();
-    return q
-      ? report.byTm.filter((tm) => tm.tmName.toLowerCase().includes(q))
-      : report.byTm;
+    return q ? report.entries.filter((e) => e.tmName.toLowerCase().includes(q)) : report.entries;
   }, [report, search]);
 
-  const activeTm   = report?.byTm.find((t) => t.tmId === selectedTm) ?? null;
-  const activeZoneTms = selectedZone ? (zoneView[selectedZone] ?? []) : [];
+  const activeTm = report?.entries.find((e) => e.tmId === selectedTm) ?? null;
 
-  // Bar chart data for TM-first right panel
-  const tmBars = React.useMemo(() => {
-    if (!activeTm) return [];
-    return ZONE_DEFS
-      .map((z) => ({ ...z, count: activeTm.zoneCounts[z.key] ?? 0 }))
-      .filter((z) => z.count > 0)
-      .sort((a, b) => b.count - a.count);
-  }, [activeTm]);
-
-  const tmMaxCount = tmBars[0]?.count ?? 1;
-
-  // Bar chart data for Zone-first right panel
-  const zoneMaxCount = activeZoneTms[0]?.count ?? 1;
-
-  // Zone counts for the left zone list (how many distinct TMs have worked each zone)
-  const zoneTmCounts = React.useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const z of ZONE_DEFS) {
-      out[z.key] = (zoneView[z.key] ?? []).length;
-    }
-    return out;
-  }, [zoneView]);
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  // All slot keys present in the loaded data (for the Slot view left rail)
+  const dataSlotKeys = React.useMemo(() => {
+    if (!report) return ALL_SLOT_KEYS;
+    const keys = new Set<string>([
+      ...ALL_SLOT_KEYS,
+      ...report.entries.flatMap((e) => Object.keys(e.zoneCounts)),
+    ]);
+    return sortedSlotKeys(Array.from(keys));
+  }, [report]);
 
   return (
     <div className="flex flex-col h-full min-h-0 text-zinc-100">
 
       {/* ── Control bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-zinc-800 flex-shrink-0">
-
-        {/* View toggle */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-zinc-800 flex-shrink-0 flex-wrap">
+        {/* View */}
         <div className="flex rounded-md border border-zinc-700 overflow-hidden text-[11px] font-semibold">
-          {(["tm", "zone"] as View[]).map((v) => (
+          {VIEW_OPTS.map((v) => (
             <button
-              key={v}
-              onClick={() => setView(v)}
+              key={v.value}
+              type="button"
+              onClick={() => setReportView(v.value)}
               className={cn(
-                "px-3 py-1 flex items-center gap-1.5 transition-colors",
-                view === v
+                "px-3 py-1.5 flex items-center gap-1.5 transition-colors",
+                reportView === v.value
                   ? "bg-zinc-700 text-zinc-100"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60"
               )}
             >
-              {v === "tm" ? <span className="ms" style={{ fontSize: 12 }}>person</span> : <span className="ms" style={{ fontSize: 12 }}>location_on</span>}
-              {v === "tm" ? "By Team Member" : "By Zone"}
+              <span className="ms" style={{ fontSize: 12 }}>{v.icon}</span>
+              {v.label}
             </button>
           ))}
         </div>
 
-        {/* Day range */}
+        {/* Window */}
         <div className="flex rounded-md border border-zinc-700 overflow-hidden text-[11px] font-semibold">
-          {([14, 30, 60] as DayRange[]).map((d) => (
+          {WINDOW_OPTS.map((w) => (
             <button
-              key={d}
-              onClick={() => setDays(d)}
+              key={String(w.value)}
+              type="button"
+              onClick={() => setReportWin(w.value)}
               className={cn(
-                "px-3 py-1 transition-colors",
-                days === d
+                "px-3 py-1.5 transition-colors",
+                reportWin === w.value
                   ? "bg-zinc-700 text-zinc-100"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60"
               )}
             >
-              {d}d
+              {w.label}
             </button>
           ))}
         </div>
 
-        {/* Summary */}
         {report && !loading && (
-          <span className="text-[10px] text-zinc-500 ml-1">
-            {report.totalNights} nights · {report.byTm.length} TMs ·{" "}
+          <span className="text-[10px] text-zinc-500">
+            {report.totalNights} nights · {report.entries.length} TMs ·{" "}
             {formatDate(report.dateRange.from)} – {formatDate(report.dateRange.to)}
           </span>
         )}
 
         <div className="flex-1" />
 
-        {/* Refresh */}
+        {report && report.entries.length > 0 && (
+          <button
+            type="button"
+            onClick={() => csvExport(report.entries, report.dateRange)}
+            className="w-7 h-7 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            title="Export CSV"
+          >
+            <span className="ms" style={{ fontSize: 14 }}>download</span>
+          </button>
+        )}
+
         <button
-          onClick={() => load(days)}
+          type="button"
+          onClick={() => void load(reportWin)}
           disabled={loading}
           className="w-7 h-7 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 transition-colors"
           title="Refresh"
@@ -288,28 +757,26 @@ export function ReportsTab() {
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       {error ? (
-        <div className="flex-1 flex items-center justify-center text-red-400 text-sm">
-          {error}
-        </div>
+        <div className="flex-1 flex items-center justify-center text-red-400 text-sm">{error}</div>
       ) : loading && !report ? (
-        <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
-          Loading…
-        </div>
-      ) : !report || report.byTm.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">Loading…</div>
+      ) : !report || report.entries.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-zinc-600 text-sm">
-          No zone assignments found in the last {days} days.
+          No assignments found in this window.
         </div>
+      ) : reportView === "matrix" ? (
+        <MatrixView entries={report.entries} />
       ) : (
         <div className="flex-1 min-h-0 flex overflow-hidden">
 
           {/* ── Left rail ──────────────────────────────────────────────── */}
           <div className="w-[220px] flex-shrink-0 border-r border-zinc-800 flex flex-col min-h-0">
-
-            {/* Search (TM view only) */}
-            {view === "tm" && (
+            {reportView === "tm" && (
               <div className="px-3 pt-3 pb-2 flex-shrink-0">
                 <div className="relative">
-                  <span className="ms absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600" style={{ fontSize: 12 }}>search</span>
+                  <span className="ms absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600" style={{ fontSize: 12 }}>
+                    search
+                  </span>
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -320,73 +787,55 @@ export function ReportsTab() {
               </div>
             )}
 
-            {/* List */}
             <div className="flex-1 min-h-0 overflow-y-auto">
-              {view === "tm" ? (
-                // TM list
-                filteredTms.map((tm) => {
+              {reportView === "tm" ? (
+                filteredEntries.map((tm) => {
                   const isActive = tm.tmId === selectedTm;
-                  // Show their top zone as a color hint
-                  const topZone = Object.entries(tm.zoneCounts).sort((a, b) => b[1] - a[1])[0];
-                  const topColor = topZone ? zoneColor(topZone[0]) : "#6B7280";
+                  const topKey   = Object.entries(tm.zoneCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+                  const dotColor = topKey ? getSlotColor(topKey) : "#52525b";
                   return (
                     <button
                       key={tm.tmId}
+                      type="button"
                       onClick={() => setSelectedTm(tm.tmId)}
                       className={cn(
-                        "w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-900",
+                        "w-full text-left px-3 py-2.5 flex items-center gap-2.5 transition-colors border-b border-zinc-900",
                         isActive ? "bg-zinc-800" : "hover:bg-zinc-900/60"
                       )}
                     >
-                      {/* Top-zone color dot */}
-                      <div
-                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: topColor }}
-                      />
-                      <span className={cn(
-                        "flex-1 text-[11px] font-medium truncate",
-                        isActive ? "text-zinc-100" : "text-zinc-400"
-                      )}>
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+                      <span className={cn("flex-1 text-[12px] font-medium truncate", isActive ? "text-zinc-100" : "text-zinc-400")}>
                         {tm.tmName}
                       </span>
-                      <span className={cn(
-                        "text-[10px] font-bold tabular-nums flex-shrink-0",
-                        isActive ? "text-zinc-300" : "text-zinc-600"
-                      )}>
-                        {tm.totalShifts}
+                      <span className={cn("text-[10px] font-bold tabular-nums flex-shrink-0", isActive ? "text-zinc-300" : "text-zinc-600")}>
+                        {tm.totalAssignments}
                       </span>
                     </button>
                   );
                 })
               ) : (
-                // Zone list
-                ZONE_DEFS.map((z) => {
-                  const isActive = z.key === selectedZone;
-                  const color = zoneColor(z.key);
-                  const tmCount = zoneTmCounts[z.key] ?? 0;
+                dataSlotKeys.map((k) => {
+                  const isActive = k === selectedSlot;
+                  const color    = getSlotColor(k);
+                  const count    = report.entries.filter((e) => e.zoneCounts[k]).length;
                   return (
                     <button
-                      key={z.key}
-                      onClick={() => setSelectedZone(z.key)}
+                      key={k}
+                      type="button"
+                      onClick={() => setSelectedSlot(k)}
                       className={cn(
-                        "w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-900",
+                        "w-full text-left px-3 py-2.5 flex items-center gap-2.5 transition-colors border-b border-zinc-900",
                         isActive ? "bg-zinc-800" : "hover:bg-zinc-900/60"
                       )}
                     >
                       <span className="text-[12px] leading-none flex-shrink-0" style={{ color }}>
-                        {zoneIcon(z.key)}
+                        {getSlotIcon(k)}
                       </span>
-                      <span className={cn(
-                        "flex-1 text-[11px] font-medium",
-                        isActive ? "text-zinc-100" : "text-zinc-400"
-                      )}>
-                        {z.label}
+                      <span className={cn("flex-1 text-[11px] font-medium truncate", isActive ? "text-zinc-100" : "text-zinc-400")}>
+                        {slotKeyToLabel(k)}
                       </span>
-                      <span className={cn(
-                        "text-[10px] font-bold tabular-nums flex-shrink-0",
-                        isActive ? "text-zinc-300" : "text-zinc-600"
-                      )}>
-                        {tmCount}
+                      <span className={cn("text-[10px] font-bold tabular-nums flex-shrink-0", isActive ? "text-zinc-300" : "text-zinc-600")}>
+                        {count}
                       </span>
                     </button>
                   );
@@ -397,118 +846,14 @@ export function ReportsTab() {
 
           {/* ── Right panel ────────────────────────────────────────────── */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
-
-            {view === "tm" ? (
-              // TM-first right panel
+            {reportView === "tm" ? (
               activeTm ? (
-                <>
-                  {/* Header */}
-                  <div className="mb-5">
-                    <div className="text-[15px] font-bold text-zinc-100 tracking-[-0.2px]">
-                      {activeTm.tmName}
-                    </div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5">
-                      {activeTm.totalShifts} shift{activeTm.totalShifts !== 1 ? "s" : ""} in window
-                      {activeTm.lastDate && ` · last assigned ${formatDate(activeTm.lastDate)}`}
-                    </div>
-                  </div>
-
-                  {/* Zone bars */}
-                  {tmBars.length === 0 ? (
-                    <div className="text-[12px] text-zinc-600">No zone assignments in this window.</div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600 mb-2">
-                        Zone Frequency
-                      </div>
-                      {tmBars.map((z) => (
-                        <FreqBar
-                          key={z.key}
-                          label={z.label}
-                          icon={zoneIcon(z.key)}
-                          count={z.count}
-                          maxCount={tmMaxCount}
-                          color={zoneColor(z.key)}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Zones not worked — shown as a dim list */}
-                  {(() => {
-                    const unworked = ZONE_DEFS.filter((z) => !activeTm.zoneCounts[z.key]);
-                    if (unworked.length === 0) return null;
-                    return (
-                      <div className="mt-5 pt-4 border-t border-zinc-800/60">
-                        <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-700 mb-2">
-                          Not Worked in Window
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {unworked.map((z) => (
-                            <span
-                              key={z.key}
-                              className="text-[10px] px-2 py-0.5 rounded border border-zinc-800 text-zinc-700"
-                            >
-                              {zoneIcon(z.key)} {z.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </>
+                <TmDetail tm={activeTm} />
               ) : (
                 <div className="text-[12px] text-zinc-600">Select a team member.</div>
               )
-
             ) : (
-              // Zone-first right panel
-              selectedZone ? (
-                <>
-                  {/* Header */}
-                  <div className="mb-5 flex items-center gap-3">
-                    <span
-                      className="text-[28px] leading-none"
-                      style={{ color: zoneColor(selectedZone) }}
-                    >
-                      {zoneIcon(selectedZone)}
-                    </span>
-                    <div>
-                      <div className="text-[15px] font-bold text-zinc-100 tracking-[-0.2px]">
-                        {ZONE_DEFS.find((z) => z.key === selectedZone)?.label}
-                      </div>
-                      <div className="text-[11px] text-zinc-500 mt-0.5">
-                        {activeZoneTms.length} TM{activeZoneTms.length !== 1 ? "s" : ""} worked this zone in window
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* TM bars */}
-                  {activeZoneTms.length === 0 ? (
-                    <div className="text-[12px] text-zinc-600">
-                      No assignments in this zone for the selected window.
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      <div className="text-[9px] font-bold tracking-[1.2px] uppercase text-zinc-600 mb-2">
-                        Times Assigned
-                      </div>
-                      {activeZoneTms.map((tm) => (
-                        <FreqBar
-                          key={tm.tmId}
-                          label={tm.tmName}
-                          count={tm.count}
-                          maxCount={zoneMaxCount}
-                          color={zoneColor(selectedZone)}
-                          sub={formatDate(tm.lastDate)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-[12px] text-zinc-600">Select a zone.</div>
-              )
+              <SlotDetail slotKey={selectedSlot} entries={report.entries} />
             )}
           </div>
         </div>
