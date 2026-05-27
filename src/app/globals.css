@@ -1,3 +1,6 @@
+/* Material Symbols Rounded — self-hosted via npm, no CDN dependency */
+@import "material-symbols/rounded";
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

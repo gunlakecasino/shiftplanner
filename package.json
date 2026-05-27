@@ -36,7 +36,8 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "ai": "^4.3.0",
     "@ai-sdk/xai": "^1.2.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "material-symbols": "^0.44.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
