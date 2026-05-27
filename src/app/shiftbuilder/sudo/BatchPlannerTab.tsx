@@ -355,7 +355,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
         {/* Night list */}
         {nightsLoading ? (
           <div className="flex items-center gap-2 text-zinc-500 text-[12px]">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading nights…
+            <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> Loading nights…
           </div>
         ) : nights.length === 0 ? (
           <div className="text-zinc-500 text-[12px]">No nights found for this week.</div>
@@ -416,11 +416,11 @@ function NightRowItem({
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Status icon */}
         <div className="shrink-0 w-5 flex justify-center">
-          {runState.phase === "running" && <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />}
-          {runState.phase === "done" && runState.result.status === "ok" && <CheckCircle className="h-4 w-4 text-emerald-400" />}
-          {runState.phase === "done" && runState.result.status === "skip" && <SkipForward className="h-4 w-4 text-zinc-500" />}
-          {runState.phase === "done" && runState.result.status === "error" && <XCircle className="h-4 w-4 text-red-400" />}
-          {runState.phase === "idle" && <Calendar className="h-4 w-4 text-zinc-600" />}
+          {runState.phase === "running" && <span className="ms animate-spin text-amber-400" style={{ fontSize: 16 }}>sync</span>}
+          {runState.phase === "done" && runState.result.status === "ok" && <span className="ms text-emerald-400" style={{ fontSize: 16 }}>check_circle</span>}
+          {runState.phase === "done" && runState.result.status === "skip" && <span className="ms text-zinc-500" style={{ fontSize: 16 }}>skip_next</span>}
+          {runState.phase === "done" && runState.result.status === "error" && <span className="ms text-red-400" style={{ fontSize: 16 }}>cancel</span>}
+          {runState.phase === "idle" && <span className="ms text-zinc-600" style={{ fontSize: 16 }}>calendar_today</span>}
         </div>
 
         {/* Day + date */}
@@ -480,9 +480,9 @@ function NightRowItem({
           )}
         >
           {runState.phase === "running" ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span>
           ) : (
-            <Play className="h-3 w-3" />
+            <span className="ms" style={{ fontSize: 12 }}>play_arrow</span>
           )}
           Run
         </button>
