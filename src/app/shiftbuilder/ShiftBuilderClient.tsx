@@ -709,6 +709,9 @@ export default function ShiftBuilder() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<Date>(() => new Date());
 
+  // Dock-specific calendar popover (simple week day jumper between arrows)
+  const [dockCalendarOpen, setDockCalendarOpen] = useState(false);
+
   // Centered expandable control cluster (new primary control surface).
   // Single orb centered on the browser. Tapping expands a centered row of all actions
   // (roster icon is now inside the "drawer"/cluster). Expands from the center, stays centered.
@@ -758,6 +761,24 @@ export default function ShiftBuilder() {
       window.removeEventListener("keydown", onKey);
     };
   }, [calendarOpen]);
+
+  // Close dock calendar popover on outside click or Escape
+  useEffect(() => {
+    if (!dockCalendarOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const cal = document.getElementById("dock-calendar-popover");
+      if (cal && !cal.contains(e.target as Node)) {
+        setDockCalendarOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDockCalendarOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [dockCalendarOpen]);
 
   // (centered-control-orb collapse effect removed — orb replaced by Velvet bottom dock)
 
@@ -840,8 +861,10 @@ export default function ShiftBuilder() {
   // === Dark mode state ======================================================
   const { isDark, toggleTheme } = useTheme();
   // Raw break_assignments rows for the current night — used to render the
-  // break sheet from the authoritative source rather than from zone_assignments,
-  // so all 23 TMs always appear regardless of who is actually placed tonight.
+  // break sheet (waves) from the authoritative source.
+  // Only TMs who are actually placed on the deployment this night (and have
+  // a positive break group) will appear. Scheduled-but-not-placed TMs are
+  // deliberately excluded per operator requirements.
   const [nightBreakRows, setNightBreakRows] = useState<Array<{ tmId: string; groupNum: number; slotRef: string | null }>>([]);
 
   // === Roster panel UI state (extracted to useRosterPanels) =================
@@ -2227,16 +2250,41 @@ export default function ShiftBuilder() {
         // Extra safety for break sheet data: explicitly re-fetch breaks for this exact night
         // right before capture. This ensures the wave/group columns have the correct day's
         // break selection even if the normal load effect's timing is racy during rapid day switching in print.
-        if (dayConf.printBreaks && nightId) {
+        //
+        // CRITICAL: Everything here must be computed from *this specific dayIdx*, not from
+        // closed-over state captured when the user first opened the Command Center.
+        // Using stale day context for multi-day prints caused TMs like Robby (scheduled
+        // or placed on the original day but not on the target print day) to leak onto
+        // the wrong break sheet.
+        //
+        // We therefore compute the correct target nightId for *this iteration* and fetch
+        // breaks + scheduled + assignments explicitly for it. This matches the normal day-load
+        // filter logic (scheduled UNION placed) while being completely independent of React state
+        // timing and closure staleness.
+        if (dayConf.printBreaks) {
           try {
-            const fresh = await getNightBreakAssignments(nightId);
-            setNightBreakRows(
-              (fresh as any[])
-                .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-                  (scheduledTmIdsTonight.size === 0 || scheduledTmIdsTonight.has(r.tmId)))
-                .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
-            );
-            await nextFrames(2); // let React commit the new nightBreakRows before capture
+            const def = DAY_DEFS[dayIdx];
+            const targetNightId: string | null = def ? await getNightIdForDate(def.date) : null;
+            if (!targetNightId) {
+              console.warn("[print] could not resolve nightId for day", dayIdx, "— skipping break safety load");
+            } else {
+              const freshBreaks = await getNightBreakAssignments(targetNightId);
+              // Per operator rule: break sheet only includes TMs who are actually
+              // placed on the deployment this night. Scheduled-but-not-placed TMs
+              // (even with break_assignments rows) are excluded.
+              const nightAssignRows = await getNightAssignments(targetNightId);
+              const placed = new Set(
+                (nightAssignRows as any[]).map((r: any) => r.tmId).filter(Boolean)
+              );
+
+              setNightBreakRows(
+                (freshBreaks as any[])
+                  .filter((r: any) => r.groupNum && r.groupNum > 0 &&
+                    (placed.size === 0 || placed.has(r.tmId)))
+                  .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
+              );
+              await nextFrames(2); // let React commit the new nightBreakRows before capture
+            }
           } catch (e) {
             console.warn("[print] extra break data load failed for day", dayIdx, e);
           }
@@ -2570,6 +2618,43 @@ export default function ShiftBuilder() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nightId, showToast]
+  );
+
+  // Dedicated handler for the new "Assign Sweeper" quick action from MarkerPad.
+  // Forces the classic orange sweeper color and prevents duplicates.
+  const handleAssignSweeperTask = React.useCallback(
+    async (uiKey: string, sweeperLabel: string) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        return;
+      }
+      try {
+        const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+        await addNightSlotTask({
+          nightId,
+          slotKey: slot_key,
+          slotType: slot_type,
+          rrSide: rr_side,
+          taskLabel: sweeperLabel,
+          sortOrder: 60,
+          color: "#FF9F0A", // classic sweeper orange
+        });
+
+        // Refresh tasks for the slot
+        const fresh = await getNightSlotTasks(nightId);
+        const byKey: Record<string, NightSlotTask[]> = {};
+        for (const t of fresh) {
+          const key = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+          if (!byKey[key]) byKey[key] = [];
+          byKey[key].push(t);
+        }
+        setSelectedTasks(byKey);
+      } catch (e) {
+        console.error("Failed to assign sweeper task", e);
+        showToast("Failed to assign sweeper task", "error");
+      }
+    },
     [nightId, showToast]
   );
 
@@ -3115,20 +3200,20 @@ export default function ShiftBuilder() {
           }
         });
 
-        // Store the raw break rows so the break sheet can render TMs who are
-        // scheduled or placed tonight. Filter out template TMs who aren't
-        // working tonight to prevent wrong-people / duplicate-chip issues.
+        // Store the raw break rows for the break sheet (waves 1/2/3).
+        // Per operator clarification: ONLY TMs who are actually placed on the
+        // deployment this night should appear on the break sheet, even if they
+        // are in the scheduled roster or have lingering break_assignments rows.
+        // Scheduled-but-not-placed TMs (e.g. Robby on a night with no slot) must
+        // be excluded. This keeps the break sheet faithful to who is actually
+        // working the floor.
         const placedTmIdSet = new Set(
           (dbAssignments as any[]).map((r: any) => r.tmId).filter(Boolean)
         );
-        const relevantBreakTmIds = new Set<string>([
-          ...Array.from(scheduledTonightSet as Set<string>),
-          ...Array.from(placedTmIdSet),
-        ]);
         setNightBreakRows(
           (breakRows as any[])
             .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-              (relevantBreakTmIds.size === 0 || relevantBreakTmIds.has(r.tmId)))
+              (placedTmIdSet.size === 0 || placedTmIdSet.has(r.tmId)))
             .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
         );
 
@@ -4909,28 +4994,23 @@ export default function ShiftBuilder() {
                       };
 
                       return [1, 2, 3].map((wave) => {
-                      // Use nightBreakRows as the authoritative TM list so ALL scheduled
-                      // TMs appear in every night's break sheet, not just those placed tonight.
-                      const waveRows = nightBreakRows.filter(r => r.groupNum === wave);
-
-                      // Build display-ready objects — prefer the actual tonight assignment
-                      // (for correct slot chip), fall back to slotRef from break_assignments.
-                      const waveAssignments = waveRows.map(r => {
-                        const actual = tmToAssignment[r.tmId];
-                        const tm = (realRoster as any[]).find((m: any) => m.id === r.tmId);
-                        const tmName = actual?.tmName ?? tm?.name ?? tm?.fullName ?? r.tmId;
-                        if (actual) return { ...actual, tmName };
-                        // TM not placed tonight — use template slotRef for chip
-                        const slotKey = r.slotRef ?? null;
-                        return {
-                          tmId: r.tmId,
-                          tmName,
-                          slotKey,
-                          type: slotRefType(slotKey),
-                          breakGroup: wave,
-                          notPlaced: true,
-                        };
-                      });
+                      // Derive the break waves *directly from the current assignments*.
+                      // This guarantees the wave columns are always 100% in sync with the
+                      // Break selection boxes (BreakBadge) on the deployment cards.
+                      // Per operator rule, only actually placed TMs appear on the break sheet.
+                      // Scheduled-but-not-placed TMs are excluded (even if they have
+                      // break_assignments rows).
+                      const waveAssignments = Object.entries(assignments)
+                        .map(([slotKey, a]: [string, any]) => {
+                          if (!a?.tmId || a.breakGroup !== wave) return null;
+                          return {
+                            ...a,
+                            slotKey,
+                            type: slotRefType(slotKey),
+                            tmName: a.tmName,
+                          };
+                        })
+                        .filter(Boolean) as any[];
 
                       const count = waveAssignments.length;
                       const waveColor =
@@ -5312,6 +5392,41 @@ export default function ShiftBuilder() {
               >
                 <span className="ms" style={{ fontSize: 20 }}>chevron_left</span>
               </button>
+
+              {/* Today + Calendar selector (new) */}
+              <button
+                type="button"
+                onClick={() => {
+                  // Use shift-aware "today" (respects 8:30am GRAVE rollover)
+                  const todayShift = currentShiftDate();
+                  const idx = DAY_DEFS.findIndex(d => sameDay(d.date, todayShift));
+                  if (idx !== -1) setSelectedDayIndex(idx);
+                }}
+                title="Jump to today (shift-aware)"
+                className="flex items-center justify-center h-full px-2 text-[10px] font-bold tracking-[0.5px] transition-colors hover:bg-white/5"
+                style={{ color: dockText, borderLeft: `1px solid ${dockSep}`, minWidth: 28 }}
+              >
+                TODAY
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDockCalendarOpen(!dockCalendarOpen);
+                  // Seed the calendar view to the currently selected day when opening
+                  if (!dockCalendarOpen) {
+                    const current = DAY_DEFS[selectedDayIndex]?.date ?? new Date();
+                    setCalendarView(new Date(current.getFullYear(), current.getMonth(), 1));
+                  }
+                }}
+                title="Open calendar — pick any day"
+                className="flex items-center justify-center h-full px-2 transition-colors hover:bg-white/5"
+                style={{ color: dockText }}
+                id="dock-calendar-trigger"
+              >
+                <span className="ms" style={{ fontSize: 18 }}>calendar_month</span>
+              </button>
+
               <button
                 type="button"
                 onClick={goNextDay}
@@ -5357,6 +5472,223 @@ export default function ShiftBuilder() {
           </div>
         );
       })()}
+
+      {/* Dock Calendar Popover — simple reliable week jumper */}
+      {dockCalendarOpen && (
+        <div
+          id="dock-calendar-popover"
+          className="fixed z-[60] w-[300px] rounded-2xl border shadow-2xl"
+          style={{
+            bottom: 52,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: isDark ? 'rgba(20,20,22,0.96)' : 'rgba(252,252,250,0.96)',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            boxShadow: isDark 
+              ? '0 20px 60px -15px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)'
+              : '0 20px 60px -15px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9)',
+            padding: '10px 10px 8px',
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, padding: '0 4px' }}>
+            <button
+              onClick={() => setCalendarView(addDays(calendarView, -32))}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-[14px] transition-colors"
+              style={{ color: isDark ? '#8E8E93' : '#6B7280' }}
+              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              ‹
+            </button>
+
+            <div style={{ 
+              fontSize: 12, 
+              fontWeight: 700, 
+              color: isDark ? '#F2F2F4' : '#111111',
+              fontFamily: 'var(--font-atkinson)'
+            }}>
+              {MONTH_LONG[calendarView.getMonth()]} {calendarView.getFullYear()}
+            </div>
+
+            <button
+              onClick={() => setCalendarView(addDays(calendarView, 32))}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-[14px] transition-colors"
+              style={{ color: isDark ? '#8E8E93' : '#6B7280' }}
+              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              ›
+            </button>
+          </div>
+
+          {/* Weekday headers */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(7, 1fr)', 
+            gap: 1, 
+            marginBottom: 2,
+            padding: '0 2px'
+          }}>
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <div key={i} style={{ 
+                textAlign: 'center', 
+                fontSize: 9, 
+                fontWeight: 600, 
+                color: isDark ? '#6B7280' : '#9CA3AF',
+                fontFamily: 'var(--font-jetbrains, monospace)'
+              }}>
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(7, 1fr)', 
+            gap: 2,
+            padding: '0 2px'
+          }}>
+            {(() => {
+              const year = calendarView.getFullYear();
+              const month = calendarView.getMonth();
+              const firstOfMonth = new Date(year, month, 1);
+              const startWeekday = firstOfMonth.getDay();
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const cells: React.ReactNode[] = [];
+
+              // Leading days (previous month)
+              for (let i = 0; i < startWeekday; i++) {
+                const d = new Date(year, month, 1 - (startWeekday - i));
+                cells.push(
+                  <button
+                    key={`prev-${i}`}
+                    onClick={() => {
+                      const newWeek = startOfShiftWeek(d);
+                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                      setWeekStart(newWeek);
+                      setSelectedDayIndex(idx);
+                      setDockCalendarOpen(false);
+                    }}
+                    style={{
+                      height: 26,
+                      width: 26,
+                      fontSize: 11,
+                      color: isDark ? '#555' : '#C8C8CC',
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {d.getDate()}
+                  </button>
+                );
+              }
+
+              // Current month days
+              for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+                const d = new Date(year, month, dayNum);
+                const currentSelected = DAY_DEFS[selectedDayIndex]?.date;
+                const isSelected = currentSelected && sameDay(d, currentSelected);
+                const isTodayShift = sameDay(d, currentShiftDate());
+
+                cells.push(
+                  <button
+                    key={dayNum}
+                    onClick={() => {
+                      const newWeek = startOfShiftWeek(d);
+                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                      setWeekStart(newWeek);
+                      setSelectedDayIndex(idx);
+                      setDockCalendarOpen(false);
+                    }}
+                    style={{
+                      height: 26,
+                      width: 26,
+                      fontSize: 11,
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: isSelected ? 700 : 500,
+                      background: isSelected 
+                        ? (isDark ? '#333' : '#111') 
+                        : 'transparent',
+                      color: isSelected 
+                        ? '#fff' 
+                        : (isDark ? '#E5E5E7' : '#1C1C1E'),
+                      border: isTodayShift && !isSelected 
+                        ? `1px solid ${isDark ? '#555' : '#D1D5DB'}` 
+                        : 'none',
+                    }}
+                  >
+                    {dayNum}
+                  </button>
+                );
+              }
+
+              // Trailing days (next month)
+              const remaining = 42 - cells.length;
+              for (let i = 1; i <= remaining; i++) {
+                const d = new Date(year, month + 1, i);
+                cells.push(
+                  <button
+                    key={`next-${i}`}
+                    onClick={() => {
+                      const newWeek = startOfShiftWeek(d);
+                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+                      setWeekStart(newWeek);
+                      setSelectedDayIndex(idx);
+                      setDockCalendarOpen(false);
+                    }}
+                    style={{
+                      height: 26,
+                      width: 26,
+                      fontSize: 11,
+                      color: isDark ? '#555' : '#C8C8CC',
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {d.getDate()}
+                  </button>
+                );
+              }
+
+              return cells;
+            })()}
+          </div>
+
+          {/* Quick Today */}
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)' }}>
+            <button
+              onClick={() => {
+                const today = currentShiftDate();
+                const newWeek = startOfShiftWeek(today);
+                const idx = Math.max(0, Math.min(6, daysBetween(newWeek, today)));
+                setWeekStart(newWeek);
+                setSelectedDayIndex(idx);
+                setDockCalendarOpen(false);
+              }}
+              style={{
+                width: '100%',
+                fontSize: 11,
+                padding: '4px 0',
+                color: '#007AFF',
+                fontWeight: 600,
+              }}
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* XAISphere removed — Ask AI button in bottom dock handles toggle */}
 
@@ -5515,6 +5847,7 @@ export default function ShiftBuilder() {
         setBreakGroupForSlot={setBreakGroupForSlot}
         onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
         onRemoveTask={handleRemoveTask}
+        onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
         onToggleLock={(slotKey) => toggleLock(slotKey)}
         onClearSlot={(slotKey) => { unassign(slotKey); setMarkerSlotKey(null); }}
         onAddCoverage={(sourceKey, targetKey) => handleCmdkAddCoverage(sourceKey, targetKey)}
@@ -5612,10 +5945,18 @@ export default function ShiftBuilder() {
                 return next;
               });
 
+              // Per operator rule: after Sudo changes (e.g. Defaults push), only keep
+              // break rows for TMs who are actually placed on the current deployment.
+              // Scheduled-but-not-placed TMs must not appear on the break sheet.
+              const currentPlaced = new Set(
+                Object.values(assignments || {})
+                  .map((a: any) => a?.tmId)
+                  .filter((id: any): id is string => !!id)
+              );
               setNightBreakRows(
                 freshBreaks
                   .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-                    (scheduledTmIdsTonight.size === 0 || scheduledTmIdsTonight.has(r.tmId)))
+                    (currentPlaced.size === 0 || currentPlaced.has(r.tmId)))
                   .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
               );
             } catch (e) {

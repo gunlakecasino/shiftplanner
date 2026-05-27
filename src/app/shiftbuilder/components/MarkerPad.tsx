@@ -46,6 +46,8 @@ export interface MarkerPadProps {
   setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onAddTask: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  /** New: Quick sweeper assignment with forced orange color + duplication guard */
+  onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onToggleLock?: (slotKey: string) => void;
   onClearSlot?: (slotKey: string) => void;
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
@@ -823,6 +825,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   onClearSlot,
   onAssign,
   onAddCoverage,
+  onAssignSweeper,
   onClose,
   isDark,
   tmGender,
@@ -832,8 +835,24 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   const [coverageConfirmed, setCoverageConfirmed] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
+  const [sweeperMenuOpen, setSweeperMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Close sweeper menu when clicking outside the panel
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setSweeperMenuOpen(false);
+      }
+    };
+    if (sweeperMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [sweeperMenuOpen]);
 
   // TM history widget — derive tmId before hooks so it can be a dependency
   const currentTmId: string | null = slotKey ? (assignments[slotKey]?.tmId ?? null) : null;
@@ -922,6 +941,12 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     if (!lbl) return;
     setTaskInput("");
     void onAddTask(slotKey, lbl);
+  };
+
+  const handleAssignSweeper = (sweeperLabel: string) => {
+    if (!onAssignSweeper) return;
+    void onAssignSweeper(slotKey, sweeperLabel);
+    setSweeperMenuOpen(false);
   };
 
   // Show TM picker when slot is empty OR when operator tapped Swap
@@ -1094,6 +1119,93 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
               fontFamily: "var(--font-jetbrains, monospace)",
             }}>↵ to add</span>
           </div>
+
+          {/* Assign Sweeper quick action — orange tasks with duplication guard */}
+          {onAssignSweeper && (() => {
+            const hasSweeper = tasks.some((t: any) =>
+              t.taskLabel?.toLowerCase().includes('sweep')
+            );
+            return (
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSweeperMenuOpen(!sweeperMenuOpen); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  disabled={hasSweeper}
+                  style={{
+                    width: '100%',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '6px 10px',
+                    borderRadius: 10,
+                    background: hasSweeper ? 'rgba(255,255,255,0.04)' : 'rgba(255,159,10,0.12)',
+                    border: hasSweeper ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,159,10,0.35)',
+                    color: hasSweeper ? 'var(--sb-text-muted, #8E8E93)' : '#FF9F0A',
+                    cursor: hasSweeper ? 'default' : 'pointer',
+                    transition: 'all 0.1s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span>🧹</span>
+                  <span>Assign Sweeper</span>
+                  {hasSweeper && <span style={{ fontSize: 9, opacity: 0.6 }}>(assigned)</span>}
+                </button>
+
+                {/* Mini drop-up modal for sweeper choice */}
+                {sweeperMenuOpen && !hasSweeper && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      right: 0,
+                      marginBottom: 4,
+                      background: isDarkPanel ? 'rgba(20,20,22,0.96)' : 'rgba(252,252,250,0.96)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 12,
+                      boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+                      padding: 4,
+                      zIndex: 50,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    {[
+                      { label: 'Sweep 5/8/HL', full: 'Sweep 5/8/HL' },
+                      { label: 'Sweep 9/10/SR', full: 'Sweep 9/10/SR' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => handleAssignSweeper(opt.full)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          background: 'transparent',
+                          color: '#FF9F0A',
+                          textAlign: 'left',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,159,10,0.12)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Task list */}
           {tasks.length > 0 && (

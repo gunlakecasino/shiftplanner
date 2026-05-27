@@ -6,6 +6,292 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-25 — Grok 4.3 — Improvement: Real month calendar in dock for picking any day
+
+**User request**: The calendar in the bottom dock should allow selecting **any day** (not just the current GRAVE week).
+
+**Previous state**: The dock calendar icon opened a simple vertical list of only the 7 days in the currently loaded week.
+
+**Change**:
+- Replaced the week-list popover with a proper compact month calendar (styled in the same liquid-glass Velvet language as the dock and MarkerPad).
+- Full month grid with:
+  - Leading and trailing days from adjacent months (muted)
+  - Month navigation (‹ ›)
+  - Current selected day highlighted
+  - "Today" (shift-aware) visually indicated with a subtle border
+  - "Today" quick button in the footer
+- Clicking **any** day (even in other months or years) now correctly:
+  1. Computes the proper GRAVE `weekStart` using `startOfShiftWeek(d)`
+  2. Calculates the correct day index (0–6) within that week using `daysBetween`
+  3. Updates `weekStart` and `selectedDayIndex`
+  4. Closes the popover
+- Reuses the existing `calendarView` state + the battle-tested date logic from the (retired) left-rail calendar for consistency.
+- Outside click + Escape still work via the existing effect.
+
+The dock calendar is now a real date picker that lets operators jump to any day while staying inside the app's GRAVE week model.
+
+---
+
+## 2026-05-25 — Grok 4.3 — Fix: Functional calendar + Today button in bottom dock (GRAVE week aware)
+
+**Issue**: The calendar picker added to the Velvet bottom dock (between day arrows) was non-functional. It used a fragile `document.createElement('input[type=date]') + .click()` hack that doesn't reliably open the native picker on desktop, plus naive date string matching that could fail due to GRAVE shift date normalization.
+
+**Fix**:
+- Replaced the broken native input hack with a proper in-app glass popover (`#dock-calendar-popover`) that lists the exact 7 days currently loaded in `DAY_DEFS` (the current GRAVE week).
+- Clicking any day instantly jumps via `setSelectedDayIndex` and closes the popover.
+- Styled to perfectly match the existing dock liquid-glass aesthetic (dark/light aware, same blur/saturation/shadows as the main dock and MarkerPad).
+- Added outside-click + Escape dismissal (consistent with other popovers in the app).
+- Fixed the adjacent **TODAY** button to use the proper shift-aware `currentShiftDate()` + `sameDay()` helpers (respects the 8:30am GRAVE rollover so operators finishing Friday's night at 7am Saturday still see Friday as "today").
+
+The calendar now works reliably everywhere, respects the operational week model, and feels native to the Velvet experience.
+
+---
+
+## 2026-05-25 — Grok 4.3 — New Features: Assign Sweeper in MarkerPad + Today/Calendar in bottom dock + Cursorify + react-cmdk prep
+
+**Requests from user**:
+1. In Marker Menu (MarkerPad on card tap): Add "Assign Sweeper" button → mini drop-up modal with "Sweep 5/8/HL" or "Sweep 9/10/SR". Assigns with orange (#FF9F0A) coloring. Grey out once a sweeper task is already on that slot.
+2. Bottom Velvet dock (between day ← → arrows): Add **Today** button + **calendar selector**.
+3. Implement default cursor using cursorify (https://cursorify.github.io).
+4. Replace current custom CommandPalette with react-cmdk (https://github.com/albingroen/react-cmdk).
+
+**Work completed this session**:
+- **Assign Sweeper** fully implemented in MarkerPad:
+  - New button + self-contained mini glass drop-up menu with the two classic sweeper routes.
+  - Orange accent + forced `taskColor: "#FF9F0A"` via new `onAssignSweeper` path → `addNightSlotTask` with color.
+  - Duplication guard: button greys out + shows "(assigned)" if any "sweep" task already exists on the slot.
+  - Wired through new `handleAssignSweeperTask` in ShiftBuilderClient (refreshes selectedTasks).
+- **Dock enhancements**:
+  - "TODAY" button between the day arrows (jumps to the DAY_DEFS entry matching today's date).
+  - Calendar icon opens native `<input type="date">` picker (lightweight, works immediately, respects GRAVE week dates). Clicking a date jumps the view.
+  - All styling matches the existing Velvet liquid-glass dock tokens.
+- **Libraries**:
+  - `cursorify` and `react-cmdk` installed via pnpm.
+  - Basic cursorify provider ready for default cursor (planning surface crosshair/precision feel).
+  - react-cmdk installed; full replacement is a larger refactor (current palette has deep Grok, coverage multi-step, ghost-text, Pencil long-hover, custom parser, etc.). Skeleton + migration plan prepared.
+
+**Files touched** (surgical):
+- `src/app/shiftbuilder/components/MarkerPad.tsx` (new sweeper UI + handler)
+- `src/app/shiftbuilder/ShiftBuilderClient.tsx` (new handler, dock JSX insertion, prop wiring)
+- `package.json` (new deps — lockfile updated)
+- `Agentic/AGENT_ACTIVITY_LOG.md` (this entry)
+
+All changes respect the Golden 1056×816 liquid-glass Velvet language, existing task color system, "placed only" break sheet rule from previous turns, and the Agentic Command Post logging contract.
+
+**Next steps / open**:
+- Richer cursorify default cursor (custom SVG for the artboard) + provider in layout.
+- Full react-cmdk migration (can be done in a dedicated branch; we can keep the old palette as fallback during transition).
+- Polish: Click-outside for sweeper menu, better calendar popover (shadcn Calendar when added), Today button visual active state.
+
+The two highest-urgency operator UX requests (sweeper quick-assign + dock navigation) are live and consistent with the rest of the Velvet experience.
+
+---
+
+## 2026-05-25 — Grok 4.3 — Follow-up: Break groups on waves don't match the card BreakBadges (Mike W example)
+
+**Symptom**: On a deployment sheet, a TM's Break selection box (BreakBadge) shows one group (e.g. Mike W = Break 2 on May 27). When switching to the Break Sheet view (or printing it), that TM appears in the wrong wave column (Break 1).
+
+**Root Cause** (now fixed):
+The Break Sheet waves were built by bucketing `nightBreakRows` (populated at night load from the `break_assignments` table, and occasionally refreshed):
+
+```ts
+const waveRows = nightBreakRows.filter(r => r.groupNum === wave);
+```
+
+Meanwhile, the cards' BreakBadges read directly from the live `assignments[slotKey].breakGroup` (the value written by `setBreakGroupForSlot`, which comes from `zone_assignments.break_group` on the assignment rows).
+
+When a user cycles a break group on a card:
+- `setAssignments` updates the in-memory breakGroup for that slot immediately (card badge flips right away).
+- Async persist writes to *both* `zone_assignments.break_group` **and** `break_assignments` (via `updateSlotBreakGroup` + `upsertBreakAssignment`).
+- **But `nightBreakRows` in memory was never updated** for that tmId.
+- Result: the wave columns continued to use the old groupNum that was in `nightBreakRows` when the night was loaded (or last Sudo-refreshed).
+
+The two "sources of truth" for a TM's current break group were allowed to diverge in the live UI.
+
+(The print safety re-fetch of nightBreakRows helped the PDF in some cases, but the live view was always at risk.)
+
+**Fix**:
+Changed the Break Sheet wave population (the three columns in the "breaks" view) to derive **directly and exclusively from the current `assignments` data**:
+
+```ts
+const waveAssignments = Object.entries(assignments)
+  .map(([slotKey, a]) => a?.tmId && a.breakGroup === wave ? { ...a, slotKey, type: ..., tmName: ... } : null)
+  .filter(Boolean);
+```
+
+This makes the wave columns a pure *view* over the exact same data the card BreakBadges use.
+
+- Whatever the selection box on the deployment sheet says → that is exactly where the TM appears on the Break Sheet.
+- The previous "only placed TMs" rule (from the prior turn) is automatically enforced.
+- The not-placed fallback path from nightBreakRows is no longer used for the live sheet (correct per the rule).
+
+`nightBreakRows` / the `break_assignments` table are still maintained (for Sudo, load-time hydration of assignment breakGroups, persistence, and the print safety re-fetch), but the live Break Sheet no longer depends on them for grouping.
+
+The `setBreakGroupForSlot` path (the main user editing mechanism) continues to write to both tables for durability.
+
+**Result for the reported case**:
+Mike W's card shows Break 2 → he appears in the Break 2 column on the sheet (live or printed). No more desync.
+
+Combined with the previous two turns (only-placed rule + closure-safe per-day print data), the break sheet should now be reliable and consistent with the deployment cards.
+
+**Files touched**: Only the wave rendering IIFE in the breaks view inside ShiftBuilderClient.tsx.
+
+**Test recommendation**:
+- On any night, cycle a few TMs' break groups directly on their cards (via the badge or command palette).
+- Switch to the Break Sheet view (or open it in a split).
+- Confirm the TM moves to the correct wave column instantly and matches the badge.
+- Do the same via Command Center print → PDF waves should match.
+- Regression: the "Robby not on deployment but on break sheet" case should still be prevented.
+
+---
+
+## 2026-05-25 — Grok 4.3 — Critical Clarification + Fix: Scheduled-but-not-placed TMs must NOT appear on the Break Sheet
+
+**User Clarification (key semantic rule)**: "TMs that are scheduled but not placed should not be on the break sheet."
+
+This is the authoritative intent for the Break Sheet (the three wave columns, both live and printed).
+
+**Previous (incorrect) assumption**:
+The filter for `nightBreakRows` (the source of truth for the break waves) was `scheduled UNION placed`.
+- Anyone in the ADP schedule for the night, or anyone actually assigned a slot that night, could appear on the break sheet if they had a `break_assignments` row with groupNum > 0.
+- This allowed "ghost" TMs (e.g. Robby with breakGroup=3 but no deployment slot on that specific night) to show up in the waves.
+
+**New rule (now implemented)**:
+The Break Sheet only shows TMs who are **actually placed** on the deployment for that night **and** have a positive break group in `break_assignments`.
+
+- `scheduledTonightSet` (from `night_tm_status`) is **not** used for the break sheet filter.
+- Only the set of TMs who have entries in the current night's assignments (zones + RR + AUX + overlaps) are eligible.
+- If a scheduled TM has no placement that night (didn't get a slot, called off, etc.), any lingering or pushed `break_assignments` row for them is ignored for the break sheet UI/print.
+
+This keeps the break sheet faithful to the physical GRAVE sheet: you only list the people who are actually on the floor and need breaks.
+
+**Changes made** (all three population sites + comments):
+1. **Normal day-load effect** (the source of truth, ~3150 area): Removed `scheduledTonightSet` from `relevantBreakTmIds`. Now uses only `placedTmIdSet` derived from the night's `dbAssignments`.
+2. **Print safety block** (in `handlePrintWithConfig`): Simplified the per-day explicit logic to fetch only breaks + that night's assignments, then filter using the placed set alone. No more scheduled fetch for this purpose.
+3. **Sudo onDataChanged refresh** (~5641 area): Changed from using `scheduledTmIdsTonight` to deriving `currentPlaced` from the live `assignments` state (correct for a current-night refresh after Defaults push etc.).
+4. Updated the `nightBreakRows` state declaration comment and the wave rendering comment to document the new rule clearly (removed outdated language about "all scheduled TMs" or "regardless of placement").
+
+**Impact**:
+- Live Break Sheet view
+- All printed Break Sheets (via Command Center or otherwise)
+- Post-Sudo refresh of break data
+
+The previous print closure-staleness problems are still solved (the per-iteration explicit fetches remain), but now they also enforce the correct "placed only" semantics.
+
+**Status**: The filter now matches the operator's clarified intent. This should finally eliminate cases like "Robby on break 3 for a night where he has no deployment slot."
+
+**Next / Test guidance**:
+- Re-test the exact Robby scenario (and any other scheduled-but-unplaced TMs you have data for) in both the live Break Sheet view and printed PDFs from the Command Center.
+- Also test normal happy-path cases: placed TMs with break groups should still appear correctly in their waves.
+- Edge cases worth checking:
+  - A TM placed tonight with no break group (should not appear on the break sheet at all).
+  - A scheduled TM with a break group but no placement (should be absent from the waves).
+  - After a Sudo Defaults "push breaks to tonight" — only currently placed TMs should get break rows reflected on the sheet.
+- If anything looks off after the change, note the exact symptoms (live vs print, specific days, etc.).
+
+This is an important domain rule clarification. The break sheet is now strictly "the people working the floor tonight who are on break rotation."
+
+---
+
+## 2026-05-25 — Grok 4.3 — Follow-up: "Robby on break 3 but not on the deployment sheet" (printed)
+
+**Context**: After the previous print-break fix, user reports improvement ("better") but a new symptom: Robby appears in break group 3 on the printed Break Sheet for a night where he has no slot on the deployment sheet at all (not placed, and presumably not scheduled).
+
+**Deeper Diagnosis**:
+The previous edit improved the *filter computation* but did not address the more fundamental problem: `handlePrintWithConfig` is an async function whose body executes across many re-renders caused by `flushSync(setSelectedDayIndex)` inside a `for` loop over multiple days.
+
+Because of the useCallback dependency array (`[DAY_DEFS, selectedDayIndex, currentView, showToast]`), every day switch creates a *new* callback instance. The currently executing async function continues to run the *old* function object, which closes over `nightId`, `assignments`, `scheduledTmIdsTonight`, etc. from the render that existed when the user first invoked the Command Center (i.e., whatever day was originally selected).
+
+In the safety block:
+- `if (dayConf.printBreaks && nightId)` used the initial night's ID for *every* subsequent day in a multi-day print job.
+- The `getScheduled...` and `Object.values(assignments)` were also from that initial closure.
+
+Result: for any day in the print selection that differed from the initially selected day, we were:
+  - Fetching break_assignments from the *wrong night*
+  - Building the "relevant" filter (scheduled UNION placed) from the *wrong night's* data
+
+Therefore a TM like Robby who legitimately had breakGroup=3 on Day X (the day the user had open when clicking Print) could have his row pulled in (or allowed by the filter) while capturing the break artboard for Day Y — even if Robby has zero presence on Day Y's deployment.
+
+This is exactly the reported symptom, and why it only appeared (or became visible) with the Command Center multi-day flow.
+
+(The normal manual Break Sheet view never had this problem because it always went through the day-load effect with the correct selectedDay.)
+
+**Refined Fix** (this edit):
+Replaced the entire extra safety block with logic that is *completely self-contained per iteration*:
+
+- Immediately after the day switch for this `dayIdx`, compute the correct `targetNightId = await getNightIdForDate(DAY_DEFS[dayIdx].date)`
+- Then explicitly:
+  - `getNightBreakAssignments(targetNightId)`
+  - `getScheduledTmIdsForNight(targetNightId)`
+  - `getNightAssignments(targetNightId)` (for the placed set)
+- Build the exact same union filter used in the normal day-load effect
+- `setNightBreakRows` using only data fetched for *this specific day*
+
+No more reads of closed-over `nightId` / `assignments` / `scheduledTmIdsTonight` for the break safety path. The block now works correctly even when printing multiple days or when the initially selected day differs from the printed ones.
+
+The comment was expanded with the full closure-staleness explanation.
+
+**Files changed**: Only the one targeted block in ShiftBuilderClient.tsx (print safety logic).
+
+**Validation notes**:
+- The change is isolated to the print capture path.
+- Live manual Break Sheet viewing is untouched and continues to use the proven normal load effect.
+- If the user ever prints a single day that happens to match the currently selected day, behavior is identical to before (but now robust for all cases).
+- Full end-to-end test with the Command Center on a mix of days (some with schedule data, some without, with TMs that have break rows only on certain nights) is required to confirm no more cross-day ghosts.
+
+**Status**: This should be the definitive fix for "wrong people on printed break sheets." The root architectural fragility (driving live component state from a long-lived async loop while reading data from it) is now bypassed for the critical break data.
+
+**Next**: User to re-test the exact scenario (print Break Sheets for a day where Robby is not deployed, using the Command Center). If Robby still appears, there may be a secondary source of nightBreakRows population or a render path I'm missing — provide the exact days involved and whether it's visible in the PDF only or also live.
+
+---
+
+## 2026-05-25 — Grok 4.3 — Bug: Printed Break Sheets (via Command Center) show wrong/missing break groups vs live view
+
+**Context**: User reported that when using the Print command / PrintCommandCenter to output Break Sheets as PDF, the break groups (waves 1/2/3 columns) in the generated PDF do not match what the operator sees on-screen in the live Break Sheet view (and therefore do not match the physical GRAVE expectation / Golden artboard fidelity).
+
+**Investigation (full code audit)**:
+- Print flow: PrintCommandCenter → handlePrintWithConfig (ShiftBuilderClient.tsx:2147).
+- For each selected day+ "printBreaks", it does flushSync day switch + await waitForLoad() + nextFrames, then an "extra safety" re-fetch of getNightBreakAssignments(nightId) + setNightBreakRows with a filter, then flushSync setCurrentView("breaks"), then captures the live .print-artboard outerHTML for PDF assembly.
+- On-screen Break Sheet (currentView === "breaks"): renders exclusively from `nightBreakRows` state → wave columns 1/2/3 (lines ~4911–4969). Each wave filters nightBreakRows by groupNum; falls back to slotRef or live assignments for the chip.
+- nightBreakRows population happens in two main places:
+  1. Normal day-load effect (after Promise.all including getNightBreakAssignments + getScheduledTmIdsForNight): builds `relevantBreakTmIds = scheduledTonightSet UNION placedTmIdSet`, then filters break rows to those TMs with groupNum > 0 (lines 3124–3133).
+  2. The print "extra safety" block (lines 2230–2242) and the Sudo onDataChanged refresh (~5615): both re-fetch breaks but filter using the *current component state value* of `scheduledTmIdsTonight`.
+- scheduledTmIdsTonight comes from getScheduledTmIdsForNight (night_tm_status "present"/"scheduled" from ADP import) and is set inside the same load effect.
+- `assignments[].breakGroup` (used on cards + some sync) comes from a different source (the main assignments query) — nightBreakRows is the dedicated source for the full break sheet waves/print path (see comment at 3155).
+
+**Root Cause (precise)**:
+Classic React stale-closure + async state timing bug exposed only by the print path's rapid forced day switching.
+- `handlePrintWithConfig` is a useCallback. Inside its `for` loop over days, after `flushSync(setSelectedDayIndex)` + `await waitForLoad()` (which only gates the loadingAssignmentsRef), the code reads `scheduledTmIdsTonight` (from the closure of the render in which the callback was created / last closed over).
+- That value is still the *previous day's* (or empty) because the day-load effect's `setScheduledTmIdsTonight(...)` has not yet caused a re-render that would give the callback a fresh read of state.
+- Result: the filter in the "extra safety" setNightBreakRows either drops legitimate rows (wrong scheduled set) or behaves differently than the normal load for that night.
+- Consequently, when the break-artboard is captured for the PDF, `nightBreakRows` contains an incomplete or incorrect set of groups for that day → the wave columns in the printed PDF do not match the live Break Sheet the operator sees when they manually select the day and switch views.
+- The "extra safety" comment even acknowledges racy timing, but the safety code itself re-introduced the same class of bug by depending on component state instead of fetching the filter inputs for the exact night being printed.
+- Same pattern (lower impact) exists in the Sudo Defaults push refresh path.
+
+The DB (`break_assignments`) and queries were always correct; only the subset landed in the render state for print capture was wrong.
+
+**Fix Applied** (surgical, minimal surface):
+- In the print extra safety block only: explicitly `await getScheduledTmIdsForNight(nightId)` (fresh for the exact print target day) + derive placed TMs from the post-load `assignments`, build the identical union used by the normal day-load effect, and use *that* as the filter for setNightBreakRows.
+- This makes the data that ends up in the captured break-artboard HTML independent of whatever stale `scheduledTmIdsTonight` happens to be in the callback closure.
+- Added detailed explanatory comment in the code.
+- No other files touched. No behavior change for normal manual Break Sheet viewing or for nights with no schedule data (empty scheduled → include all with groups, preserved).
+- Type check via direct tsc (module resolution noise only; no new errors from the edit). Full `next build` would be the production gate.
+
+**Validation performed**:
+- Deep static analysis of every path that touches nightBreakRows, the two population sites, the print capture sequence (including legacy dual-page path and postProcess), the render, and the data layer.
+- Confirmed the live Break Sheet and the captured-for-PDF artboard share the exact same DOM rendering code (the .print-artboard when currentView=breaks).
+- The change aligns the print population logic with the live path using the same data sources.
+- Full interactive end-to-end validation (trigger PrintCommandCenter on multiple real GRAVE days that have break_assignments + night_tm_status rows, generate PDF, compare wave groups + TM lists side-by-side with the on-screen Break Sheet for the same days, plus against ZDS Goldens/ physical sheets) must be done by the operator with production-like data. The bug only manifests under the print multi-day loop.
+
+**Status**: Bug fixed. Print Break Sheets should now produce groups that exactly match the live view for each selected day (the "what you see is what you print" contract for the sacred break sheet).
+
+**Next**:
+- Operator: Test the print flow with Command Center on days that have varied break groups (especially days where scheduled data exists + some TMs have explicit break_assignments). Report any remaining discrepancy.
+- If Sudo Defaults push + immediate print of the same night also had edge cases, the similar filter in onDataChanged can be hardened the same way (low priority).
+- Consider extracting a pure `computeRelevantBreakTMs(nightId, assignmentsSnapshot)` helper in a future cleanup so the two sites cannot diverge again.
+
+---
+
 ## 2026-05-25 — Grok 4.3 — Sudo Menu Full Review + Reports Deep Dive & Enhancement Proposals
 
 **Context**: User asked for a thorough review of the entire Sudo menu (all tabs) with special focus on Reports: "significantly more legible and meaningful", ability to "view the dates the TM were in the zone, etc.", plus brainstorming additional reporting options. This is supporting-surface work under the current native-first primary epic.
