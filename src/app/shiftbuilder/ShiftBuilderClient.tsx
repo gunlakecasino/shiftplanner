@@ -5116,43 +5116,6 @@ export default function ShiftBuilder() {
       </DragOverlay>
       </DndContext>
 
-      {/* ═══════════════════════════════════════════════════════════
-          VELVET BOTTOM DOCK — reference-faithful centered glass pill
-          − zoom% + | undo redo ‹ › | Deployment Breaks | ↑4 · ↓4 | 🟢 · saved
-          Height: 44px. Liquid glass. Replaces old status pill.
-          ═══════════════════════════════════════════════════════════ */}
-      {(() => {
-        let savedAgo = "Loading…";
-        if (lastSavedAt) {
-          const secs = Math.floor((Date.now() - lastSavedAt.getTime()) / 1000);
-          if (secs < 10)  savedAgo = "Saved";
-          else if (secs < 60) savedAgo = "Just now";
-          else {
-            const mins = Math.floor(secs / 60);
-            savedAgo = mins < 120
-              ? `${mins}m ago`
-              : `${Math.floor(mins / 60)}h ago`;
-          }
-        }
-
-        const zoomPct = mounted
-          ? Math.round((zoomMode === "fit" ? (fitScale ?? 1) : (zoomMode as number)) * 100)
-          : 100;
-        const numericSteps: Array<0.5 | 0.75 | 1 | 1.25> = [0.5, 0.75, 1, 1.25];
-        const stepZoom = (dir: -1 | 1) => {
-          if (zoomMode === "fit") {
-            setZoomMode(dir > 0 ? 1.25 : 0.75);
-            return;
-          }
-          const idx = numericSteps.indexOf(zoomMode);
-          if (idx !== -1) setZoomMode(numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))]);
-        };
-
-        {/* REDUNDANT BOTTOM DOCK COMPLETELY REMOVED — all controls consolidated into the single floating top header per spec */}
-      })()}
-
-      {/* (All orphaned old dock calendar + bottom dock popover dead code fully removed - syntax cleaned) */}
-
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of
          options comes from `catalogIndex` keyed by the slot's DB shape, so
