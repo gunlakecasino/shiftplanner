@@ -13,7 +13,6 @@
  */
 
 import React from "react";
-import { BarChart2, RefreshCw, User, MapPin, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getZoneFrequencyReport,
@@ -242,7 +241,7 @@ export function ReportsTab() {
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60"
               )}
             >
-              {v === "tm" ? <User className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+              {v === "tm" ? <span className="ms" style={{ fontSize: 12 }}>person</span> : <span className="ms" style={{ fontSize: 12 }}>location_on</span>}
               {v === "tm" ? "By Team Member" : "By Zone"}
             </button>
           ))}
@@ -283,7 +282,7 @@ export function ReportsTab() {
           className="w-7 h-7 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 transition-colors"
           title="Refresh"
         >
-          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
+          <span className={cn("ms", loading && "animate-spin")} style={{ fontSize: 14 }}>refresh</span>
         </button>
       </div>
 
@@ -310,7 +309,7 @@ export function ReportsTab() {
             {view === "tm" && (
               <div className="px-3 pt-3 pb-2 flex-shrink-0">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-600" />
+                  <span className="ms absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600" style={{ fontSize: 12 }}>search</span>
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}

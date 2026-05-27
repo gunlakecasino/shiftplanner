@@ -15,7 +15,6 @@
  */
 
 import React from "react";
-import { Upload, FileSpreadsheet, AlertTriangle, Loader2, Eye, Trash2, RotateCcw, ArrowLeft, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   parseADPScheduleFile,
@@ -265,7 +264,7 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
       <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <FileSpreadsheet className="h-4 w-4 text-red-300" />
+            <span className="ms text-red-300" style={{ fontSize: 16 }}>table_chart</span>
             <h2 className="font-semibold text-[15px] text-zinc-100">
               {view === "list" ? "Schedules" : `Preview · ${preview?.record.schedulePath}`}
             </h2>
@@ -281,7 +280,7 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
             onClick={refreshList}
             className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5"
           >
-            <RefreshCw className="h-3 w-3" />
+            <span className="ms" style={{ fontSize: 12 }}>refresh</span>
             refresh
           </button>
         )}
@@ -293,7 +292,7 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
             }}
             className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5"
           >
-            <ArrowLeft className="h-3 w-3" /> back to list
+            <span className="ms" style={{ fontSize: 12 }}>arrow_back</span> back to list
           </button>
         )}
       </div>
@@ -496,7 +495,7 @@ function ScheduleList({
         )}
       >
         <div className="flex items-center gap-3">
-          <Upload className={cn("h-4 w-4", dragOver ? "text-red-300" : "text-zinc-500")} />
+          <span className={cn("ms", dragOver ? "text-red-300" : "text-zinc-500")} style={{ fontSize: 16 }}>upload</span>
           <span className="text-[12px] text-zinc-400">
             Drop an XLSX here to upload a new schedule
             {busy === "__upload__" && <span className="ml-2 text-zinc-500">(uploading…)</span>}
@@ -519,14 +518,14 @@ function ScheduleList({
       {/* List */}
       {listError && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
-          <AlertTriangle className="inline h-3 w-3 mr-1" />
+          <span className="ms inline mr-1" style={{ fontSize: 12 }}>warning</span>
           {listError}
         </div>
       )}
 
       {schedules === null && (
         <div className="text-zinc-500 text-[12px] flex items-center gap-2">
-          <Loader2 className="h-3 w-3 animate-spin" /> Loading schedules…
+          <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> Loading schedules…
         </div>
       )}
 
@@ -588,7 +587,7 @@ function ScheduleList({
                           className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
                           title="View"
                         >
-                          <Eye className="h-3 w-3" /> view
+                          <span className="ms" style={{ fontSize: 12 }}>visibility</span> view
                         </button>
                         <button
                           onClick={() => onApply(s)}
@@ -596,7 +595,7 @@ function ScheduleList({
                           className="px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-white text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
                           title="Apply roster to night_tm_status"
                         >
-                          {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : "apply"}
+                          {isBusy ? <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> : "apply"}
                         </button>
                         <button
                           onClick={() => onUnapply(s)}
@@ -604,7 +603,7 @@ function ScheduleList({
                           className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-30 disabled:hover:bg-zinc-800"
                           title="Remove this schedule's rows from night_tm_status"
                         >
-                          <RotateCcw className="h-3 w-3" /> unapply
+                          <span className="ms" style={{ fontSize: 12 }}>undo</span> unapply
                         </button>
                         <button
                           onClick={() => onDelete(s)}
@@ -612,7 +611,7 @@ function ScheduleList({
                           className="px-2 py-1 rounded bg-zinc-800 hover:bg-red-600/30 text-zinc-400 hover:text-red-300 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
                           title="Delete file + clear schedule"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <span className="ms" style={{ fontSize: 12 }}>delete</span>
                         </button>
                       </div>
                     </td>
@@ -652,7 +651,7 @@ function SchedulePreview({
   if (loading) {
     return (
       <div className="text-zinc-500 text-[12px] flex items-center gap-2 py-6">
-        <Loader2 className="h-4 w-4 animate-spin" /> Downloading and parsing {record.schedulePath}…
+        <span className="ms animate-spin" style={{ fontSize: 16 }}>sync</span> Downloading and parsing {record.schedulePath}…
       </div>
     );
   }
@@ -661,7 +660,7 @@ function SchedulePreview({
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[12px] text-red-200">
         <div className="font-medium mb-1 flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4" />
+          <span className="ms" style={{ fontSize: 16 }}>warning</span>
           Couldn't load this schedule
         </div>
         <div className="text-red-300/90 font-mono text-[11px]">{error}</div>
@@ -710,7 +709,7 @@ function SchedulePreview({
             disabled={isBusy}
             className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-60"
           >
-            {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {isBusy ? <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> : null}
             Apply
           </button>
           <button
@@ -719,14 +718,14 @@ function SchedulePreview({
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-30"
             title={record.appliedRowCount === 0 ? "Nothing applied yet" : "Remove from night_tm_status"}
           >
-            <RotateCcw className="h-3.5 w-3.5" /> Unapply
+            <span className="ms" style={{ fontSize: 14 }}>undo</span> Unapply
           </button>
           <button
             onClick={onDelete}
             disabled={isBusy}
             className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-600/30 text-zinc-300 hover:text-red-300 text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Delete
+            <span className="ms" style={{ fontSize: 14 }}>delete</span> Delete
           </button>
         </div>
       </div>

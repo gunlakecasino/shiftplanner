@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Brain, Settings2, Save, RefreshCw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getActiveEngineConfig,
@@ -133,7 +132,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-zinc-400">
-        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+        <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span>
         Loading current engine config…
       </div>
     );
@@ -145,7 +144,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
-            <Settings2 className="h-4.5 w-4.5" />
+            <span className="ms" style={{ fontSize: 18 }}>tune</span>
           </div>
           <div>
             <div className="font-semibold text-lg tracking-tight">Engine Configuration</div>
@@ -157,7 +156,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
 
         {error && (
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span className="ms mt-0.5 shrink-0 text-red-400" style={{ fontSize: 16 }}>warning</span>
             <span>{error}</span>
           </div>
         )}
@@ -211,7 +210,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
         {/* Grok Reasoning Effort — only relevant for grok-hybrid */}
         <div className={cn("mb-8 transition-opacity", !isGrokHybrid && "opacity-50 pointer-events-none")}>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-zinc-400">
-            <Brain className="h-3.5 w-3.5" />
+            <span className="ms" style={{ fontSize: 14 }}>psychology</span>
             <span>Grok 4.3 Reasoning Effort</span>
             {!isGrokHybrid && <span className="normal-case text-[10px] text-zinc-600">(only applies when Grok-Hybrid is selected)</span>}
           </div>
@@ -259,9 +258,9 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
             )}
           >
             {saving ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <span className="ms animate-spin" style={{ fontSize: 16 }}>sync</span>
             ) : (
-              <Save className="h-4 w-4" />
+              <span className="ms" style={{ fontSize: 16 }}>save</span>
             )}
             {saving ? "Saving…" : "Update Active Engine Config"}
           </button>
@@ -270,7 +269,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
             onClick={loadConfig}
             className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-900"
           >
-            <RefreshCw className="h-4 w-4" /> Reload
+            <span className="ms" style={{ fontSize: 16 }}>refresh</span> Reload
           </button>
         </div>
 

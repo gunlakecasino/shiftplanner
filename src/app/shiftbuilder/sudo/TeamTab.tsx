@@ -26,19 +26,6 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
-  Loader2,
-  AlertTriangle,
-  UserPlus,
-  RefreshCw,
-  X,
-  Search,
-  Archive,
-  RotateCcw,
-  CheckCircle2,
-  Trash2,
-  Link,
-} from "lucide-react";
-import {
   listAllTMs,
   upsertTM,
   softDeleteTM,

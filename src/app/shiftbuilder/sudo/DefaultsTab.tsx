@@ -12,16 +12,6 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import {
-  Layers,
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle2,
-  Plus,
-  X,
-  Upload,
-  CalendarDays,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import BreakBadge from "../components/BreakBadge";
 import {

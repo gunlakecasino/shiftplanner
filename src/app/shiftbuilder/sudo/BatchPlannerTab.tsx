@@ -16,18 +16,6 @@
  */
 
 import React from "react";
-import {
-  Play,
-  SkipForward,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Zap,
-  Calendar,
-  RefreshCw,
-  ChevronDown,
-  Info,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   listWeeksWithNights,
@@ -225,7 +213,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
       {/* Header bar */}
       <div className="px-5 py-3 border-b border-zinc-800 bg-zinc-950/60 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-amber-400" />
+          <span className="ms text-amber-400" style={{ fontSize: 16 }}>bolt</span>
           <span className="font-semibold text-[13px] text-zinc-100">Batch Planner</span>
           <span className="text-zinc-500 text-[11px] font-mono">· weighted engine · no Grok</span>
         </div>
@@ -246,7 +234,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
           <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Week</label>
           {weeksLoading ? (
             <div className="flex items-center gap-2 text-zinc-500 text-[12px]">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading weeks…
+              <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> Loading weeks…
             </div>
           ) : weeksError ? (
             <div className="text-red-400 text-[12px]">{weeksError}</div>
@@ -273,7 +261,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+              <span className="ms pointer-events-none absolute right-2.5 top-2.5 text-zinc-500" style={{ fontSize: 14 }}>expand_more</span>
             </div>
           )}
         </div>
@@ -327,9 +315,9 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
             )}
           >
             {batchRunning ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="ms animate-spin" style={{ fontSize: 16 }}>sync</span>
             ) : (
-              <Play className="h-4 w-4" />
+              <span className="ms" style={{ fontSize: 16 }}>play_arrow</span>
             )}
             {batchRunning ? "Running…" : "Run All Nights"}
           </button>
@@ -342,7 +330,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
             disabled={anyRunning}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] text-zinc-400 hover:text-zinc-100 border border-zinc-700 hover:border-zinc-500 transition-colors disabled:opacity-30"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <span className="ms" style={{ fontSize: 14 }}>refresh</span>
             Reset
           </button>
         </div>
@@ -350,14 +338,14 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
         {/* Error */}
         {batchError && (
           <div className="flex items-start gap-2 bg-red-950/40 border border-red-800/50 rounded-lg px-3 py-2 text-[12px] text-red-300">
-            <XCircle className="h-4 w-4 shrink-0 mt-px" />
+            <span className="ms shrink-0 mt-px" style={{ fontSize: 16 }}>cancel</span>
             <span>{batchError}</span>
           </div>
         )}
 
         {/* Info callout */}
         <div className="flex items-start gap-2 bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-400">
-          <Info className="h-3.5 w-3.5 shrink-0 mt-px text-zinc-500" />
+          <span className="ms shrink-0 mt-px text-zinc-500" style={{ fontSize: 14 }}>info</span>
           <span>
             Batch runner uses the weighted scoring engine only — no Grok. Results are written directly to{" "}
             <span className="font-mono text-zinc-300">zone_assignments</span>. Open any night on the main board to run Grok on top, or to review and adjust individual picks.

@@ -18,17 +18,6 @@
  */
 
 import React from "react";
-import {
-  ListTodo,
-  Plus,
-  GripVertical,
-  Pencil,
-  Trash2,
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle2,
-  Search,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getSlotTaskCatalog,
@@ -268,7 +257,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-zinc-400">
-        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+        <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span>
         Loading task catalog…
       </div>
     );
@@ -280,7 +269,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
-            <ListTodo className="h-4.5 w-4.5" />
+            <span className="ms" style={{ fontSize: 18 }}>checklist</span>
           </div>
           <div>
             <div className="font-semibold text-lg tracking-tight">Tasks &amp; Responsibilities</div>
@@ -293,13 +282,13 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
         {/* Toasts */}
         {error && (
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <span className="ms mt-0.5 shrink-0 text-red-400" style={{ fontSize: 16 }}>warning</span>
             <span>{error}</span>
           </div>
         )}
         {success && (
           <div className="mb-4 rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" /> {success}
+            <span className="ms" style={{ fontSize: 16 }}>check_circle</span> {success}
           </div>
         )}
 
@@ -343,7 +332,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+            <span className="ms absolute left-3 top-2.5 text-zinc-500" style={{ fontSize: 16 }}>search</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -373,14 +362,14 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
             onClick={() => setShowAdd((v) => !v)}
             className="flex items-center gap-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 px-3 py-1.5 text-sm font-medium transition-colors"
           >
-            <Plus className="h-4 w-4" /> Add Task
+            <span className="ms" style={{ fontSize: 16 }}>add</span> Add Task
           </button>
 
           <button
             onClick={refresh}
             className="flex items-center gap-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 px-3 py-1.5 text-sm"
           >
-            <RefreshCw className="h-4 w-4" /> Refresh
+            <span className="ms" style={{ fontSize: 16 }}>refresh</span> Refresh
           </button>
 
           {currentNightId && (
@@ -389,7 +378,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
               className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 text-sm font-medium"
               title="Insert every task marked as 'default on new night' into the current board"
             >
-              <ListTodo className="h-4 w-4" /> Apply daily defaults
+              <span className="ms" style={{ fontSize: 16 }}>checklist</span> Apply daily defaults
             </button>
           )}
         </div>
@@ -458,7 +447,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
                         <div className="flex items-center gap-1 text-zinc-500">
                           <button onClick={() => moveInGroup(groupKey, idx, -1)} title="Move up" className="hover:text-zinc-300">↑</button>
                           <button onClick={() => moveInGroup(groupKey, idx, 1)} title="Move down" className="hover:text-zinc-300">↓</button>
-                          <GripVertical className="h-3.5 w-3.5 opacity-40 group-hover:opacity-70" />
+                          <span className="ms opacity-40 group-hover:opacity-70" style={{ fontSize: 14 }}>drag_indicator</span>
                         </div>
 
                         <div className="flex-1 font-medium text-zinc-100 truncate" title={t.label}>
@@ -492,14 +481,14 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
                             className="text-zinc-400 hover:text-red-400 p-1"
                             title="Edit label"
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="ms" style={{ fontSize: 14 }}>edit</span>
                           </button>
                           <button
                             onClick={() => handleDelete(t)}
                             className="text-red-400/70 hover:text-red-400 p-1"
                             title="Delete from catalog"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <span className="ms" style={{ fontSize: 14 }}>delete</span>
                           </button>
                         </div>
                       </li>

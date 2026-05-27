@@ -16,7 +16,6 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { X, Database, FileSpreadsheet, Code2, Terminal as TerminalIcon, ScrollText, Users, Settings2, ListTodo, BarChart2, Zap, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SchedulesTab } from "./SchedulesTab";
 import { TeamTab } from "./TeamTab";
@@ -31,19 +30,19 @@ type SudoTab = "schedules" | "team" | "tasks" | "reports" | "engine" | "planner"
 const TABS: Array<{
   id: SudoTab;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  msIcon: string;
   status: "ready" | "coming-soon";
 }> = [
-  { id: "schedules", label: "Schedules",    icon: FileSpreadsheet, status: "ready" },
-  { id: "team",      label: "Team",         icon: Users,           status: "ready" },
-  { id: "tasks",     label: "Tasks",        icon: ListTodo,        status: "ready" },
-  { id: "reports",   label: "Reports",      icon: BarChart2,       status: "ready" },
-  { id: "engine",    label: "Engine Config",icon: Settings2,       status: "ready" },
-  { id: "planner",   label: "Batch Planner",icon: Zap,             status: "ready" },
-  { id: "defaults",  label: "Card Defaults",icon: Layers,          status: "ready" },
-  { id: "sql",       label: "SQL Runner",   icon: Database,        status: "coming-soon" },
-  { id: "edge",      label: "Edge Functions",icon: Code2,          status: "coming-soon" },
-  { id: "logs",      label: "Logs",         icon: ScrollText,      status: "coming-soon" },
+  { id: "schedules", label: "Schedules",     msIcon: "table_chart",   status: "ready" },
+  { id: "team",      label: "Team",          msIcon: "group",         status: "ready" },
+  { id: "tasks",     label: "Tasks",         msIcon: "checklist",     status: "ready" },
+  { id: "reports",   label: "Reports",       msIcon: "bar_chart",     status: "ready" },
+  { id: "engine",    label: "Engine Config", msIcon: "tune",          status: "ready" },
+  { id: "planner",   label: "Batch Planner", msIcon: "bolt",          status: "ready" },
+  { id: "defaults",  label: "Card Defaults", msIcon: "layers",        status: "ready" },
+  { id: "sql",       label: "SQL Runner",    msIcon: "database",      status: "coming-soon" },
+  { id: "edge",      label: "Edge Functions",msIcon: "code",          status: "coming-soon" },
+  { id: "logs",      label: "Logs",          msIcon: "receipt_long",  status: "coming-soon" },
 ];
 
 export interface SudoWindowProps {
@@ -113,7 +112,7 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId, weekS
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <TerminalIcon className="h-4 w-4 text-red-400" />
+            <span className="ms text-red-400" style={{ fontSize: 16 }}>terminal</span>
             <div className="flex items-baseline gap-2">
               <span className="font-mono font-semibold text-[14px] tracking-wider text-zinc-100">
                 SUDO
@@ -133,7 +132,7 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId, weekS
               className="text-zinc-400 hover:text-zinc-100 rounded p-1 transition-colors"
               aria-label="Close sudo window"
             >
-              <X className="h-4 w-4" />
+              <span className="ms" style={{ fontSize: 16 }}>close</span>
             </button>
           </div>
         </div>
@@ -143,7 +142,6 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId, weekS
           {/* Tab rail */}
           <nav className="w-[200px] shrink-0 border-r border-zinc-800 bg-zinc-950/50 py-3 px-2 space-y-0.5">
             {TABS.map((t) => {
-              const Icon = t.icon;
               const isActive = activeTab === t.id;
               const isComingSoon = t.status === "coming-soon";
               return (
@@ -163,7 +161,7 @@ export function SudoWindow({ open, onClose, onDataChanged, currentNightId, weekS
                   style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
                   disabled={isComingSoon}
                 >
-                  <Icon className={cn("h-4 w-4", isActive ? "text-red-300" : "")} />
+                  <span className={cn("ms", isActive ? "text-red-300" : "")} style={{ fontSize: 16 }}>{t.msIcon}</span>
                   <span className="flex-1 text-left">{t.label}</span>
                   {isComingSoon && (
                     <span className="text-[9px] text-zinc-600 uppercase tracking-wider">
