@@ -18,6 +18,22 @@ import { supabase, getSupabaseClient } from '../supabase';
  * The UI layer maps these to pretty labels (Z1, MRR1/WRR1, AUX...).
  */
 
+/**
+ * Logs Supabase errors in a structured way that survives serialization
+ * across React Server Components, edge runtimes, and production logging pipelines.
+ * PostgrestError objects frequently collapse to `{}` when passed directly to console.error.
+ */
+function logSupabaseError(label: string, error: any) {
+  console.error(`[shiftbuilder/data] ${label}:`, {
+    message: error?.message ?? 'unknown',
+    code: error?.code,
+    details: error?.details,
+    hint: error?.hint,
+    raw: error,
+  });
+}
+
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -624,8 +640,8 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
 
     const { error } = await q;
     if (error) {
-      console.error('[shiftbuilder/data] delete assignment failed:', error);
-      throw new Error(`Failed to clear assignment: ${error.message}`);
+      logSupabaseError('delete assignment failed', error);
+      throw new Error(`Failed to clear assignment: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
     }
     return { success: true, action: 'deleted' as const };
   }
@@ -650,8 +666,8 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
     });
 
   if (error) {
-    console.error('[shiftbuilder/data] upsert assignment failed:', error);
-    throw new Error(`Failed to save assignment: ${error.message}`);
+    logSupabaseError('upsert assignment failed', error);
+    throw new Error(`Failed to save assignment: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 
   return { success: true, action: 'upserted' as const };
@@ -756,8 +772,8 @@ export async function toggleAssignmentLock(params: {
   const { error } = await q;
 
   if (error) {
-    console.error('[shiftbuilder/data] toggle lock failed:', error);
-    throw new Error(`Failed to toggle lock: ${error.message}`);
+    logSupabaseError('toggle lock failed', error);
+    throw new Error(`Failed to toggle lock: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 
   return { success: true, newLocked: !currentLocked };
@@ -958,8 +974,8 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     // 23505 = unique_violation; treat as no-op since the task is already
     // selected. Anything else is a real error.
     if ((error as any).code === '23505') return;
-    console.error('[shiftbuilder/data] addNightSlotTask failed:', error);
-    throw new Error(`Failed to add task: ${error.message}`);
+    logSupabaseError('addNightSlotTask failed', error);
+    throw new Error(`Failed to add task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 }
 
@@ -1068,8 +1084,8 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
 
   const { error } = await q;
   if (error) {
-    console.error('[shiftbuilder/data] removeNightSlotTask failed:', error);
-    throw new Error(`Failed to remove task: ${error.message}`);
+    logSupabaseError('removeNightSlotTask failed', error);
+    throw new Error(`Failed to remove task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 }
 
@@ -1101,8 +1117,8 @@ export async function updateNightSlotTaskColor(
   const { error } = await q;
 
   if (error) {
-    console.error('[shiftbuilder/data] updateNightSlotTaskColor failed:', error);
-    throw new Error(`Failed to set task color: ${error.message}`);
+    logSupabaseError('updateNightSlotTaskColor failed', error);
+    throw new Error(`Failed to set task color: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 }
 
@@ -1139,8 +1155,8 @@ export async function updateNightSlotTaskLabel(
   const { error } = await q;
 
   if (error) {
-    console.error('[shiftbuilder/data] updateNightSlotTaskLabel failed:', error);
-    throw new Error(`Failed to update task label: ${error.message}`);
+    logSupabaseError('updateNightSlotTaskLabel failed', error);
+    throw new Error(`Failed to update task label: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 }
 
@@ -1281,8 +1297,10 @@ export async function moveNightSlotTask(params: MoveTaskParams): Promise<void> {
     .eq('id', existing.id);
 
   if (updErr) {
-    console.error('[shiftbuilder/data] moveNightSlotTask update failed:', updErr);
-    throw new Error(`Failed to move task: ${updErr.message}`);
+    logSupabaseError('moveNightSlotTask update failed', updErr);
+    throw new Error(
+      `Failed to move task: ${updErr.message || 'unknown error'} (code: ${updErr.code || 'unknown'})`
+    );
   }
 }
 
