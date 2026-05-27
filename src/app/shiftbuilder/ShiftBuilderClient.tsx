@@ -714,7 +714,6 @@ export default function ShiftBuilder() {
   // controlsExpanded removed — centered orb replaced by Velvet bottom dock
 
   // Zone legend — collapsible floating pill below the zoom chip.
-  const [legendOpen, setLegendOpen] = useState(false);
 
   // Close day picker on outside click or Escape (same pattern as the retired pill hooks).
   useEffect(() => {
@@ -2646,6 +2645,36 @@ export default function ShiftBuilder() {
     [DAY_DEFS]
   );
 
+  // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
+  const markerScheduledUnassigned = React.useMemo(
+    () =>
+      Array.from(scheduledTmIdsTonight)
+        .filter((id) => !assignedThisNight.has(id))
+        .map((id) => {
+          const tm = realRoster.find((t: any) => t.id === id);
+          const tmName = tm?.name || tm?.fullName;
+          if (!tmName) return null;
+          return { tmId: id, tmName };
+        })
+        .filter(Boolean) as { tmId: string; tmName: string }[],
+    [scheduledTmIdsTonight, assignedThisNight, realRoster]
+  );
+
+  // Full roster minus currently-placed TMs — used when the operator types in the
+  // TM picker search box so they can find anyone, not just scheduled-unassigned.
+  const markerAllEligibleTms = React.useMemo(
+    () =>
+      realRoster
+        .filter((t: any) => !assignedThisNight.has(t.id))
+        .map((t: any) => {
+          const tmName = t.name || t.fullName;
+          if (!tmName) return null;
+          return { tmId: t.id as string, tmName: tmName as string };
+        })
+        .filter(Boolean) as { tmId: string; tmName: string }[],
+    [realRoster, assignedThisNight]
+  );
+
   const cmdkCompletionUnplaced = React.useMemo(
     () =>
       Array.from(scheduledTmIdsTonight)
@@ -3776,135 +3805,11 @@ export default function ShiftBuilder() {
                 <span className="ms" style={{ fontSize: 17 }}>{isDark ? "light_mode" : "dark_mode"}</span>
               </button>
 
-              {/* Publish PDF — gold button */}
-              <button
-                type="button"
-                onClick={handlePrintBothPages}
-                title="Publish PDF — print deployment sheet"
-                className="flex items-center gap-1.5 px-3 h-[30px] rounded-full font-bold text-[11.5px] transition-all shrink-0 active:scale-95"
-                style={{
-                  background: "linear-gradient(135deg, #B89708, #E9B948)",
-                  color: "#1C1C1E",
-                  border: "1px solid #E9B94880",
-                  boxShadow: "0 2px 10px rgba(184,151,8,0.40)",
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  letterSpacing: "-0.1px",
-                }}
-              >
-                <span className="ms" style={{ fontSize: 15 }}>print</span>
-                <span>Publish PDF</span>
-              </button>
             </div>
           </div>
         );
       })()}
 
-      {/* === Zone legend — collapsible key below the top bar. */}
-      <div className="fixed top-[64px] right-3 z-[39] flex flex-col items-end gap-1.5">
-        {/* Toggle button — h-8 w-8 so it's comfortably clickable */}
-        <button
-          type="button"
-          onClick={() => setLegendOpen((v) => !v)}
-          title={legendOpen ? "Close legend" : "Show artboard legend"}
-          aria-label={legendOpen ? "Close legend" : "Show artboard legend"}
-          className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shadow-md border transition-colors text-[11px] font-medium"
-          style={{
-            background: isDark
-              ? legendOpen ? "rgba(60,60,62,0.98)" : "rgba(44,44,46,0.92)"
-              : legendOpen ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.90)",
-            backdropFilter: "blur(16px) saturate(150%)",
-            WebkitBackdropFilter: "blur(16px) saturate(150%)",
-            borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
-            color: isDark ? "#8E8E93" : "#6B7280",
-          }}
-        >
-          <span className="ms" style={{ fontSize: 14 }}>{legendOpen ? "close" : "info"}</span>
-          <span style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>Legend</span>
-        </button>
-
-        {/* Legend panel */}
-        {legendOpen && (
-          <div
-            className="rounded-xl shadow-xl border text-[11px] overflow-hidden"
-            style={{
-              background: isDark ? "rgba(28,28,30,0.97)" : "rgba(255,255,255,0.97)",
-              backdropFilter: "blur(24px) saturate(160%)",
-              WebkitBackdropFilter: "blur(24px) saturate(160%)",
-              borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)",
-              width: 188,
-              fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
-            }}
-          >
-            <div
-              className="px-3 py-2 text-[9.5px] font-semibold tracking-[0.7px] uppercase"
-              style={{ color: isDark ? "#636366" : "#8E8E93", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}
-            >
-              Artboard Legend
-            </div>
-            <div className="px-3 py-2 flex flex-col gap-2">
-
-              {/* Break waves */}
-              <div>
-                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Break Wave</div>
-                <div className="flex flex-col gap-0.5">
-                  {([0, 1, 2, 3] as const).map((g) => (
-                    <div key={g} className="flex items-center gap-2">
-                      <span
-                        className="w-[22px] h-[16px] rounded-[2px] flex items-center justify-center text-[10px] font-bold text-white leading-none shrink-0"
-                        style={{ background: g === 0 ? "#9CA3AF" : "#1C1C1E" }}
-                      >
-                        {g === 0 ? "–" : g}
-                      </span>
-                      <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>
-                        {g === 0 ? "Off break sheet" : `Wave ${g} — goes ${g === 1 ? "first" : g === 2 ? "second" : "third"}`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Status rings */}
-              <div>
-                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Card Ring</div>
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ outline: "1.5px solid rgba(52,199,89,0.7)", outlineOffset: "-1px" }} />
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Tasks assigned</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ outline: "1.5px solid rgba(255,149,0,0.65)", outlineOffset: "-1px" }} />
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>No tasks yet</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: isDark ? "#2C2C2E" : "#E5E5E7" }} />
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Empty slot</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card badges */}
-              <div>
-                <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Badges</div>
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="ms shrink-0" style={{ fontSize: 13, color: '#FF9500', fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Locked — engine won't move</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-1 py-px rounded text-[8px] font-semibold tracking-wider bg-amber-100 text-amber-700 shrink-0 leading-tight">DRAFT</span>
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Engine proposal — not live</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-1 py-px rounded text-[8px] font-semibold bg-[#FFD60A] text-[#1C1C1E] shrink-0 leading-tight">✦</span>
-                    <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Apple Pencil hover</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
           fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
@@ -5432,25 +5337,10 @@ export default function ShiftBuilder() {
               <span className="ms" style={{ fontSize: 20 }}>chevron_right</span>
             </button>
 
-            {/* Save indicator + Ask AI */}
+            {/* Save indicator */}
             <div className="flex items-center gap-2 px-3">
               <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }} />
               <span className="text-[11px]" style={{ color: dockText }}>{savedAgo}</span>
-              <button
-                type="button"
-                onClick={() => setXaiSphereOpen((v) => !v)}
-                className="flex items-center gap-1 px-2.5 h-[28px] rounded-full font-bold text-[11px] transition-all ml-1"
-                style={{
-                  background: "linear-gradient(135deg, #5E2CA5, #7B3FD4)",
-                  color: "#fff",
-                  border: "1px solid rgba(123,63,212,0.50)",
-                  boxShadow: "0 2px 8px rgba(94,44,165,0.40)",
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                }}
-              >
-                <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 500' }}>auto_awesome</span>
-                <span>Ask AI</span>
-              </button>
             </div>
           </div>
         );
@@ -5616,7 +5506,9 @@ export default function ShiftBuilder() {
         onToggleLock={(slotKey) => toggleLock(slotKey)}
         onClearSlot={(slotKey) => { unassign(slotKey); setMarkerSlotKey(null); }}
         onAddCoverage={(sourceKey, targetKey) => handleCmdkAddCoverage(sourceKey, targetKey)}
-        onSwap={() => setCmdkOpen(true)}
+        onAssign={(slotKey, tmId, tmName) => assign(slotKey, tmId, tmName)}
+        scheduledUnassigned={markerScheduledUnassigned}
+        allEligibleTms={markerAllEligibleTms}
         onClose={() => setMarkerSlotKey(null)}
         auxDefs={auxDefs}
         isDark={isDark}

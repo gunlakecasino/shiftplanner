@@ -28,19 +28,26 @@ import {
   nextBreakGroup,
 } from "@/lib/shiftbuilder/constants";
 
+export interface TmEntry {
+  tmId: string;
+  tmName: string;
+}
+
 export interface MarkerPadProps {
   slotKey: string | null;
   assignments: Record<string, any>;
   selectedTasks: Record<string, NightSlotTask[]>;
   recentTasks: string[];
   auxDefs?: AuxDef[];                  // operator-added aux slots
+  scheduledUnassigned?: TmEntry[];     // TMs scheduled tonight but not yet placed
+  allEligibleTms?: TmEntry[];          // Full roster (minus placed) — used for search
   setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onAddTask: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onToggleLock?: (slotKey: string) => void;
   onClearSlot?: (slotKey: string) => void;
+  onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
-  onSwap?: (slotKey: string) => void;
   onClose: () => void;
   isDark?: boolean;
 }
@@ -165,10 +172,12 @@ const CoveragePicker: React.FC<{
   onPick: (targetKey: string) => void;
   onCancel: () => void;
   confirmed: boolean;
-}> = ({ currentSlotKey, auxDefs, onPick, onCancel, confirmed }) => {
+  isDark: boolean;
+}> = ({ currentSlotKey, auxDefs, onPick, onCancel, confirmed, isDark }) => {
   const sectionLabel: React.CSSProperties = {
     fontSize: 7.5, fontWeight: 700, letterSpacing: "1.4px",
-    textTransform: "uppercase", color: "rgba(255,255,255,0.28)",
+    textTransform: "uppercase",
+    color: isDark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.35)",
     fontFamily: "var(--font-atkinson)",
     marginBottom: 4, display: "block",
   };
@@ -182,6 +191,9 @@ const CoveragePicker: React.FC<{
     lineHeight: 1,
   };
 
+  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
+  const textMuted   = isDark ? "rgba(255,255,255,0.40)" : "rgba(0,0,0,0.35)";
+
   if (confirmed) {
     return (
       <div style={{
@@ -189,7 +201,7 @@ const CoveragePicker: React.FC<{
         alignItems: "center", justifyContent: "center", gap: 6,
       }}>
         <span style={{ fontSize: 28 }}>✓</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: textPrimary }}>
           Coverage added
         </span>
       </div>
@@ -200,7 +212,7 @@ const CoveragePicker: React.FC<{
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 10 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: "rgba(255,255,255,0.85)" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
           Add coverage to…
         </span>
         <button
@@ -208,7 +220,7 @@ const CoveragePicker: React.FC<{
           onClick={(e) => { e.stopPropagation(); onCancel(); }}
           onPointerDown={(e) => e.stopPropagation()}
           style={{
-            fontSize: 11, color: "rgba(255,255,255,0.4)", background: "none",
+            fontSize: 11, color: textMuted, background: "none",
             border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1,
           }}
         >✕</button>
@@ -310,6 +322,15 @@ const CoveragePicker: React.FC<{
               {auxDefs.map(aux => {
                 const color = getAuxAccent(aux.key);
                 const isSelf = aux.key === currentSlotKey;
+                // Light-mode aware neutrals for aux chips (no per-slot accent colour)
+                const auxBg        = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
+                const auxBorder    = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)";
+                const auxColor     = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
+                const auxBgSelf    = isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)";
+                const auxBorderSelf= isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+                const auxColorSelf = isDark ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.20)";
+                const auxBgHover   = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.09)";
+                const auxColorHover= isDark ? "rgba(255,255,255,0.90)" : "rgba(0,0,0,0.80)";
                 return (
                   <button
                     key={aux.key}
@@ -319,22 +340,22 @@ const CoveragePicker: React.FC<{
                     onPointerDown={(e) => e.stopPropagation()}
                     style={{
                       ...chipBase,
-                      borderColor: isSelf ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.14)",
-                      color: isSelf ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.60)",
-                      background: isSelf ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)",
+                      borderColor: isSelf ? auxBorderSelf : auxBorder,
+                      color: isSelf ? auxColorSelf : auxColor,
+                      background: isSelf ? auxBgSelf : auxBg,
                       cursor: isSelf ? "default" : "pointer",
                       fontSize: 8,
                     }}
                     onMouseEnter={e => {
                       if (!isSelf) {
-                        (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.12)";
-                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)";
+                        (e.currentTarget as HTMLElement).style.background = auxBgHover;
+                        (e.currentTarget as HTMLElement).style.color = auxColorHover;
                       }
                     }}
                     onMouseLeave={e => {
                       if (!isSelf) {
-                        (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
-                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.60)";
+                        (e.currentTarget as HTMLElement).style.background = auxBg;
+                        (e.currentTarget as HTMLElement).style.color = auxColor;
                       }
                     }}
                   >
@@ -350,6 +371,131 @@ const CoveragePicker: React.FC<{
   );
 };
 
+// ── TmPicker ──────────────────────────────────────────────────────────────────
+
+const TmPicker: React.FC<{
+  tms: TmEntry[];
+  allTms?: TmEntry[];   // full roster — searched when filter is non-empty
+  currentTmName?: string;
+  onPick: (tm: TmEntry) => void;
+  onCancel?: () => void;
+  confirmed: boolean;
+  accent: string;
+  isDark: boolean;
+}> = ({ tms, allTms, currentTmName, onPick, onCancel, confirmed, accent, isDark }) => {
+  const [filter, setFilter] = useState("");
+  // When searching, look across the full eligible roster; when empty show only
+  // scheduled-unassigned so the default list stays concise.
+  const searchPool = filter.trim() ? (allTms ?? tms) : tms;
+  const filtered = filter.trim()
+    ? searchPool.filter(t => t.tmName.toLowerCase().includes(filter.toLowerCase()))
+    : tms;
+
+  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
+  const textMuted   = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)";
+  const rowBg       = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
+  const rowBorder   = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.10)";
+  const inputBg     = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
+  const inputBorder = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.14)";
+
+  if (confirmed) {
+    return (
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 6,
+      }}>
+        <span className="ms" style={{ fontSize: 28, color: accent, fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: textPrimary }}>Assigned</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
+          {currentTmName ? `Replace ${currentTmName}…` : "Assign TM"}
+        </span>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ fontSize: 11, color: textMuted, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}
+          >✕</button>
+        )}
+      </div>
+
+      {/* Filter input */}
+      <input
+        type="text"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        onKeyDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        placeholder="Search…"
+        style={{
+          flexShrink: 0,
+          background: inputBg, border: `1px solid ${inputBorder}`,
+          borderRadius: 9, padding: "6px 10px",
+          fontSize: 12, fontWeight: 500, color: textPrimary,
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+          outline: "none", caretColor: accent,
+        }}
+      />
+
+      {/* TM list */}
+      <div className="no-scrollbar" style={{ overflowY: "auto", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        {filtered.length === 0 ? (
+          <div style={{ fontSize: 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
+            {filter.trim() ? "No match" : tms.length === 0 ? "All TMs placed" : "No match"}
+          </div>
+        ) : filtered.map(tm => {
+          const initial = tm.tmName.charAt(0).toUpperCase();
+          return (
+            <button
+              key={tm.tmId}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onPick(tm); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "7px 10px", borderRadius: 10, flexShrink: 0,
+                background: rowBg, border: `1px solid ${rowBorder}`,
+                cursor: "pointer", transition: "all 0.12s", textAlign: "left",
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = `${accent}22`;
+                (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = rowBg;
+                (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
+              }}
+            >
+              {/* Avatar chip */}
+              <span style={{
+                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                background: `${accent}22`, border: `1px solid ${accent}66`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 800, color: accent,
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}>{initial}</span>
+              <span style={{
+                fontSize: 12.5, fontWeight: 600, color: textPrimary,
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                letterSpacing: "-0.15px",
+              }}>{tm.tmName}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const MarkerPad: React.FC<MarkerPadProps> = ({
@@ -358,19 +504,23 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   selectedTasks,
   recentTasks,
   auxDefs = DEFAULT_AUX_DEFS,
+  scheduledUnassigned = [],
+  allEligibleTms,
   setBreakGroupForSlot,
   onAddTask,
   onRemoveTask,
   onToggleLock,
   onClearSlot,
+  onAssign,
   onAddCoverage,
-  onSwap,
   onClose,
   isDark,
 }) => {
   const [taskInput, setTaskInput] = useState("");
   const [coverageMode, setCoverageMode] = useState(false);
   const [coverageConfirmed, setCoverageConfirmed] = useState(false);
+  const [assignMode, setAssignMode] = useState(false);
+  const [assignConfirmed, setAssignConfirmed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -379,6 +529,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     setTaskInput("");
     setCoverageMode(false);
     setCoverageConfirmed(false);
+    setAssignMode(false);
+    setAssignConfirmed(false);
     if (slotKey) {
       const t = setTimeout(() => inputRef.current?.focus(), 120);
       return () => clearTimeout(t);
@@ -397,6 +549,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     document.addEventListener("mousedown", handleOutsideClick, true);
     return () => document.removeEventListener("mousedown", handleOutsideClick, true);
   }, [slotKey, onClose]);
+
+  const handlePickTm = useCallback((tm: TmEntry) => {
+    if (!slotKey || !onAssign) return;
+    onAssign(slotKey, tm.tmId, tm.tmName);
+    setAssignConfirmed(true);
+    setTimeout(() => {
+      setAssignMode(false);
+      setAssignConfirmed(false);
+      onClose();
+    }, 700);
+  }, [slotKey, onAssign, onClose]);
 
   const handlePickCoverage = useCallback(async (targetKey: string) => {
     if (!slotKey || !onAddCoverage) return;
@@ -428,6 +591,9 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     setTaskInput("");
     void onAddTask(slotKey, lbl);
   };
+
+  // Show TM picker when slot is empty OR when operator tapped Swap
+  const showTmPicker = onAssign && (!a.tmId || assignMode);
 
   const isDarkPanel = isDark !== false;
   const panelStyle: React.CSSProperties = {
@@ -552,8 +718,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
         )}
       </div>
 
-      {/* ── Break wave (hidden in coverage picker mode) ─────────────────── */}
-      {!coverageMode && (
+      {/* ── Break wave (hidden when any picker is active) ───────────────── */}
+      {!coverageMode && !showTmPicker && (
         <BreakWave
           current={currentBreak}
           accent={accent}
@@ -561,14 +727,26 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
         />
       )}
 
-      {/* ── Tasks section OR Coverage picker ───────────────────────────── */}
-      {coverageMode ? (
+      {/* ── Body: TM picker, Coverage picker, or Tasks section ──────────── */}
+      {showTmPicker ? (
+        <TmPicker
+          tms={scheduledUnassigned}
+          allTms={allEligibleTms}
+          currentTmName={a.tmId ? a.tmName : undefined}
+          onPick={handlePickTm}
+          onCancel={a.tmId ? () => { setAssignMode(false); setAssignConfirmed(false); } : undefined}
+          confirmed={assignConfirmed}
+          accent={accent}
+          isDark={isDarkPanel}
+        />
+      ) : coverageMode ? (
         <CoveragePicker
           currentSlotKey={slotKey}
           auxDefs={auxDefs}
           onPick={handlePickCoverage}
           onCancel={() => { setCoverageMode(false); setCoverageConfirmed(false); }}
           confirmed={coverageConfirmed}
+          isDark={isDarkPanel}
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0 }}>
@@ -752,11 +930,11 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
           }}
         >Coverage</button>
 
-        {/* Swap */}
-        {onSwap && a.tmId && !coverageMode && (
+        {/* Swap — only when a TM is assigned and TM picker is not already open */}
+        {onAssign && a.tmId && !coverageMode && !showTmPicker && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSwap(slotKey); }}
+            onClick={(e) => { e.stopPropagation(); setAssignMode(true); setAssignConfirmed(false); }}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
               flex: 1, height: 32, borderRadius: 9,
@@ -772,7 +950,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
         )}
 
         {/* Clear */}
-        {onClearSlot && a.tmId && !coverageMode && (
+        {onClearSlot && a.tmId && !coverageMode && !showTmPicker && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onClearSlot(slotKey); }}

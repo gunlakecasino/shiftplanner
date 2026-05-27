@@ -846,24 +846,6 @@ function CommandPaletteInner({
           />
         )}
 
-        {/* === GLOBAL: Prominent "Grok: Analyze Full Board" entry point ===
-            Always visible regardless of slot/person selection. This is the
-            primary entry point for board-level analysis. */}
-        {requestGrokStructuredSuggestions && (
-          <div className="px-4 pt-2 pb-2 border-b border-white/60 bg-white/40 dark:bg-zinc-950/40">
-            <button
-              onClick={handleAnalyzeFullBoard}
-              disabled={grokLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#007AFF]/40 bg-[#007AFF]/10 py-2 text-sm font-medium tracking-[0.3px] text-[#007AFF] hover:bg-[#007AFF]/15 active:bg-[#007AFF]/20 disabled:opacity-60 transition-all"
-              style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-            >
-              <span className="ms" style={{ fontSize: 16 }}>auto_awesome</span>
-              {grokLoading ? "Analyzing entire board with Grok..." : "Grok: Analyze Full Board"}
-            </button>
-            <div className="text-center text-[10px] text-zinc-500 mt-1 tracking-wide">Respects placement order • Safe Draft preview</div>
-          </div>
-        )}
-
         {/* Contextual header for multi-step workflows (Person ↔ Slot) — only shows when context exists */}
         {(selectedPerson || selectedSlot) && (
           <div className="px-4 pt-2.5 pb-1 text-sm border-b border-white/60 bg-white/40 dark:bg-zinc-950/40">
@@ -926,99 +908,9 @@ function CommandPaletteInner({
               </div>
             )}
 
-            {/* Contextual Grok button — only meaningful with a slot/person selected */}
-            <div className="px-4 pb-3 pt-1">
-              <button
-                onClick={handleAskGrok}
-                disabled={grokLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/40 bg-white/50 py-2 text-sm font-medium tracking-[0.3px] hover:bg-white/70 active:bg-white/90 disabled:opacity-60 transition-all"
-                style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-              >
-                <span className="ms" style={{ fontSize: 16 }}>auto_awesome</span>
-                {grokLoading ? "Asking Grok..." : "Ask Grok for suggestions (this slot/person)"}
-              </button>
-            </div>
           </div>
         )}
 
-        {/* === Grok results surface — always visible when results exist, regardless of context ===
-            Renders the legacy text response (fallback) AND the structured action cards. */}
-        {(grokResponse && !grokUsedStructured) ||
-        (grokStructured && grokStructured.actions && grokStructured.actions.length > 0) ||
-        grokWarnings.length > 0 ? (
-          <div className="px-4 py-3 border-b border-white/60 bg-white/30 dark:bg-zinc-950/30">
-            {/* Legacy free-text response (only when no structured payload) */}
-            {grokResponse && !grokUsedStructured && (
-              <div className="rounded-2xl border border-white/30 bg-white/40 p-3 text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-200">
-                {grokResponse}
-              </div>
-            )}
-
-            {/* Structured actionable suggestions (Grok Intelligence v2) */}
-            {grokStructured && grokStructured.actions && grokStructured.actions.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-[11px] font-medium text-zinc-500 tracking-wide px-1">
-                  GROK SUGGESTIONS (will enter Draft)
-                </div>
-
-                {grokStructured.actions.map((action: any, idx: number) => {
-                  const isNote = action.type === 'note';
-                  return (
-                    <div
-                      key={idx}
-                      className={cn(
-                        "rounded-2xl border p-3 text-[13px] leading-relaxed",
-                        isNote
-                          ? "border-amber-200 bg-amber-50"
-                          : "border-white/40 bg-white/60"
-                      )}
-                    >
-                      <div className={cn(
-                        "font-medium",
-                        isNote ? "text-amber-800" : "text-zinc-800 dark:text-zinc-100"
-                      )}>
-                        {action.type === 'assign' && action.slotKey && action.tmId && `Assign to ${action.slotKey}`}
-                        {action.type === 'swap' && `Swap ${action.fromSlot} ↔ ${action.toSlot}`}
-                        {action.type === 'remove' && action.slotKey && `Remove from ${action.slotKey}`}
-                        {isNote && '💡 Note'}
-                      </div>
-                      <div className={cn(
-                        "mt-1 text-[12.5px]",
-                        isNote ? "text-amber-800/90" : "text-zinc-600 dark:text-zinc-300"
-                      )}>
-                        {action.reason}
-                      </div>
-                      {!isNote && (
-                        <button
-                          onClick={() => handleApplyGrokActions([action])}
-                          className="mt-2 w-full rounded-xl bg-[#007AFF] py-1.5 text-[12px] font-medium text-white active:scale-[0.985] transition-all"
-                        >
-                          Add to Draft
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {grokStructured.actions.length > 1 && (
-                  <button
-                    onClick={() => handleApplyGrokActions(grokStructured.actions)}
-                    className="mt-1 w-full rounded-2xl border border-[#007AFF]/60 bg-[#007AFF]/10 py-2 text-[13px] font-medium text-[#007AFF] active:bg-[#007AFF]/20 transition-all"
-                  >
-                    Add All to Draft
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Guard warnings from server (important for trust) */}
-            {grokWarnings.length > 0 && (
-              <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-                Some suggestions were filtered by safety rules: {grokWarnings.join(" • ")}
-              </div>
-            )}
-          </div>
-        ) : null}
         {/* Command-mode chip bar — shows parsed command state when typing `make` or `remove`. */}
         {isCommandMode && commandState && (
           <CommandChipBar state={commandState} />
@@ -1224,13 +1116,7 @@ function CommandPaletteInner({
                   }}
                   aria-label="Search commands, roster, actions, and days"
                   placeholder={
-                    isGrokQueryMode
-                      ? grokQueryText.length < 3
-                        ? "Ask Grok anything about tonight's board…"
-                        : grokLoading
-                        ? "Asking Grok…"
-                        : "Keep typing or review results below"
-                      : isCommandMode
+                    isCommandMode
                       ? "Type a command — Tab to complete, Enter to run"
                       : isTaskShorthandMode && taskShorthand?.label
                       ? `↵ to add "${taskShorthand.label}" to ${taskShorthand.slot}`
@@ -1252,8 +1138,7 @@ function CommandPaletteInner({
                     "w-full bg-transparent text-[15px] placeholder:text-zinc-400/70",
                     "outline-none border-none focus:ring-0",
                     "font-medium tracking-[-0.2px]",
-                    isCommandMode && "font-mono text-[14px]",
-                    isGrokQueryMode && "text-purple-800 dark:text-purple-300"
+                    isCommandMode && "font-mono text-[14px]"
                   )}
                   style={{
                     fontFamily: isCommandMode
@@ -1294,47 +1179,18 @@ function CommandPaletteInner({
               </button>
             </div>
 
-            {/* === Grok Query Mode status banner — shown between input and results === */}
-            {isGrokQueryMode && (
-              <div className="mx-3 mb-2 mt-1 rounded-2xl border border-purple-400/30 bg-purple-50/60 dark:bg-purple-950/30 px-3 py-2 flex items-center gap-2">
-                <span className={cn("ms text-purple-500 shrink-0", grokLoading && "animate-pulse")} style={{ fontSize: 14 }}>auto_awesome</span>
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 tracking-[0.3px]">
-                    Grok Query Mode
-                  </span>
-                  {grokQueryText.length > 0 && (
-                    <span className="text-[11px] text-purple-600/70 dark:text-purple-400/70 ml-1.5 truncate">
-                      {grokLoading
-                        ? "— asking…"
-                        : grokQueryText.length < 3
-                        ? "— type 3+ chars"
-                        : `— "${grokQueryText}"`}
-                    </span>
-                  )}
-                </div>
-                {grokQueryText.length < 3 && !grokLoading && (
-                  <span className="shrink-0 text-[10px] text-purple-400/80">
-                    ? query · ask query
-                  </span>
-                )}
-              </div>
-            )}
-
             <CommandPrimitive.List
               className="max-h-[420px] overflow-y-auto px-1 py-2 no-scrollbar"
               style={{ contain: "content", willChange: "scroll-position" }}
             >
-              <CommandPrimitive.Empty className={cn("py-8 text-center text-sm text-zinc-500", isGrokQueryMode && "hidden")}>
+              <CommandPrimitive.Empty className="py-8 text-center text-sm text-zinc-500">
                 <div className="space-y-2 px-4">
                   <div>No results found.</div>
                   <div className="text-[11px] text-zinc-400/70 leading-relaxed">
                     Try:{" "}
                     <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">clear zone</span>{" · "}
                     <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">swap</span>{" · "}
-                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">break [name]</span>{" · "}
-                    or type{" "}
-                    <span className="font-mono bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1 rounded">?</span>{" "}
-                    to ask Grok
+                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">break [name]</span>
                   </div>
                 </div>
               </CommandPrimitive.Empty>

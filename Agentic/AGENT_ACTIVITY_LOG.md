@@ -6,6 +6,116 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-05-25 — Grok 4.3 — Sudo Menu Full Review + Reports Deep Dive & Enhancement Proposals
+
+**Context**: User asked for a thorough review of the entire Sudo menu (all tabs) with special focus on Reports: "significantly more legible and meaningful", ability to "view the dates the TM were in the zone, etc.", plus brainstorming additional reporting options. This is supporting-surface work under the current native-first primary epic.
+
+**Actions**:
+- Full re-orient via Agentic (THIS_IS... confirms webapp = secondary/maintenance while opsApp is flagship).
+- Complete code audit of SudoWindow.tsx + all 8 tabs (Schedules, Team, Tasks, Reports, EngineConfig, BatchPlanner, Defaults + 3 coming-soon placeholders).
+- Deep read of ReportsTab.tsx + the powering `getZoneFrequencyReport()` in data.ts (lines ~1927–2029).
+- Cross-reference against data model (zone_assignments, nights, tm_profiles, etc.) and centralized constants.ts.
+- Analyzed current UI (horizontal bars, 14/30/60d calendar windows, last-seen only, duplicated zone defs) vs. rich historical data that actually exists.
+- Produced structured review + concrete legibility/meaning upgrades + prioritized additional report ideas.
+- This entry appended (per Command Post contract for meaningful analytical + design work).
+
+**Sudo Menu Overall Assessment** (high-signal summary):
+- **Shell (SudoWindow)**: Strong "admin mode" signaling (red gradient accent, "SUDO · no auth · all writes are real", dev project ref, Atkinson + zinc dark). Good Esc handling, prop drilling for night/week context. Tab rail is simple but static. Max 1400px / 92vw works for dense tools.
+- **Tab Quality** (ranked by current completeness):
+  1. **TeamTab** — Excellent. Unmatched ADP merge flows, rich 4-subtab drawer (Identity/Grave/Prefs/Skills), soft delete/restore with confirmation. High operator value.
+  2. **TasksTab** — Very complete (full catalog CRUD + reorder + "Default?" flag + "Apply daily defaults" + local UX prefs that sync to main canvas via custom event).
+  3. **DefaultsTab** — Practical and well-executed (per-slot break groups + task chips, optimistic UI, sticky push-to-night/week actions). Directly addresses real operator pain (manual copy).
+  4. **BatchPlannerTab** — High-leverage (run weighted engine across full Fri–Thu week with per-night live status). Good for baseline weekly planning.
+  5. **SchedulesTab** — Heavy but necessary ADP lifecycle (upload, preview with call-off overlay, Apply/Unapply/Delete, week linking). Complex XLSX handling.
+  6. **EngineConfigTab** — Critical for intelligence posture (placement method + grokReasoningEffort + weights). Foundational.
+  7. **ReportsTab** — Weakest of the ready tabs (see deep dive below). Basic frequency only.
+- **Coming-soon tabs** (SQL Runner, Edge Functions, Logs): Correct placeholders for future power-user debugging.
+- **Systemic notes**: Many tabs duplicate zone/RR/AUX defs instead of importing from `lib/shiftbuilder/constants.ts`. onDataChanged pattern is consistent and correct. Sudo is invoked only via Command Palette ("sudo"). No native equivalent yet (will matter for opsApp parity).
+
+**ReportsTab — Current State & Problems** (the focus area):
+- Two views (TM-first / Zone-first), rolling 14/30/60 calendar-day windows.
+- Data: `getZoneFrequencyReport()` aggregates zone_assignments (slot_type='zone' only) → per-TM counts per Z1–Z10 + distinct night count ("totalShifts") + single lastDate.
+- UI: Tiny 11px text, 6px horizontal CSS bars, last-seen only on hover/sub-label, "Not Worked" chips, simple list + detail split.
+- **Legibility issues**: Low visual density contrast, hard to scan quickly, no matrix/overview, no date lists.
+- **Meaning issues**: Only counts + one date. No history, no patterns (DOW bias, streaks, rotation gaps), no filters (active/grave pool/section), calendar days vs operator's Fri–Thu mental model.
+- **Data waste**: The full history (every zone_assignment row back to whenever) exists and is queryable, but the current function + UI throws most of the signal away.
+- Duplicated ZONE_DEFS/COLORS/ICONS (should consume constants.ts).
+
+**Proposed Reports Overhaul Direction** (for user decision):
+**MVP "Legible + Date History" Upgrade** (high ROI, surgical):
+- Import zone constants properly.
+- Larger, calmer typography + better bar or list treatment (respect Golden liquid-glass language where it fits Sudo's darker admin aesthetic).
+- For selected TM in TM view: expandable or dedicated section showing the actual list of dates (or date chips) they were assigned to each zone — sorted newest first, grouped by zone or as a flat timeline.
+- Better window controls (add "This GRAVE Week", "Last 4 Weeks", custom date range later).
+- Add basic filters (Active TMs only, by primary_section, by grave_pool).
+- CSV export button (critical for power users).
+- "Last seen" and "Days since last in this zone" as first-class columns, not hover-only.
+
+**High-Value Additional Report Types** (brainstorm — prioritize with user):
+1. **TM Zone History / Timeline** (top request) — Full or filtered date list per TM per zone. "Show me every night Jessica has worked Zone 3."
+2. **Rotation Fairness / "Time Since" Matrix** — For each active TM + each major zone, surface days/weeks since last placement there. Highlights people who haven't seen popular zones recently.
+3. **Day-of-Week Bias** — Heatmap or counts: which TMs disproportionately land in which zones on which GRAVE days (Fri–Thu).
+4. **Streak & Gap Analysis** — Longest current/ historical streaks in a zone; longest gaps.
+5. **Zone Coverage / Utilization** — Per night in window, % of zones that were filled + by whom (for spotting chronic under-staffing patterns).
+6. **Co-Location / Affinity in Practice** — Which pairs of TMs actually end up assigned to adjacent or same-night zones most often (validates or challenges tm_pair_affinities).
+7. **Engine Fidelity** — How often did the deterministic planner's top-1 or top-3 recommendation match what the operator actually placed (requires storing planner output or re-running snapshots historically — higher effort).
+8. **Task + Zone Correlation** — Which tasks are most commonly active on which zones (using night_slot_tasks + zone_assignments).
+9. **Call-Off Impact on Zones** — How often a TM was assigned to a zone on a night where they later had a call-off/status change.
+10. **Notes-Driven Insights** — Simple search or tag cloud across nights.notes for the window (e.g., "frequent mentions of 'training' or 'new hire'").
+
+**Architectural Notes for Implementation**:
+- New or extended data functions in `data.ts` (or a new `reports.ts` module): `getTMZoneHistory(tmId, options)`, `getZoneActivityByDateRange(...)`, `getRotationFairness(...)`, etc. Must be efficient (index on night_date + tm_id).
+- Keep the existing frequency report as one "quick glance" card; make the date-history view the new star.
+- Sudo aesthetic (dense, zinc-950, red accents, monospaced labels where appropriate) vs. main canvas Golden spec — we can be more data-dense here because the audience is operators in "I need answers fast" mode.
+- Since webapp is secondary, design with future native reporting surface in mind (data layer + domain logic should be portable).
+
+**Status**: Review + proposal complete. No code changes yet. Followed Agentic contract + current native-first context.
+
+**Next**: User direction on:
+- Which Reports upgrades / new report types to tackle first (MVP date history + legibility polish? Or one of the advanced ones?)
+- Scope (quick win vs. proper multi-phase under coding-engineer)
+- Whether any of the other Sudo tab observations should trigger immediate surgical fixes (e.g. constant duplication).
+- Any constraints from opsApp plans (will reporting surfaces be needed in native soon?).
+
+---
+
+## 2026-05-25 — Grok 4.3 — Comprehensive Review of the Agentic Command Post
+
+**Context**: User explicitly requested a full review of the Agentic folder ("Review the agentic folder at the /briankillian/oms_root"). Performed exhaustive audit: read every core file + subfolder README + active plans + data model; listed all 30+ files; cross-referenced claims against live filesystem (ShiftBuilderClient.tsx, opsApp/, .grok/AGENTS.md, actual hook/component extractions, etc.); verified code state for fixes described in prior log entries.
+
+**Key Findings**:
+- **Overall**: The Command Post concept is excellent and largely successful. The "magic one-liner" + THIS_IS_WHAT_WE_ARE_DOING.md + detailed reverse-chronological log + clear subdirectory contracts deliver dramatically better context transfer than almost any other long-running project setup. High signal-to-noise.
+- **Stale Documentation (Highest Impact)**: 
+  - `Plans/active/ATTACK_PLAN_2026-05-22.md` completion status table (top) still lists multiple W2 items (W2-1, W2-6, W2-7/8/9/10/11) as 🔴 Open. Code inspection + prior Claude log entries (2026-05-24) confirm these were fixed (useShiftHistory ref stabilization + MAX_HISTORY, batchApplyDraftAssignments, assignedThisNight Set, dead code removal, etc.). The "Full Audit + Sync" entry claimed table updates; they were incomplete or regressed.
+  - `.grok/AGENTS.md` (project root) makes **zero mention** of the Agentic Command Post or the magic one-liner. Agentic/README.md line 51 claims it "Now points here. Updated in this setup." — this is inaccurate. Only `opsApp/AGENTS.md` correctly references the root Agentic/ folder.
+- **Orphaned Content**: `Zone Deployment Builder Web App UIUX/` (14 .jsx + index.html + 2 .DS_Store) is a complete self-contained "Velvet" prototype of the Golden 1056×816 aesthetic (reducer, cards, cmdk, markerpad, stage, etc.). Zero references in any markdown, code, or other Agentic files. Historical value as pre-React exploration, but currently dead weight with no README or context.
+- **Subfolder Health**: Memories/, Decisions/, References/ are correctly minimal (only their README "contracts" + seeded notes). Per their own rules, this is expected until durable cross-month facts or ADRs emerge. No bloat.
+- **Implementation vs Docs Alignment**:
+  - Monolith split: Partial success (components/ + hooks/ extracted, lib/shiftbuilder/ utilities present; ShiftBuilderClient.tsx still 5621 LOC; high-risk useShiftData/useDragDrop deferred as documented).
+  - opsApp/: More advanced than earliest log entries captured (TCA-style ShiftPlannerFeature, ArtboardCanvasView, PencilInteractionLayer, RosterRail, PDF export, Sudo panel, BreakTracker). The double-nested `opsApp/opsApp/` structure from Phase 0 logs persists.
+  - Native-first pivot (2026-05-25): Clearly the live primary direction; webapp now maintenance + parity.
+- **Log Hygiene**: Mostly excellent (high-signal, dated, append-only). Minor: top entries have some date interleaving from multi-agent appends; still usable.
+- **Other**: .DS_Store files present in Agentic/ and Zone subfolder (harmless but noisy). react-component-architect/ skill + reference doc is a nice reusable artifact.
+
+**Actions Taken**:
+- Full orientation re-read of all core files performed (per magic one-liner contract).
+- This review entry appended at top (mandatory per Agentic rules for "meaningful task").
+- No other files modified in this pass (pure review + diagnosis).
+
+**Recommendations**:
+1. **Sync the ATTACK_PLAN table immediately** (mark fixed W2 items ✅ or move the whole plan to archive since native-first has superseded the webapp Wave 3 focus).
+2. **Update `.grok/AGENTS.md`** to officially recognize Agentic/ as the sibling "what we are doing + memory" system alongside coding-engineer (add a short section + the magic one-liner).
+3. **Resolve the Zone Deployment Builder prototype**: Add a one-paragraph README explaining its origin (early Golden aesthetic exploration) + either (a) archive it under Plans/archive/ or (b) delete. Do not leave unexplained.
+4. After future major updates to THIS_IS_WHAT_WE_ARE_DOING.md or plan archiving, perform a 60-second "doc reality check" pass against code + log top entries.
+5. Consider a lightweight AGENTS.md pointer from root .grok/ or a root-level AGENTS.md that says "For mission context, read Agentic/ first."
+6. When opsApp work accelerates, ensure its local AGENTS.md stays in sync with root Agentic/ THIS_IS... changes.
+
+**Status**: ✅ Review complete. The Agentic Command Post remains one of the highest-leverage pieces of project infrastructure. Context transfer for any new agent (Grok/Claude/etc.) is now best-in-class. Minor documentation drift is the only real maintenance tax.
+
+**Next**: Awaiting explicit user direction — act on any of the above recommendations, resume opsApp native execution per OPSAPP_NATIVE_FIRST plan, webapp maintenance, or other priority.
+
+---
+
 ## 2026-05-24 — Claude (Sonnet 4.6) — PHASE 1: ShiftBuilder Canvas — All Views Written
 
 **Milestone**: Full Phase 1 first vertical slice is on disk. Task #8 complete.
