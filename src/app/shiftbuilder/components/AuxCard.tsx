@@ -114,9 +114,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
         ) : hasTM ? (
           <div className="flex items-center gap-1 min-w-0">
             {a.isLocked && (
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF9500] shrink-0" aria-label="Locked">
-                <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-              </svg>
+              <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
             )}
             <span
               className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"

@@ -323,9 +323,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
           )}
         </div>
         {a.isLocked && (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="#FF9F0A" style={{ flexShrink: 0 }}>
-            <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-          </svg>
+          <span className="ms" style={{ fontSize: 14, color: '#FF9F0A', flexShrink: 0, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
         )}
       </div>
 

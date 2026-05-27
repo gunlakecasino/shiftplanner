@@ -221,12 +221,7 @@ const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off
       {/* Drag grip (Phase 2 affordance) */}
       {isDraggable && (
         <div className="flex h-5 w-4 shrink-0 items-center justify-center text-[#9CA3AF] group-hover:text-[#6B7280] transition-colors">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <circle cx="3" cy="3" r="1" />
-            <circle cx="9" cy="3" r="1" />
-            <circle cx="3" cy="9" r="1" />
-            <circle cx="9" cy="9" r="1" />
-          </svg>
+          <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
         </div>
       )}
 
@@ -274,9 +269,7 @@ const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off
       {/* Status — very calm treatment (no loud pills) */}
       {isAssigned && (
         <div className="text-[#34C759] shrink-0" title="Already assigned this night">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-          </svg>
+          <span className="ms" style={{ fontSize: 16, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>check_circle</span>
         </div>
       )}
     </div>
@@ -324,11 +317,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
         title="More actions"
         aria-expanded={open}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="1.6" />
-          <circle cx="12" cy="12" r="1.6" />
-          <circle cx="19" cy="12" r="1.6" />
-        </svg>
+        <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>more_horiz</span>
       </button>
 
       {open && (
@@ -342,9 +331,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
             className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
           >
             <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
+              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>bolt</span>
               Run Engine
             </span>
             <span className="text-[11px] text-[#8E8E93] font-mono">R</span>
@@ -356,11 +343,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
             className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
           >
             <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
+              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
               Print
             </span>
             <span className="text-[11px] text-[#8E8E93] font-mono">⌘P</span>
@@ -371,10 +354,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
             onClick={() => { setOpen(false); onAddAuxSlot(); }}
             className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>add</span>
             Add AUX Slot
           </button>
           <button
@@ -389,9 +369,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
             title={onRemoveAuxSlot ? `Remove ${lastAuxSlotLabel}` : "Default AUX slots can't be removed"}
           >
             <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
+              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>remove</span>
               Remove AUX Slot
             </span>
             {lastAuxSlotLabel && (
@@ -404,10 +382,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
             onClick={() => { setOpen(false); /* TODO: hook lock-and-finalize handler */ }}
             className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#007AFF] font-semibold hover:bg-[#E5F0FF]"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>lock</span>
             Lock &amp; Finalize
           </button>
         </div>
@@ -3882,9 +3857,7 @@ export default function ShiftBuilder() {
                 <div className="text-[9px] font-semibold tracking-[0.5px] uppercase mb-1" style={{ color: isDark ? "#48484A" : "#C8C8CC" }}>Badges</div>
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-2">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#FF9500" className="shrink-0">
-                      <path d="M6 10V7a6 6 0 1 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm2 0h8V7a4 4 0 0 0-8 0v3z" />
-                    </svg>
+                    <span className="ms shrink-0" style={{ fontSize: 13, color: '#FF9500', fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
                     <span style={{ color: isDark ? "#A1A1AA" : "#6B7280" }}>Locked — engine won't move</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3946,9 +3919,7 @@ export default function ShiftBuilder() {
             aria-label="Collapse roster"
             title="Collapse roster"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>chevron_left</span>
           </button>
 
           <RosterDropZone className="flex flex-col h-full min-h-0">
@@ -3978,10 +3949,7 @@ export default function ShiftBuilder() {
                 style={{ fontFamily: "var(--font-geist-sans)" }}
               />
               <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.35-4.35" />
-                </svg>
+                <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
               </div>
             </div>
 
@@ -4181,22 +4149,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#C2410C] font-semibold px-1 pt-2 pb-0.5 hover:text-[#9A3412] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: calledOffExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: calledOffExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           Called Off
                         </span>
                         <span className="tabular-nums">{filteredCalledOff.length}</span>
@@ -4240,10 +4193,7 @@ export default function ShiftBuilder() {
                             className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
                           >
                             <span className="flex items-center gap-1.5">
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                                style={{ transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
-                                <polyline points="9 18 15 12 9 6" />
-                              </svg>
+                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                               Graves
                             </span>
                             <span className="tabular-nums">{filteredSchedGraves.length}{filterTerm ? ` / ${scheduledUnplacedGraves.length}` : ""}</span>
@@ -4265,10 +4215,7 @@ export default function ShiftBuilder() {
                             className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
                           >
                             <span className="flex items-center gap-1.5">
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                                style={{ transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
-                                <polyline points="9 18 15 12 9 6" />
-                              </svg>
+                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                               PM Overlaps (out at 1:00am)
                             </span>
                             <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
@@ -4290,10 +4237,7 @@ export default function ShiftBuilder() {
                             className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
                           >
                             <span className="flex items-center gap-1.5">
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                                style={{ transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
-                                <polyline points="9 18 15 12 9 6" />
-                              </svg>
+                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                               AM Overlaps (in 5:00–5:30am)
                             </span>
                             <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
@@ -4320,22 +4264,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: deployedExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: deployedExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           Already Deployed
                         </span>
                         <span className="tabular-nums">
@@ -4360,22 +4289,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: portersExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: portersExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           Porters
                         </span>
                         <span className="tabular-nums">
@@ -4400,22 +4314,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: amOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: amOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           AM Overlaps (in 5:00–5:30am)
                         </span>
                         <span className="tabular-nums">
@@ -4440,22 +4339,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: pmOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: pmOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           PM Overlaps (out at 1:00am)
                         </span>
                         <span className="tabular-nums">
@@ -4480,22 +4364,7 @@ export default function ShiftBuilder() {
                         className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
                       >
                         <span className="flex items-center gap-1.5">
-                          <svg
-                            width="9"
-                            height="9"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{
-                              transform: otherTmsExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                              transition: "transform 120ms ease",
-                            }}
-                          >
-                            <polyline points="9 18 15 12 9 6" />
-                          </svg>
+                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: otherTmsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                           Not Scheduled
                         </span>
                         <span className="tabular-nums">
@@ -5703,9 +5572,7 @@ export default function ShiftBuilder() {
                               aria-hidden="true"
                             >
                               {checked && (
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12" />
-                                </svg>
+                                <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 700, "opsz" 20', color: 'white' }}>check</span>
                               )}
                             </div>
                             <span className="text-[13.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>{opt.label}</span>
@@ -5754,11 +5621,7 @@ export default function ShiftBuilder() {
             aria-live="polite"
           >
             {t.kind === "error" && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
+              <span className="ms mt-0.5 shrink-0" style={{ fontSize: 16, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>error</span>
             )}
             <div className="flex-1 leading-snug">{t.message}</div>
             <button

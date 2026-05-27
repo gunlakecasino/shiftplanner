@@ -652,9 +652,7 @@ export function PrintCommandCenter({
         {/* ── HEADER ────────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px 13px", borderBottom: `1px solid ${divider}`, flexShrink: 0 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, background: isDark ? "rgba(10,132,255,0.2)" : "rgba(10,132,255,0.1)", border: "1px solid rgba(10,132,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A84FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" />
-            </svg>
+            <span className="ms" style={{ fontSize: 17, color: '#0A84FF', fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: tx, letterSpacing: "-0.01em" }}>Print Command Center</div>
@@ -665,7 +663,7 @@ export function PrintCommandCenter({
             )}
           </div>
           <button type="button" onClick={onClose} disabled={isPrinting} style={{ width: 26, height: 26, borderRadius: 13, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", border: "none", cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: ts, opacity: isPrinting ? 0.4 : 1 }} title="Close (Esc)">
-            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1l10 10M11 1L1 11" /></svg>
+            <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>close</span>
           </button>
         </div>
 
@@ -825,7 +823,7 @@ export function PrintCommandCenter({
                 ))}
               </div>
               <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 5 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={ts} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><path d="M11 8v6M8 11h6" /></svg>
+                <span className="ms" style={{ fontSize: 13, color: ts, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>info</span>
                 <span style={{ fontSize: 10, color: ts }}>
                   Auto-scale: <strong style={{ color: tx }}>{Math.round(MARGIN_ZOOM[margins] * 100)}%</strong>
                   <span style={{ opacity: 0.55 }}> · 11×8.5in landscape</span>
@@ -958,9 +956,7 @@ export function PrintCommandCenter({
                 opacity: isPrinting ? 0.6 : 1,
                 boxShadow: pageCount > 0 ? "0 2px 8px rgba(10,132,255,0.3)" : "none",
               }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" />
-                </svg>
+                <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
                 {pageCount > 0 ? `Print ${pageCount} Page${pageCount !== 1 ? "s" : ""}` : "Print"}
               </button>
             </>
@@ -971,9 +967,7 @@ export function PrintCommandCenter({
         {isPrinting && (
           <div style={{ position: "absolute", inset: 0, background: isDark ? "rgba(28,28,30,0.93)" : "rgba(250,250,252,0.93)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, borderRadius: 20, zIndex: 10 }}>
             <div style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,#0A84FF 0%,#0060D0 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(10,132,255,0.4)", animation: "pcc-pulse 1.6s ease-in-out infinite" }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" />
-              </svg>
+              <span className="ms" style={{ fontSize: 28, color: '#fff', fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 24' }}>print</span>
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: tx, marginBottom: 3 }}>{printProgress?.label ?? "Preparing…"}</div>

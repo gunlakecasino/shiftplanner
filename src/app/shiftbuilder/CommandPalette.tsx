@@ -1189,10 +1189,7 @@ function CommandPaletteInner({
                 ) : isCommandMode ? (
                   <Terminal className="h-4 w-4 text-[#007AFF]" />
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="M21 21l-4.35-4.35" />
-                  </svg>
+                  <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
                 )}
               </div>
               {/* Wrapper gives us a relative ancestor for the absolutely-placed ghost span */}
