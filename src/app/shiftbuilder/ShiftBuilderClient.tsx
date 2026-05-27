@@ -736,7 +736,7 @@ export default function ShiftBuilder() {
   // Centered expandable control cluster (new primary control surface).
   // Single orb centered on the browser. Tapping expands a centered row of all actions
   // (roster icon is now inside the "drawer"/cluster). Expands from the center, stays centered.
-  const [controlsExpanded, setControlsExpanded] = useState(false);
+  // controlsExpanded removed — centered orb replaced by Velvet bottom dock
 
   // Zone legend — collapsible floating pill below the zoom chip.
   const [legendOpen, setLegendOpen] = useState(false);
@@ -784,44 +784,7 @@ export default function ShiftBuilder() {
     };
   }, [calendarOpen]);
 
-  // Tap anywhere outside the centered control cluster (when expanded) to collapse it.
-  useEffect(() => {
-    if (!controlsExpanded) return;
-
-    const onDown = (e: MouseEvent) => {
-      const orb = document.getElementById("centered-control-orb");
-      const cluster = document.getElementById("centered-controls-cluster");
-
-      // Ignore clicks on the orb or inside the expanded cluster
-      if ((orb && orb.contains(e.target as Node)) || (cluster && cluster.contains(e.target as Node))) return;
-
-      // Ignore clicks inside any open sub popovers
-      const dayP = document.getElementById("left-rail-day-picker");
-      const calP = document.getElementById("left-rail-calendar-popover");
-      if ((dayP && dayP.contains(e.target as Node)) || (calP && calP.contains(e.target as Node))) return;
-
-      // Real outside click → collapse everything
-      setControlsExpanded(false);
-      setDayPickerOpen(false);
-      setCalendarOpen(false);
-    };
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setControlsExpanded(false);
-        setDayPickerOpen(false);
-        setCalendarOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [controlsExpanded]);
+  // (centered-control-orb collapse effect removed — orb replaced by Velvet bottom dock)
 
   const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(1);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
@@ -5458,113 +5421,6 @@ export default function ShiftBuilder() {
         ) : null}
       </DragOverlay>
       </DndContext>
-
-      {/* =====================================================
-         NEW CENTERED EXPANDABLE CONTROL CLUSTER
-         Single orb centered on the browser. Tapping it expands
-         a centered row of all controls (including the roster icon
-         "in the drawer"). Expansion grows from the center point.
-         Tap outside or the orb again to collapse (tap-to-dismiss already wired).
-      ===================================================== */}
-      {/*
-        The main orb — always visible when roster panel is closed.
-        Uses the familiar roster/people icon as the entry point.
-      */}
-      <button
-        id="centered-control-orb"
-        type="button"
-        onClick={() => setControlsExpanded(v => !v)}
-        aria-label={controlsExpanded ? "Collapse controls" : "Expand controls"}
-        title={controlsExpanded ? "Collapse centered controls" : "Open controls (roster, refresh, print, day picker, calendar...)"}
-        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] w-14 h-14 rounded-full border border-white/60 dark:border-white/10 shadow-2xl shadow-black/15 flex items-center justify-center text-[#1C1C1E] dark:text-[#F2F2F4] hover:scale-105 active:scale-95 transition-all"
-        style={{
-          background: isDark ? "rgba(44,44,46,0.95)" : "rgba(255,255,255,0.92)",
-          backdropFilter: "blur(24px) saturate(180%)",
-          WebkitBackdropFilter: "blur(24px) saturate(180%)",
-          opacity: rosterOpen ? 0.3 : 1,
-          pointerEvents: rosterOpen ? "none" : "auto",
-        }}
-      >
-        {/* App Library icon — grid of tools/controls (Cupertino / iPadOS style) */}
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          {/* Outer library frame */}
-          <rect x="3" y="3" width="18" height="18" rx="4.5" />
-          {/* Top-left "app" */}
-          <rect x="5.75" y="5.75" width="4.5" height="4.5" rx="1.25" />
-          {/* Top-right "app" */}
-          <rect x="13.75" y="5.75" width="4.5" height="4.5" rx="1.25" />
-          {/* Bottom-left "app" */}
-          <rect x="5.75" y="13.75" width="4.5" height="4.5" rx="1.25" />
-          {/* Bottom-right "app" */}
-          <rect x="13.75" y="13.75" width="4.5" height="4.5" rx="1.25" />
-        </svg>
-      </button>
-
-      {/* The expanded centered cluster — grows from the center of the orb above it */}
-      {controlsExpanded && !rosterOpen && (
-        <div
-          id="centered-controls-cluster"
-          className="fixed bottom-[78px] left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 rounded-3xl border border-white/70 dark:border-white/10 p-2 shadow-2xl shadow-black/10 backdrop-blur-xl transition-all"
-          style={{
-            background: isDark ? "rgba(44,44,46,0.97)" : "rgba(255,255,255,0.95)",
-            transform: "translateX(-50%) scale(1)",
-            opacity: 1,
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Roster button inside the drawer — opens the left roster panel */}
-          <button
-            onClick={() => { setRosterOpen(true); setControlsExpanded(false); }}
-            className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95"
-            title="Open roster"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C1C1E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </button>
-
-          {/* Refresh */}
-          <button onClick={() => window.location.reload()} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Refresh (remembers day & view)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
-          </button>
-
-          {/* Command Palette */}
-          <button onClick={() => {
-            const isMac = navigator.platform.toUpperCase().includes('MAC');
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: isMac, ctrlKey: !isMac, bubbles: true }));
-          }} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Command Palette (⌘K)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-          </button>
-
-          {/* Print — opens Command Center for full control */}
-          <button onClick={() => setIsPrintCenterOpen(true)} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Print Command Center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
-          </button>
-
-          {/* Day arrows — cross GRAVE week boundaries (Thu → next Fri, etc.)
-              w-11 h-11 = 44×44px satisfies Apple HIG minimum touch target. */}
-          <button onClick={goPrevDay} className="w-11 h-11 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] dark:text-[#F2F2F4] hover:bg-white dark:hover:bg-[#48484A] active:scale-95 text-base" title="Previous day">‹</button>
-          <button onClick={goNextDay} className="w-11 h-11 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] dark:text-[#F2F2F4] hover:bg-white dark:hover:bg-[#48484A] active:scale-95 text-base" title="Next day">›</button>
-
-          {/* Calendar */}
-          <button onClick={() => { setCalendarView(new Date()); setCalendarOpen(true); }} className="w-9 h-9 rounded-full border border-white/60 dark:border-white/10 shadow flex items-center justify-center bg-white/90 dark:bg-[#3A3A3C] hover:bg-white dark:hover:bg-[#48484A] active:scale-95" title="Calendar — pick any day">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-          </button>
-
-          {/* Colored day number */}
-          <button onClick={() => setDayPickerOpen(true)} className="w-9 h-9 rounded-full border shadow flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: currentView === "breaks" ? (isDark ? "rgba(44,44,46,0.95)" : "#fff") : selectedDay.color, borderColor: currentView === "breaks" ? selectedDay.color : "transparent", color: currentView === "breaks" ? (isDark ? "#F2F2F4" : selectedDay.color) : "#fff", borderWidth: currentView === "breaks" ? "1.5px" : 0 }} title={`${selectedDay.name} ${selectedDay.dateNum}`}>
-            {selectedDay.dateNum}
-          </button>
-
-          {/* View flip */}
-          <button onClick={() => setCurrentView(currentView === "deployment" ? "breaks" : "deployment")} className="px-3 h-9 rounded-full border border-white/60 shadow text-[10px] font-bold flex items-center justify-center active:scale-95" style={{ background: currentView === "breaks" ? "rgba(251,191,36,0.85)" : "rgba(255,255,255,0.9)", color: currentView === "breaks" ? "#1C1C1E" : "#6B7280" }} title="Flip view">
-            {currentView === "deployment" ? "DEP" : "BRK"}
-          </button>
-        </div>
-      )}
 
       {/* ═══════════════════════════════════════════════════════════
           VELVET BOTTOM DOCK — reference-faithful centered glass pill
