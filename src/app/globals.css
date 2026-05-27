@@ -622,19 +622,43 @@ body {
 }
 
 /* === Calm printed empty / unassigned treatment (Golden PDF aesthetic) ===
-   Empty cards are dimmed so filled cards pop — but not so dim tasks are unreadable.
-   opacity: 0.52 washes the top stripe, header, and border without killing task text. */
+   Empty cards are dimmed so filled cards pop — while preserving full task legibility.
+   We target ONLY the card chrome (stripe + header) via :first-child / :nth-child(2),
+   leaving the body (TM name area, task list, coverage bars) at full opacity.
+   This works because ZoneCard, RRCard, and AuxCard all share the same first-two-child
+   layout: stripe → header → body. */
 .assignment-card.empty {
   background: #F3F3F5;
   border: 1px dashed #BDBDC4;
-  opacity: 0.52;
+  /* NO opacity on the root — tasks must stay fully legible */
 }
+
+/* Accent stripe — near invisible on empty cards */
+.assignment-card.empty > div:first-child {
+  opacity: 0.22;
+}
+
+/* Zone icon + label header row */
+.assignment-card.empty > div:nth-child(2) {
+  opacity: 0.38;
+}
+
+/* Suppress the hover lift so empty cards don't jump up on mouseover */
 .assignment-card.empty:hover {
-  opacity: 0.80;
+  transform: none;
   border-color: #A8A8B0;
-  background: #F0F0F3;
+  background: #EFEFF1;
+  box-shadow: none;
 }
-.assignment-card.empty .card-name.empty,
+
+/* Restore chrome a little on hover so drop targets are obvious */
+.assignment-card.empty:hover > div:first-child {
+  opacity: 0.5;
+}
+.assignment-card.empty:hover > div:nth-child(2) {
+  opacity: 0.65;
+}
+
 .assignment-card.empty .unassigned-label {
   color: #6B7280;
   letter-spacing: 0.3px;
@@ -917,14 +941,26 @@ body {
     0 8px 20px -6px color-mix(in srgb, var(--card-accent) 30%, transparent);
 }
 .dark .assignment-card.empty {
-  background: #2C2C2E;
-  border-color: #48484A;
-  opacity: 0.45;
+  background: #2A2A2C;
+  border-color: #3A3A3C;
+}
+.dark .assignment-card.empty > div:first-child {
+  opacity: 0.18;
+}
+.dark .assignment-card.empty > div:nth-child(2) {
+  opacity: 0.32;
 }
 .dark .assignment-card.empty:hover {
-  opacity: 0.80;
-  background: #323234;
-  border-color: #5A5A5E;
+  transform: none;
+  background: #313133;
+  border-color: #4A4A4E;
+  box-shadow: none;
+}
+.dark .assignment-card.empty:hover > div:first-child {
+  opacity: 0.45;
+}
+.dark .assignment-card.empty:hover > div:nth-child(2) {
+  opacity: 0.58;
 }
 .dark .assignment-card.drop-target-active,
 .dark .drop-target-active {
