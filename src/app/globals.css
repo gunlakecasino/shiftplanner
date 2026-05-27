@@ -622,14 +622,15 @@ body {
 }
 
 /* === Calm printed empty / unassigned treatment (Golden PDF aesthetic) ===
-   These slots read as "deliberately open for this GRAVE window", not broken or disabled.
-   Warmer paper tone, visible but restrained dashed rule, intentional placeholder text. */
+   Empty cards are dimmed so filled cards pop — but not so dim tasks are unreadable.
+   opacity: 0.52 washes the top stripe, header, and border without killing task text. */
 .assignment-card.empty {
   background: #F3F3F5;
   border: 1px dashed #BDBDC4;
-  opacity: 1; /* deliberate — no "disabled" wash */
+  opacity: 0.52;
 }
 .assignment-card.empty:hover {
+  opacity: 0.80;
   border-color: #A8A8B0;
   background: #F0F0F3;
 }
@@ -918,8 +919,10 @@ body {
 .dark .assignment-card.empty {
   background: #2C2C2E;
   border-color: #48484A;
+  opacity: 0.45;
 }
 .dark .assignment-card.empty:hover {
+  opacity: 0.80;
   background: #323234;
   border-color: #5A5A5E;
 }
