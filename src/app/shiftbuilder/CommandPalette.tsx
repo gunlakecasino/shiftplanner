@@ -1,1999 +1,231 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { createPortal } from "react-dom";
-import { Command as CommandPrimitive } from "cmdk";
-import { cn } from "@/lib/utils";
-import type { CommandItem, CommandGroup } from "@/lib/shiftbuilder/useCommandActions";
-import { askGrokForShiftSuggestions, askGrokForStructuredSuggestions } from "./actions";
-import {
-  parseCommand,
-  applyCompletion,
-  type CommandState,
-  type Suggestion,
-  type ParseContext,
-  type GravePoolGroup,
-} from "@/lib/shiftbuilder/commandParser";
-import type { TeamMember } from "@/lib/shiftbuilder/data";
-import type { DisplayNameConflict } from "@/lib/shiftbuilder/tmCommands";
-import { useShiftCompletion } from "@/hooks/useShiftCompletion";
-import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
+import React from "react";
+import Cmdk, {
+  getItemIndex,
+} from "react-cmdk";
+import "react-cmdk/dist/cmdk.css";
+import { toCmdkJsonStructure } from "@/lib/shiftbuilder/useCommandActions";
+import { RosterItemRow } from "./CommandPalette.legacy";  // Reuse rich row renderer during the rebuild transition
 
-// Coverage slot picker — all assignable zones and RR pairs.
-// RR entries use the MRR key (canonical); when a user picks one the
-// handler expands it to both MRR and WRR before writing tasks.
-const COVERAGE_SLOTS: { key: string; label: string; group: 'Zone' | 'Restroom' }[] = [
-  { key: 'Z1',   label: 'Zone 1',      group: 'Zone' },
-  { key: 'Z2',   label: 'Zone 2',      group: 'Zone' },
-  { key: 'Z3',   label: 'Zone 3',      group: 'Zone' },
-  { key: 'Z4',   label: 'Zone 4',      group: 'Zone' },
-  { key: 'Z5',   label: 'Zone 5',      group: 'Zone' },
-  { key: 'Z6',   label: 'Zone 6',      group: 'Zone' },
-  { key: 'Z7',   label: 'Zone 7',      group: 'Zone' },
-  { key: 'Z8',   label: 'Zone 8',      group: 'Zone' },
-  { key: 'Z9',   label: 'Zone 9',      group: 'Zone' },
-  { key: 'Z9SR', label: 'Zone 9SR',    group: 'Zone' },
-  { key: 'Z10',  label: 'Zone 10',     group: 'Zone' },
-  { key: 'MRR1', label: 'Restroom 1',  group: 'Restroom' },
-  { key: 'MRR6', label: 'Restroom 6',  group: 'Restroom' },
-  { key: 'MRR7', label: 'Restroom 7',  group: 'Restroom' },
-  { key: 'MRR8', label: 'Restroom 8',  group: 'Restroom' },
-  { key: 'MRR10', label: 'Restroom 10', group: 'Restroom' },
-];
+// Icons for the new quick menu root
+import { Users, ArrowLeft, Settings, Printer, Undo2 } from "lucide-react";
 
-const ALL_SLOTS = ['Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR','MRR1','WRR1','MRR6','WRR6','MRR7','WRR7','MRR8','WRR8','MRR10','WRR10','ADM','TR1','TR2','SP1','SP2','OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5','OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5'];
-const TASK_SLOTS = ['Z1','Z2','Z3','Z4','Z5','Z6','Z7','Z8','Z9','Z10','Z9SR','MRR1','MRR6','MRR7','MRR8','MRR10','WRR1','WRR6','WRR7','WRR8','WRR10','ADM','TR1','TR2','OL-PM-0','OL-PM-1','OL-PM-2','OL-PM-3','OL-PM-4','OL-PM-5','OL-AM-0','OL-AM-1','OL-AM-2','OL-AM-3','OL-AM-4','OL-AM-5'];
-const BORDER_COLORS = [
-  { name: 'Gold (Z1/Z2)',     value: '#B89708' },
-  { name: 'Red (Z3–Z5, Z9)',  value: '#E53935' },
-  { name: 'Magenta (Z6)',     value: '#B7679A' },
-  { name: 'Blue (Z7)',        value: '#1976D2' },
-  { name: 'Brown (Z8)',       value: '#6B5346' },
-  { name: 'Green (Z10)',      value: '#43A047' },
-  { name: 'Orange (TR1/TR2)', value: '#FB8C00' },
-];
-
-// Normalize an RR key (MRR7 or WRR7) → "MRR7" for deduplication in coverage source checks
-function normalizeToMRR(key: string): string {
-  if (key.startsWith('WRR')) return 'MRR' + key.slice(3);
-  return key;
-}
+/**
+ * CommandPalette (react-cmdk + Velvet rearchitecture)
+ *
+ * This is the primary implementation after the full-scale rebuild.
+ * Built on react-cmdk for better structure, accessibility, keyboard navigation,
+ * and multi-page flows, while applying the project's Liquid Glass / Golden /
+ * Atkinson / Velvet visual language.
+ *
+ * Many advanced features (full NL command mode with chips, complete Grok integration,
+ * multi-step coverage/tasks/borders as Pages, Why panel, etc.) are being actively
+ * ported into the new architecture.
+ *
+ * See the approved rebuild plan for details.
+ */
 
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  actions: CommandItem[];
+  // Accepts the existing CommandItem[] from useCommandActions for the spike
+  actions?: any[];
   placeholder?: string;
-  onAddCardBorder?: (slotKey: string, color: string) => void;
-  onRemoveCardBorder?: (slotKey: string) => void;
-
-  /** New Phase 1: Pre-fill the palette with a specific slot or person for contextual flows */
-  initialContext?: {
-    type: 'slot' | 'person';
-    value: string; // slotKey (e.g. "Z3") or person id/name
-  } | null;
-
-  // Migrated from old fan (Phase 1)
-  onRemoveFromSlot?: (slotKey: string) => void;
-  onToggleLock?: (slotKey: string) => void;
-  onCycleBreak?: (slotKey: string) => void;
-
-  /** Direct assignment from contextual palette (tap slot → pick person, or vice versa) */
-  onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
-
-  /** Add a free-text task to a slot (used by the new Tasks command) */
-  onAddTask?: (slotKey: string | string[], taskLabel: string) => Promise<void>;
-
-  /** Full task catalog so the Tasks flow can offer curated quick-picks instead of only free text */
-  catalog?: any[];
-
-  // For better contextual header in seeded slot mode (Phase 1 polish)
-  selectedSlotAssignment?: any;
-
-  // Grok Intelligence v2 (structured suggestions + Draft integration)
-  isDraftMode?: boolean;
-  onApplyGrokSuggestions?: (actions: any[]) => void;
-  requestGrokStructuredSuggestions?: (focus: { type: "slot" | "person" | "board"; value?: string; userQuestion?: string }) => Promise<any>;
-  onTriggerGrokBoardAnalysis?: () => void;
-
-  // === Natural-language command mode (`make` / `remove`) ===
-  /** Full TM roster — used by the parser for name auto-complete. */
-  commandRoster?: TeamMember[];
-  /** Current operator shift date — used for "today" resolution. */
-  commandShiftDate?: Date;
-  /** Current week's days (Fri…Thu) — used for `from <day>` parsing. */
-  commandWeekDays?: { date: Date; name: string; short: string }[];
-  /** Mutations the palette can invoke when a command resolves. */
-  onSetGravePool?: (tmId: string, value: "Full" | "AM" | "PM" | null) => Promise<void>;
-  onSetDisplayName?: (tmId: string, newName: string) => Promise<void>;
-  onRemoveFromSchedule?: (tmId: string, date: Date) => Promise<void>;
-  /** Conflict check fired before the display-name confirmation modal. */
-  onCheckDisplayNameConflict?: (
-    tmId: string,
-    newName: string
-  ) => Promise<DisplayNameConflict | null>;
-
-  // === Why? mode (Phase 1 weighted engine) ===
-  /** Per-slot top-K candidate ranking with score breakdowns. */
-  whyBreakdown?: Record<string, {
-    topCandidates: Array<{
-      tmId: string;
-      tmName: string;
-      total: number;
-      breakdown: Record<string, { raw: number; weighted: number; note?: string }>;
-      excluded?: boolean;
-      excludeReason?: string;
-    }>;
-    pickedTmId: string | null;
-    preserved: boolean;
-  }>;
-  /** Per-slot source label + reasoning (engine vs grok). */
-  whyReasoning?: Record<string, { source: "engine" | "grok"; reason?: string }>;
-  /** Grok's overall draft summary, if Grok ran. */
-  whyGrokExplanation?: string;
-  /** Warnings from the guard (rejected picks, fallbacks, etc.) */
-  whyWarnings?: string[];
-  /** True while draft mode is active so Why? makes sense to show. */
-  whyAvailable?: boolean;
-
-  // === SUDO trigger ===
-  /** Fired when the operator types `sudo` and presses Enter / accepts. */
-  onOpenSudo?: () => void;
-
-  // === Coverage ===
-  /** Called when a coverage pair is confirmed (source → target). Source is a single UI key; target may expand to M+W for RR pairs. */
-  onAddCoverage?: (sourceKey: string, targetKey: string) => Promise<void>;
-
-  // === AI auto-completion context ===
-  /** Names of TMs scheduled tonight but not yet placed — used by command completion */
-  completionScheduledUnplaced?: string[];
-  /** Current assignments snapshot for command completion context */
-  completionAssignments?: Record<string, { tmId?: string; tmName?: string }>;
-  /** Current shift day name */
-  completionDay?: string;
+  // Pass-through for future (initialContext, Grok props, etc.)
+  [key: string]: any;
 }
 
-/**
- * Master Command Palette (Cmd+K)
- *
- * Phase 2: Beautiful Cupertino Liquid Glass overlay + cmdk engine.
- * Heavily customized for Golden PDF calm + Apple-grade precision.
- * No reliance on shadcn CommandDialog so we have full visual control.
- */
-function CommandPaletteInner({
+export function CommandPalette({
   open,
   onOpenChange,
-  actions,
-  placeholder = "Search roster, actions, days, history…",
-  initialContext = null,
-  onRemoveFromSlot,
-  onToggleLock,
-  onCycleBreak,
-  onAssign,
-  onAddTask,
-  catalog,
-  selectedSlotAssignment,
-  isDraftMode = false,
-  onApplyGrokSuggestions,
-  requestGrokStructuredSuggestions,
-  onTriggerGrokBoardAnalysis,
-  onAddCardBorder,
-  onRemoveCardBorder,
-  commandRoster,
-  commandShiftDate,
-  commandWeekDays,
-  onSetGravePool,
-  onSetDisplayName,
-  onRemoveFromSchedule,
-  onCheckDisplayNameConflict,
-  whyBreakdown,
-  whyReasoning,
-  whyGrokExplanation,
-  whyWarnings,
-  whyAvailable,
-  onOpenSudo,
-  completionScheduledUnplaced,
-  completionAssignments,
-  completionDay,
-  onAddCoverage,
+  actions = [],
+  placeholder = "Search roster, actions, days…",
+  ...rest
 }: CommandPaletteProps) {
-  // === Multi-step contextual state for powerful workflows ===
-  const [selectedPerson, setSelectedPerson] = React.useState<any | null>(null);
-  const [selectedSlot, setSelectedSlot] = React.useState<string | null>(null);
-  const [contextStep, setContextStep] = React.useState<'root' | 'person-to-slot' | 'slot-to-person' | 'tasks-select-zone' | 'tasks-enter-label' | 'coverage-select-source' | 'coverage-select-target'>('root');
+  const [search, setSearch] = React.useState("");
+  const [page, setPage] = React.useState<"root" | "roster" | "actions" | "context">("root");
 
-  // For the Tasks flow
-  const [selectedTaskSlot, setSelectedTaskSlot] = React.useState<string | null>(null);
-  const [multiTaskSlots, setMultiTaskSlots] = React.useState<string[]>([]);
+  // Use the new adapter for the spike (transforms current registry output)
+  const filteredItems = React.useMemo(() => {
+    return toCmdkJsonStructure(actions as any, search);
+  }, [actions, search]);
 
-  // For the Coverage flow
-  const [coverageSourceKey, setCoverageSourceKey] = React.useState<string | null>(null);
-
-  // Border mode states
-  const [borderStep, setBorderStep] = React.useState<'idle' | 'select-card' | 'select-color'>('idle');
-  const [removeBorderStep, setRemoveBorderStep] = React.useState<'idle' | 'select-card'>('idle');
-  const [borderTarget, setBorderTarget] = React.useState<string | null>(null);
-
-  // Track if this open was triggered by tapping a card (for better UX/hints)
-  const [seededFromCanvas, setSeededFromCanvas] = React.useState(false);
-
-  // Grok integration state (Phase 2 + v2 Intelligence upgrade)
-  const [grokLoading, setGrokLoading] = React.useState(false);
-  const [grokResponse, setGrokResponse] = React.useState<string | null>(null);
-
-  // Structured Grok v2 support (rich context + actionable actions)
-  const [grokStructured, setGrokStructured] = React.useState<any | null>(null);
-  const [grokWarnings, setGrokWarnings] = React.useState<string[]>([]);
-  const [grokUsedStructured, setGrokUsedStructured] = React.useState(false);
-
-  // === Why? mode toggle ===
-  const [whyOpen, setWhyOpen] = React.useState(false);
-
-  // === Category pill active filter (null = show all) ===
-  const [activeGroupFilter, setActiveGroupFilter] = React.useState<import("@/lib/shiftbuilder/useCommandActions").CommandGroup | null>(null);
-
-  // Debounce timer for the Grok free-text query mode
-  const grokQueryDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Debounce timer for command-state parsing (keeps parser off the hot input path)
-  const cmdParseDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // === Natural-language command mode (make / remove) ===
-  const [inputValue, setInputValue] = React.useState("");
-  // Deferred copy of inputValue used for parsing — updated after a 40ms debounce
-  // so the parser never runs synchronously on the keystroke microtask.
-  const [deferredInput, setDeferredInput] = React.useState("");
-
-  // AI ghost-text completion for command mode free-text.
-  // Only active when isCommandMode so it doesn't interfere with roster search.
-  const commandCompletion = useShiftCompletion({
-    surface: "command",
-    context: {
-      day: completionDay,
-      scheduledUnplaced: completionScheduledUnplaced,
-      assignments: completionAssignments,
-    },
-    disabled: false,
-    onAccept: (accepted) => setInputValue(accepted),
-  });
-
-  // Mirror measurement for inline ghost text positioning.
-  const cmdInputRef = React.useRef<HTMLInputElement>(null);
-  const cmdMirrorRef = React.useRef<HTMLSpanElement>(null);
-  const [cmdGhostLeft, setCmdGhostLeft] = React.useState(0);
-
-  const [commandStatus, setCommandStatus] = React.useState<
-    "idle" | "executing" | "success" | "error"
-  >("idle");
-  const [commandError, setCommandError] = React.useState<string | null>(null);
-  const [nameConflict, setNameConflict] = React.useState<DisplayNameConflict | null>(null);
-  const [conflictChecking, setConflictChecking] = React.useState(false);
-
-  // Build parser context. The palette only does NL parsing when we have a
-  // roster + shift date — otherwise it stays in legacy mode (regular cmdk
-  // grouped filtering).
-  const parseCtx = React.useMemo<ParseContext | null>(() => {
-    if (!commandRoster || !commandShiftDate || !commandWeekDays) return null;
-    return {
-      roster: commandRoster,
-      shiftDate: commandShiftDate,
-      weekDays: commandWeekDays,
-    };
-  }, [commandRoster, commandShiftDate, commandWeekDays]);
-
-  // Debounce the input → deferredInput pipeline so the parser doesn't run
-  // synchronously on every keystroke. 40ms is imperceptible to the operator
-  // but keeps the hot keystroke path free of regex/fuzzy work.
-  React.useEffect(() => {
-    if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
-    cmdParseDebounceRef.current = setTimeout(() => setDeferredInput(inputValue), 40);
-    return () => {
-      if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
-    };
-  }, [inputValue]);
-
-  // Run the parser on the debounced input. Falls back to null when ctx isn't provided.
-  const commandState: CommandState | null = React.useMemo(() => {
-    if (!parseCtx) return null;
-    const trimmed = deferredInput.trimStart().toLowerCase();
-    // Only parse if the input clearly looks like a command (starts with
-    // make / remove or one of their prefixes). Avoids hijacking normal
-    // fuzzy search.
-    if (!/^(m|r|s|ma|re|su|mak|rem|sud|make|remove|sudo)\b/.test(trimmed)) return null;
-    return parseCommand(deferredInput, parseCtx);
-  }, [deferredInput, parseCtx]);
-
-  const isCommandMode = !!commandState && commandState.kind !== null;
-
-  // Mirror the input's computed styles onto the hidden span once when command
-  // mode first activates (styles don't change after that).
-  const cmdStylesSyncedRef = React.useRef(false);
-  React.useEffect(() => {
-    if (!isCommandMode) { cmdStylesSyncedRef.current = false; return; }
-    if (cmdStylesSyncedRef.current) return;
-    const input = cmdInputRef.current;
-    const span = cmdMirrorRef.current;
-    if (!input || !span) return;
-    const cs = window.getComputedStyle(input);
-    span.style.fontFamily = cs.fontFamily;
-    span.style.fontSize = cs.fontSize;
-    span.style.fontWeight = cs.fontWeight;
-    span.style.letterSpacing = cs.letterSpacing;
-    span.style.paddingLeft = cs.paddingLeft;
-    cmdStylesSyncedRef.current = true;
-  }, [isCommandMode]);
-
-  // Measure ghost-text offset via ResizeObserver so we never call offsetWidth
-  // synchronously on the keystroke path (which forces a layout/reflow).
-  React.useEffect(() => {
-    const span = cmdMirrorRef.current;
-    if (!span) return;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setCmdGhostLeft(entry.contentRect.width);
-    });
-    ro.observe(span);
-    return () => ro.disconnect();
-  }, []);
-
-  // === Grok free-text query mode — activated by typing "?" or "ask " prefix ===
-  const trimmedInput = inputValue.trimStart();
-  const isGrokQueryMode =
-    !isCommandMode &&
-    (trimmedInput.startsWith("?") || trimmedInput.toLowerCase().startsWith("ask "));
-  const grokQueryText = isGrokQueryMode
-    ? (trimmedInput.startsWith("?") ? trimmedInput.slice(1) : trimmedInput.slice(4)).trim()
-    : "";
-
-  // === Task shorthand mode — "task Z1 [Mop floors]" quick entry in root mode ===
-  // Detects "task <slotKey> [optional label]" typed from root. The slot key must
-  // exactly match one of TASK_SLOTS (case-insensitive). When a label is present
-  // we show a one-tap save item; when absent we show a slot-pre-selected entry
-  // that jumps straight to the tasks-enter-label step.
-  const taskShorthand = React.useMemo(() => {
-    if (contextStep !== 'root' || isCommandMode || isGrokQueryMode) return null;
-    const trimmed = inputValue.trim();
-    const m = trimmed.match(/^task\s+([A-Za-z0-9-]+)(?:\s+(.+))?$/i);
-    if (!m) return null;
-    const rawSlot = m[1].toUpperCase();
-    const slot = TASK_SLOTS.find(s => s === rawSlot) ?? null;
-    const label = m[2]?.trim() ?? '';
-    return slot ? { slot, label } : null;
-  }, [inputValue, contextStep, isCommandMode, isGrokQueryMode]);
-  const isTaskShorthandMode = !!taskShorthand;
-
-  // Reset context when palette closes
-  React.useEffect(() => {
-    if (!open) {
-      setSelectedPerson(null);
-      setSelectedSlot(null);
-      setContextStep('root');
-      setBorderStep('idle');
-      setRemoveBorderStep('idle');
-      setBorderTarget(null);
-      setInputValue("");
-      setDeferredInput("");
-      setCommandStatus("idle");
-      setCommandError(null);
-      setNameConflict(null);
-      setConflictChecking(false);
-      setWhyOpen(false);
-      setActiveGroupFilter(null);
-      // Cancel any pending debounces
-      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
-      if (cmdParseDebounceRef.current) clearTimeout(cmdParseDebounceRef.current);
-    }
-  }, [open]);
-
-  // Phase 1: Seed contextual state when opened with initialContext (card tap)
-  React.useEffect(() => {
-    if (open && initialContext) {
-      setSeededFromCanvas(true);
-      if (initialContext.type === 'slot') {
-        setSelectedSlot(initialContext.value);
-        setSelectedPerson(null);
-        setContextStep('slot-to-person');
-      } else if (initialContext.type === 'person') {
-        // Try to find richer TM data from the current actions (roster items)
-        const rosterItem = actions.find(
-          (a) => a.group === 'Roster' &&
-                 (a.metadata?.tm?.id === initialContext.value ||
-                  a.metadata?.tm?.name === initialContext.value ||
-                  a.metadata?.tm?.fullName === initialContext.value)
-        );
-        const tm = rosterItem?.metadata?.tm || { id: initialContext.value, name: initialContext.value };
-        setSelectedPerson(tm);
-        setSelectedSlot(null);
-        setContextStep('person-to-slot');
-      }
-    } else if (!open) {
-      setSeededFromCanvas(false);
-      setGrokResponse(null);
-      setGrokStructured(null);
-      setGrokWarnings([]);
-      setGrokUsedStructured(false);
-
-      // Reset tasks flow state
-      setSelectedTaskSlot(null);
-      setMultiTaskSlots([]);
-      // Reset coverage flow state
-      setCoverageSourceKey(null);
-      if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label' ||
-          contextStep === 'coverage-select-source' || contextStep === 'coverage-select-target') {
-        setContextStep('root');
-      }
-    }
-  }, [open, initialContext, actions]);
-
-  // === Phase 3.5: Debounced Grok free-text query ===
-  // Fires 800ms after the operator stops typing in "?" / "ask " mode.
-  React.useEffect(() => {
-    if (!isGrokQueryMode || !requestGrokStructuredSuggestions) {
-      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
-      return;
-    }
-    if (grokQueryText.length < 3) {
-      // Too short — clear any stale results without firing
-      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
-      return;
-    }
-
-    if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
-    grokQueryDebounceRef.current = setTimeout(async () => {
-      setGrokLoading(true);
-      setGrokResponse(null);
-      setGrokStructured(null);
-      setGrokWarnings([]);
-      setGrokUsedStructured(false);
-      try {
-        const result = await requestGrokStructuredSuggestions({
-          type: "board",
-          userQuestion: grokQueryText,
-        });
-        if (result.usedStructured && result.structured) {
-          setGrokStructured(result.structured);
-          setGrokWarnings(result.warnings || []);
-          setGrokUsedStructured(true);
-          setGrokResponse(result.text);
-        } else {
-          setGrokResponse(result.text || "Grok responded.");
-        }
-        // After a successful response: reset input to bare "?" so the search
-        // field is clear (no leftover query text), Grok mode stays active
-        // (banner + response panel stay visible), and the cmdk list is
-        // suppressed by shouldFilter=false + empty grokQueryText.
-        setInputValue("?");
-      } catch (err) {
-        setGrokResponse("Grok query failed. Try again.");
-        console.error("[CommandPalette] grok query error:", err);
-      } finally {
-        setGrokLoading(false);
-      }
-    }, 800);
-
-    return () => {
-      if (grokQueryDebounceRef.current) clearTimeout(grokQueryDebounceRef.current);
-    };
-  }, [isGrokQueryMode, grokQueryText, requestGrokStructuredSuggestions]);
-
-  const handleAskGrok = React.useCallback(async () => {
-    if (!selectedSlot && !selectedPerson) return;
-
-    setGrokLoading(true);
-    setGrokResponse(null);
-    setGrokStructured(null);
-    setGrokWarnings([]);
-    setGrokUsedStructured(false);
-
-    if (requestGrokStructuredSuggestions) {
-      try {
-        const focus = selectedSlot
-          ? { type: "slot" as const, value: selectedSlot }
-          : { type: "person" as const, value: selectedPerson?.name || selectedPerson?.fullName };
-
-        const result = await requestGrokStructuredSuggestions(focus);
-
-        if (result.usedStructured && result.structured) {
-          setGrokStructured(result.structured);
-          setGrokWarnings(result.warnings || []);
-          setGrokUsedStructured(true);
-          setGrokResponse(result.text);
-        } else {
-          setGrokResponse(result.text);
-        }
-      } catch (err) {
-        setGrokResponse("Grok ran into an error. Please try again.");
-        console.error(err);
-      } finally {
-        setGrokLoading(false);
-      }
-      return;
-    }
-
-    try {
-      const context = selectedSlot
-        ? {
-            type: "slot" as const,
-            slotKey: selectedSlot,
-            currentAssignment: selectedSlotAssignment?.tmName || undefined,
-          }
-        : {
-            type: "person" as const,
-            personName: selectedPerson?.name || selectedPerson?.fullName,
-            currentAssignment: selectedPerson?.currentAssignment,
-          };
-
-      const result = await askGrokForShiftSuggestions(context);
-      setGrokResponse(result);
-    } catch (err) {
-      setGrokResponse("Grok ran into an error. Please try again.");
-      console.error(err);
-    } finally {
-      setGrokLoading(false);
-    }
-  }, [selectedSlot, selectedPerson, selectedSlotAssignment, requestGrokStructuredSuggestions]);
-
-  // New rich structured path (Grok Intelligence v2)
-  // The parent (ShiftBuilderClient) is expected to pass onApplyGrokSuggestions
-  // and eventually the data to build a full snapshot.
-  const handleApplyGrokActions = React.useCallback((actions: any[]) => {
-    if (!onApplyGrokSuggestions || actions.length === 0) return;
-    onApplyGrokSuggestions(actions);
-  }, [onApplyGrokSuggestions]);
-
-  const handleAnalyzeFullBoard = React.useCallback(async () => {
-    if (!requestGrokStructuredSuggestions) return;
-    setGrokLoading(true);
-    setGrokResponse(null);
-    setGrokStructured(null);
-    setGrokWarnings([]);
-    setGrokUsedStructured(false);
-
-    try {
-      const result = await requestGrokStructuredSuggestions({ type: "board" });
-      if (result.usedStructured && result.structured) {
-        setGrokStructured(result.structured);
-        setGrokWarnings(result.warnings || []);
-        setGrokUsedStructured(true);
-        setGrokResponse(result.text);
-      } else {
-        setGrokResponse(result.text || "Grok analyzed the board.");
-      }
-    } catch (e) {
-      setGrokResponse("Grok board analysis failed. Try again.");
-    } finally {
-      setGrokLoading(false);
-    }
-  }, [requestGrokStructuredSuggestions]);
-
-  // === Command-mode handlers ===
-
-  const applyTopSuggestion = React.useCallback(() => {
-    if (!commandState) return false;
-    const top = commandState.suggestions[0];
-    if (!top) return false;
-    const next = applyCompletion(commandState, top);
-    setInputValue(next);
-    return true;
-  }, [commandState]);
-
-  const applySuggestion = React.useCallback(
-    (s: Suggestion) => {
-      if (!commandState) return;
-      const next = applyCompletion(commandState, s);
-      setInputValue(next);
-    },
-    [commandState]
-  );
-
-  const executeCommand = React.useCallback(async () => {
-    if (!commandState || !commandState.isComplete) return;
-
-    // sudo: open the admin window. No TM/args needed.
-    if (commandState.kind === "sudo") {
-      if (onOpenSudo) onOpenSudo();
-      setInputValue("");
-      onOpenChange(false);
-      return;
-    }
-
-    if (!commandState.tm) return;
-    setCommandStatus("executing");
-    setCommandError(null);
-
-    try {
-      if (commandState.kind === "make") {
-        if (commandState.action === "ineligible") {
-          if (!onSetGravePool) throw new Error("setGravePool not wired");
-          await onSetGravePool(commandState.tm.id, null);
-        } else if (commandState.action === "eligible" && commandState.group) {
-          if (!onSetGravePool) throw new Error("setGravePool not wired");
-          await onSetGravePool(commandState.tm.id, commandState.group as GravePoolGroup);
-        } else if (commandState.action === "display name" && commandState.newName) {
-          // Conflict check first
-          if (onCheckDisplayNameConflict) {
-            setConflictChecking(true);
-            const conflict = await onCheckDisplayNameConflict(
-              commandState.tm.id,
-              commandState.newName
-            );
-            setConflictChecking(false);
-            if (conflict) {
-              setNameConflict(conflict);
-              setCommandStatus("idle");
-              return;
-            }
-          }
-          if (!onSetDisplayName) throw new Error("setDisplayName not wired");
-          await onSetDisplayName(commandState.tm.id, commandState.newName);
-        } else {
-          throw new Error("Incomplete make command");
-        }
-      } else if (commandState.kind === "remove") {
-        if (!onRemoveFromSchedule) throw new Error("removeFromSchedule not wired");
-        if (!commandState.when.date) throw new Error("No date resolved");
-        await onRemoveFromSchedule(commandState.tm.id, commandState.when.date);
-      }
-
-      setCommandStatus("success");
-      // Auto-close after a short delay so the operator sees feedback
-      setTimeout(() => {
-        onOpenChange(false);
-      }, 600);
-    } catch (err) {
-      console.error("[CommandPalette] execute failed:", err);
-      setCommandError(err instanceof Error ? err.message : String(err));
-      setCommandStatus("error");
-    }
-  }, [commandState, onSetGravePool, onSetDisplayName, onRemoveFromSchedule, onCheckDisplayNameConflict, onOpenChange]);
-
-  /**
-   * Confirm + execute the display-name change after the conflict modal.
-   */
-  const confirmDisplayNameChange = React.useCallback(async () => {
-    if (!commandState?.tm || !commandState.newName) return;
-    if (!onSetDisplayName) return;
-    setCommandStatus("executing");
-    setNameConflict(null);
-    try {
-      await onSetDisplayName(commandState.tm.id, commandState.newName);
-      setCommandStatus("success");
-      setTimeout(() => onOpenChange(false), 600);
-    } catch (err) {
-      setCommandError(err instanceof Error ? err.message : String(err));
-      setCommandStatus("error");
-    }
-  }, [commandState, onSetDisplayName, onOpenChange]);
-
-  // Close on Escape (cmdk also handles this, but we reinforce + back out of context)
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (contextStep !== 'root') {
-          // Back out one step instead of closing
-          if (contextStep === 'person-to-slot' || contextStep === 'slot-to-person') {
-            setSelectedPerson(null);
-            setSelectedSlot(null);
-            setContextStep('root');
-          } else if (contextStep === 'tasks-select-zone' || contextStep === 'tasks-enter-label') {
-            setSelectedTaskSlot(null);
-            setMultiTaskSlots([]);
-            setContextStep('root');
-            setInputValue('');
-          }
-        } else {
-          onOpenChange(false);
-        }
-      }
-
-      // Tab for multi-step navigation (Person <-> Slot context)
-      if (e.key === "Tab" && !e.shiftKey) {
-        if (selectedPerson && !selectedSlot && contextStep === 'person-to-slot') {
-          e.preventDefault();
-          // Focus moves conceptually to slot selection (cmdk will handle search)
-          // In future we can programmatically focus the input or filter
-        }
-        if (selectedSlot && !selectedPerson && contextStep === 'slot-to-person') {
-          e.preventDefault();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange, contextStep, selectedPerson, selectedSlot]);
-
-  // Group items for rendering
-  const grouped = React.useMemo(() => {
-    const groups: Record<CommandGroup, CommandItem[]> = {
-      Roster: [],
-      Actions: [],
-      Visual: [],
-      Navigation: [],
-      Filters: [],
-      History: [],
-      Contextual: [],
-    };
-
-    actions.forEach((item) => {
-      if (groups[item.group]) {
-        groups[item.group].push(item);
-      }
-    });
-
-    // Filter to the active pill category, or return all non-empty groups
-    let result = Object.entries(groups).filter(([_, items]) => items.length > 0) as [
-      CommandGroup,
-      CommandItem[]
-    ][];
-
-    if (activeGroupFilter) {
-      result = result.filter(([groupName]) => groupName === activeGroupFilter);
-    }
-
-    return result;
-  }, [actions, activeGroupFilter]);
+  // Extract the roster group so we can render it on its own dedicated page
+  const rosterGroup = React.useMemo(() => {
+    return filteredItems.find(
+      (g) => g.id === "roster" || g.heading?.toLowerCase() === "roster"
+    );
+  }, [filteredItems]);
 
   if (!open) return null;
 
-  const content = (
-    <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-[12vh]"
-      onClick={() => onOpenChange(false)}
+  // Dynamic placeholder based on current page
+  const effectivePlaceholder =
+    page === "roster"
+      ? "Search team members by name, section, status…"
+      : placeholder;
+
+  // Reusable renderer for a group's items (rich RosterItemRow for TMs, normal for others)
+  const renderGroupItems = (list: any) => {
+    if (!list?.items?.length) return null;
+
+    return list.items.map(({ id, ...itemRest }: any) => {
+      const meta = itemRest.metadata;
+      const isRosterItem = list.heading === "Roster" || !!meta?.tm;
+
+      const itemChildren = isRosterItem && meta?.tm ? (
+        <RosterItemRow item={{
+          id,
+          label: itemRest.label || (typeof itemRest.children === "string" ? itemRest.children : ""),
+          metadata: meta,
+          group: list.heading as any,
+          handler: itemRest.onClick,
+        } as any} />
+      ) : (
+        itemRest.children
+      );
+
+      return (
+        <Cmdk.ListItem
+          key={id}
+          index={getItemIndex(filteredItems as any, id) ?? 0}
+          onClick={itemRest.onClick}
+          closeOnSelect={itemRest.closeOnSelect}
+        >
+          {itemChildren}
+        </Cmdk.ListItem>
+      );
+    });
+  };
+
+  return (
+    <Cmdk
+      onChangeSearch={setSearch}
+      onChangeOpen={onOpenChange}
+      search={search}
+      isOpen={open}
+      page={page}
+      placeholder={effectivePlaceholder}
     >
-      {/* Backdrop — backdrop-blur-md keeps the compositor layer count low.
-          backdrop-blur-2xl triggers expensive multi-pass blur on every frame. */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-md" />
-
-      {/* Main Palette Card — Cupertino Liquid Glass + Golden calm. */}
-      <div
-        className={cn(
-          "relative w-full max-w-[640px] mx-4 rounded-3xl overflow-hidden",
-          "border border-white/60 dark:border-white/10",
-          "bg-white/90 dark:bg-zinc-950/90",
-          "shadow-2xl shadow-black/20",
-          "backdrop-blur-xl",
-          // GPU-only animation: transform + opacity — no layout properties animated.
-          // This keeps the open transition on the compositor thread.
-          "animate-in fade-in zoom-in-95 duration-150",
-          // Cupertino Liquid Glass material: subtle inner highlight
-          "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-        )}
-        style={{
-          fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
-          // CSS containment: layout changes inside the palette don't bubble up
-          // and cause repaints on the artboard behind it.
-          contain: "layout style",
-          willChange: "transform, opacity",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Floating category pills — Launchpad-inspired, large touch targets for iPad Pencil.
-            Tap once to filter to that group; tap again (or ✕ Clear) to show all. */}
-        <div className="flex gap-2 px-4 pt-3 pb-1.5 overflow-x-auto no-scrollbar items-center">
-          {(["Roster", "Actions", "Visual", "Navigation", "History"] as const).map((cat) => {
-            const isActive = activeGroupFilter === (cat as CommandGroup);
-            return (
-              <button
-                key={cat}
-                onClick={() => {
-                  if (isActive) {
-                    setActiveGroupFilter(null);
-                  } else {
-                    setActiveGroupFilter(cat as CommandGroup);
-                    // Also scroll into view as a convenience
-                    const el = document.getElementById(`group-${cat.toLowerCase()}`);
-                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  }
-                }}
-                className={cn(
-                  "shrink-0 px-3.5 py-1 text-[12px] font-medium tracking-[0.3px] rounded-2xl border transition-all",
-                  isActive
-                    ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
-                    : "bg-white/60 dark:bg-zinc-900/60 border-white/50 dark:border-white/10 hover:bg-white/80 active:bg-white"
-                )}
-                style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-              >
-                {cat}
-              </button>
-            );
-          })}
-          {/* Clear filter chip — appears when a pill is active */}
-          {activeGroupFilter && (
-            <button
-              onClick={() => setActiveGroupFilter(null)}
-              className="shrink-0 px-2.5 py-1 text-[11px] font-medium tracking-[0.3px] rounded-2xl border border-zinc-300/60 bg-zinc-100/60 text-zinc-500 hover:bg-zinc-200/60 active:bg-zinc-200 transition-all"
-              style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-            >
-              ✕ Clear
-            </button>
-          )}
-        </div>
-
-        {/* === Why? mode toggle — visible only when there's a draft to explain. */}
-        {whyAvailable && (
-          <div className="px-4 pt-2 pb-1 border-b border-white/60 bg-white/40">
-            <button
-              onClick={() => setWhyOpen(v => !v)}
-              className={cn(
-                "flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-sm font-medium tracking-[0.3px] transition-all",
-                whyOpen
-                  ? "border-purple-400/40 bg-purple-100/40 text-purple-800"
-                  : "border-white/40 bg-white/50 text-zinc-700 hover:bg-white/70"
-              )}
-              style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-            >
-              <span className="flex items-center gap-2">
-                🔍 Why?
-                <span className="text-[10px] text-zinc-500 font-normal">
-                  See engine + Grok reasoning per slot
-                </span>
-              </span>
-              <span className="text-[10px] text-zinc-400">{whyOpen ? "▲" : "▼"}</span>
-            </button>
-          </div>
-        )}
-
-        {whyAvailable && whyOpen && (
-          <WhyPanel
-            breakdown={whyBreakdown ?? {}}
-            reasoning={whyReasoning ?? {}}
-            grokExplanation={whyGrokExplanation ?? ""}
-            warnings={whyWarnings ?? []}
-          />
-        )}
-
-        {/* Contextual header for multi-step workflows (Person ↔ Slot) — only shows when context exists */}
-        {(selectedPerson || selectedSlot) && (
-          <div className="px-4 pt-2.5 pb-1 text-sm border-b border-white/60 bg-white/40 dark:bg-zinc-950/40">
-            {selectedPerson && !selectedSlot && (
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                Assign <span className="font-semibold">{selectedPerson.name || selectedPerson.fullName}</span>
-              </div>
-            )}
-            {selectedSlot && !selectedPerson && (
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                Assign to <span className="font-semibold">{slotKeyToLabel(selectedSlot)}</span>
-                {selectedSlotAssignment?.tmName && (
-                  <span className="text-zinc-500 dark:text-zinc-400 font-normal text-xs ml-2">
-                    (currently: {selectedSlotAssignment.tmName})
-                  </span>
-                )}
-              </div>
-            )}
-            {selectedPerson && selectedSlot && (
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                Assign <span className="font-semibold">{selectedPerson.name || selectedPerson.fullName}</span> to <span className="font-semibold">{selectedSlot}</span>
-              </div>
-            )}
-            <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-2">
-              <span>Tab to switch focus • Enter to confirm</span>
-              {seededFromCanvas && (
-                <span className="rounded-full bg-zinc-900/5 dark:bg-white/10 px-1.5 py-px text-[9px] tracking-wide">From canvas</span>
-              )}
-            </div>
-
-            {/* Quick actions migrated from old fan — calm pill style for iPad touch.
-                Remove and Cycle Break only show when the slot is occupied; Lock/Unlock
-                is meaningful for both filled and empty slots. */}
-            {selectedSlot && (
-              <div className="flex gap-2 pb-2 pt-1">
-                {onRemoveFromSlot && selectedSlotAssignment?.tmId && (
-                  <button
-                    onClick={() => { onRemoveFromSlot(selectedSlot); onOpenChange(false); }}
-                    className="text-[11px] px-3 py-1 rounded-full bg-red-500/10 text-red-600 hover:bg-red-500/20 active:scale-[0.985] transition-all border border-red-500/20"
-                  >
-                    Remove
-                  </button>
-                )}
-                {onToggleLock && (
-                  <button
-                    onClick={() => { onToggleLock(selectedSlot); /* keep open for more actions */ }}
-                    className="text-[11px] px-3 py-1 rounded-full bg-zinc-900/5 hover:bg-zinc-900/10 active:scale-[0.985] transition-all border border-white/40"
-                  >
-                    Lock/Unlock
-                  </button>
-                )}
-                {onCycleBreak && selectedSlotAssignment?.tmId && (
-                  <button
-                    onClick={() => onCycleBreak(selectedSlot)}
-                    className="text-[11px] px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 active:scale-[0.985] transition-all border border-amber-500/20"
-                  >
-                    Cycle Break {selectedSlotAssignment?.breakGroup ? `(now ${selectedSlotAssignment.breakGroup})` : ''}
-                  </button>
-                )}
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* Command-mode chip bar — shows parsed command state when typing `make` or `remove`. */}
-        {isCommandMode && commandState && (
-          <CommandChipBar state={commandState} />
-        )}
-
-        {/* Display-name conflict modal */}
-        {nameConflict && commandState?.tm && (
-          <div className="mx-4 my-2 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-[12.5px] text-amber-900">
-            <div className="font-semibold mb-1">Name already taken</div>
-            <div>
-              <span className="font-medium">{nameConflict.conflictDisplayName}</span> is
-              already the display name for another active TM. Pick a different name
-              for <span className="font-medium">{commandState.tm.name}</span> or rename
-              the conflicting TM first.
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => {
-                  setNameConflict(null);
-                  // Drop the input back to the partial newName so they can keep typing
-                  setInputValue(
-                    `make ${commandState.tm?.name} display name "`
-                  );
-                }}
-                className="px-2.5 py-1 rounded-full bg-white border border-amber-300 text-amber-900 text-[11px] font-medium hover:bg-amber-100"
-              >
-                Pick a different name
-              </button>
-              <button
-                onClick={() => {
-                  setNameConflict(null);
-                  setInputValue("");
-                  setCommandStatus("idle");
-                }}
-                className="px-2.5 py-1 rounded-full bg-amber-200/60 text-amber-900 text-[11px] font-medium hover:bg-amber-200"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Display-name confirmation card (no conflict) */}
-        {isCommandMode &&
-          commandState?.kind === "make" &&
-          commandState.action === "display name" &&
-          commandState.isComplete &&
-          !nameConflict &&
-          commandStatus === "idle" && (
-          <div className="mx-4 my-2 rounded-2xl border border-[#007AFF]/30 bg-[#007AFF]/5 p-3 text-[12.5px] text-zinc-800">
-            <div className="font-semibold mb-1 flex items-center gap-1.5">
-              <span className="ms text-[#007AFF]" style={{ fontSize: 14 }}>terminal</span>
-              Confirm display name change
-            </div>
-            <div>
-              Change <span className="font-semibold">{commandState.tm?.name}</span> →{" "}
-              <span className="font-semibold">"{commandState.newName}"</span> across
-              all displays?
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={executeCommand}
-                disabled={conflictChecking}
-                className="px-2.5 py-1 rounded-full bg-[#007AFF] text-white text-[11px] font-medium hover:bg-[#0066d6] disabled:opacity-60"
-              >
-                {conflictChecking ? "Checking…" : "Confirm"}
-              </button>
-              <button
-                onClick={() => setInputValue("")}
-                className="px-2.5 py-1 rounded-full bg-white border border-zinc-300 text-zinc-700 text-[11px] font-medium hover:bg-zinc-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Command status feedback */}
-        {commandStatus === "success" && (
-          <div className="mx-4 my-2 rounded-2xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
-            ✓ Command executed
-          </div>
-        )}
-        {commandStatus === "error" && (
-          <div className="mx-4 my-2 rounded-2xl border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-800">
-            ✗ {commandError ?? "Something went wrong"}
-          </div>
-        )}
-
-        {/* Header / Search */}
-        <div className="flex items-center px-4 py-3 bg-white/60 dark:bg-zinc-950/60">
-          <CommandPrimitive
-            className="w-full"
-            shouldFilter={!isCommandMode && !isGrokQueryMode && contextStep !== 'tasks-enter-label' && !isTaskShorthandMode}
-            onKeyDown={(e) => {
-              // Task label entry: Enter directly saves without requiring the user to
-              // click the list item. shouldFilter is disabled in this step so the
-              // input is free-text — Enter is the natural confirmation gesture.
-              if (contextStep === 'tasks-enter-label' && e.key === 'Enter') {
-                const label = inputValue.trim();
-                const targets = multiTaskSlots.length > 0
-                  ? multiTaskSlots
-                  : selectedTaskSlot ? [selectedTaskSlot] : [];
-                if (label && onAddTask && targets.length > 0) {
-                  e.preventDefault();
-                  void (async () => {
-                    try {
-                      await (onAddTask as any)(
-                        targets.length === 1 ? targets[0] : targets,
-                        label
-                      );
-                    } catch (err) {
-                      console.error('[CommandPalette] task save from Enter failed:', err);
-                    } finally {
-                      onOpenChange(false);
-                      setSelectedTaskSlot(null);
-                      setMultiTaskSlots([]);
-                      setContextStep('root');
-                      setInputValue('');
-                    }
-                  })();
-                  return;
-                }
-              }
-              if (isCommandMode && commandState) {
-                if (e.key === "Tab" && !e.shiftKey) {
-                  e.preventDefault();
-                  applyTopSuggestion();
-                  return;
-                }
-                if (e.key === "Enter") {
-                  if (commandState.isComplete) {
-                    // For display name, let the inline confirm card handle it.
-                    if (
-                      commandState.kind === "make" &&
-                      commandState.action === "display name"
-                    ) {
-                      // do nothing — operator clicks Confirm
-                      return;
-                    }
-                    e.preventDefault();
-                    void executeCommand();
-                  } else {
-                    // If there's a top suggestion, accept it
-                    if (commandState.suggestions[0]) {
-                      e.preventDefault();
-                      applyTopSuggestion();
-                    }
-                  }
-                  return;
-                }
-              }
+      {/* ==================== ROOT: Quick Menu (new default open experience) ==================== */}
+      <Cmdk.Page id="root">
+        {/* Primary entry point the user asked for */}
+        <Cmdk.List>
+          <Cmdk.ListItem
+            index={0}
+            onClick={() => {
+              setPage("roster");
+              setSearch(""); // fresh searchable roster list
             }}
           >
-            {/* Cupertino-inspired Search Field treatment */}
-            <div className={cn(
-              "flex items-center gap-2 px-3 py-1 rounded-2xl border",
-              isGrokQueryMode
-                ? "bg-purple-500/5 border-purple-400/40"
-                : isCommandMode
-                ? "bg-[#007AFF]/5 border-[#007AFF]/30"
-                : "bg-white/50 dark:bg-zinc-950/50 border-white/60 dark:border-white/10"
-            )}>
-              <div className="text-zinc-400">
-                {isGrokQueryMode ? (
-                  <span className="ms text-purple-500" style={{ fontSize: 16 }}>auto_awesome</span>
-                ) : isCommandMode ? (
-                  <span className="ms text-[#007AFF]" style={{ fontSize: 16 }}>terminal</span>
-                ) : (
-                  <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
-                )}
+            <div className="flex items-center gap-3 py-0.5">
+              <Users className="h-5 w-5 shrink-0 opacity-75" />
+              <div className="flex flex-col leading-tight">
+                <span className="font-medium tracking-[-0.1px]">Roster</span>
+                <span className="text-[11px] opacity-60">Search &amp; assign team members</span>
               </div>
-              {/* Wrapper gives us a relative ancestor for the absolutely-placed ghost span */}
-              <div className="relative flex-1 overflow-hidden">
-                {/* Hidden mirror span — same text as input, used to measure pixel width */}
-                <span
-                  ref={cmdMirrorRef}
-                  aria-hidden
-                  className="absolute invisible whitespace-pre pointer-events-none"
-                  style={{ left: 0, top: 0 }}
-                >
-                  {inputValue || " "}
-                </span>
-
-                <CommandPrimitive.Input
-                  ref={cmdInputRef}
-                  autoFocus
-                  value={inputValue}
-                  onValueChange={(v) => {
-                    setInputValue(v);
-                    // Feed command mode input to AI completion (no-op when not command mode).
-                    if (isCommandMode) commandCompletion.handleChange(v);
-                    else commandCompletion.dismiss();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Tab" && isCommandMode && commandCompletion.ghostText) {
-                      e.preventDefault();
-                      commandCompletion.accept(); // onAccept → setInputValue
-                    }
-                    if (e.key === "Escape" && commandCompletion.ghostText) {
-                      commandCompletion.dismiss();
-                    }
-                  }}
-                  aria-label="Search commands, roster, actions, and days"
-                  placeholder={
-                    isCommandMode
-                      ? "Type a command — Tab to complete, Enter to run"
-                      : isTaskShorthandMode && taskShorthand?.label
-                      ? `↵ to add "${taskShorthand.label}" to ${taskShorthand.slot}`
-                      : isTaskShorthandMode
-                      ? `Type task label for ${taskShorthand?.slot}...`
-                      : contextStep === "person-to-slot"
-                      ? "Type slot (e.g. Z10, MRR2)..."
-                      : contextStep === 'tasks-select-zone'
-                      ? "Select a zone / slot for the task..."
-                      : contextStep === 'tasks-enter-label'
-                      ? "Describe the task (free text)..."
-                      : contextStep === 'coverage-select-source'
-                      ? "Which card is the coverage source?"
-                      : contextStep === 'coverage-select-target'
-                      ? "Which slot are they also covering?"
-                      : placeholder
-                  }
-                  className={cn(
-                    "w-full bg-transparent text-[15px] placeholder:text-zinc-400/70",
-                    "outline-none border-none focus:ring-0",
-                    "font-medium tracking-[-0.2px]",
-                    isCommandMode && "font-mono text-[14px]"
-                  )}
-                  style={{
-                    fontFamily: isCommandMode
-                      ? "var(--font-geist-mono), monospace"
-                      : "var(--font-atkinson), system-ui",
-                    position: "relative",
-                    zIndex: 1,
-                  }}
-                />
-
-                {/* Ghost text — absolutely positioned inline after the typed text */}
-                {isCommandMode && commandCompletion.ghostText && (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none select-none absolute whitespace-pre"
-                    style={{
-                      left: cmdGhostLeft,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: "14px",
-                      fontWeight: "inherit",
-                      letterSpacing: "inherit",
-                      color: "rgba(0,122,255,0.30)",
-                      zIndex: 0,
-                    }}
-                  >
-                    {commandCompletion.ghostText}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => onOpenChange(false)}
-                className="text-zinc-400 hover:text-zinc-600 transition-colors p-1"
-                aria-label="Close command palette"
-              >
-                <span className="ms" style={{ fontSize: 16 }}>close</span>
-              </button>
             </div>
+          </Cmdk.ListItem>
+        </Cmdk.List>
 
-            <CommandPrimitive.List
-              className="max-h-[420px] overflow-y-auto px-1 py-2 no-scrollbar"
-              style={{ contain: "content", willChange: "scroll-position" }}
-            >
-              <CommandPrimitive.Empty className="py-8 text-center text-sm text-zinc-500">
-                <div className="space-y-2 px-4">
-                  <div>No results found.</div>
-                  <div className="text-[11px] text-zinc-400/70 leading-relaxed">
-                    Try:{" "}
-                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">clear zone</span>{" · "}
-                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">swap</span>{" · "}
-                    <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">break [name]</span>
-                  </div>
-                </div>
-              </CommandPrimitive.Empty>
+        {/* Quick one-shot actions (high-frequency ops, no drill-down) */}
+        <Cmdk.List heading="Quick actions">
+          <Cmdk.ListItem
+            index={1}
+            onClick={() => {
+              const openSudo = (rest as any).onOpenSudo;
+              if (openSudo) openSudo();
+              onOpenChange(false);
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Settings className="h-4 w-4 opacity-70" />
+              <span>Open Sudo / Command Center</span>
+            </div>
+          </Cmdk.ListItem>
 
-              {/* Natural-language command-mode suggestions (takes precedence) */}
-              {isCommandMode && commandState && (
-                <CommandSuggestionList
-                  state={commandState}
-                  onPick={applySuggestion}
-                />
-              )}
+          <Cmdk.ListItem
+            index={2}
+            onClick={() => {
+              // Placeholder — will be wired to real print flow in next slice
+              const onPrint = (rest as any).onPrint;
+              if (onPrint) onPrint();
+              else console.log("[Command] Print requested from quick menu");
+              onOpenChange(false);
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Printer className="h-4 w-4 opacity-70" />
+              <span>Print Break Sheet / Reports</span>
+            </div>
+          </Cmdk.ListItem>
 
-              {/* Border mode: custom steps (takes precedence) */}
-              {!isCommandMode && borderStep === 'select-card' && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to border</div>
-                  {ALL_SLOTS.map((slot) => (
-                    <CommandPrimitive.Item
-                      key={slot}
-                      value={slot}
-                      onSelect={() => {
-                        setBorderTarget(slot);
-                        setBorderStep('select-color');
-                      }}
-                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
-                    >
-                      <div className="font-medium">{slot}</div>
-                    </CommandPrimitive.Item>
-                  ))}
-                </>
-              )}
+          <Cmdk.ListItem
+            index={3}
+            onClick={() => {
+              const onUndo = (rest as any).onUndo;
+              if (onUndo) onUndo();
+              else console.log("[Command] Undo requested");
+              // stay open for undo chaining if desired
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Undo2 className="h-4 w-4 opacity-70" />
+              <span>Undo last change</span>
+            </div>
+          </Cmdk.ListItem>
+        </Cmdk.List>
 
-              {!isCommandMode && borderStep === 'select-color' && borderTarget && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Choose border color for {borderTarget}</div>
-                  {[
-                    { name: 'Gold (Z1/Z2)',     value: '#B89708' },
-                    { name: 'Red (Z3–Z5, Z9)',  value: '#E53935' },
-                    { name: 'Magenta (Z6)',     value: '#B7679A' },
-                    { name: 'Blue (Z7)',        value: '#1976D2' },
-                    { name: 'Brown (Z8)',       value: '#6B5346' },
-                    { name: 'Green (Z10)',      value: '#43A047' },
-                    { name: 'Orange (TR1/TR2)', value: '#FB8C00' },
-                  ].map((color) => (
-                    <CommandPrimitive.Item
-                      key={color.name}
-                      value={color.name}
-                      onSelect={() => {
-                        if (onAddCardBorder) {
-                          onAddCardBorder(borderTarget, color.value);
-                        }
-                        setBorderStep('idle');
-                        setBorderTarget(null);
-                        onOpenChange(false);
-                      }}
-                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
-                    >
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color.value }} />
-                      <div className="font-medium">{color.name}</div>
-                    </CommandPrimitive.Item>
-                  ))}
-                </>
-              )}
+        {/* Room for future categories: Navigation, Grok Assist, Advanced, etc. */}
+      </Cmdk.Page>
 
-              {/* Remove Card Border flow */}
-              {!isCommandMode && removeBorderStep === 'select-card' && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">Select card to remove border from</div>
-                  {ALL_SLOTS.map((slot) => (
-                    <CommandPrimitive.Item
-                      key={`remove-${slot}`}
-                      value={slot}
-                      onSelect={() => {
-                        if (onRemoveCardBorder) {
-                          onRemoveCardBorder(slot);
-                        }
-                        setRemoveBorderStep('idle');
-                        setBorderTarget(null);
-                        onOpenChange(false);
-                      }}
-                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
-                    >
-                      <div className="font-medium">{slot}</div>
-                    </CommandPrimitive.Item>
-                  ))}
-                </>
-              )}
+      {/* ==================== ROSTER PAGE: The expanded TM list the user wants behind the entry ==================== */}
+      <Cmdk.Page id="roster">
+        <Cmdk.List heading="Team Members">
+          {rosterGroup ? (
+            renderGroupItems(rosterGroup)
+          ) : (
+            <div className="px-3 py-2 text-sm opacity-60">No team members loaded.</div>
+          )}
+        </Cmdk.List>
 
-              {/* Tasks flow: multi-select cards for the same task */}
-              {!isCommandMode && contextStep === 'tasks-select-zone' && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    Select cards for the same task (click to toggle)
-                  </div>
-                  {TASK_SLOTS.map((slot) => {
-                    const isSelected = multiTaskSlots.includes(slot);
-                    return (
-                      <div
-                        key={`task-multi-${slot}`}
-                        onClick={() => {
-                          setMultiTaskSlots((prev) =>
-                            prev.includes(slot)
-                              ? prev.filter((s) => s !== slot)
-                              : [...prev, slot]
-                          );
-                        }}
-                        className={`group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 transition-colors ${
-                          isSelected
-                            ? 'bg-[#007AFF]/10 border-l-2 border-[#007AFF]/70'
-                            : 'hover:bg-zinc-900/5'
-                        }`}
-                      >
-                        <div className="font-medium flex-1">{slot}</div>
-                        {isSelected && <div className="text-[#007AFF] text-xs font-bold">✓</div>}
-                      </div>
-                    );
-                  })}
+        {/* Explicit back to quick menu */}
+        <Cmdk.List heading="Navigation">
+          <Cmdk.ListItem
+            index={99}
+            onClick={() => {
+              setPage("root");
+              setSearch("");
+            }}
+          >
+            <div className="flex items-center gap-2 text-[13px]">
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back to quick menu</span>
+            </div>
+          </Cmdk.ListItem>
+        </Cmdk.List>
+      </Cmdk.Page>
 
-                  {/* Continue button only when something is selected */}
-                  {multiTaskSlots.length > 0 && (
-                    <CommandPrimitive.Item
-                      key="tasks-multi-continue"
-                      value="continue to task label"
-                      onSelect={() => {
-                        setContextStep('tasks-enter-label');
-                        setInputValue('');
-                      }}
-                      className="mt-2 group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm bg-[#007AFF]/5 text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/15 border-l-2 border-[#007AFF]/60 transition-colors"
-                    >
-                      <div className="font-semibold">
-                        Continue → assign task to <span className="text-[#007AFF]">{multiTaskSlots.length}</span> card{multiTaskSlots.length === 1 ? '' : 's'}
-                      </div>
-                    </CommandPrimitive.Item>
-                  )}
-                </>
-              )}
-
-              {/* Tasks flow: enter free text label (supports multi-select) */}
-              {!isCommandMode && contextStep === 'tasks-enter-label' && (multiTaskSlots.length > 0 || selectedTaskSlot) && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    {multiTaskSlots.length > 0 ? (
-                      <>Task for <span className="font-semibold text-zinc-900">{multiTaskSlots.length}</span> selected cards — type description and press Enter</>
-                    ) : (
-                      <>Task for <span className="font-semibold text-zinc-900">{selectedTaskSlot}</span> — type description and press Enter</>
-                    )}
-                  </div>
-
-                  {/* Catalog quick-picks (best judgment: show relevant curated tasks from the Sudo Tasks hub) */}
-                  {catalog && catalog.length > 0 && (
-                    <div className="px-3 pt-1 pb-2">
-                      <div className="text-[9px] uppercase tracking-[0.5px] text-zinc-500/60 mb-1">From catalog</div>
-                      <div className="flex flex-wrap gap-1">
-                        {catalog.slice(0, 10).map((c: any, idx: number) => (
-                          <button
-                            key={c.id || idx}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              const targets = multiTaskSlots.length > 0 ? multiTaskSlots : (selectedTaskSlot ? [selectedTaskSlot] : []);
-                              if (targets.length === 0 || !onAddTask) return;
-                              try {
-                                await (onAddTask as any)(targets.length === 1 ? targets[0] : targets, c.label);
-                                onOpenChange(false);
-                                setSelectedTaskSlot(null);
-                                setMultiTaskSlots([]);
-                                setContextStep('root');
-                                setInputValue('');
-                              } catch (err) {
-                                console.error('Catalog task from palette failed:', err);
-                              }
-                            }}
-                            className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 hover:bg-[#007AFF]/10 text-zinc-700 hover:text-[#007AFF] border border-zinc-200 transition-colors"
-                          >
-                            {c.label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="text-[9px] text-zinc-400 mt-1">or type a custom description below</div>
-                    </div>
-                  )}
-                  <CommandPrimitive.Item
-                    key="tasks-confirm"
-                    value={`save task ${inputValue}`}
-                    onSelect={async () => {
-                      const label = inputValue.trim();
-                      if (!label || !onAddTask) return;
-
-                      const targets = multiTaskSlots.length > 0 ? multiTaskSlots : (selectedTaskSlot ? [selectedTaskSlot] : []);
-                      if (targets.length === 0) return;
-
-                      try {
-                        // Support both single-string and array for the first arg
-                        await (onAddTask as any)(targets.length === 1 ? targets[0] : targets, label);
-                        onOpenChange(false);
-                        // Reset
-                        setSelectedTaskSlot(null);
-                        setMultiTaskSlots([]);
-                        setContextStep('root');
-                        setInputValue('');
-                      } catch (err) {
-                        console.error('Failed to add task from palette:', err);
-                      }
-                    }}
-                    className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
-                  >
-                    <div className="font-medium">
-                      {multiTaskSlots.length > 0 ? (
-                        <>Assign to {multiTaskSlots.length} cards: <span className="text-[#007AFF]">{inputValue || 'your description'}</span></>
-                      ) : (
-                        <>Save task to {selectedTaskSlot}: <span className="text-[#007AFF]">{inputValue || 'your description'}</span></>
-                      )}
-                    </div>
-                  </CommandPrimitive.Item>
-                </>
-              )}
-
-              {/* Coverage flow: pick source card (when no slot pre-selected) */}
-              {!isCommandMode && contextStep === 'coverage-select-source' && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    Which card needs coverage?
-                  </div>
-                  {COVERAGE_SLOTS.map((slot) => (
-                    <CommandPrimitive.Item
-                      key={`cov-src-${slot.key}`}
-                      value={`coverage source ${slot.label}`}
-                      onSelect={() => {
-                        setCoverageSourceKey(slot.key);
-                        setContextStep('coverage-select-target');
-                        setInputValue('');
-                      }}
-                      className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
-                    >
-                      <span className="text-[10px] font-medium text-zinc-400 w-[60px]">{slot.group}</span>
-                      <span className="font-medium">{slot.label}</span>
-                    </CommandPrimitive.Item>
-                  ))}
-                </>
-              )}
-
-              {/* Coverage flow: pick target card */}
-              {!isCommandMode && contextStep === 'coverage-select-target' && coverageSourceKey && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    Covering which slot? (will add bar to both cards)
-                  </div>
-                  {COVERAGE_SLOTS
-                    .filter((slot) => normalizeToMRR(slot.key) !== normalizeToMRR(coverageSourceKey))
-                    .map((slot) => (
-                      <CommandPrimitive.Item
-                        key={`cov-tgt-${slot.key}`}
-                        value={`coverage target ${slot.label}`}
-                        onSelect={async () => {
-                          if (!onAddCoverage || !coverageSourceKey) return;
-                          try {
-                            await onAddCoverage(coverageSourceKey, slot.key);
-                          } catch (err) {
-                            console.error('[CommandPalette] coverage add failed:', err);
-                          }
-                          setCoverageSourceKey(null);
-                          setContextStep('root');
-                          setInputValue('');
-                          onOpenChange(false);
-                        }}
-                        className="group flex items-center gap-3 px-3 py-2 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 transition-colors"
-                      >
-                        <span className="text-[10px] font-medium text-zinc-400 w-[60px]">{slot.group}</span>
-                        <span className="font-medium">{slot.label}</span>
-                      </CommandPrimitive.Item>
-                    ))
-                  }
-                </>
-              )}
-
-              {/* Task shorthand quick-entry — shown when user types "task Z1 [label]" in root mode */}
-              {!isCommandMode && isTaskShorthandMode && taskShorthand && borderStep === 'idle' && removeBorderStep === 'idle' && (
-                <>
-                  <div className="px-3 py-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75">
-                    Quick add task
-                  </div>
-                  {taskShorthand.label ? (
-                    /* "task Z1 Mop floors" — label already present, one-tap save */
-                    <CommandPrimitive.Item
-                      key="task-shorthand-save"
-                      value={`task-shorthand-save-${taskShorthand.slot}`}
-                      onSelect={async () => {
-                        if (!onAddTask || !taskShorthand) return;
-                        try {
-                          await onAddTask(taskShorthand.slot, taskShorthand.label);
-                        } catch (err) {
-                          console.error('[CommandPalette] task shorthand save failed:', err);
-                        } finally {
-                          onOpenChange(false);
-                          setInputValue('');
-                        }
-                      }}
-                      className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
-                    >
-                      <div className="font-medium flex-1">
-                        Add to{" "}
-                        <span className="text-[#007AFF] font-bold">{taskShorthand.slot}</span>
-                        {": "}
-                        <span className="italic text-zinc-700 dark:text-zinc-300">{taskShorthand.label}</span>
-                      </div>
-                      <div className="text-[11px] text-zinc-400 shrink-0">↵ save</div>
-                    </CommandPrimitive.Item>
-                  ) : (
-                    /* "task Z1" — slot known, jump to label entry */
-                    <CommandPrimitive.Item
-                      key="task-shorthand-slot"
-                      value={`task-shorthand-slot-${taskShorthand.slot}`}
-                      onSelect={() => {
-                        if (!taskShorthand) return;
-                        setMultiTaskSlots([taskShorthand.slot]);
-                        setContextStep('tasks-enter-label');
-                        setInputValue('');
-                      }}
-                      className="group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 dark:text-zinc-100 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
-                    >
-                      <div className="font-medium flex-1">
-                        Add task to{" "}
-                        <span className="text-[#007AFF] font-bold">{taskShorthand.slot}</span>
-                        <span className="text-zinc-400 text-[12px] ml-1.5">— then type label</span>
-                      </div>
-                      <div className="text-[11px] text-zinc-400 shrink-0">↵ to continue</div>
-                    </CommandPrimitive.Item>
-                  )}
-                </>
-              )}
-
-              {/* Normal grouped content (only when not in special modes) */}
-              {!isCommandMode && !isTaskShorthandMode && borderStep === 'idle' && removeBorderStep === 'idle' && !['tasks-select-zone', 'tasks-enter-label', 'coverage-select-source', 'coverage-select-target'].includes(contextStep) && grouped.map(([groupName, items]) => (
-                <CommandPrimitive.Group
-                  key={groupName}
-                  id={`group-${groupName.toLowerCase()}`}
-                  heading={groupName}
-                  className="px-3 pt-2.5 pb-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75"
-                  style={{ fontFamily: "var(--font-atkinson), var(--font-geist-mono)" }}
-                >
-                  {items.map((item) => (
-                    <CommandPrimitive.Item
-                      key={item.id}
-                      // For Roster items include both display name and full name so
-                      // operators can search either. For action/navigation items use
-                      // the label only — including generic keywords ("swap replace
-                      // reassign…") in the value causes fuzzy bleed where "jessica"
-                      // matches "Swap RR8: Jeff" because j-e-s-s-i-c-a is scattered
-                      // across the keyword soup. Label-only keeps false-positive rate
-                      // near zero while preserving real name lookups.
-                      value={
-                        item.group === "Roster"
-                          ? [item.label, item.metadata?.tm?.fullName]
-                              .filter(Boolean)
-                              .join(" ")
-                          : item.label
-                      }
-                      onSelect={() => {
-                        // Roster selection in contextual flows
-                        if (item.group === "Roster" && item.metadata?.tm) {
-                          const tm = item.metadata.tm;
-
-                          // If we already have a slot selected (user tapped a card first),
-                          // perform the assignment immediately.
-                          if (selectedSlot && onAssign) {
-                            onAssign(selectedSlot, tm.id, tm.name || tm.fullName || tm.id);
-                            onOpenChange(false);
-                            return;
-                          }
-
-                          // Otherwise fall back to the multi-step "pick person then pick slot" flow
-                          setSelectedPerson(tm);
-                          setContextStep('person-to-slot');
-                          setSelectedSlot(null);
-                          // Do not close — stay open for the next step (choose slot)
-                          return;
-                        }
-
-                        // Add Card Border multi-step flow
-                        if (item.id === "visual-add-card-border") {
-                          setBorderStep('select-card');
-                          setBorderTarget(null);
-                          // stay open for card selection
-                          return;
-                        }
-
-                        // Remove Card Border multi-step flow
-                        if (item.id === "visual-remove-card-border") {
-                          setRemoveBorderStep('select-card');
-                          setBorderTarget(null);
-                          return;
-                        }
-
-                        // Tasks flow (initial simple version: select zone → free text)
-                        if (item.id === "tasks") {
-                          setContextStep('tasks-select-zone');
-                          setSelectedTaskSlot(null);
-                          setMultiTaskSlots([]);
-                          setInputValue('');
-                          return;
-                        }
-
-                        // Coverage flow
-                        if (item.id === "coverage") {
-                          if (selectedSlot) {
-                            // Card already selected — skip source selection
-                            setCoverageSourceKey(selectedSlot);
-                            setContextStep('coverage-select-target');
-                          } else {
-                            setCoverageSourceKey(null);
-                            setContextStep('coverage-select-source');
-                          }
-                          setInputValue('');
-                          return;
-                        }
-
-                        item.handler();
-
-                        // Explicit flag instead of fragile string check on group name
-                        if (!item.keepOpen) {
-                          onOpenChange(false);
-                        }
-                      }}
-                      disabled={item.disabled}
-                      className={cn(
-                        "group flex items-center gap-3 px-3 py-3 mx-1 rounded-2xl cursor-pointer", // balanced for iPad Pencil + reduced whitespace
-                        "text-sm text-zinc-900 dark:text-zinc-100",
-                        "data-[selected=true]:bg-zinc-900/5 dark:data-[selected=true]:bg-white/10 data-[selected=true]:border-l-2 data-[selected=true]:border-zinc-400/60 dark:data-[selected=true]:border-white/40",
-                        "data-[disabled=true]:opacity-40 data-[disabled=true]:cursor-not-allowed",
-                        "transition-all"
-                      )}
-                    >
-                      {/* Rich rendering for Roster items */}
-                      {item.group === "Roster" && item.metadata?.tm && (
-                        <RosterItemRow item={item} />
-                      )}
-
-                      {/* Default rendering for everything else */}
-                      {item.group !== "Roster" && (
-                        <>
-                          {item.icon && <div className="shrink-0">{item.icon}</div>}
-                          <div className="flex-1 truncate font-medium tracking-[-0.2px]">
-                            {item.label}
-                          </div>
-                        </>
-                      )}
-                    </CommandPrimitive.Item>
-                  ))}
-                </CommandPrimitive.Group>
-              ))}
-            </CommandPrimitive.List>
-          </CommandPrimitive>
+      {/* Future pages for multi-step (coverage, tasks, grok "why", NL command mode, etc.) */}
+      <Cmdk.Page id="context">
+        <div style={{ padding: 16, color: "#666", fontSize: 13 }}>
+          Contextual sub-page (person/slot flows) — ported in Phase 2 of the rebuild.
+          <br />
+          This demonstrates the clean page model replacing the old custom contextStep state machine.
         </div>
+      </Cmdk.Page>
 
-        {/* Subtle footer hint */}
-        <div
-          className="px-4 py-2 text-[10px] text-zinc-400 border-t border-white/50 bg-white/40 dark:bg-zinc-950/40 flex items-center justify-between tracking-[0.5px]"
-          style={{ fontFamily: "var(--font-atkinson), var(--font-geist-mono)" }}
-        >
-          <div className="opacity-70">
-            {isGrokQueryMode
-              ? "✦ Grok Query Mode · type ? or ask to start · esc to cancel"
-              : isTaskShorthandMode
-              ? "task <slot> <label> · ↵ to save · esc to clear"
-              : contextStep === 'tasks-enter-label'
-              ? "Type task description · ↵ to save · esc to back"
-              : contextStep !== 'root'
-              ? "Tab to switch • ↑↓ navigate · ↵ select · esc back"
-              : "↑↓ navigate · ↵ select · esc close · ? for Grok"}
-          </div>
-          <div className="opacity-50">Command Palette</div>
+      <Cmdk.Page id="actions">
+        <div style={{ padding: 16, color: "#666", fontSize: 13 }}>
+          Actions page coming in next slice (coverage, borders, tasks, etc.).
         </div>
-      </div>
-    </div>
+      </Cmdk.Page>
+    </Cmdk>
   );
-
-  return createPortal(content, document.body);
 }
 
-/**
- * Memoized export — skips re-rendering when props haven't changed.
- * Most important for when `open` is false: SBC renders frequently (every
- * assignment change, every roster update) and the palette should pay zero
- * reconciliation cost while it's closed.
- */
-export const CommandPalette = React.memo(CommandPaletteInner);
+// Maintain compatibility during transition
+export { CommandPalette as VelvetCommandPalette };
 
-/* Rich row for team members in the palette.
- *
- * IMPORTANT: TeamMember from src/lib/shiftbuilder/data.ts is camelCase
- * (fullName, id, primarySection). Reading snake_case fields here was the
- * bug that made every roster row render blank — every property resolved to
- * undefined. Match the canonical shape and fall back gracefully.
- */
-const RosterItemRow = React.memo(function RosterItemRow({ item }: { item: CommandItem }) {
-  const tm = item.metadata?.tm;
-  if (!tm) return <div>{item.label}</div>;
-
-  const current = item.metadata?.currentAssignment;
-  const displayName = tm.name || tm.fullName || tm.id || "(unknown)";
-
-  return (
-    <div className="flex items-center gap-3 w-full min-w-0 py-2.5">
-      <div className="flex-1 min-w-0">
-        <div 
-          className="font-semibold text-[15px] tracking-[-0.2px] leading-[1.35] truncate text-zinc-900 dark:text-zinc-50"
-          style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-        >
-          {displayName}
-        </div>
-        {current && (
-          <div 
-            className="text-[11px] text-zinc-500/70 dark:text-zinc-400/70 mt-px tracking-[-0.1px]"
-            style={{ fontFamily: "var(--font-atkinson), var(--font-geist-mono)" }}
-          >
-            on {current}
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-1.5 shrink-0 items-center">
-        {item.metadata?.isScheduledUnplaced && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-600 font-semibold tracking-[0.5px] border border-amber-400/30" title="On schedule tonight — not yet placed">
-            SCHED
-          </span>
-        )}
-        {item.metadata?.isPorter ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium tracking-[0.5px] border border-amber-500/15">P</span>
-        ) : item.metadata?.isPMOverlap ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#AF52DE]/10 text-[#AF52DE] font-medium tracking-[0.5px] border border-[#AF52DE]/15">PM</span>
-        ) : item.metadata?.isAMOverlap ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#34C759]/10 text-[#34C759] font-medium tracking-[0.5px] border border-[#34C759]/15">AM</span>
-        ) : item.metadata?.isGrave ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium tracking-[0.5px] border border-[#007AFF]/15">G</span>
-        ) : null}
-      </div>
-    </div>
-  );
-});
-
-/**
- * Token chips that visualize the parsed state of a `make` / `remove` command.
- * Each filled slot becomes a chip; the in-flight slot is a dashed placeholder.
- */
-const CommandChipBar = React.memo(function CommandChipBar({ state }: { state: CommandState }) {
-  const chips: { label: string; tone: "verb" | "tm" | "action" | "arg" | "pending" | "sudo"; muted?: boolean }[] = [];
-
-  if (state.kind === "sudo") {
-    chips.push({ label: "sudo", tone: "sudo" });
-    return (
-      <div className="px-4 pt-3 pb-1 flex flex-wrap items-center gap-2 border-b border-white/60 bg-red-50/40">
-        <span className="text-[11px] px-2 py-0.5 rounded-full font-mono tracking-[0.2px] border bg-red-500/10 text-red-700 border-red-500/30">
-          sudo
-        </span>
-        <span className="text-[11px] text-zinc-600">
-          open admin window — Esc to cancel, ↵ to enter
-        </span>
-        <span className="ml-auto text-[10px] text-red-700 font-medium">
-          ↵ to enter
-        </span>
-      </div>
-    );
-  }
-
-  if (state.kind) chips.push({ label: state.kind, tone: "verb" });
-  else chips.push({ label: "verb", tone: "pending", muted: true });
-
-  if (state.tm) chips.push({ label: state.tm.name || state.tm.id, tone: "tm" });
-  else if (state.kind) chips.push({ label: state.tmFragment || "TM name", tone: "pending", muted: true });
-
-  if (state.kind === "make") {
-    if (state.action) chips.push({ label: state.action, tone: "action" });
-    else if (state.tm) chips.push({ label: "eligible | ineligible | display name", tone: "pending", muted: true });
-
-    if (state.action === "eligible") {
-      if (state.group) chips.push({ label: state.group, tone: "arg" });
-      else chips.push({ label: "Full | AM | PM", tone: "pending", muted: true });
-    }
-    if (state.action === "display name") {
-      chips.push({ label: state.newName ? `"${state.newName}"` : 'new name', tone: state.newName ? "arg" : "pending", muted: !state.newName });
-    }
-  } else if (state.kind === "remove") {
-    if (state.tm) chips.push({ label: "from", tone: "action" });
-    if (state.when.label) chips.push({ label: state.when.label, tone: "arg" });
-    else if (state.tm) chips.push({ label: "when", tone: "pending", muted: true });
-  }
-
-  return (
-    <div className="px-4 pt-3 pb-1 flex flex-wrap items-center gap-1.5 border-b border-white/60 bg-white/40">
-      {chips.map((c, i) => (
-        <span
-          key={i}
-          className={cn(
-            "text-[11px] px-2 py-0.5 rounded-full font-mono tracking-[0.2px] border",
-            c.tone === "verb" && "bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/25",
-            c.tone === "tm" && "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
-            c.tone === "action" && "bg-zinc-900/5 text-zinc-700 border-zinc-300",
-            c.tone === "arg" && "bg-purple-500/10 text-purple-700 border-purple-500/25",
-            c.tone === "sudo" && "bg-red-500/10 text-red-700 border-red-500/30",
-            c.tone === "pending" && "bg-transparent text-zinc-400 border-dashed border-zinc-300"
-          )}
-        >
-          {c.label}
-        </span>
-      ))}
-      {state.isComplete && (
-        <span className="ml-auto text-[10px] text-emerald-700 font-medium">
-          ↵ to run
-        </span>
-      )}
-      {state.error && !state.isComplete && (
-        <span className="ml-auto text-[10px] text-amber-700">{state.error}</span>
-      )}
-    </div>
-  );
-});
-
-/**
- * Why? panel — explains the engine's per-slot picks side-by-side with Grok's.
- *
- * Shows for each slot:
- *   - Engine's top 3 candidates (scores + dominant signals)
- *   - Final pick (may be the engine top OR a Grok override)
- *   - When Grok overrode, the operator-facing reason
- *
- * The visual goal is dense but scannable: each slot is one collapsible row.
- */
-const WhyPanel = React.memo(function WhyPanel({
-  breakdown,
-  reasoning,
-  grokExplanation,
-  warnings,
-}: {
-  breakdown: Record<string, any>;
-  reasoning: Record<string, { source: "engine" | "grok"; reason?: string }>;
-  grokExplanation: string;
-  warnings: string[];
-}) {
-  const slots = Object.keys(breakdown).filter((s) => !breakdown[s].preserved);
-  return (
-    <div className="px-4 py-3 max-h-[260px] overflow-y-auto border-b border-white/60 bg-purple-50/30">
-      {grokExplanation && (
-        <div className="mb-2 rounded-xl border border-purple-200 bg-white/60 px-3 py-2 text-[12px] text-purple-900 font-mono leading-snug">
-          <span className="font-semibold">Grok overall: </span>{grokExplanation}
-        </div>
-      )}
-      {warnings.length > 0 && (
-        <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
-          {warnings.join(" • ")}
-        </div>
-      )}
-
-      {slots.length === 0 && (
-        <div className="text-center text-[12px] text-zinc-500 py-4">
-          No engine breakdown for this draft. Run the engine again to see scoring.
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        {slots.map((slotKey) => {
-          const r = breakdown[slotKey];
-          const reason = reasoning[slotKey];
-          const top = r.topCandidates ?? [];
-          const pickedTm = top.find((c: any) => c.tmId === r.pickedTmId);
-          const isOverride = reason?.source === "grok";
-          return (
-            <details
-              key={slotKey}
-              className={cn(
-                "rounded-xl border bg-white/70 px-2.5 py-1.5 text-[12px] font-mono",
-                isOverride ? "border-purple-300" : "border-white/60"
-              )}
-            >
-              <summary className="cursor-pointer flex items-center justify-between gap-2 list-none">
-                <span className="flex items-center gap-2">
-                  <span className="font-semibold text-zinc-700 min-w-[44px]">{slotKey}</span>
-                  <span className={cn(
-                    "font-medium",
-                    isOverride ? "text-purple-800" : "text-zinc-800"
-                  )}>
-                    {pickedTm ? pickedTm.tmName : "—"}
-                  </span>
-                  {pickedTm && (
-                    <span className="text-zinc-400">
-                      ({Number(pickedTm.total).toFixed(2)})
-                    </span>
-                  )}
-                </span>
-                <span className="text-[10px] tracking-wide text-zinc-500">
-                  {isOverride ? "GROK OVERRIDE" : "ENGINE"}
-                </span>
-              </summary>
-              <div className="mt-1.5 pl-12 space-y-1">
-                {isOverride && reason?.reason && (
-                  <div className="text-[11px] text-purple-900 leading-snug">
-                    <span className="text-purple-500">↳ </span>{reason.reason}
-                  </div>
-                )}
-                <div className="text-[10px] uppercase tracking-[0.5px] text-zinc-400 mt-1">
-                  Top candidates
-                </div>
-                {top.slice(0, 5).map((c: any, idx: number) => {
-                  const isPicked = c.tmId === r.pickedTmId;
-                  const sigs = Object.entries(c.breakdown)
-                    .filter(([, s]: any) => Number.isFinite(s.weighted) && s.weighted !== 0)
-                    .sort(([, a]: any, [, b]: any) => Math.abs(b.weighted) - Math.abs(a.weighted))
-                    .slice(0, 3);
-                  return (
-                    <div
-                      key={c.tmId}
-                      className={cn(
-                        "flex items-baseline gap-2 text-[11px] leading-snug",
-                        isPicked && !isOverride ? "text-zinc-900 font-medium" : "text-zinc-600",
-                        c.excluded && "text-zinc-400 italic"
-                      )}
-                    >
-                      <span className="min-w-[16px] text-zinc-400">{idx + 1}.</span>
-                      <span className="min-w-[100px] truncate">{c.tmName}</span>
-                      <span className="tabular-nums text-zinc-500 min-w-[36px]">
-                        {c.excluded ? "—" : Number(c.total).toFixed(2)}
-                      </span>
-                      {!c.excluded && sigs.length > 0 && (
-                        <span className="text-zinc-400 text-[10px] truncate">
-                          {sigs.map(([n, s]: any) => `${n} ${s.weighted >= 0 ? "+" : ""}${Number(s.weighted).toFixed(1)}`).join(" · ")}
-                        </span>
-                      )}
-                      {c.excluded && c.excludeReason && (
-                        <span className="text-zinc-400 text-[10px] truncate">{c.excludeReason}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          );
-        })}
-      </div>
-    </div>
-  );
-});
-
-/**
- * Suggestion list for command mode. Each item is a real cmdk item so the
- * keyboard nav (↑↓) works exactly the same as the rest of the palette.
- */
-const CommandSuggestionList = React.memo(function CommandSuggestionList({
-  state,
-  onPick,
-}: {
-  state: CommandState;
-  onPick: (s: Suggestion) => void;
-}) {
-  if (state.suggestions.length === 0) {
-    return (
-      <div className="px-3 py-6 text-center text-[12px] text-zinc-500">
-        {state.isComplete
-          ? "Press Enter to run the command."
-          : "Keep typing — no suggestions yet."}
-      </div>
-    );
-  }
-
-  const heading =
-    state.nextSlot === "verb"
-      ? "Verbs"
-      : state.nextSlot === "tm"
-      ? "Team members"
-      : state.nextSlot === "action"
-      ? "Actions"
-      : state.nextSlot === "group"
-      ? "Eligibility groups"
-      : state.nextSlot === "newName"
-      ? "Display name"
-      : state.nextSlot === "from-keyword"
-      ? "Keyword"
-      : state.nextSlot === "when"
-      ? "When"
-      : "Suggestions";
-
-  return (
-    <CommandPrimitive.Group
-      heading={heading}
-      className="px-3 pt-2.5 pb-1 text-[10px] font-medium tracking-[0.75px] text-zinc-500/75"
-    >
-      {state.suggestions.slice(0, 12).map((s, idx) => (
-        <CommandPrimitive.Item
-          key={`${s.label}-${idx}`}
-          value={`__cmd__ ${s.label} ${s.hint ?? ""}`}
-          onSelect={() => onPick(s)}
-          className="group flex items-center gap-3 px-3 py-2.5 mx-1 rounded-2xl cursor-pointer text-sm text-zinc-900 data-[selected=true]:bg-[#007AFF]/5 data-[selected=true]:border-l-2 data-[selected=true]:border-[#007AFF]/60 transition-colors"
-        >
-          <div className="flex-1 min-w-0">
-            <div className="font-medium tracking-[-0.2px]">{s.label}</div>
-            {s.hint && (
-              <div className="text-[11px] text-zinc-500 mt-px font-mono">{s.hint}</div>
-            )}
-          </div>
-          {idx === 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 font-mono">
-              Tab
-            </span>
-          )}
-        </CommandPrimitive.Item>
-      ))}
-    </CommandPrimitive.Group>
-  );
-});
+export default CommandPalette;

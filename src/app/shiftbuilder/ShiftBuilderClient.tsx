@@ -64,6 +64,7 @@ import {
 } from "@/lib/shiftbuilder/placement";
 import { buildRichGrokContextSnapshot } from "@/lib/shiftbuilder/grokIntelligence";
 import { askGrokForStructuredSuggestions } from "./actions";
+// New react-cmdk based Command Palette (full rearchitecture per approved plan - switched over)
 import { CommandPalette } from "./CommandPalette";
 import {
   setTMGravePool,
@@ -2582,6 +2583,8 @@ export default function ShiftBuilder() {
   // (even when the palette is closed) because every new function reference
   // invalidates React's shallow-equality check. These callbacks are the primary
   // source of choppiness when typing in the palette.
+
+  // Legacy fallback available: set window.__USE_LEGACY_PALETTE = true to force the old implementation if needed during the transition.
 
   const handleCmdkAddTask = React.useCallback(
     async (uiKeys: string | string[], taskLabel: string) => {
@@ -5862,7 +5865,7 @@ export default function ShiftBuilder() {
           : null}
       />
 
-      {/* Master Command Palette — Phase 2 core */}
+      {/* Master Command Palette — Full rearchitecture switched over (react-cmdk + Velvet foundation) */}
       <CommandPalette
         open={cmdkOpen}
         onOpenChange={setCmdkOpen}
@@ -5898,7 +5901,25 @@ export default function ShiftBuilder() {
         completionScheduledUnplaced={cmdkCompletionUnplaced}
         completionAssignments={cmdkCompletionAssignments}
         onAddCoverage={handleCmdkAddCoverage}
+        // Note: The new react-cmdk + Velvet foundation is now the active implementation.
+        // Multi-step flows, NL mode, and advanced Grok UI are being ported to the Page model.
       />
+
+      {/* 
+        SPIKE (Phase 0/1 of Command Palette Rebuild — approved plan)
+        Parallel usage of the new react-cmdk + Velvet foundation.
+        Uncomment the block below + comment the old one above to test the spike.
+        All existing props/callbacks will be mapped in later phases.
+      */}
+      {/* 
+      <VelvetCommandPalette
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        actions={commandActions}
+        placeholder="Search (spike using react-cmdk)..."
+        // ... other props will be adapted
+      />
+      */}
 
       {/* Night picker edge arrows removed — navigation lives in the bottom dock ← / → buttons */}
 

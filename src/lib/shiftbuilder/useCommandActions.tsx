@@ -5,6 +5,9 @@ import { type Snapshot, type AuxDef } from "./useShiftHistory";
 import type { TeamMember } from "@/lib/shiftbuilder/data";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 
+// react-cmdk utilities for the adapter (spike only — Phase 2 will move filtering + structure generation into Pages)
+import { filterItems } from "react-cmdk";
+
 // lucide-react icons — already a project dependency, zero extra install needed
 import {
   Moon,
@@ -592,3 +595,69 @@ export function useCommandActions({
 
   return items;
 }
+
+/**
+ * Spike adapter: Transform existing CommandItem[] (from this hook) into
+ * react-cmdk JsonStructure format for the VelvetCommandPalette wrapper.
+ *
+ * This allows incremental migration without changing the entire registry yet.
+ * Real version in later phases will generate pages directly (root, context-*, tasks, etc.).
+ */
+export function toCmdkJsonStructure(
+  items: CommandItem[],
+  search: string = ""
+): Array<{
+  heading?: string;
+  id: string;
+  items: Array<{
+    id: string;
+    label?: string;           // plain string for reconstruction (RosterItemRow etc.)
+    children: React.ReactNode;
+    onClick?: () => void;
+    closeOnSelect?: boolean;
+    metadata?: Record<string, any>;
+  }>;
+}> {
+  // Group by the CommandGroup enum for now (Roster, Actions, etc.)
+  const groups = new Map<string, any[]>();
+
+  items.forEach((item) => {
+    const heading = item.group;
+    if (!groups.has(heading)) groups.set(heading, []);
+
+    // Embed icon (ReactNode element from the registry, e.g. <Sun size={15}/>) directly into children.
+    // This prevents passing raw JSX elements as the `icon` prop to react-cmdk's ListItem,
+    // which expects either a component type or handles icons internally in a way that doesn't accept pre-rendered elements.
+    const iconNode = item.icon;
+    const richChildren = iconNode ? (
+      <span className="inline-flex items-center gap-2">
+        <span className="shrink-0 opacity-70">{iconNode}</span>
+        <span>{item.label}</span>
+      </span>
+    ) : (
+      item.label
+    );
+
+    groups.get(heading)!.push({
+      id: item.id,
+      label: item.label,           // carry plain label for any reconstruction logic
+      children: richChildren,
+      onClick: item.handler,
+      closeOnSelect: !item.keepOpen,
+      metadata: item.metadata,     // critical for RosterItemRow rich rendering + isRoster detection
+    });
+  });
+
+  const structure = Array.from(groups.entries()).map(([heading, items]) => ({
+    heading,
+    id: heading.toLowerCase().replace(/\s+/g, "-"),
+    items,
+  }));
+
+  // Use react-cmdk's own filter for the spike (it handles search well)
+  // Cast is intentional for the transitional adapter (shape is close enough for the composition API).
+  return filterItems(structure as any, search) as any;
+}
+
+// Types already exported above; no self-re-export needed (was causing TS2484 conflict)
+

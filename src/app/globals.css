@@ -1400,3 +1400,61 @@ body {
   user-select: none;
   pointer-events: none;
 }
+
+/* ============================================
+   react-cmdk Velvet / Liquid Glass Theme Overrides
+   (for full-scale Command Palette rebuild spike)
+   Uses existing --sb-* tokens for consistency with
+   Golden artboard + dock + MarkerPad.
+   ============================================ */
+
+@import "react-cmdk/dist/cmdk.css";
+
+.command-palette {
+  --cmdk-bg: var(--sb-glass);
+  --cmdk-border: var(--sb-glass-border);
+  --cmdk-text: var(--sb-text-1);
+  --cmdk-text-muted: var(--sb-text-muted);
+  --cmdk-accent: var(--sb-gold);
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+}
+
+.command-palette .command-palette-content {
+  background: var(--sb-glass);
+  border: 1px solid var(--sb-glass-border);
+  backdrop-filter: var(--sb-glass-blur);
+  -webkit-backdrop-filter: var(--sb-glass-blur);
+  border-radius: 24px;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.45),
+              inset 0 1px 0 var(--sb-glass-highlight);
+}
+
+.dark .command-palette .command-palette-content {
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.6),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.command-palette input {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  color: var(--sb-text-1);
+  caret-color: var(--sb-gold);
+}
+
+.command-palette [cmdk-item] {
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--sb-text-1);
+}
+
+.command-palette [cmdk-item][data-selected="true"] {
+  background: var(--sb-gold-tint);
+  color: var(--sb-text-1);
+}
+
+.command-palette [cmdk-list] {
+  scrollbar-width: thin;
+}
+
+/* Rich roster rows etc. will get custom ListItem renderers in the wrapper */
