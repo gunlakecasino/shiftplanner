@@ -21,8 +21,8 @@ const BreakBadge: React.FC<{ value: number; onCycle: () => void; size?: "sm" | "
       aria-label={label}
     >
       <span
-        className={`${visual} ${isOff ? "bg-[#9CA3AF]" : "bg-[#1C1C1E]"} text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none`}
-        style={{ fontFamily: 'var(--font-atkinson)' }}
+        className={`${visual} ${isOff ? "bg-[#9CA3AF] dark:bg-[#48484A]" : "bg-[#1C1C1E] dark:bg-[#E5E5E7] dark:text-[#1C1C1E]"} text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none`}
+        style={{ fontFamily: 'var(--font-ui, var(--font-inter-tight), system-ui)' }}
       >
         {isOff ? "–" : value}
       </span>

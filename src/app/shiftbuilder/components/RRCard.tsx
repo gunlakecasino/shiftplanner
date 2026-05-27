@@ -70,7 +70,7 @@ const RRSide: React.FC<{
     >
       {/* Label + badge row */}
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[8px] font-bold tracking-[0.5px] text-[#1C1C1E]" style={{ fontFamily: 'var(--font-atkinson)' }}>{label}</span>
+        <span className="text-[8px] font-bold tracking-[0.8px] text-[#1C1C1E] dark:text-[#9CA3AF] uppercase" style={{ fontFamily: 'var(--font-ui, var(--font-inter-tight), system-ui)' }}>{label}</span>
         <BreakBadge value={breakNum} onCycle={cycle} size="sm" />
       </div>
       {/* Name immediately under label */}
@@ -85,14 +85,14 @@ const RRSide: React.FC<{
               </svg>
             )}
             <span
-              className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 16, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
+              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+              style={{ fontSize: 17, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {a.tmName}
             </span>
           </div>
         ) : (
-          <div className="unassigned-label mt-px text-[#6B7280] font-medium tracking-[0.3px] text-[9.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>
+          <div className="unassigned-label mt-px text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[9.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
             — Unassigned —
           </div>
         )}
@@ -175,7 +175,7 @@ const RRCard: React.FC<RRCardProps> = ({
         <span className="text-[11px] leading-none">{icon}</span>
         <span
           className="font-extrabold tracking-[0.4px] uppercase"
-          style={{ fontSize: 10.5, fontFamily: "var(--font-atkinson)" }}
+          style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
         >
           {def.label}
         </span>

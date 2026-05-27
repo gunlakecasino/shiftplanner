@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Shift Builder · Velvet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800;12..96,900&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --font-atkinson: 'Atkinson Hyperlegible', 'Inter Tight', system-ui;
+    --font-display: 'Bricolage Grotesque', 'Inter Tight', system-ui;
+    --font-ui: 'Inter Tight', 'Inter', system-ui;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    background: #050406;
+    color: #E5E7EB;
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+  /* ── Animation system ────────────────────────────────────────────────── */
+
+  /* Spring presets */
+  :root {
+    --spring-snappy: cubic-bezier(0.16, 1, 0.3, 1);     /* fast settle, no overshoot */
+    --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); /* light overshoot */
+    --spring-gentle: cubic-bezier(0.22, 1, 0.36, 1);    /* gentle, iOS-like */
+    --dur-fast: 0.22s;
+    --dur-mid: 0.38s;
+    --dur-slow: 0.52s;
+  }
+
+  /* Panel slide in/out */
+  @keyframes sb-slide-left-in {
+    from { transform: translateX(-100%); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+  }
+  @keyframes sb-slide-right-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  @keyframes sb-slide-up-in {
+    from { transform: translateY(12px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+
+  /* Task add — slides in from the bottom edge */
+  @keyframes sb-task-appear {
+    from { transform: translateX(-6px) scaleY(0.7); opacity: 0; transform-origin: left center; }
+    to   { transform: translateX(0)    scaleY(1);   opacity: 1; }
+  }
+
+  /* Card selection pulse */
+  @keyframes sb-card-select {
+    0%   { box-shadow: 0 0 0 0 currentColor; }
+    40%  { box-shadow: 0 0 0 4px currentColor; }
+    100% { box-shadow: 0 0 0 0 currentColor; }
+  }
+
+  /* View crossfade */
+  @keyframes sb-view-in {
+    from { opacity: 0; transform: scale(0.985); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes sb-view-out {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(1.015); }
+  }
+
+  /* Panel open — scales up from edge */
+  @keyframes sb-panel-open {
+    from { transform: scaleX(0.88) scaleY(0.94); opacity: 0; }
+    to   { transform: scaleX(1)    scaleY(1);    opacity: 1; }
+  }
+
+  /* Collapsed tab pulse (draws attention) */
+  @keyframes sb-tab-breathe {
+    0%, 100% { opacity: 0.7; }
+    50%       { opacity: 1;   }
+  }
+
+  /* Composer popover bloom — from card position */
+  @keyframes sb-composer-up {
+    from { transform: translateY(8px) scale(0.94); opacity: 0; }
+    to   { transform: translateY(0)   scale(1);    opacity: 1; }
+  }
+  @keyframes sb-composer-down {
+    from { transform: translateY(-8px) scale(0.94); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+  }
+
+  /* Conflict halo — subtle pulse */
+  @keyframes sb-conflict-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(229,57,53,0.18), 0 4px 14px -4px rgba(229,57,53,0.35); }
+    50%      { box-shadow: 0 0 0 4px rgba(229,57,53,0.28), 0 4px 14px -4px rgba(229,57,53,0.45); }
+  }
+
+  /* Existing keyframes */
+  @keyframes sb-blink   { 50% { opacity: 0; } }
+  @keyframes sb-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(184,151,8,0.4), 0 0 0 0 rgba(184,151,8,0); }
+    50%      { box-shadow: 0 0 0 1.5px rgba(184,151,8,0.7), 0 0 16px 2px rgba(184,151,8,0.3); }
+  }
+  @keyframes sb-toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes sb-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  button {
+    border: none; background: none; font: inherit; color: inherit;
+    cursor: pointer; padding: 0;
+  }
+  input { font: inherit; }
+  *, *::before, *::after { box-sizing: border-box; }
+</style>
+
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Data + shared components -->
+<script type="text/babel" src="sb-data.jsx"></script>
+<script type="text/babel" src="sb-cards.jsx"></script>
+<script type="text/babel" src="sb-sheet.jsx"></script>
+
+<!-- Reducer (must load before app) -->
+<script type="text/babel" src="sb-reducer.jsx"></script>
+
+<!-- Stage + interactive parts -->
+<script type="text/babel" src="sb-stage.jsx"></script>
+<script type="text/babel" src="sb-chrome.jsx"></script>
+<script type="text/babel" src="sb-roster.jsx"></script>
+<script type="text/babel" src="sb-markerpad.jsx"></script>
+<script type="text/babel" src="sb-cmdk.jsx"></script>
+
+<!-- Inline composer (must load before app) -->
+<script type="text/babel" src="sb-composer.jsx"></script>
+
+<!-- Root app -->
+<script type="text/babel" src="sb-app.jsx"></script>
+
+<script type="text/babel">
+  ReactDOM.createRoot(document.getElementById('root')).render(<ShiftBuilderApp />);
+</script>
+
+</body>
+</html>

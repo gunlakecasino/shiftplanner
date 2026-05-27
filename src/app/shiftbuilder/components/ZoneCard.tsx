@@ -92,7 +92,7 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
           <span className="text-[11px] leading-none">{icon}</span>
           <span
             className="font-extrabold tracking-[0.4px] uppercase"
-            style={{ fontSize: 10.5, fontFamily: "var(--font-atkinson)" }}
+            style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
           >
             {def.label}
           </span>
@@ -107,15 +107,15 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
         ) : isDraftMode && draftInfo ? (
           <div className="flex flex-col min-w-0">
             <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 18, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
+              className="font-bold tracking-[-0.4px] text-[#111] dark:text-[#F2F2F4] truncate"
+              style={{ fontSize: 19, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {draftInfo.proposedTmName}
             </span>
             {draftInfo.previousTmName && (
               <span
-                className="text-[10px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-atkinson)" }}
+                className="text-[9.5px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px]"
+                style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
               >
                 was: {draftInfo.previousTmName}
               </span>
@@ -129,14 +129,14 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
               </svg>
             )}
             <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 20, lineHeight: 1.05, fontFamily: "var(--font-atkinson)" }}
+              className="font-bold tracking-[-0.4px] text-[#111] dark:text-[#F2F2F4] truncate"
+              style={{ fontSize: 21, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {a.tmName}
             </span>
           </div>
         ) : (
-          <div className="unassigned-label mt-0.5 text-[#6B7280] font-medium tracking-[0.4px] text-[10.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>
+          <div className="unassigned-label mt-0.5 text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[10.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
             — Unassigned —
           </div>
         )}
