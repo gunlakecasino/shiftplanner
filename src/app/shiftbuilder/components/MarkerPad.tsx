@@ -168,6 +168,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   onCoverage,
   onSwap,
   onClose,
+  isDark,
 }) => {
   const [taskInput, setTaskInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -200,9 +201,10 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     void onAddTask(slotKey, label);
   };
 
-  // ── Glass panel styles (Velvet liquid-glass spec) ──────────────────────────
+  // ── Glass panel styles (Velvet liquid-glass spec, light/dark aware) ─────────
   // top: 68px clears the 56px Velvet top bar + 12px gap.
   // bottom: 58px clears the 46px bottom dock + 12px gap.
+  const isDarkPanel = isDark !== false; // default dark if unspecified
   const panelStyle: React.CSSProperties = {
     position: "fixed",
     top: 68,
@@ -210,16 +212,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     width: 284,
     bottom: 58,
     borderRadius: 20,
-    background: "rgba(20,20,22,0.72)",
+    background: isDarkPanel
+      ? "rgba(20,20,22,0.82)"
+      : "rgba(252,252,250,0.92)",
     backdropFilter: "blur(48px) saturate(200%)",
     WebkitBackdropFilter: "blur(48px) saturate(200%)",
-    border: "1px solid rgba(255,255,255,0.11)",
-    boxShadow: `
-      inset 0 1px 0 rgba(255,255,255,0.18),
-      inset 0 -1px 0 rgba(255,255,255,0.04),
-      0 24px 48px -16px rgba(0,0,0,0.60),
-      0 0 0 1px ${accent}1a
-    `,
+    border: isDarkPanel
+      ? "1px solid rgba(255,255,255,0.11)"
+      : "1px solid rgba(0,0,0,0.09)",
+    boxShadow: isDarkPanel
+      ? `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(255,255,255,0.04), 0 24px 48px -16px rgba(0,0,0,0.60), 0 0 0 1px ${accent}1a`
+      : `inset 0 1px 0 rgba(255,255,255,0.90), 0 24px 48px -16px rgba(0,0,0,0.12), 0 0 0 1px ${accent}18`,
     display: "flex",
     flexDirection: "column",
     gap: 10,

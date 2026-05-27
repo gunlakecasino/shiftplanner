@@ -55,8 +55,9 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter(t => t.isCoverage);
+  // +6 gap above the first coverage bar so it breathes away from task list text
   const coverageBodyPb = zoneCoverageTasks.length > 0
-    ? zoneCoverageTasks.length * COVERAGE_BAR_H + 2
+    ? zoneCoverageTasks.length * COVERAGE_BAR_H + 8
     : 6;
 
   return (

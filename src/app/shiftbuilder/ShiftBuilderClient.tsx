@@ -3613,7 +3613,7 @@ export default function ShiftBuilder() {
         const totalSlots = allSlotKeys.length;
         return (
           <div
-            className="fixed top-0 left-0 right-0 z-40 flex items-center px-3 gap-2"
+            className="fixed top-0 left-0 right-0 z-40 flex items-center px-3"
             style={{
               height: 56,
               background: isDark
@@ -3666,8 +3666,16 @@ export default function ShiftBuilder() {
               </div>
             </div>
 
-            {/* ── Center: Day scrubber ── */}
-            <div className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
+            {/* ── Center: Day scrubber — absolutely centered so left/right widths don't affect it ── */}
+            <div
+              className="flex items-center gap-1"
+              style={{
+                position: "absolute",
+                left: "50%",
+                transform: "translateX(-50%)",
+                pointerEvents: "auto",
+              }}
+            >
               {DAY_DEFS.map((def, i) => {
                 const isActive = i === selectedDayIndex;
                 return (
@@ -3718,7 +3726,7 @@ export default function ShiftBuilder() {
             </div>
 
             {/* ── Right controls ── */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
 
               {/* PLACED counter */}
               <div
@@ -5610,19 +5618,6 @@ export default function ShiftBuilder() {
               overflow: "hidden",
             }}
           >
-            {/* ← prev day */}
-            <button
-              type="button"
-              onClick={goPrevDay}
-              title="Previous day"
-              className="flex items-center justify-center h-full px-3.5 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
-              style={{ color: dockText, borderRight: `1px solid ${dockSep}` }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-
             {/* − zoom% + */}
             <div className="flex items-center gap-0 h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
               <button
@@ -5687,6 +5682,19 @@ export default function ShiftBuilder() {
                   <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
                 </svg>
                 <span>Redo</span>
+              </button>
+
+              {/* ← prev day — lives between Redo and Deployment tabs */}
+              <button
+                type="button"
+                onClick={goPrevDay}
+                title="Previous day"
+                className="flex items-center justify-center h-full px-3 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
+                style={{ color: dockText, borderLeft: `1px solid ${dockSep}` }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
               </button>
             </div>
 
@@ -5753,14 +5761,7 @@ export default function ShiftBuilder() {
         );
       })()}
 
-      {/* xAI Sphere — Master Ops AI Agent (Phase 1 visual shell)
-          Lives on the right, above the status pill. Persistent Supabase-backed
-          operational co-pilot. No intelligence yet — just the beautiful presence. */}
-      <XAISphere
-        open={xaiSphereOpen}
-        onToggle={() => setXaiSphereOpen((v) => !v)}
-        weekStart={weekStart}
-      />
+      {/* XAISphere removed — Ask AI button in bottom dock handles toggle */}
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of

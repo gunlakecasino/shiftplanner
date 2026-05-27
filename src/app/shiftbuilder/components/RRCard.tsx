@@ -182,7 +182,7 @@ const RRCard: React.FC<RRCardProps> = ({
       </div>
       <div
         className="flex flex-col flex-1 px-2 pt-1.5"
-        style={{ paddingBottom: rrCoverageTasks.length > 0 ? rrCoverageTasks.length * COVERAGE_BAR_H + 2 : 6 }}
+        style={{ paddingBottom: rrCoverageTasks.length > 0 ? rrCoverageTasks.length * COVERAGE_BAR_H + 8 : 6 }}
       >
         {isDraftMode && draftInfo && (
           <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
