@@ -2224,7 +2224,8 @@ export default function ShiftBuilder() {
             const fresh = await getNightBreakAssignments(nightId);
             setNightBreakRows(
               (fresh as any[])
-                .filter((r: any) => r.groupNum && r.groupNum > 0)
+                .filter((r: any) => r.groupNum && r.groupNum > 0 &&
+                  (scheduledTmIdsTonight.size === 0 || scheduledTmIdsTonight.has(r.tmId)))
                 .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
             );
             await nextFrames(2); // let React commit the new nightBreakRows before capture
@@ -3076,11 +3077,20 @@ export default function ShiftBuilder() {
           }
         });
 
-        // Store the raw break rows so the break sheet can render all TMs
-        // from break_assignments directly (not just those placed tonight).
+        // Store the raw break rows so the break sheet can render TMs who are
+        // scheduled or placed tonight. Filter out template TMs who aren't
+        // working tonight to prevent wrong-people / duplicate-chip issues.
+        const placedTmIdSet = new Set(
+          (dbAssignments as any[]).map((r: any) => r.tmId).filter(Boolean)
+        );
+        const relevantBreakTmIds = new Set<string>([
+          ...Array.from(scheduledTonightSet as Set<string>),
+          ...Array.from(placedTmIdSet),
+        ]);
         setNightBreakRows(
           (breakRows as any[])
-            .filter((r: any) => r.groupNum && r.groupNum > 0)
+            .filter((r: any) => r.groupNum && r.groupNum > 0 &&
+              (relevantBreakTmIds.size === 0 || relevantBreakTmIds.has(r.tmId)))
             .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
         );
 
@@ -4961,74 +4971,7 @@ export default function ShiftBuilder() {
                     </div>
                   </section>
 
-                  {/* NOTES AND SIDE TASKS — fills the remaining vertical space inside
-                     the 816px paper. Ruled lines come from the .notes-pad background;
-                     the area is contentEditable so operators can scribble during a
-                     shift and have those notes carry into print. */}
-                  <section className="flex-1 min-h-0 flex flex-col">
-                    <div className="sheet-section-header">
-                      <span className="label">NOTES AND SIDE TASKS</span>
-                      <div className="divider" />
-                    </div>
-                    <div
-                      ref={notesRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      spellCheck={false}
-                      onInput={handleNotesInput}
-                      onKeyDown={(e) => {
-                        if (e.key === "Tab" && notesCompletion.ghostText) {
-                          e.preventDefault();
-                          acceptNotesSuggestion();
-                          return;
-                        }
-                        if (e.key === "Escape" && notesCompletion.ghostText) {
-                          notesCompletion.dismiss();
-                          return;
-                        }
-                      }}
-                      className={`notes-pad flex-1 min-h-0 outline-none border border-[#E5E5E7] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] dark:text-[#D1D1D6] ${
-                        (notesCompletion.ghostText || notesCompletion.isLoading)
-                          ? "rounded-t-[3px] rounded-b-none"
-                          : "rounded-[3px]"
-                      }`}
-                    />
-                    {/* AI ghost-text suggestion bar — shown while loading and when suggestion ready */}
-                    {(notesCompletion.ghostText || notesCompletion.isLoading) && (
-                      <div
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-b-[3px] bg-amber-50/80 border border-t-0 border-amber-200/70 text-[11px] select-none no-print"
-                        style={{ animation: "fadeInDown 120ms ease both" }}
-                      >
-                        {notesCompletion.isLoading && !notesCompletion.ghostText ? (
-                          /* Loading shimmer */
-                          <>
-                            <span className="text-amber-300 animate-pulse">✦</span>
-                            <span className="flex-1 h-2.5 rounded bg-amber-200/60 animate-pulse" />
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-amber-400">✦</span>
-                            <span className="text-amber-700/80 italic truncate flex-1">
-                              {notesCompletion.ghostText}
-                            </span>
-                            <kbd
-                              onClick={acceptNotesSuggestion}
-                              className="cursor-pointer px-1 py-0.5 rounded bg-amber-100 border border-amber-300/60 text-amber-600 font-mono text-[10px] hover:bg-amber-200/60 transition-colors"
-                            >
-                              Tab
-                            </kbd>
-                            <button
-                              onClick={notesCompletion.dismiss}
-                              className="text-amber-400/70 hover:text-amber-600 transition-colors leading-none"
-                              aria-label="Dismiss suggestion"
-                            >
-                              ×
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </section>
+                  {/* Notes pad removed — space now flows to cards */}
                 </>
               ) : (
                 <>
@@ -5162,6 +5105,10 @@ export default function ShiftBuilder() {
                                   <div className="space-y-1">
                                     {items.map((a: any, idx: number) => {
                                       const accent = accentFor(a);
+                                      // Only show a chip when the TM is actually placed
+                                      // tonight. For scheduled-but-not-placed TMs the
+                                      // template slotRef is stale/misleading — suppress it.
+                                      const showChip = !a.notPlaced;
                                       return (
                                         <div key={idx} className="flex items-center gap-1.5">
                                           <div className="flex-1 border-b border-dashed border-[#C8C8CC] dark:border-[#48484A] pb-px min-w-0">
@@ -5169,14 +5116,18 @@ export default function ShiftBuilder() {
                                               {a.tmName || " "}
                                             </div>
                                           </div>
-                                          <div
-                                            className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white dark:bg-[#2C2C2E]"
-                                            style={{ borderColor: accent, color: accent, fontFamily: 'var(--font-atkinson)' }}
-                                          >
-                                            {chipLabel(a)}
-                                          </div>
+                                          {showChip ? (
+                                            <div
+                                              className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white dark:bg-[#2C2C2E]"
+                                              style={{ borderColor: accent, color: accent, fontFamily: 'var(--font-atkinson)' }}
+                                            >
+                                              {chipLabel(a)}
+                                            </div>
+                                          ) : (
+                                            <div className="w-3" />
+                                          )}
                                           <span className="text-[7.5px] text-[#9CA3AF] uppercase tracking-[0.5px] w-3 text-center">
-                                            {a.type === "rr" ? ((a.slotKey || "").startsWith("M") ? "M" : "W") : ""}
+                                            {showChip && a.type === "rr" ? ((a.slotKey || "").startsWith("M") ? "M" : "W") : ""}
                                           </span>
                                         </div>
                                       );
@@ -5250,20 +5201,17 @@ export default function ShiftBuilder() {
               )}
               </div>
 
-              {/* Sheet footer — Golden: "OMS ⚙  Weekly Zone Deployment Book · GRAVES" left,
-                 version center, "— N of 14 —" right. The "GRAVES" tag
-                 replaced the old "GRAVE · 11PM – 7AM" header line that used
-                 to sit above the week pills. */}
+              {/* Sheet footer */}
               <div className="sheet-footer flex-shrink-0">
                 <div className="flex items-center gap-1">
-                  <span className="font-bold tracking-[1px] text-[#1C1C1E]">OMS</span>
+                  <span className="font-bold tracking-[1px] text-[#1C1C1E]">SBS</span>
                   <span className="text-[#9CA3AF]">⚙</span>
                   <span className="text-[#6B7280]">Weekly Zone Deployment Book</span>
                   <span className="text-[#C8C8CC] mx-1">·</span>
                   <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
                 </div>
-                <div className="text-[#9CA3AF]">v3.4</div>
-                <div className="text-[#6B7280]">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
+                <div className="text-[#9CA3AF] text-center">v0.7</div>
+                <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
               </div>
             </div>
 
@@ -5667,9 +5615,10 @@ export default function ShiftBuilder() {
         onRemoveTask={handleRemoveTask}
         onToggleLock={(slotKey) => toggleLock(slotKey)}
         onClearSlot={(slotKey) => { unassign(slotKey); setMarkerSlotKey(null); }}
-        onCoverage={() => setCmdkOpen(true)}
+        onAddCoverage={(sourceKey, targetKey) => handleCmdkAddCoverage(sourceKey, targetKey)}
         onSwap={() => setCmdkOpen(true)}
         onClose={() => setMarkerSlotKey(null)}
+        auxDefs={auxDefs}
         isDark={isDark}
       />
 
@@ -5745,7 +5694,7 @@ export default function ShiftBuilder() {
                 if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
               });
 
-              setAssignments(prev => {
+              setAssignments((prev: any) => {
                 const next = { ...prev };
                 Object.keys(next).forEach(k => {
                   const a = next[k];
@@ -5758,7 +5707,8 @@ export default function ShiftBuilder() {
 
               setNightBreakRows(
                 freshBreaks
-                  .filter((r: any) => r.groupNum && r.groupNum > 0)
+                  .filter((r: any) => r.groupNum && r.groupNum > 0 &&
+                    (scheduledTmIdsTonight.size === 0 || scheduledTmIdsTonight.has(r.tmId)))
                   .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
               );
             } catch (e) {

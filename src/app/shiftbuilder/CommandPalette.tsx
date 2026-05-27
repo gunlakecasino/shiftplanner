@@ -3,7 +3,6 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Command as CommandPrimitive } from "cmdk";
-import { X, Sparkles, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommandItem, CommandGroup } from "@/lib/shiftbuilder/useCommandActions";
 import { askGrokForShiftSuggestions, askGrokForStructuredSuggestions } from "./actions";
@@ -858,7 +857,7 @@ function CommandPaletteInner({
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#007AFF]/40 bg-[#007AFF]/10 py-2 text-sm font-medium tracking-[0.3px] text-[#007AFF] hover:bg-[#007AFF]/15 active:bg-[#007AFF]/20 disabled:opacity-60 transition-all"
               style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
             >
-              <Sparkles className="h-4 w-4" />
+              <span className="ms" style={{ fontSize: 16 }}>auto_awesome</span>
               {grokLoading ? "Analyzing entire board with Grok..." : "Grok: Analyze Full Board"}
             </button>
             <div className="text-center text-[10px] text-zinc-500 mt-1 tracking-wide">Respects placement order • Safe Draft preview</div>
@@ -935,7 +934,7 @@ function CommandPaletteInner({
                 className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/40 bg-white/50 py-2 text-sm font-medium tracking-[0.3px] hover:bg-white/70 active:bg-white/90 disabled:opacity-60 transition-all"
                 style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
               >
-                <Sparkles className="h-4 w-4" />
+                <span className="ms" style={{ fontSize: 16 }}>auto_awesome</span>
                 {grokLoading ? "Asking Grok..." : "Ask Grok for suggestions (this slot/person)"}
               </button>
             </div>
@@ -1071,7 +1070,7 @@ function CommandPaletteInner({
           commandStatus === "idle" && (
           <div className="mx-4 my-2 rounded-2xl border border-[#007AFF]/30 bg-[#007AFF]/5 p-3 text-[12.5px] text-zinc-800">
             <div className="font-semibold mb-1 flex items-center gap-1.5">
-              <Terminal className="h-3.5 w-3.5 text-[#007AFF]" />
+              <span className="ms text-[#007AFF]" style={{ fontSize: 14 }}>terminal</span>
               Confirm display name change
             </div>
             <div>
@@ -1185,9 +1184,9 @@ function CommandPaletteInner({
             )}>
               <div className="text-zinc-400">
                 {isGrokQueryMode ? (
-                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span className="ms text-purple-500" style={{ fontSize: 16 }}>auto_awesome</span>
                 ) : isCommandMode ? (
-                  <Terminal className="h-4 w-4 text-[#007AFF]" />
+                  <span className="ms text-[#007AFF]" style={{ fontSize: 16 }}>terminal</span>
                 ) : (
                   <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
                 )}
@@ -1291,14 +1290,14 @@ function CommandPaletteInner({
                 className="text-zinc-400 hover:text-zinc-600 transition-colors p-1"
                 aria-label="Close command palette"
               >
-                <X className="h-4 w-4" />
+                <span className="ms" style={{ fontSize: 16 }}>close</span>
               </button>
             </div>
 
             {/* === Grok Query Mode status banner — shown between input and results === */}
             {isGrokQueryMode && (
               <div className="mx-3 mb-2 mt-1 rounded-2xl border border-purple-400/30 bg-purple-50/60 dark:bg-purple-950/30 px-3 py-2 flex items-center gap-2">
-                <Sparkles className={cn("h-3.5 w-3.5 text-purple-500 shrink-0", grokLoading && "animate-pulse")} />
+                <span className={cn("ms text-purple-500 shrink-0", grokLoading && "animate-pulse")} style={{ fontSize: 14 }}>auto_awesome</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 tracking-[0.3px]">
                     Grok Query Mode

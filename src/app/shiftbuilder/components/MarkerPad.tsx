@@ -11,14 +11,16 @@
  *   • Quick task composer input
  *   • Recent-task gold chips for one-tap recall
  *   • Footer actions: Lock, Coverage, Swap, Clear
+ *   • Inline coverage picker (activates in-place, no command palette needed)
  *
  * All layout values match the Velvet spec (sb-velvet.jsx).
  * Uses --sb-* CSS tokens so light/dark mode is automatic.
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
+import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
   ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS,
@@ -31,12 +33,13 @@ export interface MarkerPadProps {
   assignments: Record<string, any>;
   selectedTasks: Record<string, NightSlotTask[]>;
   recentTasks: string[];
+  auxDefs?: AuxDef[];                  // operator-added aux slots
   setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onAddTask: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onToggleLock?: (slotKey: string) => void;
   onClearSlot?: (slotKey: string) => void;
-  onCoverage?: (slotKey: string) => void;
+  onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   onSwap?: (slotKey: string) => void;
   onClose: () => void;
   isDark?: boolean;
@@ -45,7 +48,6 @@ export interface MarkerPadProps {
 // ── Slot metadata lookup ─────────────────────────────────────────────────────
 
 function getSlotMeta(slotKey: string): { label: string; loc: string; icon: string; accent: string } {
-  // Zone
   const zd = ZONE_DEFS.find(z => z.key === slotKey);
   if (zd) return {
     label: zd.label,
@@ -54,7 +56,6 @@ function getSlotMeta(slotKey: string): { label: string; loc: string; icon: strin
     accent: getZoneColor(slotKey),
   };
 
-  // RR side (MRR6, WRR7, …)
   const rrMatch = slotKey.match(/^([MW])RR(\d+)$/);
   if (rrMatch) {
     const side = rrMatch[1] === "M" ? "Men's" : "Women's";
@@ -68,7 +69,6 @@ function getSlotMeta(slotKey: string): { label: string; loc: string; icon: strin
     };
   }
 
-  // Aux / support
   const ad = DEFAULT_AUX_DEFS.find(a => a.key === slotKey);
   if (ad) return {
     label: ad.label,
@@ -80,7 +80,11 @@ function getSlotMeta(slotKey: string): { label: string; loc: string; icon: strin
   return { label: slotKey, loc: "", icon: "●", accent: "#6B7280" };
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// Canonical key for RR slots in the picker — always MRR side so expandCoverageToKeys
+// adds the task to both M and W in the handler.
+function rrPickerKey(num: number) { return `MRR${num}`; }
+
+// ── BreakWave ─────────────────────────────────────────────────────────────────
 
 const BreakWave: React.FC<{
   current: BreakGroup;
@@ -153,6 +157,199 @@ const BreakWave: React.FC<{
   );
 };
 
+// ── CoveragePicker ────────────────────────────────────────────────────────────
+
+const CoveragePicker: React.FC<{
+  currentSlotKey: string;
+  auxDefs: AuxDef[];
+  onPick: (targetKey: string) => void;
+  onCancel: () => void;
+  confirmed: boolean;
+}> = ({ currentSlotKey, auxDefs, onPick, onCancel, confirmed }) => {
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 7.5, fontWeight: 700, letterSpacing: "1.4px",
+    textTransform: "uppercase", color: "rgba(255,255,255,0.28)",
+    fontFamily: "var(--font-atkinson)",
+    marginBottom: 4, display: "block",
+  };
+
+  const chipBase: React.CSSProperties = {
+    borderRadius: 8, border: "1px solid",
+    fontSize: 9, fontWeight: 700, letterSpacing: "0.4px",
+    fontFamily: "var(--font-atkinson)",
+    cursor: "pointer", transition: "all 0.12s",
+    padding: "5px 0", textAlign: "center",
+    lineHeight: 1,
+  };
+
+  if (confirmed) {
+    return (
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 6,
+      }}>
+        <span style={{ fontSize: 28 }}>✓</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
+          Coverage added
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 10 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: "rgba(255,255,255,0.85)" }}>
+          Add coverage to…
+        </span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onCancel(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            fontSize: 11, color: "rgba(255,255,255,0.4)", background: "none",
+            border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1,
+          }}
+        >✕</button>
+      </div>
+
+      {/* Scrollable slot grid */}
+      <div className="no-scrollbar" style={{ overflowY: "auto", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+
+        {/* ZONES */}
+        <div>
+          <span style={sectionLabel}>Zones</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+            {ZONE_DEFS.map(z => {
+              const color = getZoneColor(z.key);
+              const isSelf = z.key === currentSlotKey;
+              return (
+                <button
+                  key={z.key}
+                  type="button"
+                  disabled={isSelf}
+                  onClick={(e) => { e.stopPropagation(); if (!isSelf) onPick(z.key); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    ...chipBase,
+                    borderColor: isSelf ? "rgba(255,255,255,0.08)" : `${color}88`,
+                    color: isSelf ? "rgba(255,255,255,0.20)" : color,
+                    background: isSelf ? "rgba(255,255,255,0.02)" : `${color}15`,
+                    cursor: isSelf ? "default" : "pointer",
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelf) {
+                      (e.currentTarget as HTMLElement).style.background = `${color}35`;
+                      (e.currentTarget as HTMLElement).style.borderColor = color;
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelf) {
+                      (e.currentTarget as HTMLElement).style.background = `${color}15`;
+                      (e.currentTarget as HTMLElement).style.borderColor = `${color}88`;
+                    }
+                  }}
+                >
+                  {z.key.replace("Z", "")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RESTROOMS */}
+        <div>
+          <span style={sectionLabel}>Restrooms</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+            {RR_DEFS.map(rr => {
+              const color = getRRAccent(rr.num);
+              const targetKey = rrPickerKey(rr.num);
+              // Consider self if current slot is either side of this RR
+              const isSelf = currentSlotKey === `MRR${rr.num}` || currentSlotKey === `WRR${rr.num}`;
+              return (
+                <button
+                  key={rr.num}
+                  type="button"
+                  disabled={isSelf}
+                  onClick={(e) => { e.stopPropagation(); if (!isSelf) onPick(targetKey); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    ...chipBase,
+                    borderColor: isSelf ? "rgba(255,255,255,0.08)" : `${color}88`,
+                    color: isSelf ? "rgba(255,255,255,0.20)" : color,
+                    background: isSelf ? "rgba(255,255,255,0.02)" : `${color}15`,
+                    cursor: isSelf ? "default" : "pointer",
+                    fontSize: 8,
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelf) {
+                      (e.currentTarget as HTMLElement).style.background = `${color}35`;
+                      (e.currentTarget as HTMLElement).style.borderColor = color;
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelf) {
+                      (e.currentTarget as HTMLElement).style.background = `${color}15`;
+                      (e.currentTarget as HTMLElement).style.borderColor = `${color}88`;
+                    }
+                  }}
+                >
+                  {rr.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* SUPPORT / AUX */}
+        {auxDefs.length > 0 && (
+          <div>
+            <span style={sectionLabel}>Support</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
+              {auxDefs.map(aux => {
+                const color = getAuxAccent(aux.key);
+                const isSelf = aux.key === currentSlotKey;
+                return (
+                  <button
+                    key={aux.key}
+                    type="button"
+                    disabled={isSelf}
+                    onClick={(e) => { e.stopPropagation(); if (!isSelf) onPick(aux.key); }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      ...chipBase,
+                      borderColor: isSelf ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.14)",
+                      color: isSelf ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.60)",
+                      background: isSelf ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)",
+                      cursor: isSelf ? "default" : "pointer",
+                      fontSize: 8,
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSelf) {
+                        (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.12)";
+                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSelf) {
+                        (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
+                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.60)";
+                      }
+                    }}
+                  >
+                    {aux.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const MarkerPad: React.FC<MarkerPadProps> = ({
@@ -160,28 +357,59 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   assignments,
   selectedTasks,
   recentTasks,
+  auxDefs = DEFAULT_AUX_DEFS,
   setBreakGroupForSlot,
   onAddTask,
   onRemoveTask,
   onToggleLock,
   onClearSlot,
-  onCoverage,
+  onAddCoverage,
   onSwap,
   onClose,
   isDark,
 }) => {
   const [taskInput, setTaskInput] = useState("");
+  const [coverageMode, setCoverageMode] = useState(false);
+  const [coverageConfirmed, setCoverageConfirmed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Reset input when slot changes
+  // Reset all local state when the slot changes
   useEffect(() => {
     setTaskInput("");
+    setCoverageMode(false);
+    setCoverageConfirmed(false);
     if (slotKey) {
-      // Small delay so the panel is visible before focusing
       const t = setTimeout(() => inputRef.current?.focus(), 120);
       return () => clearTimeout(t);
     }
   }, [slotKey]);
+
+  // Tap-to-dismiss: close when clicking anywhere outside the panel
+  useEffect(() => {
+    if (!slotKey) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    // Use capture phase so card clicks still open the correct slot via their own handler
+    document.addEventListener("mousedown", handleOutsideClick, true);
+    return () => document.removeEventListener("mousedown", handleOutsideClick, true);
+  }, [slotKey, onClose]);
+
+  const handlePickCoverage = useCallback(async (targetKey: string) => {
+    if (!slotKey || !onAddCoverage) return;
+    try {
+      await onAddCoverage(slotKey, targetKey);
+    } finally {
+      setCoverageConfirmed(true);
+      setTimeout(() => {
+        setCoverageMode(false);
+        setCoverageConfirmed(false);
+      }, 900);
+    }
+  }, [slotKey, onAddCoverage]);
 
   if (!slotKey) return null;
 
@@ -195,16 +423,13 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     : null;
 
   const handleAddTask = () => {
-    const label = taskInput.trim();
-    if (!label) return;
+    const lbl = taskInput.trim();
+    if (!lbl) return;
     setTaskInput("");
-    void onAddTask(slotKey, label);
+    void onAddTask(slotKey, lbl);
   };
 
-  // ── Glass panel styles (Velvet liquid-glass spec, light/dark aware) ─────────
-  // top: 68px clears the 56px Velvet top bar + 12px gap.
-  // bottom: 58px clears the 46px bottom dock + 12px gap.
-  const isDarkPanel = isDark !== false; // default dark if unspecified
+  const isDarkPanel = isDark !== false;
   const panelStyle: React.CSSProperties = {
     position: "fixed",
     top: 68,
@@ -225,7 +450,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       : `inset 0 1px 0 rgba(255,255,255,0.90), 0 24px 48px -16px rgba(0,0,0,0.12), 0 0 0 1px ${accent}18`,
     display: "flex",
     flexDirection: "column",
-    gap: 10,
+    gap: coverageMode ? 8 : 10,
     padding: "14px 14px 10px",
     zIndex: 35,
     overflow: "hidden",
@@ -233,9 +458,9 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   };
 
   return (
-    <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
+    <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
 
-      {/* Accent rail at left edge */}
+      {/* Accent rail */}
       <div style={{
         position: "absolute", top: 18, left: -1, width: 3, height: 52,
         borderRadius: "0 3px 3px 0",
@@ -262,7 +487,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       >×</button>
 
       {/* ── Slot identity ──────────────────────────────────────────────── */}
-      <div style={{ paddingRight: 28, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ paddingRight: 28, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ fontSize: 18, color: accent, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
         <div>
           <div style={{
@@ -327,148 +552,160 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
         )}
       </div>
 
-      {/* ── Break wave ─────────────────────────────────────────────────── */}
-      <BreakWave
-        current={currentBreak}
-        accent={accent}
-        onChange={(g) => setBreakGroupForSlot(slotKey, g)}
-      />
+      {/* ── Break wave (hidden in coverage picker mode) ─────────────────── */}
+      {!coverageMode && (
+        <BreakWave
+          current={currentBreak}
+          accent={accent}
+          onChange={(g) => setBreakGroupForSlot(slotKey, g)}
+        />
+      )}
 
-      {/* ── Tasks ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{
-            fontSize: 9.5, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase",
-            color: "var(--sb-text-muted, #6C6C72)",
-          }}>
-            Tasks{tasks.length > 0 ? ` · ${tasks.length}` : ""}
-          </span>
-          <span style={{
-            fontSize: 9, color: "var(--sb-text-muted, #8E8E93)",
-            fontFamily: "var(--font-jetbrains, monospace)",
-          }}>↵ to add</span>
-        </div>
-
-        {/* Task list — scrollable if many */}
-        {tasks.length > 0 && (
-          <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", maxHeight: 120 }}>
-            {tasks.map(t => (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "6px 10px", borderRadius: 10,
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: 2, flexShrink: 0,
-                  background: t.color ?? accent,
-                  boxShadow: `0 0 6px ${t.color ?? accent}88`,
-                }} />
-                <span style={{
-                  fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.15px", flex: 1,
-                  color: "var(--sb-text-1, #F2F2F4)",
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{t.taskLabel}</span>
-                {onRemoveTask && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    style={{
-                      fontSize: 13, lineHeight: 1, color: "var(--sb-text-muted, #6C6C72)",
-                      background: "none", border: "none", cursor: "pointer", padding: "0 2px",
-                      flexShrink: 0,
-                    }}
-                    aria-label={`Remove task "${t.taskLabel}"`}
-                  >×</button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Task input — focused look */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 12px", borderRadius: 12,
-          background: "rgba(255,255,255,0.05)",
-          border: `1px solid ${taskInput ? accent + "99" : "rgba(255,255,255,0.09)"}`,
-          boxShadow: taskInput ? `0 0 0 3px ${accent}22, inset 0 1px 0 rgba(255,255,255,0.08)` : "none",
-          transition: "border-color 0.15s, box-shadow 0.15s",
-        }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={taskInput}
-            onChange={(e) => setTaskInput(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") { e.preventDefault(); handleAddTask(); }
-              if (e.key === "Escape") { e.preventDefault(); setTaskInput(""); onClose(); }
-            }}
-            placeholder="Type a task…"
-            style={{
-              flex: 1,
-              background: "none", border: "none", outline: "none",
-              fontSize: 13, fontWeight: 600, letterSpacing: "-0.15px",
-              color: "var(--sb-text-1, #F2F2F4)",
-              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              caretColor: accent,
-            }}
-          />
-          {taskInput && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                fontSize: 9.5, padding: "3px 8px", borderRadius: 7,
-                background: accent, color: "#fff",
-                fontWeight: 700, letterSpacing: "0.3px", border: "none", cursor: "pointer",
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                flexShrink: 0,
-              }}
-            >↵</button>
-          )}
-        </div>
-
-        {/* Recent task chips */}
-        {recentTasks.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {/* ── Tasks section OR Coverage picker ───────────────────────────── */}
+      {coverageMode ? (
+        <CoveragePicker
+          currentSlotKey={slotKey}
+          auxDefs={auxDefs}
+          onPick={handlePickCoverage}
+          onCancel={() => { setCoverageMode(false); setCoverageConfirmed(false); }}
+          confirmed={coverageConfirmed}
+        />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{
-              fontSize: 9, color: "var(--sb-text-muted, #6C6C72)",
+              fontSize: 9.5, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase",
+              color: "var(--sb-text-muted, #6C6C72)",
+            }}>
+              Tasks{tasks.length > 0 ? ` · ${tasks.length}` : ""}
+            </span>
+            <span style={{
+              fontSize: 9, color: "var(--sb-text-muted, #8E8E93)",
               fontFamily: "var(--font-jetbrains, monospace)",
-              letterSpacing: "0.3px",
-              padding: "3px 0 3px 2px", alignSelf: "center",
-            }}>recent</span>
-            {recentTasks.slice(0, 6).map(chip => (
+            }}>↵ to add</span>
+          </div>
+
+          {/* Task list */}
+          {tasks.length > 0 && (
+            <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", maxHeight: 120 }}>
+              {tasks.map(t => (
+                <div key={t.id} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 10px", borderRadius: 10,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: 2, flexShrink: 0,
+                    background: t.color ?? accent,
+                    boxShadow: `0 0 6px ${t.color ?? accent}88`,
+                  }} />
+                  <span style={{
+                    fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.15px", flex: 1,
+                    color: "var(--sb-text-1, #F2F2F4)",
+                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{t.taskLabel}</span>
+                  {onRemoveTask && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      style={{
+                        fontSize: 13, lineHeight: 1, color: "var(--sb-text-muted, #6C6C72)",
+                        background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+                        flexShrink: 0,
+                      }}
+                      aria-label={`Remove task "${t.taskLabel}"`}
+                    >×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Task input */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 12px", borderRadius: 12,
+            background: "rgba(255,255,255,0.05)",
+            border: `1px solid ${taskInput ? accent + "99" : "rgba(255,255,255,0.09)"}`,
+            boxShadow: taskInput ? `0 0 0 3px ${accent}22, inset 0 1px 0 rgba(255,255,255,0.08)` : "none",
+            transition: "border-color 0.15s, box-shadow 0.15s",
+          }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={taskInput}
+              onChange={(e) => setTaskInput(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") { e.preventDefault(); handleAddTask(); }
+                if (e.key === "Escape") { e.preventDefault(); setTaskInput(""); onClose(); }
+              }}
+              placeholder="Type a task…"
+              style={{
+                flex: 1,
+                background: "none", border: "none", outline: "none",
+                fontSize: 13, fontWeight: 600, letterSpacing: "-0.15px",
+                color: "var(--sb-text-1, #F2F2F4)",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                caretColor: accent,
+              }}
+            />
+            {taskInput && (
               <button
-                key={chip}
                 type="button"
-                onClick={(e) => { e.stopPropagation(); void onAddTask(slotKey, chip); }}
+                onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 style={{
-                  fontSize: 10, padding: "3px 8px", borderRadius: 8,
-                  background: "rgba(184,151,8,0.10)",
-                  border: "1px solid rgba(184,151,8,0.25)",
-                  color: "var(--sb-gold-bright, #E9B948)",
-                  fontWeight: 600, letterSpacing: "-0.1px",
-                  fontFamily: "var(--font-atkinson)",
-                  cursor: "pointer",
-                  transition: "background 0.12s",
+                  fontSize: 9.5, padding: "3px 8px", borderRadius: 7,
+                  background: accent, color: "#fff",
+                  fontWeight: 700, letterSpacing: "0.3px", border: "none", cursor: "pointer",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  flexShrink: 0,
                 }}
-              >{chip}</button>
-            ))}
+              >↵</button>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Recent task chips */}
+          {recentTasks.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              <span style={{
+                fontSize: 9, color: "var(--sb-text-muted, #6C6C72)",
+                fontFamily: "var(--font-jetbrains, monospace)",
+                letterSpacing: "0.3px",
+                padding: "3px 0 3px 2px", alignSelf: "center",
+              }}>recent</span>
+              {recentTasks.slice(0, 6).map(chip => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); void onAddTask(slotKey, chip); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    fontSize: 10, padding: "3px 8px", borderRadius: 8,
+                    background: "rgba(184,151,8,0.10)",
+                    border: "1px solid rgba(184,151,8,0.25)",
+                    color: "var(--sb-gold-bright, #E9B948)",
+                    fontWeight: 600, letterSpacing: "-0.1px",
+                    fontFamily: "var(--font-atkinson)",
+                    cursor: "pointer",
+                    transition: "background 0.12s",
+                  }}
+                >{chip}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Footer actions ──────────────────────────────────────────────── */}
       <div style={{
         display: "flex", gap: 5,
         paddingTop: 8,
-        borderTop: "1px solid rgba(255,255,255,0.07)",
+        borderTop: isDarkPanel ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
         flexShrink: 0,
       }}>
         {/* Lock */}
@@ -478,65 +715,74 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
             onClick={(e) => { e.stopPropagation(); onToggleLock(slotKey); }}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
-              flex: 1, height: 30, borderRadius: 9,
-              background: a.isLocked ? "rgba(255,159,10,0.18)" : "rgba(255,255,255,0.05)",
-              border: a.isLocked ? "1px solid rgba(255,159,10,0.40)" : "1px solid rgba(255,255,255,0.08)",
-              color: a.isLocked ? "#FF9F0A" : "rgba(255,255,255,0.55)",
-              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
+              flex: 1, height: 32, borderRadius: 9,
+              background: a.isLocked
+                ? "rgba(255,159,10,0.22)"
+                : isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)",
+              border: a.isLocked
+                ? "1px solid rgba(255,159,10,0.50)"
+                : isDarkPanel ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(0,0,0,0.15)",
+              color: a.isLocked ? "#FF9F0A" : isDarkPanel ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.75)",
+              fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
               transition: "all 0.15s",
             }}
           >{a.isLocked ? "🔒 Locked" : "Lock"}</button>
         )}
-        {/* Coverage */}
-        {onCoverage && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onCoverage(slotKey); }}
-            onPointerDown={(e) => e.stopPropagation()}
-            style={{
-              flex: 1, height: 30, borderRadius: 9,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.55)",
-              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
-              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-          >Coverage</button>
-        )}
+
+        {/* Coverage — always present, highlighted when coverage mode is active */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setCoverageMode(v => !v); setCoverageConfirmed(false); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            flex: 1, height: 32, borderRadius: 9,
+            background: coverageMode
+              ? `${accent}44`
+              : isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)",
+            border: coverageMode
+              ? `1px solid ${accent}`
+              : isDarkPanel ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(0,0,0,0.15)",
+            color: coverageMode ? accent : isDarkPanel ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.75)",
+            fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
+            fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+        >Coverage</button>
+
         {/* Swap */}
-        {onSwap && a.tmId && (
+        {onSwap && a.tmId && !coverageMode && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onSwap(slotKey); }}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
-              flex: 1, height: 30, borderRadius: 9,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.55)",
-              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
+              flex: 1, height: 32, borderRadius: 9,
+              background: isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)",
+              border: isDarkPanel ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(0,0,0,0.15)",
+              color: isDarkPanel ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.75)",
+              fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
               transition: "all 0.15s",
             }}
           >Swap</button>
         )}
+
         {/* Clear */}
-        {onClearSlot && a.tmId && (
+        {onClearSlot && a.tmId && !coverageMode && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onClearSlot(slotKey); }}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
-              flex: 1, height: 30, borderRadius: 9,
-              background: "rgba(229,57,53,0.10)",
-              border: "1px solid rgba(229,57,53,0.28)",
-              color: "#FF6B65",
-              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
+              flex: 1, height: 32, borderRadius: 9,
+              background: "rgba(229,57,53,0.18)",
+              border: "1px solid rgba(229,57,53,0.45)",
+              color: "#E53935",
+              fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
               transition: "all 0.15s",

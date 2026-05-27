@@ -852,8 +852,8 @@ body {
   color: #8E8E93;
   letter-spacing: 0.4px;
   font-family: var(--font-atkinson), var(--font-geist-sans);
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   align-items: center;
 }
 
