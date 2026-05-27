@@ -3728,12 +3728,12 @@ export default function ShiftBuilder() {
                 </div>
               )}
 
-              {/* Search · Assign · Command ⌘K input-style button */}
+              {/* Search · Assign · Command ⌘K */}
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
                 title="Open command palette (⌘K)"
-                className="flex items-center gap-2 px-3 h-[30px] rounded-full border transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-3 h-[30px] rounded-full border transition-colors shrink-0"
                 style={{
                   background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
                   borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
@@ -3744,9 +3744,7 @@ export default function ShiftBuilder() {
                   WebkitBackdropFilter: "blur(8px)",
                 }}
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
+                <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300' }}>search</span>
                 <span>Search · Assign · Command</span>
                 <span
                   className="px-1 py-px rounded text-[10px] font-bold"
@@ -3766,25 +3764,14 @@ export default function ShiftBuilder() {
                 style={{
                   background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
                   borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
+                  color: isDark ? "#C7C7CC" : "#374151",
                 }}
                 aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
               >
-                {isDark ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="5" />
-                    <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                    <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                )}
+                <span className="ms" style={{ fontSize: 17 }}>{isDark ? "light_mode" : "dark_mode"}</span>
               </button>
 
-              {/* Publish PDF → gold button */}
+              {/* Publish PDF — gold button */}
               <button
                 type="button"
                 onClick={handlePrintBothPages}
@@ -3799,7 +3786,8 @@ export default function ShiftBuilder() {
                   letterSpacing: "-0.1px",
                 }}
               >
-                Publish PDF →
+                <span className="ms" style={{ fontSize: 15 }}>print</span>
+                <span>Publish PDF</span>
               </button>
             </div>
           </div>
@@ -3825,21 +3813,8 @@ export default function ShiftBuilder() {
             color: isDark ? "#8E8E93" : "#6B7280",
           }}
         >
-          {legendOpen ? (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          ) : (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          )}
-          <span style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
-            Legend
-          </span>
+          <span className="ms" style={{ fontSize: 14 }}>{legendOpen ? "close" : "info"}</span>
+          <span style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>Legend</span>
         </button>
 
         {/* Legend panel */}
@@ -5418,27 +5393,47 @@ export default function ShiftBuilder() {
       <DragOverlay dropAnimation={null}>
         {activeDrag ? (
           activeDrag.kind === "task" ? (
+            /* Task drag ghost — compact Velvet pill with drag_indicator */
             <div
-              className="rounded-md px-2.5 py-1 text-[11px] font-semibold shadow-lg pointer-events-none whitespace-nowrap flex items-center gap-1.5"
+              className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
               style={{
-                background: isDark ? "rgba(44,44,46,0.97)" : "rgba(255,255,255,0.97)",
-                color: isDark ? "#F2F2F4" : "#1C1C1E",
-                border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
-                backdropFilter: "blur(12px)",
+                padding: "5px 10px 5px 7px",
+                background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
+                color: isDark ? "#E5E5E7" : "#1C1C1E",
+                border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
+                boxShadow: isDark
+                  ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
+                  : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
+                backdropFilter: "blur(20px)",
                 fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               }}
             >
-              <span className="text-[#9CA3AF]">⠿</span>
-              <span>{activeDrag.label}</span>
+              <span className="ms" style={{ fontSize: 16, color: "#9CA3AF", fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
+              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
               {activeDrag.fromSlot && (
-                <span className="opacity-50 text-[10px] ml-1">from {activeDrag.fromSlot}</span>
+                <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
               )}
             </div>
           ) : (
-            <div className="rounded-md bg-[#1C1C1E] text-white px-3 py-1.5 text-sm font-semibold shadow-lg pointer-events-none whitespace-nowrap">
-              {activeDrag.label}
+            /* TM drag ghost — name chip */
+            <div
+              className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
+              style={{
+                padding: "6px 12px 6px 9px",
+                background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
+                color: isDark ? "#F2F2F4" : "#1C1C1E",
+                border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
+                boxShadow: isDark
+                  ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
+                  : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
+                backdropFilter: "blur(20px)",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}
+            >
+              <span className="ms" style={{ fontSize: 16, color: "#9CA3AF", fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>person</span>
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.3px" }}>{activeDrag.label}</span>
               {activeDrag.fromSlot && (
-                <span className="opacity-60 ml-2 text-[11px]">from {activeDrag.fromSlot}</span>
+                <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
               )}
             </div>
           )
@@ -5499,45 +5494,38 @@ export default function ShiftBuilder() {
             }}
           >
             {/* − zoom% + */}
-            <div className="flex items-center gap-0 h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
+            <div className="flex items-center h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
               <button
                 type="button"
                 onClick={() => stepZoom(-1)}
                 title="Zoom out"
-                className="flex items-center justify-center h-full px-2.5 transition-colors"
+                className="flex items-center justify-center h-full px-2.5 transition-colors disabled:opacity-30"
                 style={{ color: dockText }}
                 disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === 0)}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
+                <span className="ms" style={{ fontSize: 18 }}>remove</span>
               </button>
               <button
                 type="button"
                 onClick={() => setZoomMode("fit")}
                 title="Reset to fit"
                 className="text-[11.5px] font-bold px-1 h-full transition-colors"
-                style={{
-                  color: dockActiveText, minWidth: 40, textAlign: "center",
-                  fontFamily: "var(--font-jetbrains, monospace)",
-                }}
+                style={{ color: dockActiveText, minWidth: 40, textAlign: "center", fontFamily: "var(--font-jetbrains, monospace)" }}
               >{zoomPct}%</button>
               <button
                 type="button"
                 onClick={() => stepZoom(1)}
                 title="Zoom in"
-                className="flex items-center justify-center h-full px-2.5 transition-colors"
+                className="flex items-center justify-center h-full px-2.5 transition-colors disabled:opacity-30"
                 style={{ color: dockText }}
                 disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === numericSteps.length - 1)}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
+                <span className="ms" style={{ fontSize: 18 }}>add</span>
               </button>
             </div>
 
-            {/* Undo / Redo */}
-            <div className="flex items-center gap-0 h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
+            {/* Undo / Redo / ← prev day */}
+            <div className="flex items-center h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
               <button
                 type="button"
                 onClick={() => { const prev = shiftHistory.undo(); if (prev) { setAssignments(prev.assignments); } }}
@@ -5546,35 +5534,28 @@ export default function ShiftBuilder() {
                 className="flex items-center justify-center h-full px-3 disabled:opacity-30 transition-colors"
                 style={{ color: dockText }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7v6h6" /><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-                </svg>
+                <span className="ms" style={{ fontSize: 20, fontVariationSettings: '"FILL" 0, "wght" 300' }}>undo</span>
               </button>
               <button
                 type="button"
                 onClick={() => { const next = shiftHistory.redo(); if (next) { setAssignments(next.assignments); } }}
                 disabled={!shiftHistory.canRedo}
                 title="Redo (⌘⇧Z)"
-                className="flex items-center gap-1 h-full px-3 disabled:opacity-30 transition-colors text-[11px] font-medium"
+                className="flex items-center justify-center h-full px-3 disabled:opacity-30 transition-colors"
                 style={{ color: dockText }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
-                </svg>
-                <span>Redo</span>
+                <span className="ms" style={{ fontSize: 20, fontVariationSettings: '"FILL" 0, "wght" 300' }}>redo</span>
               </button>
 
-              {/* ← prev day — lives between Redo and Deployment tabs */}
+              {/* ← prev day */}
               <button
                 type="button"
                 onClick={goPrevDay}
                 title="Previous day"
-                className="flex items-center justify-center h-full px-3 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
+                className="flex items-center justify-center h-full px-3 transition-colors"
                 style={{ color: dockText, borderLeft: `1px solid ${dockSep}` }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
+                <span className="ms" style={{ fontSize: 20 }}>chevron_left</span>
               </button>
             </div>
 
@@ -5595,7 +5576,6 @@ export default function ShiftBuilder() {
                   }}
                 >{view.charAt(0).toUpperCase() + view.slice(1)}</button>
               ))}
-              {/* Tasks — opens ⌘K */}
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
@@ -5609,22 +5589,20 @@ export default function ShiftBuilder() {
               type="button"
               onClick={goNextDay}
               title="Next day"
-              className="flex items-center justify-center h-full px-3.5 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
+              className="flex items-center justify-center h-full px-3 transition-colors"
               style={{ color: dockText, borderRight: `1px solid ${dockSep}` }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18l6-6-6-6" />
-              </svg>
+              <span className="ms" style={{ fontSize: 20 }}>chevron_right</span>
             </button>
 
-            {/* Save dot + Ask AI */}
+            {/* Save indicator + Ask AI */}
             <div className="flex items-center gap-2 px-3">
               <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }} />
               <span className="text-[11px]" style={{ color: dockText }}>{savedAgo}</span>
               <button
                 type="button"
                 onClick={() => setXaiSphereOpen((v) => !v)}
-                className="flex items-center gap-1.5 px-2.5 h-[28px] rounded-full font-bold text-[11px] transition-all ml-1"
+                className="flex items-center gap-1 px-2.5 h-[28px] rounded-full font-bold text-[11px] transition-all ml-1"
                 style={{
                   background: "linear-gradient(135deg, #5E2CA5, #7B3FD4)",
                   color: "#fff",
@@ -5633,7 +5611,7 @@ export default function ShiftBuilder() {
                   fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                 }}
               >
-                <span>✦</span>
+                <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 500' }}>auto_awesome</span>
                 <span>Ask AI</span>
               </button>
             </div>

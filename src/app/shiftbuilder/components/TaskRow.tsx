@@ -125,10 +125,10 @@ const TaskRow: React.FC<TaskRowProps> = ({
             e.stopPropagation();
             (taskDragListeners as any)?.onPointerDown?.(e);
           }}
-          className="mt-px mr-1 cursor-grab text-[#9CA3AF] opacity-60 group-hover/task:opacity-100 active:cursor-grabbing select-none touch-none"
-          title="Drag this task to another card to reassign it"
+          className="mt-px mr-0.5 cursor-grab text-[#9CA3AF] opacity-40 group-hover/task:opacity-90 active:cursor-grabbing select-none touch-none flex items-center"
+          title="Drag to reassign"
         >
-          ⠿
+          <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
         </div>
       )}
       {/* Label area — supports inline editing + hanging indent for wrapping.

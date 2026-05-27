@@ -71,6 +71,13 @@ export default function RootLayout({
       {/* Runs before React hydration — prevents flash of wrong theme on load.
           Reads localStorage('oms-theme') first; falls back to system preference. */}
       <head>
+        {/* Material Symbols Rounded — variable icon font used throughout the app */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+          rel="stylesheet"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('oms-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&s)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
