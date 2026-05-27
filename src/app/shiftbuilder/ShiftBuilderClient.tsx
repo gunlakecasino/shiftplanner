@@ -905,6 +905,10 @@ export default function ShiftBuilder() {
   // Bumps when a `make`/`remove` command lands so the load effect refetches.
   const [tmCommandEpoch, setTMCommandEpoch] = useState(0);
 
+  // Bumps when Sudo mutates per-night operational data (breaks, tasks, assignments, etc.)
+  // so the current night's UI (including break sheet) refreshes without the user having to switch days.
+  const [sudoDataEpoch, setSudoDataEpoch] = useState(0);
+
   // === Print Command Center ===
   const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -5712,8 +5716,40 @@ export default function ShiftBuilder() {
         onDataChanged={async () => {
           // Refresh anything the sudo window might have mutated
           setTMCommandEpoch((e) => e + 1);
+          setSudoDataEpoch((e) => e + 1);
 
-          // Also refresh the live engine config (weights, placement method, grok reasoning effort)
+          // Force-refresh the current night's break data (and other day-specific data)
+          // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
+          if (nightId) {
+            try {
+              const freshBreaks = await getNightBreakAssignments(nightId);
+              const breakByTm: Record<string, BreakGroup> = {};
+              freshBreaks.forEach((r: any) => {
+                if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
+              });
+
+              setAssignments(prev => {
+                const next = { ...prev };
+                Object.keys(next).forEach(k => {
+                  const a = next[k];
+                  if (a.tmId && breakByTm[a.tmId] !== undefined) {
+                    next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
+                  }
+                });
+                return next;
+              });
+
+              setNightBreakRows(
+                freshBreaks
+                  .filter((r: any) => r.groupNum && r.groupNum > 0)
+                  .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
+              );
+            } catch (e) {
+              console.warn("[sudo] failed to refresh break data after Sudo change", e);
+            }
+          }
+
+          // Also refresh the live engine config
           try {
             const fresh = await getActiveEngineConfig();
             setEngineConfig(fresh);
