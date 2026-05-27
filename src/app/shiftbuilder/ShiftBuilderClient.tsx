@@ -1997,20 +1997,20 @@ export default function ShiftBuilder() {
         requestAnimationFrame(tick);
       });
 
-    // Wait for loadingAssignments to go true then false (data fully loaded for this day).
-    // The 200ms head-start gives the useEffect time to set loadingAssignments=true before
-    // we start polling.
+    // Wait until night data is fully loaded for the current day.
+    // Fast path: if not loading right now, the data is already ready — resolve immediately.
+    // Slow path: a fetch is in flight — poll at 60ms intervals until loadingAssignmentsRef
+    //            goes false (fetch done) or we exceed the timeout.
     const waitForLoad = (timeoutMs = 15000) =>
       new Promise<void>((resolve, reject) => {
+        if (!loadingAssignmentsRef.current) { resolve(); return; }
         const start = Date.now();
-        let seenLoading = false;
         const check = () => {
-          if (loadingAssignmentsRef.current) seenLoading = true;
-          if (seenLoading && !loadingAssignmentsRef.current) { resolve(); return; }
+          if (!loadingAssignmentsRef.current) { resolve(); return; }
           if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
           setTimeout(check, 60);
         };
-        setTimeout(check, 200);
+        setTimeout(check, 60);
       });
 
     // Shared post-processing for breaks artboards: pin overlaps above footer.
@@ -2145,15 +2145,14 @@ export default function ShiftBuilder() {
 
     const waitForLoad = (timeoutMs = 15000) =>
       new Promise<void>((resolve, reject) => {
+        if (!loadingAssignmentsRef.current) { resolve(); return; }
         const start = Date.now();
-        let seenLoading = false;
         const check = () => {
-          if (loadingAssignmentsRef.current) seenLoading = true;
-          if (seenLoading && !loadingAssignmentsRef.current) { resolve(); return; }
+          if (!loadingAssignmentsRef.current) { resolve(); return; }
           if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
           setTimeout(check, 60);
         };
-        setTimeout(check, 200);
+        setTimeout(check, 60);
       });
 
     const postProcessBreaksArtboard = (artboard: Element) => {
