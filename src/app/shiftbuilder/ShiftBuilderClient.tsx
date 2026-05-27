@@ -2216,6 +2216,23 @@ export default function ShiftBuilder() {
         await waitForLoad();
         await nextFrames(4);
 
+        // Extra safety for break sheet data: explicitly re-fetch breaks for this exact night
+        // right before capture. This ensures the wave/group columns have the correct day's
+        // break selection even if the normal load effect's timing is racy during rapid day switching in print.
+        if (dayConf.printBreaks && nightId) {
+          try {
+            const fresh = await getNightBreakAssignments(nightId);
+            setNightBreakRows(
+              (fresh as any[])
+                .filter((r: any) => r.groupNum && r.groupNum > 0)
+                .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
+            );
+            await nextFrames(2); // let React commit the new nightBreakRows before capture
+          } catch (e) {
+            console.warn("[print] extra break data load failed for day", dayIdx, e);
+          }
+        }
+
         const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
         if (!liveArtboard) continue;
 
