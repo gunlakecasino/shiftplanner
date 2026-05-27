@@ -384,7 +384,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
         <div className="flex items-center gap-3 flex-wrap">
           {/* Title */}
           <div className="flex items-center gap-2 mr-2">
-            <Layers className="h-4 w-4 text-red-400" />
+            <span className="ms text-red-400" style={{ fontSize: 16 }}>layers</span>
             <span className="text-[13px] font-semibold text-zinc-200 tracking-wide">
               Card Defaults
             </span>
@@ -394,21 +394,21 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
           <div className="flex items-center gap-2 flex-wrap">
             <PushButton
               label="Breaks → Today"
-              icon={<CalendarDays className="h-3.5 w-3.5" />}
+              icon={<span className="ms" style={{ fontSize: 14 }}>calendar_month</span>}
               loading={pushing === "breaks-today"}
               disabled={!currentNightId || pushing !== null}
               onClick={() => handlePush("breaks-today")}
             />
             <PushButton
               label="Breaks → Week"
-              icon={<Upload className="h-3.5 w-3.5" />}
+              icon={<span className="ms" style={{ fontSize: 14 }}>upload</span>}
               loading={pushing === "breaks-week"}
               disabled={!weekStart || pushing !== null}
               onClick={() => handlePush("breaks-week")}
             />
             <PushButton
               label="Tasks → Today"
-              icon={<CalendarDays className="h-3.5 w-3.5" />}
+              icon={<span className="ms" style={{ fontSize: 14 }}>calendar_month</span>}
               loading={pushing === "tasks-today"}
               disabled={!currentNightId || pushing !== null}
               variant="tasks"
@@ -416,7 +416,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
             />
             <PushButton
               label="Tasks → Week"
-              icon={<Upload className="h-3.5 w-3.5" />}
+              icon={<span className="ms" style={{ fontSize: 14 }}>upload</span>}
               loading={pushing === "tasks-week"}
               disabled={!weekStart || pushing !== null}
               variant="tasks"
@@ -430,7 +430,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
             disabled={loading}
             className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
           >
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            <span className={cn("ms", loading && "animate-spin")} style={{ fontSize: 14 }}>refresh</span>
             Refresh
           </button>
         </div>
@@ -449,7 +449,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
         {loading ? (
           <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
-            <RefreshCw className="h-4 w-4 animate-spin mr-2" /> Loading defaults…
+            <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span> Loading defaults…
           </div>
         ) : (
           sections.map((sec) => {
@@ -509,8 +509,8 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
             )}
             style={atkinsonStyle}
           >
-            {t.kind === "error"   && <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-red-400" />}
-            {t.kind === "success" && <CheckCircle2  className="h-3.5 w-3.5 mt-0.5 shrink-0 text-green-400" />}
+            {t.kind === "error"   && <span className="ms mt-0.5 shrink-0 text-red-400" style={{ fontSize: 14 }}>warning</span>}
+            {t.kind === "success" && <span className="ms mt-0.5 shrink-0 text-green-400" style={{ fontSize: 14 }}>check_circle</span>}
             {t.message}
           </div>
         ))}
@@ -589,7 +589,7 @@ function SlotRow({
               className="ml-0.5 text-zinc-500 hover:text-red-400 transition-colors"
               title="Remove default task"
             >
-              <X className="h-2.5 w-2.5" />
+              <span className="ms" style={{ fontSize: 10 }}>close</span>
             </button>
           </span>
         ))}
@@ -618,7 +618,7 @@ function SlotRow({
               onClick={onCancelAdd}
               className="h-[22px] px-1.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors"
             >
-              <X className="h-3 w-3" />
+              <span className="ms" style={{ fontSize: 12 }}>close</span>
             </button>
           </div>
         ) : (
@@ -626,7 +626,7 @@ function SlotRow({
             onClick={onStartAdd}
             className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-[10px] text-zinc-600 hover:border-zinc-500 hover:text-zinc-400 transition-colors"
           >
-            <Plus className="h-2.5 w-2.5" /> task
+            <span className="ms" style={{ fontSize: 10 }}>add</span> task
           </button>
         )}
       </div>
@@ -662,7 +662,7 @@ function PushButton({
       className={cn(base, colors)}
     >
       {loading ? (
-        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+        <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span>
       ) : (
         icon
       )}
