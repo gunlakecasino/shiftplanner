@@ -46,6 +46,7 @@ import {
   getNightBreakAssignments,
   upsertBreakAssignment,
   deleteBreakAssignment,
+  updateSlotBreakGroup,
   batchApplyDraftAssignments,
   type CatalogTask,
   type NightSlotTask,
@@ -1668,17 +1669,25 @@ export default function ShiftBuilder() {
       [slotKey]: { ...prev[slotKey], breakGroup: group },
     }));
 
-    if (tmId) {
-      (async () => {
-        let nid = targetNightId;
-        if (!nid) nid = await resolveNightIdForDate(captureDate, captureDayName);
-        if (!nid) {
-          showToast(`Couldn't save break group: no night context yet`);
-          return;
-        }
-        try {
+    (async () => {
+      let nid = targetNightId;
+      if (!nid) nid = await resolveNightIdForDate(captureDate, captureDayName);
+      if (!nid) {
+        showToast(`Couldn't save break group: no night context yet`);
+        return;
+      }
+      try {
+        // Always persist to zone_assignments.break_group — the canonical card display source.
+        await updateSlotBreakGroup(
+          nid,
+          slotKey,
+          assignments[slotKey]?.rrSide ?? null,
+          group,
+        );
+
+        // Also keep break_assignments in sync for the break-sheet / print path.
+        if (tmId) {
           if (group === 0) {
-            // "-" means not on breaks this shift → remove any existing record
             await deleteBreakAssignment(nid, tmId);
           } else {
             await upsertBreakAssignment({
@@ -1688,11 +1697,11 @@ export default function ShiftBuilder() {
               slotRef: slotKey,
             });
           }
-        } catch (e: any) {
-          showToast(`Couldn't save break group: ${e?.message ?? "unknown error"}`);
         }
-      })();
-    }
+      } catch (e: any) {
+        showToast(`Couldn't save break group: ${e?.message ?? "unknown error"}`);
+      }
+    })();
   };
 
   // Optimistic local update + fire-and-forget persist. The DB write doesn't
@@ -3142,11 +3151,9 @@ export default function ShiftBuilder() {
             type: row.slotType,
             rrSide: row.rrSide ?? null,
             isLocked: !!row.isLocked,
-            // Pull from break_assignments by tm_id.
-            // No row (or explicit "-") means the TM is not on the break rotation
-            // for this shift. Overlaps (AM/PM) and anyone never given a break
-            // will correctly show "-" by default.
-            breakGroup: row.tmId && breakByTm[row.tmId] !== undefined ? breakByTm[row.tmId] : 0,
+            // zone_assignments.break_group is the canonical display source.
+            // break_assignments (breakByTm) is retained for the break-sheet / print path only.
+            breakGroup: row.breakGroup ?? 0,
             source: "manual",
           };
         });

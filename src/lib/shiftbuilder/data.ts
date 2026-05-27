@@ -59,6 +59,8 @@ export interface ZoneAssignmentRow {
   isLocked: boolean;
   isFilled: boolean;
   updatedAt?: string;
+  /** Break group (1/2/3) assigned to this SLOT in zone_assignments. 0 = not on breaks. */
+  breakGroup?: number | null;
 }
 
 export interface NightInfo {
@@ -498,7 +500,7 @@ export async function listRecentNights(limit = 14): Promise<NightInfo[]> {
 export async function getNightAssignments(nightId: string): Promise<ZoneAssignmentRow[]> {
   const { data: rows, error } = await supabase
     .from('zone_assignments')
-    .select('night_id, slot_key, slot_type, tm_id, rr_side, is_locked, is_filled, updated_at, sort_order')
+    .select('night_id, slot_key, slot_type, tm_id, rr_side, is_locked, is_filled, updated_at, sort_order, break_group')
     .eq('night_id', nightId)
     .order('sort_order', { ascending: true })
     .order('slot_key', { ascending: true });
@@ -538,7 +540,48 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
     isLocked: !!row.is_locked,
     isFilled: !!row.is_filled,
     updatedAt: row.updated_at,
+    breakGroup: row.break_group ?? null,
   }));
+}
+
+/**
+ * Persist a break group directly onto the zone_assignments slot row.
+ * zone_assignments.break_group is the canonical UI display source.
+ * (break_assignments continues to serve the break-sheet / print path.)
+ */
+export async function updateSlotBreakGroup(
+  nightId: string,
+  slotKey: string,
+  rrSide: string | null,
+  breakGroup: number,
+): Promise<void> {
+  if (!nightId || !slotKey) return;
+  const client = getSupabaseClient();
+
+  const slotType = slotKey.startsWith('zone_') ? 'zone'
+    : slotKey.startsWith('rr_')  ? 'rr'
+    : 'aux';
+
+  // Build the match — must respect the unique index (night_id, slot_type, slot_key, rr_side)
+  let q = client
+    .from('zone_assignments')
+    .upsert(
+      {
+        night_id:    nightId,
+        slot_type:   slotType,
+        slot_key:    slotKey,
+        rr_side:     rrSide ?? null,
+        break_group: breakGroup,
+        updated_at:  new Date().toISOString(),
+      },
+      { onConflict: 'night_id,slot_type,slot_key,rr_side' }
+    );
+
+  const { error } = await q;
+  if (error) {
+    logSupabaseError('updateSlotBreakGroup failed', error);
+    throw new Error(`Failed to save slot break group: ${error.message}`);
+  }
 }
 
 /**
