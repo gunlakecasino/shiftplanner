@@ -3357,6 +3357,15 @@ export default function ShiftBuilder() {
     return out;
   }, [catalog]);
 
+  // All deployable slot keys (zones + RR sides + aux) — used for placed/total count in top bar
+  const allSlotKeys = React.useMemo(() => {
+    const keys: string[] = [];
+    ZONE_DEFS.forEach(z => keys.push(z.key));
+    RR_DEFS.forEach(r => { keys.push(`MRR${r.num}`); keys.push(`WRR${r.num}`); });
+    auxDefs.forEach(a => keys.push(a.key));
+    return keys;
+  }, [auxDefs]);
+
   // Index catalog by `${slotType}:${slotKey}:${rrSide ?? ""}` so the popover
   // can list options for any given card in O(1).
   const catalogIndex = React.useMemo(() => {
@@ -3593,191 +3602,233 @@ export default function ShiftBuilder() {
   return (
     <div className="h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative" style={{ background: "var(--sb-substrate, #FAFAF8)" }}>
       {/* ═══════════════════════════════════════════════════════════
-          VELVET TOP BAR — liquid-glass chrome strip
-          Height: 56px. Blur: 40px / saturate 180%.
-          Left:   logo mark + "ZDS Forge" wordmark
-          Center: day scrubber (7 color pills, Fri→Thu)
-          Right:  draft amber pill · zoom select · dark-mode · ⌘K
-          Replaces the old floating brand chip + zoom chip pair.
-          The roster panel + zone legend both start at top-[64px]
-          so nothing overlaps.
+          VELVET TOP BAR — reference design faithful implementation
+          Height: 56px. Liquid-glass: blur(48px) saturate(200%).
+          Left:   avatar + "Shift Builder · Grave" + subtitle
+          Center: day scrubber colored pills (Fri→Thu)
+          Right:  PLACED · Draft pill · Search ⌘K · ☀/🌙 · Publish PDF
           ═══════════════════════════════════════════════════════════ */}
-      <div
-        className="fixed top-0 left-0 right-0 z-40 flex items-center px-4 gap-3 border-b"
-        style={{
-          height: 56,
-          background: isDark ? "rgba(15,14,16,0.82)" : "rgba(250,250,248,0.88)",
-          backdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-          WebkitBackdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-          borderBottomColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)",
-        }}
-      >
-        {/* ── Logo mark ── */}
-        <div className="flex items-center gap-2 shrink-0 mr-1">
+      {(() => {
+        const placedCount = allSlotKeys.filter(k => !!assignments[k]?.tmId).length;
+        const totalSlots = allSlotKeys.length;
+        return (
           <div
-            className="w-[26px] h-[26px] rounded-[6px] flex items-center justify-center"
-            style={{ background: isDark ? "#1C1C1E" : "#111111", boxShadow: "0 1px 4px rgba(0,0,0,0.35)" }}
+            className="fixed top-0 left-0 right-0 z-40 flex items-center px-3 gap-2"
+            style={{
+              height: 56,
+              background: isDark
+                ? "rgba(18,17,20,0.90)"
+                : "rgba(248,248,246,0.92)",
+              backdropFilter: "blur(48px) saturate(200%)",
+              WebkitBackdropFilter: "blur(48px) saturate(200%)",
+              borderBottom: isDark
+                ? "1px solid rgba(255,255,255,0.07)"
+                : "1px solid rgba(0,0,0,0.06)",
+              boxShadow: isDark
+                ? "0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.35)"
+                : "0 1px 0 rgba(255,255,255,0.80), 0 4px 20px rgba(0,0,0,0.06)",
+            }}
           >
-            <span
-              className="text-white font-extrabold tracking-[-0.5px]"
-              style={{ fontSize: 12, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-            >Z</span>
-          </div>
-          <div className="flex flex-col leading-none">
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4]"
-              style={{ fontSize: 12.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-            >ZDS Forge</span>
-            <span
-              className="text-[#9CA3AF] dark:text-[#636366]"
-              style={{ fontSize: 9.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-            >Shift Planner</span>
-          </div>
-        </div>
-
-        {/* ── Day scrubber ── fills remaining space between logo and right controls */}
-        <div className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto no-scrollbar">
-          {DAY_DEFS.map((def, i) => {
-            const isActive = i === selectedDayIndex;
-            return (
-              <button
-                key={def.name}
-                type="button"
-                onClick={() => setSelectedDayIndex(i)}
-                title={`${def.name} ${def.dateNum} · ${def.monthYear}`}
-                className="shrink-0 flex flex-col items-center justify-center rounded-[6px] px-2 transition-all"
+            {/* ── Left: Brand identity ── */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Avatar circle — user initial */}
+              <div
+                className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-bold text-[13px] shrink-0"
                 style={{
-                  height: 38,
-                  minWidth: 42,
-                  background: isActive
-                    ? def.color
-                    : isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-                  border: isActive
-                    ? `1px solid ${def.color}`
-                    : `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-                  boxShadow: isActive ? `0 2px 8px ${def.color}55` : "none",
+                  background: isDark
+                    ? "linear-gradient(135deg, #2C2C2E, #1C1C1E)"
+                    : "linear-gradient(135deg, #E5E5EA, #D1D1D6)",
+                  border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
+                  color: isDark ? "#F2F2F4" : "#1C1C1E",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  letterSpacing: "-0.4px",
+                  boxShadow: isDark
+                    ? "inset 0 1px 0 rgba(255,255,255,0.10)"
+                    : "inset 0 1px 0 rgba(255,255,255,0.90)",
+                }}
+              >B</div>
+              <div className="flex flex-col leading-none">
+                <div
+                  className="font-bold tracking-[-0.3px]"
+                  style={{
+                    fontSize: 12.5,
+                    color: isDark ? "#F2F2F4" : "#111111",
+                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  }}
+                >Shift Builder · Grave</div>
+                <div
+                  style={{
+                    fontSize: 9.5, marginTop: 1,
+                    color: isDark ? "#636366" : "#9CA3AF",
+                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  }}
+                >GLCR · Internal Maintenance · Brian C.</div>
+              </div>
+            </div>
+
+            {/* ── Center: Day scrubber ── */}
+            <div className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto no-scrollbar px-2">
+              {DAY_DEFS.map((def, i) => {
+                const isActive = i === selectedDayIndex;
+                return (
+                  <button
+                    key={def.name}
+                    type="button"
+                    onClick={() => setSelectedDayIndex(i)}
+                    title={`${def.name} ${def.dateNum} · ${def.monthYear}`}
+                    className="shrink-0 flex items-center justify-center rounded-full transition-all"
+                    style={{
+                      height: 32,
+                      minWidth: isActive ? 60 : 32,
+                      gap: isActive ? 5 : 0,
+                      background: isActive
+                        ? def.color
+                        : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                      border: isActive
+                        ? `1px solid ${def.color}`
+                        : `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+                      boxShadow: isActive ? `0 2px 12px ${def.color}55` : "none",
+                      padding: "0 10px",
+                    }}
+                  >
+                    {isActive && (
+                      <span
+                        className="font-bold leading-none"
+                        style={{
+                          fontSize: 13,
+                          color: "#ffffff",
+                          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                          letterSpacing: "-0.2px",
+                        }}
+                      >{def.dateNum}</span>
+                    )}
+                    <span
+                      className="font-extrabold tracking-[0.4px] uppercase leading-none"
+                      style={{
+                        fontSize: isActive ? 10 : 10,
+                        color: isActive ? "#ffffffcc" : isDark ? "#636366" : "#9CA3AF",
+                        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                      }}
+                    >
+                      {def.name.slice(0, 3)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Right controls ── */}
+            <div className="flex items-center gap-2 shrink-0">
+
+              {/* PLACED counter */}
+              <div
+                className="flex items-center gap-1 text-[11px] font-semibold shrink-0"
+                style={{
+                  color: isDark ? "#8E8E93" : "#6B7280",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                 }}
               >
-                <span
-                  className="font-extrabold tracking-[0.5px] uppercase leading-none"
+                <span style={{ color: isDark ? "#C7C7CC" : "#374151" }}>PLACED</span>
+                <span>{placedCount}/{totalSlots}</span>
+              </div>
+
+              {/* Hairline separator */}
+              <span className="w-px h-4 rounded-full shrink-0" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)" }} />
+
+              {/* Draft amber pill */}
+              {isDraftMode && (
+                <div
+                  className="flex items-center gap-1.5 px-2.5 h-[26px] rounded-full font-semibold shrink-0"
                   style={{
-                    fontSize: 9,
-                    color: isActive ? "#ffffff" : isDark ? "#8E8E93" : "#6B7280",
+                    background: "rgba(245,158,11,0.14)",
+                    color: "#E9A825",
+                    border: "1px solid rgba(245,158,11,0.32)",
+                    fontSize: 10.5,
                     fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                   }}
                 >
-                  {def.name.slice(0, 3)}
-                </span>
+                  <span className="w-[6px] h-[6px] rounded-full bg-amber-400 animate-pulse shrink-0" />
+                  Draft
+                </div>
+              )}
+
+              {/* Search · Assign · Command ⌘K input-style button */}
+              <button
+                type="button"
+                onClick={() => setCmdkOpen(true)}
+                title="Open command palette (⌘K)"
+                className="flex items-center gap-2 px-3 h-[30px] rounded-full border transition-colors shrink-0"
+                style={{
+                  background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
+                  borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
+                  color: isDark ? "#8E8E93" : "#9CA3AF",
+                  fontSize: 11,
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span>Search · Assign · Command</span>
                 <span
-                  className="font-bold leading-none mt-0.5"
+                  className="px-1 py-px rounded text-[10px] font-bold"
                   style={{
-                    fontSize: 13,
-                    color: isActive ? "#ffffff" : isDark ? "#C7C7CC" : "#374151",
-                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                    background: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)",
+                    color: isDark ? "#C7C7CC" : "#6B7280",
+                    fontFamily: "var(--font-jetbrains, monospace)",
                   }}
-                >
-                  {def.dateNum}
-                </span>
+                >⌘K</span>
               </button>
-            );
-          })}
-        </div>
 
-        {/* ── Right controls ── */}
-        <div className="flex items-center gap-2 shrink-0">
+              {/* Dark mode toggle */}
+              <button
+                onClick={toggleTheme}
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                className="flex items-center justify-center w-[30px] h-[30px] rounded-full border transition-colors shrink-0"
+                style={{
+                  background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
+                  borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
+                }}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                )}
+              </button>
 
-          {/* Draft amber pill — only when isDraftMode */}
-          {isDraftMode && (
-            <div
-              className="flex items-center gap-1 px-2 h-[26px] rounded-full text-[10.5px] font-semibold"
-              style={{
-                background: "rgba(245,158,11,0.15)",
-                color: "#D97706",
-                border: "1px solid rgba(245,158,11,0.30)",
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Draft
+              {/* Publish PDF → gold button */}
+              <button
+                type="button"
+                onClick={handlePrintBothPages}
+                title="Publish PDF — print deployment sheet"
+                className="flex items-center gap-1.5 px-3 h-[30px] rounded-full font-bold text-[11.5px] transition-all shrink-0 active:scale-95"
+                style={{
+                  background: "linear-gradient(135deg, #B89708, #E9B948)",
+                  color: "#1C1C1E",
+                  border: "1px solid #E9B94880",
+                  boxShadow: "0 2px 10px rgba(184,151,8,0.40)",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  letterSpacing: "-0.1px",
+                }}
+              >
+                Publish PDF →
+              </button>
             </div>
-          )}
-
-          {/* Zoom select */}
-          <div
-            className="flex items-center gap-1 px-2 h-[30px] rounded-full border"
-            style={{
-              background: isDark ? "rgba(44,44,46,0.70)" : "rgba(255,255,255,0.70)",
-              borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#9CA3AF] shrink-0">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <select
-              value={String(zoomMode)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setZoomMode(v === "fit" ? "fit" : (Number(v) as 0.5 | 0.75 | 1 | 1.25));
-              }}
-              className="bg-transparent outline-none border-none cursor-pointer text-[11.5px] font-medium dark:text-[#F2F2F4] text-[#111]"
-              style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-              title="Zoom"
-            >
-              <option value="fit">{mounted && zoomMode === "fit" ? `Fit ${Math.round(fitScale * 100)}%` : "Fit"}</option>
-              <option value="0.5">50%</option>
-              <option value="0.75">75%</option>
-              <option value="1">100%</option>
-              <option value="1.25">125%</option>
-            </select>
           </div>
-
-          {/* Dark mode toggle */}
-          <button
-            onClick={toggleTheme}
-            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="flex items-center justify-center w-[30px] h-[30px] rounded-full border transition-colors"
-            style={{
-              background: isDark ? "rgba(44,44,46,0.70)" : "rgba(255,255,255,0.70)",
-              borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)",
-            }}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {isDark ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#F2F2F4]">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#1C1C1E]">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-
-          {/* ⌘K glass pill */}
-          <button
-            type="button"
-            onClick={() => setCmdkOpen(true)}
-            title="Open command palette (⌘K)"
-            className="flex items-center gap-1.5 px-3 h-[30px] rounded-full border text-[11px] font-medium transition-colors"
-            style={{
-              background: isDark ? "rgba(44,44,46,0.70)" : "rgba(255,255,255,0.70)",
-              borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)",
-              color: isDark ? "#C7C7CC" : "#374151",
-              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <span>⌘K</span>
-          </button>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* === Zone legend — collapsible key below the top bar. */}
       <div className="fixed top-[64px] right-3 z-[39] flex flex-col items-end gap-1.5">
@@ -3918,18 +3969,20 @@ export default function ShiftBuilder() {
         */}
         <div
           aria-hidden={!rosterOpen}
-          className="fixed left-3 top-[64px] bottom-3 w-[280px] z-30 rounded-2xl border border-white/60 dark:border-white/10 shadow-2xl shadow-black/10 overflow-hidden flex flex-col"
+          className="fixed left-3 top-[64px] bottom-3 w-[280px] z-30 rounded-2xl overflow-hidden flex flex-col"
           style={{
-            // Genie-out origin: where the collapsed sphere sits (left edge,
-            // vertically centered). Spring spec mirrors the day-pill cluster
-            // for visual consistency.
-            background: isDark ? "rgba(36,36,38,0.95)" : "rgba(255,255,255,0.80)",
+            // Velvet liquid-glass + genie-out animation
+            background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
+            backdropFilter: "blur(48px) saturate(200%)",
+            WebkitBackdropFilter: "blur(48px) saturate(200%)",
+            border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
+            boxShadow: isDark
+              ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 60px rgba(0,0,0,0.55)"
+              : "inset 0 1px 0 rgba(255,255,255,0.90), 0 20px 60px rgba(0,0,0,0.10)",
             transformOrigin: "0% 50%",
             transform: rosterOpen ? "scale(1)" : "scale(0.15)",
             opacity: rosterOpen ? 1 : 0,
             pointerEvents: rosterOpen ? "auto" : "none",
-            backdropFilter: "blur(24px) saturate(160%)",
-            WebkitBackdropFilter: "blur(24px) saturate(160%)",
             transition: "transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
@@ -4745,7 +4798,7 @@ export default function ShiftBuilder() {
             //              (left-3, 48px wide) has air around it.
             paddingTop: 72,
             paddingRight: markerSlotKey ? 308 : 64,
-            paddingBottom: 72,
+            paddingBottom: 80,
             paddingLeft: rosterOpen ? 296 : 64,
           }}
         >
@@ -5506,9 +5559,9 @@ export default function ShiftBuilder() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════
-          VELVET BOTTOM DOCK — centered glass pill
-          Replaces the old floating status pill (bottom-right).
-          Contains: P1/P2 page toggle · save status · engine state
+          VELVET BOTTOM DOCK — reference-faithful centered glass pill
+          ← | − zoom% + | undo redo | Deployment Breaks | → | 🟢 · Ask AI
+          Height: 44px. Liquid glass. Replaces old status pill.
           ═══════════════════════════════════════════════════════════ */}
       {(() => {
         let savedAgo = "Not saved";
@@ -5520,62 +5573,181 @@ export default function ShiftBuilder() {
             savedAgo = mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
           }
         }
+
+        const zoomPct = mounted
+          ? Math.round((zoomMode === "fit" ? (fitScale ?? 1) : (zoomMode as number)) * 100)
+          : 100;
+        const numericSteps: Array<0.5 | 0.75 | 1 | 1.25> = [0.5, 0.75, 1, 1.25];
+        const stepZoom = (dir: -1 | 1) => {
+          if (zoomMode === "fit") {
+            setZoomMode(dir > 0 ? 1.25 : 0.75);
+            return;
+          }
+          const idx = numericSteps.indexOf(zoomMode);
+          if (idx !== -1) setZoomMode(numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))]);
+        };
+
+        const dockBg = isDark ? "rgba(22,21,24,0.90)" : "rgba(252,252,250,0.92)";
+        const dockBorder = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)";
+        const dockText = isDark ? "#8E8E93" : "#6B7280";
+        const dockSep = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)";
+        const dockBtnBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+        const dockActiveText = isDark ? "#F2F2F4" : "#111111";
+
         return (
           <div
-            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 rounded-full border shadow-lg shadow-black/10"
+            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 flex items-center rounded-full border"
             style={{
-              height: 38,
-              background: isDark ? "rgba(28,28,30,0.88)" : "rgba(255,255,255,0.88)",
-              backdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-              WebkitBackdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-              borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
+              height: 44,
+              background: dockBg,
+              backdropFilter: "blur(48px) saturate(200%)",
+              WebkitBackdropFilter: "blur(48px) saturate(200%)",
+              borderColor: dockBorder,
+              boxShadow: isDark
+                ? "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.45)"
+                : "inset 0 1px 0 rgba(255,255,255,0.90), 0 8px 32px rgba(0,0,0,0.08)",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              overflow: "hidden",
             }}
           >
-            {/* Page-turn toggle */}
+            {/* ← prev day */}
             <button
               type="button"
-              onClick={() => setCurrentView((v) => v === "deployment" ? "breaks" : "deployment")}
-              title={currentView === "deployment" ? "Switch to Break Sheet (P2)" : "Switch to Deployment (P1)"}
-              className="flex items-center gap-1.5 group"
-              aria-label={currentView === "deployment" ? "P1 — switch to break sheet" : "P2 — switch to deployment"}
+              onClick={goPrevDay}
+              title="Previous day"
+              className="flex items-center justify-center h-full px-3.5 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
+              style={{ color: dockText, borderRight: `1px solid ${dockSep}` }}
             >
-              <svg
-                width="12" height="12" viewBox="0 0 16 16" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                className="text-[#9CA3AF] dark:text-[#636366] group-hover:text-[#374151] dark:group-hover:text-[#C7C7CC] transition-colors"
-              >
-                <path d="M3 2h7l3 3v9H3V2z" /><path d="M10 2v3h3" />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
               </svg>
-              <span
-                className="text-[11px] font-bold text-[#6B7280] dark:text-[#8E8E93] group-hover:text-[#374151] dark:group-hover:text-[#C7C7CC] transition-colors leading-none"
-              >
-                {currentView === "deployment" ? "P1" : "P2"}
-              </span>
             </button>
 
-            {/* Hairline separator */}
-            <span className="w-px h-4 rounded-full bg-[#E5E5E7] dark:bg-[#3A3A3C] shrink-0" />
-
-            {/* Save status */}
-            <div className="flex items-center gap-1.5 text-[11px] text-[#6B7280] dark:text-[#8E8E93]">
-              <span
-                className="w-[7px] h-[7px] rounded-full shrink-0"
-                style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }}
-                aria-hidden="true"
-              />
-              <span className="font-semibold">{isDraftMode ? "Draft" : "Live"}</span>
-              <span className="text-[#C8C8CC] dark:text-[#3A3A3C]">·</span>
-              <span>{savedAgo}</span>
+            {/* − zoom% + */}
+            <div className="flex items-center gap-0 h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
+              <button
+                type="button"
+                onClick={() => stepZoom(-1)}
+                title="Zoom out"
+                className="flex items-center justify-center h-full px-2.5 transition-colors"
+                style={{ color: dockText }}
+                disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === 0)}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomMode("fit")}
+                title="Reset to fit"
+                className="text-[11.5px] font-bold px-1 h-full transition-colors"
+                style={{
+                  color: dockActiveText, minWidth: 40, textAlign: "center",
+                  fontFamily: "var(--font-jetbrains, monospace)",
+                }}
+              >{zoomPct}%</button>
+              <button
+                type="button"
+                onClick={() => stepZoom(1)}
+                title="Zoom in"
+                className="flex items-center justify-center h-full px-2.5 transition-colors"
+                style={{ color: dockText }}
+                disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === numericSteps.length - 1)}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
             </div>
 
-            {/* Hairline separator */}
-            <span className="w-px h-4 rounded-full bg-[#E5E5E7] dark:bg-[#3A3A3C] shrink-0" />
+            {/* Undo / Redo */}
+            <div className="flex items-center gap-0 h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
+              <button
+                type="button"
+                onClick={() => { const prev = shiftHistory.undo(); if (prev) { setAssignments(prev.assignments); } }}
+                disabled={!shiftHistory.canUndo}
+                title="Undo (⌘Z)"
+                className="flex items-center justify-center h-full px-3 disabled:opacity-30 transition-colors"
+                style={{ color: dockText }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7v6h6" /><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => { const next = shiftHistory.redo(); if (next) { setAssignments(next.assignments); } }}
+                disabled={!shiftHistory.canRedo}
+                title="Redo (⌘⇧Z)"
+                className="flex items-center gap-1 h-full px-3 disabled:opacity-30 transition-colors text-[11px] font-medium"
+                style={{ color: dockText }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
+                </svg>
+                <span>Redo</span>
+              </button>
+            </div>
 
-            {/* Engine status */}
-            <div className="flex items-center gap-1.5 text-[11px] text-[#6B7280] dark:text-[#8E8E93]">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#34C759] shrink-0" aria-hidden="true" />
-              <span>Engine ready</span>
+            {/* Deployment / Breaks / Tasks tabs */}
+            <div className="flex items-center gap-0 h-full px-1" style={{ borderRight: `1px solid ${dockSep}` }}>
+              {(["deployment", "breaks"] as const).map(view => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => setCurrentView(view)}
+                  className="flex items-center justify-center h-[32px] px-3 rounded-full text-[12px] font-bold transition-all mx-0.5"
+                  style={{
+                    background: currentView === view ? dockBtnBg : "transparent",
+                    color: currentView === view ? dockActiveText : dockText,
+                    border: currentView === view
+                      ? `1px solid ${isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)"}`
+                      : "1px solid transparent",
+                  }}
+                >{view.charAt(0).toUpperCase() + view.slice(1)}</button>
+              ))}
+              {/* Tasks — opens ⌘K */}
+              <button
+                type="button"
+                onClick={() => setCmdkOpen(true)}
+                className="flex items-center justify-center h-[32px] px-3 rounded-full text-[12px] font-bold transition-all mx-0.5"
+                style={{ color: dockText, border: "1px solid transparent" }}
+              >Tasks</button>
+            </div>
+
+            {/* → next day */}
+            <button
+              type="button"
+              onClick={goNextDay}
+              title="Next day"
+              className="flex items-center justify-center h-full px-3.5 transition-colors hover:text-[#374151] dark:hover:text-[#C7C7CC]"
+              style={{ color: dockText, borderRight: `1px solid ${dockSep}` }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+
+            {/* Save dot + Ask AI */}
+            <div className="flex items-center gap-2 px-3">
+              <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: lastSavedAt ? "#34C759" : "#FF9500" }} />
+              <span className="text-[11px]" style={{ color: dockText }}>{savedAgo}</span>
+              <button
+                type="button"
+                onClick={() => setXaiSphereOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 h-[28px] rounded-full font-bold text-[11px] transition-all ml-1"
+                style={{
+                  background: "linear-gradient(135deg, #5E2CA5, #7B3FD4)",
+                  color: "#fff",
+                  border: "1px solid rgba(123,63,212,0.50)",
+                  boxShadow: "0 2px 8px rgba(94,44,165,0.40)",
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                }}
+              >
+                <span>✦</span>
+                <span>Ask AI</span>
+              </button>
             </div>
           </div>
         );
@@ -5753,6 +5925,8 @@ export default function ShiftBuilder() {
         onRemoveTask={handleRemoveTask}
         onToggleLock={(slotKey) => toggleLock(slotKey)}
         onClearSlot={(slotKey) => { unassign(slotKey); setMarkerSlotKey(null); }}
+        onCoverage={() => setCmdkOpen(true)}
+        onSwap={() => setCmdkOpen(true)}
         onClose={() => setMarkerSlotKey(null)}
         isDark={isDark}
       />
@@ -5795,66 +5969,7 @@ export default function ShiftBuilder() {
         onAddCoverage={handleCmdkAddCoverage}
       />
 
-      {/* Night picker edge arrows — a thin visible tab at rest, expands on hover.
-          Left arrow hidden when roster panel is open (it occupies that edge).
-          z-[35] keeps them below all fixed chrome (status pill, sphere, zoom chip). */}
-      {!rosterOpen && (
-        <button
-          type="button"
-          onClick={goPrevDay}
-          title="Previous day"
-          aria-label="Previous day"
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-[35] h-32 w-9 flex items-center justify-start transition-opacity duration-200 group"
-        >
-          {/* Visible tab at rest; wider pill with chevron on hover */}
-          <div
-            className="flex items-center justify-center shadow-md transition-all duration-200 group-hover:w-9 group-hover:h-14 group-hover:rounded-r-2xl"
-            style={{
-              width: 6,
-              height: 40,
-              borderRadius: "0 6px 6px 0",
-              background: isDark ? "rgba(72,72,74,0.85)" : "rgba(200,200,204,0.85)",
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-            }}
-          >
-            <svg
-              width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-              style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </div>
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={goNextDay}
-        title="Next day"
-        aria-label="Next day"
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-[35] h-32 w-9 flex items-center justify-end transition-opacity duration-200 group"
-      >
-        <div
-          className="flex items-center justify-center shadow-md transition-all duration-200 group-hover:w-9 group-hover:h-14 group-hover:rounded-l-2xl"
-          style={{
-            width: 6,
-            height: 40,
-            borderRadius: "6px 0 0 6px",
-            background: isDark ? "rgba(72,72,74,0.85)" : "rgba(200,200,204,0.85)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-          }}
-        >
-          <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-            style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </div>
-      </button>
+      {/* Night picker edge arrows removed — navigation lives in the bottom dock ← / → buttons */}
 
       {/* Print Command Center — full overlay with day selection, page order, margins */}
       <PrintCommandCenter

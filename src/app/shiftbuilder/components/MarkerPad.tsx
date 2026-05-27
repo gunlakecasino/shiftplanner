@@ -36,6 +36,8 @@ export interface MarkerPadProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onToggleLock?: (slotKey: string) => void;
   onClearSlot?: (slotKey: string) => void;
+  onCoverage?: (slotKey: string) => void;
+  onSwap?: (slotKey: string) => void;
   onClose: () => void;
   isDark?: boolean;
 }
@@ -163,6 +165,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   onRemoveTask,
   onToggleLock,
   onClearSlot,
+  onCoverage,
+  onSwap,
   onClose,
 }) => {
   const [taskInput, setTaskInput] = useState("");
@@ -196,27 +200,30 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     void onAddTask(slotKey, label);
   };
 
-  // ── Glass panel styles (mirrors Velvet spec exactly) ──────────────────────
+  // ── Glass panel styles (Velvet liquid-glass spec) ──────────────────────────
+  // top: 68px clears the 56px Velvet top bar + 12px gap.
+  // bottom: 58px clears the 46px bottom dock + 12px gap.
   const panelStyle: React.CSSProperties = {
     position: "fixed",
-    top: 80,
+    top: 68,
     right: 12,
     width: 284,
-    bottom: 70,
-    borderRadius: 22,
-    background: "var(--sb-glass, rgba(28,28,30,0.58))",
-    backdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-    WebkitBackdropFilter: "var(--sb-glass-blur, blur(40px) saturate(180%))",
-    border: "1px solid var(--sb-glass-border, rgba(255,255,255,0.10))",
+    bottom: 58,
+    borderRadius: 20,
+    background: "rgba(20,20,22,0.72)",
+    backdropFilter: "blur(48px) saturate(200%)",
+    WebkitBackdropFilter: "blur(48px) saturate(200%)",
+    border: "1px solid rgba(255,255,255,0.11)",
     boxShadow: `
-      inset 0 1px 0 var(--sb-glass-highlight, rgba(255,255,255,0.14)),
-      0 20px 40px -20px rgba(0,0,0,0.5),
-      0 0 0 1px ${accent}22
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(255,255,255,0.04),
+      0 24px 48px -16px rgba(0,0,0,0.60),
+      0 0 0 1px ${accent}1a
     `,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-    padding: "14px 14px 12px",
+    gap: 10,
+    padding: "14px 14px 10px",
     zIndex: 35,
     overflow: "hidden",
     animation: "sb-slide-right-in var(--sb-dur-fast, 0.22s) var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1)) both",
@@ -252,26 +259,21 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       >×</button>
 
       {/* ── Slot identity ──────────────────────────────────────────────── */}
-      <div style={{ paddingRight: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 20, color: accent, lineHeight: 1 }}>{icon}</span>
-          <span style={{
-            fontSize: 10.5, fontWeight: 800, letterSpacing: "1.4px",
+      <div style={{ paddingRight: 28, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18, color: accent, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
+        <div>
+          <div style={{
+            fontSize: 11, fontWeight: 800, letterSpacing: "1.2px",
             color: accent, textTransform: "uppercase",
-            fontFamily: "var(--font-atkinson)",
-          }}>{label}</span>
+            fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+          }}>{label}</div>
+          <div style={{
+            fontSize: 9.5, marginTop: 1,
+            color: "rgba(255,255,255,0.30)",
+            fontFamily: "var(--font-jetbrains, monospace)",
+            letterSpacing: "0.2px",
+          }}>Marker Pad</div>
         </div>
-        <div style={{
-          fontSize: 18, fontWeight: 800, lineHeight: 1.1,
-          color: "var(--sb-text-1, #F2F2F4)",
-          fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-          letterSpacing: "-0.3px",
-        }}>{loc}</div>
-        <div style={{
-          fontSize: 10, marginTop: 2,
-          color: "var(--sb-text-muted, #8E8E93)",
-          fontFamily: "var(--font-jetbrains, monospace)",
-        }}>slot · {slotKey}</div>
       </div>
 
       {/* ── Assigned TM ────────────────────────────────────────────────── */}
@@ -465,9 +467,10 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       <div style={{
         display: "flex", gap: 5,
         paddingTop: 8,
-        borderTop: "1px solid rgba(255,255,255,0.06)",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
         flexShrink: 0,
       }}>
+        {/* Lock */}
         {onToggleLock && (
           <button
             type="button"
@@ -475,15 +478,53 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
             onPointerDown={(e) => e.stopPropagation()}
             style={{
               flex: 1, height: 30, borderRadius: 9,
-              background: a.isLocked ? "rgba(255,159,10,0.14)" : "rgba(255,255,255,0.04)",
-              border: a.isLocked ? "1px solid rgba(255,159,10,0.35)" : "1px solid rgba(255,255,255,0.07)",
-              color: a.isLocked ? "#FF9F0A" : "var(--sb-text-3, #C7C7CC)",
+              background: a.isLocked ? "rgba(255,159,10,0.18)" : "rgba(255,255,255,0.05)",
+              border: a.isLocked ? "1px solid rgba(255,159,10,0.40)" : "1px solid rgba(255,255,255,0.08)",
+              color: a.isLocked ? "#FF9F0A" : "rgba(255,255,255,0.55)",
               fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
+              transition: "all 0.15s",
             }}
           >{a.isLocked ? "🔒 Locked" : "Lock"}</button>
         )}
+        {/* Coverage */}
+        {onCoverage && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCoverage(slotKey); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              flex: 1, height: 30, borderRadius: 9,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.55)",
+              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
+              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >Coverage</button>
+        )}
+        {/* Swap */}
+        {onSwap && a.tmId && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSwap(slotKey); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              flex: 1, height: 30, borderRadius: 9,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.55)",
+              fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
+              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >Swap</button>
+        )}
+        {/* Clear */}
         {onClearSlot && a.tmId && (
           <button
             type="button"
@@ -492,11 +533,12 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
             style={{
               flex: 1, height: 30, borderRadius: 9,
               background: "rgba(229,57,53,0.10)",
-              border: "1px solid rgba(229,57,53,0.30)",
+              border: "1px solid rgba(229,57,53,0.28)",
               color: "#FF6B65",
               fontSize: 10.5, fontWeight: 600, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
+              transition: "all 0.15s",
             }}
           >Clear</button>
         )}
