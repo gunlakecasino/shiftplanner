@@ -187,7 +187,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
           onClick={refresh}
           className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5"
         >
-          <RefreshCw className="h-3 w-3" /> refresh
+          <span className="ms" style={{ fontSize: 12 }}>refresh</span> refresh
         </button>
       </div>
 
@@ -211,7 +211,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
         {unmatched.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
             <div className="flex items-center gap-2 mb-2">
-              <UserPlus className="h-3.5 w-3.5 text-amber-300" />
+              <span className="ms text-amber-300" style={{ fontSize: 14 }}>person_add</span>
               <span className="text-[11px] uppercase tracking-wider text-amber-200 font-mono">
                 Unmatched from latest schedule ({unmatched.length})
               </span>
@@ -236,7 +236,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                       className="ml-1 flex items-center gap-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300 hover:text-amber-200 transition-colors"
                       title="Create new TM from this name"
                     >
-                      <UserPlus className="h-3 w-3" />
+                      <span className="ms" style={{ fontSize: 12 }}>person_add</span>
                       Add
                     </button>
 
@@ -249,7 +249,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                       className="flex items-center gap-1 rounded-md bg-sky-500/15 hover:bg-sky-500/25 px-2 py-0.5 text-[10px] text-sky-400 hover:text-sky-300 transition-colors"
                       title="This person already exists — link the ADP spelling to them"
                     >
-                      <Link className="h-3 w-3" />
+                      <span className="ms" style={{ fontSize: 12 }}>link</span>
                       Merge
                     </button>
                   </div>
@@ -271,13 +271,13 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                     }}
                     className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1"
                   >
-                    <X className="h-3 w-3" /> Cancel
+                    <span className="ms" style={{ fontSize: 12 }}>close</span> Cancel
                   </button>
                 </div>
 
                 {/* Quick search within active TMs */}
                 <div className="relative mb-2">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-600" />
+                  <span className="ms absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600" style={{ fontSize: 12 }}>search</span>
                   <input
                     type="text"
                     value={mergeSearch}
@@ -322,7 +322,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
         {/* Filter bar */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+            <span className="ms absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" style={{ fontSize: 14 }}>search</span>
             <input
               type="text"
               value={query}
@@ -360,20 +360,20 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
             }}
             className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-medium inline-flex items-center gap-1.5"
           >
-            <UserPlus className="h-3 w-3" /> new TM
+            <span className="ms" style={{ fontSize: 12 }}>person_add</span> new TM
           </button>
         </div>
 
         {/* List */}
         {error && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
-            <AlertTriangle className="inline h-3 w-3 mr-1" />
+            <span className="ms inline mr-1" style={{ fontSize: 12 }}>warning</span>
             {error}
           </div>
         )}
         {tms === null && (
           <div className="text-zinc-500 text-[12px] flex items-center gap-2">
-            <Loader2 className="h-3 w-3 animate-spin" /> Loading TMs…
+            <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> Loading TMs…
           </div>
         )}
         {tms && (
@@ -646,7 +646,7 @@ function TMEditDrawer({
             className="text-zinc-400 hover:text-zinc-100 rounded p-1 transition-colors"
             aria-label="Close drawer"
           >
-            <X className="h-4 w-4" />
+            <span className="ms" style={{ fontSize: 16 }}>close</span>
           </button>
         </div>
 
@@ -725,7 +725,7 @@ function TMEditDrawer({
                 disabled={saving}
                 className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-red-600/30 text-zinc-400 hover:text-red-300 text-[11px] font-mono inline-flex items-center gap-1.5"
               >
-                <Archive className="h-3 w-3" /> soft-delete
+                <span className="ms" style={{ fontSize: 12 }}>archive</span> soft-delete
               </button>
             ) : (
               <button
@@ -733,7 +733,7 @@ function TMEditDrawer({
                 disabled={saving}
                 className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-emerald-500/20 text-zinc-400 hover:text-emerald-300 text-[11px] font-mono inline-flex items-center gap-1.5"
               >
-                <RotateCcw className="h-3 w-3" /> restore
+                <span className="ms" style={{ fontSize: 12 }}>undo</span> restore
               </button>
             )}
           </div>
@@ -749,7 +749,7 @@ function TMEditDrawer({
               disabled={saving}
               className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5"
             >
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              {saving ? <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> : <span className="ms" style={{ fontSize: 12 }}>check_circle</span>}
               Save
             </button>
           </div>
@@ -993,7 +993,7 @@ function PrefsForm({
                       }}
                       className="text-zinc-600 hover:text-red-400"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <span className="ms" style={{ fontSize: 12 }}>delete</span>
                     </button>
                   </td>
                 </tr>
@@ -1100,7 +1100,7 @@ function PrefsForm({
                       }}
                       className="text-zinc-600 hover:text-red-400"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <span className="ms" style={{ fontSize: 12 }}>delete</span>
                     </button>
                   </td>
                 </tr>
