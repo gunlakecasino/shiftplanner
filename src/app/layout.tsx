@@ -27,10 +27,11 @@ const atkinson = Atkinson_Hyperlegible({
 });
 
 // Bricolage Grotesque — Velvet display font (logo, large headings, date numerals)
+// Uses the variable font axis so we can pass `axes: ["opsz"]` for optical sizing
 const bricolage = Bricolage_Grotesque({
   variable: "--font-bricolage",
   subsets: ["latin"],
-  weight: ["400", "600", "700", "800"],
+  weight: "variable",
   axes: ["opsz"],
 });
 
