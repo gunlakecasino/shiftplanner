@@ -121,6 +121,8 @@ import {
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
+import FloatingNav from "./components/FloatingNav";
+import { useCurrentNight } from "./hooks/useCurrentNight";
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
 import BreakBadge from "./components/BreakBadge";
 import AssignmentLine from "./components/AssignmentLine";
@@ -710,13 +712,7 @@ export default function ShiftBuilder() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<Date>(() => new Date());
 
-  // Dock-specific calendar popover (simple week day jumper between arrows)
-  const [dockCalendarOpen, setDockCalendarOpen] = useState(false);
-
-  // Centered expandable control cluster (new primary control surface).
-  // Single orb centered on the browser. Tapping expands a centered row of all actions
-  // (roster icon is now inside the "drawer"/cluster). Expands from the center, stays centered.
-  // controlsExpanded removed — centered orb replaced by Velvet bottom dock
+  // (Dock-specific calendar popover removed — calendar now lives in the floating top header date navigator)
 
   // Zone legend — collapsible floating pill below the zoom chip.
 
@@ -763,25 +759,7 @@ export default function ShiftBuilder() {
     };
   }, [calendarOpen]);
 
-  // Close dock calendar popover on outside click or Escape
-  useEffect(() => {
-    if (!dockCalendarOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const cal = document.getElementById("dock-calendar-popover");
-      if (cal && !cal.contains(e.target as Node)) {
-        setDockCalendarOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDockCalendarOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [dockCalendarOpen]);
-
-  // (centered-control-orb collapse effect removed — orb replaced by Velvet bottom dock)
+  // (Dock calendar close effect removed along with the old bottom dock popover)
 
   const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(1);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
@@ -1563,6 +1541,22 @@ export default function ShiftBuilder() {
   // === Zoom & centering (extracted to useZoom) ===
   const { zoomMode, setZoomMode, fitScale, stageHostRef, scale, recomputeScale } = useZoom({ rosterOpen });
 
+  const numericSteps: (0.5 | 0.75 | 1 | 1.25)[] = [0.5, 0.75, 1, 1.25];
+
+  const stepZoom = (dir: -1 | 1) => {
+    if (zoomMode === "fit") {
+      setZoomMode(dir > 0 ? 1.25 : 0.75);
+      return;
+    }
+    const idx = numericSteps.indexOf(zoomMode as any);
+    if (idx !== -1) {
+      const next = numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))];
+      setZoomMode(next);
+    } else {
+      setZoomMode(dir > 0 ? 1.25 : 0.75);
+    }
+  };
+
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
   // squeezing the barrel instantly opens the contextual Command Palette.
@@ -1594,6 +1588,13 @@ export default function ShiftBuilder() {
   }, [openPaletteForSlot]);
 
   const selectedDay = DAY_DEFS[selectedDayIndex];
+
+  // Full TanStack Query commitment for the current night
+  const currentNight = useCurrentNight(selectedDay);
+
+  // Use query data as source of truth (full TanStack Query commitment)
+  const queryAssignments = currentNight.assignments || {};
+  const queryNightId = currentNight.nightId || null;
 
   // Day arrow navigation — cross GRAVE week boundaries seamlessly.
   const goPrevDay = React.useCallback(() => {
@@ -3466,6 +3467,9 @@ export default function ShiftBuilder() {
     return keys;
   }, [auxDefs]);
 
+  const placedCount = allSlotKeys.filter(k => !!assignments[k]?.tmId).length;
+  const totalSlots = allSlotKeys.length;
+
   // Index catalog by `${slotType}:${slotKey}:${rrSide ?? ""}` so the popover
   // can list options for any given card in O(1).
   const catalogIndex = React.useMemo(() => {
@@ -3702,216 +3706,52 @@ export default function ShiftBuilder() {
   return (
     <div className="h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative" style={{ background: "var(--sb-substrate, #FAFAF8)" }}>
       {/* ═══════════════════════════════════════════════════════════
-          VELVET TOP BAR — reference design faithful implementation
-          Height: 56px. Liquid-glass: blur(48px) saturate(200%).
-          Left:   avatar + "Shift Builder · Grave" + subtitle
-          Center: day scrubber colored pills (Fri→Thu)
-          Right:  PLACED · Draft pill · Search ⌘K · ☀/🌙 · Publish PDF
+          Floating Nav (Framer Motion + CVA)
+          Glassmorphic bar with premium date selector transition.
+          All other controls preserved visually.
           ═══════════════════════════════════════════════════════════ */}
-      {(() => {
-        const placedCount = allSlotKeys.filter(k => !!assignments[k]?.tmId).length;
-        const totalSlots = allSlotKeys.length;
-        return (
-          <div
-            className="fixed top-0 left-0 right-0 z-40 flex items-center px-3"
-            style={{
-              height: 56,
-              background: isDark
-                ? "rgba(18,17,20,0.90)"
-                : "rgba(248,248,246,0.92)",
-              backdropFilter: "blur(48px) saturate(200%)",
-              WebkitBackdropFilter: "blur(48px) saturate(200%)",
-              borderBottom: isDark
-                ? "1px solid rgba(255,255,255,0.07)"
-                : "1px solid rgba(0,0,0,0.06)",
-              boxShadow: isDark
-                ? "0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.35)"
-                : "0 1px 0 rgba(255,255,255,0.80), 0 4px 20px rgba(0,0,0,0.06)",
-            }}
-          >
-            {/* ── Left: Brand identity ── */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Avatar circle — user initial */}
-              <div
-                className="w-[30px] h-[30px] rounded-full flex items-center justify-center font-bold text-[13px] shrink-0"
-                style={{
-                  background: isDark
-                    ? "linear-gradient(135deg, #2C2C2E, #1C1C1E)"
-                    : "linear-gradient(135deg, #E5E5EA, #D1D1D6)",
-                  border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
-                  color: isDark ? "#F2F2F4" : "#1C1C1E",
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  letterSpacing: "-0.4px",
-                  boxShadow: isDark
-                    ? "inset 0 1px 0 rgba(255,255,255,0.10)"
-                    : "inset 0 1px 0 rgba(255,255,255,0.90)",
-                }}
-              >B</div>
-              <div className="flex flex-col leading-none">
-                <div
-                  className="font-bold tracking-[-0.3px]"
-                  style={{
-                    fontSize: 12.5,
-                    color: isDark ? "#F2F2F4" : "#111111",
-                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  }}
-                >Shift Builder · Grave</div>
-                <div
-                  style={{
-                    fontSize: 9.5, marginTop: 1,
-                    color: isDark ? "#636366" : "#9CA3AF",
-                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  }}
-                >GLCR · Internal Maintenance · Brian C.</div>
-              </div>
-            </div>
+      <FloatingNav
+        days={DAY_DEFS.map((d, idx) => ({
+          id: idx,
+          label: String(d.dateNum),
+          shortLabel: d.date.toLocaleString("default", { month: "short" }).toUpperCase(),
+          dateNum: d.dateNum,
+          isToday: d.isToday,
+          date: d.date,
+        }))}
+        selectedDayId={selectedDayIndex}
+        onDaySelect={(id, date) => {
+          if (id === selectedDayIndex) return;
 
-            {/* ── Center: Day scrubber — absolutely centered so left/right widths don't affect it ── */}
-            <div
-              className="flex items-center gap-1"
-              style={{
-                position: "absolute",
-                left: "50%",
-                transform: "translateX(-50%)",
-                pointerEvents: "auto",
-              }}
-            >
-              {DAY_DEFS.map((def, i) => {
-                const isActive = i === selectedDayIndex;
-                return (
-                  <button
-                    key={def.name}
-                    type="button"
-                    onClick={() => setSelectedDayIndex(i)}
-                    title={`${def.name} ${def.dateNum} · ${def.monthYear}`}
-                    className="shrink-0 flex items-center justify-center rounded-full transition-all"
-                    style={{
-                      height: 32,
-                      minWidth: isActive ? 60 : 32,
-                      gap: isActive ? 5 : 0,
-                      background: isActive
-                        ? def.color
-                        : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
-                      border: isActive
-                        ? `1px solid ${def.color}`
-                        : `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
-                      boxShadow: isActive ? `0 2px 12px ${def.color}55` : "none",
-                      padding: "0 10px",
-                    }}
-                  >
-                    {isActive && (
-                      <span
-                        className="font-bold leading-none"
-                        style={{
-                          fontSize: 13,
-                          color: "#ffffff",
-                          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                          letterSpacing: "-0.2px",
-                        }}
-                      >{def.dateNum}</span>
-                    )}
-                    <span
-                      className="font-extrabold tracking-[0.4px] uppercase leading-none"
-                      style={{
-                        fontSize: isActive ? 10 : 10,
-                        color: isActive ? "#ffffffcc" : isDark ? "#636366" : "#9CA3AF",
-                        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                      }}
-                    >
-                      {def.name.slice(0, 3)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          // Full TanStack Query commitment: prefetch the target day for instant feel
+          currentNight.prefetchNight(date);
 
-            {/* ── Right controls ── */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
+          const prefersReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (prefersReduced) {
+            setSelectedDayIndex(id);
+            return;
+          }
+          setSelectedDayIndex(id);
+        }}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        onToday={() => {
+          const today = currentShiftDate();
+          const newWeek = startOfShiftWeek(today);
+          const idx = Math.max(0, Math.min(6, daysBetween(newWeek, today)));
+          setWeekStart(newWeek);
+          setSelectedDayIndex(idx);
+        }}
+        onCommandOpen={() => setCmdkOpen(true)}
+        onThemeToggle={toggleTheme}
+        isDark={isDark}
+        userInitials="BC"
+      />
 
-              {/* PLACED counter */}
-              <div
-                className="flex items-center gap-1 text-[11px] font-semibold shrink-0"
-                style={{
-                  color: isDark ? "#8E8E93" : "#6B7280",
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                }}
-              >
-                <span style={{ color: isDark ? "#C7C7CC" : "#374151" }}>PLACED</span>
-                <span>{placedCount}/{totalSlots}</span>
-              </div>
-
-              {/* Hairline separator */}
-              <span className="w-px h-4 rounded-full shrink-0" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)" }} />
-
-              {/* Draft amber pill */}
-              {isDraftMode && (
-                <div
-                  className="flex items-center gap-1.5 px-2.5 h-[26px] rounded-full font-semibold shrink-0"
-                  style={{
-                    background: "rgba(245,158,11,0.14)",
-                    color: "#E9A825",
-                    border: "1px solid rgba(245,158,11,0.32)",
-                    fontSize: 10.5,
-                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  }}
-                >
-                  <span className="w-[6px] h-[6px] rounded-full bg-amber-400 animate-pulse shrink-0" />
-                  Draft
-                </div>
-              )}
-
-              {/* Search · Assign · Command ⌘K */}
-              <button
-                type="button"
-                onClick={() => setCmdkOpen(true)}
-                title="Open command palette (⌘K)"
-                className="flex items-center gap-1.5 px-3 h-[30px] rounded-full border transition-colors shrink-0"
-                style={{
-                  background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
-                  borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
-                  color: isDark ? "#8E8E93" : "#9CA3AF",
-                  fontSize: 11,
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  backdropFilter: "blur(8px)",
-                  WebkitBackdropFilter: "blur(8px)",
-                }}
-              >
-                <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300' }}>search</span>
-                <span>Search · Assign · Command</span>
-                <span
-                  className="px-1 py-px rounded text-[10px] font-bold"
-                  style={{
-                    background: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)",
-                    color: isDark ? "#C7C7CC" : "#6B7280",
-                    fontFamily: "var(--font-jetbrains, monospace)",
-                  }}
-                >⌘K</span>
-              </button>
-
-              {/* Dark mode toggle */}
-              <button
-                onClick={toggleTheme}
-                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                className="flex items-center justify-center w-[30px] h-[30px] rounded-full border transition-colors shrink-0"
-                style={{
-                  background: isDark ? "rgba(38,38,40,0.80)" : "rgba(240,240,240,0.80)",
-                  borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.09)",
-                  color: isDark ? "#C7C7CC" : "#374151",
-                }}
-                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                <span className="ms" style={{ fontSize: 17 }}>{isDark ? "light_mode" : "dark_mode"}</span>
-              </button>
-
-            </div>
-          </div>
-        );
-      })()}
-
-
-      {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
-          fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} autoScroll={false}>
+        {/* (Floating Placed pill removed from bottom-right per request — single instance now lives in top nav right section with visual progress) */}
+        {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
+            fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
       {/* The roster used to be a 268px flex sibling. It's now a floating
          Liquid Glass panel anchored to the left, position:fixed inside this
          relative container so the canvas can take the full width. When the
@@ -5308,392 +5148,10 @@ export default function ShiftBuilder() {
           if (idx !== -1) setZoomMode(numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))]);
         };
 
-        const dockBg = isDark ? "rgba(22,21,24,0.90)" : "rgba(252,252,250,0.92)";
-        const dockBorder = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)";
-        const dockText = isDark ? "#8E8E93" : "#6B7280";
-        const dockSep = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)";
-        const dockBtnBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
-        const dockActiveText = isDark ? "#F2F2F4" : "#111111";
-
-        return (
-          <div
-            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 flex items-center rounded-full border"
-            style={{
-              height: 44,
-              background: dockBg,
-              backdropFilter: "blur(48px) saturate(200%)",
-              WebkitBackdropFilter: "blur(48px) saturate(200%)",
-              borderColor: dockBorder,
-              boxShadow: isDark
-                ? "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.45)"
-                : "inset 0 1px 0 rgba(255,255,255,0.90), 0 8px 32px rgba(0,0,0,0.08)",
-              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              overflow: "hidden",
-            }}
-          >
-            {/* − zoom% + */}
-            <div className="flex items-center h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
-              <button
-                type="button"
-                onClick={() => stepZoom(-1)}
-                title="Zoom out"
-                className="flex items-center justify-center h-full px-2.5 transition-colors disabled:opacity-30"
-                style={{ color: dockText }}
-                disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === 0)}
-              >
-                <span className="ms" style={{ fontSize: 18 }}>remove</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setZoomMode("fit")}
-                title="Reset to fit"
-                className="text-[11.5px] font-bold px-1 h-full transition-colors"
-                style={{ color: dockActiveText, minWidth: 40, textAlign: "center", fontFamily: "var(--font-jetbrains, monospace)" }}
-              >{zoomPct}%</button>
-              <button
-                type="button"
-                onClick={() => stepZoom(1)}
-                title="Zoom in"
-                className="flex items-center justify-center h-full px-2.5 transition-colors disabled:opacity-30"
-                style={{ color: dockText }}
-                disabled={!mounted || (zoomMode !== "fit" && numericSteps.indexOf(zoomMode) === numericSteps.length - 1)}
-              >
-                <span className="ms" style={{ fontSize: 18 }}>add</span>
-              </button>
-            </div>
-
-            {/* Undo / Redo / ← → */}
-            <div className="flex items-center h-full" style={{ borderRight: `1px solid ${dockSep}` }}>
-              <button
-                type="button"
-                onClick={() => { const prev = shiftHistory.undo(); if (prev) { setAssignments(prev.assignments); } }}
-                disabled={!shiftHistory.canUndo}
-                title="Undo (⌘Z)"
-                className="flex items-center justify-center h-full px-3 disabled:opacity-30 transition-colors"
-                style={{ color: dockText }}
-              >
-                <span className="ms" style={{ fontSize: 20, fontVariationSettings: '"FILL" 0, "wght" 300' }}>undo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { const next = shiftHistory.redo(); if (next) { setAssignments(next.assignments); } }}
-                disabled={!shiftHistory.canRedo}
-                title="Redo (⌘⇧Z)"
-                className="flex items-center justify-center h-full px-3 disabled:opacity-30 transition-colors"
-                style={{ color: dockText }}
-              >
-                <span className="ms" style={{ fontSize: 20, fontVariationSettings: '"FILL" 0, "wght" 300' }}>redo</span>
-              </button>
-
-              {/* ← → day navigation (grouped together) */}
-              <button
-                type="button"
-                onClick={goPrevDay}
-                title="Previous day"
-                className="flex items-center justify-center h-full px-2.5 transition-colors"
-                style={{ color: dockText, borderLeft: `1px solid ${dockSep}` }}
-              >
-                <span className="ms" style={{ fontSize: 20 }}>chevron_left</span>
-              </button>
-
-              {/* Today + Calendar selector (new) */}
-              <button
-                type="button"
-                onClick={() => {
-                  // Use shift-aware "today" (respects 8:30am GRAVE rollover)
-                  const todayShift = currentShiftDate();
-                  const idx = DAY_DEFS.findIndex(d => sameDay(d.date, todayShift));
-                  if (idx !== -1) setSelectedDayIndex(idx);
-                }}
-                title="Jump to today (shift-aware)"
-                className="flex items-center justify-center h-full px-2 text-[10px] font-bold tracking-[0.5px] transition-colors hover:bg-white/5"
-                style={{ color: dockText, borderLeft: `1px solid ${dockSep}`, minWidth: 28 }}
-              >
-                TODAY
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDockCalendarOpen(!dockCalendarOpen);
-                  // Seed the calendar view to the currently selected day when opening
-                  if (!dockCalendarOpen) {
-                    const current = DAY_DEFS[selectedDayIndex]?.date ?? new Date();
-                    setCalendarView(new Date(current.getFullYear(), current.getMonth(), 1));
-                  }
-                }}
-                title="Open calendar — pick any day"
-                className="flex items-center justify-center h-full px-2 transition-colors hover:bg-white/5"
-                style={{ color: dockText }}
-                id="dock-calendar-trigger"
-              >
-                <span className="ms" style={{ fontSize: 18 }}>calendar_month</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={goNextDay}
-                title="Next day"
-                className="flex items-center justify-center h-full px-2.5 transition-colors"
-                style={{ color: dockText }}
-              >
-                <span className="ms" style={{ fontSize: 20 }}>chevron_right</span>
-              </button>
-            </div>
-
-            {/* Deployment / Breaks view tabs */}
-            <div className="flex items-center gap-0 h-full px-1" style={{ borderRight: `1px solid ${dockSep}` }}>
-              {(["deployment", "breaks"] as const).map(view => (
-                <button
-                  key={view}
-                  type="button"
-                  onClick={() => setCurrentView(view)}
-                  className="flex items-center justify-center h-[32px] px-3 rounded-full text-[12px] font-bold transition-all mx-0.5"
-                  style={{
-                    background: currentView === view ? dockBtnBg : "transparent",
-                    color: currentView === view ? dockActiveText : dockText,
-                    border: currentView === view
-                      ? `1px solid ${isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)"}`
-                      : "1px solid transparent",
-                  }}
-                >{view.charAt(0).toUpperCase() + view.slice(1)}</button>
-              ))}
-            </div>
-
-            {/* Save indicator */}
-            <div className="flex items-center gap-2 px-3">
-              <span
-                className="w-[7px] h-[7px] rounded-full shrink-0"
-                style={{
-                  background: lastSavedAt
-                    ? (Date.now() - lastSavedAt.getTime() < 120_000 ? "#34C759" : "#FF9F0A")
-                    : "#8E8E93",
-                }}
-              />
-              <span className="text-[11px]" style={{ color: dockText }}>{savedAgo}</span>
-            </div>
-          </div>
-        );
+        {/* REDUNDANT BOTTOM DOCK COMPLETELY REMOVED — all controls consolidated into the single floating top header per spec */}
       })()}
 
-      {/* Dock Calendar Popover — simple reliable week jumper */}
-      {dockCalendarOpen && (
-        <div
-          id="dock-calendar-popover"
-          className="fixed z-[60] w-[300px] rounded-2xl border shadow-2xl"
-          style={{
-            bottom: 52,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: isDark ? 'rgba(20,20,22,0.96)' : 'rgba(252,252,250,0.96)',
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
-            backdropFilter: 'blur(24px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            boxShadow: isDark 
-              ? '0 20px 60px -15px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)'
-              : '0 20px 60px -15px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9)',
-            padding: '10px 10px 8px',
-          }}
-        >
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, padding: '0 4px' }}>
-            <button
-              onClick={() => setCalendarView(addDays(calendarView, -32))}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[14px] transition-colors"
-              style={{ color: isDark ? '#8E8E93' : '#6B7280' }}
-              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              ‹
-            </button>
-
-            <div style={{ 
-              fontSize: 12, 
-              fontWeight: 700, 
-              color: isDark ? '#F2F2F4' : '#111111',
-              fontFamily: 'var(--font-atkinson)'
-            }}>
-              {MONTH_LONG[calendarView.getMonth()]} {calendarView.getFullYear()}
-            </div>
-
-            <button
-              onClick={() => setCalendarView(addDays(calendarView, 32))}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[14px] transition-colors"
-              style={{ color: isDark ? '#8E8E93' : '#6B7280' }}
-              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              ›
-            </button>
-          </div>
-
-          {/* Weekday headers */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(7, 1fr)', 
-            gap: 1, 
-            marginBottom: 2,
-            padding: '0 2px'
-          }}>
-            {['S','M','T','W','T','F','S'].map((d, i) => (
-              <div key={i} style={{ 
-                textAlign: 'center', 
-                fontSize: 9, 
-                fontWeight: 600, 
-                color: isDark ? '#6B7280' : '#9CA3AF',
-                fontFamily: 'var(--font-jetbrains, monospace)'
-              }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Day grid */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(7, 1fr)', 
-            gap: 2,
-            padding: '0 2px'
-          }}>
-            {(() => {
-              const year = calendarView.getFullYear();
-              const month = calendarView.getMonth();
-              const firstOfMonth = new Date(year, month, 1);
-              const startWeekday = firstOfMonth.getDay();
-              const daysInMonth = new Date(year, month + 1, 0).getDate();
-              const cells: React.ReactNode[] = [];
-
-              // Leading days (previous month)
-              for (let i = 0; i < startWeekday; i++) {
-                const d = new Date(year, month, 1 - (startWeekday - i));
-                cells.push(
-                  <button
-                    key={`prev-${i}`}
-                    onClick={() => {
-                      const newWeek = startOfShiftWeek(d);
-                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                      setWeekStart(newWeek);
-                      setSelectedDayIndex(idx);
-                      setDockCalendarOpen(false);
-                    }}
-                    style={{
-                      height: 26,
-                      width: 26,
-                      fontSize: 11,
-                      color: isDark ? '#555' : '#C8C8CC',
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {d.getDate()}
-                  </button>
-                );
-              }
-
-              // Current month days
-              for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
-                const d = new Date(year, month, dayNum);
-                const currentSelected = DAY_DEFS[selectedDayIndex]?.date;
-                const isSelected = currentSelected && sameDay(d, currentSelected);
-                const isTodayShift = sameDay(d, currentShiftDate());
-
-                cells.push(
-                  <button
-                    key={dayNum}
-                    onClick={() => {
-                      const newWeek = startOfShiftWeek(d);
-                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                      setWeekStart(newWeek);
-                      setSelectedDayIndex(idx);
-                      setDockCalendarOpen(false);
-                    }}
-                    style={{
-                      height: 26,
-                      width: 26,
-                      fontSize: 11,
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: isSelected ? 700 : 500,
-                      background: isSelected 
-                        ? (isDark ? '#333' : '#111') 
-                        : 'transparent',
-                      color: isSelected 
-                        ? '#fff' 
-                        : (isDark ? '#E5E5E7' : '#1C1C1E'),
-                      border: isTodayShift && !isSelected 
-                        ? `1px solid ${isDark ? '#555' : '#D1D5DB'}` 
-                        : 'none',
-                    }}
-                  >
-                    {dayNum}
-                  </button>
-                );
-              }
-
-              // Trailing days (next month)
-              const remaining = 42 - cells.length;
-              for (let i = 1; i <= remaining; i++) {
-                const d = new Date(year, month + 1, i);
-                cells.push(
-                  <button
-                    key={`next-${i}`}
-                    onClick={() => {
-                      const newWeek = startOfShiftWeek(d);
-                      const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                      setWeekStart(newWeek);
-                      setSelectedDayIndex(idx);
-                      setDockCalendarOpen(false);
-                    }}
-                    style={{
-                      height: 26,
-                      width: 26,
-                      fontSize: 11,
-                      color: isDark ? '#555' : '#C8C8CC',
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {d.getDate()}
-                  </button>
-                );
-              }
-
-              return cells;
-            })()}
-          </div>
-
-          {/* Quick Today */}
-          <div style={{ marginTop: 6, paddingTop: 6, borderTop: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)' }}>
-            <button
-              onClick={() => {
-                const today = currentShiftDate();
-                const newWeek = startOfShiftWeek(today);
-                const idx = Math.max(0, Math.min(6, daysBetween(newWeek, today)));
-                setWeekStart(newWeek);
-                setSelectedDayIndex(idx);
-                setDockCalendarOpen(false);
-              }}
-              style={{
-                width: '100%',
-                fontSize: 11,
-                padding: '4px 0',
-                color: '#007AFF',
-                fontWeight: 600,
-              }}
-            >
-              Today
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* XAISphere removed — Ask AI button in bottom dock handles toggle */}
+      {/* (All orphaned old dock calendar + bottom dock popover dead code fully removed - syntax cleaned) */}
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of

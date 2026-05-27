@@ -80,9 +80,26 @@
   --sb-day-6: #2F4F4F; /* Thursday  */
 
   /* ── Animation system ────────────────────────────────────────────────── */
+  /* Velvet Animation Principles (inspired by Motion.dev AI Kit best practices)
+     - Only animate transform, opacity, and filter for hardware acceleration.
+     - Prefer real spring motion over hand-tuned cubic-bezier when possible.
+     - Keep animation logic "fire-and-forget" — minimize driving from React state every frame.
+     - Color morphs that must sync with physical motion are often best handled with WAAPI.
+     - Use generous but intentional durations (never < 180ms for important state changes).
+     - Respect prefers-reduced-motion everywhere.
+  */
+
+  /* Current springs (cubic-bezier approximations — good enough for most UI) */
   --sb-spring-snappy: cubic-bezier(0.16, 1, 0.3, 1);
   --sb-spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --sb-spring-gentle: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Example high-quality CSS spring (linear()) — generated following Motion spring math.
+     Use for premium micro-interactions like the day selector vacuum where feel matters most.
+     This one is a snappy, slightly bouncy spring suitable for selection changes.
+  */
+  --sb-spring-premium-snappy: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1.004 83.8%, 1);
+
   --sb-dur-fast: 0.22s;
   --sb-dur-mid:  0.38s;
   --sb-dur-slow: 0.52s;

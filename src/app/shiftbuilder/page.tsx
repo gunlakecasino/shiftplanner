@@ -16,6 +16,7 @@
  */
 
 import dynamic from "next/dynamic";
+import { QueryProvider } from "./providers";
 
 const ShiftBuilderClient = dynamic(
   () => import("./ShiftBuilderClient"),
@@ -41,5 +42,9 @@ const ShiftBuilderClient = dynamic(
 );
 
 export default function ShiftBuilderPage() {
-  return <ShiftBuilderClient />;
+  return (
+    <QueryProvider>
+      <ShiftBuilderClient />
+    </QueryProvider>
+  );
 }

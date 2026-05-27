@@ -130,14 +130,32 @@ const BreakWave: React.FC<{
               type="button"
               onClick={(e) => { e.stopPropagation(); onChange(o.v); }}
               onPointerDown={(e) => e.stopPropagation()}
-              className="flex flex-col items-center py-2 rounded-xl transition-all"
+              className="flex flex-col items-center py-2 rounded-xl"
               style={{
                 background: active
                   ? `linear-gradient(180deg, ${accent}cc, ${accent}88)`
-                  : "rgba(255,255,255,0.04)",
-                border: active ? `1px solid ${accent}` : "1px solid rgba(255,255,255,0.07)",
-                boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 10px -4px ${accent}88` : "none",
+                  : "var(--sb-glass)",
+                border: active ? `1px solid ${accent}` : "1px solid var(--sb-glass-border)",
+                boxShadow: active 
+                  ? `inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 10px -4px ${accent}88` 
+                  : "none",
                 color: active ? "#fff" : "var(--sb-text-muted, #9CA3AF)",
+                transition: "all 0.22s var(--sb-spring-premium-snappy)",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.07)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                  e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = "var(--sb-glass)";
+                  e.currentTarget.style.borderColor = "var(--sb-glass-border)";
+                  e.currentTarget.style.boxShadow = "none";
+                }
               }}
             >
               <span
@@ -414,14 +432,14 @@ const MiniHistorySection: React.FC<{
   tmGender?: string | null;
   onViewAll: () => void;
 }> = ({ history, loading, isDark, tmGender, onViewAll }) => {
-  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
-  const textMuted   = isDark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.38)";
-  const divBorder   = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const textPrimary = isDark ? "var(--sb-text-1, #F2F2F4)" : "var(--sb-text-1, #111111)";
+  const textMuted   = isDark ? "var(--sb-text-muted, #8E8E93)" : "var(--sb-text-muted, #6C6C72)";
+  const divBorder   = "var(--sb-glass-border)";
 
   const wrapStyle: React.CSSProperties = {
     borderTop: `1px solid ${divBorder}`,
     paddingTop: 8,
-    display: "flex", flexDirection: "column", gap: 5,
+    display: "flex", flexDirection: "column", gap: 4,
   };
 
   if (loading) {
@@ -457,7 +475,22 @@ const MiniHistorySection: React.FC<{
     const ago   = last ? daysAgoFrom(last) : null;
 
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div 
+        style={{ 
+          display: "flex", alignItems: "center", gap: 6, 
+          padding: "1px 0",
+          borderRadius: 6,
+          transition: "background 0.12s var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1))",
+        }}
+        onMouseEnter={(e) => { 
+          e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"; 
+          e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+        }}
+        onMouseLeave={(e) => { 
+          e.currentTarget.style.background = "transparent"; 
+          e.currentTarget.style.boxShadow = "none";
+        }}
+      >
         <span style={{
           fontSize: 8, fontWeight: 800, padding: "2px 5px", borderRadius: 4,
           background: `${accent}22`, border: `1px solid ${accent}50`, color: accent,
@@ -477,7 +510,13 @@ const MiniHistorySection: React.FC<{
         }}>
           <span>{count}×</span>
           {ago !== null && (
-            <span style={{ color: recencyColor(ago) }}>{ago}d</span>
+            <span style={{ 
+              color: recencyColor(ago), 
+              fontWeight: 600,
+              padding: "0 3px",
+              borderRadius: 3,
+              background: `${recencyColor(ago)}15`,
+            }}>{ago}d</span>
           )}
         </span>
       </div>
@@ -501,8 +540,22 @@ const MiniHistorySection: React.FC<{
             fontSize: 9, fontWeight: 600, letterSpacing: "0.2px",
             color: "var(--sb-gold-bright, #E9B948)",
             background: "none", border: "none", cursor: "pointer",
-            padding: "1px 4px",
+            padding: "2px 6px",
+            borderRadius: 6,
             fontFamily: "var(--font-atkinson)",
+            transition: "all 0.18s var(--sb-spring-premium-snappy)",
+          }}
+          onMouseEnter={(e) => { 
+            e.currentTarget.style.background = "rgba(184,151,8,0.14)"; 
+            e.currentTarget.style.color = "#E9B948"; 
+            e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+            e.currentTarget.style.transform = "translateY(-0.5px)";
+          }}
+          onMouseLeave={(e) => { 
+            e.currentTarget.style.background = "none"; 
+            e.currentTarget.style.color = "var(--sb-gold-bright, #E9B948)"; 
+            e.currentTarget.style.boxShadow = "none";
+            e.currentTarget.style.transform = "";
           }}
         >View All →</button>
       </div>
@@ -539,11 +592,11 @@ const HistoryOverlay: React.FC<{
 }> = ({ history, isDark, onClose }) => {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  const textPrimary = isDark ? "rgba(255,255,255,0.88)" : "rgba(0,0,0,0.85)";
-  const textMuted   = isDark ? "rgba(255,255,255,0.40)" : "rgba(0,0,0,0.40)";
-  const panelBg     = isDark ? "rgba(16,16,18,0.97)" : "rgba(250,250,248,0.98)";
+  const textPrimary = isDark ? "var(--sb-text-1, #F2F2F4)" : "var(--sb-text-1, #111111)";
+  const textMuted   = isDark ? "var(--sb-text-muted, #8E8E93)" : "var(--sb-text-muted, #6C6C72)";
+  const panelBg     = "var(--sb-glass)";
   const rowBgBase   = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)";
-  const rowBorderBase = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)";
+  const rowBorderBase = "var(--sb-glass-border)";
 
   const sorted = Object.entries(history.zoneCounts)
     .sort(([, a], [, b]) => b - a);
@@ -553,11 +606,11 @@ const HistoryOverlay: React.FC<{
       style={{
         position: "absolute", inset: 0, borderRadius: 20, zIndex: 20,
         background: panelBg,
-        backdropFilter: "blur(48px) saturate(180%)",
-        WebkitBackdropFilter: "blur(48px) saturate(180%)",
+        backdropFilter: "var(--sb-glass-blur)",
+        WebkitBackdropFilter: "var(--sb-glass-blur)",
         display: "flex", flexDirection: "column",
         padding: "14px 14px 10px",
-        animation: "sb-slide-right-in var(--sb-dur-fast, 0.18s) cubic-bezier(0.16,1,0.3,1) both",
+        animation: "sb-slide-right-in var(--sb-dur-fast, 0.18s) var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1)) both",
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -569,11 +622,14 @@ const HistoryOverlay: React.FC<{
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             width: 26, height: 26, borderRadius: "50%",
-            background: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)",
-            border: isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.12)",
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid var(--sb-glass-border)",
             display: "flex", alignItems: "center", justifyContent: "center",
             color: textMuted, cursor: "pointer", flexShrink: 0, fontSize: 15, lineHeight: 1,
+            transition: "all 0.22s var(--sb-spring-premium-snappy)",
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.14)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = "var(--sb-glass-border)"; }}
           aria-label="Back"
         >←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -616,7 +672,20 @@ const HistoryOverlay: React.FC<{
                     ? (isDark ? `${accent}18` : `${accent}12`)
                     : rowBgBase,
                   border: `1px solid ${isExpanded ? accent + "44" : rowBorderBase}`,
-                  cursor: "pointer", transition: "all 0.15s",
+                  cursor: "pointer", 
+                  transition: "all 0.22s var(--sb-spring-premium-snappy)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isExpanded) {
+                    e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+                    e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isExpanded) {
+                    e.currentTarget.style.background = rowBgBase;
+                    e.currentTarget.style.boxShadow = "none";
+                  }
                 }}
               >
                 {/* Short key badge */}
@@ -960,24 +1029,20 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     width: 284,
     bottom: 58,
     borderRadius: 20,
-    background: isDarkPanel
-      ? "rgba(20,20,22,0.82)"
-      : "rgba(252,252,250,0.92)",
-    backdropFilter: "blur(48px) saturate(200%)",
-    WebkitBackdropFilter: "blur(48px) saturate(200%)",
-    border: isDarkPanel
-      ? "1px solid rgba(255,255,255,0.11)"
-      : "1px solid rgba(0,0,0,0.09)",
+    background: "var(--sb-glass)",
+    backdropFilter: "var(--sb-glass-blur)",
+    WebkitBackdropFilter: "var(--sb-glass-blur)",
+    border: "1px solid var(--sb-glass-border)",
     boxShadow: isDarkPanel
-      ? `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(255,255,255,0.04), 0 24px 48px -16px rgba(0,0,0,0.60), 0 0 0 1px ${accent}1a`
-      : `inset 0 1px 0 rgba(255,255,255,0.90), 0 24px 48px -16px rgba(0,0,0,0.12), 0 0 0 1px ${accent}18`,
+      ? `inset 0 1px 0 var(--sb-glass-highlight), inset 0 -1px 0 rgba(255,255,255,0.04), 0 24px 48px -16px rgba(0,0,0,0.55), 0 0 0 1px ${accent}1a`
+      : `inset 0 1px 0 var(--sb-glass-highlight), 0 24px 48px -16px rgba(0,0,0,0.12), 0 0 0 1px ${accent}18`,
     display: "flex",
     flexDirection: "column",
     gap: coverageMode ? 8 : 10,
     padding: "14px 14px 10px",
     zIndex: 35,
     overflow: "hidden",
-    animation: "sb-slide-right-in var(--sb-dur-fast, 0.22s) var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1)) both",
+    animation: "sb-slide-right-in 0.32s var(--sb-spring-premium-snappy) both",
   };
 
   return (
@@ -999,30 +1064,42 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
         style={{
           position: "absolute", top: 10, right: 10,
           width: 26, height: 26, borderRadius: "50%",
-          background: "rgba(255,255,255,0.06)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.10)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--sb-text-muted, #9CA3AF)",
           cursor: "pointer",
-          fontSize: 13, lineHeight: 1,
+          fontSize: 14, lineHeight: 1,
+          transition: "all 0.22s var(--sb-spring-premium-snappy)",
         }}
         aria-label="Close marker pad"
+        onMouseEnter={(e) => { 
+          e.currentTarget.style.background = "var(--sb-glass)"; 
+          e.currentTarget.style.borderColor = "var(--sb-glass-border)"; 
+          e.currentTarget.style.boxShadow = "0 0 0 1px var(--sb-glass-highlight)";
+        }}
+        onMouseLeave={(e) => { 
+          e.currentTarget.style.background = "rgba(255,255,255,0.05)"; 
+          e.currentTarget.style.borderColor = "rgba(255,255,255,0.10)"; 
+          e.currentTarget.style.boxShadow = "none";
+        }}
       >×</button>
 
       {/* ── Slot identity ──────────────────────────────────────────────── */}
-      <div style={{ paddingRight: 28, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+      <div style={{ paddingRight: 28, display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
         <span style={{ fontSize: 18, color: accent, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
         <div>
           <div style={{
-            fontSize: 11, fontWeight: 800, letterSpacing: "1.2px",
+            fontSize: 11, fontWeight: 800, letterSpacing: "1.15px",
             color: accent, textTransform: "uppercase",
             fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
           }}>{label}</div>
           <div style={{
-            fontSize: 9.5, marginTop: 1,
-            color: "rgba(255,255,255,0.30)",
+            fontSize: 9, marginTop: 0.5,
+            color: "var(--sb-text-muted, #8E8E93)",
             fontFamily: "var(--font-jetbrains, monospace)",
-            letterSpacing: "0.2px",
+            letterSpacing: "0.25px",
+            opacity: 0.75,
           }}>Marker Pad</div>
         </div>
       </div>
@@ -1136,25 +1213,25 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                     width: '100%',
                     fontSize: 11,
                     fontWeight: 700,
-                    padding: '6px 10px',
-                    borderRadius: 10,
-                    background: hasSweeper ? 'rgba(255,255,255,0.04)' : 'rgba(255,159,10,0.12)',
-                    border: hasSweeper ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,159,10,0.35)',
+                    padding: '7px 12px',
+                    borderRadius: 12,
+                    background: hasSweeper ? 'rgba(255,255,255,0.035)' : 'rgba(255,159,10,0.10)',
+                    border: hasSweeper ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(255,159,10,0.30)',
                     color: hasSweeper ? 'var(--sb-text-muted, #8E8E93)' : '#FF9F0A',
                     cursor: hasSweeper ? 'default' : 'pointer',
-                    transition: 'all 0.1s',
+                    transition: 'all 0.22s var(--sb-spring-premium-snappy)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
                   }}
                 >
-                  <span>🧹</span>
+                  <span style={{ fontSize: 13, lineHeight: 1 }}>🧹</span>
                   <span>Assign Sweeper</span>
-                  {hasSweeper && <span style={{ fontSize: 9, opacity: 0.6 }}>(assigned)</span>}
+                  {hasSweeper && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 2 }}>(assigned)</span>}
                 </button>
 
-                {/* Mini drop-up modal for sweeper choice */}
+                {/* Mini drop-up — Velvet glass treatment */}
                 {sweeperMenuOpen && !hasSweeper && (
                   <div
                     onClick={(e) => e.stopPropagation()}
@@ -1163,16 +1240,22 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                       bottom: '100%',
                       left: 0,
                       right: 0,
-                      marginBottom: 4,
-                      background: isDarkPanel ? 'rgba(20,20,22,0.96)' : 'rgba(252,252,250,0.96)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      borderRadius: 12,
-                      boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
-                      padding: 4,
+                      marginBottom: 6,
+                      background: isDarkPanel ? 'var(--sb-glass)' : 'var(--sb-glass)',
+                      border: '1px solid var(--sb-glass-border)',
+                      borderRadius: 14,
+                      boxShadow: isDarkPanel
+                        ? '0 16px 40px -12px rgba(0,0,0,0.55), inset 0 1px 0 var(--sb-glass-highlight)'
+                        : '0 12px 32px -8px rgba(0,0,0,0.18), inset 0 1px 0 var(--sb-glass-highlight)',
+                      backdropFilter: 'var(--sb-glass-blur)',
+                      WebkitBackdropFilter: 'var(--sb-glass-blur)',
+                      padding: '6px 4px',
                       zIndex: 50,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 2,
+                      animation: 'sb-slide-up-in 0.2s var(--sb-spring-premium-snappy) both',
+                      transformOrigin: 'bottom',
                     }}
                   >
                     {[
@@ -1184,19 +1267,21 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                         type="button"
                         onClick={() => handleAssignSweeper(opt.full)}
                         onPointerDown={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = 'rgba(255,159,10,0.12)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.background = 'transparent'; }}
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          padding: '8px 12px',
-                          borderRadius: 8,
+                          padding: '8px 14px',
+                          borderRadius: 10,
                           background: 'transparent',
                           color: '#FF9F0A',
+                          transition: 'all 0.18s var(--sb-spring-premium-snappy)',
                           textAlign: 'left',
                           border: 'none',
                           cursor: 'pointer',
+                          letterSpacing: '-0.1px',
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,159,10,0.12)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
                         {opt.label}
                       </button>
@@ -1211,12 +1296,26 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
           {tasks.length > 0 && (
             <div className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", maxHeight: 120 }}>
               {tasks.map(t => (
-                <div key={t.id} style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 10px", borderRadius: 10,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}>
+                <div 
+                  key={t.id} 
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "6px 10px", borderRadius: 10,
+                    background: "var(--sb-glass)",
+                    border: "1px solid var(--sb-glass-border)",
+                    transition: "all 0.22s var(--sb-spring-premium-snappy)",
+                  }}
+                  onMouseEnter={(e) => { 
+                    e.currentTarget.style.background = "rgba(255,255,255,0.09)";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)";
+                    e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+                  }}
+                  onMouseLeave={(e) => { 
+                    e.currentTarget.style.background = "var(--sb-glass)";
+                    e.currentTarget.style.borderColor = "var(--sb-glass-border)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
                   <span style={{
                     width: 6, height: 6, borderRadius: 2, flexShrink: 0,
                     background: t.color ?? accent,
@@ -1234,11 +1333,15 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                       onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
                       onPointerDown={(e) => e.stopPropagation()}
                       style={{
-                        fontSize: 13, lineHeight: 1, color: "var(--sb-text-muted, #6C6C72)",
-                        background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+                        fontSize: 14, lineHeight: 1, color: "var(--sb-text-muted, #6C6C72)",
+                        background: "none", border: "none", cursor: "pointer", 
+                        padding: "2px 5px", borderRadius: 6,
                         flexShrink: 0,
+                        transition: "all 0.18s var(--sb-spring-premium-snappy)",
                       }}
                       aria-label={`Remove task "${t.taskLabel}"`}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "#FF3B30"; e.currentTarget.style.background = "rgba(255,59,48,0.12)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--sb-text-muted, #6C6C72)"; e.currentTarget.style.background = "none"; }}
                     >×</button>
                   )}
                 </div>
@@ -1250,10 +1353,12 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "8px 12px", borderRadius: 12,
-            background: "rgba(255,255,255,0.05)",
-            border: `1px solid ${taskInput ? accent + "99" : "rgba(255,255,255,0.09)"}`,
-            boxShadow: taskInput ? `0 0 0 3px ${accent}22, inset 0 1px 0 rgba(255,255,255,0.08)` : "none",
-            transition: "border-color 0.15s, box-shadow 0.15s",
+            background: "var(--sb-glass)",
+            border: `1px solid ${taskInput ? accent + "66" : "var(--sb-glass-border)"}`,
+            boxShadow: taskInput 
+              ? `0 0 0 3px ${accent}15, 0 1px 0 var(--sb-glass-highlight), inset 0 1px 0 var(--sb-glass-highlight)` 
+              : "0 1px 0 var(--sb-glass-highlight), inset 0 1px 0 var(--sb-glass-highlight)",
+            transition: "all 0.22s var(--sb-spring-premium-snappy)",
           }}>
             <input
               ref={inputRef}
@@ -1286,6 +1391,15 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                   fontWeight: 700, letterSpacing: "0.3px", border: "none", cursor: "pointer",
                   fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                   flexShrink: 0,
+                  transition: "all 0.12s var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1))",
+                }}
+                onMouseEnter={(e) => { 
+                  e.currentTarget.style.transform = "scale(1.04)"; 
+                  e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+                }}
+                onMouseLeave={(e) => { 
+                  e.currentTarget.style.transform = "scale(1)"; 
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >↵</button>
             )}
@@ -1314,7 +1428,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                     fontWeight: 600, letterSpacing: "-0.1px",
                     fontFamily: "var(--font-atkinson)",
                     cursor: "pointer",
-                    transition: "background 0.12s",
+                    transition: "all 0.12s var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1))",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(184,151,8,0.22)";
+                    e.currentTarget.style.borderColor = "rgba(184,151,8,0.45)";
+                    e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(184,151,8,0.10)";
+                    e.currentTarget.style.borderColor = "rgba(184,151,8,0.25)";
+                    e.currentTarget.style.boxShadow = "none";
                   }}
                 >{chip}</button>
               ))}
@@ -1338,7 +1462,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       <div style={{
         display: "flex", gap: 5,
         paddingTop: 8,
-        borderTop: isDarkPanel ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
+        borderTop: "1px solid var(--sb-glass-border)",
         flexShrink: 0,
       }}>
         {/* Lock */}
@@ -1359,7 +1483,21 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
               fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
-              transition: "all 0.15s",
+              transition: "all 0.22s var(--sb-spring-premium-snappy)",
+            }}
+            onMouseEnter={(e) => {
+              if (!a.isLocked) {
+                e.currentTarget.style.background = "rgba(255,255,255,0.16)";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.30)";
+                e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!a.isLocked) {
+                e.currentTarget.style.background = isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)";
+                e.currentTarget.style.borderColor = isDarkPanel ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.15)";
+                e.currentTarget.style.boxShadow = "none";
+              }
             }}
           >{a.isLocked ? "🔒 Locked" : "Lock"}</button>
         )}
@@ -1381,7 +1519,21 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
             fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
             fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
             cursor: "pointer",
-            transition: "all 0.15s",
+            transition: "all 0.22s var(--sb-spring-premium-snappy)",
+          }}
+          onMouseEnter={(e) => {
+            if (!coverageMode) {
+              e.currentTarget.style.background = isDarkPanel ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.10)";
+              e.currentTarget.style.borderColor = isDarkPanel ? "rgba(255,255,255,0.30)" : "rgba(0,0,0,0.22)";
+              e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!coverageMode) {
+              e.currentTarget.style.background = isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)";
+              e.currentTarget.style.borderColor = isDarkPanel ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.15)";
+              e.currentTarget.style.boxShadow = "none";
+            }
           }}
         >Coverage</button>
 
@@ -1399,7 +1551,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
               fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
-              transition: "all 0.15s",
+              transition: "all 0.22s var(--sb-spring-premium-snappy)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDarkPanel ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.10)";
+              e.currentTarget.style.borderColor = isDarkPanel ? "rgba(255,255,255,0.30)" : "rgba(0,0,0,0.22)";
+              e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isDarkPanel ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.06)";
+              e.currentTarget.style.borderColor = isDarkPanel ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.15)";
+              e.currentTarget.style.boxShadow = "none";
             }}
           >Swap</button>
         )}
@@ -1418,7 +1580,17 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
               fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px",
               fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               cursor: "pointer",
-              transition: "all 0.15s",
+              transition: "all 0.22s var(--sb-spring-premium-snappy)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(229,57,53,0.28)";
+              e.currentTarget.style.borderColor = "rgba(229,57,53,0.65)";
+              e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(229,57,53,0.18)";
+              e.currentTarget.style.borderColor = "rgba(229,57,53,0.45)";
+              e.currentTarget.style.boxShadow = "none";
             }}
           >Clear</button>
         )}
