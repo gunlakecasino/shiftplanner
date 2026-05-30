@@ -23,6 +23,9 @@ export interface OverlapSlotProps {
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
+
+  // Locked state for the night (disables interactions)
+  isLocked?: boolean;
 }
 
 // One overlap cell (Break Sheet view) — a small assignable card. Backed by
@@ -44,27 +47,28 @@ const OverlapSlot: React.FC<OverlapSlotProps> = ({
   onEditTask,
   onLiveAssign,
   onLiveUnassign,
+  isLocked = false,
 }) => {
   const a = assignments[slotKey] || {};
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
   const dim = !hasTM && !loading;
 
   // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(slotKey, el),
+    (el) => { if (!isLocked) onCardClick(slotKey, el); },
   );
 
   return (
     <div
       ref={setRef}
-      onClick={(e) => onCardClick(slotKey, e.currentTarget, e)}
+      onClick={(e) => { if (!isLocked) onCardClick(slotKey, e.currentTarget, e); }}
       {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
+      {...(hasTM && !isLocked ? listeners : {})}
+      {...(hasTM && !isLocked ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
         clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
+        if (hasTM && !isLocked && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
