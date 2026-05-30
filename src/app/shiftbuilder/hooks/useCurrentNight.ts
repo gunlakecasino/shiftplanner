@@ -15,6 +15,7 @@ import {
   getGraveAvailableTeamMembers,
   getOnScheduleTmIdsForNight,
 } from "@/lib/shiftbuilder/data";
+import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
 
 /**
  * useCurrentNight

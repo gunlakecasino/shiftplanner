@@ -1,0 +1,5 @@
+# Supabase project configuration
+# https://supabase.com/docs/guides/cli/config
+
+[functions.verify-pin]
+verify_jwt = false

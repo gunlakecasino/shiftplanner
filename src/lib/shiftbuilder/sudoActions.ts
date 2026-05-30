@@ -12,6 +12,7 @@
 import { supabase } from "../supabase";
 import type { NightStatusUpsert } from "./adpSchedule";
 import type { PlacementMethod, GrokReasoningEffort } from "./engineConfig";
+import { setNightLocked } from "./data";
 
 export interface NightStatusUpsertResult {
   /** Total rows successfully written (count of (tm_id, night_id) pairs) */
@@ -481,6 +482,98 @@ export async function deleteSchedule(args: {
   }
 }
 
+/**
+ * Set the publication status of an entire week.
+ * 'published' = officially released / locked for ops use.
+ * 'draft' = still in preparation.
+ *
+ * When publishing, the nights for that week are also locked.
+ * When unpublishing, they are unlocked.
+ */
+export async function setWeekPublished(weekId: string, published: boolean): Promise<void> {
+  const status = published ? "published" : "draft";
+
+  // 1. Update week status
+  const { error } = await supabase
+    .from("weeks")
+    .update({ status })
+    .eq("id", weekId);
+
+  if (error) {
+    throw new Error(`setWeekPublished failed: ${error.message}`);
+  }
+
+  // 2. Lock/unlock the individual nights
+  const { data: nightRows, error: nightsErr } = await supabase
+    .from("nights")
+    .select("id")
+    .eq("week_id", weekId);
+
+  if (nightsErr) {
+    console.warn("[sudoActions] setWeekPublished - could not load nights for locking:", nightsErr.message);
+    return;
+  }
+
+  const nightIds = (nightRows ?? []).map((n: any) => n.id);
+  for (const nightId of nightIds) {
+    try {
+      await setNightLocked(nightId, published);
+    } catch (lockErr) {
+      console.warn(`[sudoActions] Failed to ${published ? 'lock' : 'unlock'} night ${nightId}`, lockErr);
+    }
+  }
+}
+
+/**
+ * Set publication status for specific individual days (by ISO date).
+ * Useful for publishing only certain days of a week (granular control).
+ *
+ * When publishing days, those nights are also locked in the main planner.
+ * When unpublishing, they are unlocked.
+ */
+export async function setDatesPublished(
+  dates: string[],
+  published: boolean
+): Promise<{ updated: number }> {
+  if (!dates.length) return { updated: 0 };
+
+  const status = published ? "published" : "draft";
+
+  // Find the corresponding night rows
+  const { data: nights, error: nightsErr } = await supabase
+    .from("nights")
+    .select("id")
+    .in("night_date", dates);
+
+  if (nightsErr) {
+    throw new Error(`setDatesPublished (nights lookup) failed: ${nightsErr.message}`);
+  }
+
+  const nightIds = (nights ?? []).map((n: any) => n.id);
+  if (nightIds.length === 0) return { updated: 0 };
+
+  // Update status on nights
+  const { error: updErr, count } = await supabase
+    .from("nights")
+    .update({ status })
+    .in("id", nightIds);
+
+  if (updErr) {
+    throw new Error(`setDatesPublished failed: ${updErr.message}`);
+  }
+
+  // Lock/unlock the nights
+  for (const nightId of nightIds) {
+    try {
+      await setNightLocked(nightId, published);
+    } catch (lockErr) {
+      console.warn(`[sudoActions] Failed to ${published ? 'lock' : 'unlock'} night ${nightId}`, lockErr);
+    }
+  }
+
+  return { updated: count ?? 0 };
+}
+
 // =====================================================================
 // Team management (SUDO Team tab)
 // =====================================================================
@@ -535,6 +628,127 @@ export interface TMSlotSkill {
   slotId: string;
   score: number;
   updatedAt: string;
+}
+
+// =====================================================================
+// User management (SUDO Users tab) — granular per-user privileges
+// =====================================================================
+
+export interface SudoUser {
+  id: string;
+  email: string | null;
+  full_name: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  permissions: Record<string, any> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function listAllUsers(): Promise<SudoUser[]> {
+  // We try to include the permissions column, but fall back gracefully
+  // if the migration hasn't been applied yet (common during development).
+  const baseSelect = "id, email, full_name, username, role, is_active, created_at, updated_at";
+
+  // First attempt: include permissions
+  let { data, error } = await supabase
+    .from("users")
+    .select(`${baseSelect}, permissions`)
+    .order("full_name", { ascending: true });
+
+  if (error && error.message.includes("permissions")) {
+    // Column doesn't exist yet — fetch without it and default permissions to null
+    console.warn("[listAllUsers] 'permissions' column not found yet. Falling back to null permissions.");
+    const fallback = await supabase
+      .from("users")
+      .select(baseSelect)
+      .order("full_name", { ascending: true });
+
+    if (fallback.error) throw new Error(`listAllUsers failed: ${fallback.error.message}`);
+
+    return (fallback.data ?? []).map((u: any) => ({
+      ...u,
+      permissions: null,
+    })) as SudoUser[];
+  }
+
+  if (error) throw new Error(`listAllUsers failed: ${error.message}`);
+  return (data as SudoUser[]) ?? [];
+}
+
+export async function updateUserPermissions(
+  userId: string,
+  permissions: Record<string, any> | null
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ permissions, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) throw new Error(`updateUserPermissions failed: ${error.message}`);
+}
+
+export async function updateUserRole(userId: string, role: string): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) throw new Error(`updateUserRole failed: ${error.message}`);
+}
+
+// =====================================================================
+// User creation & soft-delete (used by Sudo → Users tab)
+// =====================================================================
+
+export interface CreateUserInput {
+  full_name: string;
+  username: string;
+  email?: string | null;
+  role?: string;
+  pin: string; // raw PIN, will be hashed server-side
+}
+
+export async function createUser(input: CreateUserInput): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('create-user', {
+    body: {
+      full_name: input.full_name,
+      username: input.username,
+      email: input.email || null,
+      role: input.role || 'utility_ops_super',
+      pin: input.pin,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Failed to create user: ${error.message}`);
+  }
+
+  // The edge function should return { success: true, userId }
+  if (!data?.success) {
+    throw new Error(data?.error || 'Unknown error creating user');
+  }
+
+  return data.userId;
+}
+
+export async function deactivateUser(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) throw new Error(`deactivateUser failed: ${error.message}`);
+}
+
+export async function reactivateUser(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ is_active: true, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) throw new Error(`reactivateUser failed: ${error.message}`);
 }
 
 /**

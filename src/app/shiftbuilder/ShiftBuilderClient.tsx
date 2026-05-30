@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal, flushSync } from "react-dom";
 import {
   DndContext,
@@ -108,6 +109,8 @@ import {
 import { askGrokEngineDraft } from "./actions";
 import { SudoWindow } from "./sudo/SudoWindow";
 import { XAISphere } from "./xai/XAISphere";
+import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
+import { PinGate } from "./components/PinGate";
 import {
   PrintCommandCenter,
   type PrintConfig,
@@ -211,11 +214,12 @@ const RosterItem: React.FC<{
   isAssigned: boolean; 
   emphasis: "on" | "off" | "scheduled";
   isLocked?: boolean;
-}> = ({ tm, isAssigned, emphasis, isLocked = false }) => {
+  canEdit?: boolean;
+}> = ({ tm, isAssigned, emphasis, isLocked = false, canEdit = true }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tm:${tm.id}`,
     data: { type: "tm", tmId: tm.id, tmName: tm.name },
-    disabled: isAssigned || isLocked,
+    disabled: isAssigned || isLocked || !canEdit,
   });
 
   const initials = tm.name
@@ -225,7 +229,7 @@ const RosterItem: React.FC<{
     .slice(0, 2)
     .toUpperCase();
 
-  const isDraggable = !isAssigned;
+  const isDraggable = !isAssigned && canEdit;
 
   return (
     <div
@@ -686,7 +690,10 @@ function buildCoverPageArtboardHTML(
   );
 }
 
-export default function ShiftBuilder() {
+// ---------------------------------------------------------------------------
+// Inner component — the real ShiftBuilder experience (only rendered after PIN auth)
+// ---------------------------------------------------------------------------
+function AuthedShiftBuilder() {
   // Default the day picker to the active shift date. `currentShiftDate()`
   // returns yesterday's calendar date until 8:30am local time (so the operator
   // finishing Friday's grave at 6:30am Saturday morning still lands on
@@ -892,6 +899,31 @@ export default function ShiftBuilder() {
     cmdkOpen, setCmdkOpen,
     cmdkInitialContext, setCmdkInitialContext,
   } = useRosterPanels();
+
+  // Ops auth (PIN gate) — available only inside the authenticated tree.
+  const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+
+  // Destructure the granular permissions for easy use throughout the component
+  const {
+    canSeeDraftData = false,
+    canPublish = false,
+    canApplySchedules = false,
+    canRunEngine = false,
+    canManageTeam = false,
+    canAccessSudo = false,
+    canEditAssignments = false,
+    canLockUnlock = false,
+  } = permissions || {};
+
+  const handleOpenSudo = useCallback(() => {
+    // Prefer the new granular permission system
+    if (permissions?.canAccessSudo) {
+      setSudoOpen(true);
+    } else {
+      console.warn("[shiftbuilder] Sudo access denied — role:", currentOperator?.role);
+      // Future: surface a nice toast "Insufficient privileges for Sudo"
+    }
+  }, [permissions?.canAccessSudo, currentOperator?.role, setSudoOpen]);
 
   // Persist the exact selected GRAVE day (calendar date) so refresh restores
   // both the correct weekStart and the day index within that week.
@@ -1972,7 +2004,24 @@ export default function ShiftBuilder() {
   // The persist helper never re-reads state — so if the operator switches to
   // a different day before the network call resolves, the write still lands
   // on the night it was issued against.
+  // ── Permission guard helpers (centralized so every mutation path is covered)
+  const requireEdit = (): boolean => {
+    if (!canEditAssignments) {
+      showToast("Insufficient privileges — you cannot edit assignments", "error");
+      return false;
+    }
+    return true;
+  };
+  const requireLock = (): boolean => {
+    if (!canLockUnlock) {
+      showToast("Insufficient privileges — you cannot lock/unlock slots", "error");
+      return false;
+    }
+    return true;
+  };
+
   const assign = (slotKey: string, tmId: string, tmName: string) => {
+    if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
       return;
@@ -2015,6 +2064,7 @@ export default function ShiftBuilder() {
   };
 
   const unassign = (slotKey: string) => {
+    if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
       return;
@@ -2050,6 +2100,7 @@ export default function ShiftBuilder() {
   };
 
   const toggleLock = (slotKey: string) => {
+    if (!requireLock()) return;
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     const willLock = !assignments[slotKey]?.isLocked;
     pendingHistoryRef.current = { description: `${willLock ? "Locked" : "Unlocked"} ${slotKey}`, before };
@@ -2768,12 +2819,16 @@ export default function ShiftBuilder() {
   // Stable callbacks for useCommandActions — keeping these out of the call-site
   // so useCommandActions can detect actual changes (not new references every render).
   const cmdActionRunEngine = React.useCallback(() => {
+    if (!canRunEngine) {
+      showToast("Insufficient privileges — you cannot run the engine", "error");
+      return;
+    }
     if (isCurrentNightLocked) {
       showToast("This day is locked — engine cannot run", "error");
       return;
     }
     if (isDraftMode) applyDraft(); else enterDraftMode();
-  }, [isDraftMode, applyDraft, enterDraftMode, isCurrentNightLocked]);
+  }, [canRunEngine, isDraftMode, applyDraft, enterDraftMode, isCurrentNightLocked]);
 
   // Print button opens Command Center; direct "print tonight" shortcut still available via palette
   const cmdActionPrint = React.useCallback(() => setIsPrintCenterOpen(true), []);
@@ -2781,6 +2836,7 @@ export default function ShiftBuilder() {
   const cmdActionOpenPrintCenter = React.useCallback(() => setIsPrintCenterOpen(true), []);
 
   const cmdActionLockDay = React.useCallback(async () => {
+    if (!requireLock()) return;
     if (!nightId) {
       showToast("No active night selected", "error");
       return;
@@ -2793,9 +2849,10 @@ export default function ShiftBuilder() {
       console.error("Failed to lock day", e);
       showToast(`Failed to lock day: ${e?.message ?? "unknown"}`, "error");
     }
-  }, [nightId]);
+  }, [nightId, requireLock]);
 
   const cmdActionUnlockDay = React.useCallback(async () => {
+    if (!requireLock()) return;
     if (!nightId) {
       showToast("No active night selected", "error");
       return;
@@ -2808,7 +2865,7 @@ export default function ShiftBuilder() {
       console.error("Failed to unlock day", e);
       showToast(`Failed to unlock day: ${e?.message ?? "unknown"}`, "error");
     }
-  }, [nightId]);
+  }, [nightId, requireLock]);
 
   const cmdActionUndo = React.useCallback(() => {
     const prev = shiftHistory.undo();
@@ -3664,7 +3721,7 @@ export default function ShiftBuilder() {
         }
       }
     })();
-  }, [selectedDay.date, tmCommandEpoch]);
+  }, [selectedDay.date, tmCommandEpoch, sudoDataEpoch]);
 
   // === Persistence helpers ==================================================
   //
@@ -4084,7 +4141,14 @@ export default function ShiftBuilder() {
         onCommandOpen={() => setCmdkOpen(true)}
         onThemeToggle={toggleTheme}
         isDark={isDark}
-        userInitials="BC"
+        userInitials={currentOperator ? currentOperator.full_name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "OP"}
+        currentUser={currentOperator ? {
+          full_name: currentOperator.full_name,
+          username: currentOperator.username,
+          role: currentOperator.role,
+        } : undefined}
+        onLogout={logoutOperator}
+        onOpenSudo={handleOpenSudo}
         // Zoom cluster (Fit / − / +)
         onZoomFit={handleZoomFit}
         onZoomOut={handleZoomOut}
@@ -4109,7 +4173,7 @@ export default function ShiftBuilder() {
         */}
         <div
           aria-hidden={!rosterOpen}
-          className="fixed left-3 top-[64px] bottom-3 w-[280px] z-30 rounded-2xl overflow-hidden flex flex-col"
+          className="fixed left-3 top-[52px] sm:top-[64px] bottom-3 w-[280px] sm:w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col"
           style={{
             // Velvet liquid-glass + genie-out animation
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
@@ -4426,7 +4490,7 @@ export default function ShiftBuilder() {
                           </button>
                           {scheduledGravesExpanded && filteredSchedGraves.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                           })}
                         </>
                       )}
@@ -4448,7 +4512,7 @@ export default function ShiftBuilder() {
                           </button>
                           {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                           })}
                         </>
                       )}
@@ -4470,7 +4534,7 @@ export default function ShiftBuilder() {
                           </button>
                           {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                           })}
                         </>
                       )}
@@ -4499,7 +4563,7 @@ export default function ShiftBuilder() {
                       </button>
                       {deployedExpanded && filteredOnThisNight.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                       })}
                     </>
                   )}
@@ -4524,7 +4588,7 @@ export default function ShiftBuilder() {
                       </button>
                       {portersExpanded && filteredPorters.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                       })}
                     </>
                   )}
@@ -4549,7 +4613,7 @@ export default function ShiftBuilder() {
                       </button>
                       {amOverlapsExpanded && filteredAMOverlaps.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                       })}
                     </>
                   )}
@@ -4574,7 +4638,7 @@ export default function ShiftBuilder() {
                       </button>
                       {pmOverlapsExpanded && filteredPMOverlaps.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                       })}
                     </>
                   )}
@@ -4599,7 +4663,7 @@ export default function ShiftBuilder() {
                       </button>
                       {otherTmsExpanded && filteredRegularGrave.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
                       })}
                     </>
                   )}
@@ -5754,7 +5818,11 @@ export default function ShiftBuilder() {
         whyGrokExplanation={draftGrokExplanation}
         whyWarnings={draftEngineWarnings}
         whyAvailable={isDraftMode && Object.keys(draftBreakdown).length > 0}
-        onOpenSudo={() => setSudoOpen(true)}
+        onOpenSudo={() => {
+          // Role gate lives in the stable handler defined near the top of AuthedShiftBuilder.
+          // We call the captured handler here.
+          handleOpenSudo();
+        }}
         completionDay={selectedDay.name}
         completionScheduledUnplaced={cmdkCompletionUnplaced}
         completionAssignments={cmdkCompletionAssignments}
@@ -5800,10 +5868,27 @@ export default function ShiftBuilder() {
         onClose={() => setSudoOpen(false)}
         currentNightId={nightId}
         weekStart={weekStart}
+        currentOperator={currentOperator ? {
+          id: currentOperator.id,
+          full_name: currentOperator.full_name,
+          username: currentOperator.username,
+          role: currentOperator.role,
+        } : null}
+        onSignOut={logoutOperator}
+        isDark={isDark}
+        permissions={permissions}
         onDataChanged={async () => {
           // Refresh anything the sudo window might have mutated
           setTMCommandEpoch((e) => e + 1);
           setSudoDataEpoch((e) => e + 1);
+
+          // Force the TanStack Query layer (useCurrentNight) to refetch the current night.
+          // This is the primary source for many surfaces and will pick up assignment,
+          // break, task, and note changes pushed from Sudo.
+          try {
+            const dateKey = selectedDay.date.toISOString().slice(0, 10);
+            currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+          } catch {}
 
           // Force-refresh the current night's break data (and other day-specific data)
           // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
@@ -5856,4 +5941,43 @@ export default function ShiftBuilder() {
       />
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Public entry — wraps everything with OpsAuthProvider and shows the PIN gate
+// until a valid operator authenticates. After auth, renders the full experience.
+// This is the minimal, non-disruptive gate the operator requested.
+// ---------------------------------------------------------------------------
+export default function ShiftBuilder() {
+  return (
+    <OpsAuthProvider>
+      <ShiftBuilderGate />
+    </OpsAuthProvider>
+  );
+}
+
+function ShiftBuilderGate() {
+  const { isAuthenticated, isLoading, hasRole } = useOpsAuth();
+  const router = useRouter();
+
+  // While hydrating from localStorage, show nothing (prevents flash).
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#111113] flex items-center justify-center text-zinc-600 text-sm font-mono tracking-wider">
+        LOADING OPS SESSION…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <PinGate />;
+  }
+
+  // Note: We are moving away from a separate /today page.
+  // Granular permissions (canEdit, canPublish, etc.) are now
+  // handled via usePermissions() from @/lib/auth/opsAuth.
+  // The old hard redirect has been removed.
+
+  // Full privileged experience
+  return <AuthedShiftBuilder />;
 }

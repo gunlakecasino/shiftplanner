@@ -45,6 +45,13 @@ export function getSupabaseClient(): SupabaseClient {
 
     const usingService = !!serviceKey;
 
+    // Helpful for prod debugging (Railway logs). In prod we are almost always on anon.
+    // If you see "ShiftBuilder client initialized with anon key" + later empty result sets,
+    // the problem is almost always RLS policies not granting SELECT to the anon role.
+    console.log(
+      `[supabase] ShiftBuilder client initialized with ${usingService ? 'SERVICE_ROLE' : 'anon'} key (env: ${process.env.NODE_ENV})`
+    );
+
     // === PHASE 0 HARDENING ===
     if (usingService) {
       if (IS_PRODUCTION) {

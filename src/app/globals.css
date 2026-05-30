@@ -1489,3 +1489,13 @@ body {
 }
 
 /* Rich roster rows etc. will get custom ListItem renderers in the wrapper */
+
+/* Minimal shake for PIN gate error state (matches PinGate.tsx) */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 420ms cubic-bezier(0.36, 0, 0.66, -0.56);
+}

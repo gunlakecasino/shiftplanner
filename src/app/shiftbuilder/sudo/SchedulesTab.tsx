@@ -33,6 +33,8 @@ import {
   deleteSchedule,
   uploadScheduleFile,
   linkScheduleToWeek,
+  setWeekPublished,
+  setDatesPublished,
   type ScheduleRecord,
 } from "@/lib/shiftbuilder/sudoActions";
 import {
@@ -81,9 +83,14 @@ function buildNameLookups(
 
 export interface SchedulesTabProps {
   onDataChanged?: () => void;
+  isDark?: boolean;
+  /** From the new granular permissions system */
+  canSeeDraftData?: boolean;
+  canPublish?: boolean;
+  canApplySchedules?: boolean;
 }
 
-export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
+export function SchedulesTab({ onDataChanged, isDark = false, canSeeDraftData = false, canPublish = false, canApplySchedules = false }: SchedulesTabProps = {}) {
   const [view, setView] = React.useState<View>("list");
   const [schedules, setSchedules] = React.useState<ScheduleRecord[] | null>(null);
   const [listError, setListError] = React.useState<string | null>(null);
@@ -256,6 +263,40 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
     }
   };
 
+  const handlePublishWeek = async (record: ScheduleRecord, publish: boolean) => {
+    const action = publish ? "publish" : "unpublish";
+    if (!window.confirm(`${publish ? "Publish" : "Unpublish"} the entire week for "${record.schedulePath}"?`)) {
+      return;
+    }
+    setBusy(record.weekId);
+    try {
+      await setWeekPublished(record.weekId, publish);
+      flashToast("ok", `Week ${publish ? "published" : "unpublished"}.`);
+      await refreshList();
+      onDataChanged?.();
+    } catch (err) {
+      flashToast("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Day-level publish (can be called from preview or future granular UI)
+  const handlePublishDates = async (dates: string[], publish: boolean) => {
+    if (!dates.length) return;
+    setBusy("__dates__");
+    try {
+      const res = await setDatesPublished(dates, publish);
+      flashToast("ok", `${publish ? "Published" : "Unpublished"} ${res.updated} day(s).`);
+      await refreshList();
+      onDataChanged?.();
+    } catch (err) {
+      flashToast("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // ===== Render =====
 
   return (
@@ -301,10 +342,14 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
       {statusToast && (
         <div
           className={cn(
-            "mx-6 mt-3 rounded-lg px-3 py-2 text-[12px] border",
+            "mx-6 mt-3 rounded-xl px-3.5 py-2.5 text-[12px] border",
             statusToast.kind === "ok"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-              : "bg-red-500/10 border-red-500/30 text-red-200"
+              ? isDark
+                ? "bg-emerald-500/12 border-emerald-500/25 text-emerald-300"
+                : "bg-emerald-100 border-emerald-200 text-emerald-800"
+              : isDark
+              ? "bg-red-500/12 border-red-500/25 text-red-300"
+              : "bg-red-100 border-red-200 text-red-800"
           )}
         >
           {statusToast.msg}
@@ -318,7 +363,12 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
             schedules={schedules}
             listError={listError}
             busy={busy}
+            isDark={isDark}
+            canSeeDraftData={canSeeDraftData}
             onView={handleView}
+            onPublishWeek={handlePublishWeek}
+            canPublish={canSeeDraftData && canPublish}
+            canApplySchedules={canApplySchedules}
             onApply={async (rec) => {
               setBusy(rec.weekId);
               try {
@@ -394,11 +444,13 @@ export function SchedulesTab({ onDataChanged }: SchedulesTabProps = {}) {
           <SchedulePreview
             preview={preview}
             busy={busy}
+            canApplySchedules={canApplySchedules}
             onApply={async () => {
               if (preview.parsed) await handleApply(preview.record, preview.parsed);
             }}
             onUnapply={() => handleUnapply(preview.record)}
             onDelete={() => handleDelete(preview.record)}
+            onPublishDates={handlePublishDates}
             onToggleCallOff={async (tmId, iso) => {
               const key = `${tmId}|${iso}`;
               try {
@@ -451,7 +503,12 @@ function ScheduleList({
   schedules,
   listError,
   busy,
+  isDark = false,
+  canSeeDraftData = false,
+  canPublish = false,
+  canApplySchedules = false,
   onView,
+  onPublishWeek,
   onApply,
   onUnapply,
   onDelete,
@@ -460,13 +517,25 @@ function ScheduleList({
   schedules: ScheduleRecord[] | null;
   listError: string | null;
   busy: string | null;
+  isDark?: boolean;
+  canSeeDraftData?: boolean;
+  canPublish?: boolean;
+  canApplySchedules?: boolean;
   onView: (r: ScheduleRecord) => void;
+  onPublishWeek: (r: ScheduleRecord, publish: boolean) => void | Promise<void>;
   onApply: (r: ScheduleRecord) => void | Promise<void>;
   onUnapply: (r: ScheduleRecord) => void | Promise<void>;
   onDelete: (r: ScheduleRecord) => void | Promise<void>;
   onUpload: (f: File) => void | Promise<void>;
 }) {
   const [dragOver, setDragOver] = React.useState(false);
+
+  // Enforce draft visibility permission
+  const visibleSchedules = React.useMemo(() => {
+    if (!schedules) return null;
+    if (canSeeDraftData) return schedules;
+    return schedules.filter(s => s.status === "published");
+  }, [schedules, canSeeDraftData]);
 
   return (
     <div className="space-y-4">
@@ -488,20 +557,29 @@ function ScheduleList({
           if (f) onUpload(f);
         }}
         className={cn(
-          "border-2 border-dashed rounded-xl p-3 transition-all flex items-center justify-between",
+          "border-2 border-dashed rounded-2xl p-4 transition-all flex items-center justify-between",
           dragOver
-            ? "border-red-400/60 bg-red-500/5"
-            : "border-zinc-700 bg-zinc-900/30 hover:border-zinc-600"
+            ? isDark
+              ? "border-[#B89708]/60 bg-[#B89708]/5"
+              : "border-[#B89708]/70 bg-[#B89708]/5"
+            : isDark
+            ? "border-white/20 bg-white/5 hover:border-white/30"
+            : "border-black/15 bg-black/3 hover:border-black/25"
         )}
       >
         <div className="flex items-center gap-3">
-          <span className={cn("ms", dragOver ? "text-red-300" : "text-zinc-500")} style={{ fontSize: 16 }}>upload</span>
-          <span className="text-[12px] text-zinc-400">
+          <span className={cn("ms", dragOver ? "text-[#B89708]" : isDark ? "text-zinc-400" : "text-[#6C6C72]")} style={{ fontSize: 18 }}>upload</span>
+          <span className={cn("text-[12.5px]", isDark ? "text-zinc-300" : "text-[#3C3C43]")}>
             Drop an XLSX here to upload a new schedule
-            {busy === "__upload__" && <span className="ml-2 text-zinc-500">(uploading…)</span>}
+            {busy === "__upload__" && <span className="ml-2 text-[#6C6C72]">(uploading…)</span>}
           </span>
         </div>
-        <label className="text-[11px] px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer">
+        <label className={cn(
+          "text-[11px] px-3 py-1.5 rounded-xl font-medium cursor-pointer border transition-colors",
+          isDark
+            ? "bg-white/5 border-white/10 text-zinc-200 hover:bg-white/10"
+            : "bg-white border-black/10 text-[#1C1C1E] hover:bg-[#F8F8F6]"
+        )}>
           <input
             type="file"
             accept=".xlsx,.xls,.csv"
@@ -517,101 +595,168 @@ function ScheduleList({
 
       {/* List */}
       {listError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
-          <span className="ms inline mr-1" style={{ fontSize: 12 }}>warning</span>
+        <div className={cn(
+          "rounded-xl border px-3.5 py-2.5 text-[12.5px]",
+          isDark
+            ? "border-red-500/30 bg-red-500/10 text-red-300"
+            : "border-red-200 bg-red-50 text-red-800"
+        )}>
+          <span className="ms inline mr-1" style={{ fontSize: 13 }}>warning</span>
           {listError}
         </div>
       )}
 
       {schedules === null && (
-        <div className="text-zinc-500 text-[12px] flex items-center gap-2">
-          <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> Loading schedules…
+        <div className={cn("text-[12.5px] flex items-center gap-2", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>
+          <span className="ms animate-spin" style={{ fontSize: 13 }}>sync</span> Loading schedules…
         </div>
       )}
 
       {schedules?.length === 0 && (
-        <div className="text-center py-10 text-zinc-500 text-[12px]">
+        <div className={cn("text-center py-10 text-[13px]", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>
           No schedules uploaded yet. Drop an XLSX above to get started.
         </div>
       )}
 
-      {schedules && schedules.length > 0 && (
-        <div className="rounded-2xl border border-zinc-800 overflow-hidden">
-          <table className="w-full text-[12px]">
-            <thead className="bg-zinc-950 text-zinc-400 text-[10px] uppercase tracking-wider">
+      {visibleSchedules && visibleSchedules.length > 0 && (
+        <div className={cn("rounded-2xl border overflow-hidden", isDark ? "border-white/10" : "border-black/10")}>
+          <table className="w-full text-[12.5px]">
+            <thead className={cn(
+              "text-[10px] uppercase tracking-[0.8px] font-medium",
+              isDark ? "bg-[#1C1C1E] text-[#8E8E93]" : "bg-[#F2F2F0] text-[#5A5A5F]"
+            )}>
               <tr>
-                <th className="text-left px-4 py-2.5 font-medium">Week ending</th>
-                <th className="text-left px-4 py-2.5 font-medium">File</th>
-                <th className="text-left px-4 py-2.5 font-medium">Status</th>
-                <th className="text-right px-4 py-2.5 font-medium">Size</th>
-                <th className="text-right px-4 py-2.5 font-medium">Applied rows</th>
-                <th className="text-right px-4 py-2.5 font-medium w-[280px]">Actions</th>
+                <th className="text-left px-4 py-3">Week ending</th>
+                <th className="text-left px-4 py-3">File</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-right px-4 py-3">Size</th>
+                <th className="text-right px-4 py-3">Applied rows</th>
+                <th className="text-right px-4 py-3 w-[300px]">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {schedules.map((s) => {
+              {visibleSchedules.map((s) => {
                 const isBusy = busy === s.weekId;
                 return (
-                  <tr key={s.weekId} className="border-t border-zinc-900 hover:bg-zinc-900/40">
-                    <td className="px-4 py-3 text-zinc-200 font-mono">{s.weekEnding}</td>
-                    <td className="px-4 py-3 text-zinc-300 font-mono text-[11.5px] truncate max-w-[280px]">
+                  <tr 
+                    key={s.weekId} 
+                    className={cn(
+                      "border-t hover:bg-black/3 dark:hover:bg-white/3 transition-colors",
+                      isDark ? "border-white/5" : "border-black/5"
+                    )}
+                  >
+                    <td className={cn("px-4 py-3 font-mono tabular-nums", isDark ? "text-zinc-300" : "text-[#2C2C2E]")}>
+                      {s.weekEnding}
+                    </td>
+                    <td className={cn("px-4 py-3 font-mono text-[11.5px] truncate max-w-[300px]", isDark ? "text-zinc-200" : "text-[#1C1C1E] font-medium")}>
                       {s.schedulePath}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
-                          "text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border",
+                          "text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono border",
                           s.status === "published"
-                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                            : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                            ? isDark
+                              ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
+                              : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : isDark
+                            ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
+                            : "bg-amber-100 text-amber-800 border-amber-200"
                         )}
                       >
                         {s.status || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-400 font-mono text-[11px]">
+                    <td className={cn("px-4 py-3 text-right font-mono text-[11px]", isDark ? "text-zinc-400" : "text-[#5A5A5F]")}>
                       {formatBytes(s.storageSizeBytes)}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-400 font-mono text-[11px]">
+                    <td className="px-4 py-3 text-right font-mono text-[11px]">
                       {s.appliedRowCount > 0 ? (
-                        <span className="text-emerald-300">{s.appliedRowCount}</span>
+                        <span className={isDark ? "text-emerald-300" : "text-emerald-700 font-medium"}>{s.appliedRowCount}</span>
                       ) : (
-                        <span className="text-zinc-600">0</span>
+                        <span className={isDark ? "text-zinc-600" : "text-[#8E8E93]"}>0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
+                    <td className="px-4 py-2.5 text-right">
+                      <div className="inline-flex items-center gap-1 flex-wrap justify-end">
+                        {/* Publish / Unpublish Week - only if user has permission */}
+                        {canSeeDraftData && canPublish && (
+                          <>
+                            {s.status !== "published" ? (
+                              <button
+                                onClick={() => onPublishWeek(s, true)}
+                                disabled={isBusy}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-medium font-mono inline-flex items-center gap-1 disabled:opacity-50 active:scale-[0.985] transition-all"
+                                title="Mark entire week as officially published"
+                              >
+                                publish
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onPublishWeek(s, false)}
+                                disabled={isBusy}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50 transition-colors border",
+                                  isDark
+                                    ? "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+                                    : "bg-white border-black/10 text-[#3C3C43] hover:bg-[#F2F2F0]"
+                                )}
+                                title="Revert week to draft status"
+                              >
+                                unpublish
+                              </button>
+                            )}
+                          </>
+                        )}
+
                         <button
                           onClick={() => onView(s)}
                           disabled={isBusy}
-                          className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50 transition-colors border",
+                            isDark
+                              ? "bg-white/5 border-white/10 text-zinc-200 hover:bg-white/10"
+                              : "bg-white border-black/10 text-[#1C1C1E] hover:bg-[#F2F2F0]"
+                          )}
                           title="View"
                         >
-                          <span className="ms" style={{ fontSize: 12 }}>visibility</span> view
+                          <span className="ms" style={{ fontSize: 13 }}>visibility</span> view
                         </button>
-                        <button
-                          onClick={() => onApply(s)}
-                          disabled={isBusy}
-                          className="px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-white text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
-                          title="Apply roster to night_tm_status"
-                        >
-                          {isBusy ? <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> : "apply"}
-                        </button>
+                        {canApplySchedules && (
+                          <button
+                            onClick={() => onApply(s)}
+                            disabled={isBusy}
+                            className="px-2.5 py-1 rounded-lg bg-[#C13A14] hover:bg-[#A12F10] text-white text-[10px] font-medium font-mono inline-flex items-center gap-1 disabled:opacity-50 active:scale-[0.985] transition-all"
+                            title="Apply roster to night_tm_status"
+                          >
+                            {isBusy ? <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> : "apply"}
+                          </button>
+                        )}
                         <button
                           onClick={() => onUnapply(s)}
                           disabled={isBusy || s.appliedRowCount === 0}
-                          className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-30 disabled:hover:bg-zinc-800"
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-40 transition-colors border",
+                            isDark
+                              ? "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+                              : "bg-white border-black/10 text-[#3C3C43] hover:bg-[#F2F2F0]"
+                          )}
                           title="Remove this schedule's rows from night_tm_status"
                         >
-                          <span className="ms" style={{ fontSize: 12 }}>undo</span> unapply
+                          <span className="ms" style={{ fontSize: 13 }}>undo</span> unapply
                         </button>
                         <button
                           onClick={() => onDelete(s)}
                           disabled={isBusy}
-                          className="px-2 py-1 rounded bg-zinc-800 hover:bg-red-600/30 text-zinc-400 hover:text-red-300 text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50"
+                          className={cn(
+                            "px-2 py-1 rounded-lg text-[10px] font-mono inline-flex items-center gap-1 disabled:opacity-50 transition-colors",
+                            isDark
+                              ? "text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
+                              : "text-[#6C6C72] hover:text-red-600 hover:bg-red-50"
+                          )}
                           title="Delete file + clear schedule"
                         >
-                          <span className="ms" style={{ fontSize: 12 }}>delete</span>
+                          <span className="ms" style={{ fontSize: 13 }}>delete</span>
                         </button>
                       </div>
                     </td>
@@ -633,17 +778,21 @@ function ScheduleList({
 function SchedulePreview({
   preview,
   busy,
+  canApplySchedules = false,
   onApply,
   onUnapply,
   onDelete,
   onToggleCallOff,
+  onPublishDates,
 }: {
   preview: PreviewState;
   busy: string | null;
+  canApplySchedules?: boolean;
   onApply: () => void | Promise<void>;
   onUnapply: () => void | Promise<void>;
   onDelete: () => void | Promise<void>;
   onToggleCallOff: (tmId: string, iso: string) => void | Promise<void>;
+  onPublishDates?: (dates: string[], publish: boolean) => void | Promise<void>;
 }) {
   const { record, parsed, callOffSet, loading, error } = preview;
   const isBusy = busy === record.weekId;
@@ -704,14 +853,16 @@ function SchedulePreview({
           {stats.dateRange ? `${stats.dateRange.first} → ${stats.dateRange.last}` : "no dates"}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onApply}
-            disabled={isBusy}
-            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-60"
-          >
-            {isBusy ? <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> : null}
-            Apply
-          </button>
+          {canApplySchedules && (
+            <button
+              onClick={onApply}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5 disabled:opacity-60"
+            >
+              {isBusy ? <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> : null}
+              Apply
+            </button>
+          )}
           <button
             onClick={onUnapply}
             disabled={isBusy || record.appliedRowCount === 0}
@@ -729,6 +880,48 @@ function SchedulePreview({
           </button>
         </div>
       </div>
+
+      {/* Day-level Publish Controls (granular) */}
+      {onPublishDates && parsed?.dateColumns?.length > 0 && (
+        <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/2 dark:bg-white/3 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] uppercase tracking-[1px] font-mono text-[#6C6C72] dark:text-[#8E8E93]">
+              PUBLISH SPECIFIC DAYS
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onPublishDates(parsed.dateColumns.map(c => c.iso), true)}
+                disabled={!!busy}
+                className="px-2.5 py-0.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
+              >
+                Publish All Days
+              </button>
+              <button
+                onClick={() => onPublishDates(parsed.dateColumns.map(c => c.iso), false)}
+                disabled={!!busy}
+                className="px-2.5 py-0.5 text-xs rounded-lg border text-current hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                Unpublish All
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {parsed.dateColumns.map((col) => (
+              <button
+                key={col.iso}
+                onClick={() => onPublishDates([col.iso], true)}
+                disabled={!!busy}
+                className="px-2.5 py-1 text-[11px] rounded-xl border border-black/10 dark:border-white/15 font-mono transition-all active:scale-[0.97] hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+              >
+                {col.rawHeader || col.iso}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] mt-2 text-[#6C6C72] dark:text-zinc-500">
+            Use these for partial weeks — publish only the days that are final.
+          </div>
+        </div>
+      )}
 
       {/* Debug summary — surfaces why a schedule produces empty zones */}
       <details className="rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-3" open={missingGraveTMs.length > 0 || unmatchedRows.length > 0}>

@@ -23,7 +23,6 @@
  */
 
 import React from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
   listAllTMs,
@@ -45,14 +44,23 @@ import {
   type TMSlotSkill,
 } from "@/lib/shiftbuilder/sudoActions";
 import { supabase } from "@/lib/supabase";
+import {
+  GlassSurface,
+  GoldHairline,
+  SudoBanner,
+  CenteredGlassModal,
+  SudoTabButton,
+} from "./SudoGlass";
 
 export interface TeamTabProps {
   onDataChanged?: () => void;
+  /** Follows the parent Sudo theme for correct glass + text colors */
+  isDark?: boolean;
 }
 
 type Filter = "active" | "inactive" | "all";
 
-export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
+export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
   // Phase 1 (2026-05-28) — "Zone Matrix" sub-tab / section.
   // Shows per-TM last placement + 4w/8w/lifetime counts per zone from the new tm_zone_matrix table.
   // Powered by getTmZoneMatrix() + the placement history writer in data.ts.
@@ -179,17 +187,17 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-black/10 dark:border-white/10 flex items-center justify-between bg-black/3 dark:bg-white/3">
         <div>
-          <h2 className="font-semibold text-[15px] text-zinc-100">Team</h2>
-          <p className="text-[12px] text-zinc-500 leading-snug max-w-2xl">
+          <h2 className={cn("font-semibold text-[15px]", isDark ? "text-zinc-100" : "text-[#1C1C1E]")}>Team</h2>
+          <p className={cn("text-[12px] leading-snug max-w-2xl", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
             Manage every TM in <span className="font-mono">tm_profiles</span>. Edit identity,
             grave pool, preferences, accommodations, and per-slot skill scores.
           </p>
         </div>
         <button
           onClick={refresh}
-          className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5"
+          className={cn("text-[11px] inline-flex items-center gap-1.5", isDark ? "text-zinc-400 hover:text-zinc-200" : "text-[#6C6C72] hover:text-[#111]")}
         >
           <span className="ms" style={{ fontSize: 12 }}>refresh</span> refresh
         </button>
@@ -197,16 +205,9 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
 
       {/* Toast */}
       {toast && (
-        <div
-          className={cn(
-            "mx-6 mt-3 rounded-lg px-3 py-2 text-[12px] border",
-            toast.kind === "ok"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-              : "bg-red-500/10 border-red-500/30 text-red-200"
-          )}
-        >
+        <SudoBanner kind={toast.kind} isDark={isDark} className="mx-6 mt-3">
           {toast.msg}
-        </div>
+        </SudoBanner>
       )}
 
       {/* Body */}
@@ -326,16 +327,21 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
         {/* Filter bar */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
-            <span className="ms absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" style={{ fontSize: 14 }}>search</span>
+            <span className={cn("ms absolute left-2.5 top-1/2 -translate-y-1/2", isDark ? "text-zinc-500" : "text-[#6C6C72]")} style={{ fontSize: 14 }}>search</span>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by display name, full name, or tm_id…"
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+              className={cn(
+                "w-full pl-8 pr-3 py-1.5 rounded-lg text-[12px] focus:outline-none transition-colors",
+                isDark
+                  ? "bg-[#1C1C1E] border border-[#3A3A3C] text-[#F2F2F4] placeholder:text-zinc-600 focus:border-[#B89708]/60"
+                  : "bg-white border border-[#E5E5E7] text-[#1C1C1E] placeholder:text-[#9CA3AF] focus:border-[#B89708]/60"
+              )}
             />
           </div>
-          <div className="flex items-center gap-1 rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+          <div className={cn("flex items-center gap-1 rounded-lg p-0.5 border", isDark ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5E7]")}>
             {(["active", "inactive", "all"] as Filter[]).map((f) => (
               <button
                 key={f}
@@ -343,8 +349,12 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                 className={cn(
                   "px-2.5 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors",
                   filter === f
-                    ? "bg-red-500/20 text-red-200"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? isDark
+                      ? "bg-[#B89708]/15 text-[#E9B948]"
+                      : "bg-[#B89708]/10 text-[#8B6910]"
+                    : isDark
+                    ? "text-zinc-400 hover:text-zinc-200"
+                    : "text-[#6C6C72] hover:text-[#111]"
                 )}
               >
                 {f}
@@ -362,7 +372,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                 flash("err", err instanceof Error ? err.message : String(err));
               }
             }}
-            className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-medium inline-flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[11px] font-medium inline-flex items-center gap-1.5 active:scale-[0.985] transition-all"
           >
             <span className="ms" style={{ fontSize: 12 }}>person_add</span> new TM
           </button>
@@ -381,9 +391,9 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
           </div>
         )}
         {tms && (
-          <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+          <div className={cn("rounded-2xl border overflow-hidden", isDark ? "border-white/10" : "border-black/10")}>
             <table className="w-full text-[12px]">
-              <thead className="bg-zinc-950 text-zinc-400 text-[10px] uppercase tracking-wider">
+              <thead className={cn("text-[10px] uppercase tracking-wider", isDark ? "bg-[#1C1C1E] text-[#8E8E93]" : "bg-[#F2F2F0] text-[#6C6C72]")}>
                 <tr>
                   <th className="text-left px-4 py-2.5 font-medium">Display name</th>
                   <th className="text-left px-4 py-2.5 font-medium">Full name</th>
@@ -399,27 +409,28 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
                     key={tm.tmId}
                     onClick={() => setDrawerTmId(tm.tmId)}
                     className={cn(
-                      "border-t border-zinc-900 hover:bg-zinc-900/40 cursor-pointer",
+                      "border-t cursor-pointer transition-colors",
+                      isDark ? "border-white/5 hover:bg-white/5" : "border-black/5 hover:bg-black/5",
                       !tm.active && "opacity-60"
                     )}
                   >
-                    <td className="px-4 py-2.5 text-zinc-100 font-medium">{tm.displayName}</td>
-                    <td className="px-4 py-2.5 text-zinc-400">{tm.fullName ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-500 font-mono text-[11px]">{tm.tmId}</td>
+                    <td className={cn("px-4 py-2.5 font-medium", isDark ? "text-zinc-100" : "text-[#1C1C1E]")}>{tm.displayName}</td>
+                    <td className={cn("px-4 py-2.5", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>{tm.fullName ?? "—"}</td>
+                    <td className={cn("px-4 py-2.5 font-mono text-[11px]", isDark ? "text-zinc-500" : "text-[#8E8E93]")}>{tm.tmId}</td>
                     <td className="px-4 py-2.5">
-                      <PoolPill pool={tm.gravePool} />
+                      <PoolPill pool={tm.gravePool} isDark={isDark} />
                     </td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono text-[11px]">
+                    <td className={cn("px-4 py-2.5 text-right font-mono text-[11px]", isDark ? "text-zinc-300" : "text-[#3C3C43]")}>
                       {tm.skillScore === null ? "—" : tm.skillScore.toFixed(1)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <StatusPill active={tm.active} status={tm.status} />
+                      <StatusPill active={tm.active} status={tm.status} isDark={isDark} />
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-zinc-500 text-[12px]">
+                    <td colSpan={6} className={cn("px-4 py-6 text-center text-[12px]", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
                       No TMs match the current filter.
                     </td>
                   </tr>
@@ -430,7 +441,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
         )}
       </div>
 
-      {/* Drawer */}
+      {/* Drawer — now a centered premium glass modal (per approved direction) */}
       {drawerTM && (
         <TMEditDrawer
           tm={drawerTM}
@@ -441,6 +452,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
             onDataChanged?.();
           }}
           onFlash={flash}
+          isDark={isDark}
         />
       )}
     </div>
@@ -451,7 +463,7 @@ export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
 // Pills
 // =====================================================================
 
-function PoolPill({ pool }: { pool: string | null }) {
+function PoolPill({ pool, isDark = false }: { pool: string | null; isDark?: boolean }) {
   if (!pool) return <span className="text-zinc-600 text-[10px] font-mono">—</span>;
   const p = pool.toUpperCase();
   const label =
@@ -480,7 +492,7 @@ function PoolPill({ pool }: { pool: string | null }) {
   );
 }
 
-function StatusPill({ active, status }: { active: boolean; status: string }) {
+function StatusPill({ active, status, isDark = false }: { active: boolean; status: string; isDark?: boolean }) {
   if (!active) {
     const color =
       status === "LOA"
@@ -513,12 +525,14 @@ function TMEditDrawer({
   onClose,
   onSaved,
   onFlash,
+  isDark = false,
 }: {
   tm: TMRecord;
   allSlotIds: string[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
   onFlash: (kind: "ok" | "err", msg: string) => void;
+  isDark?: boolean;
 }) {
   const [tab, setTab] = React.useState<DrawerTab>("identity");
   const [form, setForm] = React.useState<TMRecord>(tm);
@@ -631,138 +645,137 @@ function TMEditDrawer({
     }
   };
 
-  const content = (
-    <div className="fixed inset-0 z-[10010] flex justify-end" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative h-full w-[640px] bg-zinc-950 text-zinc-100 border-l border-zinc-800 shadow-2xl flex flex-col overflow-hidden"
-        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-semibold text-zinc-100">{form.displayName || "(no display name)"}</div>
-            <div className="text-[10px] font-mono text-zinc-500">{form.tmId}</div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-100 rounded p-1 transition-colors"
-            aria-label="Close drawer"
-          >
-            <span className="ms" style={{ fontSize: 16 }}>close</span>
-          </button>
-        </div>
-
-        {/* Tab rail */}
-        <div className="px-3 border-b border-zinc-800 flex items-center gap-1">
-          {(["identity", "grave", "prefs", "skills"] as DrawerTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                "px-3 py-2 text-[11px] uppercase tracking-wider font-mono transition-colors border-b-2",
-                tab === t
-                  ? "border-red-400 text-red-200"
-                  : "border-transparent text-zinc-500 hover:text-zinc-300"
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {/* In-drawer toast */}
-        {drawerToast && (
-          <div
-            className={cn(
-              "mx-4 mt-2 rounded-lg px-3 py-2 text-[12px] border",
-              drawerToast.kind === "ok"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                : "bg-red-500/10 border-red-500/30 text-red-200"
-            )}
-          >
-            {drawerToast.msg}
-          </div>
-        )}
-
-        {/* Body */}
-        <div className="flex-1 min-h-0 overflow-auto px-5 py-4 space-y-4">
-          {tab === "identity" && (
-            <IdentityForm form={form} setForm={setForm} />
-          )}
-          {tab === "grave" && <GraveForm form={form} setForm={setForm} />}
-          {tab === "prefs" && detail && (
-            <PrefsForm
-              tmId={form.tmId}
-              preferences={detail.preferences}
-              accommodations={detail.accommodations}
-              onChanged={async () => {
-                const d = await getTMDetail(form.tmId);
-                setDetail(d);
-              }}
-              onFlash={onFlash}
-            />
-          )}
-          {tab === "skills" && detail && (
-            <SkillsForm
-              tmId={form.tmId}
-              overallScore={form.skillScore}
-              onOverallChange={(v) => setForm((f) => ({ ...f, skillScore: v }))}
-              slotSkills={detail.slotSkills}
-              allSlotIds={allSlotIds}
-              onScoreSaved={async () => {
-                const d = await getTMDetail(form.tmId);
-                setDetail(d);
-              }}
-              onFlash={onFlash}
-            />
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-zinc-800 bg-zinc-950/60 px-4 py-2.5 flex items-center justify-between gap-2">
+  // New centered premium glass modal (replaces the old right slide-in)
+  return (
+    <CenteredGlassModal
+      open={true}
+      onClose={onClose}
+      isDark={isDark}
+      width={680}
+      title={form.displayName || "(no display name)"}
+      subtitle={form.tmId}
+      headerActions={
+        saving ? (
+          <span className="text-[11px] text-[#6C6C72] dark:text-zinc-500 font-mono mr-2">saving…</span>
+        ) : null
+      }
+      footer={
+        <div className="flex items-center justify-between gap-3">
           <div>
             {form.active ? (
               <button
                 onClick={softDelete}
                 disabled={saving}
-                className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-red-600/30 text-zinc-400 hover:text-red-300 text-[11px] font-mono inline-flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-black/10 dark:border-white/10 text-[#6C6C72] dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
-                <span className="ms" style={{ fontSize: 12 }}>archive</span> soft-delete
+                <span className="ms mr-1" style={{ fontSize: 12 }}>archive</span>
+                soft-delete
               </button>
             ) : (
               <button
                 onClick={restore}
                 disabled={saving}
-                className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-emerald-500/20 text-zinc-400 hover:text-emerald-300 text-[11px] font-mono inline-flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-black/10 dark:border-white/10 text-[#6C6C72] dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
               >
-                <span className="ms" style={{ fontSize: 12 }}>undo</span> restore
+                <span className="ms mr-1" style={{ fontSize: 12 }}>undo</span>
+                restore
               </button>
             )}
           </div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 text-[12px]"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-[12px] text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={save}
               disabled={saving}
-              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-medium inline-flex items-center gap-1.5"
+              className="px-5 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[12px] font-medium inline-flex items-center gap-2 shadow-sm active:scale-[0.985] transition-all"
             >
-              {saving ? <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> : <span className="ms" style={{ fontSize: 12 }}>check_circle</span>}
-              Save
+              {saving ? (
+                <>
+                  <span className="ms animate-spin" style={{ fontSize: 14 }}>refresh</span>
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <span className="ms" style={{ fontSize: 14 }}>check_circle</span>
+                  Save Changes
+                </>
+              )}
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
+      }
+    >
+      {/* In-modal toast banner */}
+      {drawerToast && (
+        <SudoBanner kind={drawerToast.kind} isDark={isDark} className="mb-4">
+          {drawerToast.msg}
+        </SudoBanner>
+      )}
 
-  return createPortal(content, document.body);
+      {/* Horizontal tab strip (gold accent for active) */}
+      <div className="flex items-center gap-1 border-b border-black/10 dark:border-white/10 pb-2 mb-4">
+        {(["identity", "grave", "prefs", "skills"] as DrawerTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              "px-4 py-1.5 text-[11px] uppercase tracking-[1px] font-mono rounded-lg transition-all",
+              tab === t
+                ? isDark
+                  ? "bg-[#B89708]/15 text-[#E9B948] border border-[#B89708]/30"
+                  : "bg-[#B89708]/10 text-[#8B6910] border border-[#B89708]/25"
+                : isDark
+                ? "text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                : "text-[#6C6C72] hover:bg-black/5 hover:text-[#111]"
+            )}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Form body */}
+      <div className="space-y-4 text-[13px]">
+        {tab === "identity" && <IdentityForm form={form} setForm={setForm} isDark={isDark} />}
+        {tab === "grave" && <GraveForm form={form} setForm={setForm} isDark={isDark} />}
+        {tab === "prefs" && detail && (
+          <PrefsForm
+            tmId={form.tmId}
+            preferences={detail.preferences}
+            accommodations={detail.accommodations}
+            onChanged={async () => {
+              const d = await getTMDetail(form.tmId);
+              setDetail(d);
+            }}
+            onFlash={onFlash}
+            isDark={isDark}
+          />
+        )}
+        {tab === "skills" && detail && (
+          <SkillsForm
+            tmId={form.tmId}
+            overallScore={form.skillScore}
+            onOverallChange={(v) => setForm((f) => ({ ...f, skillScore: v }))}
+            slotSkills={detail.slotSkills}
+            allSlotIds={allSlotIds}
+            onScoreSaved={async () => {
+              const d = await getTMDetail(form.tmId);
+              setDetail(d);
+            }}
+            onFlash={onFlash}
+            isDark={isDark}
+          />
+        )}
+      </div>
+    </CenteredGlassModal>
+  );
 }
 
 // =====================================================================
@@ -772,40 +785,42 @@ function TMEditDrawer({
 function IdentityForm({
   form,
   setForm,
+  isDark = false,
 }: {
   form: TMRecord;
   setForm: React.Dispatch<React.SetStateAction<TMRecord>>;
+  isDark?: boolean;
 }) {
   return (
     <div className="space-y-3">
-      <Field label="Display Name *">
+      <Field label="Display Name *" isDark={isDark}>
         <input
           type="text"
           value={form.displayName ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-          className={inputCx}
+          className={inputCx(isDark)}
         />
       </Field>
-      <Field label="Full Name (legal / payroll)">
+      <Field label="Full Name (legal / payroll)" isDark={isDark}>
         <input
           type="text"
           value={form.fullName ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-          className={inputCx}
+          className={inputCx(isDark)}
         />
       </Field>
-      <Field label="Employee Name (as it appears in ADP)">
+      <Field label="Employee Name (as it appears in ADP)" isDark={isDark}>
         <input
           type="text"
           value={form.employeeName ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, employeeName: e.target.value }))}
-          className={inputCx}
+          className={inputCx(isDark)}
         />
       </Field>
-      <Field label="tm_id (immutable)">
-        <input type="text" value={form.tmId} readOnly disabled className={cn(inputCx, "opacity-60")} />
+      <Field label="tm_id (immutable)" isDark={isDark}>
+        <input type="text" value={form.tmId} readOnly disabled className={cn(inputCx(isDark), "opacity-60")} />
       </Field>
-      <Field label="Active status">
+      <Field label="Active status" isDark={isDark}>
         <div className="flex gap-1.5 items-center">
           {([true, false] as const).map((opt) => (
             <button
@@ -815,21 +830,18 @@ function IdentityForm({
                 setForm((f) => ({
                   ...f,
                   active: opt,
-                  // valid status values: 'active' | 'LOA' | 'transferred' | 'separated' | 'other'
-                  status: opt
-                    ? "active"
-                    : f.status === "active"
-                    ? "separated"
-                    : f.status,
+                  status: opt ? "active" : f.status === "active" ? "separated" : f.status,
                 }))
               }
               className={cn(
                 "px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border transition-colors",
                 form.active === opt
                   ? opt
-                    ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
-                    : "bg-zinc-700 text-zinc-300 border-zinc-600"
-                  : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-200 border-amber-500/30"
+                  : isDark
+                  ? "bg-white/5 text-zinc-400 border-white/10 hover:text-zinc-200"
+                  : "bg-black/5 text-[#6C6C72] border-black/10 hover:text-[#111]"
               )}
             >
               {opt ? "active" : "inactive"}
@@ -839,7 +851,7 @@ function IdentityForm({
             <select
               value={form.status}
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-              className="ml-2 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+              className={cn("ml-2 px-2 py-1.5 rounded-lg text-[11px] font-mono focus:outline-none", miniSelectCx(isDark))}
             >
               <option value="separated">separated</option>
               <option value="LOA">LOA</option>
@@ -848,16 +860,16 @@ function IdentityForm({
             </select>
           )}
         </div>
-        <p className="text-[10px] text-zinc-600 mt-1">
+        <p className={cn("text-[10px] mt-1", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
           Inactive TMs are hidden from the engine roster and the active filter. Hit Save to persist.
         </p>
       </Field>
-      <Field label="Notes">
+      <Field label="Notes" isDark={isDark}>
         <textarea
           rows={4}
           value={form.notes ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-          className={inputCx}
+          className={inputCx(isDark)}
         />
       </Field>
     </div>
@@ -867,13 +879,15 @@ function IdentityForm({
 function GraveForm({
   form,
   setForm,
+  isDark = false,
 }: {
   form: TMRecord;
   setForm: React.Dispatch<React.SetStateAction<TMRecord>>;
+  isDark?: boolean;
 }) {
   return (
     <div className="space-y-3">
-      <Field label="Grave Pool">
+      <Field label="Grave Pool" isDark={isDark}>
         <div className="flex flex-wrap gap-1.5">
           {([
             { value: null,    label: "None",       active: "bg-zinc-700 text-zinc-200 border-zinc-500" },
@@ -890,39 +904,41 @@ function GraveForm({
                 "px-3 py-1.5 rounded-lg text-[11px] font-mono tracking-wider border transition-colors",
                 form.gravePool === value
                   ? active
-                  : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
+                  : isDark
+                  ? "bg-white/5 text-zinc-400 border-white/10 hover:text-zinc-200"
+                  : "bg-black/5 text-[#6C6C72] border-black/10 hover:text-[#111]"
               )}
             >
               {label}
             </button>
           ))}
         </div>
-        <div className="text-[10px] text-zinc-500 mt-1.5 leading-relaxed">
-          <span className="text-[#60aaff]">Graves</span> = full 11pm–7am shift ·{" "}
-          <span className="text-[#d084f0]">PM Overlap</span> = out at ~1am ·{" "}
-          <span className="text-[#5ddf7d]">AM Overlap</span> = in at 5am–5:15am (on next day's ADP schedule) ·{" "}
-          <span className="text-zinc-400">None</span> = not on grave shift
+        <div className={cn("text-[10px] mt-1.5 leading-relaxed", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
+          <span className="text-[#007AFF]">Graves</span> = full 11pm–7am shift ·{" "}
+          <span className="text-[#AF52DE]">PM Overlap</span> = out at ~1am ·{" "}
+          <span className="text-[#34C759]">AM Overlap</span> = in at 5am–5:15am (on next day's ADP schedule) ·{" "}
+          <span className={isDark ? "text-zinc-400" : "text-[#6C6C72]"}>None</span> = not on grave shift
         </div>
       </Field>
-      <Field label="Primary Section">
+      <Field label="Primary Section" isDark={isDark}>
         <input
           type="text"
           value={form.primarySection ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, primarySection: e.target.value || null }))}
-          className={inputCx}
+          className={inputCx(isDark)}
           placeholder="e.g. zones / restrooms / aux"
         />
       </Field>
-      <Field label="Slot Preference">
+      <Field label="Slot Preference" isDark={isDark}>
         <input
           type="text"
           value={form.slotPreference ?? ""}
           onChange={(e) => setForm((f) => ({ ...f, slotPreference: e.target.value || null }))}
-          className={inputCx}
+          className={inputCx(isDark)}
           placeholder="e.g. Z9SR, ADM"
         />
       </Field>
-      <Field label="Tie-Break Rank">
+      <Field label="Tie-Break Rank" isDark={isDark}>
         <input
           type="number"
           value={form.tieBreakRank ?? ""}
@@ -932,7 +948,7 @@ function GraveForm({
               tieBreakRank: e.target.value === "" ? null : Number(e.target.value),
             }))
           }
-          className={inputCx}
+          className={inputCx(isDark)}
         />
       </Field>
     </div>
@@ -945,12 +961,14 @@ function PrefsForm({
   accommodations,
   onChanged,
   onFlash,
+  isDark = false,
 }: {
   tmId: string;
   preferences: TMPreference[];
   accommodations: TMAccommodation[];
   onChanged: () => void | Promise<void>;
   onFlash: (kind: "ok" | "err", msg: string) => void;
+  isDark?: boolean;
 }) {
   const [newPref, setNewPref] = React.useState({ stance: "prefer", strength: "soft", target: "", note: "" });
   const [newAcc, setNewAcc] = React.useState({ type: "physical", severity: "soft", target: "", note: "" });
@@ -1007,7 +1025,7 @@ function PrefsForm({
                   <select
                     value={newPref.stance}
                     onChange={(e) => setNewPref({ ...newPref, stance: e.target.value })}
-                    className={miniSelectCx}
+                    className={miniSelectCx(isDark)}
                   >
                     <option value="prefer">prefer</option>
                     <option value="avoid">avoid</option>
@@ -1017,7 +1035,7 @@ function PrefsForm({
                   <select
                     value={newPref.strength}
                     onChange={(e) => setNewPref({ ...newPref, strength: e.target.value })}
-                    className={miniSelectCx}
+                    className={miniSelectCx(isDark)}
                   >
                     <option value="soft">soft</option>
                     <option value="hard">hard</option>
@@ -1029,7 +1047,7 @@ function PrefsForm({
                     value={newPref.target}
                     placeholder="slot / area / TM"
                     onChange={(e) => setNewPref({ ...newPref, target: e.target.value })}
-                    className={miniInputCx}
+                    className={miniInputCx(isDark)}
                   />
                 </td>
                 <td className="px-2 py-1.5">
@@ -1038,7 +1056,7 @@ function PrefsForm({
                     value={newPref.note}
                     placeholder="optional note"
                     onChange={(e) => setNewPref({ ...newPref, note: e.target.value })}
-                    className={miniInputCx}
+                    className={miniInputCx(isDark)}
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -1114,7 +1132,7 @@ function PrefsForm({
                   <select
                     value={newAcc.type}
                     onChange={(e) => setNewAcc({ ...newAcc, type: e.target.value })}
-                    className={miniSelectCx}
+                    className={miniSelectCx(isDark)}
                   >
                     <option value="physical">physical</option>
                     <option value="medical">medical</option>
@@ -1126,7 +1144,7 @@ function PrefsForm({
                   <select
                     value={newAcc.severity}
                     onChange={(e) => setNewAcc({ ...newAcc, severity: e.target.value })}
-                    className={miniSelectCx}
+                    className={miniSelectCx(isDark)}
                   >
                     <option value="soft">soft</option>
                     <option value="hard">hard</option>
@@ -1138,7 +1156,7 @@ function PrefsForm({
                     value={newAcc.target}
                     placeholder="e.g. no_sweeper"
                     onChange={(e) => setNewAcc({ ...newAcc, target: e.target.value })}
-                    className={miniInputCx}
+                    className={miniInputCx(isDark)}
                   />
                 </td>
                 <td className="px-2 py-1.5">
@@ -1147,7 +1165,7 @@ function PrefsForm({
                     value={newAcc.note}
                     placeholder="required note"
                     onChange={(e) => setNewAcc({ ...newAcc, note: e.target.value })}
-                    className={miniInputCx}
+                    className={miniInputCx(isDark)}
                   />
                 </td>
                 <td className="px-2 py-1.5 text-right">
@@ -1191,6 +1209,7 @@ function SkillsForm({
   allSlotIds,
   onScoreSaved,
   onFlash,
+  isDark = false,
 }: {
   tmId: string;
   overallScore: number | null;
@@ -1199,6 +1218,7 @@ function SkillsForm({
   allSlotIds: string[];
   onScoreSaved: () => void | Promise<void>;
   onFlash: (kind: "ok" | "err", msg: string) => void;
+  isDark?: boolean;
 }) {
   const byId = React.useMemo(() => {
     const m = new Map<string, number>();
@@ -1237,7 +1257,7 @@ function SkillsForm({
             onChange={(e) =>
               onOverallChange(e.target.value === "" ? null : Number(e.target.value))
             }
-            className={cn(inputCx, "w-20 text-center")}
+            className={cn(inputCx(isDark), "w-20 text-center")}
           />
         </div>
       </Field>
@@ -1297,17 +1317,36 @@ function SkillsForm({
 // Form primitives
 // =====================================================================
 
-const inputCx =
-  "w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600";
-const miniInputCx =
-  "w-full px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:border-zinc-600";
-const miniSelectCx =
-  "px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-200 focus:outline-none focus:border-zinc-600";
+const inputCx = (isDark: boolean) =>
+  cn(
+    "w-full px-2.5 py-1.5 rounded-lg text-[12px] placeholder:text-[#9CA3AF] focus:outline-none transition-colors",
+    isDark
+      ? "bg-[#1C1C1E] border border-[#3A3A3C] text-[#F2F2F4] focus:border-[#B89708]/60"
+      : "bg-white border border-[#E5E5E7] text-[#1C1C1E] focus:border-[#B89708]/60"
+  );
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const miniInputCx = (isDark: boolean) =>
+  cn(
+    "w-full px-2 py-1 rounded text-[11px] focus:outline-none transition-colors",
+    isDark
+      ? "bg-[#0F0E10] border border-[#3A3A3C] text-[#F2F2F4] focus:border-[#B89708]/50"
+      : "bg-[#FAFAF8] border border-[#E5E5E7] text-[#1C1C1E] focus:border-[#B89708]/50"
+  );
+
+const miniSelectCx = (isDark: boolean) =>
+  cn(
+    "px-2 py-1 rounded text-[11px] focus:outline-none transition-colors",
+    isDark
+      ? "bg-[#0F0E10] border border-[#3A3A3C] text-[#F2F2F4] focus:border-[#B89708]/50"
+      : "bg-[#FAFAF8] border border-[#E5E5E7] text-[#1C1C1E] focus:border-[#B89708]/50"
+  );
+
+function Field({ label, children, isDark = false }: { label: string; children: React.ReactNode; isDark?: boolean }) {
   return (
     <label className="block">
-      <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-mono">{label}</span>
+      <span className={cn("text-[10px] uppercase tracking-wider font-mono", isDark ? "text-[#8E8E93]" : "text-[#6C6C72]")}>
+        {label}
+      </span>
       <div className="mt-1">{children}</div>
     </label>
   );
