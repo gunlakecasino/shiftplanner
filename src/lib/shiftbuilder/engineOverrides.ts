@@ -187,7 +187,7 @@ async function fetchVersionHistory(leafId: string) {
 
   while (currentId && !seen.has(currentId)) {
     seen.add(currentId);
-    const { data, error } = await supabase
+    const { data, error }: { data: any; error: any } = await supabase
       .from("engine_config")
       .select("id, version_name, created_at, parent_id")
       .eq("id", currentId)
