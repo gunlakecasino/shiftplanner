@@ -715,6 +715,7 @@ function CommandPaletteInner({
       Navigation: [],
       Filters: [],
       History: [],
+      Schedule: [],
       Contextual: [],
     };
 
