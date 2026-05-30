@@ -31,6 +31,9 @@ export interface AuxCardProps {
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
+
+  // Locked state for the night (disables interactions)
+  isLocked?: boolean;
 }
 
 const AuxCard: React.FC<AuxCardProps> = ({
@@ -48,31 +51,32 @@ const AuxCard: React.FC<AuxCardProps> = ({
   onEditTask,
   onLiveAssign,
   onLiveUnassign,
+  isLocked = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key);
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "aux", { tmId: a.tmId, tmName: a.tmName });
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "aux", { tmId: a.tmId, tmName: a.tmName }, isLocked);
 
   // Phase 1 Live layer ready (onLive* props when wired).
   const icon = getAuxIcon(def.key);
   const isEmpty = !hasTM && !loading;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(def.key, el),
+    (el) => { if (!isLocked) onCardClick(def.key, el); },
   );
 
   return (
     <div
       ref={setRef}
-      onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+      onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
+      {...(hasTM && !isLocked ? listeners : {})}
+      {...(hasTM && !isLocked ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
         clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
+        if (hasTM && !isLocked && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
