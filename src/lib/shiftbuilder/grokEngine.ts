@@ -21,6 +21,7 @@
 import type { CoveragePlannerResult, SlotRanking } from "./placement";
 import type { EngineConfig } from "./engineConfig";
 import { getPlacementOrderText, getEligibilityRulesText } from "./placement";
+import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
 
 // ---------------------------------------------------------------
 // Snapshot types
@@ -56,6 +57,18 @@ export interface GrokEngineSnapshot {
   thresholds: EngineConfig["thresholds"];
   /** Desired Grok 4.3 reasoning depth for this engine run (only meaningful for grok-hybrid) */
   grokReasoningEffort?: EngineConfig["grokReasoningEffort"];
+
+  /**
+   * NEW (2026-05-30 evolution): Rich textual summary of the entire rules engine.
+   * This positions the deterministic layer as the authoritative "rules" that Grok must respect.
+   */
+  rulesSummary?: string;
+
+  /**
+   * Optional reference to a live EngineRules instance (for future tool-calling paths).
+   * Not serialized into the prompt snapshot.
+   */
+  _engineRules?: EngineRules;
 }
 
 export interface GrokEnginePick {
@@ -91,6 +104,12 @@ export function buildGrokEngineSnapshot(args: {
   config: EngineConfig;
   placementOrder: string[];
   topK?: number;
+
+  /**
+   * Optional: Pass the full EngineRulesContext so we can build a rich,
+   * authoritative rules summary that Grok will treat as its constraint system.
+   */
+  rulesContext?: EngineRulesContext;
 }): GrokEngineSnapshot {
   const {
     dayName,
@@ -159,7 +178,7 @@ export function buildGrokEngineSnapshot(args: {
     if (tm) calledOffTmNames.push(tm.name || tm.fullName || id);
   });
 
-  return {
+  const snapshot: GrokEngineSnapshot = {
     day: dayName,
     shiftDate: toIso(shiftDate),
     placementOrder,
@@ -171,6 +190,24 @@ export function buildGrokEngineSnapshot(args: {
     thresholds: config.thresholds,
     grokReasoningEffort: config.grokReasoningEffort,
   };
+
+  // === 2026-05-30 Evolution: Inject rich rules representation ===
+  if (args.rulesContext) {
+    try {
+      const engineRules = createEngineRules(args.rulesContext);
+      snapshot.rulesSummary = engineRules.getRulesSummaryForLLM();
+      snapshot._engineRules = engineRules; // available for future tool-calling paths
+    } catch (e) {
+      console.warn("[grokEngine] Failed to build rich EngineRules summary", e);
+      // Fall back to the classic static text (still better than nothing)
+      snapshot.rulesSummary = `${getPlacementOrderText()}\n\n${getEligibilityRulesText()}`;
+    }
+  } else {
+    // Legacy fallback
+    snapshot.rulesSummary = `${getPlacementOrderText()}\n\n${getEligibilityRulesText()}`;
+  }
+
+  return snapshot;
 }
 
 // ---------------------------------------------------------------
@@ -178,19 +215,25 @@ export function buildGrokEngineSnapshot(args: {
 // ---------------------------------------------------------------
 
 export function buildGrokEngineSystemPrompt(snapshot: GrokEngineSnapshot): string {
-  const orderText = getPlacementOrderText();
-  const eligibilityText = getEligibilityRulesText();
-  return `You are the planning brain for the ZDS grave shift. The deterministic
-scoring layer has already produced a Top-K candidate ranking per slot. Your
-job is to choose the final pick per slot, drawing on judgment the math
-can't capture: rotation memory, tonight's specific context, operator notes,
-and pair dynamics.
+  // Prefer the rich, live rules summary from the EngineRules abstraction when available.
+  // This is the key evolution: Grok now receives the deterministic engine as a
+  // comprehensive, authoritative rule system rather than just two static text blocks.
+  const rulesText = snapshot.rulesSummary ||
+    `${getPlacementOrderText()}\n\n${getEligibilityRulesText()}`;
 
-CRITICAL RULES:
+  return `You are the planning brain for the ZDS grave shift.
 
-${orderText}
+The deterministic engine (defined in code + live engine_config + historical matrix) acts as the authoritative **Rules Engine**.
 
-${eligibilityText}
+Your job is to produce high-quality placements while deeply respecting that rule system.
+You may use the provided per-slot candidate rankings and their scores as strong guidance,
+but you have the authority (and responsibility) to make final placement decisions using
+higher-order judgment the pure math cannot capture: operator intent from notes, rotation health,
+team dynamics, risk posture for tonight, and patterns not fully encoded in the weights.
+
+=== AUTHORITATIVE RULES ENGINE ===
+
+${rulesText}
 
 OUTPUT CONTRACT — STRICT JSON SCHEMA (field names + casing are EXACT):
 
@@ -210,8 +253,8 @@ OUTPUT CONTRACT — STRICT JSON SCHEMA (field names + casing are EXACT):
 
 CRITICAL CONSTRAINTS:
 - Every \`tmId\` MUST be one that appears in the candidates list for that slot
-  in the snapshot below. NEVER invent a TM. NEVER pick someone the
-  deterministic layer didn't surface — they were filtered for hard reasons.
+  in the snapshot below (these candidates have already passed the hard eligibility rules).
+  NEVER invent a TM.
 - Skip slots marked \`preserved: true\` — those have an existing TM the
   operator already placed; do not propose a different pick.
 - If you have no opinion for a slot, omit it from \`picks\` and the system
@@ -219,13 +262,18 @@ CRITICAL CONSTRAINTS:
 - The \`reason\` field is mandatory for every pick.
 
 GUIDANCE:
-- Prefer the deterministic top pick unless you have a specific reason to
-  override. The math already encodes the weights the operator tuned.
-- Override when: tonight's context (notes, call-offs, recent history)
-  changes the calculus; pair affinity with already-placed neighbors should
-  be respected; rotation memory suggests breaking a repeat.
-- Be conservative — surprises are bad. The operator will review your
-  picks in Draft Mode before applying.
+- The deterministic engine has already done the hard filtering and weighted scoring.
+  Treat its output as a very strong recommendation, not as gospel.
+- Override the top candidate when higher-order context justifies it:
+    - Tonight's specific conditions (notes, call-offs, weather, events, morale)
+    - Rotation health and long-term fairness not fully captured in the matrix
+    - Pair dynamics and team chemistry
+    - Operator explicit or implicit intent
+- When tools are provided to you (checkEligibility, scoreCandidate, getRulesSummary, etc.),
+  USE THEM actively during your reasoning. They give you live access to the Rules Engine.
+- Be thoughtful but not timid. The operator will review everything in Draft Mode.
+- When you override, explain your reasoning clearly — the operator uses these
+  reasons to understand and trust (or correct) your decisions.
 
 Current snapshot (JSON):
 ${JSON.stringify(snapshot, null, 2)}

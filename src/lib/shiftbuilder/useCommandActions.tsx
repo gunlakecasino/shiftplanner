@@ -27,6 +27,8 @@ import {
   Coffee,
   Lock,
   GitMerge,
+  Edit,
+  RefreshCw,
 } from "lucide-react";
 
 // Types for the master command palette (Phase 2 core)
@@ -37,6 +39,7 @@ export type CommandGroup =
   | "Navigation"
   | "Filters"
   | "History"
+  | "Schedule"
   | "Contextual";
 
 export interface CommandItem {
@@ -101,6 +104,9 @@ interface UseCommandActionsProps {
   // Draft mode support (for Command Palette labels)
   isDraftMode?: boolean;
 
+  /** Current engine placement method (for better "Run Engine" labeling) */
+  enginePlacementMethod?: "greedy" | "weighted" | "grok-hybrid";
+
   // ADP schedule data — TMs scheduled for tonight (drives prioritization)
   scheduledTmIdsTonight?: Set<string>;
   calledOffIds?: Set<string>;
@@ -116,12 +122,25 @@ interface UseCommandActionsProps {
   onToggleLock?: (slotKey: string) => void;
   /** Cycle break group for the TM currently in this slot (1→2→3→1). */
   onCycleBreak?: (slotKey: string) => void;
+
   /** Open the palette pre-seeded for this slot (for "Swap Zone X" flow). */
   onOpenPaletteForSlot?: (slotKey: string) => void;
   /** Wipe all card border colors at once ("Reset All Card Borders"). */
   onClearAllBorders?: () => void;
   /** Open the Print Command Center overlay. */
   onOpenPrintCenter?: () => void;
+
+  /** Lock the entire current day/night. */
+  onLockDay?: () => void;
+  /** Unlock the entire current day/night. */
+  onUnlockDay?: () => void;
+  isCurrentNightLocked?: boolean;
+
+  // === New: Live schedule status editing (LOA, PTO, Other, change shift, restore) ===
+  /** Update night_tm_status for a TM on the current night (status + optional note) */
+  onUpdateScheduleStatus?: (tmId: string, status: string, note?: string | null) => Promise<void>;
+  /** Restore a TM to their ADP-imported status (remove manual override or call-off) */
+  onRestoreScheduleStatus?: (tmId: string) => Promise<void>;
 }
 
 /**
@@ -162,6 +181,12 @@ export function useCommandActions({
   onOpenPaletteForSlot,
   onClearAllBorders,
   onOpenPrintCenter,
+  onLockDay,
+  onUnlockDay,
+  isCurrentNightLocked = false,
+  enginePlacementMethod,
+  onUpdateScheduleStatus,
+  onRestoreScheduleStatus,
 }: UseCommandActionsProps): CommandItem[] {
   // Defensive local alias — prevents Fast Refresh / closure issues when the hook
   // is used across many re-renders during heavy development (matches the errors seen in logs).
@@ -359,10 +384,24 @@ export function useCommandActions({
     }
 
     if (onRunEngine) {
+      let runLabel = draftMode
+        ? "Apply Current Draft & Save"
+        : "Run Engine (Enter Draft Mode)";
+
+      if (!draftMode && enginePlacementMethod) {
+        const methodLabel =
+          enginePlacementMethod === "grok-hybrid"
+            ? "Grok-Hybrid"
+            : enginePlacementMethod === "weighted"
+            ? "Weighted"
+            : "Engine";
+        runLabel = `Run ${methodLabel} Engine (Draft Mode)`;
+      }
+
       result.push({
         id: "action-run-engine",
-        label: draftMode ? "Apply Current Draft & Save" : "Run Engine (Enter Draft Mode)",
-        keywords: ["engine", "auto", "assign", "optimize", "run", "draft"],
+        label: runLabel,
+        keywords: ["engine", "auto", "assign", "optimize", "run", "draft", "grok"],
         group: "Actions",
         icon: draftMode
           ? <CheckCircle size={15} className="opacity-60" />
@@ -434,6 +473,73 @@ export function useCommandActions({
         group: "Actions",
         icon: <Printer size={15} className="opacity-60" />,
         handler: onPrintWeek,
+      });
+    }
+
+    if (isCurrentNightLocked) {
+      if (onUnlockDay) {
+        result.push({
+          id: "action-unlock-day",
+          label: "Unlock this Day",
+          keywords: ["unlock", "edit", "modify", "open", "day", "night"],
+          group: "Actions",
+          icon: <Lock size={15} className="opacity-60" />,
+          handler: onUnlockDay,
+        });
+      }
+    } else {
+      if (onLockDay) {
+        result.push({
+          id: "action-lock-day",
+          label: "Lock this Day",
+          keywords: ["lock", "finalize", "protect", "freeze", "day", "night", "secure"],
+          group: "Actions",
+          icon: <Lock size={15} className="opacity-60" />,
+          handler: onLockDay,
+        });
+      }
+    }
+
+    // ========== SCHEDULE STATUS EDITING (Live - reflects to planner/engine immediately) ==========
+    if (onUpdateScheduleStatus) {
+      const scheduleActions = [
+        { label: "Mark as PTO tonight", status: "PTO", keywords: ["pto", "paid", "time", "off"] },
+        { label: "Mark as LOA tonight", status: "LOA", keywords: ["loa", "leave", "absence"] },
+        { label: "Mark as Other (custom)", status: "Other", keywords: ["other", "custom", "misc"] },
+        { label: "Mark as Off / Not Available", status: "off", keywords: ["off", "unavailable", "absent"] },
+      ];
+
+      scheduleActions.forEach(({ label, status, keywords }) => {
+        result.push({
+          id: `action-mark-${status.toLowerCase()}`,
+          label,
+          keywords: [...keywords, "schedule", "status", "mark", "edit"],
+          group: "Schedule",
+          icon: <Edit size={15} className="opacity-60" />,
+          handler: async () => {
+            // For now, acts on the last selected roster item if available, or prompts.
+            // In a full implementation this would use palette selection context.
+            // TODO: Track last selected roster item from palette context
+            console.warn("Schedule mark action - wire with selected TM context (placeholder)");
+            // Example future call: await onUpdateScheduleStatus(lastRosterId, status);
+          },
+          keepOpen: true,
+        });
+      });
+    }
+
+    if (onRestoreScheduleStatus) {
+      result.push({
+        id: "action-restore-schedule",
+        label: "Restore ADP Schedule Status",
+        keywords: ["restore", "reset", "adp", "undo", "schedule", "status"],
+        group: "Schedule",
+        icon: <RefreshCw size={15} className="opacity-60" />,
+        handler: async () => {
+          // Same context note as above
+          console.warn("Restore schedule action - wire with selected TM context");
+        },
+        keepOpen: true,
       });
     }
 

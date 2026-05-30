@@ -1,22 +1,46 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
-// Shared hook: turn a slot key into a "card is both droppable AND draggable"
-// node. Draggable only activates when the card is filled, so empty cards just
-// receive drops; filled cards can be picked up and moved/swapped/unassigned.
+/**
+ * useSlotDnd
+ *
+ * Pure dnd-kit wiring for a slot (droppable + draggable when filled).
+ *
+ * Phase 1 Live Cache integration note (2026-05-27):
+ * - This hook remains the single source of truth for drag/drop gesture state
+ *   (isOver, isDragging, listeners, setRef).
+ * - **Mutation side** (the actual assign/unassign) should now come from the
+ *   optimistic hooks in `useLiveAssignments.ts` (which do dual Query + Zustand
+ *   optimistic updates + perfect rollback + conflict toasts via liveCache.ts).
+ * - Callers (ZoneCard, RRCard, etc.) will receive `onAssign`, `onUnassign` etc.
+ *   from the new live layer (wired in ShiftBuilderClient) instead of doing
+ *   direct setState + fire-and-forget persistAssign.
+ *
+ * See:
+ * - liveCache.ts (realtime bridge)
+ * - useLiveAssignments.ts (optimistic mutations + onMutate/rollback pattern)
+ * - ShiftBuilderClient.tsx (where the live hooks will be instantiated and passed down)
+ * - Original persistAssign at ShiftBuilderClient.tsx:3376 (still used under the hood)
+ *
+ * Non-breaking: existing dnd behavior is 100% unchanged.
+ */
 export function useSlotDnd(
   slotKey: string,
   slotType: "zone" | "rr" | "aux" | "overlap",
   tm: { tmId?: string | null; tmName?: string | null },
+  isLocked: boolean = false,
 ) {
+  const disabled = isLocked;
+
   const { setNodeRef: setDropRef, isOver, active } = useDroppable({
     id: `slot:${slotKey}`,
     data: { type: "slot", slotKey, slotType },
+    disabled,
   });
   const hasTM = !!tm.tmName;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id: `assigned:${slotKey}`,
     data: { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName },
-    disabled: !hasTM,
+    disabled: disabled || !hasTM,
   });
   const setRef = (el: HTMLElement | null) => {
     setDropRef(el);

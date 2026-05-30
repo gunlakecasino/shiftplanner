@@ -13,7 +13,7 @@ import {
 } from "@/lib/xai";
 
 // Vercel AI SDK (Phase 3 migration) — structured output + official xAI provider
-import { generateObject } from "ai";
+import { generateObject, generateText, tool } from "ai";
 import {
   createGrokEngineModel,
   createGrokSuggestionModel,
@@ -32,6 +32,9 @@ import {
   type GrokEngineSnapshot,
   type GrokEnginePick,
 } from "@/lib/shiftbuilder/grokEngine";
+
+import { createEngineRulesTools, EngineRules } from "@/lib/shiftbuilder/engineRules";
+import { scoreAssignment, buildDefaultAdjacency } from "@/lib/shiftbuilder/scoring";
 
 export type GrokContext = {
   type: "slot" | "person";
@@ -214,10 +217,36 @@ export type GrokEngineRunResult = {
  * slot. Returns validated picks + warnings. On any failure (API error,
  * unparseable response, all picks rejected by guard), returns empty picks
  * and the caller will use the deterministic top-scorer.
+ *
+ * @param tools - Optional AI SDK tools (from createEngineRulesTools).
+ *                When provided, Grok can actively query the live Rules Engine
+ *                (eligibility, scoring, etc.) during reasoning. This is the
+ *                key mechanism for "Grok uses the engine as rules".
  */
+export interface GrokEngineToolContext {
+  roster?: any[];
+  currentDraft?: Record<string, string>;
+  scoringData?: {
+    skillScores?: Map<string, number>;
+    slotDifficulty?: Map<string, number>;
+    preferencesByTm?: Map<string, any[]>;
+    pairAffinitiesByTm?: Map<string, any[]>;
+    accommodationsByTm?: Map<string, any[]>;
+    zoneMatrix?: Map<string, Map<string, any>>;
+  };
+  scheduledTmIds?: Set<string>;   // NEW for schedule tools
+}
+
 export async function askGrokEngineDraft(
-  snapshot: GrokEngineSnapshot
+  snapshot: GrokEngineSnapshot,
+  options?: {
+    tools?: Record<string, any>;
+    /** Additional data needed to make tools actually executable with real scoring */
+    toolContext?: GrokEngineToolContext;
+  }
 ): Promise<GrokEngineRunResult> {
+  const tools = options?.tools;
+  const toolContext = options?.toolContext;
   const systemPrompt = buildGrokEngineSystemPrompt(snapshot);
   const userPrompt = `Here is tonight's snapshot and per-slot ranking.
 
@@ -237,13 +266,163 @@ in the system prompt.`;
 
     const model = createGrokEngineModel();
 
+    if (tools && Object.keys(tools).length > 0) {
+      // === FULL TOOL-CALLING PATH (2026-05-30 implementation) ===
+      console.log("[GrokEngine] FULL tool-calling mode enabled.");
+
+      // Build real executable tools if we have context data
+      let executableTools = tools;
+      if (toolContext?.roster) {
+        const safeRoster = toolContext.roster;
+        const currentDraftMap = new Map(Object.entries(toolContext.currentDraft ?? {}));
+
+        // Rebuild a real scoring context from the data the client sent
+        const scoringCtx = toolContext.scoringData
+          ? {
+              config: snapshot as any,
+              skillScores: toolContext.scoringData.skillScores ?? new Map(),
+              slotDifficulty: toolContext.scoringData.slotDifficulty ?? new Map(),
+              preferencesByTm: toolContext.scoringData.preferencesByTm ?? new Map(),
+              pairAffinitiesByTm: toolContext.scoringData.pairAffinitiesByTm ?? new Map(),
+              accommodationsByTm: toolContext.scoringData.accommodationsByTm ?? new Map(),
+              currentDraft: currentDraftMap,
+              adjacency: buildDefaultAdjacency(),
+              zoneMatrix: toolContext.scoringData.zoneMatrix,
+            }
+          : ({} as any);
+
+        const rulesForTools = new EngineRules({
+          config: snapshot as any,
+          scoringContext: scoringCtx,
+          auxDefs: [],
+          currentDraft: currentDraftMap,
+          scheduledTmIds: toolContext.scheduledTmIds,
+        });
+
+        executableTools = {
+          ...tools,
+          checkEligibility: {
+            ...tools.checkEligibility,
+            execute: async ({ tmId, slotKey }: any) => {
+              const tm = safeRoster.find((t: any) => t.id === tmId);
+              if (!tm) return { tmId, slotKey, isEligible: false, error: "TM not found in roster" };
+              return {
+                tmId,
+                slotKey,
+                isEligible: rulesForTools.isEligible(tm, slotKey),
+              };
+            },
+          },
+          scoreCandidate: {
+            ...tools.scoreCandidate,
+            execute: async ({ tmId, slotKey, includeBreakdown = true }: any) => {
+              const tm = safeRoster.find((t: any) => t.id === tmId);
+              if (!tm) return { tmId, slotKey, error: "TM not found in roster" };
+
+              try {
+                const result = await scoreAssignment(tm, slotKey, scoringCtx);
+                return {
+                  tmId,
+                  slotKey,
+                  total: result.total,
+                  excluded: result.excluded,
+                  excludeReason: result.excludeReason,
+                  breakdown: includeBreakdown ? result.breakdown : undefined,
+                };
+              } catch (e: any) {
+                return { tmId, slotKey, error: e?.message || "Scoring failed" };
+              }
+            },
+          },
+          // New high-value tool: quick view of current board state for global reasoning
+          getCurrentBoardState: {
+            description: "Returns a compact summary of which TMs are currently assigned to which slots. Use this to understand the global board state before making new placement decisions.",
+            parameters: {}, // schema optional for simple tools
+            execute: async () => {
+              const board: Record<string, string> = {};
+              Object.entries(toolContext.currentDraft ?? {}).forEach(([slot, tmId]) => {
+                board[slot] = tmId as string;
+              });
+              return { currentAssignments: board };
+            },
+          },
+
+          // Schedule status tool (now executable with real data)
+          getTMScheduleStatus: {
+            ...tools.getTMScheduleStatus,
+            execute: async ({ tmId }: any) => {
+              return {
+                tmId,
+                isOnSchedule: rulesForTools.isOnSchedule(tmId),
+                status: rulesForTools.getScheduleStatus(tmId),
+              };
+            },
+          },
+        };
+      }
+
+      const enhancedUserPrompt = `${userPrompt}
+
+You have access to powerful live tools from the authoritative Rules Engine. USE THEM FREQUENTLY to make high-quality decisions:
+- checkEligibility(tmId, slotKey)
+- scoreCandidate(tmId, slotKey) — your most important tool for understanding trade-offs
+- getCurrentBoardState() — see who's already placed where (global view)
+- getTMScheduleStatus(tmId) — check if someone is on the ADP schedule tonight (very important when schedule data exists)
+- getRulesSummary() — if you need to re-read the full rule system
+
+Explore with tools before committing to picks. When ready, output ONLY the final JSON block.`;
+
+      const result = await generateText({
+        model,
+        tools: executableTools,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: enhancedUserPrompt },
+        ],
+        temperature: 0.2,
+        maxTokens: 2500,
+        providerOptions: {
+          xai: {
+            reasoningEffort: effort,
+          },
+        },
+      });
+
+      const rawResponse = result.text;
+
+      // Rich capture of tool usage for training/refinement data
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        console.groupCollapsed(`[GrokToolUsage] ${result.toolCalls.length} tool calls made by Grok`);
+        result.toolCalls.forEach((call: any, i: number) => {
+          console.log(`Tool call #${i + 1}:`, call.toolName, "args:", call.args);
+        });
+        if (result.toolResults) {
+          result.toolResults.forEach((res: any, i: number) => {
+            console.log(`Tool result #${i + 1}:`, res.result);
+          });
+        }
+        console.groupEnd();
+      }
+
+      const parsed = parseGrokEngineResponse(rawResponse);
+      const guard = guardGrokEnginePicks(parsed.picks, snapshot);
+
+      return {
+        picks: guard.validPicks,
+        explanation: parsed.explanation,
+        warnings: guard.warnings,
+        usedGrok: guard.validPicks.length > 0,
+        rawText: rawResponse,
+      };
+    }
+
+    // === Standard non-tool path (original behavior) ===
     const { object: parsed } = await generateObject({
       model,
       schema: GrokEngineResponseSchema,
       messages,
       temperature: 0.2,
       maxTokens: 1500,
-      // Reasoning effort is passed via providerOptions at call time (the official way)
       providerOptions: {
         xai: {
           reasoningEffort: effort,
@@ -252,9 +431,6 @@ in the system prompt.`;
     });
 
     const guard = guardGrokEnginePicks(parsed.picks, snapshot);
-
-    // For debugging / "Why?" panel we store the structured result as JSON.
-    // (In a follow-up we can also capture the original text via response if needed.)
     const rawTextForDebug = JSON.stringify(parsed, null, 2);
 
     return {

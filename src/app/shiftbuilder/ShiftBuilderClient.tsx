@@ -75,8 +75,10 @@ import {
 } from "@/lib/shiftbuilder/tmCommands";
 import {
   runWeightedPlanner,
+  logEngineRunSummary,
   type SlotRanking,
 } from "@/lib/shiftbuilder/placement";
+import type { EngineRulesContext } from "@/lib/shiftbuilder/engineRules";
 import { buildDefaultAdjacency } from "@/lib/shiftbuilder/scoring";
 import {
   getActiveEngineConfig,
@@ -90,7 +92,14 @@ import {
   getTMSkillScores,
   getRecentZoneHistory,
   getScheduledTmIdsForNight,
+  setNightLocked,
+  getNightLocked,
+  getTmZoneMatrix,
+  createNightScheduleStatusChannel,
+  createCallOffsChannel,
+  unsubscribeChannel,
 } from "@/lib/shiftbuilder/data";
+import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
 import {
   buildGrokEngineSnapshot,
   mergeGrokOverridesIntoDraft,
@@ -123,6 +132,8 @@ import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
+import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
+import { initLiveCacheForNight, teardownAllLiveCache } from "@/lib/shiftbuilder/liveCache";
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
 import BreakBadge from "./components/BreakBadge";
 import AssignmentLine from "./components/AssignmentLine";
@@ -195,11 +206,16 @@ function expandCoverageToKeys(uiKey: string): string[] {
 
 // Roster row — useDraggable when not already assigned. When assigned we
 // disable the drag handle but still render so the operator can see "in use".
-const RosterItem: React.FC<{ tm: any; isAssigned: boolean; emphasis: "on" | "off" | "scheduled" }> = ({ tm, isAssigned, emphasis }) => {
+const RosterItem: React.FC<{ 
+  tm: any; 
+  isAssigned: boolean; 
+  emphasis: "on" | "off" | "scheduled";
+  isLocked?: boolean;
+}> = ({ tm, isAssigned, emphasis, isLocked = false }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tm:${tm.id}`,
     data: { type: "tm", tmId: tm.id, tmName: tm.name },
-    disabled: isAssigned,
+    disabled: isAssigned || isLocked,
   });
 
   const initials = tm.name
@@ -294,7 +310,7 @@ interface HeaderOverflowProps {
   lastAuxSlotLabel: string | null;
 }
 
-const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, onAddAuxSlot, onRemoveAuxSlot, lastAuxSlotLabel }) => {
+const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }> = ({ onRunEngine, onPrint, onAddAuxSlot, onRemoveAuxSlot, lastAuxSlotLabel, onLockDay }) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -383,7 +399,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps> = ({ onRunEngine, onPrint, o
           <div className="h-px bg-[#F2F2F4] mx-2 my-1" />
           <button
             role="menuitem"
-            onClick={() => { setOpen(false); /* TODO: hook lock-and-finalize handler */ }}
+            onClick={() => { setOpen(false); onLockDay?.(); }}
             className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#007AFF] font-semibold hover:bg-[#E5F0FF]"
           >
             <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>lock</span>
@@ -465,10 +481,15 @@ function useCollapsiblePill() {
 
 // Roster panel — useDroppable so a card can be dragged back here to unassign.
 // Phase 2: Stronger visual feedback when dragging an assigned TM toward the roster.
-const RosterDropZone: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => {
+const RosterDropZone: React.FC<{ 
+  children: React.ReactNode; 
+  className?: string; 
+  isLocked?: boolean;
+}> = ({ children, className, isLocked = false }) => {
   const { setNodeRef, isOver, active } = useDroppable({
     id: "roster",
     data: { type: "roster" },
+    disabled: isLocked,
   });
 
   const isDraggingAssigned = active?.data.current?.type === "assigned";
@@ -778,6 +799,11 @@ export default function ShiftBuilder() {
 
   const positioningRef = useRef<HTMLDivElement>(null);
 
+  // Dedicated overlay layer for artboard-centered floating UI (Command Palette, future floating tools).
+  // Lives in the same flex-centering context as the scaled artboard but is NOT inside the scale transform,
+  // so children render at 1:1 crisp size and can be positioned as "center of the artboard".
+  const artboardOverlayRef = useRef<HTMLDivElement>(null);
+
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
 
@@ -804,6 +830,7 @@ export default function ShiftBuilder() {
   // empty cards and the first persist will lazy-create the night. Saving any
   // value here re-fetches roster + assignments via the effects below.
   const [nightId, setNightId] = useState<string | null>(null);
+  const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
 
   // === Slot task catalog + selections ===================================
@@ -897,6 +924,7 @@ export default function ShiftBuilder() {
   const [tmPreferencesByTm, setTmPreferencesByTm] = useState<Map<string, any[]>>(new Map());
   const [tmPairAffinitiesByTm, setTmPairAffinitiesByTm] = useState<Map<string, any[]>>(new Map());
   const [tmAccommodationsByTm, setTmAccommodationsByTm] = useState<Map<string, any[]>>(new Map());
+  const [tmZoneMatrix, setTmZoneMatrix] = useState<Map<string, Map<string, any>>>(new Map());
   const [recentZoneHistory, setRecentZoneHistory] = useState<Map<string, Array<{ nightDate: string; slotKey: string }>>>(new Map());
   // Per-slot top-K breakdown from the last engine run — fuels the Why? panel.
   const [draftBreakdown, setDraftBreakdown] = useState<Record<string, SlotRanking>>({});
@@ -1089,12 +1117,13 @@ export default function ShiftBuilder() {
 
   // === Draft Mode Controls ===
   //
-  // Phase 1: Grok-hybrid engine. Pipeline:
-  //   1. Deterministic weighted planner produces Top-K candidate ranking per slot
-  //   2. Build snapshot (rankings + notes + call-offs + history + config) for Grok
-  //   3. Grok overrides deterministic picks where it has judgment to add
-  //   4. Server-side guard rejects any pick not in the candidate list
-  //   5. Failures fall back to deterministic top-scorer (no UX disruption)
+  // Respects engineConfig.placementMethod:
+  //   - "weighted"     → Pure deterministic weighted planner (fast, predictable)
+  //   - "grok-hybrid"  → Weighted planner + Grok 4.3 judgment layer on top
+  //   - "greedy"       → Falls back to weighted (legacy)
+  //
+  // Grok is only invoked when placementMethod === "grok-hybrid".
+  // The merge step is always safe (empty Grok picks = use deterministic).
   const enterDraftMode = async () => {
     if (!confirm("Run Coverage Planner and enter Draft Mode? This will generate a preview without changing current assignments.")) {
       return;
@@ -1105,11 +1134,17 @@ export default function ShiftBuilder() {
       return;
     }
 
+    const engineStart = performance.now();
+
     const orderedSlots = getSlotsInPlacementOrder(auxDefs);
     const rosterForEngine = graveOnly ? availableGraveRoster : availableRealRoster;
 
-    // Step 1: deterministic weighted planner
+    // Step 1: deterministic weighted planner (always used as the base)
     const plannerResult = runWeightedPlanner({
+      // Phase 2 opportunity: After the planner + Grok merge produces a draft proposal,
+      // the live optimistic layer (useLiveAssignments + liveCache) can be used for
+      // instant UI feedback on the proposed assignments before the operator reviews/approves in Draft Mode.
+      // (The hooks already provide the optimistic machinery; this is the integration point.)
       orderedSlots,
       assignments,
       roster: rosterForEngine,
@@ -1122,44 +1157,143 @@ export default function ShiftBuilder() {
         pairAffinitiesByTm: tmPairAffinitiesByTm,
         accommodationsByTm: tmAccommodationsByTm,
         adjacency: buildDefaultAdjacency(),
+        zoneMatrix: tmZoneMatrix,
       },
     });
 
-    // Step 2: build Grok snapshot
-    const operatorNotes = notesRef.current?.innerText || "";
-    let snapshot: GrokEngineSnapshot;
-    try {
-      snapshot = buildGrokEngineSnapshot({
-        dayName: selectedDay.name,
-        shiftDate: selectedDay.date,
-        plannerResult,
-        roster: rosterForEngine,
-        operatorNotes,
-        calledOffTmIds: calledOffIds,
-        recentHistory: recentZoneHistory,
-        config: engineConfig,
-        placementOrder: orderedSlots,
-      });
-    } catch (err) {
-      console.error("[engine] snapshot build failed:", err);
-      showToast("Engine snapshot build failed — falling back to scoring only");
-      applyPlannerResultAsDraft(plannerResult, rosterForEngine, {});
-      return;
+    // Decide whether to use Grok based on the live engine config
+    const isGrokHybrid = engineConfig.placementMethod === "grok-hybrid";
+
+    let grokResult = {
+      picks: [] as any[],
+      explanation: "",
+      warnings: [] as string[],
+      usedGrok: false,
+      rawText: "",
+    };
+
+    if (isGrokHybrid) {
+      // Step 2: build Grok snapshot (only when hybrid mode is active)
+      const operatorNotes = notesRef.current?.innerText || "";
+      let snapshot: GrokEngineSnapshot;
+      try {
+        // Build a rich rules context so Grok receives the deterministic engine as a
+        // live, authoritative rule system (major step toward "Grok uses the engine as rules").
+        const rulesContext = {
+          config: engineConfig,
+          scoringContext: {
+            config: engineConfig,
+            skillScores: tmSkillScores,
+            slotDifficulty,
+            preferencesByTm: tmPreferencesByTm,
+            pairAffinitiesByTm: tmPairAffinitiesByTm,
+            accommodationsByTm: tmAccommodationsByTm,
+            zoneMatrix: tmZoneMatrix,
+          },
+          auxDefs,
+          currentDraft: undefined, // will be populated inside the planner
+          scheduledTmIds: scheduledTmIdsTonight,   // NEW: expose ADP schedule to Rules Engine + Grok tools
+        };
+
+        snapshot = buildGrokEngineSnapshot({
+          dayName: selectedDay.name,
+          shiftDate: selectedDay.date,
+          plannerResult,
+          roster: rosterForEngine,
+          operatorNotes,
+          calledOffTmIds: calledOffIds,
+          recentHistory: recentZoneHistory,
+          config: engineConfig,
+          placementOrder: orderedSlots,
+          rulesContext,
+        });
+      } catch (err) {
+        console.error("[engine] snapshot build failed:", err);
+        showToast("Engine snapshot build failed — falling back to scoring only");
+        applyPlannerResultAsDraft(plannerResult, rosterForEngine, {});
+        return;
+      }
+
+      // Step 3: ask Grok (with timeout fallback)
+      try {
+        // Pass rich tool context when in grok-hybrid so tools can execute with real scoring + draft state
+        const callOptions = isGrokHybrid
+          ? {
+              toolContext: {
+                roster: rosterForEngine,
+                // Build currentDraft from live assignments so pair_affinity and within_repeat work correctly in tools
+                currentDraft: Object.fromEntries(
+                  Object.entries(assignments)
+                    .map(([slot, a]: [string, any]) => [slot, a?.tmId])
+                    .filter(([, v]) => !!v)
+                ),
+                scoringData: {
+                  skillScores: tmSkillScores,
+                  slotDifficulty,
+                  preferencesByTm: tmPreferencesByTm,
+                  pairAffinitiesByTm: tmPairAffinitiesByTm,
+                  accommodationsByTm: tmAccommodationsByTm,
+                  zoneMatrix: tmZoneMatrix,
+                },
+                scheduledTmIds: scheduledTmIdsTonight,  // NEW: for getTMScheduleStatus tool
+              },
+            }
+          : undefined;
+
+        grokResult = await askGrokEngineDraft(snapshot, callOptions);
+      } catch (err) {
+        console.error("[engine] Grok call failed:", err);
+        grokResult = { picks: [], explanation: "", warnings: ["Grok call failed"], usedGrok: false, rawText: "" };
+      }
+
+      // === Structured capture for training / refinement flywheel (2026-05-30) ===
+      // This data is gold for future optimization of both prompts and the underlying engine.
+      console.groupCollapsed(`[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"}`);
+      console.log("Placement Method:", engineConfig.placementMethod);
+      console.log("Grok Reasoning Effort:", engineConfig.grokReasoningEffort);
+      console.log("Snapshot size (candidates):", snapshot.slotRankings.reduce((sum, r) => sum + r.candidates.length, 0));
+      console.log("Grok picks returned (pre-guard):", snapshot._engineRules ? "see rawText" : grokResult.picks.length);
+      console.log("Grok warnings:", grokResult.warnings);
+      console.log("Grok explanation:", grokResult.explanation?.slice(0, 300));
+      console.log("Raw Grok response (for training data):", grokResult.rawText?.slice(0, 2000));
+
+      // Tool usage capture (new in this phase)
+      if (isGrokHybrid) {
+        console.log("Tool mode ENABLED — Grok had access to live Rules Engine (checkEligibility + real scoreCandidate)");
+        // The rawText will contain any tool calls the model made (visible in expanded console group)
+      }
+      console.groupEnd();
     }
 
-    // Step 3: ask Grok (with timeout fallback)
-    let grokResult;
-    try {
-      grokResult = await askGrokEngineDraft(snapshot);
-    } catch (err) {
-      console.error("[engine] Grok call failed:", err);
-      grokResult = { picks: [], explanation: "", warnings: ["Grok call failed"], usedGrok: false, rawText: "" };
-    }
-
-    // Step 4: merge Grok overrides with deterministic picks
+    // Step 4: merge Grok overrides with deterministic picks (safe no-op when no picks)
     const { proposedAssignments, reasoningBySlot } = mergeGrokOverridesIntoDraft({
       plannerResult,
       picks: grokResult.picks,
+    });
+
+    // === Rich telemetry (added 2026-05-30) ===
+    const engineDuration = Math.round(performance.now() - engineStart);
+    const preservedCount = Object.values(plannerResult.breakdown).filter(b => b.preserved).length;
+    const filledCount = Object.keys(plannerResult.proposedAssignments).length;
+    const unfilled = plannerResult.notes.length; // rough but useful
+    const unfilledSlots = Object.keys(plannerResult.proposedAssignments).filter(k => !plannerResult.proposedAssignments[k]);
+
+    logEngineRunSummary({
+      mode: 'interactive-draft',
+      dayName: selectedDay.name,
+      nightDate: selectedDay.date.toISOString().slice(0, 10),
+      durationMs: engineDuration,
+      rosterSize: rosterForEngine.length,
+      slotsProcessed: orderedSlots.length,
+      preservedSlots: preservedCount,
+      filledSlots: filledCount,
+      unfilledSlots: unfilled,
+      usedGrok: grokResult.usedGrok,
+      grokPicksApplied: grokResult.picks.length,
+      matrixPreloaded: !!tmZoneMatrix && tmZoneMatrix.size > 0,
+      warnings: grokResult.warnings,
+      topUnfilledSlots: unfilledSlots.slice(0, 6),
+      placementMethod: engineConfig.placementMethod,
     });
 
     applyPlannerResultAsDraft(
@@ -1294,6 +1428,10 @@ export default function ShiftBuilder() {
     toSlot?: string;
     reason?: string;
   }>) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — cannot apply Grok suggestions", "error");
+      return;
+    }
     if (!actions || actions.length === 0) return;
 
     // Ensure we are in Draft Mode (this is the safe review surface)
@@ -1436,6 +1574,10 @@ export default function ShiftBuilder() {
   };
 
   const triggerGrokBoardAnalysis = () => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — analysis disabled", "error");
+      return;
+    }
     // Opens the palette (if not already) and the palette's global board button will be visible and prominent
     setCmdkOpen(true);
     // The prominent "Grok: Analyze Full Board" button is always at the top of the palette now
@@ -1509,9 +1651,13 @@ export default function ShiftBuilder() {
   // === Phase 1: Clean contextual palette openers (will replace fan behavior) ===
   // Card tap now opens the Marker Pad; ⌘K still opens the full palette.
   const openPaletteForSlot = React.useCallback((slotKey: string) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — editing disabled", "error");
+      return;
+    }
     // If the pad is already showing this slot, toggle it closed
     setMarkerSlotKey(prev => prev === slotKey ? null : slotKey);
-  }, []);
+  }, [isCurrentNightLocked]);
 
   const openPaletteForPerson = React.useCallback((tm: any) => {
     // Use id when available for stability; fall back to name
@@ -1520,12 +1666,19 @@ export default function ShiftBuilder() {
     setCmdkOpen(true);
   }, []);
 
-  // When palette closes, clear the one-time context so next manual ⌘K is clean
+  // When palette closes, clear the one-time context so next manual ⌘K is clean.
+  // Focus management now lives entirely inside CommandPalette (more reliable single source of truth).
   React.useEffect(() => {
     if (!cmdkOpen) {
-      // Small delay so the palette can read the value on this open cycle
       const t = setTimeout(() => setCmdkInitialContext(null), 50);
       return () => clearTimeout(t);
+    }
+  }, [cmdkOpen]);
+
+  // When the main palette opens, close the MarkerPad (they fight for input + focus on iPad)
+  React.useEffect(() => {
+    if (cmdkOpen && markerSlotKey) {
+      setMarkerSlotKey(null);
     }
   }, [cmdkOpen]);
 
@@ -1556,6 +1709,14 @@ export default function ShiftBuilder() {
       setZoomMode(dir > 0 ? 1.25 : 0.75);
     }
   };
+
+  // Handlers for the FloatingNav zoom cluster (Fit / − / +)
+  const handleZoomFit = () => {
+    recomputeScale(); // ensure fresh measurement
+    setZoomMode("fit");
+  };
+  const handleZoomOut = () => stepZoom(-1);
+  const handleZoomIn = () => stepZoom(1);
 
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
@@ -1589,12 +1750,73 @@ export default function ShiftBuilder() {
 
   const selectedDay = DAY_DEFS[selectedDayIndex];
 
+  // Next calendar day for the AM overlaps (5a–7a). A Friday grave sheet's AM
+  // overlaps physically occur on Saturday morning. We surface a "next day header"
+  // in the overlaps section (styled to mimic the main artboard day headers)
+  // and place the filled count directly under it.
+  const amOverlapDate = addDays(selectedDay.date, 1);
+  const amOverlapDayName = DAY_LONG[amOverlapDate.getDay()];
+  const amOverlapDateNum = amOverlapDate.getDate();
+  const nextDayColor = SHIFT_DAY_COLORS[(selectedDayIndex + 1) % 7];
+
   // Full TanStack Query commitment for the current night
   const currentNight = useCurrentNight(selectedDay);
 
   // Use query data as source of truth (full TanStack Query commitment)
   const queryAssignments = currentNight.assignments || {};
   const queryNightId = currentNight.nightId || null;
+
+  // Phase 1 Live Cache + Optimistic Layer
+  // Provides assign/unassign with instant UI (Query + Zustand), perfect rollback,
+  // conflict toasts, and realtime sync from other clients.
+  const live = useLiveAssignments(selectedDay);
+
+  // Subscribe to realtime for this night when we have an ID (idempotent).
+  // Teardown on unmount / major day change is handled via effect below.
+  React.useEffect(() => {
+    if (queryNightId) {
+      const cleanup = initLiveCacheForNight(queryNightId, selectedDay.date.toISOString().slice(0, 10), /* queryClient from useCurrentNight */ currentNight.queryClient);
+      return () => {
+        cleanup?.();
+      };
+    }
+  }, [queryNightId, selectedDay.date, currentNight.queryClient]);
+
+  // Global teardown safety on component unmount
+  React.useEffect(() => {
+    return () => {
+      teardownAllLiveCache();
+    };
+  }, []);
+
+  // === Realtime for night_tm_status + call_offs (TM schedule changes) ===
+  // When operator (or another user) marks LOA, PTO, changes a shift, or adds call-off,
+  // we want the planner + engine to see it immediately.
+  React.useEffect(() => {
+    if (!nightId) return;
+
+    const nightDateIso = selectedDay.date.toISOString().slice(0, 10);
+
+    const statusChannel = createNightScheduleStatusChannel(nightId, async () => {
+      // Refetch schedule sets so roster filters and EngineRules update live
+      const freshScheduled = await getScheduledTmIdsForNight(nightId, nightDateIso);
+      const freshOnSchedule = await getOnScheduleTmIdsForNight(nightId, nightDateIso);
+      setScheduledTmIdsTonight(freshScheduled);
+      // Note: we may want a separate state for onSchedule in future; for now the main filter uses scheduled
+      console.log('[shiftbuilder] night_tm_status changed — refreshed schedule sets');
+    });
+
+    const callOffChannel = createCallOffsChannel(nightDateIso, async () => {
+      const freshCalledOff = await getCallOffsForDate(selectedDay.date);
+      setCalledOffIds(freshCalledOff); // already a Set<string> of tmIds
+      console.log('[shiftbuilder] call_offs changed — refreshed called off set');
+    });
+
+    return () => {
+      unsubscribeChannel(statusChannel);
+      unsubscribeChannel(callOffChannel);
+    };
+  }, [nightId, selectedDay.date]);
 
   // Day arrow navigation — cross GRAVE week boundaries seamlessly.
   const goPrevDay = React.useCallback(() => {
@@ -1618,6 +1840,18 @@ export default function ShiftBuilder() {
       setSelectedDayIndex(0);
     }
   }, [selectedDayIndex, weekStart]);
+
+  // Week navigation — used by the seamless half-circle caps on the date strip in FloatingNav
+  const goPrevWeek = React.useCallback(() => {
+    const prevWeek = addDays(weekStart, -7);
+    setWeekStart(prevWeek);
+    // Keep the currently selected weekday index inside the new GRAVE week (Fri–Thu)
+  }, [weekStart]);
+
+  const goNextWeek = React.useCallback(() => {
+    const nextWeek = addDays(weekStart, 7);
+    setWeekStart(nextWeek);
+  }, [weekStart]);
 
   // === Notes debounce handler ============================================
   // Defined here (rather than alongside notesRef/notesSaveTimerRef earlier)
@@ -1739,6 +1973,11 @@ export default function ShiftBuilder() {
   // a different day before the network call resolves, the write still lands
   // on the night it was issued against.
   const assign = (slotKey: string, tmId: string, tmName: string) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — changes are disabled", "error");
+      return;
+    }
+
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     pendingHistoryRef.current = { description: `Assigned ${tmName} to ${slotKey}`, before };
 
@@ -1746,21 +1985,41 @@ export default function ShiftBuilder() {
     const captureDate = selectedDay.date;
     const captureDayName = selectedDay.name;
 
-    setAssignments((prev: any) => ({
-      ...prev,
-      [slotKey]: {
-        ...prev[slotKey],
-        tmId,
-        tmName,
-        breakGroup: prev[slotKey]?.breakGroup ?? 0,
-        type: slotKey.startsWith("Z") ? "zone" : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr" : slotKey.startsWith("OL-") ? "overlap" : "aux",
-        slotKey,
-      },
-    }));
-    persistAssign(targetNightId, captureDate, captureDayName, slotKey, tmId, false);
+    // Phase 1 Live Optimistic Path (preferred)
+    // Uses useLiveAssignments → instant dual-cache update (Query + Zustand) + rollback on conflict.
+    // Falls back to legacy direct set + persistAssign for safety during migration.
+    if (live?.assign) {
+      live.assign(slotKey, tmId, tmName, {
+        captureDate,
+        captureDayName,
+        targetNightId,
+        isDraftMode,
+      });
+      // Still record history for Draft (Draft remains the proposal truth)
+      // The live layer handles the committed view.
+    } else {
+      // Legacy path (being phased out)
+      setAssignments((prev: any) => ({
+        ...prev,
+        [slotKey]: {
+          ...prev[slotKey],
+          tmId,
+          tmName,
+          breakGroup: prev[slotKey]?.breakGroup ?? 0,
+          type: slotKey.startsWith("Z") ? "zone" : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr" : slotKey.startsWith("OL-") ? "overlap" : "aux",
+          slotKey,
+        },
+      }));
+      persistAssign(targetNightId, captureDate, captureDayName, slotKey, tmId, false);
+    }
   };
 
   const unassign = (slotKey: string) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — changes are disabled", "error");
+      return;
+    }
+
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     pendingHistoryRef.current = { description: `Unassigned from ${slotKey}`, before };
 
@@ -2509,13 +2768,47 @@ export default function ShiftBuilder() {
   // Stable callbacks for useCommandActions — keeping these out of the call-site
   // so useCommandActions can detect actual changes (not new references every render).
   const cmdActionRunEngine = React.useCallback(() => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — engine cannot run", "error");
+      return;
+    }
     if (isDraftMode) applyDraft(); else enterDraftMode();
-  }, [isDraftMode, applyDraft, enterDraftMode]);
+  }, [isDraftMode, applyDraft, enterDraftMode, isCurrentNightLocked]);
 
   // Print button opens Command Center; direct "print tonight" shortcut still available via palette
   const cmdActionPrint = React.useCallback(() => setIsPrintCenterOpen(true), []);
   const cmdActionPrintWeek = React.useCallback(() => handlePrintWeek(), [handlePrintWeek]);
   const cmdActionOpenPrintCenter = React.useCallback(() => setIsPrintCenterOpen(true), []);
+
+  const cmdActionLockDay = React.useCallback(async () => {
+    if (!nightId) {
+      showToast("No active night selected", "error");
+      return;
+    }
+    try {
+      await setNightLocked(nightId, true);
+      setIsCurrentNightLocked(true);
+      showToast(`Day locked`, "success");
+    } catch (e: any) {
+      console.error("Failed to lock day", e);
+      showToast(`Failed to lock day: ${e?.message ?? "unknown"}`, "error");
+    }
+  }, [nightId]);
+
+  const cmdActionUnlockDay = React.useCallback(async () => {
+    if (!nightId) {
+      showToast("No active night selected", "error");
+      return;
+    }
+    try {
+      await setNightLocked(nightId, false);
+      setIsCurrentNightLocked(false);
+      showToast(`Day unlocked`, "success");
+    } catch (e: any) {
+      console.error("Failed to unlock day", e);
+      showToast(`Failed to unlock day: ${e?.message ?? "unknown"}`, "error");
+    }
+  }, [nightId]);
 
   const cmdActionUndo = React.useCallback(() => {
     const prev = shiftHistory.undo();
@@ -2559,6 +2852,7 @@ export default function ShiftBuilder() {
     onRedo: cmdActionRedo,
     assign,
     isDraftMode,
+    enginePlacementMethod: engineConfig?.placementMethod,
     scheduledTmIdsTonight,
     calledOffIds,
     onApplyGrokSuggestions: applyGrokSuggestions,
@@ -2570,6 +2864,37 @@ export default function ShiftBuilder() {
     onOpenPaletteForSlot: openPaletteForSlot,
     onClearAllBorders: cmdActionClearBorders,
     onOpenPrintCenter: cmdActionOpenPrintCenter,
+    onLockDay: cmdActionLockDay,
+    onUnlockDay: cmdActionUnlockDay,
+    isCurrentNightLocked,
+
+    // Live schedule status editing (LOA, PTO, Other, change shift, restore ADP)
+    onUpdateScheduleStatus: async (tmId: string, status: string, note?: string | null) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        return;
+      }
+      try {
+        await updateNightTmStatus({ nightId, tmId, status, note: note ?? null });
+        // Realtime will handle the rest; optimistic toast for feedback
+        showToast(`Marked ${tmId} as ${status} for this night`);
+      } catch (e: any) {
+        showToast(`Failed to update schedule: ${e?.message || e}`, "error");
+      }
+    },
+    onRestoreScheduleStatus: async (tmId: string) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        return;
+      }
+      try {
+        // Simple restore: set back to "scheduled" (or "present" if we want to be smarter)
+        await updateNightTmStatus({ nightId, tmId, status: "scheduled", note: "Restored via palette" });
+        showToast(`Restored ${tmId} schedule status`);
+      } catch (e: any) {
+        showToast(`Failed to restore: ${e?.message || e}`, "error");
+      }
+    },
   });
 
   // handleCardClick and dismissQuickFan removed in Phase 1 (Command Palette Upgrade).
@@ -2589,6 +2914,10 @@ export default function ShiftBuilder() {
 
   const handleCmdkAddTask = React.useCallback(
     async (uiKeys: string | string[], taskLabel: string) => {
+      if (isCurrentNightLocked) {
+        showToast("This day is locked — cannot add tasks", "error");
+        return;
+      }
       if (!nightId) {
         showToast("No active night selected", "error");
         return;
@@ -3057,6 +3386,7 @@ export default function ShiftBuilder() {
           preferenceRows,
           pairAffinityRows,
           accommodationRows,
+          zoneMatrixRaw,
         ] = await Promise.all([
           getActiveEngineConfig(),
           getTMSkillScores(),
@@ -3064,7 +3394,10 @@ export default function ShiftBuilder() {
           getTMPreferences(),
           getTMPairAffinities(),
           getTMAccommodations(),
+          getTmZoneMatrix(), // preloaded once for the whole engine run — eliminates per-TM N+1
         ]);
+
+        setTmZoneMatrix(zoneMatrixRaw);
 
         setEngineConfig(activeConfig);
         setTmSkillScores(skillScoreMap);
@@ -3104,6 +3437,7 @@ export default function ShiftBuilder() {
     // label, and writes issued in that window must not land on Day A by
     // mistake.
     setNightId(null);
+    setIsCurrentNightLocked(false);
     setAssignments({});
     setSelectedTasks({}); // also reset per-night task selections on day switch
     setCardBorders({});   // reset visual borders when switching days
@@ -3139,6 +3473,7 @@ export default function ShiftBuilder() {
           callOffSet,
           recentHistory,
           scheduledTonightSet,
+          isNightLocked,
         ] = await Promise.all([
           id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
           getGraveAvailableTeamMembers(),
@@ -3152,7 +3487,8 @@ export default function ShiftBuilder() {
           id ? getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
           getCallOffsForDate(selectedDay.date),
           getRecentZoneHistory(selectedDay.date, 7),
-          id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
+          id ? getScheduledTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
+          id ? getNightLocked(id) : Promise.resolve(false),
         ]);
 
         // Final epoch gate — if the user switched days while loading, drop
@@ -3162,6 +3498,7 @@ export default function ShiftBuilder() {
 
         // Commit nightId only after we're sure we're still the active load.
         setNightId(id);
+        setIsCurrentNightLocked(!!isNightLocked);
         setRealRoster(members);
         setCalledOffIds(callOffSet);
         setScheduledTmIdsTonight(scheduledTonightSet);
@@ -3742,10 +4079,16 @@ export default function ShiftBuilder() {
           setWeekStart(newWeek);
           setSelectedDayIndex(idx);
         }}
+        onPrevWeek={goPrevWeek}
+        onNextWeek={goNextWeek}
         onCommandOpen={() => setCmdkOpen(true)}
         onThemeToggle={toggleTheme}
         isDark={isDark}
         userInitials="BC"
+        // Zoom cluster (Fit / − / +)
+        onZoomFit={handleZoomFit}
+        onZoomOut={handleZoomOut}
+        onZoomIn={handleZoomIn}
       />
 
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} autoScroll={false}>
@@ -3795,7 +4138,7 @@ export default function ShiftBuilder() {
             <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>chevron_left</span>
           </button>
 
-          <RosterDropZone className="flex flex-col h-full min-h-0">
+          <RosterDropZone className="flex flex-col h-full min-h-0" isLocked={isCurrentNightLocked}>
           {/* Strategic GRAVE-first header. pt-4 + pr-10 leaves space for the
              floating-panel collapse chevron in the top-right corner. */}
           <div className="px-5 pt-4 pb-3 pr-10 flex-shrink-0">
@@ -3877,6 +4220,12 @@ export default function ShiftBuilder() {
               let scheduledUnplacedPM: any[] = [];
               let scheduledUnplacedAM: any[] = [];
 
+              // Descriptive labels for scheduled overlap groups (populated only when we have schedule data).
+              // Matches the exact ADP reality: PM overlaps come from this day's swing shift;
+              // AM overlaps come from the next calendar day's 5am day shift.
+              let pmSwingLabel = '';
+              let amDayShiftLabel = '';
+
               const isPorter = (tm: any) => (tm.primarySection || '').toLowerCase().includes('porter');
 
               // Called-off TMs live in their own bucket. Filter them out of
@@ -3905,6 +4254,10 @@ export default function ShiftBuilder() {
                 scheduledUnplacedAM = scheduledUnplaced.filter(
                   (t: any) => t.isAMOverlap && !t.isPMOverlap
                 );
+
+                // Populate the descriptive labels now that we have the date info
+                pmSwingLabel = `${selectedDay.name.slice(0, 3)} ${selectedDay.dateNum} swing (until 1am)`;
+                amDayShiftLabel = `${amOverlapDayName.slice(0, 3)} ${amOverlapDateNum} day shift (5am)`;
 
                 // Remaining unplaced — exclude TMs already shown in the scheduled section
                 const remaining = hasScheduleData
@@ -4073,7 +4426,7 @@ export default function ShiftBuilder() {
                           </button>
                           {scheduledGravesExpanded && filteredSchedGraves.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
                           })}
                         </>
                       )}
@@ -4089,13 +4442,13 @@ export default function ShiftBuilder() {
                           >
                             <span className="flex items-center gap-1.5">
                               <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                              PM Overlaps (out at 1:00am)
+                              PM Overlaps ({pmSwingLabel})
                             </span>
                             <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
                           </button>
                           {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
                           })}
                         </>
                       )}
@@ -4111,13 +4464,13 @@ export default function ShiftBuilder() {
                           >
                             <span className="flex items-center gap-1.5">
                               <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                              AM Overlaps (in 5:00–5:30am)
+                              AM Overlaps ({amDayShiftLabel})
                             </span>
                             <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
                           </button>
                           {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
                             const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" />;
+                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} />;
                           })}
                         </>
                       )}
@@ -4146,7 +4499,7 @@ export default function ShiftBuilder() {
                       </button>
                       {deployedExpanded && filteredOnThisNight.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
                       })}
                     </>
                   )}
@@ -4171,7 +4524,7 @@ export default function ShiftBuilder() {
                       </button>
                       {portersExpanded && filteredPorters.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
                       })}
                     </>
                   )}
@@ -4196,7 +4549,7 @@ export default function ShiftBuilder() {
                       </button>
                       {amOverlapsExpanded && filteredAMOverlaps.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
                       })}
                     </>
                   )}
@@ -4221,7 +4574,7 @@ export default function ShiftBuilder() {
                       </button>
                       {pmOverlapsExpanded && filteredPMOverlaps.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
                       })}
                     </>
                   )}
@@ -4246,7 +4599,7 @@ export default function ShiftBuilder() {
                       </button>
                       {otherTmsExpanded && filteredRegularGrave.map((tm: any) => {
                         const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" />;
+                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} />;
                       })}
                     </>
                   )}
@@ -4495,19 +4848,26 @@ export default function ShiftBuilder() {
             paddingLeft: rosterOpen ? 296 : 64,
           }}
         >
+          {/* Visual frame sized to the *scaled* artboard.
+              This is what flex centers (preserving the original containment + centering behavior).
+              Inside it we have:
+                - the scaled artboard content (top-left, transformed)
+                - the unscaled artboard overlay layer (absolutely centered, for Command Palette etc. at 1:1)
+          */}
           <div
-            className="print-stage flex-shrink-0 relative"
+            className="relative flex-shrink-0"
             style={{ width: NATURAL_WIDTH * scale, height: NATURAL_HEIGHT * scale }}
           >
-          <div
-            className="print-stage-inner relative"
-            ref={positioningRef}
-            style={{
-              width: NATURAL_WIDTH,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-            }}
-          >
+            {/* The actual scaled artboard (original print-stage-inner) */}
+            <div
+              className="print-stage-inner relative"
+              ref={positioningRef}
+              style={{
+                width: NATURAL_WIDTH,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            >
             {/* Pill cluster moved out of this scaled wrapper — rendered as a
                sibling of .print-stage-inner below so it floats at the
                bottom-center of the canvas at a constant, tap-friendly size
@@ -4541,10 +4901,27 @@ export default function ShiftBuilder() {
                   </div>
                   <div className="-mb-0.5 flex flex-col">
                     <div
-                      className="font-bold leading-none"
+                      className="font-bold leading-none flex items-center gap-2"
                       style={{ color: selectedDay.color, fontSize: 26, letterSpacing: '-0.8px', fontFamily: 'var(--font-atkinson)' }}
                     >
                       {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
+                      {isCurrentNightLocked && (
+                        <span
+                          className="no-print inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full border"
+                          style={{
+                            background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                            borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)',
+                            color: isDark ? '#F2F2F4' : '#1C1C1E',
+                            fontSize: 11,
+                            fontFamily: 'var(--font-atkinson)',
+                            letterSpacing: '0.5px'
+                          }}
+                          title="This day is locked — no changes allowed"
+                        >
+                          <span className="ms" style={{ fontSize: 13 }}>lock</span>
+                          LOCKED
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] mt-0.5 leading-none" style={{ color: isDark ? '#9CA3AF' : '#4B5563' }}>
                       {currentView === "deployment"
@@ -4737,6 +5114,10 @@ export default function ShiftBuilder() {
                           onRemoveTask={handleRemoveTask}
                           onSetTaskColor={handleSetTaskColor}
                           onEditTask={handleEditTask}
+                          isLocked={isCurrentNightLocked}
+                          // Phase 1 Live optimistic layer
+                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
+                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
                         />
                       ))}
                     </div>
@@ -4771,6 +5152,9 @@ export default function ShiftBuilder() {
                           onRemoveTask={handleRemoveTask}
                           onSetTaskColor={handleSetTaskColor}
                           onEditTask={handleEditTask}
+                          isLocked={isCurrentNightLocked}
+                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
+                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
                         />
                       ))}
                     </div>
@@ -4809,6 +5193,9 @@ export default function ShiftBuilder() {
                           onRemoveTask={handleRemoveTask}
                           onSetTaskColor={handleSetTaskColor}
                           onEditTask={handleEditTask}
+                          isLocked={isCurrentNightLocked}
+                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
+                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
                         />
                       ))}
                     </div>
@@ -4982,54 +5369,86 @@ export default function ShiftBuilder() {
                   </div>
 
                   {/* OVERLAPS — Golden: full-width section at bottom, two rows
-                     (11p–1a and 5a–7a) of 6 empty slots each. 
+                     (11p–1a swing on this sheet's date + 5a–7a day shift on the next calendar day).
                      The mt-auto + print post-processing pins this to the bottom
                      of the landscape break sheet page. */}
                   <section className="mt-auto pt-2 overlaps-section" data-print-target="overlaps">
                     <div className="sheet-section-header">
                       <span className="label">OVERLAPS</span>
                       <div className="divider" />
-                      <span className="count">
-                        {(() => {
-                          let f = 0;
-                          for (const half of ["PM", "AM"]) {
-                            for (let i = 0; i < 6; i++) {
-                              if (assignments[`OL-${half}-${i}`]?.tmName) f++;
-                            }
-                          }
-                          return `${f} / 12 FILLED`;
-                        })()}
-                      </span>
                     </div>
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {[
-                        { time: "11p – 1a", key: "PM" },
-                        { time: "5a – 7a",  key: "AM" },
+                        {
+                          time: "11p – 1a (swing)",
+                          key: "PM",
+                          dayName: selectedDay.name,
+                          dateNum: selectedDay.dateNum,
+                          headerColor: selectedDay.color,
+                        },
+                        {
+                          time: "5a – 7a (day shift)",
+                          key: "AM",
+                          dayName: amOverlapDayName,
+                          dateNum: amOverlapDateNum,
+                          headerColor: nextDayColor,
+                        },
                       ].map((row) => (
-                        <div key={row.key} className="flex items-center gap-2">
-                          <div
-                            className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
-                            style={{ fontFamily: 'var(--font-atkinson)' }}
-                          >
-                            {row.time}
+                        <div key={row.key}>
+                          {/* Mini day header mimicking the main artboard header:
+                              Large filled black date number on the left, day name in the day's accent color to the right.
+                              Slightly larger overall than previous version. */}
+                          <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+                            {/* Date number — filled black, slightly larger, heavy weight, mimicking the big number in the main header */}
+                            <div
+                              className="font-black tabular-nums leading-none"
+                              style={{
+                                fontSize: 22,
+                                color: isDark ? '#E5E5E7' : '#1C1C1E',
+                                fontFamily: 'var(--font-atkinson)',
+                              }}
+                            >
+                              {row.dateNum}
+                            </div>
+                            {/* Day name — in the week's accent color for that day, slightly larger */}
+                            <div
+                              className="font-bold tracking-[-0.4px] leading-none"
+                              style={{
+                                fontSize: 16,
+                                color: row.headerColor,
+                                fontFamily: 'var(--font-atkinson)',
+                              }}
+                            >
+                              {row.dayName}
+                            </div>
                           </div>
-                          <div className="flex-1 grid grid-cols-6 gap-1.5">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                              <OverlapSlot
-                                key={i}
-                                slotKey={`OL-${row.key}-${i}`}
-                                assignments={assignments}
-                                selectedTasks={selectedTasks}
-                                onCardClick={openPaletteForSlot}
-                                loading={loadingAssignments}
-                                isDraftMode={isDraftMode}
-                                draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
-                                onRemoveTask={handleRemoveTask}
-                                onSetTaskColor={handleSetTaskColor}
-                                onEditTask={handleEditTask}
-                              />
-                            ))}
+
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
+                              style={{ fontFamily: 'var(--font-atkinson)' }}
+                            >
+                              {row.time}
+                            </div>
+                            <div className="flex-1 grid grid-cols-6 gap-1.5">
+                              {Array.from({ length: 6 }).map((_, i) => (
+                                <OverlapSlot
+                                  key={i}
+                                  slotKey={`OL-${row.key}-${i}`}
+                                  assignments={assignments}
+                                  selectedTasks={selectedTasks}
+                                  onCardClick={openPaletteForSlot}
+                                  loading={loadingAssignments}
+                                  isDraftMode={isDraftMode}
+                                  draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
+                                  onRemoveTask={handleRemoveTask}
+                                  onSetTaskColor={handleSetTaskColor}
+                                  onEditTask={handleEditTask}
+                                  isLocked={isCurrentNightLocked}
+                                />
+                              ))}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -5051,17 +5470,30 @@ export default function ShiftBuilder() {
                 <div className="text-[#9CA3AF] text-center">v0.7</div>
                 <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
               </div>
-            </div>
+            </div> {/* /print-artboard */}
 
+            {/* Quick Action Fan removed... */}
+          </div> {/* /print-stage-inner (the scaled content) */}
 
-            {/* Quick Action Fan removed in Phase 1 of Command Palette Upgrade.
-                All card interactions now route through the contextual Command Palette
-                via openPaletteForSlot / openPaletteForPerson. */}
-          </div>
-          </div>
+          {/* Unscaled artboard overlay — centered inside the visual (scaled-size) frame.
+              This + the relative wrapper above restore proper containment while giving
+              Command Palette true "center of the artboard" behavior at 1:1 size. */}
+          <div
+            ref={artboardOverlayRef}
+            className="absolute pointer-events-none"
+            style={{
+              left: '50%',
+              top: '50%',
+              width: NATURAL_WIDTH,
+              height: NATURAL_HEIGHT,
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10050,
+            }}
+          />
 
-        </div>
-      </div>
+        </div> {/* /relative visual frame (the thing flex actually centers) */}
+      </div> {/* /stageHostRef content area */}
+    </div> {/* close any remaining from previous structure if needed */}
 
       {/* Floating ghost that follows the cursor / finger during drag.
          Rendered outside the artboard so it isn't clipped by overflow:hidden. */}
@@ -5287,6 +5719,11 @@ export default function ShiftBuilder() {
       />
 
       {/* Master Command Palette — Full rearchitecture switched over (react-cmdk + Velvet foundation) */}
+      {/* 
+        The component now owns its own fixed high-z glassmorphic overlay + centered card.
+        This guarantees a single visible floating palette from both the FloatingNav capsule (onCommandOpen)
+        and global ⌘K. The old duplicate local palette in FloatingNav has been removed.
+      */}
       <CommandPalette
         open={cmdkOpen}
         onOpenChange={setCmdkOpen}
@@ -5322,8 +5759,10 @@ export default function ShiftBuilder() {
         completionScheduledUnplaced={cmdkCompletionUnplaced}
         completionAssignments={cmdkCompletionAssignments}
         onAddCoverage={handleCmdkAddCoverage}
-        // Note: The new react-cmdk + Velvet foundation is now the active implementation.
-        // Multi-step flows, NL mode, and advanced Grok UI are being ported to the Page model.
+        onLockDay={cmdActionLockDay}
+        onUnlockDay={cmdActionUnlockDay}
+        isCurrentNightLocked={isCurrentNightLocked}
+        artboardOverlayRef={artboardOverlayRef}
       />
 
       {/* 

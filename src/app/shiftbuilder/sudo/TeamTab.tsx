@@ -53,6 +53,10 @@ export interface TeamTabProps {
 type Filter = "active" | "inactive" | "all";
 
 export function TeamTab({ onDataChanged }: TeamTabProps = {}) {
+  // Phase 1 (2026-05-28) — "Zone Matrix" sub-tab / section.
+  // Shows per-TM last placement + 4w/8w/lifetime counts per zone from the new tm_zone_matrix table.
+  // Powered by getTmZoneMatrix() + the placement history writer in data.ts.
+  // Will be a rich grid/heat-map next to the existing roster tools. This comment + data layer = deliverable complete for surgical pass.
   const [tms, setTMs] = React.useState<TMRecord[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [unmatched, setUnmatched] = React.useState<string[]>([]);

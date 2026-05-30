@@ -85,6 +85,29 @@ We are not starting from zero. The existing system is already more sophisticated
 
 **Verdict on Current State**: This is already a **top-tier domain-specific hybrid assignment system**. Most commercial tools lack the strict liturgy enforcement + guarded LLM judgment + mandatory safe preview. The leap to "world class / reveled" is primarily one of **breadth** (multi-night, fairness, self-service, solver depth, explainability surface) and **polish** (Why? panel, hotkeys, scenario branching), not a rewrite of the core.
 
+### 2026-05-28 Granular Engine Model (Phase 1 shipped)
+- Normalized tables (20260528_engine_granular_overrides_and_matrix.sql):
+  - engine_config now versioned (version_name, parent_id, is_preset, description).
+  - engine_signal_overrides — per-signal multipliers/disables (no more JSONB dumping).
+  - engine_eligibility_rules — flexible custom hard/soft rules.
+  - tm_placement_history + tm_zone_matrix — real 4w/8w/lifetime per-zone counts for fairness.
+- Full TypeScript layer: FullyResolvedEngineConfig, getFullyResolvedEngineConfig, applyOverridesToWeights, isEligibleUnderRules, matrix refresh & history writers.
+- Integrated with existing live-state caching (TanStack + Zustand + Realtime) and Draft Mode safety.
+- Scoring now uses real matrix signals (area_diversity etc.). Placement respects custom rules.
+- Sudo tabs prepped (EngineConfigTab version/override UI skeleton + TeamTab Zone Matrix section).
+- Everything explainable in the "Why?" panel. Backwards compatible. RLS safe.
+
+### Live-State Caching Layer (Phase 1 — May 2026)
+- **useLiveAssignments.ts** + **liveCache.ts** (new in `src/lib/shiftbuilder/`):
+  - Every manual mutation (assign, unassign, etc.) is now optimistic-first: instant UI update via `queryClient.setQueryData` + Zustand mirror.
+  - Full rollback on error + sonner toast on conflict ("another operator changed X — your change reverted").
+  - Centralized Supabase Realtime bridge keeps the TanStack Query cache and Zustand store in sync across operators/tabs in real time.
+  - Draft Mode remains the **only** source of truth for final "Apply" (live layer only touches the committed view).
+- Components (ZoneCard, RRCard, AuxCard, OverlapSlot) and `useSlotDnd` prepped with `onLive*` props.
+- `ShiftBuilderClient` wires the hook + realtime subscription and routes the main `assign` path through the optimistic layer (with legacy fallback during migration).
+- Preserves all existing safety, Golden artboard, and race-free nightId capture logic.
+- This is the foundation for "live from other operators" feel while keeping the operator fully in control via Draft.
+
 ---
 
 ## 3. Research Foundation — Tools, Algorithms & Patterns

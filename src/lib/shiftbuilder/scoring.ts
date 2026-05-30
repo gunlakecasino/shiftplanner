@@ -25,6 +25,7 @@ import type {
   TMPreferenceRow,
   TMPairAffinityRow,
   TMAccommodationRow,
+  TmZoneMatrixRow,
 } from "./data";
 import type { EngineConfig } from "./engineConfig";
 import { resolvedWeights } from "./engineConfig";
@@ -58,6 +59,13 @@ export interface ScoringContext {
    * pair affinity. For Phase 1 we use a simple zone-number adjacency.
    */
   adjacency: Map<string, string[]>;
+  /**
+   * Preloaded tm_zone_matrix data for the fairness signals (area_diversity,
+   * cross_week_rotation, prior_run_continuity). Loaded once per engine run
+   * by the caller and passed in so scoring stays fully synchronous and fast.
+   * Keyed by tmId → zoneKey (e.g. "Z2", "Z9SR").
+   */
+  zoneMatrix?: Map<string, Map<string, TmZoneMatrixRow>>;
 }
 
 export interface SignalScore {
@@ -135,6 +143,13 @@ export function scoreAssignment(
   // ---- pair_affinity ------------------------------------------------
   const pair = scorePairAffinity(tm, slotKey, ctx);
   breakdown.pair_affinity = pair;
+
+  // ---- 2026-05-28 matrix-derived fairness signals (Phase 1) ----------
+  // These now read from tm_zone_matrix (populated from tm_placement_history).
+  // They power area_diversity, cross_week_rotation, prior_run_continuity etc.
+  // Data is preloaded by the caller into ctx.zoneMatrix (batched once per engine run).
+  const matrixSignals = scoreMatrixFairnessSignals(tm, slotKey, ctx);
+  Object.assign(breakdown, matrixSignals);
 
   // Hard pair-avoid becomes a hard exclude.
   if (!excluded && pair.raw <= -1 && pair.note?.includes("hard")) {
@@ -345,3 +360,68 @@ export function buildDefaultAdjacency(): Map<string, string[]> {
 
   return out;
 }
+
+// =============================================================================
+// 2026-05-28: Matrix-derived fairness signals (Phase 1)
+// These read tm_zone_matrix (via ctx or direct data helper) and contribute to
+// the weights that already existed in EngineWeights (area_diversity, etc.).
+// The actual matrix data comes from tm_placement_history refreshed on Draft apply.
+// =============================================================================
+
+interface MatrixFairnessSignals {
+  area_diversity?: SignalScore;
+  cross_week_rotation?: SignalScore;
+  prior_run_continuity?: SignalScore;
+  // weekly_load_balance can be added here later when we have full-week aggregates
+}
+
+function scoreMatrixFairnessSignals(
+  tm: any,
+  slotKey: string,
+  ctx: ScoringContext
+): MatrixFairnessSignals {
+  const weights = resolvedWeights(ctx.config);
+  const breakdown: MatrixFairnessSignals = {};
+
+  // 2026-05-30 fix: Use preloaded matrix (batched once by the engine caller in
+  // ShiftBuilderClient + sudoActions). This eliminates the previous per-TM
+  // Supabase N+1 inside the hot scoring loop (and fixes a latent bug where
+  // promises were being treated as ScoreResult objects).
+  // Falls back to zeros if not provided (graceful degradation).
+  const matrix = ctx.zoneMatrix ?? new Map<string, Map<string, TmZoneMatrixRow>>();
+  const zoneData = matrix.get(tm.id)?.get(slotKey);
+  const matrixRow = zoneData
+    ? {
+        count_4w: zoneData.count4w ?? 0,
+        count_8w: zoneData.count8w ?? 0,
+        last_placed_at: zoneData.lastPlacedAt ?? null,
+      }
+    : { count_4w: 0, count_8w: 0, last_placed_at: null as string | null };
+
+  // area_diversity: penalize heavy recent concentration in one area
+  const areaDiversityRaw = Math.max(0, 1 - (matrixRow.count_4w / 6));
+  breakdown.area_diversity = {
+    raw: areaDiversityRaw,
+    weighted: areaDiversityRaw * (weights.area_diversity ?? 0.7),
+    note: `4w count in this zone: ${matrixRow.count_4w}`,
+  };
+
+  // cross_week_rotation
+  const rotationRaw = matrixRow.count_8w > 3 ? 0.3 : 1.0;
+  breakdown.cross_week_rotation = {
+    raw: rotationRaw,
+    weighted: rotationRaw * (weights.cross_week_rotation ?? 0.5),
+    note: `8w count: ${matrixRow.count_8w}`,
+  };
+
+  // prior_run_continuity
+  const continuityRaw = matrixRow.last_placed_at ? 0.8 : 0.4;
+  breakdown.prior_run_continuity = {
+    raw: continuityRaw,
+    weighted: continuityRaw * (weights.prior_run_continuity ?? 0.4),
+    note: matrixRow.last_placed_at ? "recent placement in zone" : "no recent history",
+  };
+
+  return breakdown;
+}
+

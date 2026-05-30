@@ -12,6 +12,8 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
 
+/** AuxCard — Phase 1 Live layer prep (same pattern as ZoneCard / RRCard). */
+
 export interface AuxCardProps {
   def: any;
   assignments: any;
@@ -25,6 +27,10 @@ export interface AuxCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+
+  // Phase 1 Live optimistic layer
+  onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
+  onLiveUnassign?: (uiKey: string) => void;
 }
 
 const AuxCard: React.FC<AuxCardProps> = ({
@@ -40,6 +46,8 @@ const AuxCard: React.FC<AuxCardProps> = ({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onLiveAssign,
+  onLiveUnassign,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -47,6 +55,7 @@ const AuxCard: React.FC<AuxCardProps> = ({
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "aux", { tmId: a.tmId, tmName: a.tmName });
 
+  // Phase 1 Live layer ready (onLive* props when wired).
   const icon = getAuxIcon(def.key);
   const isEmpty = !hasTM && !loading;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(

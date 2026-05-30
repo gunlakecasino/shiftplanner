@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
@@ -16,9 +16,12 @@ import {
   User,
   Search,
 } from "lucide-react";
-import { Command } from "cmdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, startOfWeek } from "date-fns";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+// Note: "cmdk" package import removed — the search capsule now exclusively triggers the global CommandPalette
+// (react-cmdk based) via onCommandOpen. Duplicate local palette caused z-index + focus conflicts.
 
 // ==================== CVA VARIANTS ====================
 const navVariants = cva(
@@ -77,6 +80,8 @@ export interface FloatingNavProps {
   placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
   savedText?: string;
   onToday: () => void;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onZoomFit?: () => void;
@@ -101,6 +106,8 @@ export default function FloatingNav({
   placedCount,
   savedText = "Saved",
   onToday,
+  onPrevWeek,
+  onNextWeek,
   onUndo,
   onRedo,
   onZoomFit,
@@ -111,7 +118,6 @@ export default function FloatingNav({
   isDark = false,
   userInitials = "BC",
 }: FloatingNavProps) {
-  const [cmdkOpen, setCmdkOpen] = React.useState(false);
   const queryClient = useQueryClient();
 
   // TanStack Query for day switching with optimistic updates + instant feel
@@ -169,51 +175,108 @@ export default function FloatingNav({
 
         {/* CENTER: Date Selector + View Switcher */}
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-3 min-w-0 px-2">
-          {/* Date Pills with Framer Motion Layout Swoop */}
-          <div
-            className="flex items-center gap-1 px-1.5 py-1 rounded-2xl relative"
-            style={{ background: "rgba(0,0,0,0.025)", border: "1px solid var(--sb-glass-border)" }}
-          >
-            {days.map((day) => {
-              const isActive = day.id === selectedDayId;
-
-              return (
-                <button
-                  key={day.id}
-                  onClick={() => handleDaySelect(day.id, day.date || new Date())}
-                  className={cn(
-                    datePillVariants({ active: isActive }),
-                    "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all",
-                    isActive ? "px-3.5 text-sm" : "px-2.5 text-[12px]"
-                  )}
-                  style={{
-                    minWidth: isActive ? 46 : 28,
-                    background: isActive ? ACCENT : "transparent",
-                    color: isActive ? "#fff" : isDark ? "#A1A1AA" : "#52525B",
-                    border: isActive ? `1px solid ${ACCENT}` : "1px solid transparent",
-                    fontWeight: isActive ? 700 : 600,
-                    fontSize: isActive ? "13px" : "12px",
-                  }}
+          {/* Date Pills with seamless half-circle week navigation caps */}
+          <div className="relative flex items-center">
+            {/* Left seamless half-circle cap — previous GRAVE week */}
+            {onPrevWeek && (
+              <motion.button
+                onClick={onPrevWeek}
+                whileHover={{ scale: 1.08, opacity: 0.95 }}
+                whileTap={{ scale: 0.88 }}
+                transition={SPRING}
+                className="absolute left-1 top-1/2 z-20 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full"
+                style={{
+                  background: "rgba(0,0,0,0.025)", // seamless match with strip
+                }}
+                title="Previous week"
+                aria-label="Previous GRAVE week"
+              >
+                <motion.span
+                  whileHover={{ x: -1.5 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
                 >
-                  {/* The sliding active highlight - pure layout animation */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="active-date-pill"
-                      className="absolute inset-0 rounded-full -z-10"
-                      style={{ background: ACCENT }}
-                      transition={SPRING}
-                    />
-                  )}
+                  <ChevronLeft className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
+                </motion.span>
+              </motion.button>
+            )}
 
-                  {isActive && day.shortLabel && (
-                    <span className="mr-1 text-[9px] font-bold tracking-[0.5px] opacity-90" style={{ color: "#fff" }}>
-                      {day.shortLabel}
+            {/* The pill strip itself (7 days always fully visible) */}
+            <div
+              className="flex items-center gap-1 px-7 py-1 rounded-2xl relative"
+              style={{
+                background: "rgba(0,0,0,0.025)",
+                border: "1px solid var(--sb-glass-border)",
+              }}
+            >
+              {days.map((day) => {
+                const isActive = day.id === selectedDayId;
+
+                return (
+                  <button
+                    key={day.id}
+                    onClick={() => handleDaySelect(day.id, day.date || new Date())}
+                    className={cn(
+                      datePillVariants({ active: isActive }),
+                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all flex-shrink-0",
+                      isActive ? "px-3 text-sm" : "px-2 text-[12px]"
+                    )}
+                    style={{
+                      minWidth: isActive ? 58 : 34,
+                      background: isActive ? ACCENT : "transparent",
+                      color: isActive ? "#fff" : isDark ? "#A1A1AA" : "#52525B",
+                      border: isActive ? `1px solid ${ACCENT}` : "1px solid transparent",
+                      fontWeight: isActive ? 700 : 600,
+                      fontSize: isActive ? "13px" : "12px",
+                    }}
+                  >
+                    {/* The sliding active highlight - pure layout animation */}
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-date-pill"
+                        className="absolute inset-0 rounded-full -z-10"
+                        style={{ background: ACCENT }}
+                        transition={SPRING}
+                      />
+                    )}
+
+                    {isActive && day.shortLabel && (
+                      <span className="mr-1 text-[9px] font-bold tracking-[0.5px] opacity-90" style={{ color: "#fff" }}>
+                        {day.shortLabel}
+                      </span>
+                    )}
+                    <span 
+                      className="leading-none tabular-nums inline-block text-center" 
+                      style={{ minWidth: 18 }}
+                    >
+                      {day.label}
                     </span>
-                  )}
-                  <span className="leading-none tabular-nums">{day.label}</span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right seamless half-circle cap — next GRAVE week */}
+            {onNextWeek && (
+              <motion.button
+                onClick={onNextWeek}
+                whileHover={{ scale: 1.08, opacity: 0.95 }}
+                whileTap={{ scale: 0.88 }}
+                transition={SPRING}
+                className="absolute right-1 top-1/2 z-20 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full"
+                style={{
+                  background: "rgba(0,0,0,0.025)", // seamless match with strip
+                }}
+                title="Next week"
+                aria-label="Next GRAVE week"
+              >
+                <motion.span
+                  whileHover={{ x: 1.5 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                >
+                  <ChevronRight className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
+                </motion.span>
+              </motion.button>
+            )}
           </div>
 
           {/* Deployment / Breaks Segmented */}
@@ -241,7 +304,6 @@ export default function FloatingNav({
           {/* Command Capsule */}
           <button
             onClick={() => {
-              setCmdkOpen(true);
               onCommandOpen?.();
             }}
             className="flex items-center gap-2 md:gap-2.5 px-4 md:px-5 h-9 rounded-2xl text-[12.5px] font-semibold border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985] group"
@@ -283,34 +345,12 @@ export default function FloatingNav({
         </div>
       </nav>
 
-      {/* cmdk Command Palette */}
-      <AnimatePresence>
-        {cmdkOpen && (
-          <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[18vh]" onClick={() => setCmdkOpen(false)}>
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.985 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.985 }}
-              className="w-full max-w-[620px] rounded-2xl border bg-white/95 dark:bg-zinc-950/95 shadow-2xl backdrop-blur-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <Command className="p-2" loop>
-                <div className="flex items-center gap-2 border-b px-3 py-2">
-                  <Search className="h-4 w-4 opacity-50" />
-                  <Command.Input placeholder="Search commands, people, actions..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400" />
-                </div>
-                <Command.List className="max-h-[320px] overflow-y-auto p-2 text-sm">
-                  <Command.Empty>No results found.</Command.Empty>
-                  <Command.Group heading="Quick Actions">
-                    <Command.Item onSelect={() => { setCmdkOpen(false); onToday(); }}>Go to Today</Command.Item>
-                    <Command.Item onSelect={() => setCmdkOpen(false)}>Lock current slot</Command.Item>
-                  </Command.Group>
-                </Command.List>
-              </Command>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* 
+        Command Palette is now rendered exclusively by the parent (ShiftBuilderClient).
+        The search capsule above only calls onCommandOpen, which wires to the single global
+        react-cmdk + Velvet-backed palette (full roster, actions, Sudo, Grok, etc.).
+        Duplicate local palette removed to eliminate z-index wars, focus traps, and iPad typing breakage.
+      */}
     </>
   );
 }

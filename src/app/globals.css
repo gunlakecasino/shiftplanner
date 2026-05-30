@@ -1328,6 +1328,11 @@ body {
   .print-dual-container .print-artboard * {
     visibility: visible !important;
   }
+
+  /* Hide any UI elements that should never appear in printed output (e.g. LOCKED badge) */
+  .no-print {
+    display: none !important;
+  }
 }
 
 /* Hide the dual container on screen — it only exists transiently during
@@ -1434,6 +1439,15 @@ body {
   --cmdk-text-muted: var(--sb-text-muted);
   --cmdk-accent: var(--sb-gold);
   font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+}
+
+/* Force the command palette above everything else (FloatingNav z-40, Sudo z-[10010], MarkerPad, etc.) */
+.command-palette,
+.command-palette [cmdk-root],
+.command-palette [cmdk-overlay],
+.command-palette [cmdk-dialog],
+.command-palette [cmdk-content] {
+  z-index: 10050 !important;
 }
 
 .command-palette .command-palette-content {

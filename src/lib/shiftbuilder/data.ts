@@ -212,11 +212,13 @@ export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
  *
  * Sources (merged):
  *   1. night_tm_status rows for tonight's night_id — populated by ADP import.
+ *      For a Friday May 29 grave sheet, this includes all TMs scheduled on the
+ *      Friday swing shift (PM overlaps scheduled until 1:00am).
  *   2. night_tm_status rows for the NEXT calendar day, filtered to grave_pool='AM'
- *      TMs only. Reason: AM overlap TMs (in at 5:00–5:30am) are scheduled by ADP
- *      under the next morning's date (e.g. a Friday grave shift has AM overlaps
- *      imported as Saturday 5am), so their night_tm_status rows live under the
- *      Saturday night_id, not Friday's.
+ *      TMs only. Reason: AM overlap TMs are scheduled in at 5:00am on day shift
+ *      THE NEXT DAY. So for a Friday May 29 grave sheet, the AM overlaps are
+ *      those scheduled on Saturday May 30 day shift at 5am. Their rows live
+ *      under Saturday's night_id, not Friday's.
  *   3. Fallback heuristic: TMs appearing in zone/break/overlap_assignments for
  *      any night this week — covers weeks where no ADP import has been run yet.
  *
@@ -244,31 +246,39 @@ export async function getOnScheduleTmIdsForNight(
   const [tonightStatusRes, tomorrowNightRes] = await Promise.all([
     supabase
       .from('night_tm_status')
-      .select('tm_id')
+      .select('tm_id, status')
       .eq('night_id', nightId),
     nextDateStr
       ? supabase.from('nights').select('id').eq('night_date', nextDateStr).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
 
-  (tonightStatusRes.data || []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
+  // Only count TMs as "on schedule" if they have a working status (respects manual LOA/PTO/etc edits)
+  (tonightStatusRes.data || [])
+    .filter((r: any) => !r.status || ["present", "scheduled"].includes(r.status))
+    .forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
 
   // AM overlap TMs are imported as next-day schedule entries
+  // (only those with working status on the next day's row)
   if (tomorrowNightRes.data?.id) {
     const tomorrowNightId = tomorrowNightRes.data.id;
     const { data: nextDayStatus } = await supabase
       .from('night_tm_status')
-      .select('tm_id')
+      .select('tm_id, status')
       .eq('night_id', tomorrowNightId);
 
     if (nextDayStatus?.length) {
-      const nextTmIds = (nextDayStatus || []).map((r: any) => r.tm_id).filter(Boolean);
-      if (nextTmIds.length > 0) {
+      const nextWorkingTmIds = (nextDayStatus || [])
+        .filter((r: any) => !r.status || ["present", "scheduled"].includes(r.status))
+        .map((r: any) => r.tm_id)
+        .filter(Boolean);
+
+      if (nextWorkingTmIds.length > 0) {
         // Only include those who are AM overlap TMs (grave_pool = 'AM')
         const { data: amProfiles } = await supabase
           .from('tm_profiles')
           .select('tm_id')
-          .in('tm_id', nextTmIds)
+          .in('tm_id', nextWorkingTmIds)
           .eq('grave_pool', 'AM')
           .eq('active', true);
         (amProfiles || []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
@@ -821,6 +831,52 @@ export async function toggleAssignmentLock(params: {
   }
 
   return { success: true, newLocked: !currentLocked };
+}
+
+/**
+ * Lock or unlock an entire night (the day).
+ * This sets nights.is_locked and can be used to prevent further edits to the day.
+ */
+export async function setNightLocked(nightId: string, locked: boolean): Promise<void> {
+  if (!nightId) {
+    throw new Error('setNightLocked requires a nightId');
+  }
+
+  const client = getSupabaseClient();
+
+  const { error } = await client
+    .from('nights')
+    .update({
+      is_locked: locked,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', nightId);
+
+  if (error) {
+    logSupabaseError('setNightLocked failed', error);
+    throw new Error(`Failed to ${locked ? 'lock' : 'unlock'} day: ${error.message || 'unknown'}`);
+  }
+}
+
+/**
+ * Returns whether the given night is locked.
+ */
+export async function getNightLocked(nightId: string): Promise<boolean> {
+  if (!nightId) return false;
+
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('nights')
+    .select('is_locked')
+    .eq('id', nightId)
+    .single();
+
+  if (error || !data) {
+    logSupabaseError('getNightLocked failed', error);
+    return false;
+  }
+
+  return !!data.is_locked;
 }
 
 // ============================================================================
@@ -1707,6 +1763,65 @@ export async function unsubscribeChannel(channel: any) {
   }
 }
 
+/**
+ * Create a Supabase Realtime channel for live updates on night_tm_status for a specific night.
+ * This lets schedule changes (ADP re-imports, manual status edits, LOA/PTO marks) flow live into the planner.
+ */
+export function createNightScheduleStatusChannel(
+  nightId: string,
+  onChange: (payload: any) => void
+) {
+  const client = getSupabaseClient();
+
+  return client
+    .channel(`shiftbuilder-night-tm-status-${nightId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'night_tm_status',
+        filter: `night_id=eq.${nightId}`,
+      },
+      (payload) => {
+        console.log('[shiftbuilder] night_tm_status realtime change', payload.eventType, payload.new);
+        onChange(payload);
+      }
+    )
+    .subscribe((status) => {
+      console.log('[shiftbuilder] night_tm_status subscription status:', status);
+    });
+}
+
+/**
+ * Create a Supabase Realtime channel for live updates on call_offs for a specific date.
+ */
+export function createCallOffsChannel(
+  nightDateIso: string, // yyyy-mm-dd
+  onChange: (payload: any) => void
+) {
+  const client = getSupabaseClient();
+
+  return client
+    .channel(`shiftbuilder-call-offs-${nightDateIso}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'call_offs',
+        filter: `night_date=eq.${nightDateIso}`,
+      },
+      (payload) => {
+        console.log('[shiftbuilder] call_offs realtime change', payload.eventType);
+        onChange(payload);
+      }
+    )
+    .subscribe((status) => {
+      console.log('[shiftbuilder] call_offs subscription status:', status);
+    });
+}
+
 // ============================================================================
 // Debug / Utility
 // ============================================================================
@@ -1876,22 +1991,64 @@ export async function getTMSkillScores(): Promise<Map<string, number>> {
  * signal that the filter shouldn't be applied (no schedule loaded yet).
  */
 export async function getScheduledTmIdsForNight(
-  nightId: string
+  nightId: string,
+  shiftDate?: string
 ): Promise<Set<string>> {
   if (!nightId) return new Set();
 
-  const { data, error } = await supabase
+  const tmIdSet = new Set<string>();
+
+  // Current night: only TMs with working status
+  const { data: tonightData, error: tonightErr } = await supabase
     .from("night_tm_status")
     .select("tm_id, status")
     .eq("night_id", nightId)
     .in("status", ["present", "scheduled"]);
 
-  if (error) {
-    console.warn("[data] getScheduledTmIdsForNight failed:", error.message);
-    return new Set();
+  if (tonightErr) {
+    console.warn("[data] getScheduledTmIdsForNight (tonight) failed:", tonightErr.message);
+  } else {
+    (tonightData ?? []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
   }
 
-  return new Set((data ?? []).map((r: any) => r.tm_id));
+  // AM overlaps from next calendar day (if shiftDate provided)
+  if (shiftDate) {
+    const shiftDateObj = new Date(`${shiftDate}T12:00:00Z`);
+    if (!isNaN(shiftDateObj.getTime())) {
+      const nextDateStr = new Date(shiftDateObj);
+      nextDateStr.setUTCDate(nextDateStr.getUTCDate() + 1);
+      const nextIso = nextDateStr.toISOString().slice(0, 10);
+
+      const { data: nextNight } = await supabase
+        .from('nights')
+        .select('id')
+        .eq('night_date', nextIso)
+        .maybeSingle();
+
+      if (nextNight?.id) {
+        const { data: nextDayRows } = await supabase
+          .from("night_tm_status")
+          .select("tm_id, status")
+          .eq("night_id", nextNight.id)
+          .in("status", ["present", "scheduled"]);
+
+        const nextTmIds = (nextDayRows ?? []).map((r: any) => r.tm_id).filter(Boolean);
+
+        if (nextTmIds.length > 0) {
+          const { data: amProfiles } = await supabase
+            .from('tm_profiles')
+            .select('tm_id')
+            .in('tm_id', nextTmIds)
+            .eq('grave_pool', 'AM')
+            .eq('active', true);
+
+          (amProfiles ?? []).forEach((r: any) => r.tm_id && tmIdSet.add(r.tm_id));
+        }
+      }
+    }
+  }
+
+  return tmIdSet;
 }
 
 /**
@@ -2652,4 +2809,152 @@ export async function pushTaskDefaultsToWeek(
   }
 
   return { nights: nightIds.length, applied: totalApplied };
+}
+
+// =============================================================================
+// 2026-05-28 Phase 1: TM Placement History + Zone Matrix helpers
+// These feed the new fairness signals in scoring.ts and are the write path
+// from successful Draft applies (see applyDraft in ShiftBuilderClient).
+// All functions are TanStack-cache friendly and respect the live-state layer.
+// =============================================================================
+
+export interface TmZoneMatrixRow {
+  tmId: string;
+  zoneKey: string;
+  lastPlacedAt: string | null;
+  count4w: number;
+  count8w: number;
+  countLifetime: number;
+}
+
+export interface TmPlacementHistoryRow {
+  tmId: string;
+  nightId: string;
+  slotKey: string;
+  slotType: string;
+  placedAt: string;
+  weekStart: string | null;
+}
+
+/**
+ * Returns the current zone matrix for a TM (or all TMs if no tmId).
+ * Used by scoring for area_diversity / rotation signals.
+ */
+export async function getTmZoneMatrix(tmId?: string): Promise<Map<string, Map<string, TmZoneMatrixRow>>> {
+  let q = supabase
+    .from("tm_zone_matrix")
+    .select("tm_id, zone_key, last_placed_at, count_4w, count_8w, count_lifetime");
+
+  if (tmId) q = q.eq("tm_id", tmId);
+
+  const { data, error } = await q;
+
+  if (error) {
+    console.warn("[data] getTmZoneMatrix failed", error);
+    return new Map();
+  }
+
+  const out = new Map<string, Map<string, TmZoneMatrixRow>>();
+  (data || []).forEach((row: any) => {
+    if (!out.has(row.tm_id)) out.set(row.tm_id, new Map());
+    out.get(row.tm_id)!.set(row.zone_key, {
+      tmId: row.tm_id,
+      zoneKey: row.zone_key,
+      lastPlacedAt: row.last_placed_at,
+      count4w: row.count_4w ?? 0,
+      count8w: row.count_8w ?? 0,
+      countLifetime: row.count_lifetime ?? 0,
+    });
+  });
+  return out;
+}
+
+/**
+ * Refreshes (or creates) the zone matrix rows for a TM from placement history.
+ * Called after a successful Draft apply for the affected TMs.
+ * This is the bridge between committed assignments and the fast fairness signals.
+ */
+export async function refreshTmZoneMatrix(tmId: string, lookbackWeeks = 12): Promise<void> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (lookbackWeeks * 7));
+
+  const { data: history, error } = await supabase
+    .from("tm_placement_history")
+    .select("slot_key, placed_at, week_start")
+    .eq("tm_id", tmId)
+    .gte("placed_at", cutoff.toISOString())
+    .order("placed_at", { ascending: false });
+
+  if (error || !history) {
+    console.warn("[data] refreshTmZoneMatrix history fetch failed", error);
+    return;
+  }
+
+  const now = new Date();
+  const fourWeeksAgo = new Date(now.getTime() - 28 * 86400 * 1000);
+  const eightWeeksAgo = new Date(now.getTime() - 56 * 86400 * 1000);
+
+  const zoneCounts = new Map<string, { last: string | null; c4: number; c8: number; life: number }>();
+
+  history.forEach((h: any) => {
+    // Only real zones count for area/rotation fairness
+    if (!/^Z\d+$/.test(h.slot_key) && h.slot_key !== "Z9SR") return;
+
+    const z = h.slot_key;
+    const placed = new Date(h.placed_at);
+    if (!zoneCounts.has(z)) {
+      zoneCounts.set(z, { last: null, c4: 0, c8: 0, life: 0 });
+    }
+    const rec = zoneCounts.get(z)!;
+    rec.life += 1;
+    if (placed >= fourWeeksAgo) rec.c4 += 1;
+    if (placed >= eightWeeksAgo) rec.c8 += 1;
+    if (!rec.last || placed > new Date(rec.last)) rec.last = h.placed_at;
+  });
+
+  // Upsert into tm_zone_matrix
+  const upserts = Array.from(zoneCounts.entries()).map(([zoneKey, rec]) => ({
+    tm_id: tmId,
+    zone_key: zoneKey,
+    last_placed_at: rec.last,
+    count_4w: rec.c4,
+    count_8w: rec.c8,
+    count_lifetime: rec.life,
+    updated_at: now.toISOString(),
+  }));
+
+  if (upserts.length > 0) {
+    const { error: upErr } = await supabase
+      .from("tm_zone_matrix")
+      .upsert(upserts, { onConflict: "tm_id,zone_key" });
+
+    if (upErr) console.warn("[data] tm_zone_matrix upsert failed", upErr);
+  }
+}
+
+/**
+ * Records a committed placement into history (called from applyDraft after successful DB write).
+ * This is the only writer path for tm_placement_history.
+ */
+export async function recordPlacementHistory(
+  tmId: string,
+  nightId: string,
+  slotKey: string,
+  slotType: string,
+  rrSide: string | null = null,
+  weekStart: string | null = null
+): Promise<void> {
+  const { error } = await supabase.from("tm_placement_history").insert({
+    tm_id: tmId,
+    night_id: nightId,
+    slot_key: slotKey,
+    slot_type: slotType,
+    rr_side: rrSide,
+    week_start: weekStart,
+    is_committed: true,
+  });
+
+  if (error) {
+    console.warn("[data] recordPlacementHistory failed", error);
+  }
 }

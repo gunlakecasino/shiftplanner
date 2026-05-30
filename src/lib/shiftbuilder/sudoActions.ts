@@ -204,6 +204,39 @@ export async function upsertNightTmStatusBatch(
   };
 }
 
+/**
+ * Update (or insert) the schedule status for a single TM on a single night.
+ * Supports marking LOA, PTO, Other, or changing the effective status without a full ADP re-import.
+ * Changes are picked up live by the planner via realtime subscriptions on night_tm_status.
+ */
+export async function updateNightTmStatus(params: {
+  nightId: string;
+  tmId: string;
+  status: string;           // e.g. "scheduled", "present", "off", "LOA", "PTO", "Other", "called_off"
+  note?: string | null;
+  tmName?: string | null;   // optional – will be filled if missing
+}) {
+  const { nightId, tmId, status, note, tmName } = params;
+
+  const payload: any = {
+    night_id: nightId,
+    tm_id: tmId,
+    status,
+    note: note ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (tmName) payload.tm_name = tmName;
+
+  const { error } = await supabase
+    .from("night_tm_status")
+    .upsert(payload, { onConflict: "night_id,tm_id" });
+
+  if (error) {
+    throw new Error(`updateNightTmStatus failed: ${error.message}`);
+  }
+}
+
 // =====================================================================
 // Schedule storage management (SUDO Schedules tab)
 // =====================================================================
@@ -920,11 +953,13 @@ import {
   getTMPreferences,
   getTMPairAffinities,
   getTMAccommodations,
+  getTmZoneMatrix,
 } from "./data";
 import { getActiveEngineConfig } from "./engineConfig";
 import {
   runWeightedPlanner,
   getSlotsInPlacementOrder,
+  logEngineRunSummary,
 } from "./placement";
 import { buildDefaultAdjacency } from "./scoring";
 import { uiToDb, dbToUi } from "./slot-keys";
@@ -997,7 +1032,9 @@ export async function batchRunEngineForWeek(
   if (!nightRows || nightRows.length === 0) throw new Error("No nights found for this week.");
 
   // Load session-stable data once for the whole batch
-  const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave] =
+  // zoneMatrix is preloaded here for future richer week-level orchestration
+  // and to keep the data loading pattern consistent with per-night runs.
+  const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave, zoneMatrix] =
     await Promise.all([
       getActiveEngineConfig(),
       getTMSkillScores(),
@@ -1006,6 +1043,7 @@ export async function batchRunEngineForWeek(
       getTMPairAffinities(),
       getTMAccommodations(),
       getGraveAvailableTeamMembers(),
+      getTmZoneMatrix(),
     ]);
 
   // Build per-TM Maps once
@@ -1101,7 +1139,7 @@ export async function batchRunEngineForNight(
     .maybeSingle();
   if (nightErr || !nightRow) throw new Error(`Night ${nightId} not found`);
 
-  const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave] =
+  const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave, zoneMatrix] =
     await Promise.all([
       getActiveEngineConfig(),
       getTMSkillScores(),
@@ -1110,6 +1148,7 @@ export async function batchRunEngineForNight(
       getTMPairAffinities(),
       getTMAccommodations(),
       getGraveAvailableTeamMembers(),
+      getTmZoneMatrix(), // preloaded once — fixes the previous per-TM N+1 inside scoring
     ]);
 
   const prefByTm = new Map<string, any[]>();
@@ -1140,6 +1179,7 @@ export async function batchRunEngineForNight(
     pairByTm,
     accByTm,
     adjacency: buildDefaultAdjacency(),
+    zoneMatrix,
     skipFilledNights,
     requireSchedule,
     filterBySchedule,
@@ -1162,11 +1202,12 @@ async function runEngineForSingleNight(params: {
   pairByTm: Map<string, any[]>;
   accByTm: Map<string, any[]>;
   adjacency: Map<string, string[]>;
+  zoneMatrix?: Map<string, Map<string, any>>;
   skipFilledNights: boolean;
   requireSchedule: boolean;
   filterBySchedule: boolean;
 }): Promise<BatchNightResult> {
-  const { nightId, nightDate, dayName, grave, engineConfig, skillScores, slotDifficulty, prefByTm, pairByTm, accByTm, adjacency, skipFilledNights, requireSchedule, filterBySchedule } = params;
+  const { nightId, nightDate, dayName, grave, engineConfig, skillScores, slotDifficulty, prefByTm, pairByTm, accByTm, adjacency, zoneMatrix, skipFilledNights, requireSchedule, filterBySchedule } = params;
   const notes: string[] = [];
 
   // Load night-specific data in parallel
@@ -1228,10 +1269,35 @@ async function runEngineForSingleNight(params: {
       pairAffinitiesByTm: pairByTm,
       accommodationsByTm: accByTm,
       adjacency,
+      zoneMatrix,
     },
   });
 
   notes.push(...plannerResult.notes);
+
+  // === Rich engine telemetry (2026-05-30) ===
+  const preservedCount = Object.values(plannerResult.breakdown).filter(b => b.preserved).length;
+  const filledCount = Object.keys(plannerResult.proposedAssignments).length;
+  const unfilledSlots = Object.entries(plannerResult.proposedAssignments)
+    .filter(([, tmId]) => !tmId)
+    .map(([k]) => k);
+
+  logEngineRunSummary({
+    mode: 'batch-night',
+    dayName,
+    nightDate,
+    rosterSize: rosterForEngine.length,
+    slotsProcessed: orderedSlots.length,
+    preservedSlots: preservedCount,
+    filledSlots: filledCount,
+    unfilledSlots: unfilledSlots.length,
+    usedGrok: false,
+    grokPicksApplied: 0,
+    matrixPreloaded: !!zoneMatrix && zoneMatrix.size > 0,
+    warnings: plannerResult.notes,
+    topUnfilledSlots: unfilledSlots.slice(0, 6),
+    placementMethod: engineConfig.placementMethod,
+  });
 
   // Count preserved (already filled) vs new proposals
   let preserved = 0;

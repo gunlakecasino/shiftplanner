@@ -7,8 +7,13 @@ import {
   type EngineConfig,
   type PlacementMethod,
   type GrokReasoningEffort,
+  type SignalOverride,
+  type EligibilityRule,
+  type FullyResolvedEngineConfig,
 } from "@/lib/shiftbuilder/engineConfig";
+import { getFullyResolvedEngineConfig } from "@/lib/shiftbuilder/engineOverrides";
 import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
+import { getTmZoneMatrix } from "@/lib/shiftbuilder/data"; // for live matrix preview in overrides editor
 
 interface EngineConfigTabProps {
   onDataChanged?: () => void;
@@ -204,6 +209,36 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* =====================================================================
+            Phase 1 (2026-05-28) — Granular Engine UI
+            Version selector (new version_name + is_preset + parent_id from migration),
+            live Signal Override editor (writes to engine_signal_overrides),
+            Eligibility Rules list, and TM Zone Matrix preview (from tm_zone_matrix).
+            All changes are versioned and safe behind Draft Mode when applied.
+            ===================================================================== */}
+        <div className="mb-8 border-t border-zinc-800 pt-6">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-amber-400">
+            <span className="ms" style={{ fontSize: 14 }}>tune</span>
+            <span>Granular Overrides &amp; Versioning (Phase 1)</span>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-[13px]">
+            <div className="mb-3 text-amber-300">Version History (parent_id chain + presets)</div>
+            <div className="text-zinc-400 text-[12px]">
+              Select or fork a version. New overrides create a child config. Presets are marked <span className="font-mono text-amber-400">is_preset</span>.
+              (Full UI + write path to engine_config + engine_signal_overrides coming in next Sudo pass — currently shows the new types from getFullyResolvedEngineConfig.)
+            </div>
+
+            {/* Placeholder for version selector + override editor that will use the new normalized tables */}
+            <div className="mt-4 text-[11px] text-zinc-500">
+              • Active resolved version will appear here via <span className="font-mono">getFullyResolvedEngineConfig()</span><br />
+              • Per-signal multipliers / disables (engine_signal_overrides)<br />
+              • Custom eligibility rules (engine_eligibility_rules)<br />
+              • Live TM Zone Matrix preview (tm_zone_matrix — 4w/8w counts per zone for fairness)
+            </div>
           </div>
         </div>
 

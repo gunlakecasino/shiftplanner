@@ -13,6 +13,12 @@ import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import CoverageBar from "./CoverageBar";
 
+/**
+ * RRCard (Phase 1 Live Cache migration)
+ * See ZoneCard.tsx for the full migration note pattern.
+ * New optional onLiveAssign / onLiveUnassign props prepared for the optimistic layer.
+ */
+
 export interface RRCardProps {
   def: any;
   assignments: any;
@@ -26,6 +32,10 @@ export interface RRCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+
+  // Phase 1 Live optimistic layer (preferred for assign/unassign)
+  onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
+  onLiveUnassign?: (uiKey: string) => void;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -42,11 +52,17 @@ const RRSide: React.FC<{
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask }) => {
+
+  // Phase 1 Live optimistic layer
+  onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
+  onLiveUnassign?: (uiKey: string) => void;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "rr", { tmId: a.tmId, tmName: a.tmName });
+
+  // Phase 1 Live layer ready (onLiveAssign / onLiveUnassign when wired by parent).
   const dim = !hasTM && !loading;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => onClick(slotKey, el),
@@ -132,6 +148,9 @@ const RRCard: React.FC<RRCardProps> = ({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onLiveAssign,
+  onLiveUnassign,
+  isLocked = false,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;

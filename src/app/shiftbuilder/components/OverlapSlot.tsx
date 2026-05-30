@@ -6,6 +6,8 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import TaskRow from "./TaskRow";
 
+/** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
+
 export interface OverlapSlotProps {
   slotKey: string;
   assignments: any;
@@ -17,6 +19,10 @@ export interface OverlapSlotProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+
+  // Phase 1 Live optimistic layer
+  onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
+  onLiveUnassign?: (uiKey: string) => void;
 }
 
 // One overlap cell (Break Sheet view) — a small assignable card. Backed by
@@ -36,10 +42,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = ({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onLiveAssign,
+  onLiveUnassign,
 }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName });
   const dim = !hasTM && !loading;
+
+  // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => onCardClick(slotKey, el),

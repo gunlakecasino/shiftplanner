@@ -1,15 +1,9 @@
 "use client";
 
 import React from "react";
-import Cmdk, {
-  getItemIndex,
-} from "react-cmdk";
-import "react-cmdk/dist/cmdk.css";
-import { toCmdkJsonStructure } from "@/lib/shiftbuilder/useCommandActions";
-import { RosterItemRow } from "./CommandPalette.legacy";  // Reuse rich row renderer during the rebuild transition
-
-// Icons for the new quick menu root
-import { Users, ArrowLeft, Settings, Printer, Undo2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, Settings, Undo2 } from "lucide-react";
 
 /**
  * CommandPalette (react-cmdk + Velvet rearchitecture)
@@ -32,6 +26,11 @@ interface CommandPaletteProps {
   // Accepts the existing CommandItem[] from useCommandActions for the spike
   actions?: any[];
   placeholder?: string;
+  /** When provided, the palette will portal into this container instead of document.body
+   *  and use absolute positioning so it is centered inside the artboard overlay layer
+   *  (Option 1 best-UX path — true "center of the artboard" at any zoom level).
+   */
+  artboardOverlayRef?: React.RefObject<HTMLDivElement | null> | null;
   // Pass-through for future (initialContext, Grok props, etc.)
   [key: string]: any;
 }
@@ -39,190 +38,439 @@ interface CommandPaletteProps {
 export function CommandPalette({
   open,
   onOpenChange,
-  actions = [],
-  placeholder = "Search roster, actions, days…",
+  artboardOverlayRef,
   ...rest
 }: CommandPaletteProps) {
+  const initialContext = (rest as any).initialContext as { type: 'slot' | 'person'; value: string } | null | undefined;
+  const selectedSlotAssignment = (rest as any).selectedSlotAssignment;
+  const onAddTask = (rest as any).onAddTask;
+  const onAddCoverage = (rest as any).onAddCoverage;
+  const onCycleBreak = (rest as any).onCycleBreak;
+  const onRemoveFromSlot = (rest as any).onRemoveFromSlot;
+
   const [search, setSearch] = React.useState("");
-  const [page, setPage] = React.useState<"root" | "roster" | "actions" | "context">("root");
+  const [selectedIndex, setSelectedIndex] = React.useState(0); // for keyboard navigation over filtered results
 
-  // Use the new adapter for the spike (transforms current registry output)
-  const filteredItems = React.useMemo(() => {
-    return toCmdkJsonStructure(actions as any, search);
-  }, [actions, search]);
+  // Portal mount guard (prevents SSR mismatch and ensures we escape any transformed ancestors)
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
-  // Extract the roster group so we can render it on its own dedicated page
-  const rosterGroup = React.useMemo(() => {
-    return filteredItems.find(
-      (g) => g.id === "roster" || g.heading?.toLowerCase() === "roster"
-    );
-  }, [filteredItems]);
+  // Robust iPad-safe focus.
+  // All hooks are ALWAYS called in the exact same order on every render of this
+  // component instance. We never early-return before hooks. Visibility is
+  // controlled purely by the `open` flag (and CSS) so React always sees the
+  // same hook sequence. This eliminates "Rendered more hooks than during the
+  // previous render" even under Turbopack HMR or rapid open/close cycles.
+  React.useEffect(() => {
+    if (!open || !mounted) return;
 
-  if (!open) return null;
+    const t = setTimeout(() => {
+      const input = document.querySelector('.command-palette input') as HTMLInputElement | null;
+      if (input && document.activeElement !== input) {
+        input.focus({ preventScroll: true });
+      }
+    }, 80);
+    return () => clearTimeout(t);
+  }, [open, mounted]);
 
-  // Dynamic placeholder based on current page
-  const effectivePlaceholder =
-    page === "roster"
-      ? "Search team members by name, section, status…"
-      : placeholder;
+  // Lock body scroll while the palette is open.
+  React.useEffect(() => {
+    if (!open || !mounted) return;
 
-  // Reusable renderer for a group's items (rich RosterItemRow for TMs, normal for others)
-  const renderGroupItems = (list: any) => {
-    if (!list?.items?.length) return null;
+    const body = document.body;
+    const html = document.documentElement;
 
-    return list.items.map(({ id, ...itemRest }: any) => {
-      const meta = itemRest.metadata;
-      const isRosterItem = list.heading === "Roster" || !!meta?.tm;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyPaddingRight = body.style.paddingRight;
+    const prevHtmlOverflow = html.style.overflow;
 
-      const itemChildren = isRosterItem && meta?.tm ? (
-        <RosterItemRow item={{
-          id,
-          label: itemRest.label || (typeof itemRest.children === "string" ? itemRest.children : ""),
-          metadata: meta,
-          group: list.heading as any,
-          handler: itemRest.onClick,
-        } as any} />
-      ) : (
-        itemRest.children
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    html.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      body.style.paddingRight = prevBodyPaddingRight;
+      html.style.overflow = prevHtmlOverflow;
+    };
+  }, [open, mounted]);
+
+  const handleClose = () => onOpenChange(false);
+
+  // Always render the same hook sequence. We only populate the expensive
+  // animated tree when we actually want it visible.
+  const show = open && mounted;
+
+  // Ref for the floating card so we can detect outside clicks reliably
+  const cardRef = React.useRef<HTMLDivElement>(null);
+
+  // === Robust Dismissal Strategy ===
+  // We deliberately use a document-level listener (capture phase) rather than
+  // relying solely on the backdrop. This gives consistent behavior in two modes:
+  //
+  // 1. Classic body portal → clicking anywhere outside the glass card closes it.
+  // 2. Artboard overlay mode → clicking anywhere in the stageHostRef / gray padding
+  //    *or* outside the 1056×816 logical box also closes it (the backdrop only covers
+  //    the logical artboard area).
+  //
+  // Global Escape is also handled here so it works even if focus is on a list item.
+  React.useEffect(() => {
+    if (!show) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // If the click landed inside the card, ignore it
+      if (cardRef.current && cardRef.current.contains(e.target as Node)) {
+        return;
+      }
+      // Click was outside the card → dismiss
+      handleClose();
+    };
+
+    // Use capture phase so we beat other handlers
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('mousedown', handleMouseDown, true);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('mousedown', handleMouseDown, true);
+    };
+  }, [show]);
+
+  const useArtboardOverlay = !!artboardOverlayRef?.current;
+
+  // === Dynamic actions from the rich registry (useCommandActions) ===
+  const rawActions: any[] = (rest as any).actions || [];
+
+  // Client-side filter against label + keywords (simple but effective while we restore full react-cmdk)
+  const filteredActions = React.useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return rawActions;
+
+    return rawActions.filter((item: any) => {
+      const labelMatch = (item.label || "").toLowerCase().includes(term);
+      const keywordMatch = (item.keywords || []).some((k: string) =>
+        k.toLowerCase().includes(term)
       );
-
-      return (
-        <Cmdk.ListItem
-          key={id}
-          index={getItemIndex(filteredItems as any, id) ?? 0}
-          onClick={itemRest.onClick}
-          closeOnSelect={itemRest.closeOnSelect}
-        >
-          {itemChildren}
-        </Cmdk.ListItem>
-      );
+      return labelMatch || keywordMatch;
     });
-  };
+  }, [rawActions, search]);
 
-  return (
-    <Cmdk
-      onChangeSearch={setSearch}
-      onChangeOpen={onOpenChange}
-      search={search}
-      isOpen={open}
-      page={page}
-      placeholder={effectivePlaceholder}
-    >
-      {/* ==================== ROOT: Quick Menu (new default open experience) ==================== */}
-      <Cmdk.Page id="root">
-        {/* Primary entry point the user asked for */}
-        <Cmdk.List>
-          <Cmdk.ListItem
-            index={0}
-            onClick={() => {
-              setPage("roster");
-              setSearch(""); // fresh searchable roster list
-            }}
-          >
-            <div className="flex items-center gap-3 py-0.5">
-              <Users className="h-5 w-5 shrink-0 opacity-75" />
-              <div className="flex flex-col leading-tight">
-                <span className="font-medium tracking-[-0.1px]">Roster</span>
-                <span className="text-[11px] opacity-60">Search &amp; assign team members</span>
+  // Group the filtered actions for nice sections
+  const groupedActions = React.useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const item of filteredActions) {
+      const g = item.group || "Other";
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(item);
+    }
+    return groups;
+  }, [filteredActions]);
+
+  // Flattened list for keyboard navigation
+  const flatFiltered = React.useMemo(() => filteredActions, [filteredActions]);
+
+  // Reset selection when search or actions change
+  React.useEffect(() => {
+    setSelectedIndex(0);
+  }, [search, flatFiltered.length]);
+
+  const paletteContent = show ? (
+    <>
+      {/* Backdrop — when using artboard overlay we render a lighter one limited to the overlay area */}
+      <div
+        className={useArtboardOverlay 
+          ? "absolute inset-0 z-[10049] bg-black/30 overscroll-none touch-none" 
+          : "fixed inset-0 z-[10050] bg-black/40 overscroll-none touch-none"}
+        onClick={handleClose}
+        onWheel={(e) => e.preventDefault()}
+      />
+
+      {/* Centered floating glass card */}
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.985, x: '-50%', y: '-50%' }}
+          animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+          exit={{ opacity: 0, scale: 0.985, x: '-50%', y: '-50%' }}
+          transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.85 }}
+          ref={cardRef}
+          className={`command-palette ${useArtboardOverlay ? 'absolute' : 'fixed'} z-[10051] w-full max-w-[620px] max-h-[min(70vh,560px)] rounded-3xl border shadow-2xl backdrop-blur-xl overflow-hidden pointer-events-auto flex flex-col`}
+          style={{
+            left: '50%',
+            top: '50%',
+            background: "var(--sb-glass, rgba(255,255,255,0.96))",
+            borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))",
+            boxShadow: "0 30px 70px -15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Minimal reliable shell — full roster/Grok/cmdk flows being restored */}
+          <div className="flex flex-col h-full">
+            <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))" }}>
+              <Search className="h-4 w-4 opacity-50" />
+              <input
+                placeholder="Search roster, actions, or type a command…"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    onOpenChange(false);
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSelectedIndex((i) => Math.min(i + 1, Math.max(0, flatFiltered.length - 1)));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSelectedIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    const target = flatFiltered[selectedIndex];
+                    if (target) {
+                      try { target.handler?.(); } catch (err) { console.error(err); }
+                      if (!target.keepOpen) onOpenChange(false);
+                    }
+                  }
+                }}
+              />
+              <button
+                onClick={() => onOpenChange(false)}
+                className="text-xs px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-[0.985] transition-transform"
+              >
+                Esc
+              </button>
+            </div>
+
+            {/* Contextual header when opened for a specific slot or person */}
+            {initialContext && (
+              <div className="px-4 py-1.5 text-[11px] bg-black/5 dark:bg-white/5 text-[#6B7280] dark:text-[#8E8E93] border-b" style={{ borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))" }}>
+                {initialContext.type === 'slot' ? 'Assigning to' : 'Context'} <span className="font-medium text-[#1C1C1E] dark:text-white">{initialContext.value}</span>
               </div>
+            )}
+
+            <div className="p-2 flex-1 min-h-0 overflow-auto text-sm">
+              {/* Always-visible high-frequency actions (pinned at top for muscle memory) */}
+              <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#6B7280] dark:text-[#8E8E93]">Quick actions</div>
+
+              <button
+                onClick={() => { (rest as any).onOpenSudo?.(); onOpenChange(false); }}
+                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+              >
+                <Settings className="h-4 w-4 opacity-70" />
+                <span className="font-medium">Open Sudo / Command Center</span>
+              </button>
+
+              <button
+                onClick={() => onOpenChange(false)}
+                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+              >
+                <span className="inline-block w-4 h-4 opacity-70">📅</span>
+                <span>Go to Today</span>
+              </button>
+
+              <button
+                onClick={() => { (rest as any).onUndo?.(); }}
+                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+              >
+                <Undo2 className="h-4 w-4 opacity-70" />
+                <span>Undo last change</span>
+              </button>
+
+              <div className="my-2 h-px bg-black/10 dark:bg-white/10" />
+
+              {/* Contextual actions when opened with a specific slot/person context */}
+              {initialContext?.type === 'person' && initialContext.value && (
+                <div className="mb-3">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#007AFF] dark:text-[#0A84FF]">
+                    About {initialContext.value}
+                  </div>
+                  <div className="px-3 py-2 text-sm text-[#6B7280] dark:text-[#8E8E93]">
+                    Person context active. Use roster rail or type to assign this person.
+                  </div>
+                </div>
+              )}
+
+              {initialContext?.type === 'slot' && initialContext.value && (
+                <div className="mb-3">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#007AFF] dark:text-[#0A84FF]">
+                    For {initialContext.value}
+                    {selectedSlotAssignment?.tmName && ` · ${selectedSlotAssignment.tmName}`}
+                  </div>
+
+                  {onRemoveFromSlot && (
+                    <button
+                      onClick={() => {
+                        onRemoveFromSlot(initialContext.value);
+                        onOpenChange(false);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                    >
+                      <span className="text-red-500">×</span>
+                      <span>Clear this slot</span>
+                    </button>
+                  )}
+
+                  {onAddTask && (
+                    <button
+                      onClick={() => {
+                        // Simple immediate task prompt for now (full multi-step flow can be layered later)
+                        const label = prompt('Task label for ' + initialContext.value + '?');
+                        if (label) onAddTask(initialContext.value, label);
+                        onOpenChange(false);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                    >
+                      <span>✓</span>
+                      <span>Add task to this slot</span>
+                    </button>
+                  )}
+
+                  {onCycleBreak && (
+                    <button
+                      onClick={() => {
+                        onCycleBreak(initialContext.value);
+                        onOpenChange(false);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                    >
+                      <span>↻</span>
+                      <span>Cycle break group</span>
+                    </button>
+                  )}
+
+                  {onAddCoverage && (
+                    <button
+                      onClick={() => {
+                        // Placeholder for coverage flow – can be expanded into multi-step picker later
+                        alert('Coverage flow from ' + initialContext.value + ' – full picker coming in next layer');
+                        onOpenChange(false);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                    >
+                      <span>⇄</span>
+                      <span>Add coverage from this slot</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Dynamic grouped + searchable actions from the real registry */}
+              {Object.keys(groupedActions).length > 0 ? (
+                (() => {
+                  // Build a flat list for reliable keyboard selection across groups
+                  let globalIndex = 0;
+                  const renderedGroups: React.ReactNode[] = [];
+
+                  Object.entries(groupedActions).forEach(([groupName, items]) => {
+                    const groupElements: React.ReactNode[] = [];
+
+                    items.forEach((item: any) => {
+                      const currentGlobalIndex = globalIndex++;
+                      const isSelected = currentGlobalIndex === selectedIndex;
+
+                      const isRoster = item.group === 'Roster' && item.metadata?.tm;
+                      const tm = item.metadata?.tm;
+
+                      groupElements.push(
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            try {
+                              item.handler?.();
+                            } catch (e) {
+                              console.error("[CommandPalette] handler error", e);
+                            }
+                            if (!item.keepOpen) {
+                              onOpenChange(false);
+                            }
+                          }}
+                          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-sm ${
+                            isSelected
+                              ? 'bg-[#007AFF15] dark:bg-[#0A84FF30] ring-1 ring-[#007AFF40] dark:ring-[#0A84FF50]'
+                              : 'hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10'
+                          }`}
+                        >
+                          {item.icon && (
+                            <span className="shrink-0 opacity-70">{item.icon}</span>
+                          )}
+                          <span className="truncate flex-1">{item.label}</span>
+
+                          {/* Roster-specific rich metadata */}
+                          {isRoster && tm && (
+                            <div className="flex items-center gap-2 text-[10px] text-[#6B7280] dark:text-[#8E8E93] ml-auto">
+                              {tm.primarySection && (
+                                <span className="px-1.5 py-px rounded bg-black/5 dark:bg-white/10">{tm.primarySection}</span>
+                              )}
+                              {tm.gravePool && <span className="text-[#34C759]">G</span>}
+                              {item.metadata?.currentAssignment && (
+                                <span className="font-mono truncate max-w-[90px]">{item.metadata.currentAssignment}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Generic fallback */}
+                          {!isRoster && item.metadata?.currentAssignment && (
+                            <span className="ml-auto text-[10px] text-[#6B7280] dark:text-[#8E8E93] truncate max-w-[120px]">
+                              {item.metadata.currentAssignment}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    });
+
+                    renderedGroups.push(
+                      <div key={groupName} className="mb-3">
+                        <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#6B7280] dark:text-[#8E8E93]">
+                          {groupName}
+                        </div>
+                        {groupElements}
+                      </div>
+                    );
+                  });
+
+                  return renderedGroups;
+                })()
+              ) : search.trim() ? (
+                <div className="px-3 py-4 text-sm text-[#6B7280] dark:text-[#8E8E93]">
+                  No matches for “{search}”.
+                </div>
+              ) : (
+                <div className="px-3 py-4 text-sm text-[#6B7280] dark:text-[#8E8E93]">
+                  Start typing to search the roster, actions, days, and more.
+                </div>
+              )}
             </div>
-          </Cmdk.ListItem>
-        </Cmdk.List>
 
-        {/* Quick one-shot actions (high-frequency ops, no drill-down) */}
-        <Cmdk.List heading="Quick actions">
-          <Cmdk.ListItem
-            index={1}
-            onClick={() => {
-              const openSudo = (rest as any).onOpenSudo;
-              if (openSudo) openSudo();
-              onOpenChange(false);
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <Settings className="h-4 w-4 opacity-70" />
-              <span>Open Sudo / Command Center</span>
+            <div className="border-t px-3 py-1.5 text-[10px] text-[#9CA3AF] dark:text-[#636366] flex items-center justify-between" style={{ borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))" }}>
+              <div>⌘K • ShiftBuilder</div>
+              <div className="opacity-60">Esc to close</div>
             </div>
-          </Cmdk.ListItem>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </>
+  ) : null;
 
-          <Cmdk.ListItem
-            index={2}
-            onClick={() => {
-              // Placeholder — will be wired to real print flow in next slice
-              const onPrint = (rest as any).onPrint;
-              if (onPrint) onPrint();
-              else console.log("[Command] Print requested from quick menu");
-              onOpenChange(false);
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <Printer className="h-4 w-4 opacity-70" />
-              <span>Print Break Sheet / Reports</span>
-            </div>
-          </Cmdk.ListItem>
+  // ALWAYS return a portal from this component (hook count stable).
+  // When an artboardOverlayRef is supplied we portal into it instead of body.
+  // This gives true "center of the artboard" (Option 1 best UX).
+  const portalTarget = useArtboardOverlay && artboardOverlayRef?.current
+    ? artboardOverlayRef.current
+    : document.body;
 
-          <Cmdk.ListItem
-            index={3}
-            onClick={() => {
-              const onUndo = (rest as any).onUndo;
-              if (onUndo) onUndo();
-              else console.log("[Command] Undo requested");
-              // stay open for undo chaining if desired
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <Undo2 className="h-4 w-4 opacity-70" />
-              <span>Undo last change</span>
-            </div>
-          </Cmdk.ListItem>
-        </Cmdk.List>
-
-        {/* Room for future categories: Navigation, Grok Assist, Advanced, etc. */}
-      </Cmdk.Page>
-
-      {/* ==================== ROSTER PAGE: The expanded TM list the user wants behind the entry ==================== */}
-      <Cmdk.Page id="roster">
-        <Cmdk.List heading="Team Members">
-          {rosterGroup ? (
-            renderGroupItems(rosterGroup)
-          ) : (
-            <div className="px-3 py-2 text-sm opacity-60">No team members loaded.</div>
-          )}
-        </Cmdk.List>
-
-        {/* Explicit back to quick menu */}
-        <Cmdk.List heading="Navigation">
-          <Cmdk.ListItem
-            index={99}
-            onClick={() => {
-              setPage("root");
-              setSearch("");
-            }}
-          >
-            <div className="flex items-center gap-2 text-[13px]">
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to quick menu</span>
-            </div>
-          </Cmdk.ListItem>
-        </Cmdk.List>
-      </Cmdk.Page>
-
-      {/* Future pages for multi-step (coverage, tasks, grok "why", NL command mode, etc.) */}
-      <Cmdk.Page id="context">
-        <div style={{ padding: 16, color: "#666", fontSize: 13 }}>
-          Contextual sub-page (person/slot flows) — ported in Phase 2 of the rebuild.
-          <br />
-          This demonstrates the clean page model replacing the old custom contextStep state machine.
-        </div>
-      </Cmdk.Page>
-
-      <Cmdk.Page id="actions">
-        <div style={{ padding: 16, color: "#666", fontSize: 13 }}>
-          Actions page coming in next slice (coverage, borders, tasks, etc.).
-        </div>
-      </Cmdk.Page>
-    </Cmdk>
-  );
+  return createPortal(paletteContent, portalTarget);
 }
 
 // Maintain compatibility during transition

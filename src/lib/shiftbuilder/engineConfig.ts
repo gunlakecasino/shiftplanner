@@ -2,8 +2,15 @@
  * Engine config loader.
  *
  * The active `engine_config` row owns the soft-weight bag, scoring thresholds,
- * slot-priority overrides, and the `placement_method` selector. Everything in
- * the scoring layer reads from here — no weights are hard-coded in TypeScript.
+ * slot-priority overrides, and the `placement_method` selector.
+ *
+ * As of the 2026-05-28 migration, engine_config also supports versioning
+ * (version_name, parent_id, is_preset) + normalized overrides via
+ * engine_signal_overrides and engine_eligibility_rules tables.
+ *
+ * Everything in the scoring and placement layers should prefer
+ * FullyResolvedEngineConfig (from engineOverrides.ts) over raw EngineConfig
+ * when possible.
  *
  * This is intentional: the operator can tune weights via SQL (or, eventually,
  * a settings panel) without redeploying the app.
@@ -47,14 +54,27 @@ export type GrokReasoningEffort = "none" | "low" | "medium" | "high";
 export interface EngineConfig {
   id: string;
   isActive: boolean;
+
+  // === Versioning fields (added in 2026-05-28 migration) ===
+  /** Human-readable name for this config version (e.g. "GRAVE-Standard-v2") */
+  versionName?: string | null;
+  /** Description of what this version does or why it exists */
+  description?: string | null;
+  /** Parent config this version was forked from (enables history tree) */
+  parentId?: string | null;
+  /** True if this is a built-in or saved preset that operators can fork from */
+  isPreset: boolean;
+
   weights: EngineWeights;
   thresholds: EngineThresholds;
   slotPriority: Record<string, number>; // slot → priority override
   placementMethod: PlacementMethod;
   /** Grok 4.3 reasoning depth used only when placementMethod === "grok-hybrid" */
   grokReasoningEffort: GrokReasoningEffort;
+
   notes: string | null;
   createdAt: string;
+  updatedAt?: string;
   createdBy: string | null;
 }
 
@@ -91,13 +111,22 @@ export const DEFAULT_GROK_REASONING_EFFORT: GrokReasoningEffort = "medium";
 export const FALLBACK_CONFIG: EngineConfig = {
   id: "fallback",
   isActive: true,
+
+  // Versioning fields for fallback
+  versionName: "Fallback",
+  description: "Hardcoded safe defaults when no active engine_config row exists.",
+  parentId: null,
+  isPreset: false,
+
   weights: { ...DEFAULT_WEIGHTS },
   thresholds: { ...DEFAULT_THRESHOLDS },
   slotPriority: {},
   placementMethod: "weighted",
   grokReasoningEffort: DEFAULT_GROK_REASONING_EFFORT,
+
   notes: "Synthesized fallback — no active engine_config row found.",
   createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
   createdBy: null,
 };
 
@@ -126,7 +155,9 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
   const { data, error } = await supabase
     .from("engine_config")
     .select(
-      "id, is_active, weights, thresholds, slot_priority, placement_method, grok_reasoning_effort, notes, created_at, created_by"
+      "id, is_active, version_name, description, parent_id, is_preset, " +
+      "weights, thresholds, slot_priority, placement_method, grok_reasoning_effort, " +
+      "notes, created_at, updated_at, created_by"
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false })
@@ -152,6 +183,13 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
   return {
     id: row.id,
     isActive: !!row.is_active,
+
+    // New versioning fields (2026-05-28)
+    versionName: row.version_name ?? null,
+    description: row.description ?? null,
+    parentId: row.parent_id ?? null,
+    isPreset: !!row.is_preset,
+
     weights: (row.weights ?? {}) as EngineWeights,
     thresholds: (row.thresholds ?? {}) as EngineThresholds,
     slotPriority: (row.slot_priority ?? {}) as Record<string, number>,
@@ -159,8 +197,72 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
       ? method
       : "weighted") as PlacementMethod,
     grokReasoningEffort: validReasoning,
+
     notes: row.notes ?? null,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
     createdBy: row.created_by ?? null,
   };
+}
+
+// =============================================================================
+// Phase 1 (2026-05-28) — Granular Engine Model Extensions
+// Added after migration 20260528_engine_granular_overrides_and_matrix.sql
+// These types are the contract between the new normalized tables and the rest
+// of the engine (scoring, placement, overrides resolver, Sudo UI).
+// See engineOverrides.ts for the heavy lifting (getFullyResolvedEngineConfig etc.)
+// =============================================================================
+
+/**
+ * A single granular override for one signal inside a specific engine_config version.
+ * Stored in the new engine_signal_overrides table (normalized, not JSONB).
+ */
+export interface SignalOverride {
+  id: string;
+  configId: string;
+  signalName: string;                    // matches keys in EngineWeights
+  overrideType: 'multiplier' | 'absolute' | 'disabled';
+  value: number | null;
+  appliesToSlotTypes?: string[] | null;
+  appliesToSlotKeys?: string[] | null;
+  appliesToZones?: string[] | null;
+  priority: number;
+  isActive: boolean;
+  notes?: string | null;
+}
+
+/**
+ * A custom eligibility rule attached to a config version.
+ * Stored in engine_eligibility_rules. The condition JSONB is intentionally
+ * flexible so the placement layer can evolve without schema changes.
+ */
+export interface EligibilityRule {
+  id: string;
+  configId: string;
+  ruleName: string;
+  ruleType: string;                      // 'hard_exclude', 'soft_prefer', 'min_experience', etc.
+  description?: string | null;
+  condition: Record<string, any>;
+  appliesToSlotTypes?: string[] | null;
+  appliesToSlotKeys?: string[] | null;
+  priority: number;
+  isActive: boolean;
+}
+
+/**
+ * The fully resolved config after walking the version parent chain,
+ * applying all active signal overrides, and merging eligibility rules.
+ * This is what scoring.ts and placement.ts should consume going forward.
+ */
+export interface FullyResolvedEngineConfig extends EngineConfig {
+  /** The concrete version name the operator actually selected (or inherited) */
+  resolvedVersionName: string;
+  /** All active signal overrides for this version (already sorted by priority) */
+  signalOverrides: SignalOverride[];
+  /** All active eligibility rules for this version */
+  eligibilityRules: EligibilityRule[];
+  /** Whether this config is a preset (affects UI copy + "reset to preset" behavior) */
+  isPreset: boolean;
+  /** The parent chain (most recent first) for "Why this config?" explainability */
+  versionHistory: Array<{ id: string; versionName: string | null; createdAt: string }>;
 }

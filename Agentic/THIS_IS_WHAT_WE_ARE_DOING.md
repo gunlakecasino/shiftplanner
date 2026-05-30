@@ -60,8 +60,8 @@ The original "coding-engineer + Live Browser is King" rules continue to apply to
 - **New Primary**: `/opsApp/` — New native SwiftUI + PencilKit iPad app (flagship Pencil Pro 2 experience)
 - `src/app/shiftbuilder/` (webapp) — Maintenance + parity work only going forward
 - `src/app/nightwatch/` (webapp) — Continued evolution as the web reference surface
-- `src/lib/shiftbuilder/` — Core domain logic (shared conceptually with opsApp)
-- `Key-Information/ops-agent-data-model.md` — Authoritative data model for both surfaces
+- `src/lib/shiftbuilder/` — Core domain logic (shared conceptually with opsApp) — **2026-05-28: Granular engine model (versioned configs + normalized overrides + eligibility rules + TM zone matrix) shipped in webapp as supporting work.**
+- `Key-Information/ops-agent-data-model.md` — Authoritative data model for both surfaces (now includes the new engine_* and tm_* matrix tables)
 
 Webapp work is now secondary to `opsApp` execution.
 

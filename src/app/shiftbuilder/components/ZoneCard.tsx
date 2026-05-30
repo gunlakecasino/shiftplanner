@@ -13,6 +13,19 @@ import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
 import CoverageBar from "./CoverageBar";
 
+/**
+ * ZoneCard (Phase 1 Live Cache migration)
+ *
+ * Mutation path update note:
+ * - The dnd gesture wiring still comes from useSlotDnd (see its updated JSDoc).
+ * - Preferred mutation functions (assign/unassign with full optimistic Query+Zustand
+ *   updates, rollback on conflict, and realtime sync) now come from `useLiveAssignments`.
+ * - Parent (ShiftBuilderClient) will pass `onLiveAssign`, `onLiveUnassign` etc.
+ *   wired to the new hook. Old direct paths are being migrated surgically.
+ *
+ * See liveCache.ts, useLiveAssignments.ts, and the updated useSlotDnd.ts.
+ * Draft Mode safety is preserved in the caller.
+ */
 export interface ZoneCardProps {
   def: any;
   assignments: any;
@@ -26,6 +39,13 @@ export interface ZoneCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+
+  // Phase 1 Live optimistic layer (preferred for assign/unassign)
+  onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
+  onLiveUnassign?: (uiKey: string) => void;
+
+  /** When true, the entire card is read-only (no drag, no drop, no editing) */
+  isLocked?: boolean;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = ({
@@ -41,17 +61,25 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onLiveAssign,
+  onLiveUnassign,
+  isLocked = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getZoneColor(def.key);
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "zone", { tmId: a.tmId, tmName: a.tmName });
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "zone", { tmId: a.tmId, tmName: a.tmName }, isLocked);
+
+  // Phase 1 note: When onLiveAssign / onLiveUnassign are provided by parent,
+  // they should be called from drag handlers / quick actions instead of (or in
+  // addition to) the legacy direct setAssignments + persistAssign path.
+  // The optimistic work (Query + Zustand + rollback) happens inside useLiveAssignments.
 
   const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => onCardClick(def.key, el),
+    (el) => { if (!isLocked) onCardClick(def.key, el); },
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter(t => t.isCoverage);
@@ -63,17 +91,19 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
   return (
     <div
       ref={setRef}
-      onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+      onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
+      {...(hasTM && !isLocked ? listeners : {})}
+      {...(hasTM && !isLocked ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
+        if (isLocked) return;
         clearLongHoverTimer();
         if (hasTM && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
+
       data-slot-key={def.key}
       className={`assignment-card relative overflow-hidden cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
       style={{

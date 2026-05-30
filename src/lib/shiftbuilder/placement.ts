@@ -4,11 +4,12 @@
  * This module is the **authoritative definition** of how placements must work
  * in the Coverage Planner (Phase 1).
  *
- * Usage:
- *   import { PLACEMENT_ORDER, getSlotsInPlacementOrder, runCoveragePlanner } from "@/lib/shiftbuilder/placement";
+ * Usage (recommended):
+ *   import { PLACEMENT_ORDER, getSlotsInPlacementOrder, runWeightedPlanner } from "@/lib/shiftbuilder/placement";
  *
- * All future placement services, engines, and auto-assign logic must use
- * the functions exported from this file.
+ * The legacy `runCoveragePlanner` is a deprecated skeleton and should not be used
+ * for any real scheduling work. All production paths now go through `runWeightedPlanner`
+ * (with optional Grok-hybrid overlay).
  */
 
 import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
@@ -123,29 +124,48 @@ export interface SlotRanking {
 }
 
 /**
- * Runs the Coverage Planner following the strict PLACEMENT_ORDER.
+ * @deprecated LEGACY SKELETON — DO NOT USE for production engine runs.
  *
- * This is the foundation for the "Run Engine" feature.
- * Currently a skeleton — will be expanded with real eligibility logic.
+ * This was the original naive greedy implementation before the real
+ * weighted planner + Grok-hybrid system existed (Phase 1).
+ *
+ * It lacks:
+ *   - Weighted scoring
+ *   - Pair affinity
+ *   - Preference / matrix fairness signals
+ *   - Top-K breakdown for the Why? panel
+ *   - Proper Draft Mode support
+ *
+ * The single source of truth for all real engine execution is now
+ * `runWeightedPlanner` (and the Grok-hybrid wrapper around it).
+ *
+ * This function is kept only for:
+ *   - Historical reference
+ *   - Possible future "very simple fallback" mode
+ *   - Type compatibility in a few import sites
+ *
+ * If you call this, you will get poor results and no diagnostics.
  */
 export function runCoveragePlanner(input: CoveragePlannerInput): CoveragePlannerResult {
+  console.warn(
+    "[runCoveragePlanner] DEPRECATED skeleton called. This produces low-quality output. " +
+    "Use runWeightedPlanner (or the Grok-hybrid path) instead."
+  );
+
   const { orderedSlots, assignments, roster } = input;
 
   const proposedAssignments: Record<string, string> = {};
   const assignedTmIds = new Set<string>();
   const notes: string[] = [];
 
-  // TODO: Replace with real eligibility + scoring logic
-  // For now: simple greedy assignment in strict order
+  // Legacy naive greedy (intentionally left as-is for reference)
   for (const slotKey of orderedSlots) {
     if (assignments[slotKey]?.tmId) {
-      // Already assigned — respect existing
       proposedAssignments[slotKey] = assignments[slotKey].tmId;
       assignedTmIds.add(assignments[slotKey].tmId);
       continue;
     }
 
-    // Find first eligible unassigned person (very basic for now)
     const candidate = roster.find(
       (tm: any) => !assignedTmIds.has(tm.id) && isEligibleForSlot(tm, slotKey)
     );
@@ -184,9 +204,13 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
 
 /**
  * Walks PLACEMENT_ORDER. For each slot, scores all eligible candidates not
- * already used in this draft and picks the highest-scoring TM. Preserves
- * filled slots as-is (passing them through). Returns a per-slot Top-K
- * breakdown so the "Why?" panel can show the candidate ranking.
+ * already used in this draft and picks the highest-scoring TM.
+ *
+ * Preserves filled slots as-is. Explicitly respects `isLocked` / `is_locked`
+ * flags (from zone_assignments.is_locked). Locked slots are never candidates
+ * for reassignment during this engine run.
+ *
+ * Returns a per-slot Top-K breakdown so the "Why?" panel can show the candidate ranking.
  *
  * This is the deterministic core. The Grok-hybrid path (later) wraps this
  * by feeding the same context + Top-K ranking into Grok and using its
@@ -213,7 +237,12 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
 
   for (const slotKey of orderedSlots) {
     // Preserve existing assignment if present.
+    // 2026-05-30: Explicitly respect isLocked (passed through from zone_assignments.is_locked
+    // in the batch path, and from live state in interactive). Locked slots are never
+    // candidates for engine reassignment in this run.
     const existing = assignments[slotKey];
+    const isLocked = !!(existing as any)?.isLocked || !!(existing as any)?.is_locked;
+
     if (existing?.tmId) {
       proposedAssignments[slotKey] = existing.tmId;
       breakdown[slotKey] = {
@@ -221,6 +250,10 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
         pickedTmId: existing.tmId,
         preserved: true,
       };
+
+      if (isLocked) {
+        notes.push(`Locked slot ${slotKey} respected (existing TM ${existing.tmId} kept)`);
+      }
       continue;
     }
 
@@ -317,7 +350,17 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
  *   field on tm_profiles — currently not present; operator must swap M/W manually.
  * - Breaks are ignored for placement decisions.
  */
-export function isEligibleForSlot(tm: any, slotKey: string): boolean {
+export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: any[] = []): boolean {
+  // 2026-05-28: First check custom rules from the resolved engine config (engine_eligibility_rules table).
+  // This is the injection point for operator-defined hard excludes / restrictions.
+  // The helper lives in engineOverrides.ts so it can evolve independently of the core liturgy.
+  if (eligibilityRules.length > 0) {
+    const { isEligibleUnderRules } = require("./engineOverrides"); // dynamic to avoid circular during rollout
+    if (!isEligibleUnderRules(tm, slotKey, "zone", eligibilityRules)) {
+      return false;
+    }
+  }
+
   const isGrave = !!tm.gravePool;
   const isAMOverlapAssigned = !!tm.isAMOverlap;
   const isPMOverlapAssigned = !!tm.isPMOverlap;
@@ -455,4 +498,77 @@ export function getEligibilityRulesText(): string {
 - Always prefer minimal disruption and respect the current draft or live board state when provided.
 
 These rules are non-negotiable. Any suggestion that would violate them must be rejected by the server guard before being shown to the operator.`;
+}
+
+// =====================================================================
+// ENGINE TELEMETRY & DIAGNOSTICS (added 2026-05-30)
+// =====================================================================
+
+export interface EngineRunTelemetry {
+  mode: 'interactive-draft' | 'batch-night' | 'batch-week';
+  dayName?: string;
+  nightDate?: string;
+  durationMs?: number;
+  rosterSize: number;
+  slotsProcessed: number;
+  preservedSlots: number;
+  filledSlots: number;
+  unfilledSlots: number;
+  usedGrok: boolean;
+  grokPicksApplied: number;
+  matrixPreloaded: boolean;
+  warnings: string[];
+  topUnfilledSlots: string[];
+  /** The placement method that was active for this run (from engine_config) */
+  placementMethod?: "greedy" | "weighted" | "grok-hybrid";
+}
+
+/**
+ * Structured logging for every engine run (interactive + batch).
+ * Call this after runWeightedPlanner + any Grok merge step.
+ *
+ * This gives operators and future agents much better visibility than
+ * the scattered console.warns that existed before.
+ */
+export function logEngineRunSummary(telemetry: EngineRunTelemetry) {
+  const {
+    mode,
+    dayName,
+    nightDate,
+    durationMs,
+    rosterSize,
+    slotsProcessed,
+    preservedSlots,
+    filledSlots,
+    unfilledSlots,
+    usedGrok,
+    grokPicksApplied,
+    matrixPreloaded,
+    warnings,
+    topUnfilledSlots,
+    placementMethod,
+  } = telemetry;
+
+  const methodLabel = placementMethod ? `method=${placementMethod}` : '';
+  const label = `[EngineRun:${mode}] ${dayName || ''} ${nightDate || ''}`.trim();
+
+  console.groupCollapsed(
+    `%c${label}  |  ${methodLabel}  filled=${filledSlots}  unfilled=${unfilledSlots}  preserved=${preservedSlots}  grok=${usedGrok ? grokPicksApplied : 'off'}  matrix=${matrixPreloaded ? 'preloaded' : 'missing'}`,
+    'color:#64748b;font-size:11px'
+  );
+
+  if (durationMs) {
+    console.log(`Duration: ${durationMs}ms`);
+  }
+  console.log(`Roster size: ${rosterSize}  |  Slots in order: ${slotsProcessed}`);
+
+  if (unfilledSlots > 0) {
+    console.warn(`Unfilled slots: ${topUnfilledSlots.join(', ')}${unfilledSlots > topUnfilledSlots.length ? ` (+${unfilledSlots - topUnfilledSlots.length} more)` : ''}`);
+  }
+
+  if (warnings.length > 0) {
+    console.warn('Warnings:', warnings);
+  }
+
+  console.groupEnd();
 }
