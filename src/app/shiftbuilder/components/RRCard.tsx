@@ -36,6 +36,9 @@ export interface RRCardProps {
   // Phase 1 Live optimistic layer (preferred for assign/unassign)
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
+
+  // Locked state for the night (disables interactions)
+  isLocked?: boolean;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -56,7 +59,10 @@ const RRSide: React.FC<{
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign }) => {
+
+  // Locked state for the night
+  isLocked?: boolean;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -71,13 +77,13 @@ const RRSide: React.FC<{
   return (
     <div
       ref={setRef}
-      onClick={(e) => onClick(slotKey, e.currentTarget, e)}
+      onClick={(e) => { if (!isLocked) onClick(slotKey, e.currentTarget, e); }}
       {...penHoverHandlers}
-      {...(hasTM ? listeners : {})}
-      {...(hasTM ? attributes : {})}
+      {...(hasTM && !isLocked ? listeners : {})}
+      {...(hasTM && !isLocked ? attributes : {})}
       onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
         clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
+        if (hasTM && !isLocked && (listeners as any)?.onPointerDown) {
           (listeners as any).onPointerDown(e);
         }
       }}
@@ -216,6 +222,7 @@ const RRCard: React.FC<RRCardProps> = ({
             onRemoveTask={onRemoveTask}
             onSetTaskColor={onSetTaskColor}
             onEditTask={onEditTask}
+            isLocked={isLocked}
           />
           <RRSide
             slotKey={wKey}
@@ -228,6 +235,7 @@ const RRCard: React.FC<RRCardProps> = ({
             onRemoveTask={onRemoveTask}
             onSetTaskColor={onSetTaskColor}
             onEditTask={onEditTask}
+            isLocked={isLocked}
           />
         </div>
       </div>
