@@ -1066,17 +1066,17 @@ function AuthedShiftBuilder() {
   // Component-level Set for O(1) "is this TM already on the board?" checks.
   // Replaces the O(n) Object.values().some() pattern used across the roster rail
   // and the completionScheduledUnplaced filter.
-  // Includes local + drafts + live optimistic (the picker memos below use the even fuller version
-  // that also folds in currentNight query data).
+  //
+  // IMPORTANT: This is an *early* memo. It must only reference state that is declared
+  // before this point in the component to avoid Temporal Dead Zone (TDZ) errors during
+  // the initial render. The full rich version (including currentNight, Zustand store,
+  // and liveAssignmentsStore) lives in `alreadyAssignedThisNight` below, which is used
+  // for the MarkerPad picker and other late consumers.
   const assignedThisNight = React.useMemo(() => {
     const set = new Set<string>(Object.values(assignments).map((a: any) => a?.tmId).filter(Boolean));
     Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    // Live optimistic layer
-    const dateKey = selectedDay.date.toISOString().slice(0, 10);
-    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    Object.values(liveForNight).forEach((a: any) => a?.tmId && set.add(a.tmId));
     return set;
-  }, [assignments, draftAssignments, selectedDay, liveAssignVersion]);
+  }, [assignments, draftAssignments]);
 
   // GRAVE shift filter (11pm–6:55am)
   const baseRoster = graveOnly ? graveRoster : realRoster;
