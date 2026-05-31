@@ -1833,6 +1833,14 @@ function AuthedShiftBuilder() {
   // Full TanStack Query commitment for the current night
   const currentNight = useCurrentNight(selectedDay);
 
+  // Narrow Zustand subscriptions — these are the source of truth for what the
+  // cards are actually rendering right now (post 3.4 + live layer refactor).
+  // We must consult them for MarkerPad mode decisions and the "already placed"
+  // exclusion, otherwise filled cards look unassigned to the pad and the picker
+  // lists contain people who are visibly on the board.
+  const storeAssignments = useAssignments();
+  const storeDraftAssignments = useDraftAssignments();
+
   // === Phase 3.1 Unification Bridge (first safe slice) ===
   // We are migrating consumers to prefer data from useCurrentNight.
   // These effective* values let us switch consumers one by one without a big bang.
@@ -3380,17 +3388,22 @@ function AuthedShiftBuilder() {
   // (optimistic writes + realtime bridge from useLiveAssignments + liveCache).
   const alreadyAssignedThisNight = React.useMemo(() => {
     const set = new Set<string>();
+    // Local legacy
     Object.values(assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
     Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    // TanStack Query (initial load + some updates)
     if (currentNight?.assignments) {
       Object.values(currentNight.assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
     }
-    // Live optimistic + realtime-synced assignments (the layer that actually receives instant updates on assign)
+    // The actual source the cards render from (Zustand + live layer)
+    Object.values(storeAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    Object.values(storeDraftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    // Live optimistic + realtime (for anything that bypasses the main store)
     const dateKey = selectedDay.date.toISOString().slice(0, 10);
     const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
     Object.values(liveForNight).forEach((a: any) => a?.tmId && set.add(a.tmId));
     return set;
-  }, [assignments, draftAssignments, currentNight?.assignments, selectedDay, liveAssignVersion]);
+  }, [assignments, draftAssignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
   // Fresh assignments view specifically for MarkerPad.
   // The cards (inside Board) and live layer now use Zustand + liveAssignmentsStore,
@@ -3402,11 +3415,15 @@ function AuthedShiftBuilder() {
     if (currentNight?.assignments) {
       Object.assign(merged, currentNight.assignments);
     }
+    // Pull whatever the cards are currently rendering (this is the key fix for
+    // "clicking a filled card still shows the big assign list")
+    Object.assign(merged, storeAssignments);
+    Object.assign(merged, storeDraftAssignments);
     const dateKey = selectedDay.date.toISOString().slice(0, 10);
     const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    Object.assign(merged, liveForNight); // live + realtime win for freshness
+    Object.assign(merged, liveForNight);
     return merged;
-  }, [assignments, currentNight?.assignments, selectedDay, liveAssignVersion]);
+  }, [assignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
   // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
   const markerScheduledUnassigned = React.useMemo(() => {
