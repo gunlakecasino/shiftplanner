@@ -34,7 +34,7 @@ export interface ParsedTM {
  */
 const SCHEDULE_COLS = [5, 7, 8, 9, 10, 11, 12];
 
-function normalizeTime(raw: string): { startTime?: string; endTime?: string; durationHours?: number; label: string } {
+function normalizeTime(raw: string): { startTime?: string; endTime?: string; durationHours?: number; label: string; isOff?: boolean } {
   const trimmed = raw.trim().toUpperCase();
 
   if (!trimmed || trimmed === 'OFF' || trimmed === '') {

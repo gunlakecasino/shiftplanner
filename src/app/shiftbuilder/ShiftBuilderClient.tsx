@@ -61,6 +61,7 @@ import {
   getSlotsInPlacementOrder,
   runCoveragePlanner,
   validatePlacementOrder,
+  isEligibleForSlot,
   type AuxDef,
 } from "@/lib/shiftbuilder/placement";
 import { buildRichGrokContextSnapshot } from "@/lib/shiftbuilder/grokIntelligence";
@@ -99,6 +100,8 @@ import {
   getTmZoneMatrix,
   createNightScheduleStatusChannel,
   createCallOffsChannel,
+  createTMDefaultSchedulesChannel,
+  createTMOnCallSchedulesChannel,
   unsubscribeChannel,
 } from "@/lib/shiftbuilder/data";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
@@ -1265,7 +1268,7 @@ function AuthedShiftBuilder() {
           },
           auxDefs,
           currentDraft: undefined, // will be populated inside the planner
-          scheduledTmIds: scheduledTmIdsTonight,   // NEW: expose ADP schedule to Rules Engine + Grok tools
+          scheduledTmIds: effectiveScheduledTmIdsTonight,   // NEW: expose ADP schedule to Rules Engine + Grok tools
         };
 
         snapshot = buildGrokEngineSnapshot({
@@ -1308,7 +1311,7 @@ function AuthedShiftBuilder() {
                   accommodationsByTm: tmAccommodationsByTm,
                   zoneMatrix: tmZoneMatrix,
                 },
-                scheduledTmIds: scheduledTmIdsTonight,  // NEW: for getTMScheduleStatus tool
+                scheduledTmIds: effectiveScheduledTmIdsTonight,  // NEW: for getTMScheduleStatus tool
               },
             }
           : undefined;
@@ -1856,6 +1859,43 @@ function AuthedShiftBuilder() {
   const effectiveRealRoster = currentNight.realRoster ?? realRoster;
   const effectiveGraveRoster = currentNight.graveRoster ?? graveRoster;
 
+  // === Phase 3.1 Unification for Scheduled Roster (MarkerPad + CMD-K picker fix) ===
+  // Declared here (after hook, before the late memos that consume it).
+  // This makes the modern useCurrentNight (which calls the authoritative new roster function)
+  // the source of truth for what appears in the card-tap TM picker.
+  const effectiveScheduledTmIdsTonight: Set<string> =
+    (currentNight.scheduledTmIdsTonight as Set<string> | undefined) ?? scheduledTmIdsTonight;
+
+  // === LIVE DEBUG WATCH LIST (from operator-reported picker names) ===
+  // When any of these make it into the scheduledUnassigned / eligible lists for MarkerPad,
+  // we log their full roster record (gravePool, gender, primarySection, etc.) so we can
+  // immediately see eligibility issues for the clicked slot (e.g. Z8 zone).
+  const __WATCHED_PICKER_NAMES__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
+
+  // === TEMP DIAGNOSTIC: compare hook vs legacy scheduled set (the root of the picker bug) ===
+  // Opt-in on production: localStorage.setItem('__DEBUG_MARKER_PICKER__', '1') or add ?debug=picker to URL.
+  const __DEBUG_MARKER_PICKER__ =
+    process.env.NODE_ENV !== 'production' ||
+    (typeof window !== 'undefined' &&
+      (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
+        window.location?.search?.includes('debug=picker')));
+  if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined') {
+    const hookScheduled = currentNight.scheduledTmIdsTonight as Set<string> | undefined;
+    const legacyScheduled = scheduledTmIdsTonight;
+    if (hookScheduled && legacyScheduled) {
+      const hookSize = hookScheduled.size;
+      const legacySize = legacyScheduled.size;
+      if (hookSize !== legacySize || [...hookScheduled].some(id => !legacyScheduled.has(id))) {
+        console.warn('[MARKER-PICKER-DEBUG] MISMATCH between hook.scheduledTmIdsTonight and legacy state!', {
+          hookSize, legacySize,
+          hookHasExtra: [...hookScheduled].filter(id => !legacyScheduled.has(id)),
+          legacyHasExtra: [...legacyScheduled].filter(id => !hookScheduled.has(id)),
+        });
+      }
+    }
+  }
+  // === END TEMP DIAGNOSTIC ===
+
   // Assignments unification bridge (next major slice in 3.1)
   // assignments is the hottest mutable state on the board.
   const effectiveAssignments = currentNight.assignments ?? assignments;
@@ -1944,7 +1984,8 @@ function AuthedShiftBuilder() {
 
     // Send raw data when available so the worker can do real heavy lifting
     // (assignment mapping, wave prep, etc.) off the main thread.
-    if (currentNight?.rawDbAssignments) {
+    const hasRaw = currentNight?.rawDbAssignments && Array.isArray(currentNight.rawDbAssignments);
+    if (hasRaw) {
       payload.dbAssignments = currentNight.rawDbAssignments;
     }
     if (currentNight?.rawBreakRows) {
@@ -1957,10 +1998,13 @@ function AuthedShiftBuilder() {
       payload.assignments = effectiveAssignments;
     }
 
-    dayWorkerRef.current.postMessage({
-      type: 'PROCESS_NIGHT',
-      payload,
-    });
+    // Only post if we have something useful to avoid the worker getting undefined data
+    if (hasRaw || (payload.assignments && Object.keys(payload.assignments).length > 0)) {
+      dayWorkerRef.current.postMessage({
+        type: 'PROCESS_NIGHT',
+        payload,
+      });
+    }
   }, [currentNight?.rawDbAssignments, currentNight?.rawBreakRows, effectiveAssignments, auxDefs]);
 
   // 3.5 Measurement: when the visual surface has fresh data
@@ -2090,9 +2134,26 @@ function AuthedShiftBuilder() {
       console.log('[shiftbuilder] call_offs changed — refreshed called off set');
     });
 
+    // NEW: React to changes in the static roster (defaults + weekly specials).
+    // This makes "I marked someone OFF in Sudo Weekly Defaults / Roster" immediately
+    // reflected in the board picker without needing to switch days or hard refresh.
+    const defaultSchedulesChannel = createTMDefaultSchedulesChannel(async () => {
+      const freshNewRoster = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
+      setScheduledTmIdsTonight(freshNewRoster);
+      console.log('[shiftbuilder] tm_default_schedules changed — refreshed roster scheduled set');
+    });
+
+    const onCallSchedulesChannel = createTMOnCallSchedulesChannel(async () => {
+      const freshNewRoster = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
+      setScheduledTmIdsTonight(freshNewRoster);
+      console.log('[shiftbuilder] tm_on_call_schedules changed — refreshed roster scheduled set');
+    });
+
     return () => {
       unsubscribeChannel(statusChannel);
       unsubscribeChannel(callOffChannel);
+      unsubscribeChannel(defaultSchedulesChannel);
+      unsubscribeChannel(onCallSchedulesChannel);
     };
   }, [nightId, selectedDay.date]);
 
@@ -3167,7 +3228,7 @@ function AuthedShiftBuilder() {
     assign,
     isDraftMode,
     enginePlacementMethod: engineConfig?.placementMethod,
-    scheduledTmIdsTonight,
+    scheduledTmIdsTonight: effectiveScheduledTmIdsTonight,
     calledOffIds,
     onApplyGrokSuggestions: applyGrokSuggestions,
     onTriggerGrokBoardAnalysis: triggerGrokBoardAnalysis,
@@ -3431,7 +3492,8 @@ function AuthedShiftBuilder() {
 
   // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
   const markerScheduledUnassigned = React.useMemo(() => {
-    return Array.from(scheduledTmIdsTonight)
+    const raw = Array.from(effectiveScheduledTmIdsTonight);
+    const filtered = raw
       .filter((id) => !alreadyAssignedThisNight.has(id) && !calledOffIds.has(id))
       .map((id) => {
         const tm = effectiveRealRoster.find((t: any) => t.id === id);
@@ -3440,24 +3502,105 @@ function AuthedShiftBuilder() {
         return { tmId: id, tmName };
       })
       .filter(Boolean) as { tmId: string; tmName: string }[];
-  }, [scheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds, effectiveRealRoster]);
+
+    // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug resolved) ===
+    const __DEBUG_MARKER_PICKER__ =
+      process.env.NODE_ENV !== 'production' ||
+      (typeof window !== 'undefined' &&
+        (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
+          window.location?.search?.includes('debug=picker')));
+    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined' && raw.length > 0) {
+      console.groupCollapsed(`[MARKER-PICKER-DEBUG] markerScheduledUnassigned (effective/hook-preferred) size=${filtered.length}`);
+      console.log('Source effectiveScheduled size:', raw.length);
+      console.log('After already-assigned + called-off filter + name lookup:', filtered.map(x => x.tmName));
+
+      // Enrich with full roster attributes for the exact names the operator is seeing
+      filtered.forEach(entry => {
+        const nameLower = entry.tmName.toLowerCase();
+        if (__WATCHED_PICKER_NAMES__.some(w => nameLower.includes(w))) {
+          const fullTm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
+          console.log(`[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name "${entry.tmName}" (in picker for current night):`, fullTm);
+        }
+      });
+      console.groupEnd();
+    }
+    // === END TEMP DIAGNOSTIC ===
+
+    return filtered;
+  }, [effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds, effectiveRealRoster]);
 
   // Full roster minus currently-placed TMs — used when the operator types in the
   // TM picker search box so they can find anyone, not just scheduled-unassigned.
   const markerAllEligibleTms = React.useMemo(() => {
     // Still limit to scheduled roster TMs (strict new system) + exclude already placed
-    return effectiveRealRoster
-      .filter((t: any) => scheduledTmIdsTonight.has(t.id) && !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
+    const filtered = effectiveRealRoster
+      .filter((t: any) => effectiveScheduledTmIdsTonight.has(t.id) && !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
       .map((t: any) => {
         const tmName = t.name || t.fullName;
         if (!tmName) return null;
         return { tmId: t.id as string, tmName: tmName as string };
       })
       .filter(Boolean) as { tmId: string; tmName: string }[];
-  }, [effectiveRealRoster, scheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds]);
+
+    // === TEMP DIAGNOSTIC ===
+    const __DEBUG_MARKER_PICKER__ =
+      process.env.NODE_ENV !== 'production' ||
+      (typeof window !== 'undefined' &&
+        (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
+          window.location?.search?.includes('debug=picker')));
+    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined' && filtered.length > 0) {
+      console.log('[MARKER-PICKER-DEBUG] markerAllEligibleTms (search pool, hook-preferred) size=', filtered.length, filtered.map(x => x.tmName));
+
+      filtered.forEach(entry => {
+        const nameLower = entry.tmName.toLowerCase();
+        if (__WATCHED_PICKER_NAMES__.some(w => nameLower.includes(w))) {
+          const fullTm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
+          console.log(`[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name "${entry.tmName}" (in search pool):`, fullTm);
+        }
+      });
+    }
+    // === END TEMP DIAGNOSTIC ===
+
+    return filtered;
+  }, [effectiveRealRoster, effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds]);
+
+  // === Slot-aware eligibility filtering for MarkerPad picker ===
+  // When a specific card is clicked (markerSlotKey is set), we further narrow the
+  // "Scheduled + Unassigned" lists using the same isEligibleForSlot rules the
+  // engine and Grok paths use. This delivers the "Eligible + Scheduled + Unassigned"
+  // contract the user requested.
+  //
+  // This is the final piece that prevents PM Overlap TMs from appearing on core
+  // zone cards (and applies RR gender rules, etc.).
+  const getEligibleForCurrentSlot = React.useCallback(
+    (baseList: { tmId: string; tmName: string }[]) => {
+      if (!markerSlotKey) return baseList;
+      return baseList.filter((entry) => {
+        const tm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
+        if (!tm) return false;
+        try {
+          return isEligibleForSlot(tm, markerSlotKey);
+        } catch {
+          // Safe fallback during any edge case with the eligibility function
+          return true;
+        }
+      });
+    },
+    [markerSlotKey, effectiveRealRoster]
+  );
+
+  const markerSlotScheduledUnassigned = React.useMemo(
+    () => getEligibleForCurrentSlot(markerScheduledUnassigned),
+    [getEligibleForCurrentSlot, markerScheduledUnassigned]
+  );
+
+  const markerSlotAllEligibleTms = React.useMemo(
+    () => getEligibleForCurrentSlot(markerAllEligibleTms),
+    [getEligibleForCurrentSlot, markerAllEligibleTms]
+  );
 
   const cmdkCompletionUnplaced = React.useMemo(() => {
-    return Array.from(scheduledTmIdsTonight)
+    return Array.from(effectiveScheduledTmIdsTonight)
       .filter((id) => !alreadyAssignedThisNight.has(id))
       .map((id) => {
         const tm = effectiveRealRoster.find((t: any) => t.id === id);
@@ -3465,7 +3608,7 @@ function AuthedShiftBuilder() {
       })
       .filter(Boolean)
       .slice(0, 12) as string[];
-  }, [scheduledTmIdsTonight, alreadyAssignedThisNight, effectiveRealRoster]);
+  }, [effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, effectiveRealRoster]);
 
   const cmdkCompletionAssignments = React.useMemo(
     () =>
@@ -4544,7 +4687,7 @@ function AuthedShiftBuilder() {
             graveRoster={effectiveGraveRoster}
             // assignments now pulled via narrow Zustand selector inside RosterRail (3.4)
             assignedThisNight={assignedThisNight}
-            scheduledTmIdsTonight={scheduledTmIdsTonight}
+            scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
             calledOffIds={calledOffIds}
             graveOnly={graveOnly}
             rosterSearch={rosterSearch}
@@ -5085,8 +5228,8 @@ function AuthedShiftBuilder() {
         onClearSlot={handleMarkerPadClearSlot}
         onAddCoverage={handleMarkerPadAddCoverage}
         onAssign={handleMarkerPadAssign}
-        scheduledUnassigned={markerScheduledUnassigned}
-        allEligibleTms={markerAllEligibleTms}
+        scheduledUnassigned={markerSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+        allEligibleTms={markerSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
         onClose={() => setMarkerSlotKey(null)}
         auxDefs={auxDefs}
         isDark={isDark}

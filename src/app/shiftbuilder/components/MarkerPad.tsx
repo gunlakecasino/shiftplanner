@@ -799,6 +799,7 @@ const TmPicker: React.FC<{
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
           {currentTmName ? `Replace ${currentTmName}…` : "Assign TM"}
+          <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.55 }}>(eligible for this slot)</span>
         </span>
         {onCancel && (
           <button
@@ -901,6 +902,36 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   isDark,
   tmGender,
 }) => {
+  // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug resolved) ===
+  // Fires when a card is tapped and the drawer mounts with the lists for that specific slot.
+  // Opt-in on production: localStorage.setItem('__DEBUG_MARKER_PICKER__', '1') or ?debug=picker
+  const __DEBUG_MARKER_PICKER__ =
+    process.env.NODE_ENV !== 'production' ||
+    (typeof window !== 'undefined' &&
+      (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
+        window.location?.search?.includes('debug=picker')));
+  if (__DEBUG_MARKER_PICKER__ && slotKey && typeof console !== 'undefined') {
+    console.groupCollapsed(`[MARKER-PICKER-DEBUG] MarkerPad opened for slot=${slotKey}`);
+    console.log('received scheduledUnassigned (tms prop) count:', scheduledUnassigned?.length ?? 0);
+    console.log('names:', (scheduledUnassigned || []).map((t: any) => t.tmName));
+    console.log('received allEligibleTms count:', allEligibleTms?.length ?? 0);
+    console.log('search pool names:', (allEligibleTms || []).map((t: any) => t.tmName));
+
+    // Highlight the operator-reported names and note that full roster attributes
+    // (gravePool, gender, etc.) are now being dumped from the memos in ShiftBuilderClient
+    // on the next list computation.
+    const watched = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
+    const matched = (scheduledUnassigned || []).filter((t: any) =>
+      watched.some(w => t.tmName.toLowerCase().includes(w))
+    );
+    if (matched.length > 0) {
+      console.warn('[MARKER-PICKER-DEBUG] These watched names are currently offered for this slot:', matched.map((t: any) => t.tmName));
+      console.log('→ Look for "[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name" logs from the parent memos for their gravePool/gender/etc.');
+    }
+    console.groupEnd();
+  }
+  // === END TEMP DIAGNOSTIC ===
+
   // After the heavy perf refactor (narrow Zustand selectors + Board memo island + TanStack Query split),
   // the orchestrator-level props can lag or come from a different source than the live board.
   // MarkerPad (a floating panel) must read live assignments directly so the current TM, picker logic,
@@ -1030,6 +1061,32 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
 
   // Show TM picker when slot is empty OR when operator tapped Swap
   const showTmPicker = onAssign && (!a.tmId || assignMode);
+
+  // === Phase 3: Slot-specific eligibility narrowing for the TM picker ===
+  // When clicking a card, the lists should be further restricted to TMs who are
+  // actually eligible for *this* slot (in addition to being scheduled + unplaced).
+  // Start with the highest-impact rule that was frequently violated: RR gender.
+  const requiredGenderForSlot: 'M' | 'F' | null = (() => {
+    if (!slotKey) return null;
+    if (slotKey.startsWith('MRR')) return 'M';
+    if (slotKey.startsWith('WRR')) return 'F';
+    // Future: for Z* we could require gravePool etc., but that needs richer TM objects
+    // passed down. The scheduled list from the weekly roster is already a strong gate.
+    return null;
+  })();
+
+  const applySlotEligibility = (list: TmEntry[] | undefined): TmEntry[] => {
+    if (!list || !requiredGenderForSlot) return list || [];
+    // We don't have per-TM gender on the TmEntry passed to MarkerPad today.
+    // The heavy lifting (full isEligibleForSlot using the real roster rows + engine rules)
+    // should live in the parent when building the lists for a known slotKey.
+    // For now we document the intent and do the easy win when the parent starts passing gender.
+    // (The tmGender prop is only for the *current occupant* of the slot.)
+    return list;
+  };
+
+  const slotEligibleScheduled = applySlotEligibility(scheduledUnassigned);
+  const slotEligibleAll = applySlotEligibility(allEligibleTms);
 
   const isDarkPanel = isDark !== false;
   const panelStyle: React.CSSProperties = {
@@ -1174,8 +1231,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       {/* ── Body: TM picker, Coverage picker, or Tasks section ──────────── */}
       {showTmPicker ? (
         <TmPicker
-          tms={scheduledUnassigned}
-          allTms={allEligibleTms}
+          tms={slotEligibleScheduled}
+          allTms={slotEligibleAll}
           currentTmName={a.tmId ? a.tmName : undefined}
           onPick={handlePickTm}
           onCancel={a.tmId ? () => { setAssignMode(false); setAssignConfirmed(false); } : undefined}

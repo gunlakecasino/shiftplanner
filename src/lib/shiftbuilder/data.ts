@@ -1,6 +1,8 @@
 import { supabase, getSupabaseClient } from '../supabase';
 import { dbToUi } from './slot-keys';
 import { startOfRosterWeek, daysBetween } from './dateUtils';
+import type { WeeklyShift } from './types/schedules';
+import { isWorkingShift } from './types/schedules';
 
 /**
  * Shift Builder Data Layer — Real Supabase backed.
@@ -1831,6 +1833,63 @@ export function createCallOffsChannel(
     });
 }
 
+/**
+ * Realtime channel for changes to tm_default_schedules.
+ * Any change to a TM's default can affect who is considered "scheduled" on future days.
+ * When this fires, the caller should re-fetch getScheduledTmIdsForNightFromNewRoster.
+ */
+export function createTMDefaultSchedulesChannel(
+  onChange: (payload: any) => void
+) {
+  const client = getSupabaseClient();
+
+  return client
+    .channel('shiftbuilder-tm-default-schedules')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'tm_default_schedules',
+      },
+      (payload) => {
+        console.log('[shiftbuilder] tm_default_schedules realtime change', payload.eventType);
+        onChange(payload);
+      }
+    )
+    .subscribe((status) => {
+      console.log('[shiftbuilder] tm_default_schedules subscription status:', status);
+    });
+}
+
+/**
+ * Realtime channel for changes to tm_on_call_schedules (the weekly specials / overrides).
+ * Critical for live reflection when user marks someone OFF or adds a special in Sudo Weekly Roster.
+ */
+export function createTMOnCallSchedulesChannel(
+  onChange: (payload: any) => void
+) {
+  const client = getSupabaseClient();
+
+  return client
+    .channel('shiftbuilder-tm-on-call-schedules')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'tm_on_call_schedules',
+      },
+      (payload) => {
+        console.log('[shiftbuilder] tm_on_call_schedules realtime change', payload.eventType);
+        onChange(payload);
+      }
+    )
+    .subscribe((status) => {
+      console.log('[shiftbuilder] tm_on_call_schedules subscription status:', status);
+    });
+}
+
 // ============================================================================
 // Debug / Utility
 // ============================================================================
@@ -2066,9 +2125,9 @@ export async function getScheduledTmIdsForNight(
  *
  * This is the path to fully removing the old ADP / night_tm_status baseline.
  *
- * For the initial implementation: any active TM in one of the core scheduled
- * groups (Grave, On Call, AM Overlaps, PM Overlaps) is considered scheduled
- * for the week. Day-specific pattern filtering can be added later.
+ * Day-specific filtering via weekly_pattern[dayIndex] + isWorkingShift is active.
+ * The result Set is the source of truth for MarkerPad TM picker "Scheduled" lists
+ * and roster filtering on the board.
  */
 export async function getScheduledTmIdsForNightFromNewRoster(
   nightDate: string
@@ -2103,44 +2162,73 @@ export async function getScheduledTmIdsForNightFromNewRoster(
       .select('tm_id')
       .in('group_id', groupIds);
 
-    if (!members || members.length === 0) return result;
+    const groupMemberUuids = new Set<string>(
+      (members ?? []).map((m: any) => m.tm_id).filter(Boolean)
+    );
 
-    const memberUuids = Array.from(new Set(members.map((m: any) => m.tm_id).filter(Boolean)));
+    // 4. Also discover any TMs that have an explicit weekly special/override for this week
+    //    (this supports the "Add or edit for any active TM" flow in Weekly Roster,
+    //     and makes markings done there actually affect the board picker).
+    const { data: weekSpecialsForDiscovery } = await supabase
+      .from('tm_on_call_schedules')
+      .select('tm_id')
+      .eq('week_start', rosterWeekStartIso);
 
-    // 4. Load most recent default schedule per member (effective on or before the roster week)
+    const specialTmUuids = new Set<string>(
+      (weekSpecialsForDiscovery ?? []).map((s: any) => s.tm_id).filter(Boolean)
+    );
+
+    // Combined set: anyone in the 4 groups OR anyone who has a special this week
+    const relevantUuids = new Set<string>([...groupMemberUuids, ...specialTmUuids]);
+
+    if (relevantUuids.size === 0) return result;
+
+    const relevantUuidArray = Array.from(relevantUuids);
+
+    // 5. Load most recent default for the relevant TMs
     const { data: defaults } = await supabase
       .from('tm_default_schedules')
       .select('tm_id, effective_from, weekly_pattern')
-      .in('tm_id', memberUuids)
+      .in('tm_id', relevantUuidArray)
       .lte('effective_from', rosterWeekStartIso)
       .order('effective_from', { ascending: false });
 
-    // Build map: uuid -> most recent pattern
     const defaultPatternByUuid = new Map<string, any[]>();
     (defaults ?? []).forEach((row: any) => {
       if (!defaultPatternByUuid.has(row.tm_id)) {
-        defaultPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+        const normalized = (row.weekly_pattern || []).map((d: any) => {
+          if (!d.startTime) {
+            return { ...d, startTime: null, endTime: null, label: "OFF" };
+          }
+          return d;
+        });
+        defaultPatternByUuid.set(row.tm_id, normalized);
       }
     });
 
-    // 5. Load weekly specials/overrides for *this exact roster week*
-    //    (On Call + AM/PM Overlaps live in tm_on_call_schedules as overrides)
+    // 6. Load the actual specials for this week (now for the broader set)
     const { data: weeklySpecials } = await supabase
       .from('tm_on_call_schedules')
       .select('tm_id, week_start, weekly_pattern')
       .eq('week_start', rosterWeekStartIso)
-      .in('tm_id', memberUuids);
+      .in('tm_id', relevantUuidArray);
 
     const weeklyPatternByUuid = new Map<string, any[]>();
     (weeklySpecials ?? []).forEach((row: any) => {
-      weeklyPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+      const normalized = (row.weekly_pattern || []).map((d: any) => {
+        if (!d.startTime) {
+          return { ...d, startTime: null, endTime: null, label: "OFF" };
+        }
+        return d;
+      });
+      weeklyPatternByUuid.set(row.tm_id, normalized);
     });
 
-    // 6. Map uuid → legacy tm_id and test the exact day slot in (special OR default)
+    // 7. Map uuid → legacy tm_id for the relevant TMs and test the day
     const { data: profiles } = await supabase
       .from('tm_profiles')
-      .select('id, tm_id')
-      .in('id', memberUuids)
+      .select('id, tm_id, display_name')
+      .in('id', relevantUuidArray)
       .eq('active', true);
 
     const uuidToLegacyId = new Map<string, string>();
@@ -2148,19 +2236,64 @@ export async function getScheduledTmIdsForNightFromNewRoster(
       if (p.tm_id) uuidToLegacyId.set(p.id, p.tm_id);
     });
 
-    for (const uuid of memberUuids) {
+    // Watched names provided by operator for this debugging session
+    const __WATCHED_NAMES__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
+
+    for (const uuid of relevantUuidArray) {
       const legacyId = uuidToLegacyId.get(uuid);
       if (!legacyId) continue;
 
       // Weekly special (this week) wins over the rolling default
       const pattern = weeklyPatternByUuid.get(uuid) || defaultPatternByUuid.get(uuid) || [];
-      const dayEntry = pattern[dayIndex];
+      const dayEntry = pattern[dayIndex] as WeeklyShift | undefined;
 
-      if (dayEntry && dayEntry.startTime) {
-        // Real scheduled shift that day per the static roster → eligible for board
+      // Strict check: must have real startTime AND not be explicitly marked OFF.
+      // This prevents TMs who were explicitly set to OFF in Weekly Defaults
+      // (or current week specials) from appearing in the board picker.
+      if (isWorkingShift(dayEntry)) {
+        // Real scheduled working shift that day per the static roster
         result.add(legacyId);
       }
+
+      // Targeted watch for the exact names the operator reported seeing in the picker
+      const prof = (profiles ?? []).find((p: any) => p.id === uuid);
+      const disp = (prof?.display_name || '').toLowerCase();
+      const leg = (legacyId || '').toLowerCase();
+      if (__WATCHED_NAMES__.some(w => disp.includes(w) || leg.includes(w))) {
+        console.log(`[MARKER-PICKER-DEBUG] WATCHED TM: ${prof?.display_name || legacyId}`, {
+          nightDate,
+          dayIndex,
+          dayEntry,
+          isWorkingShiftResult: isWorkingShift(dayEntry),
+          fromWeeklySpecial: !!weeklyPatternByUuid.get(uuid),
+          fromDefault: !!defaultPatternByUuid.get(uuid),
+          legacyId,
+        });
+      }
     }
+
+    // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug is resolved) ===
+    // Helps confirm exactly what the weekly roster function is returning for the
+    // selected night vs what the operator sees in Sudo > Weekly Roster tab.
+    const __DEBUG_MARKER_PICKER__ = true;
+    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined') {
+      console.groupCollapsed(
+        `[MARKER-PICKER-DEBUG] getScheduled...FromNewRoster ${nightDate} → size=${result.size}`
+      );
+      console.log('rosterWeekStartIso:', rosterWeekStartIso, 'computed dayIndex:', dayIndex);
+      console.log('relevant TMs considered (groups + specials this week):', relevantUuidArray.length);
+      console.log('Final legacy tm_ids returned (these feed scheduledTmIdsTonight):', Array.from(result));
+
+      // Quick summary for the names the operator just reported seeing in the picker
+      const watchedInFinalSet = Array.from(result).filter(id =>
+        __WATCHED_NAMES__.some(w => id.toLowerCase().includes(w))
+      );
+      if (watchedInFinalSet.length > 0) {
+        console.warn('[MARKER-PICKER-DEBUG] WATCHED names that made it into scheduled set for this night:', watchedInFinalSet);
+      }
+      console.groupEnd();
+    }
+    // === END TEMP DIAGNOSTIC ===
   } catch (e) {
     console.warn('[data] getScheduledTmIdsForNightFromNewRoster failed:', e);
   }
