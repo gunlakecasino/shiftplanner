@@ -48,7 +48,7 @@ export interface ZoneCardProps {
   isLocked?: boolean;
 }
 
-const ZoneCard: React.FC<ZoneCardProps> = ({
+const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
@@ -188,6 +188,6 @@ const ZoneCard: React.FC<ZoneCardProps> = ({
       }
     </div>
   );
-};
+});
 
 export default ZoneCard;

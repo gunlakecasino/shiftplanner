@@ -55,6 +55,13 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
   },
+  // PWA foundation (Phase 0 — will become critical in Phase 3)
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ShiftForge",
+  },
 };
 
 export default function RootLayout({
@@ -74,6 +81,66 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('oms-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&s)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+          }}
+        />
+        {/* === VELVET PERFORMANCE: Service Worker registration ===
+            - ONLY registers in production (secure contexts).
+            - In development (localhost / .local / common dev ports) we explicitly
+              unregister any existing SW + skip registration.
+            - This is critical for Turbopack HMR. Aggressive caching of /_next/static chunks
+              during dev causes "module factory is not available" errors.
+            - The SW itself (public/sw.js) also has a localhost early-exit as defense-in-depth.
+            - We deliberately avoid process.env here to prevent "Can't find variable: process"
+              crashes on iPad Safari simulator and certain Turbopack dev loads.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function() {
+  if (typeof window === 'undefined') return;
+  if (!('serviceWorker' in navigator)) return;
+
+  // === PROPER GUARD: Never register SW during development ===
+  // We use a pure runtime hostname/port check (no process.env) because this runs
+  // inside dangerouslySetInnerHTML. Bare "process" references cause hard crashes
+  // ("Can't find variable: process") on iPad Safari simulator + Turbopack dev.
+  if (
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    location.hostname.endsWith('.local') ||
+    location.port === '3000' ||
+    location.port === '3001'
+  ) {
+    // Dev: aggressively clean SWs and caches so Turbopack HMR stays healthy.
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      registrations.forEach(function(registration) { registration.unregister(); });
+    });
+    if ('caches' in window) {
+      caches.keys().then(function(keys) { keys.forEach(function(k){caches.delete(k);}); });
+    }
+    return;
+  }
+
+  // Production only: register on secure contexts
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(reg) {
+        // Optional: expose version for Sudo debugging
+        if (reg.active) {
+          const ch = new MessageChannel();
+          ch.port1.onmessage = function(e) { console.log('[Velvet SW] version', e.data.version); };
+          reg.active.postMessage({ type: 'GET_VERSION' }, [ch.port2]);
+        }
+        console.log('[Velvet] Service Worker registered');
+      })
+      .catch(function(err) {
+        console.warn('[Velvet] SW registration failed (non-fatal):', err?.message);
+      });
+  });
+})();
+            `.trim(),
           }}
         />
       </head>

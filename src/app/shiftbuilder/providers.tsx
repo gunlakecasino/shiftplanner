@@ -1,7 +1,8 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { reportWebVitals } from "@/lib/perf";
 
 /**
  * QueryProvider
@@ -36,3 +37,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
+
+// Fire once when the heavy ShiftBuilder surface mounts (Phase 0)
+if (typeof window !== "undefined") {
+  reportWebVitals();
+}
+

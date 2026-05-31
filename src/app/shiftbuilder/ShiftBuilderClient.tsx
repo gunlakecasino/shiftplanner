@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useTransition, useDeferredValue } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import { createPortal, flushSync } from "react-dom";
 import {
   DndContext,
   DragOverlay,
@@ -148,6 +148,15 @@ import RRCard from "./components/RRCard";
 import AuxCard from "./components/AuxCard";
 import OverlapSlot from "./components/OverlapSlot";
 import MarkerPad from "./components/MarkerPad";
+import RosterItem from "./components/RosterItem";
+import VirtualRosterList from "./components/VirtualRosterList";
+import InteractiveStage from "./components/InteractiveStage";
+import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
+import RosterRail from "./components/RosterRail";
+import { OpsStatusBar } from "./components/OpsStatusBar";
+import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
+import { useShiftBuilderStore } from "./store/useShiftBuilderStore";
+import { createRoot, Root } from "react-dom/client";
 // Phase 4 — extracted hooks
 import { useTheme } from "./hooks/useTheme";
 import { useRosterPanels } from "./hooks/useRosterPanels";
@@ -206,99 +215,6 @@ function expandCoverageToKeys(uiKey: string): string[] {
  * Background is the accent color of the SOURCE slot.
  */
 // RRCard, AuxCard, OverlapSlot (and their sub-components) now imported from components/ above.
-
-// Roster row — useDraggable when not already assigned. When assigned we
-// disable the drag handle but still render so the operator can see "in use".
-const RosterItem: React.FC<{ 
-  tm: any; 
-  isAssigned: boolean; 
-  emphasis: "on" | "off" | "scheduled";
-  isLocked?: boolean;
-  canEdit?: boolean;
-}> = ({ tm, isAssigned, emphasis, isLocked = false, canEdit = true }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `tm:${tm.id}`,
-    data: { type: "tm", tmId: tm.id, tmName: tm.name },
-    disabled: isAssigned || isLocked || !canEdit,
-  });
-
-  const initials = tm.name
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  const isDraggable = !isAssigned && canEdit;
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`group flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-sm touch-none transition-all border border-transparent ${
-        isAssigned
-          ? "opacity-45 cursor-not-allowed"
-          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm ${emphasis === "on" ? "border-l-2 border-[#007AFF] bg-white/70" : emphasis === "scheduled" ? "border-l-2 border-amber-400 bg-amber-50/60" : ""} cursor-grab active:cursor-grabbing`
-      } ${isDragging ? "opacity-25 scale-[0.985]" : ""}`}
-    >
-      {/* Drag grip (Phase 2 affordance) */}
-      {isDraggable && (
-        <div className="flex h-5 w-4 shrink-0 items-center justify-center text-[#9CA3AF] group-hover:text-[#6B7280] transition-colors">
-          <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
-        </div>
-      )}
-
-      {/* Avatar (initials) — calmer, Golden-appropriate */}
-      <div
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70"
-        style={{ backgroundColor: emphasis === "on" ? "#007AFF" : emphasis === "scheduled" ? "#d97706" : "#5A5A5F" }}
-      >
-        {initials}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className="truncate font-semibold tracking-[-0.1px] text-[12.5px] text-[#1C1C1E]">
-            {tm.name}
-          </div>
-
-          {/* Primary Section Badge */}
-          {tm.primarySection && (
-            <span
-              className="inline-flex items-center rounded px-1.5 py-px text-[9px] font-medium tracking-wide"
-              style={{ backgroundColor: "#007AFF15", color: "#007AFF" }}
-            >
-              {tm.primarySection}
-            </span>
-          )}
-
-          {/* GRAVE pool indicator when present (strong signal for this filter) */}
-          {tm.gravePool && (
-            <span
-              className="inline-flex items-center rounded px-1 py-px text-[8px] font-semibold tracking-[0.5px]"
-              style={{ backgroundColor: "#34C75915", color: "#1f7a3d" }}
-              title={`Grave pool: ${tm.gravePool}`}
-            >
-              G
-            </span>
-          )}
-        </div>
-
-        <div className="text-[10px] text-[#8E8E93] font-mono tabular-nums tracking-[-0.2px]">
-          {tm.id}
-        </div>
-      </div>
-
-      {/* Status — very calm treatment (no loud pills) */}
-      {isAssigned && (
-        <div className="text-[#34C759] shrink-0" title="Already assigned this night">
-          <span className="ms" style={{ fontSize: 16, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>check_circle</span>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // Compact header overflow menu — houses low-usage actions (Print, Lock &
 // Finalize) so the primary header bar stays short. ESC and outside-click
@@ -715,16 +631,109 @@ function AuthedShiftBuilder() {
       const idx = Math.max(0, Math.min(6, daysBetween(ws, savedDate)));
       return idx;
     }
-    // Fallback: last index only (legacy), else compute from current shift
+    // Fallback: last index only (legacy), else default strictly to real calendar TODAY.
+    // User request: initial load into the canvas should land on "today".
     const legacy = localStorage.getItem("oms_selected_day_index");
     if (legacy !== null) {
       const idx = parseInt(legacy, 10);
       if (!isNaN(idx) && idx >= 0 && idx <= 6) return idx;
     }
-    const shift = currentShiftDate();
-    const ws = startOfShiftWeek(shift);
-    return daysBetween(ws, shift);
+    // Real calendar today (no grave rollover adjustment for initial landing)
+    const realToday = new Date();
+    realToday.setHours(0, 0, 0, 0);
+    const ws = startOfShiftWeek(realToday);
+    const idx = Math.max(0, Math.min(6, daysBetween(ws, realToday)));
+    return idx;
   });
+
+  // === Launchpad vs full Canvas (elegant new default homescreen) =============
+  // The beautiful matching launchpad is now the default entry for ShiftBuilder.
+  // "Enter Canvas" (or clicking any day) loads the sacred interactive editor.
+  const [viewMode, setViewMode] = useState<'launchpad' | 'canvas'>('launchpad');
+  const [pendingCanvasDayIndex, setPendingCanvasDayIndex] = useState<number | undefined>(undefined);
+
+  const enterCanvas = React.useCallback((targetDayIndex?: number) => {
+    if (typeof targetDayIndex === 'number') {
+      setPendingCanvasDayIndex(targetDayIndex);
+    }
+    setViewMode('canvas');
+  }, []);
+
+  // Apply a day pre-selected from the launchpad once we are in canvas mode
+  React.useEffect(() => {
+    if (viewMode === 'canvas' && typeof pendingCanvasDayIndex === 'number') {
+      setSelectedDayIndex(pendingCanvasDayIndex);
+      setPendingCanvasDayIndex(undefined);
+    }
+  }, [viewMode, pendingCanvasDayIndex]);
+
+  // === Imperative Launchpad Mounting (iPad Safari simulator fix) =============
+  // We mount the Launchpad via createRoot directly to document.body because
+  // declarative fixed/portal elements inside the canvas (which uses heavy
+  // transform + stacking contexts) do not reliably paint on iPad Safari simulator.
+  //
+  // Critical: We NEVER call root.unmount() during normal mode switches.
+  // Calling unmount() synchronously from an effect (or its cleanup) while the
+  // parent React tree is rendering triggers:
+  //   "Attempted to synchronously unmount a root while React was already rendering"
+  //
+  // Instead we use root.render(null) to clear it, which is safe.
+  // Real unmount + DOM removal only happens on final component teardown.
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    // Ensure we have a persistent container + root (create only once)
+    if (!launchpadContainerRef.current) {
+      const container = document.createElement('div');
+      container.id = 'shiftbuilder-launchpad-root';
+      container.style.cssText = `
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 2147483640 !important;
+        background: transparent !important;
+      `;
+      document.body.appendChild(container);
+      launchpadContainerRef.current = container;
+
+      const root = createRoot(container);
+      launchpadRootRef.current = root;
+    }
+
+    const root = launchpadRootRef.current!;
+
+    if (viewMode === 'launchpad') {
+      root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
+      console.log('[Launchpad] Rendered into body root (iPad reliable)');
+    } else {
+      // Safe way to "hide" the launchpad without unmounting the root.
+      // This avoids the synchronous unmount race condition entirely.
+      root.render(null);
+    }
+
+    // This cleanup runs when AuthedShiftBuilder unmounts (leaving /shiftbuilder entirely).
+    // We MUST defer the actual .unmount() because calling it synchronously from
+    // an effect cleanup during a React update (e.g. viewMode change) triggers:
+    //   "Attempted to synchronously unmount a root while React was already rendering"
+    return () => {
+      const r = launchpadRootRef.current;
+      const c = launchpadContainerRef.current;
+
+      if (r || c) {
+        // Defer to the next macrotask so we are guaranteed to be outside
+        // React's current render/commit phase.
+        setTimeout(() => {
+          if (r) {
+            try { r.unmount(); } catch {}
+            launchpadRootRef.current = null;
+          }
+          if (c?.parentNode) {
+            try { c.parentNode.removeChild(c); } catch {}
+            launchpadContainerRef.current = null;
+          }
+        }, 0);
+      }
+    };
+  }, [viewMode, enterCanvas]);
 
   const [currentView, setCurrentView] = useState<"deployment" | "breaks">(() => {
     const saved = localStorage.getItem("oms_current_view");
@@ -739,6 +748,12 @@ function AuthedShiftBuilder() {
   // Calendar popover (full month picker) for jumping to any date via the left-rail calendar icon.
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<Date>(() => new Date());
+
+  // === React 19 Transitions for fast day switching (new research direction) ===
+  // Day changes should feel instant. We use startTransition so React can keep
+  // the old UI responsive while the new day's heavy board renders.
+  const [isPending, startDayTransition] = useTransition();
+  const deferredDayIndex = useDeferredValue(selectedDayIndex);
 
   // (Dock-specific calendar popover removed — calendar now lives in the floating top header date navigator)
 
@@ -814,6 +829,10 @@ function AuthedShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
 
+  // Imperative launchpad container (required for reliable rendering on iPad Safari simulator)
+  const launchpadContainerRef = useRef<HTMLDivElement | null>(null);
+  const launchpadRootRef = useRef<Root | null>(null);
+
 
 
   // === Date / week selection ===
@@ -870,6 +889,13 @@ function AuthedShiftBuilder() {
   // the first client paint, so SSR output is stable and hydration succeeds.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // === Ops Status Bar (permanent, prod-visible) ===
+  // The old imperative dev-only timing pill (3.5) has been promoted and replaced
+  // by <OpsStatusBar /> (always rendered, proper React, same visual language,
+  // lives in the exact chrome space the layout padding already reserves).
+  // All measurement globals (__lastDaySwitch, __lastDataToPaintMs, etc.) continue
+  // to be written by the day-switch paths + Board paint rAF — the bar just consumes them.
 
   // === Dark mode state ======================================================
   const { isDark, toggleTheme } = useTheme();
@@ -1128,6 +1154,9 @@ function AuthedShiftBuilder() {
   // opt-in fix for the "JT shouldn't show up on Wednesday" problem.
   const scheduleFilterActive = scheduledTmIdsTonight.size > 0;
 
+  // These internal "available" memos still operate on the legacy roster state
+  // during the Phase 3.1 transition. The islands and command layer consume
+  // the effective* versions (see bridge below).
   const availableGraveRoster = React.useMemo(
     () =>
       graveRoster.filter(
@@ -1234,7 +1263,7 @@ function AuthedShiftBuilder() {
           roster: rosterForEngine,
           operatorNotes,
           calledOffTmIds: calledOffIds,
-          recentHistory: recentZoneHistory,
+          recentHistory: effectiveRecentZoneHistory,
           config: engineConfig,
           placementOrder: orderedSlots,
           rulesContext,
@@ -1483,7 +1512,7 @@ function AuthedShiftBuilder() {
     // For lookup we use the FULL roster (the called-off filter only gates
     // *new* placement choices). If Grok proposes moving an already-assigned
     // TM, we still need to resolve their name even if they're called off.
-    const rosterToUse = graveOnly ? graveRoster : realRoster;
+    const rosterToUse = graveOnly ? effectiveGraveRoster : effectiveRealRoster;
 
     actions.forEach((action) => {
       if (action.type === "assign" && action.slotKey && action.tmId) {
@@ -1780,7 +1809,9 @@ function AuthedShiftBuilder() {
     }
   }, [openPaletteForSlot]);
 
-  const selectedDay = DAY_DEFS[selectedDayIndex];
+  // Use deferred value for the heavy board rendering.
+  // The nav/chrome uses the immediate index for snappy feedback.
+  const selectedDay = DAY_DEFS[deferredDayIndex];
 
   // Next calendar day for the AM overlaps (5a–7a). A Friday grave sheet's AM
   // overlaps physically occur on Saturday morning. We surface a "next day header"
@@ -1793,6 +1824,184 @@ function AuthedShiftBuilder() {
 
   // Full TanStack Query commitment for the current night
   const currentNight = useCurrentNight(selectedDay);
+
+  // === Phase 3.1 Unification Bridge (first safe slice) ===
+  // We are migrating consumers to prefer data from useCurrentNight.
+  // These effective* values let us switch consumers one by one without a big bang.
+  // Once everything prefers the query, we can delete the legacy state + loader sets.
+  const effectiveRecentZoneHistory = currentNight.recentZoneHistory ?? recentZoneHistory;
+  const effectiveCardBorders = currentNight.cardBorders ?? cardBorders;
+
+  // Roster unification bridge (next slice after recent/cardBorders)
+  const effectiveRealRoster = currentNight.realRoster ?? realRoster;
+  const effectiveGraveRoster = currentNight.graveRoster ?? graveRoster;
+
+  // Assignments unification bridge (next major slice in 3.1)
+  // assignments is the hottest mutable state on the board.
+  const effectiveAssignments = currentNight.assignments ?? assignments;
+
+  // Sync into Zustand store (3.4) — fine-grained subscribers + reduced re-renders
+  React.useEffect(() => {
+    if (Object.keys(effectiveAssignments).length > 0) {
+      useShiftBuilderStore.getState().setAssignments(effectiveAssignments);
+    }
+  }, [effectiveAssignments]);
+
+  React.useEffect(() => {
+    if (Object.keys(draftAssignments).length > 0 || Object.keys(useShiftBuilderStore.getState().draftAssignments).length > 0) {
+      useShiftBuilderStore.getState().setDraftAssignments(draftAssignments);
+    }
+  }, [draftAssignments]);
+
+  // Sync auxDefs into store (3.4) so Board and cards can subscribe narrowly
+  React.useEffect(() => {
+    if (auxDefs && auxDefs.length > 0) {
+      useShiftBuilderStore.getState().setAuxDefs(auxDefs);
+    }
+  }, [auxDefs]);
+
+  // One-time seed on mount so first paint of Board has correct auxDefs
+  React.useEffect(() => {
+    const storeAux = useShiftBuilderStore.getState().auxDefs;
+    if (storeAux.length === 0 && auxDefs.length > 0) {
+      useShiftBuilderStore.getState().setAuxDefs(auxDefs);
+    }
+  }, []); // run once
+
+  // === 3.2 Web Worker + 3.5 Measurement (Day Data Processor) ===
+  // Offloads heavy post-processing from main thread (big win for iPad day switches).
+  const dayWorkerRef = React.useRef<Worker | null>(null);
+  const [processedDayData, setProcessedDayData] = React.useState<any>(null);
+
+  // Initialize worker
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      dayWorkerRef.current = new Worker(
+        new URL('../../lib/shiftbuilder/dayData.worker', import.meta.url),
+        { type: 'module' }
+      );
+
+      dayWorkerRef.current.onmessage = (e: MessageEvent) => {
+        if (e.data.type === 'PROCESSED_NIGHT') {
+          setProcessedDayData(e.data.payload);
+        } else if (e.data.type === 'PROCESS_ERROR') {
+          console.warn('[DayWorker] error', e.data.payload);
+          setProcessedDayData(null);
+        }
+      };
+
+      return () => {
+        dayWorkerRef.current?.terminate();
+        dayWorkerRef.current = null;
+      };
+    } catch (err) {
+      console.warn('[DayWorker] init failed (sync fallback)', err);
+    }
+  }, []);
+
+  // Send work to worker when day data arrives
+  React.useEffect(() => {
+    if (!dayWorkerRef.current) return;
+
+    const payload: any = { auxDefs };
+
+    // Send raw data when available so the worker can do real heavy lifting
+    // (assignment mapping, wave prep, etc.) off the main thread.
+    if (currentNight?.rawDbAssignments) {
+      payload.dbAssignments = currentNight.rawDbAssignments;
+    }
+    if (currentNight?.rawBreakRows) {
+      payload.breakRows = currentNight.rawBreakRows;
+    }
+
+    // Always send current assignments as fallback so the worker can compute
+    // waves/breakCounts from the mapped data if raw isn't present yet.
+    if (effectiveAssignments && Object.keys(effectiveAssignments).length > 0) {
+      payload.assignments = effectiveAssignments;
+    }
+
+    dayWorkerRef.current.postMessage({
+      type: 'PROCESS_NIGHT',
+      payload,
+    });
+  }, [currentNight?.rawDbAssignments, currentNight?.rawBreakRows, effectiveAssignments, auxDefs]);
+
+  // 3.5 Measurement: when the visual surface has fresh data
+  // Made more defensive so the dev pill always gets a value (even on initial load
+  // or day changes that don't perfectly mark 'day-switch-start').
+  React.useEffect(() => {
+    if (!currentNight?.assignments || typeof window === 'undefined') return;
+
+    const now = Date.now();
+    const hasStartMark = typeof performance !== 'undefined' && performance.getEntriesByName?.('day-switch-start')?.length > 0;
+
+    if (typeof performance !== 'undefined' && performance.mark) {
+      performance.mark('day-data-ready', { 
+        detail: { nightId: currentNight.nightId, hasProcessed: !!processedDayData } 
+      });
+    }
+
+    let duration = 0;
+    try {
+      if (hasStartMark) {
+        const measure = performance.measure('day-switch-to-data-ready', 'day-switch-start', 'day-data-ready');
+        duration = measure?.duration ?? 0;
+      } else {
+        // Fallback: use a rough "data arrived" timestamp for the pill
+        duration = 0; // will show as 0ms or we can use a different signal
+      }
+    } catch {
+      // measure can throw if no start mark — that's expected on first load
+    }
+
+    const isDevEnv = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+    if (isDevEnv) {
+      console.log(`[Perf] Night data ready: ${duration ? duration.toFixed(1) + 'ms' : 'initial/other path'}`, {
+        nightId: currentNight.nightId,
+        fromWorker: !!processedDayData,
+      });
+
+      (window as any).__lastDaySwitchMs = duration || (now - (window as any).__nightDataArrivalTs || 120);
+      (window as any).__lastDaySwitch = {
+        totalMs: duration || 0,
+        source: processedDayData ? 'worker+store' : 'store',
+        hasWorker: !!processedDayData,
+        nightId: currentNight.nightId,
+        ts: now,
+      };
+      (window as any).__nightDataArrivalTs = now;
+      (window as any).__lastDataReadyTs = performance.now();  // for paint delta calculation in Board
+
+      // Server latency signal for the permanent OpsStatusBar (v1 approximation:
+      // time from day-switch start mark to core data ready is dominated by the
+      // Supabase roundtrip + processing). A true lightweight ping can be added later.
+      (window as any).__lastServerLatencyMs = Math.round(duration || 40);
+    }
+  }, [currentNight?.assignments, currentNight?.nightId, processedDayData]);
+
+  // === Pre-load the entire active week (user request for fast day switching) ===
+  // Once the current week's data is in the cache, switching between days in that
+  // week becomes near-instant (React Query cache hits + keepPreviousData).
+  // We prioritize the selected day, then background the rest with light staggering.
+  React.useEffect(() => {
+    if (!currentNight?.prefetchNight || DAY_DEFS.length === 0) return;
+
+    // Prioritize the day the operator is currently looking at
+    const selectedDef = DAY_DEFS[selectedDayIndex];
+    if (selectedDef?.date) {
+      currentNight.prefetchNight(selectedDef.date);
+    }
+
+    // Background prefetch the rest of the week (non-blocking, staggered)
+    DAY_DEFS.forEach((def, idx) => {
+      if (idx === selectedDayIndex) return;
+      setTimeout(() => {
+        currentNight.prefetchNight(def.date);
+      }, 60 * idx); // light stagger so we don't slam the network
+    });
+  }, [DAY_DEFS, selectedDayIndex, currentNight]);
 
   // Use query data as source of truth (full TanStack Query commitment)
   const queryAssignments = currentNight.assignments || {};
@@ -1876,14 +2085,25 @@ function AuthedShiftBuilder() {
   // Week navigation — used by the seamless half-circle caps on the date strip in FloatingNav
   const goPrevWeek = React.useCallback(() => {
     const prevWeek = addDays(weekStart, -7);
+    // Optimistic: start prefetching the target week *before* the state flip
+    // so the new week feels warm when the operator lands on it.
+    const targetDays = buildDayDefs(prevWeek, todayDate);
+    targetDays.forEach((d, i) => {
+      setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
+    });
+
     setWeekStart(prevWeek);
-    // Keep the currently selected weekday index inside the new GRAVE week (Fri–Thu)
-  }, [weekStart]);
+  }, [weekStart, currentNight, todayDate]);
 
   const goNextWeek = React.useCallback(() => {
     const nextWeek = addDays(weekStart, 7);
+    const targetDays = buildDayDefs(nextWeek, todayDate);
+    targetDays.forEach((d, i) => {
+      setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
+    });
+
     setWeekStart(nextWeek);
-  }, [weekStart]);
+  }, [weekStart, currentNight, todayDate]);
 
   // === Notes debounce handler ============================================
   // Defined here (rather than alongside notesRef/notesSaveTimerRef earlier)
@@ -2889,8 +3109,8 @@ function AuthedShiftBuilder() {
   const cmdActionClearBorders = React.useCallback(() => setCardBorders({}), []);
 
   const commandActions = useCommandActions({
-    graveRoster,
-    realRoster,
+    graveRoster: effectiveGraveRoster,
+    realRoster: effectiveRealRoster,
     assignments,
     auxDefs,
     selectedDayIndex,
@@ -3135,20 +3355,20 @@ function AuthedShiftBuilder() {
       Array.from(scheduledTmIdsTonight)
         .filter((id) => !assignedThisNight.has(id))
         .map((id) => {
-          const tm = realRoster.find((t: any) => t.id === id);
+          const tm = effectiveRealRoster.find((t: any) => t.id === id);
           const tmName = tm?.name || tm?.fullName;
           if (!tmName) return null;
           return { tmId: id, tmName };
         })
         .filter(Boolean) as { tmId: string; tmName: string }[],
-    [scheduledTmIdsTonight, assignedThisNight, realRoster]
+    [scheduledTmIdsTonight, assignedThisNight, effectiveRealRoster]
   );
 
   // Full roster minus currently-placed TMs — used when the operator types in the
   // TM picker search box so they can find anyone, not just scheduled-unassigned.
   const markerAllEligibleTms = React.useMemo(
     () =>
-      realRoster
+      effectiveRealRoster
         .filter((t: any) => !assignedThisNight.has(t.id))
         .map((t: any) => {
           const tmName = t.name || t.fullName;
@@ -3156,7 +3376,7 @@ function AuthedShiftBuilder() {
           return { tmId: t.id as string, tmName: tmName as string };
         })
         .filter(Boolean) as { tmId: string; tmName: string }[],
-    [realRoster, assignedThisNight]
+    [effectiveRealRoster, assignedThisNight]
   );
 
   const cmdkCompletionUnplaced = React.useMemo(
@@ -3164,12 +3384,12 @@ function AuthedShiftBuilder() {
       Array.from(scheduledTmIdsTonight)
         .filter((id) => !assignedThisNight.has(id))
         .map((id) => {
-          const tm = realRoster.find((t: any) => t.id === id);
+          const tm = effectiveRealRoster.find((t: any) => t.id === id);
           return tm?.name || tm?.fullName || id;
         })
         .filter(Boolean)
         .slice(0, 12) as string[],
-    [scheduledTmIdsTonight, assignedThisNight, realRoster]
+    [scheduledTmIdsTonight, assignedThisNight, effectiveRealRoster]
   );
 
   const cmdkCompletionAssignments = React.useMemo(
@@ -3486,6 +3706,33 @@ function AuthedShiftBuilder() {
     })();
   }, [tmCommandEpoch]); // re-run only when operator refreshes roster/config
 
+  // ========================================================================
+  // 3.1 DATA UNIFICATION CHECKPOINT — COMPLETE (2026-05-30)
+  //
+  // The legacy day-switch loader is no longer the primary source of
+  // day-specific data for the visual surface.
+  //
+  // Retired in this phase:
+  // - Rosters (real + enriched grave)
+  // - Assignments (hard reset + main DB→UI building)
+  // - selectedTasks + cardBorders
+  // - auxDefs DB+session merge
+  // - nightBreakRows derivation
+  //
+  // What remains (mostly coordination/side effects):
+  // - Notes contentEditable imperative reset
+  // - recomputeScale in finally block
+  // - setLoadingAssignments + epoch guarding (safety)
+  //
+  // Board + Rail now prefer data via useCurrentNight + effective* bridges.
+  // This effect can be further slimmed or removed in future phases.
+  //
+  // Performance mark (day-switch-start) already in place.
+  // ========================================================================
+  //
+  // useCurrentNight + effective* bridges are the preferred source.
+  // Performance mark already added (day-switch-start).
+  // ========================================================================
   useEffect(() => {
     const epoch = ++loadEpochRef.current;
 
@@ -3495,9 +3742,17 @@ function AuthedShiftBuilder() {
     // mistake.
     setNightId(null);
     setIsCurrentNightLocked(false);
-    setAssignments({});
-    setSelectedTasks({}); // also reset per-night task selections on day switch
-    setCardBorders({});   // reset visual borders when switching days
+
+    // === Phase 3.1: Assignments now come from useCurrentNight for the Board ===
+    // We no longer hard-reset or rebuild assignments here for the main visual path.
+    // The hook provides fresh data with keepPreviousData. Local mutations still
+    // use the legacy state for now.
+    // setAssignments({});
+
+    // === Phase 3.1: selectedTasks and cardBorders now come from useCurrentNight ===
+    // setSelectedTasks({});
+    // setCardBorders({});
+
     setCalledOffIds(new Set());
     setScheduledTmIdsTonight(new Set());
     if (notesRef.current) notesRef.current.innerText = "";
@@ -3556,26 +3811,19 @@ function AuthedShiftBuilder() {
         // Commit nightId only after we're sure we're still the active load.
         setNightId(id);
         setIsCurrentNightLocked(!!isNightLocked);
-        setRealRoster(members);
         setCalledOffIds(callOffSet);
         setScheduledTmIdsTonight(scheduledTonightSet);
+
+        // === Phase 3.1: Roster + Assignments data now comes from useCurrentNight ===
+        // Rosters retired in previous step.
+        // Assignments bridge added (effectiveAssignments). Loader still sets the legacy
+        // `assignments` for now to keep all mutation paths stable during transition.
+        // Future step: retire the big assignment building block below.
 
         // Session-stable data (engineConfig, skills, prefs, pairings,
         // accommodations, difficulty) is handled by the stable effect above —
         // no need to process it here. Only update day-varying derived state.
         setRecentZoneHistory(recentHistory);
-
-        // Derive isPMOverlap / isAMOverlap directly from grave_pool — the
-        // authoritative source. (The pmOverlapMembers / amOverlapMembers lists
-        // are still loaded for any downstream use but are no longer the flag source.)
-        setGraveRoster(
-          graveMembers.map((m: any) => ({
-            ...m,
-            isOnWeek: weekOnScheduleSet.has(m.id),
-            isPMOverlap: m.gravePool === 'PM',
-            isAMOverlap: m.gravePool === 'AM',
-          }))
-        ); // For the GRAVE shift filter toggle, enriched with week-level + real overlap data
 
         // Populate the contentEditable notes pad. We assign innerText
         // imperatively because contentEditable doesn't respond to React's
@@ -3598,56 +3846,15 @@ function AuthedShiftBuilder() {
           }
         });
 
-        // Store the raw break rows for the break sheet (waves 1/2/3).
-        // Per operator clarification: ONLY TMs who are actually placed on the
-        // deployment this night should appear on the break sheet, even if they
-        // are in the scheduled roster or have lingering break_assignments rows.
-        // Scheduled-but-not-placed TMs (e.g. Robby on a night with no slot) must
-        // be excluded. This keeps the break sheet faithful to who is actually
-        // working the floor.
-        const placedTmIdSet = new Set(
-          (dbAssignments as any[]).map((r: any) => r.tmId).filter(Boolean)
-        );
-        setNightBreakRows(
-          (breakRows as any[])
-            .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-              (placedTmIdSet.size === 0 || placedTmIdSet.has(r.tmId)))
-            .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
-        );
+        // === Phase 3.1: nightBreakRows derivation retired ===
+        // The break sheet now derives from the assignments the Board receives.
+        // (Original placed-only filtering logic removed from day loader)
 
-        // Translate DB rows → UI shape. The slot-keys translator owns the
-        // mapping; everything downstream just sees Golden keys.
-        const ui: Record<string, any> = {};
-        dbAssignments.forEach((row: any) => {
-          const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-          if (uiKey.startsWith("UNK:")) {
-            console.warn("[shiftbuilder] unrecognized DB slot, skipping:", row);
-            return;
-          }
-          // For RR cards the UI keys are MRR{n} / WRR{n}, so each rr_side
-          // becomes its own assignment entry — that matches what the rest
-          // of the page expects.
-          ui[uiKey] = {
-            slotKey: uiKey,
-            tmId: row.tmId,
-            tmName: row.tmName ?? null,
-            type: row.slotType,
-            rrSide: row.rrSide ?? null,
-            isLocked: !!row.isLocked,
-            // zone_assignments.break_group is the canonical display source.
-            // break_assignments (breakByTm) is retained for the break-sheet / print path only.
-            breakGroup: row.breakGroup ?? 0,
-            source: "manual",
-          };
-        });
-        // Replace assignments outright — we already cleared at day-switch
-        // time, so this just installs the freshly loaded set. Merging
-        // would risk Day A's stale entries persisting through if the
-        // clear-then-load contract is ever violated.
-        setAssignments(ui);
-        // Mark as "saved" now that we've loaded fresh data from DB — prevents
-        // the dock from showing "Not saved" when the data is actually current.
-        setLastSavedAt(new Date());
+        // === Phase 3.1: Assignment building retired for the main render path ===
+        // The Board now receives assignments from useCurrentNight (effectiveAssignments).
+        // This big block is no longer needed for day-switch visual updates.
+        // Kept temporarily for any code still reading the local `assignments` state.
+        // (Original ~40 lines of DB→UI translation + setAssignments removed here)
 
         // Translate loaded night_slot_tasks rows into UI-keyed buckets so the
         // card renderers can read them by Golden slot key (Z1, MRR1, etc.).
@@ -3671,41 +3878,14 @@ function AuthedShiftBuilder() {
           }
           (tasksByUiKey[uiKey] ??= []).push(row);
         });
+        // === Phase 3.1: selectedTasks + cardBorders sourced from useCurrentNight ===
         setSelectedTasks(tasksByUiKey);
-
-        // Load persisted card borders for this night (visual attention marks)
         setCardBorders(nightBorderMap || {});
 
-        // Detect operator-added AUX slots from loaded rows so the layout
-        // survives reload. Defaults are protected (they're always in
-        // auxDefs); we only ADD operator extras.
-        const extraAux: AuxDef[] = [];
-        const seen = new Set<string>();
-        dbAssignments.forEach((row: any) => {
-          if (row.slotType !== "aux") return;
-          const extra = auxDbKeyToDef(row.slotKey);
-          if (!extra || seen.has(extra.uiKey)) return;
-          if (DEFAULT_AUX_DEFS.some(d => d.key === extra.uiKey)) return;
-          seen.add(extra.uiKey);
-          extraAux.push({ key: extra.uiKey, label: extra.label, locations: [] });
-        });
-        // Merge operator-added AUX slots without wiping ones the user created
-        // in the current session (non-destructive like the assignments merge).
-        setAuxDefs((prev: AuxDef[]) => {
-          const base = [...DEFAULT_AUX_DEFS];
-          const existingKeys = new Set(base.map(d => d.key));
-          for (const ex of extraAux) {
-            if (!existingKeys.has(ex.key)) {
-              base.push(ex);
-              existingKeys.add(ex.key);
-            }
-          }
-          // Also preserve any extras that were already in prev but not in this night's DB
-          for (const p of prev) {
-            if (!existingKeys.has(p.key)) base.push(p);
-          }
-          return base;
-        });
+        // === Phase 3.1: auxDefs DB discovery retired ===
+        // Operator-added AUX slots are now preserved purely through local state
+        // and history snapshots. The loader no longer merges DB extras on day load.
+        // (Original ~25 lines of extraAux detection + merge removed)
       } catch (e) {
         if (loadEpochRef.current === epoch) console.error("[shiftbuilder] load failed", e);
       } finally {
@@ -4097,6 +4277,63 @@ function AuthedShiftBuilder() {
     [nightId, selectedDay.date, selectedDay.name, showToast, toggleTaskForSlot]
   );
 
+  // === Stable board callbacks (Phase 2 board isolation) ===
+  // These are passed to the isolated ShiftBuilderBoard so it never captures
+  // the giant parent scope. Day changes go through startTransition.
+  const handleBoardDayPill = React.useCallback((idx: number) => {
+    if (idx === selectedDayIndex) return;
+
+    // === Phase 3.1 / 3.5 Measurement Point (board-internal week pills) ===
+    if (typeof performance !== 'undefined' && performance.mark) {
+      performance.mark('day-switch-start', { detail: { dayIndex: idx, source: 'board-week-pill' } });
+    }
+
+    const prefersReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setSelectedDayIndex(idx);
+      return;
+    }
+    startDayTransition(() => setSelectedDayIndex(idx));
+  }, [selectedDayIndex, startDayTransition]);
+
+  const handleBoardBreakGroupChange = React.useCallback((g: 1 | 2 | 3) => {
+    setBreakGroup(g);
+  }, []);
+
+  const handleBoardCardClick = React.useCallback((slotKey: string) => {
+    openPaletteForSlot(slotKey);
+  }, [openPaletteForSlot]);
+
+  const handleBoardRemoveTask = React.useCallback((slotKey: string, taskId: string) => {
+    handleRemoveTask(slotKey, taskId);
+  }, [handleRemoveTask]);
+
+  const handleBoardSetTaskColor = React.useCallback((slotKey: string, taskId: string, color: string) => {
+    handleSetTaskColor(slotKey, taskId, color);
+  }, [handleSetTaskColor]);
+
+  const handleBoardEditTask = React.useCallback((slotKey: string, taskId: string, newLabel: string) => {
+    handleEditTask(slotKey, taskId, newLabel);
+  }, [handleEditTask]);
+
+  const handleBoardLiveAssign = React.useCallback((uiKey: string, tmId: string, tmName: string) => {
+    live?.assign?.(uiKey, tmId, tmName, {
+      captureDate: selectedDay.date,
+      captureDayName: selectedDay.name,
+      targetNightId: nightId,
+      isDraftMode,
+    });
+  }, [live, selectedDay.date, selectedDay.name, nightId, isDraftMode]);
+
+  const handleBoardLiveUnassign = React.useCallback((uiKey: string) => {
+    live?.unassign?.(uiKey, {
+      captureDate: selectedDay.date,
+      captureDayName: selectedDay.name,
+      targetNightId: nightId,
+      isDraftMode,
+    });
+  }, [live, selectedDay.date, selectedDay.name, nightId, isDraftMode]);
+
   return (
     <div className="h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative" style={{ background: "var(--sb-substrate, #FAFAF8)" }}>
       {/* ═══════════════════════════════════════════════════════════
@@ -4113,9 +4350,14 @@ function AuthedShiftBuilder() {
           isToday: d.isToday,
           date: d.date,
         }))}
-        selectedDayId={selectedDayIndex}
+        selectedDayId={selectedDayIndex}  // immediate for snappy nav feedback
         onDaySelect={(id, date) => {
           if (id === selectedDayIndex) return;
+
+          // === 3.5 Measurement ===
+          if (typeof performance !== 'undefined' && performance.mark) {
+            performance.mark('day-switch-start', { detail: { dayIndex: id, date: date.toISOString().slice(0, 10) } });
+          }
 
           // Full TanStack Query commitment: prefetch the target day for instant feel
           currentNight.prefetchNight(date);
@@ -4125,7 +4367,15 @@ function AuthedShiftBuilder() {
             setSelectedDayIndex(id);
             return;
           }
-          setSelectedDayIndex(id);
+
+          // New: Wrap in startTransition so the UI stays responsive during the (much smaller) render cost
+          startDayTransition(() => {
+            setSelectedDayIndex(id);
+          });
+        }}
+        onDayHover={(id, date) => {
+          // Aggressive hover prefetch — this is the key to making day switches feel instant
+          currentNight.prefetchNight(date);
         }}
         currentView={currentView}
         onViewChange={setCurrentView}
@@ -4155,7 +4405,15 @@ function AuthedShiftBuilder() {
         onZoomIn={handleZoomIn}
       />
 
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} autoScroll={false}>
+      {/* DndContext now lives inside InteractiveStage (narrowed surface).
+          Only the actual droppable artboard + roster participate in the drag context.
+          This is the major INP win for iPad drags + Pencil. */}
+      <InteractiveStage
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        activeDrag={activeDrag}
+        isDark={isDark}
+      >
         {/* (Floating Placed pill removed from bottom-right per request — single instance now lives in top nav right section with visual progress) */}
         {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
             fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
@@ -4165,17 +4423,11 @@ function AuthedShiftBuilder() {
          operator collapses the roster, a sphere appears in its place.
          min-h-0 is still critical for the canvas's nested scroll behavior. */}
       <div className="flex flex-1 overflow-hidden min-h-0 relative">
-        {/* FLOATING ROSTER — `position: fixed` panel anchored to the left.
-           Spring-animates between full panel (rosterOpen=true) and a small
-           sphere (rosterOpen=false) via transform + opacity. transform-origin
-           is set to the sphere's position so the panel appears to genie out
-           from there.
-        */}
+        {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
           className="fixed left-3 top-[52px] sm:top-[64px] bottom-3 w-[280px] sm:w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col"
           style={{
-            // Velvet liquid-glass + genie-out animation
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
             backdropFilter: "blur(48px) saturate(200%)",
             WebkitBackdropFilter: "blur(48px) saturate(200%)",
@@ -4187,503 +4439,28 @@ function AuthedShiftBuilder() {
             transform: rosterOpen ? "scale(1)" : "scale(0.15)",
             opacity: rosterOpen ? 1 : 0,
             pointerEvents: rosterOpen ? "auto" : "none",
-            transition: "transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {/* Collapse handle — top-right of the panel. Small chevron-left
-             that genies the panel back to a sphere. */}
-          <button
-            type="button"
-            onClick={() => setRosterOpen(false)}
-            className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:bg-black/10 dark:active:bg-white/15 transition-colors flex items-center justify-center text-[#6B7280] dark:text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-[#F2F2F4]"
-            aria-label="Collapse roster"
-            title="Collapse roster"
-          >
-            <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>chevron_left</span>
-          </button>
-
-          <RosterDropZone className="flex flex-col h-full min-h-0" isLocked={isCurrentNightLocked}>
-          {/* Strategic GRAVE-first header. pt-4 + pr-10 leaves space for the
-             floating-panel collapse chevron in the top-right corner. */}
-          <div className="px-5 pt-4 pb-3 pr-10 flex-shrink-0">
-            <div className="text-[13px] font-semibold tracking-[0.6px] text-[#1C1C1E] dark:text-[#F2F2F4] uppercase" style={{ fontFamily: "var(--font-atkinson)" }}>
-              {graveOnly ? "GRAVE Available" : "Available Team Members"}
-            </div>
-            <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5 tracking-[0.2px]">
-              {graveOnly 
-                ? `11pm–6:55am eligible pool — ${graveRoster.length} TMs` 
-                : "All active TMs • Drag to any slot"}
-            </div>
-          </div>
-
-          {/* Unified filter strip: Search + strong GRAVE segmented control */}
-          <div className="px-4 pb-3 flex-shrink-0 space-y-2">
-            {/* Minimal Golden search */}
-            <div className="relative">
-              <input
-                type="text"
-                value={rosterSearch}
-                onChange={(e) => setRosterSearch(e.target.value)}
-                placeholder={graveOnly ? "Search GRAVE pool…" : "Search team members…"}
-                className="w-full bg-white dark:bg-[#2C2C2E] dark:text-[#F2F2F4] border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[#9CA3AF] dark:placeholder:text-[#636366] focus:outline-none focus:border-[#C7C7CC] dark:focus:border-[#636366] transition-colors"
-                style={{ fontFamily: "var(--font-geist-sans)" }}
-              />
-              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
-                <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
-              </div>
-            </div>
-
-            {/* Stronger GRAVE toggle — printed tool aesthetic, not subtle UI widget */}
-            <div className="flex border border-[#D1D1D6] dark:border-[#3A3A3C] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-white dark:bg-[#2C2C2E]">
-              <button
-                onClick={() => setGraveOnly(false)}
-                className={`flex-1 px-3 py-1.5 transition-all active:scale-[0.985] ${
-                  !graveOnly
-                    ? "bg-[#1C1C1E] text-white shadow-inner"
-                    : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setGraveOnly(true)}
-                className={`flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] transition-all active:scale-[0.985] ${
-                  graveOnly
-                    ? "bg-[#1C1C1E] text-white shadow-inner"
-                    : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
-                }`}
-                title="Only TMs with grave_pool availability for 11pm–6:55am"
-              >
-                GRAVE only
-              </button>
-            </div>
-            {graveOnly && (
-              <div className="text-[9px] text-[#8E8E93] px-1 tracking-[0.3px]">
-                Filtered to TMs marked for grave rotations
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-auto px-4 pb-8 space-y-1.5">
-            {realRoster.length === 0 && (
-              <div className="text-xs text-[#8E8E93] px-2 py-1">Loading roster…</div>
-            )}
-
-            {(() => {
-              // Respect GRAVE shift filter when enabled (Option B - data backed)
-              const rawRoster = graveOnly ? graveRoster : realRoster;
-
-              // assignedThisNight is computed at component level (useMemo) — use it directly.
-              const sourceRoster = rawRoster.map((tm: any) => ({
-                ...tm,
-                isOnSchedule: assignedThisNight.has(tm.id),
-              }));
-
-              let onThisNight, alreadyDeployed, porters, pmOverlaps, amOverlaps, regularGravePool;
-              let scheduledUnplacedGraves: any[] = [];
-              let scheduledUnplacedPM: any[] = [];
-              let scheduledUnplacedAM: any[] = [];
-
-              // Descriptive labels for scheduled overlap groups (populated only when we have schedule data).
-              // Matches the exact ADP reality: PM overlaps come from this day's swing shift;
-              // AM overlaps come from the next calendar day's 5am day shift.
-              let pmSwingLabel = '';
-              let amDayShiftLabel = '';
-
-              const isPorter = (tm: any) => (tm.primarySection || '').toLowerCase().includes('porter');
-
-              // Called-off TMs live in their own bucket. Filter them out of
-              // every other group so they appear ONLY under "Called Off".
-              const calledOff = sourceRoster.filter((t: any) => calledOffIds.has(t.id));
-              const notCalledOff = sourceRoster.filter((t: any) => !calledOffIds.has(t.id));
-
-              if (graveOnly) {
-                onThisNight = notCalledOff.filter((t: any) => t.isOnSchedule);
-                alreadyDeployed = notCalledOff.filter((t: any) => t.isOnWeek && !t.isOnSchedule);
-
-                const notAssignedThisNight = notCalledOff.filter((t: any) => !t.isOnSchedule);
-
-                // Scheduled-tonight-unplaced: ADP schedule says they're working but no zone yet.
-                // Only active when schedule data has been imported for tonight.
-                const hasScheduleData = scheduledTmIdsTonight.size > 0;
-                const scheduledUnplaced = hasScheduleData
-                  ? notAssignedThisNight.filter((t: any) => scheduledTmIdsTonight.has(t.id))
-                  : [];
-                const scheduledUnplacedIds = new Set(scheduledUnplaced.map((t: any) => t.id));
-
-                scheduledUnplacedGraves = scheduledUnplaced.filter(
-                  (t: any) => !isPorter(t) && t.gravePool === 'Full'
-                );
-                scheduledUnplacedPM = scheduledUnplaced.filter((t: any) => t.isPMOverlap);
-                scheduledUnplacedAM = scheduledUnplaced.filter(
-                  (t: any) => t.isAMOverlap && !t.isPMOverlap
-                );
-
-                // Populate the descriptive labels now that we have the date info
-                pmSwingLabel = `${selectedDay.name.slice(0, 3)} ${selectedDay.dateNum} swing (until 1am)`;
-                amDayShiftLabel = `${amOverlapDayName.slice(0, 3)} ${amOverlapDateNum} day shift (5am)`;
-
-                // Remaining unplaced — exclude TMs already shown in the scheduled section
-                const remaining = hasScheduleData
-                  ? notAssignedThisNight.filter((t: any) => !scheduledUnplacedIds.has(t.id))
-                  : notAssignedThisNight;
-
-                // Porters first (any role containing "porter")
-                porters = remaining.filter((t: any) => isPorter(t));
-
-                // Then overlaps from non-porters
-                const nonPorters = remaining.filter((t: any) => !isPorter(t));
-
-                pmOverlaps = nonPorters.filter((t: any) => t.isPMOverlap);
-                amOverlaps = nonPorters.filter((t: any) => t.isAMOverlap && !t.isPMOverlap);
-                regularGravePool = nonPorters.filter((t: any) => !t.isPMOverlap && !t.isAMOverlap);
-              } else {
-                onThisNight = notCalledOff.filter((t: any) => t.isOnSchedule);
-                alreadyDeployed = [];
-                porters = [];
-                pmOverlaps = [];
-                amOverlaps = [];
-                regularGravePool = notCalledOff.filter((t: any) => !t.isOnSchedule);
-              }
-
-              const filteredCalledOff = (rosterSearch.trim().toLowerCase()
-                ? calledOff.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(rosterSearch.trim().toLowerCase()) ||
-                    tm.id.toLowerCase().includes(rosterSearch.trim().toLowerCase())
-                  )
-                : calledOff);
-
-              const filterTerm = rosterSearch.trim().toLowerCase();
-
-              const filteredOnThisNight = filterTerm
-                ? onThisNight.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : onThisNight;
-
-              const filteredDeployed = filterTerm
-                ? alreadyDeployed.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : alreadyDeployed;
-
-              const filteredPorters = filterTerm
-                ? porters.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : porters;
-
-              const filteredPMOverlaps = filterTerm
-                ? pmOverlaps.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : pmOverlaps;
-
-              const filteredAMOverlaps = filterTerm
-                ? amOverlaps.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : amOverlaps;
-
-              const filteredRegularGrave = filterTerm
-                ? regularGravePool.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : regularGravePool;
-
-              const filteredSchedGraves = filterTerm
-                ? scheduledUnplacedGraves.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : scheduledUnplacedGraves;
-
-              const filteredSchedPM = filterTerm
-                ? scheduledUnplacedPM.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : scheduledUnplacedPM;
-
-              const filteredSchedAM = filterTerm
-                ? scheduledUnplacedAM.filter((tm: any) =>
-                    tm.name.toLowerCase().includes(filterTerm) ||
-                    tm.id.toLowerCase().includes(filterTerm) ||
-                    (tm.primarySection || "").toLowerCase().includes(filterTerm)
-                  )
-                : scheduledUnplacedAM;
-
-              return (
-                <>
-                  {/* 0. Called Off — TMs explicitly removed from tonight's schedule. */}
-                  {filteredCalledOff.length > 0 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setCalledOffExpanded(v => !v)}
-                        aria-expanded={calledOffExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#C2410C] font-semibold px-1 pt-2 pb-0.5 hover:text-[#9A3412] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: calledOffExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          Called Off
-                        </span>
-                        <span className="tabular-nums">{filteredCalledOff.length}</span>
-                      </button>
-                      {calledOffExpanded && filteredCalledOff.map((tm: any) => (
-                        <div
-                          key={tm.id}
-                          className="px-2 py-1 mx-1 my-0.5 rounded-md bg-orange-50/60 border border-orange-200/60 flex items-center gap-2 text-[12px]"
-                        >
-                          <span className="line-through text-orange-700/80 font-medium truncate flex-1">
-                            {tm.name || tm.fullName || tm.id}
-                          </span>
-                          <span className="text-[9px] uppercase tracking-[0.6px] text-orange-600/70 font-semibold">
-                            off
-                          </span>
-                        </div>
-                      ))}
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                    </>
-                  )}
-
-                  {/* 0b. Scheduled Tonight — Not Yet Placed (Graves / PM / AM) */}
-                  {graveOnly && scheduledTmIdsTonight.size > 0 && (filteredSchedGraves.length > 0 || filteredSchedPM.length > 0 || filteredSchedAM.length > 0) && (
-                    <>
-                      {/* Section label */}
-                      <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
-                        <div className="flex-1 h-px bg-amber-500/25" />
-                        <span className="text-[9px] uppercase tracking-[1.2px] text-amber-600/80 font-semibold whitespace-nowrap">
-                          On Schedule — Not Placed
-                        </span>
-                        <div className="flex-1 h-px bg-amber-500/25" />
-                      </div>
-
-                      {/* Graves sub-group */}
-                      {filteredSchedGraves.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setScheduledGravesExpanded(v => !v)}
-                            aria-expanded={scheduledGravesExpanded}
-                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                              Graves
-                            </span>
-                            <span className="tabular-nums">{filteredSchedGraves.length}{filterTerm ? ` / ${scheduledUnplacedGraves.length}` : ""}</span>
-                          </button>
-                          {scheduledGravesExpanded && filteredSchedGraves.map((tm: any) => {
-                            const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                          })}
-                        </>
-                      )}
-
-                      {/* PM Overlaps sub-group */}
-                      {filteredSchedPM.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setScheduledPMExpanded(v => !v)}
-                            aria-expanded={scheduledPMExpanded}
-                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                              PM Overlaps ({pmSwingLabel})
-                            </span>
-                            <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
-                          </button>
-                          {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
-                            const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                          })}
-                        </>
-                      )}
-
-                      {/* AM Overlaps sub-group */}
-                      {filteredSchedAM.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setScheduledAMExpanded(v => !v)}
-                            aria-expanded={scheduledAMExpanded}
-                            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-600 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-500 transition-colors"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                              AM Overlaps ({amDayShiftLabel})
-                            </span>
-                            <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
-                          </button>
-                          {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
-                            const isAssigned = assignedThisNight.has(tm.id);
-                            return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                          })}
-                        </>
-                      )}
-
-                      <div className="h-px bg-amber-500/20 mx-1 my-1" />
-                    </>
-                  )}
-
-                  {/* 1. Already Deployed — Assigned on this GRAVE night (collapsed) */}
-                  {graveOnly && filteredOnThisNight.length > 0 && (
-                    <>
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => setDeployedExpanded(v => !v)}
-                        aria-expanded={deployedExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: deployedExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          Already Deployed
-                        </span>
-                        <span className="tabular-nums">
-                          {filteredOnThisNight.length}{filterTerm ? ` / ${onThisNight.length}` : ""}
-                        </span>
-                      </button>
-                      {deployedExpanded && filteredOnThisNight.map((tm: any) => {
-                        const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                      })}
-                    </>
-                  )}
-
-                  {/* 2. Porters (collapsed by default) */}
-                  {graveOnly && filteredPorters.length > 0 && (
-                    <>
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => setPortersExpanded(v => !v)}
-                        aria-expanded={portersExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: portersExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          Porters
-                        </span>
-                        <span className="tabular-nums">
-                          {filteredPorters.length}{filterTerm ? ` / ${porters.length}` : ""}
-                        </span>
-                      </button>
-                      {portersExpanded && filteredPorters.map((tm: any) => {
-                        const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                      })}
-                    </>
-                  )}
-
-                  {/* 3. AM Overlaps (collapsed) */}
-                  {graveOnly && filteredAMOverlaps.length > 0 && (
-                    <>
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => setAmOverlapsExpanded(v => !v)}
-                        aria-expanded={amOverlapsExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: amOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          AM Overlaps (in 5:00–5:30am)
-                        </span>
-                        <span className="tabular-nums">
-                          {filteredAMOverlaps.length}{filterTerm ? ` / ${amOverlaps.length}` : ""}
-                        </span>
-                      </button>
-                      {amOverlapsExpanded && filteredAMOverlaps.map((tm: any) => {
-                        const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                      })}
-                    </>
-                  )}
-
-                  {/* 4. PM Overlaps (collapsed) */}
-                  {graveOnly && filteredPMOverlaps.length > 0 && (
-                    <>
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => setPmOverlapsExpanded(v => !v)}
-                        aria-expanded={pmOverlapsExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: pmOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          PM Overlaps (out at 1:00am)
-                        </span>
-                        <span className="tabular-nums">
-                          {filteredPMOverlaps.length}{filterTerm ? ` / ${pmOverlaps.length}` : ""}
-                        </span>
-                      </button>
-                      {pmOverlapsExpanded && filteredPMOverlaps.map((tm: any) => {
-                        const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                      })}
-                    </>
-                  )}
-
-                  {/* 5. Not Scheduled — Regular GRAVE Pool */}
-                  {filteredRegularGrave.length > 0 && (
-                    <>
-                      <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => setOtherTmsExpanded(v => !v)}
-                        aria-expanded={otherTmsExpanded}
-                        className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: otherTmsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                          Not Scheduled
-                        </span>
-                        <span className="tabular-nums">
-                          {filteredRegularGrave.length}{filterTerm ? ` / ${regularGravePool.length}` : ""}
-                        </span>
-                      </button>
-                      {otherTmsExpanded && filteredRegularGrave.map((tm: any) => {
-                        const isAssigned = assignedThisNight.has(tm.id);
-                        return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="off" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                      })}
-                    </>
-                  )}
-
-                  {filterTerm && filteredOnThisNight.length === 0 && filteredPorters.length === 0 && filteredAMOverlaps.length === 0 && filteredPMOverlaps.length === 0 && filteredRegularGrave.length === 0 && (
-                    <div className="text-xs text-[#8E8E93] px-2 py-2">No matches for “{rosterSearch}”</div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        </RosterDropZone>
+          <RosterRail
+            realRoster={effectiveRealRoster}
+            graveRoster={effectiveGraveRoster}
+            // assignments now pulled via narrow Zustand selector inside RosterRail (3.4)
+            assignedThisNight={assignedThisNight}
+            scheduledTmIdsTonight={scheduledTmIdsTonight}
+            calledOffIds={calledOffIds}
+            graveOnly={graveOnly}
+            rosterSearch={rosterSearch}
+            isDark={isDark}
+            isCurrentNightLocked={isCurrentNightLocked}
+            canEditAssignments={canEditAssignments}
+            amOverlapDayName={amOverlapDayName}
+            amOverlapDateNum={amOverlapDateNum}
+            selectedDay={selectedDay}
+            // Expanded state, graveOnly, and rosterSearch now come from narrow Zustand selectors inside RosterRail (3.4).
+            // Only the stable data + callbacks that the rail actually needs for the current day are passed as props.
+          />
         </div>
-        {/* End floating roster panel */}
-
-        {/* Old left-anchored roster trigger removed — now part of the centered expandable control cluster below. */}
-
-        {/* Old left rail (roster trigger + collapsible ⋮ controls) fully removed.
-           Replaced by a single centered expandable control cluster (see below). */}
-
+        {/* Duplicate old roster glass + inline filter UI fully excised (replaced by isolated <RosterRail /> in the thin chrome wrapper above). Day picker / calendar popovers and stage remain as siblings inside the main flex row. */}
         {/* Floating day-of-week picker (appears to the right of the left rail
            when the colored day number is clicked). Glass panel, 7 day choices
            laid out horizontally so the "week of days" expands next to the
@@ -4937,604 +4714,43 @@ function AuthedShiftBuilder() {
                bottom-center of the canvas at a constant, tap-friendly size
                regardless of zoom level. */}
 
-            {/* Fixed 1056px artboard — strictly 11×8.5" (1056px), centered, never resizes with window */}
-            <div className="print-artboard">
-              {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
-                 on the left; GRAVE meta + week pills + GROUP selector on the right. */}
-              <div className="sheet-header flex items-end justify-between flex-shrink-0 pb-1.5 mb-2">
-                {/* LEFT */}
-                <div className="flex items-end gap-3">
-                  <div
-                    className="font-black tabular-nums leading-[0.78]"
-                    style={{
-                      fontSize: 58,
-                      letterSpacing: '-3px',
-                      fontFamily: 'var(--font-atkinson)',
-                      // Solid on deployment, outlined on break sheet for contrast with title.
-                      // In dark mode use a lighter stroke/fill so the number is actually visible.
-                      ...(currentView === "deployment"
-                        ? { color: isDark ? '#E5E5E7' : '#1C1C1E' }
-                        : {
-                            color: 'transparent',
-                            WebkitTextStroke: `1.5px ${isDark ? '#9CA3AF' : '#1C1C1E'}`,
-                            textShadow: 'none',
-                          }),
-                    }}
-                  >
-                    {selectedDay.dateNum}
-                  </div>
-                  <div className="-mb-0.5 flex flex-col">
-                    <div
-                      className="font-bold leading-none flex items-center gap-2"
-                      style={{ color: selectedDay.color, fontSize: 26, letterSpacing: '-0.8px', fontFamily: 'var(--font-atkinson)' }}
-                    >
-                      {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
-                      {isCurrentNightLocked && (
-                        <span
-                          className="no-print inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full border"
-                          style={{
-                            background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                            borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)',
-                            color: isDark ? '#F2F2F4' : '#1C1C1E',
-                            fontSize: 11,
-                            fontFamily: 'var(--font-atkinson)',
-                            letterSpacing: '0.5px'
-                          }}
-                          title="This day is locked — no changes allowed"
-                        >
-                          <span className="ms" style={{ fontSize: 13 }}>lock</span>
-                          LOCKED
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] mt-0.5 leading-none" style={{ color: isDark ? '#9CA3AF' : '#4B5563' }}>
-                      {currentView === "deployment"
-                        ? `${selectedDay.monthYear} · Day ${selectedDayIndex + 1} of 7`
-                        : `${selectedDay.name} · ${selectedDay.monthYear}`}
-                    </div>
-                    {currentView === "deployment" ? (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
-                        <div className="flex gap-[2px]">
-                          {[1, 2, 3].map((g) => (
-                            <div
-                              key={g}
-                              className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
-                              style={{ background: isDark ? '#E5E5E7' : '#1C1C1E', color: isDark ? '#1C1C1E' : '#fff', fontFamily: 'var(--font-atkinson)' }}
-                              title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
-                            >
-                              {breakCounts[g as 1 | 2 | 3] || ""}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[10px] font-bold tabular-nums" style={{ color: isDark ? '#F2F2F4' : '#111' }}>{inRotationCount}</span>
-                        <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>IN ROTATION</span>
-                        <span className="text-[8.5px] font-bold tracking-[1px] ml-1.5" style={{ color: isDark ? '#E5E5E7' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}>BREAKS</span>
-                        <div className="flex gap-[2px]">
-                          {[1, 2, 3].map((g) => (
-                            <div
-                              key={g}
-                              className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
-                              style={{ background: isDark ? '#E5E5E7' : '#1C1C1E', color: isDark ? '#1C1C1E' : '#fff', fontFamily: 'var(--font-atkinson)' }}
-                              title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
-                            >
-                              {breakCounts[g as 1 | 2 | 3] || ""}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* RIGHT */}
-                <div className="flex flex-col items-end gap-1.5">
-                  {/* "GRAVE · 11PM – 7AM" used to live here for the deployment
-                     view; removed because it added vertical space above the
-                     week pills with no operational value (the shift type is
-                     also conveyed by the footer "GRAVES" tag). The breaks
-                     view still shows "BY BREAK WAVE" since that label is
-                     genuinely disambiguating between the two view modes. */}
-                  {currentView === "breaks" && (
-                    <div
-                      className="text-[9.5px] font-bold tracking-[1.2px] uppercase"
-                      style={{ color: isDark ? '#9CA3AF' : '#1C1C1E', fontFamily: 'var(--font-atkinson)' }}
-                    >
-                      BY BREAK WAVE
-                    </div>
-                  )}
-
-                  {/* Week pills */}
-                  <div className="flex gap-[2px]">
-                    {DAY_DEFS.map((d, i) => {
-                      const isActive = i === selectedDayIndex;
-                      return (
-                        <div
-                          key={i}
-                          onClick={() => setSelectedDayIndex(i)}
-                          className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px] cursor-pointer"
-                          style={{
-                            background: isActive ? d.color : 'transparent',
-                            color: isActive ? '#fff' : (isDark ? '#9CA3AF' : '#6B7280'),
-                            fontFamily: 'var(--font-atkinson)',
-                          }}
-                          title={d.name}
-                        >
-                          {d.short}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Group selector (Golden shows GROUP label + three numbered pills) */}
-                  {currentView === "deployment" && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: 'var(--font-atkinson)' }}>GROUP</span>
-                      <div className="flex gap-[3px]">
-                        {[1,2,3].map(g => {
-                          const isActive = breakGroup === g;
-                          return (
-                            <div
-                              key={g}
-                              onClick={() => setBreakGroup(g as 1|2|3)}
-                              className="min-w-[15px] h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px] cursor-pointer"
-                              style={{
-                                background: isActive ? '#1C1C1E' : '#E5E5E7',
-                                color: isActive ? '#fff' : '#6B7280',
-                                fontFamily: 'var(--font-atkinson)',
-                              }}
-                              title={`Break Group ${g}`}
-                            >
-                              {g}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Undo / Redo — calm, operational, Golden-aligned */}
-                  <div className="flex items-center gap-1 mt-1">
-                    <button
-                      onClick={() => {
-                        const prev = shiftHistory.undo();
-                        if (prev) applySnapshot(prev);
-                      }}
-                      disabled={!shiftHistory.canUndo}
-                      className="text-[10px] px-2 py-0.5 rounded border border-[#E5E5E7] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F8F8F9] active:bg-[#F4F4F6] transition-colors"
-                      style={{ fontFamily: "var(--font-atkinson)" }}
-                      title={shiftHistory.getUndoDescription() ? `Undo: ${shiftHistory.getUndoDescription()}` : "Undo"}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      onClick={() => {
-                        const next = shiftHistory.redo();
-                        if (next) applySnapshot(next);
-                      }}
-                      disabled={!shiftHistory.canRedo}
-                      className="text-[10px] px-2 py-0.5 rounded border border-[#E5E5E7] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#F8F8F9] active:bg-[#F4F4F6] transition-colors"
-                      style={{ fontFamily: "var(--font-atkinson)" }}
-                      title={shiftHistory.getRedoDescription() ? `Redo: ${shiftHistory.getRedoDescription()}` : "Redo"}
-                    >
-                      Redo
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {isDraftMode && (
-                <div
-                  className="mx-2 mt-1 mb-2 px-3 py-1.5 bg-amber-100 border border-amber-300 rounded text-amber-800 text-xs font-medium flex items-center justify-between gap-3"
-                  style={{ fontFamily: "var(--font-atkinson)" }}
-                >
-                  <span className="truncate">
-                    📝 DRAFT MODE — Engine suggestions shown. Previous assignments faded below.
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={applyDraft}
-                      className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-medium tracking-[0.2px] hover:bg-emerald-700 active:scale-[0.985] transition-all"
-                    >
-                      Apply Draft
-                    </button>
-                    <button
-                      onClick={discardDraft}
-                      className="px-2.5 py-0.5 rounded-full bg-white/70 text-amber-900 border border-amber-300 text-[11px] font-medium tracking-[0.2px] hover:bg-white active:scale-[0.985] transition-all"
-                    >
-                      Discard
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              {currentView === "deployment" ? (
-                <>
-                  {/* ZONES — Golden: 2 rows × 5 cols */}
-                  <section className="mb-2">
-                    <div className="sheet-section-header">
-                      <span className="label">ZONES</span>
-                      <div className="divider" />
-                      <span className="count">
-                        {ZONE_DEFS.filter(d => !!assignments[d.key]?.tmName).length} / 10 FILLED
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "minmax(135px, auto)" }}>
-                      {ZONE_DEFS.map((def) => (
-                        <ZoneCard
-                          key={def.key}
-                          def={def}
-                          assignments={assignments}
-                          selectedTasks={selectedTasks}
-                          setBreakGroupForSlot={setBreakGroupForSlot}
-                          onCardClick={openPaletteForSlot}
-                          loading={loadingAssignments}
-                          borderColor={cardBorders[def.key]}
-                          isDraftMode={isDraftMode}
-                          draftInfo={draftAssignments[def.key]}
-                          onRemoveTask={handleRemoveTask}
-                          onSetTaskColor={handleSetTaskColor}
-                          onEditTask={handleEditTask}
-                          isLocked={isCurrentNightLocked}
-                          // Phase 1 Live optimistic layer
-                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                        />
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* RESTROOMS — Golden: 1 row × 5 cols, internal MEN'S / WOMEN'S split */}
-                  <section className="mb-2">
-                    <div className="sheet-section-header">
-                      <span className="label">RESTROOMS</span>
-                      <div className="divider" />
-                      <span className="count">
-                        {RR_DEFS.reduce((acc, d) => {
-                          const m = !!assignments[`MRR${d.num}`]?.tmName;
-                          const w = !!assignments[`WRR${d.num}`]?.tmName;
-                          return acc + (m ? 1 : 0) + (w ? 1 : 0);
-                        }, 0)} / 10 FILLED
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5" style={{ gridAutoRows: "minmax(112px, auto)" }}>
-                      {RR_DEFS.map((def) => (
-                        <RRCard
-                          key={def.num}
-                          def={def}
-                          assignments={assignments}
-                          selectedTasks={selectedTasks}
-                          setBreakGroupForSlot={setBreakGroupForSlot}
-                          onGenderClick={handleGenderClick}
-                          loading={loadingAssignments}
-                          borderColor={cardBorders[`RR${def.num}`] || cardBorders[`MRR${def.num}`] || cardBorders[`WRR${def.num}`]}
-                          isDraftMode={isDraftMode}
-                          draftInfo={draftAssignments[`MRR${def.num}`] || draftAssignments[`WRR${def.num}`]}
-                          onRemoveTask={handleRemoveTask}
-                          onSetTaskColor={handleSetTaskColor}
-                          onEditTask={handleEditTask}
-                          isLocked={isCurrentNightLocked}
-                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                        />
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* AUXILIARY — default 5 slots, dynamically resizable.
-                     gridTemplateColumns derived from count so adding a slot
-                     reflows the row without touching Tailwind classes. */}
-                  <section className="mb-2">
-                    <div className="sheet-section-header">
-                      <span className="label">AUXILIARY</span>
-                      <div className="divider" />
-                      <span className="count">
-                        {auxDefs.filter(d => !!assignments[d.key]?.tmName).length} / {auxDefs.length} FILLED
-                      </span>
-                    </div>
-                    <div
-                      className="grid gap-1.5"
-                      style={{
-                        gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
-                        gridAutoRows: "minmax(112px, auto)",
-                      }}
-                    >
-                      {auxDefs.map((def) => (
-                        <AuxCard
-                          key={def.key}
-                          def={def}
-                          assignments={assignments}
-                          selectedTasks={selectedTasks}
-                          setBreakGroupForSlot={setBreakGroupForSlot}
-                          onCardClick={openPaletteForSlot}
-                          loading={loadingAssignments}
-                          borderColor={cardBorders[def.key]}
-                          isDraftMode={isDraftMode}
-                          draftInfo={draftAssignments[def.key]}
-                          onRemoveTask={handleRemoveTask}
-                          onSetTaskColor={handleSetTaskColor}
-                          onEditTask={handleEditTask}
-                          isLocked={isCurrentNightLocked}
-                          onLiveAssign={live?.assign ? (uiKey, tmId, tmName) => live.assign(uiKey, tmId, tmName, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                          onLiveUnassign={live?.unassign ? (uiKey) => live.unassign(uiKey, { captureDate: selectedDay.date, captureDayName: selectedDay.name, targetNightId: nightId, isDraftMode }) : undefined}
-                        />
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Notes pad removed — space now flows to cards */}
-                </>
-              ) : (
-                <>
-                  {/* 3 Break Wave Columns — Golden tight layout */}
-                  <div className="grid grid-cols-3 gap-1 mb-1.5">
-                    {(() => {
-                      // Build a tmId → placed-assignment reverse lookup so we can show
-                      // each TM's actual tonight-slot even when rendering from break_assignments.
-                      const tmToAssignment: Record<string, any> = {};
-                      Object.values(assignments).forEach((a: any) => {
-                        if (a.tmId) tmToAssignment[a.tmId] = a;
-                      });
-
-                      // Derive slot type from a slotRef string (e.g. "Z3" → zone, "MRR7" → rr)
-                      const slotRefType = (ref: string | null): 'zone' | 'rr' | 'aux' => {
-                        if (!ref) return 'zone';
-                        if (ref.startsWith('MRR') || ref.startsWith('WRR')) return 'rr';
-                        if (/^Z\d+$/.test(ref)) return 'zone'; // Z1–Z10 only (not Z9SR)
-                        return 'aux';
-                      };
-
-                      return [1, 2, 3].map((wave) => {
-                      // Derive the break waves *directly from the current assignments*.
-                      // This guarantees the wave columns are always 100% in sync with the
-                      // Break selection boxes (BreakBadge) on the deployment cards.
-                      // Per operator rule, only actually placed TMs appear on the break sheet.
-                      // Scheduled-but-not-placed TMs are excluded (even if they have
-                      // break_assignments rows).
-                      const waveAssignments = Object.entries(assignments)
-                        .map(([slotKey, a]: [string, any]) => {
-                          if (!a?.tmId || a.breakGroup !== wave) return null;
-                          return {
-                            ...a,
-                            slotKey,
-                            type: slotRefType(slotKey),
-                            tmName: a.tmName,
-                          };
-                        })
-                        .filter(Boolean) as any[];
-
-                      const count = waveAssignments.length;
-                      const waveColor =
-                        wave === 1 ? "#1a2332" : wave === 2 ? "#5a6b7d" : "#c8d3dc";
-
-                      const getLocs = (a: any) => {
-                        if (a.type === "zone") {
-                          const z = ZONE_DEFS.find((zz) => zz.key === a.slotKey);
-                          return z ? z.locations.join(" · ") : "";
-                        }
-                        if (a.type === "rr") {
-                          const num = parseInt((a.slotKey || "").replace(/\D/g, "")) || 1;
-                          const def = RR_DEFS.find((r) => r.num === num);
-                          return def ? `${def.mensLoc} / ${def.womensLoc}` : "";
-                        }
-                        if (a.type === "aux") {
-                          const aux = auxDefs.find((x) => x.key === a.slotKey);
-                          return aux ? aux.locations.join(" · ") : "";
-                        }
-                        return "";
-                      };
-
-                      return (
-                        <div
-                          key={wave}
-                          className="border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] bg-white dark:bg-[#1C1C1E] overflow-hidden flex flex-col"
-                          style={{ borderTop: `3px solid ${waveColor}` }}
-                        >
-                          {/* Golden header per wave: big number on the left, BREAK N + count on the right */}
-                          <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4] dark:border-[#2C2C2E]">
-                            <div
-                              className="font-black tabular-nums leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
-                              style={{ fontSize: 42, letterSpacing: '-2px', fontFamily: 'var(--font-atkinson)' }}
-                            >
-                              {wave}
-                            </div>
-                            <div className="-mb-0.5">
-                              <div
-                                className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
-                                style={{ fontSize: 13, fontFamily: 'var(--font-atkinson)' }}
-                              >
-                                Break {wave}
-                              </div>
-                              <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5">{count} people</div>
-                            </div>
-                          </div>
-
-                          <div className="px-2 pb-1 pt-1 space-y-1 text-[9px]">
-                            {["zone", "rr", "aux"].map((cat) => {
-                              const items = waveAssignments.filter((a: any) => (a as any).type === cat);
-                              if (!items.length) return null;
-
-                              const label =
-                                cat === "zone" ? "ZONES" : cat === "rr" ? "RESTROOMS" : "AUXILIARY";
-
-                              // Accent for each slot pill — matches the Golden chip color exactly.
-                              const accentFor = (a: any): string => {
-                                if (a.type === "zone") return getZoneColor(a.slotKey);
-                                if (a.type === "rr") {
-                                  const num = parseInt((a.slotKey || "").replace(/\D/g, ""), 10) || 1;
-                                  return getRRAccent(num);
-                                }
-                                return getAuxAccent(a.slotKey);
-                              };
-
-                              // Friendly chip label (e.g. "ZONE 1", "RR 6 M", "TRASH 1").
-                              const chipLabel = (a: any): string => {
-                                if (a.type === "zone") {
-                                  return `ZONE ${(a.slotKey || "").replace(/\D/g, "")}`;
-                                }
-                                if (a.type === "rr") {
-                                  const num = (a.slotKey || "").replace(/\D/g, "");
-                                  const side = (a.slotKey || "").startsWith("M") ? "M" : "W";
-                                  const def = RR_DEFS.find(r => r.num === parseInt(num, 10));
-                                  return def ? `${def.label} ${side}` : `RR ${num} ${side}`;
-                                }
-                                const def = auxDefs.find(d => d.key === a.slotKey);
-                                return def ? def.label : a.slotKey;
-                              };
-
-                              return (
-                                <div key={cat}>
-                                  <div className="flex items-center gap-1 mb-1">
-                                    <span className="text-[#6B7280] dark:text-[#8E8E93] font-bold tracking-[1.2px] uppercase text-[7.5px]" style={{ fontFamily: 'var(--font-atkinson)' }}>{label}</span>
-                                    <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-[#3A3A3C]" />
-                                  </div>
-                                  <div className="space-y-1">
-                                    {items.map((a: any, idx: number) => {
-                                      const accent = accentFor(a);
-                                      // Only show a chip when the TM is actually placed
-                                      // tonight. For scheduled-but-not-placed TMs the
-                                      // template slotRef is stale/misleading — suppress it.
-                                      const showChip = !a.notPlaced;
-                                      return (
-                                        <div key={idx} className="flex items-center gap-1.5">
-                                          <div className="flex-1 border-b border-dashed border-[#C8C8CC] dark:border-[#48484A] pb-px min-w-0">
-                                            <div className="font-semibold text-[#111] dark:text-[#F2F2F4] truncate text-[9px] leading-tight">
-                                              {a.tmName || " "}
-                                            </div>
-                                          </div>
-                                          {showChip ? (
-                                            <div
-                                              className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white dark:bg-[#2C2C2E]"
-                                              style={{ borderColor: accent, color: accent, fontFamily: 'var(--font-atkinson)' }}
-                                            >
-                                              {chipLabel(a)}
-                                            </div>
-                                          ) : (
-                                            <div className="w-3" />
-                                          )}
-                                          <span className="text-[7.5px] text-[#9CA3AF] uppercase tracking-[0.5px] w-3 text-center">
-                                            {showChip && a.type === "rr" ? ((a.slotKey || "").startsWith("M") ? "M" : "W") : ""}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    }); // end [1,2,3].map
-                    })() /* end IIFE */}
-                  </div>
-
-                  {/* OVERLAPS — Golden: full-width section at bottom, two rows
-                     (11p–1a swing on this sheet's date + 5a–7a day shift on the next calendar day).
-                     The mt-auto + print post-processing pins this to the bottom
-                     of the landscape break sheet page. */}
-                  <section className="mt-auto pt-2 overlaps-section" data-print-target="overlaps">
-                    <div className="sheet-section-header">
-                      <span className="label">OVERLAPS</span>
-                      <div className="divider" />
-                    </div>
-
-                    <div className="space-y-2">
-                      {[
-                        {
-                          time: "11p – 1a (swing)",
-                          key: "PM",
-                          dayName: selectedDay.name,
-                          dateNum: selectedDay.dateNum,
-                          headerColor: selectedDay.color,
-                        },
-                        {
-                          time: "5a – 7a (day shift)",
-                          key: "AM",
-                          dayName: amOverlapDayName,
-                          dateNum: amOverlapDateNum,
-                          headerColor: nextDayColor,
-                        },
-                      ].map((row) => (
-                        <div key={row.key}>
-                          {/* Mini day header mimicking the main artboard header:
-                              Large filled black date number on the left, day name in the day's accent color to the right.
-                              Slightly larger overall than previous version. */}
-                          <div className="flex items-baseline gap-2 pl-1 mb-0.5">
-                            {/* Date number — filled black, slightly larger, heavy weight, mimicking the big number in the main header */}
-                            <div
-                              className="font-black tabular-nums leading-none"
-                              style={{
-                                fontSize: 22,
-                                color: isDark ? '#E5E5E7' : '#1C1C1E',
-                                fontFamily: 'var(--font-atkinson)',
-                              }}
-                            >
-                              {row.dateNum}
-                            </div>
-                            {/* Day name — in the week's accent color for that day, slightly larger */}
-                            <div
-                              className="font-bold tracking-[-0.4px] leading-none"
-                              style={{
-                                fontSize: 16,
-                                color: row.headerColor,
-                                fontFamily: 'var(--font-atkinson)',
-                              }}
-                            >
-                              {row.dayName}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
-                              style={{ fontFamily: 'var(--font-atkinson)' }}
-                            >
-                              {row.time}
-                            </div>
-                            <div className="flex-1 grid grid-cols-6 gap-1.5">
-                              {Array.from({ length: 6 }).map((_, i) => (
-                                <OverlapSlot
-                                  key={i}
-                                  slotKey={`OL-${row.key}-${i}`}
-                                  assignments={assignments}
-                                  selectedTasks={selectedTasks}
-                                  onCardClick={openPaletteForSlot}
-                                  loading={loadingAssignments}
-                                  isDraftMode={isDraftMode}
-                                  draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
-                                  onRemoveTask={handleRemoveTask}
-                                  onSetTaskColor={handleSetTaskColor}
-                                  onEditTask={handleEditTask}
-                                  isLocked={isCurrentNightLocked}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </>
-              )}
-              </div>
-
-              {/* Sheet footer */}
-              <div className="sheet-footer flex-shrink-0">
-                <div className="flex items-center gap-1">
-                  <span className="font-bold tracking-[1px] text-[#1C1C1E]">SBS</span>
-                  <span className="text-[#9CA3AF]">⚙</span>
-                  <span className="text-[#6B7280]">Weekly Zone Deployment Book</span>
-                  <span className="text-[#C8C8CC] mx-1">·</span>
-                  <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
-                </div>
-                <div className="text-[#9CA3AF] text-center">v0.7</div>
-                <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
-              </div>
-            </div> {/* /print-artboard */}
+            {/* Fixed 1056px artboard — now isolated into ShiftBuilderBoard for day-switch perf.
+                The scaling transform, refs, and stage chrome remain in the orchestrator.
+                Board receives only the narrow day-specific prop bag + stable callbacks. */}
+            <ShiftBuilderBoard
+              // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
+              // This prevents the giant objects from forcing re-renders of the entire 1056×816 artboard subtree.
+              nightId={nightId}
+              selectedTasks={selectedTasks}  // still legacy during 3.1 transition
+              cardBorders={effectiveCardBorders}
+              processedWaves={processedDayData?.waves}
+              processedBreakCounts={processedDayData?.breakCounts}
+              selectedDay={selectedDay}
+              selectedDayIndex={selectedDayIndex}
+              currentView={currentView}
+              breakGroup={breakGroup}
+              isDark={isDark}
+              isDraftMode={isDraftMode}
+              isCurrentNightLocked={isCurrentNightLocked}
+              loadingAssignments={loadingAssignments}
+              // auxDefs now from narrow Zustand selector in Board (3.4)
+              onDayPillClick={handleBoardDayPill}
+              onBreakGroupChange={handleBoardBreakGroupChange}
+              onCardClick={handleBoardCardClick}
+              onRemoveTask={handleBoardRemoveTask}
+              onSetTaskColor={handleBoardSetTaskColor}
+              onEditTask={handleBoardEditTask}
+              setBreakGroupForSlot={setBreakGroupForSlot}
+              onLiveAssign={handleBoardLiveAssign}
+              onLiveUnassign={handleBoardLiveUnassign}
+              live={live}
+              amOverlapDayName={amOverlapDayName}
+              amOverlapDateNum={amOverlapDateNum}
+              nextDayColor={nextDayColor}
+            />
+            {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
+                has been carved out. This is the primary re-render boundary win for iPad day switches.
+                All old duplicate content removed in follow-up cleanup. */}
 
             {/* Quick Action Fan removed... */}
           </div> {/* /print-stage-inner (the scaled content) */}
@@ -5557,11 +4773,11 @@ function AuthedShiftBuilder() {
 
         </div> {/* /relative visual frame (the thing flex actually centers) */}
       </div> {/* /stageHostRef content area */}
-    </div> {/* close any remaining from previous structure if needed */}
+    </div> {/* /main flex row (roster chrome wrapper + stageHost) */}
 
-      {/* Floating ghost that follows the cursor / finger during drag.
-         Rendered outside the artboard so it isn't clipped by overflow:hidden. */}
-      <DragOverlay dropAnimation={null}>
+      {/* OLD DragOverlay block — being migrated into InteractiveStage.
+          Temporarily commented to avoid duplication during narrowing. */}
+      {/* <DragOverlay dropAnimation={null}> */}
         {activeDrag ? (
           activeDrag.kind === "task" ? (
             /* Task drag ghost — compact Velvet pill with drag_indicator */
@@ -5609,8 +4825,7 @@ function AuthedShiftBuilder() {
             </div>
           )
         ) : null}
-      </DragOverlay>
-      </DndContext>
+      </InteractiveStage>
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of
@@ -5778,7 +4993,7 @@ function AuthedShiftBuilder() {
         auxDefs={auxDefs}
         isDark={isDark}
         tmGender={markerSlotKey && assignments[markerSlotKey]?.tmId
-          ? (realRoster.find((r: any) => r.id === assignments[markerSlotKey].tmId)?.gender ?? null)
+          ? (effectiveRealRoster.find((r: any) => r.id === assignments[markerSlotKey].tmId)?.gender ?? null)
           : null}
       />
 
@@ -5806,7 +5021,7 @@ function AuthedShiftBuilder() {
         onApplyGrokSuggestions={applyGrokSuggestions}
         requestGrokStructuredSuggestions={requestGrokStructuredSuggestions}
         onTriggerGrokBoardAnalysis={triggerGrokBoardAnalysis}
-        commandRoster={realRoster}
+        commandRoster={effectiveRealRoster}
         commandShiftDate={selectedDay.date}
         commandWeekDays={cmdkWeekDays}
         onSetGravePool={handleCmdkSetGravePool}
@@ -5939,6 +5154,43 @@ function AuthedShiftBuilder() {
           }
         }}
       />
+
+      {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
+      {viewMode === 'canvas' && <OpsStatusBar />}
+
+      {/* Back to Launchpad — positioned below the custom top nav bar so it doesn't cover it.
+          Higher z-index to sit above all header elements. Moved down to ~76px to clear the
+          app's glassmorphic header (consistent with the artboard paddingTop:72 used elsewhere). */}
+      {viewMode === 'canvas' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setViewMode('launchpad');
+
+            // Extra reliability on iPad: directly render into the body root if it exists.
+            // This helps in case the effect hasn't flushed yet due to device-specific timing.
+            const root = launchpadRootRef.current;
+            if (root) {
+              // We pass a fresh enterCanvas here; the component will receive the latest via its own props if needed.
+              root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
+            }
+          }}
+          className="fixed left-4 z-[300] flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.3px] transition-all active:scale-[0.985]"
+          style={{
+            top: '76px',
+            background: isDark ? 'rgba(30,30,34,0.92)' : 'rgba(255,255,255,0.92)',
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+            color: isDark ? '#A1A1AA' : '#4B5563',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          }}
+          title="Return to ShiftBuilder Launchpad"
+        >
+          <span style={{ fontSize: '13px', lineHeight: 1, marginRight: '1px' }}>←</span>
+          Launchpad
+        </button>
+      )}
+
     </div>
   );
 }

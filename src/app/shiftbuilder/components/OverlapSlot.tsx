@@ -34,7 +34,7 @@ export interface OverlapSlotProps {
 //
 // SlotKey shape is OL-PM-0..5 and OL-AM-0..5. uiToDb / dbToUi know how to
 // translate these.
-const OverlapSlot: React.FC<OverlapSlotProps> = ({
+const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   slotKey,
   assignments,
   selectedTasks,
@@ -120,6 +120,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default OverlapSlot;

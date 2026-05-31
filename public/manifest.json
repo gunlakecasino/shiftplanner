@@ -1,0 +1,20 @@
+{
+  "name": "Velvet ShiftForge — GLCR OMS",
+  "short_name": "ShiftForge",
+  "description": "World-class GRAVE shift scheduling for Gun Lake Casino Resort operations. Instant. Offline-resilient. Perfect.",
+  "start_url": "/shiftbuilder",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#B89708",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["productivity", "business", "utilities"],
+  "scope": "/",
+  "lang": "en-US"
+}

@@ -119,7 +119,7 @@ export function classifySheet(name: string): SheetKind {
  *   Graves → any TM with a gravePool value (the full grave roster)
  */
 export function parseWorkbookAggregate(
-  workbook: XLSX.WorkBook,
+  workbook: any, // populated after lazy XLSX load in caller
   sourceFile: string,
   roster: TeamMember[]
 ): ParsedSchedule {
@@ -130,12 +130,12 @@ export function parseWorkbookAggregate(
   // names ("Sheet1", "Sheet2", "Sheet3") and the canonical layout is
   // Sheet1=Day, Sheet2=Swings, Sheet3=Graves.
   const kindByName = new Map<string, SheetKind>();
-  sheetNames.forEach((n) => kindByName.set(n, classifySheet(n)));
+  sheetNames.forEach((n: string) => kindByName.set(n, classifySheet(n)));
   const anyRecognized = Array.from(kindByName.values()).some((k) => k !== "unknown");
   if (!anyRecognized) {
     // Positional fallback. Map by position to the canonical layout.
     const positional: SheetKind[] = ["days", "swings", "graves"];
-    sheetNames.forEach((n, i) => {
+    sheetNames.forEach((n: string, i: number) => {
       if (i < positional.length) {
         kindByName.set(n, positional[i]);
       } else {
@@ -242,7 +242,7 @@ function pickDefaultSheet(workbook: XLSX.WorkBook): string | undefined {
  * Pure version that operates on an already-loaded workbook (handy for tests).
  */
 export function parseWorkbook(
-  workbook: XLSX.WorkBook,
+  workbook: any, // populated after lazy XLSX load in caller
   sourceFile: string,
   roster: TeamMember[],
   sheetName?: string

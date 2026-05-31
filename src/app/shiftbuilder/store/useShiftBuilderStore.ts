@@ -1,0 +1,175 @@
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import type { AuxDef } from '@/lib/shiftbuilder/placement';
+
+/**
+ * Minimal Zustand store for the remaining local mutable state in ShiftBuilder.
+ *
+ * Goal (3.4): Reduce re-render surface in the orchestrator by moving
+ * high-churn state (assignments, draft, etc.) here with fine-grained selectors.
+ *
+ * Start small: assignments + basic actions.
+ * Expand iteratively.
+ */
+
+interface ShiftBuilderState {
+  assignments: Record<string, any>;
+  setAssignments: (assignments: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
+
+  draftAssignments: Record<string, {
+    proposedTmId: string;
+    proposedTmName: string;
+    previousTmId?: string;
+    previousTmName?: string;
+    proposedClear?: boolean;
+  }>;
+  setDraftAssignments: (draft: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
+
+  // Future: auxDefs, etc.
+
+  // 3.4 continuation — Roster rail UI state (expanded sections + filters)
+  // Moved here so RosterRail can subscribe narrowly instead of receiving 12+ props.
+  rosterUI: {
+    expanded: {
+      otherTms: boolean;
+      calledOff: boolean;
+      deployed: boolean;
+      pmOverlaps: boolean;
+      amOverlaps: boolean;
+      porters: boolean;
+      scheduledGraves: boolean;
+      scheduledPM: boolean;
+      scheduledAM: boolean;
+    };
+    graveOnly: boolean;
+    rosterSearch: string;
+  };
+  setRosterSectionExpanded: (key: keyof ShiftBuilderState['rosterUI']['expanded'], value: boolean) => void;
+  setGraveOnly: (v: boolean) => void;
+  setRosterSearch: (v: string) => void;
+
+  // auxDefs moved to store for narrow subscription in Board/cards (changes infrequently but reduces prop surface)
+  auxDefs: AuxDef[];
+  setAuxDefs: (updater: AuxDef[] | ((prev: AuxDef[]) => AuxDef[])) => void;
+}
+
+export const useShiftBuilderStore = create<ShiftBuilderState>()(
+  subscribeWithSelector((set) => ({
+    assignments: {},
+
+    setAssignments: (updater) =>
+      set((state) => ({
+        assignments: typeof updater === 'function' ? updater(state.assignments) : updater,
+      })),
+
+    draftAssignments: {},
+
+    setDraftAssignments: (updater) =>
+      set((state) => ({
+        draftAssignments: typeof updater === 'function' ? updater(state.draftAssignments) : updater,
+      })),
+
+    clearDraft: () => set({ draftAssignments: {} }),
+
+    // Roster UI (3.4 narrow subscription target)
+    rosterUI: {
+      expanded: {
+        otherTms: false,
+        calledOff: true,
+        deployed: false,
+        pmOverlaps: false,
+        amOverlaps: false,
+        porters: false,
+        scheduledGraves: true,
+        scheduledPM: true,
+        scheduledAM: true,
+      },
+      graveOnly: true,
+      rosterSearch: '',
+    },
+
+    setRosterSectionExpanded: (key, value) =>
+      set((state) => ({
+        rosterUI: {
+          ...state.rosterUI,
+          expanded: {
+            ...state.rosterUI.expanded,
+            [key]: value,
+          },
+        },
+      })),
+
+    setGraveOnly: (v) =>
+      set((state) => ({
+        rosterUI: { ...state.rosterUI, graveOnly: v },
+      })),
+
+    setRosterSearch: (v) =>
+      set((state) => ({
+        rosterUI: { ...state.rosterUI, rosterSearch: v },
+      })),
+
+    // auxDefs
+    auxDefs: [],
+
+    setAuxDefs: (updater) =>
+      set((state) => ({
+        auxDefs: typeof updater === 'function' ? updater(state.auxDefs) : updater,
+      })),
+  }))
+);
+
+// Optional: Dev-only subscribe for debugging day-switch impact
+const __DEV__ =
+  typeof process !== 'undefined' &&
+  process.env &&
+  process.env.NODE_ENV === 'development';
+
+if (__DEV__) {
+  useShiftBuilderStore.subscribe(
+    (state) => state.assignments,
+    (assignments, prev) => {
+      console.log('[ShiftBuilderStore] assignments changed', {
+        keys: Object.keys(assignments).length,
+        prevKeys: Object.keys(prev).length,
+      });
+    }
+  );
+
+  useShiftBuilderStore.subscribe(
+    (state) => state.draftAssignments,
+    (draft, prev) => {
+      console.log('[ShiftBuilderStore] draftAssignments changed', {
+        keys: Object.keys(draft).length,
+        prevKeys: Object.keys(prev).length,
+      });
+    }
+  );
+}
+
+// === Narrow selector hooks (3.4) — preferred consumption pattern for islands ===
+// These give components fine-grained reactivity. Only the component re-renders
+// when the selected slice actually changes (thanks to subscribeWithSelector + zustand's equality).
+
+export const useAssignments = () =>
+  useShiftBuilderStore((state) => state.assignments);
+
+export const useDraftAssignments = () =>
+  useShiftBuilderStore((state) => state.draftAssignments);
+
+// Convenience: get current draft for a specific slot (used by cards)
+export const useDraftForSlot = (slotKey: string) =>
+  useShiftBuilderStore((state) => state.draftAssignments[slotKey]);
+
+// Roster UI selectors (3.4) — RosterRail now subscribes narrowly to only what it renders
+export const useRosterSectionExpanded = (key: keyof ShiftBuilderState['rosterUI']['expanded']) =>
+  useShiftBuilderStore((state) => state.rosterUI.expanded[key]);
+
+export const useGraveOnly = () =>
+  useShiftBuilderStore((state) => state.rosterUI.graveOnly);
+
+export const useRosterSearch = () =>
+  useShiftBuilderStore((state) => state.rosterUI.rosterSearch);
+
+export const useAuxDefs = () =>
+  useShiftBuilderStore((state) => state.auxDefs);

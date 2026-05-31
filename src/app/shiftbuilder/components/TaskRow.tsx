@@ -34,7 +34,7 @@ export interface TaskRowProps {
   draggable?: boolean;
 }
 
-const TaskRow: React.FC<TaskRowProps> = ({
+const TaskRow: React.FC<TaskRowProps> = React.memo(({
   task,
   slotKey,
   onRemoveTask,
@@ -255,6 +255,6 @@ const TaskRow: React.FC<TaskRowProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default TaskRow;

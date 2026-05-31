@@ -31,7 +31,8 @@
 import { streamText } from "ai";
 import { createXai } from "@ai-sdk/xai";
 
-export const runtime = "nodejs";
+// Note: runtime = "nodejs" removed for cacheComponents compatibility (Next 16).
+// This route will use the default Node.js runtime, which is what we want for xAI streaming.
 
 // ─── Surface config ───────────────────────────────────────────────────────────
 

@@ -76,6 +76,8 @@ export interface FloatingNavProps {
   days: DayItem[];
   selectedDayId: number;
   onDaySelect: (id: number, date: Date) => void;
+  /** Called on hover for aggressive prefetch — makes day switching feel instant */
+  onDayHover?: (id: number, date: Date) => void;
   currentView: "deployment" | "breaks";
   onViewChange: (view: "deployment" | "breaks") => void;
   placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
@@ -113,6 +115,7 @@ export default function FloatingNav({
   days,
   selectedDayId,
   onDaySelect,
+  onDayHover,
   currentView,
   onViewChange,
   placedCount,
@@ -281,6 +284,8 @@ export default function FloatingNav({
                   <button
                     key={day.id}
                     onClick={() => handleDaySelect(day.id, day.date || new Date())}
+                    onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
+                    onTouchStart={() => onDayHover?.(day.id, day.date || new Date())}
                     className={cn(
                       datePillVariants({ active: isActive }),
                       "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all flex-shrink-0 snap-center touch-manipulation",

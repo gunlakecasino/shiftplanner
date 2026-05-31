@@ -8,11 +8,15 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
  * that the TM is pulling double duty covering another slot.
  * Background is the accent color of the SOURCE slot.
  */
-const CoverageBar: React.FC<{
+const CoverageBar = React.memo(function CoverageBar({
+  task,
+  slotKey,
+  onRemoveTask,
+}: {
   task: NightSlotTask;
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
-}> = ({ task, slotKey, onRemoveTask }) => {
+}) {
   const [hovered, setHovered] = React.useState(false);
   const bg = task.color || '#6B7280';
 
@@ -61,6 +65,6 @@ const CoverageBar: React.FC<{
       )}
     </div>
   );
-};
+});
 
 export default CoverageBar;

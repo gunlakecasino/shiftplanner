@@ -141,7 +141,7 @@ const RRSide: React.FC<{
   );
 };
 
-const RRCard: React.FC<RRCardProps> = ({
+const RRCard: React.FC<RRCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
@@ -245,6 +245,6 @@ const RRCard: React.FC<RRCardProps> = ({
       ))}
     </div>
   );
-};
+});
 
 export default RRCard;

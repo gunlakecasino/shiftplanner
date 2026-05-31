@@ -1790,6 +1790,10 @@ export function createNightScheduleStatusChannel(
     )
     .subscribe((status) => {
       console.log('[shiftbuilder] night_tm_status subscription status:', status);
+      // Expose to OpsStatusBar (permanent prod telemetry)
+      (window as any).__realtimeState =
+        status === 'SUBSCRIBED' ? 'LIVE' :
+        status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'OFFLINE' : 'SYNCING';
     });
 }
 
@@ -1819,6 +1823,10 @@ export function createCallOffsChannel(
     )
     .subscribe((status) => {
       console.log('[shiftbuilder] call_offs subscription status:', status);
+      // Expose to OpsStatusBar (permanent prod telemetry)
+      (window as any).__realtimeState =
+        status === 'SUBSCRIBED' ? 'LIVE' :
+        status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'OFFLINE' : 'SYNCING';
     });
 }
 

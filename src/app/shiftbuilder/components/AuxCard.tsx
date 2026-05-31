@@ -36,7 +36,7 @@ export interface AuxCardProps {
   isLocked?: boolean;
 }
 
-const AuxCard: React.FC<AuxCardProps> = ({
+const AuxCard: React.FC<AuxCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
@@ -146,6 +146,6 @@ const AuxCard: React.FC<AuxCardProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default AuxCard;

@@ -3,13 +3,19 @@
 import React from "react";
 
 // Dashed assignment line — TM name rides on top, or empty when unfilled.
-const AssignmentLine: React.FC<{
+const AssignmentLine = React.memo(function AssignmentLine({
+  tmName,
+  placeholder = "",
+  size = "md",
+  isLocked = false,
+  loading = false,
+}: {
   tmName?: string | null;
   placeholder?: string;
   size?: "sm" | "md";
   isLocked?: boolean;
   loading?: boolean;
-}> = ({ tmName, placeholder = "", size = "md", isLocked = false, loading = false }) => {
+}) {
   const text = size === "sm" ? "text-[9px]" : "text-[11px]";
   if (loading) {
     return (
@@ -26,6 +32,6 @@ const AssignmentLine: React.FC<{
       <span className="truncate">{tmName || placeholder || " "}</span>
     </div>
   );
-};
+});
 
 export default AssignmentLine;

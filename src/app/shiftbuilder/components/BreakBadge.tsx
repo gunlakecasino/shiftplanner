@@ -7,7 +7,7 @@ import React from "react";
 // Hit area extends beyond the visible glyph via padding+negative-margin so the
 // chip stays at Golden-density visually but is comfortably tappable on iPad
 // (28×24 effective hit area, satisfies the 24pt-minimum guidance for dense UI).
-const BreakBadge: React.FC<{ value: number; onCycle: () => void; size?: "sm" | "md" }> = ({ value, onCycle, size = "md" }) => {
+const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" }: { value: number; onCycle: () => void; size?: "sm" | "md" }) {
   const visual = size === "sm" ? "w-[18px] h-[14px] text-[9px]" : "w-[22px] h-[16px] text-[10.5px]";
   const label = value === 0 ? "Off the break sheet — tap to cycle" : `Break Group ${value} — tap to cycle`;
   const isOff = value === 0;
@@ -28,6 +28,6 @@ const BreakBadge: React.FC<{ value: number; onCycle: () => void; size?: "sm" | "
       </span>
     </button>
   );
-};
+});
 
 export default BreakBadge;
