@@ -156,7 +156,11 @@ import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/Shi
 import RosterRail from "./components/RosterRail";
 import { OpsStatusBar } from "./components/OpsStatusBar";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
-import { useShiftBuilderStore } from "./store/useShiftBuilderStore";
+import { 
+  useShiftBuilderStore, 
+  useAssignments, 
+  useDraftAssignments 
+} from "./store/useShiftBuilderStore";
 import { createRoot, Root } from "react-dom/client";
 // Phase 4 — extracted hooks
 import { useTheme } from "./hooks/useTheme";
