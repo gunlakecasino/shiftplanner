@@ -3392,6 +3392,22 @@ function AuthedShiftBuilder() {
     return set;
   }, [assignments, draftAssignments, currentNight?.assignments, selectedDay, liveAssignVersion]);
 
+  // Fresh assignments view specifically for MarkerPad.
+  // The cards (inside Board) and live layer now use Zustand + liveAssignmentsStore,
+  // but MarkerPad was still receiving the stale local `assignments` useState.
+  // This caused filled cards to appear "unassigned" inside the pad → it would
+  // immediately show the big TM picker list instead of the normal occupant UI + Swap.
+  const markerPadAssignments = React.useMemo(() => {
+    const merged: Record<string, any> = { ...assignments };
+    if (currentNight?.assignments) {
+      Object.assign(merged, currentNight.assignments);
+    }
+    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+    Object.assign(merged, liveForNight); // live + realtime win for freshness
+    return merged;
+  }, [assignments, currentNight?.assignments, selectedDay, liveAssignVersion]);
+
   // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
   const markerScheduledUnassigned = React.useMemo(() => {
     return Array.from(scheduledTmIdsTonight)
@@ -5037,7 +5053,7 @@ function AuthedShiftBuilder() {
       {/* Velvet Marker Pad — floating right panel, opens on card tap */}
       <MarkerPad
         slotKey={markerSlotKey}
-        assignments={assignments}
+        assignments={markerPadAssignments}
         selectedTasks={selectedTasks}
         recentTasks={recentTasks}
         setBreakGroupForSlot={setBreakGroupForSlot}
@@ -5053,8 +5069,8 @@ function AuthedShiftBuilder() {
         onClose={() => setMarkerSlotKey(null)}
         auxDefs={auxDefs}
         isDark={isDark}
-        tmGender={markerSlotKey && assignments[markerSlotKey]?.tmId
-          ? (effectiveRealRoster.find((r: any) => r.id === assignments[markerSlotKey].tmId)?.gender ?? null)
+        tmGender={markerSlotKey && markerPadAssignments[markerSlotKey]?.tmId
+          ? (effectiveRealRoster.find((r: any) => r.id === markerPadAssignments[markerSlotKey].tmId)?.gender ?? null)
           : null}
       />
 
