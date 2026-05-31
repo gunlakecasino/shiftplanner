@@ -14,6 +14,20 @@ export function startOfShiftWeek(date: Date): Date {
   return d;
 }
 
+/**
+ * Roster week start (Thursday-anchored Thu→Wed for the static TM schedule patterns).
+ * weekly_pattern[0] = Thursday, [1]=Friday, ..., [6]=Wednesday.
+ * Used by tm_default_schedules + tm_on_call_schedules (the new 4-group roster).
+ */
+export function startOfRosterWeek(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  // Thursday is getDay() === 4
+  const back = (d.getDay() + 7 - 4) % 7;
+  d.setDate(d.getDate() - back);
+  return d;
+}
+
 // === Shift-aware "today" =====================================================
 // A grave shift runs 11pm → 7am and is named after the day it BEGINS. So
 // Friday's grave shift runs Fri 11pm → Sat 7am. At 6:30am Saturday morning the

@@ -1,5 +1,6 @@
 import { supabase, getSupabaseClient } from '../supabase';
 import { dbToUi } from './slot-keys';
+import { startOfRosterWeek, daysBetween } from './dateUtils';
 
 /**
  * Shift Builder Data Layer — Real Supabase backed.
@@ -2057,6 +2058,114 @@ export async function getScheduledTmIdsForNight(
   }
 
   return tmIdSet;
+}
+
+/**
+ * NEW SYSTEM (2026-06): Compute scheduled TMs for a night strictly from the
+ * static group-based roster (tm_groups + tm_default_schedules + weekly specials).
+ *
+ * This is the path to fully removing the old ADP / night_tm_status baseline.
+ *
+ * For the initial implementation: any active TM in one of the core scheduled
+ * groups (Grave, On Call, AM Overlaps, PM Overlaps) is considered scheduled
+ * for the week. Day-specific pattern filtering can be added later.
+ */
+export async function getScheduledTmIdsForNightFromNewRoster(
+  nightDate: string
+): Promise<Set<string>> {
+  const result = new Set<string>();
+
+  try {
+    // 1. Parse the night and compute the *roster* week (Thu-anchored Thu→Wed)
+    //    so dayIndex aligns with weekly_pattern[0]=Thu ... [6]=Wed stored in the DB.
+    const night = new Date(nightDate + 'T12:00:00'); // local noon avoids TZ day shifts
+    if (isNaN(night.getTime())) return result;
+
+    const rosterWeekStart = startOfRosterWeek(night);
+    const rosterWeekStartIso = localDateIso(rosterWeekStart);
+
+    // Day index into the roster pattern array (0=Thu, 1=Fri, ..., 6=Wed)
+    const dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+
+    // 2. Load the 4 core groups
+    const { data: groups } = await supabase
+      .from('tm_groups')
+      .select('id, name')
+      .in('name', ['Grave', 'On Call', 'AM Overlaps', 'PM Overlaps']);
+
+    if (!groups || groups.length === 0) return result;
+
+    const groupIds = groups.map((g: any) => g.id);
+
+    // 3. Load active members of those groups (uuids)
+    const { data: members } = await supabase
+      .from('tm_group_members')
+      .select('tm_id')
+      .in('group_id', groupIds);
+
+    if (!members || members.length === 0) return result;
+
+    const memberUuids = Array.from(new Set(members.map((m: any) => m.tm_id).filter(Boolean)));
+
+    // 4. Load most recent default schedule per member (effective on or before the roster week)
+    const { data: defaults } = await supabase
+      .from('tm_default_schedules')
+      .select('tm_id, effective_from, weekly_pattern')
+      .in('tm_id', memberUuids)
+      .lte('effective_from', rosterWeekStartIso)
+      .order('effective_from', { ascending: false });
+
+    // Build map: uuid -> most recent pattern
+    const defaultPatternByUuid = new Map<string, any[]>();
+    (defaults ?? []).forEach((row: any) => {
+      if (!defaultPatternByUuid.has(row.tm_id)) {
+        defaultPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+      }
+    });
+
+    // 5. Load weekly specials/overrides for *this exact roster week*
+    //    (On Call + AM/PM Overlaps live in tm_on_call_schedules as overrides)
+    const { data: weeklySpecials } = await supabase
+      .from('tm_on_call_schedules')
+      .select('tm_id, week_start, weekly_pattern')
+      .eq('week_start', rosterWeekStartIso)
+      .in('tm_id', memberUuids);
+
+    const weeklyPatternByUuid = new Map<string, any[]>();
+    (weeklySpecials ?? []).forEach((row: any) => {
+      weeklyPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+    });
+
+    // 6. Map uuid → legacy tm_id and test the exact day slot in (special OR default)
+    const { data: profiles } = await supabase
+      .from('tm_profiles')
+      .select('id, tm_id')
+      .in('id', memberUuids)
+      .eq('active', true);
+
+    const uuidToLegacyId = new Map<string, string>();
+    (profiles ?? []).forEach((p: any) => {
+      if (p.tm_id) uuidToLegacyId.set(p.id, p.tm_id);
+    });
+
+    for (const uuid of memberUuids) {
+      const legacyId = uuidToLegacyId.get(uuid);
+      if (!legacyId) continue;
+
+      // Weekly special (this week) wins over the rolling default
+      const pattern = weeklyPatternByUuid.get(uuid) || defaultPatternByUuid.get(uuid) || [];
+      const dayEntry = pattern[dayIndex];
+
+      if (dayEntry && dayEntry.startTime) {
+        // Real scheduled shift that day per the static roster → eligible for board
+        result.add(legacyId);
+      }
+    }
+  } catch (e) {
+    console.warn('[data] getScheduledTmIdsForNightFromNewRoster failed:', e);
+  }
+
+  return result;
 }
 
 /**

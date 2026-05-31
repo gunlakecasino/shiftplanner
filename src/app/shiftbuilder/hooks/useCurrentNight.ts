@@ -12,6 +12,7 @@ import {
   getNightCardBorders,
   getRecentZoneHistory,
   getScheduledTmIdsForNight,
+  getScheduledTmIdsForNightFromNewRoster,
   getGraveAvailableTeamMembers,
   getOnScheduleTmIdsForNight,
   getActiveTeamMembers,
@@ -48,6 +49,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         members,
         dbAssignments,
         scheduledTonightSet,
+        newRosterScheduledSet,
         graveMembers,
         weekOnScheduleSet,
       ] = await Promise.all([
@@ -55,6 +57,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
         id ? getNightAssignments(id) : Promise.resolve([]),
         id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
+        id ? getScheduledTmIdsForNightFromNewRoster(selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
         getGraveAvailableTeamMembers(),
         id ? getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
       ]);
@@ -84,11 +87,14 @@ export function useCurrentNight(selectedDay: DayDef) {
         isAMOverlap: m.gravePool === 'AM',
       }));
 
+      // Strict new roster system (groups + defaults + weekly specials). Old night_tm_status is transitional only.
+      const scheduledTmIdsTonight: Set<string> = newRosterScheduledSet;
+
       return {
         nightId: id,
         assignments,
         members,
-        scheduledTmIdsTonight: scheduledTonightSet,
+        scheduledTmIdsTonight,
         realRoster: members,
         graveRoster,
         // Raw data for the Web Worker (3.2) so it can do heavy post-processing off main thread
@@ -150,11 +156,20 @@ export function useCurrentNight(selectedDay: DayDef) {
       queryKey: coreKey,
       queryFn: async () => {
         const id = await getNightIdForDate(date);
-        const [members, dbAssignments, scheduledTonightSet, graveMembers, weekOnScheduleSet] = await Promise.all([
+        const [
+          members,
+          dbAssignments,
+          _legacyScheduled,
+          newRosterScheduledSet,
+          graveMembers,
+          weekOnScheduleSet,
+        ] = await Promise.all([
           // Cached server roster for speed
           id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
           id ? getNightAssignments(id) : Promise.resolve([]),
+          // legacy kept only for transitional reads during migration
           id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
+          id ? getScheduledTmIdsForNightFromNewRoster(date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
           getGraveAvailableTeamMembers(),
           id ? getOnScheduleTmIdsForNight(id, date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
         ]);
@@ -179,7 +194,7 @@ export function useCurrentNight(selectedDay: DayDef) {
           nightId: id, 
           assignments, 
           members, 
-          scheduledTmIdsTonight: scheduledTonightSet, 
+          scheduledTmIdsTonight: newRosterScheduledSet,  // strict new roster
           realRoster: members, 
           graveRoster,
           rawDbAssignments: dbAssignments,

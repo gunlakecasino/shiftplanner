@@ -93,6 +93,7 @@ import {
   getTMSkillScores,
   getRecentZoneHistory,
   getScheduledTmIdsForNight,
+  getScheduledTmIdsForNightFromNewRoster,
   setNightLocked,
   getNightLocked,
   getTmZoneMatrix,
@@ -136,7 +137,7 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
-import { initLiveCacheForNight, teardownAllLiveCache } from "@/lib/shiftbuilder/liveCache";
+import { initLiveCacheForNight, teardownAllLiveCache, liveAssignmentsStore } from "@/lib/shiftbuilder/liveCache";
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
 import BreakBadge from "./components/BreakBadge";
 import AssignmentLine from "./components/AssignmentLine";
@@ -1065,10 +1066,17 @@ function AuthedShiftBuilder() {
   // Component-level Set for O(1) "is this TM already on the board?" checks.
   // Replaces the O(n) Object.values().some() pattern used across the roster rail
   // and the completionScheduledUnplaced filter.
-  const assignedThisNight = React.useMemo(
-    () => new Set(Object.values(assignments).map((a: any) => a?.tmId).filter(Boolean)),
-    [assignments]
-  );
+  // Includes local + drafts + live optimistic (the picker memos below use the even fuller version
+  // that also folds in currentNight query data).
+  const assignedThisNight = React.useMemo(() => {
+    const set = new Set<string>(Object.values(assignments).map((a: any) => a?.tmId).filter(Boolean));
+    Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    // Live optimistic layer
+    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+    Object.values(liveForNight).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    return set;
+  }, [assignments, draftAssignments, selectedDay, liveAssignVersion]);
 
   // GRAVE shift filter (11pm–6:55am)
   const baseRoster = graveOnly ? graveRoster : realRoster;
@@ -1847,6 +1855,21 @@ function AuthedShiftBuilder() {
     }
   }, [effectiveAssignments]);
 
+  // Live assignments version — forces alreadyAssignedThisNight (and therefore the
+  // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
+  // the optimistic live layer or realtime bridge mutates placements for this night.
+  // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
+  const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
+  React.useEffect(() => {
+    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const unsubscribe = liveAssignmentsStore.subscribe(
+      (state) => state.assignmentsByNight[dateKey],
+      () => setLiveAssignVersion((v) => v + 1),
+      { fireImmediately: false }
+    );
+    return unsubscribe;
+  }, [selectedDay]);
+
   React.useEffect(() => {
     if (Object.keys(draftAssignments).length > 0 || Object.keys(useShiftBuilderStore.getState().draftAssignments).length > 0) {
       useShiftBuilderStore.getState().setDraftAssignments(draftAssignments);
@@ -2042,7 +2065,9 @@ function AuthedShiftBuilder() {
       // Refetch schedule sets so roster filters and EngineRules update live
       const freshScheduled = await getScheduledTmIdsForNight(nightId, nightDateIso);
       const freshOnSchedule = await getOnScheduleTmIdsForNight(nightId, nightDateIso);
-      setScheduledTmIdsTonight(freshScheduled);
+      const newRosterScheduled = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
+      // Strict new roster for scheduled
+      setScheduledTmIdsTonight(newRosterScheduled);
       // Note: we may want a separate state for onSchedule in future; for now the main filter uses scheduled
       console.log('[shiftbuilder] night_tm_status changed — refreshed schedule sets');
     });
@@ -3349,48 +3374,61 @@ function AuthedShiftBuilder() {
     [DAY_DEFS]
   );
 
+  // Single source of truth for "which TMs are already placed this night (committed + draft + live optimistic)".
+  // Used by the MarkerPad picker, CMD-K, etc. to exclude TMs who are already scheduled/placed.
+  // Pulls from local state (legacy), currentNight query data, *and* the liveAssignmentsStore
+  // (optimistic writes + realtime bridge from useLiveAssignments + liveCache).
+  const alreadyAssignedThisNight = React.useMemo(() => {
+    const set = new Set<string>();
+    Object.values(assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    if (currentNight?.assignments) {
+      Object.values(currentNight.assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    }
+    // Live optimistic + realtime-synced assignments (the layer that actually receives instant updates on assign)
+    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+    Object.values(liveForNight).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    return set;
+  }, [assignments, draftAssignments, currentNight?.assignments, selectedDay, liveAssignVersion]);
+
   // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
-  const markerScheduledUnassigned = React.useMemo(
-    () =>
-      Array.from(scheduledTmIdsTonight)
-        .filter((id) => !assignedThisNight.has(id))
-        .map((id) => {
-          const tm = effectiveRealRoster.find((t: any) => t.id === id);
-          const tmName = tm?.name || tm?.fullName;
-          if (!tmName) return null;
-          return { tmId: id, tmName };
-        })
-        .filter(Boolean) as { tmId: string; tmName: string }[],
-    [scheduledTmIdsTonight, assignedThisNight, effectiveRealRoster]
-  );
+  const markerScheduledUnassigned = React.useMemo(() => {
+    return Array.from(scheduledTmIdsTonight)
+      .filter((id) => !alreadyAssignedThisNight.has(id) && !calledOffIds.has(id))
+      .map((id) => {
+        const tm = effectiveRealRoster.find((t: any) => t.id === id);
+        const tmName = tm?.name || tm?.fullName;
+        if (!tmName) return null;
+        return { tmId: id, tmName };
+      })
+      .filter(Boolean) as { tmId: string; tmName: string }[];
+  }, [scheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds, effectiveRealRoster]);
 
   // Full roster minus currently-placed TMs — used when the operator types in the
   // TM picker search box so they can find anyone, not just scheduled-unassigned.
-  const markerAllEligibleTms = React.useMemo(
-    () =>
-      effectiveRealRoster
-        .filter((t: any) => !assignedThisNight.has(t.id))
-        .map((t: any) => {
-          const tmName = t.name || t.fullName;
-          if (!tmName) return null;
-          return { tmId: t.id as string, tmName: tmName as string };
-        })
-        .filter(Boolean) as { tmId: string; tmName: string }[],
-    [effectiveRealRoster, assignedThisNight]
-  );
+  const markerAllEligibleTms = React.useMemo(() => {
+    // Still limit to scheduled roster TMs (strict new system) + exclude already placed
+    return effectiveRealRoster
+      .filter((t: any) => scheduledTmIdsTonight.has(t.id) && !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
+      .map((t: any) => {
+        const tmName = t.name || t.fullName;
+        if (!tmName) return null;
+        return { tmId: t.id as string, tmName: tmName as string };
+      })
+      .filter(Boolean) as { tmId: string; tmName: string }[];
+  }, [effectiveRealRoster, scheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds]);
 
-  const cmdkCompletionUnplaced = React.useMemo(
-    () =>
-      Array.from(scheduledTmIdsTonight)
-        .filter((id) => !assignedThisNight.has(id))
-        .map((id) => {
-          const tm = effectiveRealRoster.find((t: any) => t.id === id);
-          return tm?.name || tm?.fullName || id;
-        })
-        .filter(Boolean)
-        .slice(0, 12) as string[],
-    [scheduledTmIdsTonight, assignedThisNight, effectiveRealRoster]
-  );
+  const cmdkCompletionUnplaced = React.useMemo(() => {
+    return Array.from(scheduledTmIdsTonight)
+      .filter((id) => !alreadyAssignedThisNight.has(id))
+      .map((id) => {
+        const tm = effectiveRealRoster.find((t: any) => t.id === id);
+        return tm?.name || tm?.fullName || id;
+      })
+      .filter(Boolean)
+      .slice(0, 12) as string[];
+  }, [scheduledTmIdsTonight, alreadyAssignedThisNight, effectiveRealRoster]);
 
   const cmdkCompletionAssignments = React.useMemo(
     () =>
@@ -3785,6 +3823,7 @@ function AuthedShiftBuilder() {
           callOffSet,
           recentHistory,
           scheduledTonightSet,
+          newRosterScheduledSet,
           isNightLocked,
         ] = await Promise.all([
           id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
@@ -3800,6 +3839,8 @@ function AuthedShiftBuilder() {
           getCallOffsForDate(selectedDay.date),
           getRecentZoneHistory(selectedDay.date, 7),
           id ? getScheduledTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
+          // NEW SYSTEM: also pull from the group-based static roster (Grave + On Call + Overlaps)
+          getScheduledTmIdsForNightFromNewRoster(selectedDay.date.toISOString().slice(0, 10)),
           id ? getNightLocked(id) : Promise.resolve(false),
         ]);
 
@@ -3812,7 +3853,8 @@ function AuthedShiftBuilder() {
         setNightId(id);
         setIsCurrentNightLocked(!!isNightLocked);
         setCalledOffIds(callOffSet);
-        setScheduledTmIdsTonight(scheduledTonightSet);
+        // Use the new roster system strictly for who is scheduled this day
+        setScheduledTmIdsTonight(newRosterScheduledSet);
 
         // === Phase 3.1: Roster + Assignments data now comes from useCurrentNight ===
         // Rosters retired in previous step.
@@ -4300,9 +4342,28 @@ function AuthedShiftBuilder() {
     setBreakGroup(g);
   }, []);
 
-  const handleBoardCardClick = React.useCallback((slotKey: string) => {
+  const handleBoardCardClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
     openPaletteForSlot(slotKey);
   }, [openPaletteForSlot]);
+
+  // Stable wrapper for MarkerPad so its internal buttons (TM picker, Lock, Coverage, etc.)
+  // don't receive a new function reference on every orchestrator render after the perf refactor.
+  const handleMarkerPadAssign = React.useCallback((slotKey: string, tmId: string, tmName: string) => {
+    assign(slotKey, tmId, tmName);
+  }, [assign]);
+
+  const handleMarkerPadToggleLock = React.useCallback((slotKey: string) => {
+    toggleLock(slotKey);
+  }, [toggleLock]);
+
+  const handleMarkerPadClearSlot = React.useCallback((slotKey: string) => {
+    unassign(slotKey);
+    setMarkerSlotKey(null);
+  }, [unassign]);
+
+  const handleMarkerPadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
+    handleCmdkAddCoverage(sourceKey, targetKey);
+  }, [handleCmdkAddCoverage]);
 
   const handleBoardRemoveTask = React.useCallback((slotKey: string, taskId: string) => {
     handleRemoveTask(slotKey, taskId);
@@ -4983,10 +5044,10 @@ function AuthedShiftBuilder() {
         onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
         onRemoveTask={handleRemoveTask}
         onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
-        onToggleLock={(slotKey) => toggleLock(slotKey)}
-        onClearSlot={(slotKey) => { unassign(slotKey); setMarkerSlotKey(null); }}
-        onAddCoverage={(sourceKey, targetKey) => handleCmdkAddCoverage(sourceKey, targetKey)}
-        onAssign={(slotKey, tmId, tmName) => assign(slotKey, tmId, tmName)}
+        onToggleLock={handleMarkerPadToggleLock}
+        onClearSlot={handleMarkerPadClearSlot}
+        onAddCoverage={handleMarkerPadAddCoverage}
+        onAssign={handleMarkerPadAssign}
         scheduledUnassigned={markerScheduledUnassigned}
         allEligibleTms={markerAllEligibleTms}
         onClose={() => setMarkerSlotKey(null)}

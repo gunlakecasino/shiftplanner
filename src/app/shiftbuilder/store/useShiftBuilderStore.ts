@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { AuxDef } from '@/lib/shiftbuilder/placement';
+import type { EngineAnalysis, HumanFeedback, TrainingExample } from '@/lib/shiftbuilder/ai/types';
 
 /**
  * Minimal Zustand store for the remaining local mutable state in ShiftBuilder.
@@ -51,6 +52,24 @@ interface ShiftBuilderState {
   // auxDefs moved to store for narrow subscription in Board/cards (changes infrequently but reduces prop surface)
   auxDefs: AuxDef[];
   setAuxDefs: (updater: AuxDef[] | ((prev: AuxDef[]) => AuxDef[])) => void;
+
+  // =================================================================
+  // AI Engine Lab + Training Loop (full port from previous work) — strongly typed
+  // =================================================================
+  engineAnalyses: EngineAnalysis[];
+  addEngineAnalysis: (analysis: EngineAnalysis) => void;
+  clearEngineAnalyses: () => void;
+
+  humanFeedback: HumanFeedback[];
+  addHumanFeedback: (feedback: HumanFeedback) => void;
+  clearHumanFeedback: () => void;
+
+  trainingExamples: TrainingExample[];
+  addTrainingExample: (example: TrainingExample) => void;
+
+  // Live engine config snapshot for the AI Lab
+  liveEngineConfigForAI: any | null;
+  setLiveEngineConfigForAI: (cfg: any) => void;
 }
 
 export const useShiftBuilderStore = create<ShiftBuilderState>()(
@@ -116,6 +135,24 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       set((state) => ({
         auxDefs: typeof updater === 'function' ? updater(state.auxDefs) : updater,
       })),
+
+    // AI Lab slices (full training loop port) — typed
+    engineAnalyses: [],
+    addEngineAnalysis: (analysis) =>
+      set((state) => ({ engineAnalyses: [analysis, ...state.engineAnalyses].slice(0, 50) })),
+    clearEngineAnalyses: () => set({ engineAnalyses: [] }),
+
+    humanFeedback: [],
+    addHumanFeedback: (fb) =>
+      set((state) => ({ humanFeedback: [fb, ...state.humanFeedback].slice(0, 100) })),
+    clearHumanFeedback: () => set({ humanFeedback: [] }),
+
+    trainingExamples: [],
+    addTrainingExample: (ex) =>
+      set((state) => ({ trainingExamples: [ex, ...state.trainingExamples].slice(0, 200) })),
+
+    liveEngineConfigForAI: null,
+    setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
   }))
 );
 
@@ -173,3 +210,16 @@ export const useRosterSearch = () =>
 
 export const useAuxDefs = () =>
   useShiftBuilderStore((state) => state.auxDefs);
+
+// AI Lab narrow selectors
+export const useEngineAnalyses = () =>
+  useShiftBuilderStore((state) => state.engineAnalyses);
+
+export const useHumanFeedback = () =>
+  useShiftBuilderStore((state) => state.humanFeedback);
+
+export const useTrainingExamples = () =>
+  useShiftBuilderStore((state) => state.trainingExamples);
+
+export const useLiveEngineConfigForAI = () =>
+  useShiftBuilderStore((state) => state.liveEngineConfigForAI);

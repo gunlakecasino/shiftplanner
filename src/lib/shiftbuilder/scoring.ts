@@ -151,6 +151,10 @@ export function scoreAssignment(
   const matrixSignals = scoreMatrixFairnessSignals(tm, slotKey, ctx);
   Object.assign(breakdown, matrixSignals);
 
+  // ---- order_priority (NEW: strongly incentivize filling in the declared order)
+  const orderPrio = scoreOrderPriority(slotKey, ctx);
+  breakdown.order_priority = orderPrio;
+
   // Hard pair-avoid becomes a hard exclude.
   if (!excluded && pair.raw <= -1 && pair.note?.includes("hard")) {
     excluded = true;
@@ -423,5 +427,35 @@ function scoreMatrixFairnessSignals(
   };
 
   return breakdown;
+}
+
+/**
+ * Scores how well this assignment respects the operator's declared fill order.
+ * Earlier slots in PLACEMENT_ORDER get a strong positive bonus.
+ * This is the main lever to "ensure coverage fills in the stated order".
+ */
+function scoreOrderPriority(slotKey: string, ctx: ScoringContext): SignalScore {
+  const weights = resolvedWeights(ctx.config);
+  const weight = weights.order_priority ?? 2.5;
+
+  // Import here to avoid circular deps at module load
+  const { PLACEMENT_ORDER } = require("./placement");
+
+  const idx = PLACEMENT_ORDER.indexOf(slotKey);
+  if (idx === -1) {
+    // Unknown slot (extra AUX) — neutral
+    return { raw: 0, weighted: 0, note: "not in core placement order" };
+  }
+
+  const total = PLACEMENT_ORDER.length;
+  // Position 0 (first restroom) = +1.0, last = 0.0
+  const positionFactor = 1 - (idx / Math.max(1, total - 1));
+  const raw = positionFactor; // 0 to 1
+
+  return {
+    raw,
+    weighted: raw * weight,
+    note: `Priority position ${idx + 1}/${total} in fill order`,
+  };
 }
 

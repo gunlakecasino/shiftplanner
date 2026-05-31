@@ -22,6 +22,7 @@ import type { CoveragePlannerResult, SlotRanking } from "./placement";
 import type { EngineConfig } from "./engineConfig";
 import { getPlacementOrderText, getEligibilityRulesText } from "./placement";
 import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
+import { buildFewShotCorrectionsBlock } from "./ai/promptUtils"; // wire AI Lab feedback into production placements
 
 // ---------------------------------------------------------------
 // Snapshot types
@@ -69,6 +70,9 @@ export interface GrokEngineSnapshot {
    * Not serialized into the prompt snapshot.
    */
   _engineRules?: EngineRules;
+
+  /** Human corrections from AI Lab (few-shot) — injected for training loop */
+  recentHumanCorrections?: string;
 }
 
 export interface GrokEnginePick {
@@ -110,6 +114,9 @@ export function buildGrokEngineSnapshot(args: {
    * authoritative rules summary that Grok will treat as its constraint system.
    */
   rulesContext?: EngineRulesContext;
+
+  /** Human feedback from AI Lab training loop — will be injected as few-shot */
+  recentHumanFeedback?: any[];
 }): GrokEngineSnapshot {
   const {
     dayName,
@@ -205,6 +212,12 @@ export function buildGrokEngineSnapshot(args: {
   } else {
     // Legacy fallback
     snapshot.rulesSummary = `${getPlacementOrderText()}\n\n${getEligibilityRulesText()}`;
+  }
+
+  // === Wire AI Lab human corrections into every production Grok placement call ===
+  if (args.recentHumanFeedback && args.recentHumanFeedback.length > 0) {
+    snapshot.recentHumanCorrections = buildFewShotCorrectionsBlock(args.recentHumanFeedback, 4, 900);
+    snapshot.rulesSummary = (snapshot.rulesSummary || '') + snapshot.recentHumanCorrections;
   }
 
   return snapshot;

@@ -18,7 +18,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { SchedulesTab } from "./SchedulesTab";
+
 import { TeamTab } from "./TeamTab";
 import { EngineConfigTab } from "./EngineConfigTab";
 import { TasksTab } from "./TasksTab";
@@ -33,8 +33,10 @@ import {
   SudoTabButton,
   SudoBanner,
 } from "./SudoGlass";
+import { TMDefaultsTab } from "./TMDefaultsTab";
+import { WeeklyRosterTab } from "./WeeklyRosterTab";
 
-type SudoTab = "dashboard" | "schedules" | "team" | "users" | "tasks" | "reports" | "engine" | "planner" | "defaults" | "sql" | "edge" | "logs";
+type SudoTab = "dashboard" | "tmDefaults" | "team" | "users" | "tasks" | "reports" | "engine" | "planner" | "defaults" | "weeklyRoster" | "sql" | "edge" | "logs";
 
 const TABS: Array<{
   id: SudoTab;
@@ -43,8 +45,9 @@ const TABS: Array<{
   status: "ready" | "coming-soon";
 }> = [
   { id: "dashboard", label: "Dashboard",      msIcon: "dashboard",     status: "ready" },
-  { id: "schedules", label: "Schedules",     msIcon: "table_chart",   status: "ready" },
+  { id: "tmDefaults", label: "TM Defaults",   msIcon: "event_repeat",  status: "ready" },
   { id: "team",      label: "Team",          msIcon: "group",         status: "ready" },
+  { id: "weeklyRoster", label: "Weekly Roster", msIcon: "table_chart", status: "ready" },
   { id: "users",     label: "Users",         msIcon: "manage_accounts", status: "ready" },
   { id: "tasks",     label: "Tasks",         msIcon: "checklist",     status: "ready" },
   { id: "reports",   label: "Reports",       msIcon: "bar_chart",     status: "ready" },
@@ -259,13 +262,12 @@ export function SudoWindow({
                 permissions={permissions}
               />
             )}
-            {activeTab === "schedules" && (
-              <SchedulesTab 
+            {activeTab === "tmDefaults" && (
+              <TMDefaultsTab 
                 onDataChanged={onDataChanged} 
                 isDark={isDark} 
-                canSeeDraftData={permissions?.canSeeDraftData ?? false}
-                canPublish={permissions?.canPublish ?? false}
-                canApplySchedules={permissions?.canApplySchedules ?? false}
+                currentOperator={currentOperator}
+                weekStart={weekStart}
               />
             )}
             {activeTab === "team"      && <TeamTab onDataChanged={onDataChanged} isDark={isDark} />}
@@ -279,6 +281,7 @@ export function SudoWindow({
             {activeTab === "planner"   && (canRunEngine ? <BatchPlannerTab onDataChanged={onDataChanged} /> : <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />)}
             {activeTab === "team"      && (canManageTeam ? <TeamTab onDataChanged={onDataChanged} isDark={isDark} /> : <InsufficientPermNotice feature="Team Management" isDark={isDark} />)}
             {activeTab === "defaults"  && <DefaultsTab onDataChanged={onDataChanged} currentNightId={currentNightId} weekStart={weekStart} />}
+            {activeTab === "weeklyRoster" && <WeeklyRosterTab onDataChanged={onDataChanged} isDark={isDark} weekStart={weekStart} />}
             {activeTab === "sql"       && <ComingSoonPanel feature="SQL Runner" isDark={isDark} />}
             {activeTab === "edge"      && <ComingSoonPanel feature="Edge Functions" isDark={isDark} />}
             {activeTab === "logs"      && <ComingSoonPanel feature="Logs" isDark={isDark} />}

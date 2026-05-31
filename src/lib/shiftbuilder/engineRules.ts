@@ -31,6 +31,14 @@ import {
   type CoveragePlannerResult,
 } from "./placement";
 
+// Wire in the new granular AI-native skill as the preferred source for eligibility
+import {
+  evaluateEligibility as skillEvaluateEligibility,
+  DEFAULT_ELIGIBILITY_RULES as SKILL_DEFAULT_RULES,
+  getDefaultEligibilityRulesText,
+  explainEligibility,
+} from "./skills/placement-engine";
+
 import {
   scoreAssignment,
   buildDefaultAdjacency,
@@ -107,16 +115,32 @@ export class EngineRules {
     return getPlacementOrderText();
   }
 
-  /** Returns the full eligibility rule text (for LLM prompts). */
+  /** Returns the full eligibility rule text (for LLM prompts). Now includes the skill's rules. */
   getEligibilityRulesAsText(): string {
-    return getEligibilityRulesText();
+    const base = getEligibilityRulesText();
+    const skillText = getDefaultEligibilityRulesText();
+    return `${base}\n\n=== Granular Skill Rules (AI-editable) ===\n${skillText}`;
   }
 
   /**
    * Checks hard eligibility for a TM on a slot.
    * This is the primary "does this violate the rules?" gate.
+   * Now prefers the new granular skill's evaluateEligibility when available.
    */
   isEligible(tm: any, slotKey: string): boolean {
+    try {
+      // Prefer the new AI-modifiable skill
+      const context = {
+        config: this.ctx.config,
+        currentAssignments: undefined,
+        calledOffTmIds: undefined,
+      };
+      const result = skillEvaluateEligibility(tm, slotKey, context);
+      if (!result.passed) return false;
+    } catch (e) {
+      // Fall back silently if skill not ready
+    }
+
     const eligibilityRules = (this.ctx.config as any).eligibilityRules ?? [];
     return isEligibleForSlot(tm, slotKey, eligibilityRules);
   }

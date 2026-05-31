@@ -582,7 +582,8 @@ import * as XLSX from "xlsx";
 import { parseWorkbookAggregate } from "./adpSchedule";
 
 export interface TMRecord {
-  tmId: string;
+  id: string;           // uuid (new canonical id for new schedule/group tables)
+  tmId: string;         // legacy text id (tm_xxx)
   displayName: string;
   fullName: string | null;
   employeeName: string | null;
@@ -765,6 +766,7 @@ export async function listAllTMs(): Promise<TMRecord[]> {
 
 function rowToTMRecord(r: any): TMRecord {
   return {
+    id: r.id,                    // the uuid we added for new tables
     tmId: r.tm_id,
     displayName: r.display_name,
     fullName: r.full_name,
@@ -1110,6 +1112,8 @@ export async function updateActiveEngineConfig(updates: {
   placementMethod?: PlacementMethod;
   grokReasoningEffort?: GrokReasoningEffort;
   notes?: string | null;
+  weights?: Record<string, number>;
+  eligibilityRules?: any[]; // custom rules for the skill / engine_eligibility_rules
 }): Promise<void> {
   // Find the current active row (most recent is_active = true)
   const { data: activeRows, error: findErr } = await supabase
@@ -1130,6 +1134,8 @@ export async function updateActiveEngineConfig(updates: {
   if (updates.placementMethod) payload.placement_method = updates.placementMethod;
   if (updates.grokReasoningEffort) payload.grok_reasoning_effort = updates.grokReasoningEffort;
   if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.weights) payload.weights = updates.weights;
+  if (updates.eligibilityRules) payload.eligibility_rules = updates.eligibilityRules; // store as JSON column or related table
 
   if (activeRows && activeRows.length > 0) {
     // Update existing active row in place (simple & safe for dev)
@@ -1144,7 +1150,7 @@ export async function updateActiveEngineConfig(updates: {
     const { error: insErr } = await supabase.from("engine_config").insert({
       ...payload,
       is_active: true,
-      weights: {},
+      weights: updates.weights || {},
       thresholds: {},
       slot_priority: {},
       created_at: new Date().toISOString(),

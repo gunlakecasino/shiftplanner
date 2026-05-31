@@ -28,8 +28,9 @@ export const RR_DEFS = [
 ];
 
 // Auxiliary / Support slots
-// NOTE: The first four (Z9SR, ADM, TR1, TR2) have **fixed positions** in PLACEMENT_ORDER.
-// Any additional support slots the operator adds should be appended after TR2.
+// NOTE: Placement order is now defined in the skill (target-derivation.ts / DEFAULT_PLACEMENT_ORDER)
+// and re-exported here for backward compatibility. Support slots SP1/SP2 have fixed positions
+// after Trash per the operator's required fill sequence.
 export const DEFAULT_AUX_DEFS: AuxDef[] = [
   { key: "Z9SR", label: "Z9 SR",     locations: ["Z9 Smoking Room"] },
   { key: "ADM",  label: "ADMIN",     locations: ["Floor Admin"]     },

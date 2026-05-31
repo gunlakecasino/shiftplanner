@@ -29,6 +29,7 @@ import {
   nextBreakGroup,
 } from "@/lib/shiftbuilder/constants";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
+import { useAssignments } from "../store/useShiftBuilderStore";
 
 export interface TmEntry {
   tmId: string;
@@ -765,9 +766,10 @@ const TmPicker: React.FC<{
   isDark: boolean;
 }> = ({ tms, allTms, currentTmName, onPick, onCancel, confirmed, accent, isDark }) => {
   const [filter, setFilter] = useState("");
-  // When searching, look across the full eligible roster; when empty show only
-  // scheduled-unassigned so the default list stays concise.
-  const searchPool = filter.trim() ? (allTms ?? tms) : tms;
+  // Strict roster mode: always prefer the scheduled-unassigned list (tms).
+  // Only fall back to the broader roster (allTms) if explicitly passed and user is searching for exceptions.
+  // This makes clicking a zone only show available/unassigned TMs from the weekly roster.
+  const searchPool = filter.trim() && allTms ? allTms : tms;
   const filtered = filter.trim()
     ? searchPool.filter(t => t.tmName.toLowerCase().includes(filter.toLowerCase()))
     : tms;
@@ -881,7 +883,7 @@ const TmPicker: React.FC<{
 
 const MarkerPad: React.FC<MarkerPadProps> = ({
   slotKey,
-  assignments,
+  assignments: assignmentsProp,
   selectedTasks,
   recentTasks,
   auxDefs = DEFAULT_AUX_DEFS,
@@ -899,6 +901,14 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   isDark,
   tmGender,
 }) => {
+  // After the heavy perf refactor (narrow Zustand selectors + Board memo island + TanStack Query split),
+  // the orchestrator-level props can lag or come from a different source than the live board.
+  // MarkerPad (a floating panel) must read live assignments directly so the current TM, picker logic,
+  // and action results always match what the user sees on the artboard.
+  const storeAssignments = useAssignments();
+  const assignments = (storeAssignments && Object.keys(storeAssignments).length > 0)
+    ? storeAssignments
+    : (assignmentsProp ?? {});
   const [taskInput, setTaskInput] = useState("");
   const [coverageMode, setCoverageMode] = useState(false);
   const [coverageConfirmed, setCoverageConfirmed] = useState(false);

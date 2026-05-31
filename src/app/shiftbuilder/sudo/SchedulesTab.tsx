@@ -1,6 +1,21 @@
 "use client";
 
 /**
+ * @deprecated — OLD ADP / legacy schedule upload system.
+ * This entire tab was stripped and replaced (2026-06) by the new static
+ * TM default weekly schedules architecture (tm_default_schedules + groups + on-call).
+ *
+ * The tab "Schedules" was renamed to "TM Defaults" in Sudo and now renders
+ * TMDefaultsTab.tsx which is the canonical Sudo surface for the new system.
+ *
+ * Do not use or extend this file. It is kept only for historical reference.
+ */
+
+// ============================================================================
+// OLD CODE BELOW — DO NOT EDIT. The new implementation lives in TMDefaultsTab.tsx
+// ============================================================================
+
+/**
  * Schedules tab — the list-and-preview admin surface for uploaded ADP
  * exports stored in the `schedules` Supabase Storage bucket.
  *

@@ -14,6 +14,13 @@
 
 import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
 
+// Single source of truth for placement order now lives in the AI-modifiable skill
+import {
+  DEFAULT_PLACEMENT_ORDER,
+  deriveTargetSlotsInOrder,
+  calculateCoverageFeasibility,
+} from "./skills/placement-engine";
+
 // Minimal interface to avoid circular imports
 export interface AuxDef {
   key: string;
@@ -25,52 +32,21 @@ export interface AuxDef {
 // AUTHORITATIVE PLACEMENT ORDER (Phase 1 - Coverage Planner)
 // ========================================================
 /**
- * The **strict, non-negotiable** order the auto-assignment engine
- * must follow during initial coverage planning.
+ * The **strict, non-negotiable** fill order for the placement engine.
  *
- * Zone 9 SR (Smoking Room) has a **fixed position** and is never
- * moved based on conditions.
+ * This is the exact sequence the greedy / weighted planner and Grok-hybrid
+ * layer must respect unless hard constraints make it impossible.
  *
- * Any dynamically added Support/Overflow slots must come **after**
- * this entire list.
+ * - Restrooms are filled first with strict gender matching (MRR* = male, WRR* = female).
+ * - Admin and high-priority zones follow in the specific sequence below.
+ * - Z9SR, Trash, and Support slots have fixed positions at the end of the core list.
+ * - Any extra AUX slots the operator adds must come after SP2.
  */
-export const PLACEMENT_ORDER: readonly string[] = [
-  // 1. Restrooms (Men’s + Women’s) — highest priority block
-  "MRR1",
-  "WRR1",
-  "MRR6",
-  "WRR6",
-  "MRR7",
-  "WRR7",
-  "MRR8",
-  "WRR8",
-  "MRR10",
-  "WRR10",
-
-  // 2. Admin
-  "ADM",
-
-  // 3–12. Main Zones in required sequence
-  "Z9",
-  "Z1",
-  "Z4",
-  "Z5",
-  "Z2",
-  "Z3",
-  "Z8",
-  "Z10",
-  "Z7",
-  "Z6",
-
-  // 13. Zone 9 Smoking Room — FIXED POSITION (never conditional)
-  "Z9SR",
-
-  // 14–15. Trash
-  "TR1",
-  "TR2",
-
-  // 16+. Overflow / Support slots (SP1, SP2, SP3, ...) come after everything above
-] as const;
+/**
+ * Authoritative placement/fill order.
+ * This now comes directly from the AI-modifiable skill layer.
+ */
+export const PLACEMENT_ORDER: readonly string[] = DEFAULT_PLACEMENT_ORDER;
 
 /**
  * Returns all slot keys in the exact order the Coverage Planner must process them.
@@ -78,14 +54,8 @@ export const PLACEMENT_ORDER: readonly string[] = [
  * @param auxDefs - Currently active auxiliary/support slots (including user-added ones)
  */
 export function getSlotsInPlacementOrder(auxDefs: AuxDef[] = []): string[] {
-  const fixed = [...PLACEMENT_ORDER];
-
-  // Any extra support/overflow slots the operator has added must come last
-  const extraSupport = auxDefs
-    .map((d) => d.key)
-    .filter((key) => !fixed.includes(key));
-
-  return [...fixed, ...extraSupport];
+  // Delegate to the skill's derivation logic (keeps legacy and skill in sync)
+  return deriveTargetSlotsInOrder(auxDefs);
 }
 
 // ========================================================
@@ -223,6 +193,19 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
   const breakdown: Record<string, SlotRanking> = {};
   const notes: string[] = [];
 
+  // === World-class Coverage Feasibility (using skill tier model) ===
+  const availableUnique = roster.length;
+  const feasibility = calculateCoverageFeasibility(availableUnique);
+
+  notes.push(`Coverage Feasibility: ${feasibility.explanation}`);
+
+  if (feasibility.shortfall > 0) {
+    notes.push(
+      `REALITY CHECK: With only ${availableUnique} TMs it is impossible to clear Tier 1 + Tier 2. ` +
+      `The engine will protect the highest possible tiers and leave lower coverage unfilled.`
+    );
+  }
+
   // Live mutable draft for within_repeat + pair_affinity awareness.
   const currentDraft = new Map<string, string>();
 
@@ -323,7 +306,21 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       proposedAssignments[slotKey] = picked.tmId;
       currentDraft.set(slotKey, picked.tmId);
     } else {
-      notes.push(`No non-excluded candidate for ${slotKey}`);
+      // "Unless something goes crazy wrong" policy:
+      // For high-priority slots (early in order), be much more aggressive about filling
+      // even with lower-scoring candidates rather than leaving them empty.
+      const orderIndex = orderedSlots.indexOf(slotKey);
+      const isHighPriority = orderIndex < 10; // First 10 in the declared order (Restrooms through Z8)
+
+      if (isHighPriority && scored.length > 0) {
+        // Take the best available (even if excluded or low score) for critical early slots
+        const bestAvailable = scored[0];
+        proposedAssignments[slotKey] = bestAvailable.tmId;
+        currentDraft.set(slotKey, bestAvailable.tmId);
+        notes.push(`High-priority slot ${slotKey} force-filled with ${bestAvailable.tmName} (score ${bestAvailable.total.toFixed(1)}) to maintain order`);
+      } else {
+        notes.push(`No non-excluded candidate for ${slotKey}`);
+      }
     }
   }
 
@@ -460,26 +457,43 @@ export function validatePlacementOrder(auxDefs: AuxDef[]): string[] {
  * suitable for injection into LLM system prompts.
  */
 export function getPlacementOrderText(): string {
-  return `AUTHORITATIVE PLACEMENT ORDER (strict, non-negotiable for all auto-assignment and Grok suggestions):
+  return `AUTHORITATIVE PLACEMENT / FILL ORDER (strict, non-negotiable unless impossible due to hard constraints):
 
-1. Restrooms (Men’s + Women’s) — highest priority block
+1. Restrooms — highest priority
    MRR1, WRR1, MRR6, WRR6, MRR7, WRR7, MRR8, WRR8, MRR10, WRR10
+   (Strict gender rule: MRR* must be filled by male TMs, WRR* by female TMs)
 
 2. Admin
    ADM
 
-3–12. Main Zones (in this exact sequence)
-   Z9, Z1, Z4, Z5, Z2, Z3, Z8, Z10, Z7, Z6
+3. Zone 9
+4. Zone 4
+5. Zone 5
+6. Zone 1
+7. Zone 2
+8. Zone 3
+9. Zone 7
+10. Zone 8
+11. Zone 10
+12. Zone 6
 
-13. Zone 9 Smoking Room — FIXED POSITION (never conditional or moved)
-    Z9SR
+13. Zone 9 Smoking Room (Z9SR) — FIXED POSITION
+14. Trash 1 (TR1)
+15. Trash 2 (TR2)
+16. Support 1 (SP1)
+17. Support 2 (SP2)
 
-14–15. Trash
-    TR1, TR2
+18+. Any additional operator-added AUX / Support / Overflow slots must come AFTER SP2.
 
-16+. Any operator-added Overflow / Support slots (SP1, SP2, AUX..., etc.) come AFTER everything above.
+HARD UNIQUE-TM LIMIT (this is non-negotiable physical reality):
+- Filling all 10 Restrooms requires 5 male + 5 female = **10 distinct TMs**.
+- Filling all 10 main Zones requires **10 more distinct full-grave TMs**.
+- Admin requires **1 more**.
+- Total to clear the top of the order (Restrooms + Admin + Zones): minimum **21 unique TMs**.
 
-When suggesting assignments, you MUST process and propose in this order. Never suggest filling a later slot (e.g. Z2 or Support) before all earlier slots in this list have been considered.`;
+You cannot reuse the same people. If the available roster is below this threshold, it is mathematically impossible to achieve full coverage in the stated order.
+
+The engine (and any Grok suggestions) MUST attempt to fill slots in exactly this order. Never propose filling a lower-priority slot before all higher-priority slots have been considered or ruled out by hard constraints. Clearly call out impossibility when headcount is insufficient.`;
 }
 
 /**

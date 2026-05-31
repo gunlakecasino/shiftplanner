@@ -37,6 +37,9 @@ export interface EngineWeights {
   prior_run_continuity?: number;
   skill_stretch_reward?: number;
   sweeper_rotation_penalty?: number;
+
+  /** Strongly incentivizes filling slots early in the declared PLACEMENT_ORDER */
+  order_priority?: number;
 }
 
 export interface EngineThresholds {
@@ -97,6 +100,9 @@ export const DEFAULT_WEIGHTS: Required<EngineWeights> = {
   prior_run_continuity: 0.4,
   skill_stretch_reward: 0.3,
   sweeper_rotation_penalty: 0.3,
+
+  // Strong incentive to fill high-priority slots first (per operator-specified order)
+  order_priority: 2.5,
 };
 
 export const DEFAULT_THRESHOLDS: Required<EngineThresholds> = {
