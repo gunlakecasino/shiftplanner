@@ -74,7 +74,15 @@ export async function getTmShiftForNight(
 
   const rosterWeekStart = startOfRosterWeek(night);
   const rosterWeekStartIso = rosterWeekStart.toISOString().slice(0, 10);
-  const dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+  let dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+
+  // Phase 1 hardening for future dates: if the computed dayIndex is out of expected range
+  // for some reason (clock skew, bad date objects), force it into 0-6 relative to the roster Thursday.
+  if (dayIndex < 0 || dayIndex > 6) {
+    dayIndex = ((daysBetween(rosterWeekStart, night) % 7) + 7) % 7;
+  }
+
+  const isFuture = rosterWeekStart.getTime() > Date.now() + (7 * 24 * 60 * 60 * 1000);
 
   // 1. Most recent effective default
   const { data: defaults } = await supabase
@@ -128,6 +136,14 @@ export async function getTmShiftForNight(
       hadDefault: !!def,
       rawEntry,
       finalIsWorking: !!(rawEntry && isWorkingShift(rawEntry)),
+      isFutureDate: isFuture,
+    });
+  }
+  if (isFuture && process.env.NODE_ENV !== 'production') {
+    console.log('[PHASE1-FUTURE-DATE] getTmShiftForNight called for future roster week', {
+      night: night.toISOString().slice(0,10),
+      rosterWeekStart: rosterWeekStartIso,
+      dayIndex,
     });
   }
 
@@ -179,10 +195,22 @@ export async function getScheduledTmsForNight(
     (defaultsForWeek || []).forEach((d: any) => { if (!effectiveByTm[d.tm_id]) effectiveByTm[d.tm_id] = d.weekly_pattern || []; });
     (weekOnCall || []).forEach((s: any) => { effectiveByTm[s.tm_id] = s.weekly_pattern || []; });
 
-    // Build from the raw weekly roster data.
-    // To make "scheduled but unassigned" work well for the picker even with partial data,
-    // we include any TM that has a weekly special containing a "Full Grave" (or equivalent) pattern
-    // into the grave partition for the whole week. Same idea for overlaps.
+    // Also read group membership via anon (this is the reliable way, same as the admin path)
+    const { data: groupData } = await anon.from("tm_groups").select(`name, tm_group_members (tm_id)`);
+
+    const graveMemberIds = new Set<string>();
+    const pmOverlapMemberIds = new Set<string>();
+    const amOverlapMemberIds = new Set<string>();
+
+    (groupData || []).forEach((g: any) => {
+      const name = (g.name || "").toLowerCase();
+      const members = (g.tm_group_members || []).map((m: any) => m.tm_id);
+      if (name.includes("grave")) members.forEach((id: string) => graveMemberIds.add(id));
+      if (name.includes("pm overlap") || name.includes("pm_overlaps")) members.forEach((id: string) => pmOverlapMemberIds.add(id));
+      if (name.includes("am overlap") || name.includes("am_overlaps")) members.forEach((id: string) => amOverlapMemberIds.add(id));
+    });
+
+    // Build from the raw weekly roster data + group membership.
     const graveFromRoster = new Set<string>();
     const pmFromRoster = new Set<string>();
     const amFromRoster = new Set<string>();
@@ -193,13 +221,17 @@ export async function getScheduledTmsForNight(
 
       if (!hasWorking) return;
 
-      if (labels.includes("full grave") || labels.includes("grave")) {
+      const inGraveGroup = graveMemberIds.has(tmId);
+      const inPMGroup = pmOverlapMemberIds.has(tmId);
+      const inAMGroup = amOverlapMemberIds.has(tmId);
+
+      if (labels.includes("full grave") || labels.includes("grave") || inGraveGroup) {
         graveFromRoster.add(tmId);
       }
-      if (labels.includes("pm overlap")) {
+      if (labels.includes("pm overlap") || inPMGroup) {
         pmFromRoster.add(tmId);
       }
-      if (labels.includes("am overlap")) {
+      if (labels.includes("am overlap") || inAMGroup) {
         amFromRoster.add(tmId);
       }
     });

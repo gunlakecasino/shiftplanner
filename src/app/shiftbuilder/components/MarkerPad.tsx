@@ -19,7 +19,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
@@ -964,9 +963,12 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     }
     setTmHistoryLoading(true);
     setHistoryOpen(false);
-    getTmPlacementHistory(currentTmId, 30)
-      .then(h => { setTmHistory(h); setTmHistoryLoading(false); })
-      .catch(() => { setTmHistory(null); setTmHistoryLoading(false); });
+    import("@/lib/shiftbuilder/data")
+      .then(({ getTmPlacementHistory }) =>
+        getTmPlacementHistory(currentTmId, 30)
+          .then(h => { setTmHistory(h); setTmHistoryLoading(false); })
+          .catch(() => { setTmHistory(null); setTmHistoryLoading(false); })
+      );
   }, [currentTmId]);
 
   // Reset all local state when the slot changes

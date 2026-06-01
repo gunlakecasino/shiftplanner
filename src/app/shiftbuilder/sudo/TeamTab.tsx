@@ -24,24 +24,13 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import {
-  listAllTMs,
-  upsertTM,
-  softDeleteTM,
-  restoreTM,
-  getUnmatchedFromLatestSchedule,
-  getTMDetail,
-  upsertSlotSkill,
-  addTMPreference,
-  deleteTMPreference,
-  addTMAccommodation,
-  deleteTMAccommodation,
-  createTMFromUnmatched,
-  mergeUnmatchedIntoTM,
-  type TMRecord,
-  type TMPreference,
-  type TMAccommodation,
-  type TMSlotSkill,
+// TM management functions are dynamically imported inside handlers/effects
+// to prevent static pulling of the heavy data module through sudoActions (Turbopack HMR fix).
+import type {
+  TMRecord,
+  TMPreference,
+  TMAccommodation,
+  TMSlotSkill,
 } from "@/lib/shiftbuilder/sudoActions";
 import { supabase } from "@/lib/supabase";
 import {
@@ -57,6 +46,23 @@ export interface TeamTabProps {
   /** Follows the parent Sudo theme for correct glass + text colors */
   isDark?: boolean;
 }
+
+// Dynamic helpers — prevents static top-level dependency on sudoActions (which pulls data)
+const dyn = {
+  listAllTMs: async () => (await import("@/lib/shiftbuilder/sudoActions")).listAllTMs(),
+  upsertTM: async (p: any) => (await import("@/lib/shiftbuilder/sudoActions")).upsertTM(p),
+  softDeleteTM: async (id: string) => (await import("@/lib/shiftbuilder/sudoActions")).softDeleteTM(id),
+  restoreTM: async (id: string) => (await import("@/lib/shiftbuilder/sudoActions")).restoreTM(id),
+  getUnmatchedFromLatestSchedule: async (r: any) => (await import("@/lib/shiftbuilder/sudoActions")).getUnmatchedFromLatestSchedule(r),
+  getTMDetail: async (id: string) => (await import("@/lib/shiftbuilder/sudoActions")).getTMDetail(id),
+  upsertSlotSkill: async (p: any) => (await import("@/lib/shiftbuilder/sudoActions")).upsertSlotSkill(p),
+  addTMPreference: async (p: any) => (await import("@/lib/shiftbuilder/sudoActions")).addTMPreference(p),
+  deleteTMPreference: async (id: string) => (await import("@/lib/shiftbuilder/sudoActions")).deleteTMPreference(id),
+  addTMAccommodation: async (p: any) => (await import("@/lib/shiftbuilder/sudoActions")).addTMAccommodation(p),
+  deleteTMAccommodation: async (id: string) => (await import("@/lib/shiftbuilder/sudoActions")).deleteTMAccommodation(id),
+  createTMFromUnmatched: async (name: string) => (await import("@/lib/shiftbuilder/sudoActions")).createTMFromUnmatched(name),
+  mergeUnmatchedIntoTM: async (name: string, targetId: string) => (await import("@/lib/shiftbuilder/sudoActions")).mergeUnmatchedIntoTM(name, targetId),
+};
 
 type Filter = "active" | "inactive" | "all";
 
@@ -82,6 +88,11 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
   const refresh = React.useCallback(async () => {
     setError(null);
     try {
+      const {
+        listAllTMs,
+        getUnmatchedFromLatestSchedule,
+      } = await import("@/lib/shiftbuilder/sudoActions");
+
       const rows = await listAllTMs();
       setTMs(rows);
       // Discover unmatched names from the most recent applied schedule.
@@ -156,7 +167,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
 
   const handleAddUnmatched = async (rawName: string) => {
     try {
-      const newId = await createTMFromUnmatched(rawName);
+      const newId = await dyn.createTMFromUnmatched(rawName);
       flash("ok", `Created — opening drawer to finish setup`);
       await refresh();
       setDrawerTmId(newId);
@@ -168,7 +179,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
 
   const handleMergeUnmatched = async (rawName: string, targetTmId: string) => {
     try {
-      await mergeUnmatchedIntoTM(rawName, targetTmId);
+      await dyn.mergeUnmatchedIntoTM(rawName, targetTmId);
       flash("ok", `Merged "${rawName}" into existing TM — future schedules will match`);
       setMergingName(null);
       setMergeSearch("");
@@ -395,7 +406,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
           <button
             onClick={async () => {
               try {
-                const newId = await upsertTM({ displayName: "New TM", active: true, status: "active" });
+                const newId = await dyn.upsertTM({ displayName: "New TM", active: true, status: "active" });
                 await refresh();
                 setDrawerTmId(newId);
                 onDataChanged?.();
@@ -589,7 +600,7 @@ function TMEditDrawer({
     let cancelled = false;
     (async () => {
       try {
-        const d = await getTMDetail(tm.tmId);
+        const d = await dyn.getTMDetail(tm.tmId);
         if (!cancelled) setDetail(d);
       } catch (err) {
         if (!cancelled) onFlash("err", err instanceof Error ? err.message : String(err));
@@ -615,7 +626,7 @@ function TMEditDrawer({
   const save = async () => {
     setSaving(true);
     try {
-      await upsertTM({
+      await dyn.upsertTM({
         tmId: form.tmId,
         displayName: form.displayName,
         fullName: form.fullName,
@@ -647,7 +658,7 @@ function TMEditDrawer({
     }
     setSaving(true);
     try {
-      await softDeleteTM(form.tmId);
+      await dyn.softDeleteTM(form.tmId);
       onFlash("ok", `${form.displayName} marked inactive`);
       await onSaved();
       onClose();
@@ -663,7 +674,7 @@ function TMEditDrawer({
   const restore = async () => {
     setSaving(true);
     try {
-      await restoreTM(form.tmId);
+      await dyn.restoreTM(form.tmId);
       flashDrawer("ok", `${form.displayName} restored`);
       onFlash("ok", `${form.displayName} restored`);
       await onSaved();
@@ -782,7 +793,7 @@ function TMEditDrawer({
             preferences={detail.preferences}
             accommodations={detail.accommodations}
             onChanged={async () => {
-              const d = await getTMDetail(form.tmId);
+              const d = await dyn.getTMDetail(form.tmId);
               setDetail(d);
             }}
             onFlash={onFlash}
@@ -797,7 +808,7 @@ function TMEditDrawer({
             slotSkills={detail.slotSkills}
             allSlotIds={allSlotIds}
             onScoreSaved={async () => {
-              const d = await getTMDetail(form.tmId);
+              const d = await dyn.getTMDetail(form.tmId);
               setDetail(d);
             }}
             onFlash={onFlash}
@@ -1048,7 +1059,7 @@ function PrefsForm({
                     <button
                       onClick={async () => {
                         try {
-                          await deleteTMPreference(p.id);
+                          await dyn.deleteTMPreference(p.id);
                           await onChanged();
                         } catch (err) {
                           onFlash("err", err instanceof Error ? err.message : String(err));
@@ -1105,7 +1116,7 @@ function PrefsForm({
                     onClick={async () => {
                       if (!newPref.target.trim()) return;
                       try {
-                        await addTMPreference({ tmId, ...newPref });
+                        await dyn.addTMPreference({ tmId, ...newPref });
                         setNewPref({ stance: "prefer", strength: "soft", target: "", note: "" });
                         await onChanged();
                       } catch (err) {
@@ -1155,7 +1166,7 @@ function PrefsForm({
                     <button
                       onClick={async () => {
                         try {
-                          await deleteTMAccommodation(a.id);
+                          await dyn.deleteTMAccommodation(a.id);
                           await onChanged();
                         } catch (err) {
                           onFlash("err", err instanceof Error ? err.message : String(err));
@@ -1214,7 +1225,7 @@ function PrefsForm({
                     onClick={async () => {
                       if (!newAcc.note.trim()) return;
                       try {
-                        await addTMAccommodation({
+                        await dyn.addTMAccommodation({
                           tmId,
                           type: newAcc.type,
                           severity: newAcc.severity,
@@ -1269,7 +1280,7 @@ function SkillsForm({
 
   const setScore = async (slotId: string, score: number) => {
     try {
-      await upsertSlotSkill({ tmId, slotId, score });
+      await dyn.upsertSlotSkill({ tmId, slotId, score });
       await onScoreSaved();
     } catch (err) {
       onFlash("err", err instanceof Error ? err.message : String(err));

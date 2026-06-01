@@ -270,7 +270,10 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, 
       const g = getGroupByName(name);
       (g?.members || []).forEach((mid: string) => ids.add(mid));
     });
-    return roster.filter((r: any) => ids.has(r.id));
+    // Robust matching: group members store UUIDs (from tm_profiles.id),
+    // while roster items expose both short tm_id as .id and the UUID as .profileId.
+    // This fixes the "defaults showing no TM" after importing schedules + group membership.
+    return roster.filter((r: any) => ids.has(r.profileId) || ids.has(r.id));
   }, [groups, roster]);
 
   const addToGroup = async (groupName: string, tmId: string) => {

@@ -46,12 +46,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
-import {
-  upsertZoneAssignment,
-  getOrCreateNightForDate,
-  type UpsertAssignmentParams,
-} from "@/lib/shiftbuilder/data";
+import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
 
 // ============================================================================
 // Types
@@ -104,6 +101,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
         // Robust nightId resolution (the key fix for unassign not persisting)
         if (!resolvedNightId && captureDate && captureDayName) {
           try {
+            const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
             resolvedNightId = await getOrCreateNightForDate(
               new Date(captureDate),
               captureDayName
@@ -119,15 +117,27 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
         const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
 
+        // For unassign (tmId null), use the robust delete that also cleans
+        // legacy keys (e.g. "Z9" vs "zone_9"). This is the permanent fix for
+        // ghost assignments from old data.
+        if ((rest as any).tmId == null) {
+          const { deleteZoneAssignment } = await import("@/lib/shiftbuilder/data");
+          return deleteZoneAssignment({
+            nightId: resolvedNightId,
+            uiKey,
+          });
+        }
+
         const upsertParams: UpsertAssignmentParams = {
           nightId: resolvedNightId,
           slotKey: slot_key,
           slotType: slot_type as any,
           rrSide: rr_side as any,
-          tmId: (rest as any).tmId ?? null,
+          tmId: (rest as any).tmId,
           isLocked: (rest as any).isLocked,
         };
 
+        const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
         return upsertZoneAssignment(upsertParams);
       },
 
@@ -277,24 +287,4 @@ export function useLiveAssignments(selectedDay: DayDef) {
     isMutating: assignMutation.isPending || unassignMutation.isPending,
     ensureRealtime, // exposed so the client can wire it when nightId becomes available
   };
-}
-
-// ============================================================================
-// Small helper (duplicated here for hook independence; real version lives in client)
-// In a later cleanup we can move uiToDb into lib/slot-keys.ts and import it.
-// For now this keeps the hook self-contained during surgical rollout.
-function uiToDb(uiKey: string) {
-  // Minimal version of the mapping used throughout the app.
-  // Real implementation handles Z*, MRR*, WRR*, AUX*, OL-*, TR* etc.
-  if (uiKey.startsWith("M") || uiKey.startsWith("W")) {
-    const num = uiKey.replace(/\D/g, "");
-    return {
-      slot_key: uiKey,
-      slot_type: "rr",
-      rr_side: uiKey.startsWith("M") ? "mens" : "womens",
-    };
-  }
-  if (uiKey.startsWith("OL")) return { slot_key: uiKey, slot_type: "overlap", rr_side: null };
-  if (uiKey.startsWith("TR")) return { slot_key: uiKey, slot_type: "tr", rr_side: null };
-  return { slot_key: uiKey, slot_type: "zone", rr_side: null };
 }

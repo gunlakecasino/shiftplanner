@@ -16,15 +16,24 @@
  */
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 import { TeamTab } from "./TeamTab";
-import { EngineConfigTab } from "./EngineConfigTab";
 import { TasksTab } from "./TasksTab";
 import { ReportsTab } from "./ReportsTab";
-import { BatchPlannerTab } from "./BatchPlannerTab";
 import { DefaultsTab } from "./DefaultsTab";
+
+// Heavy tabs: code-split so Weekly Roster / Dashboard do not pull placement → data.ts.
+const EngineConfigTab = dynamic(
+  () => import("./EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
+  { ssr: false }
+);
+const BatchPlannerTab = dynamic(
+  () => import("./BatchPlannerTab").then((m) => ({ default: m.BatchPlannerTab })),
+  { ssr: false }
+);
 import { DashboardTab } from "./DashboardTab";
 import { UsersTab } from "./UsersTab";
 import {

@@ -13,8 +13,7 @@ import {
   type FullyResolvedEngineConfig,
 } from "@/lib/shiftbuilder/engineConfig";
 import { getFullyResolvedEngineConfig } from "@/lib/shiftbuilder/engineOverrides";
-import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
-import { getTmZoneMatrix } from "@/lib/shiftbuilder/data"; // for live matrix preview in overrides editor
+// Server action imported at call time so SudoWindow does not pull placement → data.ts via sudoActions batch block.
 
 interface EngineConfigTabProps {
   onDataChanged?: () => void;
@@ -113,6 +112,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
     setSuccess(null);
 
     try {
+      const { updateActiveEngineConfig } = await import("@/lib/shiftbuilder/sudoActions");
       await updateActiveEngineConfig({
         placementMethod,
         grokReasoningEffort: isGrokHybrid ? grokReasoningEffort : undefined,

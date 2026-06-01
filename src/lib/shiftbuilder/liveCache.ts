@@ -49,6 +49,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { QueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "../supabase"; // re-exported singleton from the data layer root
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { dbToUi } from "@/lib/shiftbuilder/slot-keys"; // correct DB→UI reverse (z9_sr + aux → Z9SR, zone_9 + zone → Z9, etc.)
 
 // ============================================================================
 // ZUSTAND LIVE STORE (lightweight mirror of committed server state)
@@ -157,8 +158,12 @@ export function initLiveCacheForNight(
   const supabase = getSupabaseClient();
   liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connecting");
 
+  // Unique suffix prevents any "after subscribe" races if the guard key
+  // is ever bypassed (HMR, StrictMode, or overlapping nightId reuse).
+  // The activeChannels guard still ensures we only keep one subscription per (nightId, dateKey).
+  const nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const channel = supabase
-    .channel(`live-night-${nightId}`)
+    .channel(`live-night-${nightId}-${nonce}`)
     .on(
       "postgres_changes",
       {
@@ -209,10 +214,12 @@ function handleAssignmentChange(
 ) {
   const { eventType, new: newRow, old: oldRow } = payload;
 
-  // Convert DB shape to the uiKey shape the UI has always used (Z1, MRR1, etc.)
-  // In real code we have dbToUi / uiToDb helpers in the client; for the bridge we
-  // do a lightweight reverse mapping here. For Phase 1 we keep it simple.
-  const uiKey = newRow?.slot_key ?? oldRow?.slot_key; // best effort
+  // Convert DB shape to the uiKey shape the UI has always used (Z9, Z9SR, MRR1, etc.)
+  // Use the canonical dbToUi so aux slots (z9_sr + "aux") and zones (zone_9 + "zone") round-trip correctly.
+  const rowForKey = newRow || oldRow;
+  const uiKey = rowForKey
+    ? dbToUi(rowForKey.slot_key, rowForKey.slot_type, rowForKey.rr_side ?? null)
+    : null;
   if (!uiKey) return;
 
   const store = liveAssignmentsStore.getState();

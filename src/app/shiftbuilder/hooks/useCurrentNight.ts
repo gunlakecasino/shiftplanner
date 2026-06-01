@@ -2,23 +2,12 @@
 
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import {
-  getNightIdForDate,
-  getTeamMembersForNight,
-  getNightAssignments,
-  getNightNotes,
-  getNightSlotTasks,
-  getNightBreakAssignments,
-  getNightCardBorders,
-  getRecentZoneHistory,
-  getGraveAvailableTeamMembers,
-  getOnScheduleTmIdsForNight,
-  getActiveTeamMembers,
-} from "@/lib/shiftbuilder/data";
+import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+// data.ts helpers are dynamically imported inside the main load effect for Turbopack HMR stability
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
-import {
-  getScheduledTmsForNight,
-} from "@/lib/shiftbuilder/schedules";
+// Scheduled roster now loaded via API route to keep admin client creation on the server
+// (prevents Multiple GoTrueClient warnings and auth issues in the browser).
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
 
 // Server-cached roster (huge win for day switch speed)
@@ -45,6 +34,15 @@ export function useCurrentNight(selectedDay: DayDef) {
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
     queryFn: async () => {
+      const {
+        getNightIdForDate,
+        getTeamMembersForNight,
+        getNightAssignments,
+        getGraveAvailableTeamMembers,
+        getOnScheduleTmIdsForNight,
+        getActiveTeamMembers,
+      } = await import("@/lib/shiftbuilder/data");
+
       const id = await getNightIdForDate(selectedDay.date);
 
       const [
@@ -77,6 +75,30 @@ export function useCurrentNight(selectedDay: DayDef) {
         } catch {}
       });
 
+      // Enrich with breakGroup from the separate break_assignments table so BreakBadge
+      // on ZoneCard / AuxCard / RRCard inside the isolated board actually shows 1/2/3 (or –).
+      // This was missing after the core loader was introduced; the legacy paths had it but
+      // the board now reads the narrow shape from currentNight.assignments → store.
+      if (id) {
+        try {
+          const { getNightBreakAssignments } = await import("@/lib/shiftbuilder/data");
+          const breaks = await getNightBreakAssignments(id);
+          const breakByTm: Record<string, number> = {};
+          (breaks || []).forEach((r: any) => {
+            if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
+          });
+          Object.keys(assignments).forEach((k) => {
+            const a = assignments[k];
+            if (a?.tmId && breakByTm[a.tmId] != null) {
+              a.breakGroup = breakByTm[a.tmId];
+            }
+          });
+        } catch (e) {
+          // Non-fatal — break pills will just show "–" until next refetch
+          console.warn("[useCurrentNight] could not load break groups for pills", e);
+        }
+      }
+
       // Enrich grave roster with week + overlap flags (authoritative source moved here for unification)
       const graveRoster = graveMembers.map((m: any) => ({
         ...m,
@@ -88,28 +110,48 @@ export function useCurrentNight(selectedDay: DayDef) {
       // === CANONICAL SCHEDULED DATA (single source of truth) ===
       // Uses the exact same resolver logic as the Sudo Weekly Roster tab.
       // This replaces the old getScheduledTmIdsForNightFromNewRoster + getNightRosterClassification path.
-      let canonicalScheduled: Awaited<ReturnType<typeof getScheduledTmsForNight>> = {
-        allScheduled: [],
-        fullGraveScheduled: [],
-        pmOverlapScheduled: [],
-        amOverlapScheduled: [],
-        scheduledWithRoles: [],
+      let canonicalScheduled = {
+        allScheduled: [] as any[],
+        fullGraveScheduled: [] as any[],
+        pmOverlapScheduled: [] as any[],
+        amOverlapScheduled: [] as any[],
+        scheduledWithRoles: [] as any[],
       };
 
       try {
-        canonicalScheduled = await getScheduledTmsForNight(selectedDay.date);
+        const dateStr = formatLocalDateISO(selectedDay.date);
+        const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error("[useCurrentNight] scheduled-roster API failed", {
+            status: res.status,
+            error: errorData,
+          });
+          throw new Error(`Scheduled roster API returned ${res.status}`);
+        }
+        
+        const data = await res.json();
+        canonicalScheduled = {
+          allScheduled: data.allScheduled || [],
+          fullGraveScheduled: data.fullGraveScheduled || [],
+          pmOverlapScheduled: data.pmOverlapScheduled || [],
+          amOverlapScheduled: data.amOverlapScheduled || [],
+          scheduledWithRoles: data.scheduledWithRoles || [],
+        };
+        
+        if (!canonicalScheduled.allScheduled.length) {
+          console.warn("[useCurrentNight] API returned empty scheduled roster — this usually means the service role key is missing or the weekly roster hasn't been applied yet");
+        }
       } catch (e) {
-        const railwayEnv = process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown';
-        console.error("[useCurrentNight] failed to load canonical scheduled data (this is expected if SUPABASE_SERVICE_ROLE_KEY is not set on Railway)", {
-          error: e,
-          railwayEnvironment: railwayEnv,
-          nodeEnv: process.env.NODE_ENV,
-        });
+        console.error("[useCurrentNight] failed to load canonical scheduled data via API", e);
+        // Optional: surface to user in a future toast
       }
 
-      const fullGraveScheduledTonight = new Set(canonicalScheduled.fullGraveScheduled.map((t: any) => t.id));
-      const pmOverlapScheduledTonight = new Set(canonicalScheduled.pmOverlapScheduled.map((t: any) => t.id));
-      const amOverlapScheduledTonight = new Set(canonicalScheduled.amOverlapScheduled.map((t: any) => t.id));
+      const scheduledId = (t: any) => t.tmId || t.tm_id || t.id;
+      const fullGraveScheduledTonight = new Set(canonicalScheduled.fullGraveScheduled.map(scheduledId));
+      const pmOverlapScheduledTonight = new Set(canonicalScheduled.pmOverlapScheduled.map(scheduledId));
+      const amOverlapScheduledTonight = new Set(canonicalScheduled.amOverlapScheduled.map(scheduledId));
 
       // Enrich the main realRoster using the canonical partitioned sets
       const enrichedRealRoster = (members || []).map((m: any) => ({
@@ -128,7 +170,7 @@ export function useCurrentNight(selectedDay: DayDef) {
 
       // Legacy shape kept for broad compatibility during migration
       const scheduledTmIdsTonight: Set<string> = new Set(
-        canonicalScheduled.allScheduled.map((t: any) => t.id)
+        canonicalScheduled.allScheduled.map(scheduledId)
       );
 
       return {
@@ -160,6 +202,15 @@ export function useCurrentNight(selectedDay: DayDef) {
   const secondaryQuery = useQuery({
     queryKey: ["nightSecondary", dateKey],
     queryFn: async () => {
+      const {
+        getNightIdForDate,
+        getNightNotes,
+        getNightSlotTasks,
+        getNightBreakAssignments,
+        getNightCardBorders,
+        getRecentZoneHistory,
+      } = await import("@/lib/shiftbuilder/data");
+
       const id = await getNightIdForDate(selectedDay.date);
 
       const [
@@ -204,6 +255,15 @@ export function useCurrentNight(selectedDay: DayDef) {
     queryClient.prefetchQuery({
       queryKey: coreKey,
       queryFn: async () => {
+        const {
+          getNightIdForDate,
+          getTeamMembersForNight,
+          getNightAssignments,
+          getGraveAvailableTeamMembers,
+          getOnScheduleTmIdsForNight,
+          getActiveTeamMembers,
+        } = await import("@/lib/shiftbuilder/data");
+
         const id = await getNightIdForDate(date);
         const [
           members,
@@ -257,6 +317,15 @@ export function useCurrentNight(selectedDay: DayDef) {
     queryClient.prefetchQuery({
       queryKey: secondaryKey,
       queryFn: async () => {
+        const {
+          getNightIdForDate,
+          getNightNotes,
+          getNightSlotTasks,
+          getNightBreakAssignments,
+          getNightCardBorders,
+          getRecentZoneHistory,
+        } = await import("@/lib/shiftbuilder/data");
+
         const id = await getNightIdForDate(date);
         const [notesText, nightTaskRows, breakRows, nightBorderMap, recentHistory] = await Promise.all([
           id ? getNightNotes(id) : Promise.resolve(""),

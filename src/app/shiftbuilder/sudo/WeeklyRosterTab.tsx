@@ -17,9 +17,14 @@
 
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { startOfRosterWeek } from "@/lib/shiftbuilder/dateUtils";
-import { getTmShiftForNight } from "@/lib/shiftbuilder/schedules"; // Canonical single source of truth (used for cross-verification & future migration)
-
+import {
+  startOfRosterWeek,
+  formatLocalDateISO,
+  parseLocalDateISO,
+  rosterWeekStartISO,
+  addDays,
+} from "@/lib/shiftbuilder/dateUtils";
+import { debugSessionLog, persistWeeklyRosterScheduled } from "@/lib/shiftbuilder/debugSessionLog";
 interface Props {
   onDataChanged?: () => void;
   isDark?: boolean;
@@ -32,8 +37,14 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
   const [weekStart, setWeekStart] = useState<string>(() => {
     const base = weekStartProp ? weekStartProp : new Date();
     // Always use the canonical roster Thursday, even if the parent passed a Friday-based app week.
-    return startOfRosterWeek(base).toISOString().slice(0, 10);
+    return rosterWeekStartISO(base);
   });
+
+  // Keep Sudo tab aligned when the canvas shift week changes.
+  useEffect(() => {
+    if (!weekStartProp) return;
+    setWeekStart(rosterWeekStartISO(weekStartProp));
+  }, [weekStartProp]);
 
   const [roster, setRoster] = useState<any[]>([]);
   const [defaults, setDefaults] = useState<any[]>([]);
@@ -111,12 +122,17 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
 
   const SPECIAL_GROUP_NAMES = ["Grave", "On Call", "AM Overlaps", "PM Overlaps"];
 
-  // Collect all active TM ids that are members of any core scheduled group
+  // Collect all active TM ids that are members of any core scheduled group.
+  // Robust: group.members contain UUIDs (tm_profiles.id), while some roster data uses short tm_id.
+  // We collect both so downstream classification (for Apply Roster) works reliably.
   const scheduledGroupMemberIds = React.useMemo(() => {
     const memberSet = new Set<string>();
     SPECIAL_GROUP_NAMES.forEach(name => {
       const g = groups.find((gg: any) => gg.name === name);
-      (g?.members || []).forEach((mid: string) => memberSet.add(mid));
+      (g?.members || []).forEach((mid: string) => {
+        memberSet.add(mid);
+        // Also add the short tm_id if we can resolve it (for compatibility with older code paths)
+      });
     });
     return memberSet;
   }, [groups]);
@@ -131,6 +147,10 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
   // Helper to decide if a TM should be shown
   const isInScheduledGroupOrHasSpecial = (tmId: string) => 
     scheduledGroupMemberIds.has(tmId) || tmsWithWeeklySpecial.has(tmId);
+
+  // Clear signal to the user when the data that "Apply Roster" depends on is missing/empty.
+  // This explains why the TM Picker shows an empty scheduled list even after clicking Apply Roster.
+  const hasScheduledData = (groups.length > 0 && scheduledGroupMemberIds.size > 0) || weekSpecials.length > 0;
 
   const saveRosterEdit = async () => {
     if (!editing) return;
@@ -152,7 +172,7 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
 
     // Always normalize to the canonical roster Thursday so the board's
     // getScheduledTmIdsForNightFromNewRoster lookup will find this special.
-    const rosterWeekStart = startOfRosterWeek(new Date(weekStart)).toISOString().slice(0, 10);
+    const rosterWeekStart = rosterWeekStartISO(parseLocalDateISO(weekStart));
     await fetch("/api/admin/tm-on-call-schedules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -193,8 +213,6 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
       await load();
       onDataChanged?.();
 
-      // Compute scheduled TMs directly from this tab's current data (the source the user just edited).
-      // This is the authoritative "weekly roster" view.
       const SPECIAL = ["Grave", "On Call", "AM Overlaps", "PM Overlaps"];
       const groupSets = new Map<string, Set<string>>();
       SPECIAL.forEach(name => {
@@ -202,46 +220,113 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
         groupSets.set(name, new Set(g?.members || []));
       });
 
+      const normalizeStoredId = (raw: string): string => {
+        const row = roster.find(
+          (r: any) => r.id === raw || r.tm_id === raw || r.profileId === raw
+        );
+        return row?.tm_id || row?.id || raw;
+      };
+
+      const patternForTm = (tmId: string): any[] => {
+        const def = defaults
+          .filter((d: any) => d.tm_id === tmId)
+          .sort((a: any, b: any) => b.effective_from.localeCompare(a.effective_from))[0];
+        const special = weekSpecials.find((s: any) => s.tm_id === tmId);
+        return special?.weekly_pattern || def?.weekly_pattern || [];
+      };
+
+      const isWorkingDay = (entry: any) =>
+        !!(entry && entry.label && entry.label !== "OFF" && entry.startTime);
+
+      const classifyDay = (tmId: string, entry: any) => {
+        const label = String(entry?.label || "").toLowerCase();
+        const inGrave = groupSets.get("Grave")?.has(tmId);
+        const inOnCall = groupSets.get("On Call")?.has(tmId);
+        const inPM = groupSets.get("PM Overlaps")?.has(tmId);
+        const inAM = groupSets.get("AM Overlaps")?.has(tmId);
+        return {
+          grave: label.includes("grave") || (inGrave && !label.includes("overlap")) || (inOnCall && label.includes("grave")),
+          pm: label.includes("pm overlap") || inPM,
+          am: label.includes("am overlap") || inAM,
+        };
+      };
+
+      const candidateIds = new Set<string>();
+      SPECIAL.forEach(name => groupSets.get(name)?.forEach((id) => candidateIds.add(id)));
+      (weekSpecials || []).forEach((sp: any) => sp.tm_id && candidateIds.add(sp.tm_id));
+
+      const rosterThursday = startOfRosterWeek(parseLocalDateISO(weekStart));
+      const canonicalWeekStart = formatLocalDateISO(rosterThursday);
+      const graveByNight: Record<string, string[]> = {};
+      const pmOverlapByNight: Record<string, string[]> = {};
+      const amOverlapByNight: Record<string, string[]> = {};
       const grave = new Set<string>();
       const pm = new Set<string>();
       const am = new Set<string>();
 
-      // TMs with weekly specials this week
-      (weekSpecials || []).forEach((sp: any) => {
-        if (!sp.tm_id) return;
-        const labels = (sp.weekly_pattern || []).map((p: any) => String(p?.label || "").toLowerCase()).join(" ");
-        const hasWork = (sp.weekly_pattern || []).some((p: any) => p && p.label && p.label !== "OFF");
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const nightDate = addDays(rosterThursday, dayIdx);
+        const nightIso = formatLocalDateISO(nightDate);
+        const graveNight = new Set<string>();
+        const pmNight = new Set<string>();
+        const amNight = new Set<string>();
 
-        if (!hasWork) return;
+        candidateIds.forEach((rawId) => {
+          const tmId = normalizeStoredId(rawId);
+          const pattern = patternForTm(tmId);
+          const entry = pattern[dayIdx];
+          if (!isWorkingDay(entry)) return;
+          const roles = classifyDay(tmId, entry);
+          if (roles.grave) graveNight.add(tmId);
+          if (roles.pm) pmNight.add(tmId);
+          if (roles.am) amNight.add(tmId);
+        });
 
-        if (labels.includes("grave") || groupSets.get("Grave")?.has(sp.tm_id)) grave.add(sp.tm_id);
-        if (labels.includes("pm overlap") || groupSets.get("PM Overlaps")?.has(sp.tm_id)) pm.add(sp.tm_id);
-        if (labels.includes("am overlap") || groupSets.get("AM Overlaps")?.has(sp.tm_id)) am.add(sp.tm_id);
-      });
+        graveByNight[nightIso] = Array.from(graveNight);
+        pmOverlapByNight[nightIso] = Array.from(pmNight);
+        amOverlapByNight[nightIso] = Array.from(amNight);
+        graveNight.forEach((id) => grave.add(id));
+        pmNight.forEach((id) => pm.add(id));
+        amNight.forEach((id) => am.add(id));
+      }
 
-      // Explicit group members
-      groupSets.get("Grave")?.forEach(id => grave.add(id));
-      groupSets.get("PM Overlaps")?.forEach(id => pm.add(id));
-      groupSets.get("AM Overlaps")?.forEach(id => am.add(id));
-
-      // Push directly to the main board store so the TM Picker default list uses it immediately.
-      // This is the "pull directly from the weekly roster" path the user requested.
       try {
         const store = await import("@/app/shiftbuilder/store/useShiftBuilderStore");
-        store.useShiftBuilderStore.getState().setWeeklyRosterScheduled({
-          weekStart,
+        const applied = {
+          weekStart: canonicalWeekStart,
           grave: Array.from(grave),
           pmOverlap: Array.from(pm),
           amOverlap: Array.from(am),
+          graveByNight,
+          pmOverlapByNight,
+          amOverlapByNight,
+        };
+        store.useShiftBuilderStore.getState().setWeeklyRosterScheduled(applied);
+        persistWeeklyRosterScheduled(applied);
+        // #region agent log
+        debugSessionLog({
+          runId: "post-fix",
+          hypothesisId: "B",
+          location: "WeeklyRosterTab.tsx:handleApplyRoster",
+          message: "Apply Roster pushed to Zustand",
+          data: {
+            weekStart: applied.weekStart,
+            graveCount: applied.grave.length,
+            pmCount: applied.pmOverlap.length,
+            graveByNightKeys: Object.keys(graveByNight),
+            sampleNightGraveCounts: Object.fromEntries(
+              Object.entries(graveByNight).map(([k, v]) => [k, v.length])
+            ),
+          },
         });
-      } catch {}
+        // #endregion
+      } catch (err) {
+        console.error('[WeeklyRosterTab] Apply Roster store push failed', err);
+      }
 
-      // Also warm the server canonical (useful when service key is present)
-      const start = startOfRosterWeek(new Date(weekStart));
-      const dates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(start); d.setDate(d.getDate() + i);
-        return d.toISOString().slice(0, 10);
-      });
+      const dates = Array.from({ length: 7 }, (_, i) =>
+        formatLocalDateISO(addDays(rosterThursday, i))
+      );
       await Promise.all(dates.map(d => fetch(`/api/shiftbuilder/scheduled-roster?date=${d}`).catch(() => {})));
 
       alert("Roster applied. The TM Picker should now reflect the weekly roster for scheduled but unassigned TMs.");
@@ -256,6 +341,15 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
 
   return (
     <div>
+      {!hasScheduledData && !loading && (
+        <div className="mb-4 rounded border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm text-yellow-200">
+          <strong>No scheduled data loaded for this week.</strong><br />
+          The TM Default Schedules and/or Weekly On-Call specials appear to be empty. 
+          "Apply Roster" will produce an empty list for the picker until you populate defaults (in the Defaults tab) or add weekly specials.
+          This is why the MarkerPad shows 0 scheduled TMs even in DIRECT mode.
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-[15px] font-semibold">Current Week Roster</div>
@@ -264,9 +358,9 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              const d = new Date(weekStart);
+              const d = parseLocalDateISO(weekStart);
               d.setDate(d.getDate() - 7);
-              setWeekStart(d.toISOString().slice(0, 10));
+              setWeekStart(formatLocalDateISO(d));
             }}
             className="px-2 py-1 text-sm rounded border border-white/10 hover:bg-white/5"
           >
@@ -280,9 +374,9 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
           />
           <button
             onClick={() => {
-              const d = new Date(weekStart);
+              const d = parseLocalDateISO(weekStart);
               d.setDate(d.getDate() + 7);
-              setWeekStart(d.toISOString().slice(0, 10));
+              setWeekStart(formatLocalDateISO(d));
             }}
             className="px-2 py-1 text-sm rounded border border-white/10 hover:bg-white/5"
           >
@@ -329,12 +423,12 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
                   <span>{t.name}</span>
                   <button
                     onClick={async () => {
-                      const rosterWeekStart = startOfRosterWeek(new Date(weekStart)).toISOString().slice(0, 10);
+                      const rosterWeekStart = rosterWeekStartISO(parseLocalDateISO(weekStart));
                       await fetch("/api/admin/tm-on-call-schedules", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                          tm_id: t.id,
+                          tm_id: t.tm_id || t.id,
                           week_start: rosterWeekStart,
                           weekly_pattern: [
                             {startTime:"21:00",endTime:"07:00",label:"Full Grave"},

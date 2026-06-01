@@ -14,19 +14,9 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import BreakBadge from "../components/BreakBadge";
-import {
-  getSlotDefaults,
-  getSlotDefaultTasks,
-  upsertSlotDefault,
-  addSlotDefaultTask,
-  removeSlotDefaultTask,
-  pushBreakDefaultsToNight,
-  pushBreakDefaultsToWeek,
-  pushTaskDefaultsToNight,
-  pushTaskDefaultsToWeek,
-  type SlotDefault,
-  type SlotDefaultTask,
-} from "@/lib/shiftbuilder/data";
+// Slot defaults / task / break default helpers are dynamically imported inside the handlers that use them.
+// This prevents the heavy data.ts module from being part of the top-level static import graph of Sudo tabs (Turbopack HMR fix).
+import type { SlotDefault, SlotDefaultTask } from "@/lib/shiftbuilder/data";
 import {
   ZONE_DEFS,
   RR_DEFS,
@@ -177,6 +167,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const { getSlotDefaults, getSlotDefaultTasks } = await import("@/lib/shiftbuilder/data");
       const [defaults, tasks] = await Promise.all([
         getSlotDefaults(),
         getSlotDefaultTasks(),
@@ -229,6 +220,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       setBreakGroups((p) => ({ ...p, [def.compositeKey]: next }));
 
       try {
+        const { upsertSlotDefault } = await import("@/lib/shiftbuilder/data");
         await upsertSlotDefault({
           slotKey: def.dbKey,
           slotType: def.dbType,
@@ -272,6 +264,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       setAddingFor(null);
 
       try {
+        const { addSlotDefaultTask, getSlotDefaultTasks } = await import("@/lib/shiftbuilder/data");
         await addSlotDefaultTask({
           slotKey: def.dbKey,
           slotType: def.dbType,
@@ -312,6 +305,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       }));
 
       try {
+        const { removeSlotDefaultTask } = await import("@/lib/shiftbuilder/data");
         await removeSlotDefaultTask(task.id);
       } catch (e: any) {
         // Revert
@@ -332,6 +326,13 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       setPushing(op);
 
       try {
+        const {
+          pushBreakDefaultsToNight,
+          pushBreakDefaultsToWeek,
+          pushTaskDefaultsToNight,
+          pushTaskDefaultsToWeek,
+        } = await import("@/lib/shiftbuilder/data");
+
         if (op === "breaks-today") {
           if (!currentNightId) { showToast("No current night loaded", "error"); return; }
           const { applied } = await pushBreakDefaultsToNight(currentNightId);

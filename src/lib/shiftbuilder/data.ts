@@ -544,6 +544,37 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
     }
   }
 
+  // Permanent mapping hygiene:
+  // If we ever load legacy UI keys (Z9, ADM, etc.), rewrite them in the DB
+  // to canonical normalized keys (zone_9, admin, ...) so deletes and future
+  // queries always succeed. This runs on every night load.
+  const legacyRows = rows.filter((r: any) =>
+    !r.slot_key.startsWith('zone_') &&
+    !r.slot_key.startsWith('rr_') &&
+    !r.slot_key.startsWith('overlap_') &&
+    !r.slot_key.startsWith('aux_') &&
+    !r.slot_key.startsWith('support_') &&
+    !r.slot_key.startsWith('trash_')
+  );
+
+  if (legacyRows.length > 0) {
+    await Promise.all(legacyRows.map(async (r: any) => {
+      try {
+        const canonical = uiToDb(r.slot_key); // works because of passthrough + mapping
+        await supabase
+          .from('zone_assignments')
+          .update({
+            slot_key: canonical.slot_key,
+            slot_type: canonical.slot_type,
+            rr_side: canonical.rr_side,
+          })
+          .eq('id', r.id);
+      } catch (e) {
+        console.warn('[shiftbuilder] Failed to normalize legacy slot key', r.slot_key, e);
+      }
+    }));
+  }
+
   return rows.map((row: any) => ({
     slotKey: row.slot_key,
     tmId: row.tm_id || null,
@@ -679,37 +710,37 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
     throw new Error('nightId and slotKey are required for upsertZoneAssignment');
   }
 
-  if (!tmId) {
-    // Unassign / clear the slot
-    let q = client
-      .from('zone_assignments')
-      .delete()
-      .eq('night_id', nightId)
-      .eq('slot_key', slotKey)
-      .eq('slot_type', slotType);
-
-    if (rrSide) {
-      q = q.eq('rr_side', rrSide);
-    } else {
-      // Also delete any rr_side variants if we are clearing a logical pair (defensive)
-      // For safety we delete exact match first; caller should be explicit for RR sides.
-    }
-
-    const { error } = await q;
-    if (error) {
-      logSupabaseError('delete assignment failed', error);
-      throw new Error(`Failed to clear assignment: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-    }
-    return { success: true, action: 'deleted' as const };
+  // Defensive normalization: if someone passes a UI key by mistake,
+  // convert it to the canonical DB key. This prevents future drift.
+  let finalSlotKey = slotKey;
+  let finalSlotType = slotType;
+  let finalRrSide = rrSide;
+  try {
+    const mapped = uiToDb(slotKey);
+    finalSlotKey = mapped.slot_key;
+    finalSlotType = mapped.slot_type;
+    finalRrSide = mapped.rr_side;
+  } catch {
+    // already a DB key or unknown — leave as-is
   }
 
-  // Assign or re-assign
+  if (!tmId) {
+    // Unassign / clear the slot — use the robust helper that also cleans legacy keys
+    return deleteZoneAssignment({
+      nightId,
+      uiKey: slotKey, // the robust function will handle normalization + legacy cleanup
+      slotType: finalSlotType,
+      rrSide: finalRrSide,
+    });
+  }
+
+  // Assign or re-assign — always use normalized keys
   const row: Record<string, any> = {
     night_id: nightId,
-    slot_key: slotKey,
-    slot_type: slotType,
+    slot_key: finalSlotKey,
+    slot_type: finalSlotType,
     tm_id: tmId,
-    rr_side: rrSide,
+    rr_side: finalRrSide,
     is_filled: true,
     is_locked: isLocked,
     updated_at: new Date().toISOString(),
@@ -728,6 +759,71 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
   }
 
   return { success: true, action: 'upserted' as const };
+}
+
+/**
+ * Robust delete for a zone assignment.
+ * 
+ * Tries the canonical DB key first.
+ * If that affects 0 rows, it also tries common legacy UI keys
+ * (e.g. "Z9" instead of "zone_9") to clean up old data.
+ * 
+ * This provides a permanent safety net during the transition away from
+ * legacy slot keys in the database.
+ */
+export async function deleteZoneAssignment(params: {
+  nightId: string;
+  uiKey: string;           // UI key like "Z9", "Z9SR", "MRR1", etc.
+  slotType?: string;
+  rrSide?: string | null;
+}) {
+  const client = getSupabaseClient();
+  const { nightId, uiKey, slotType = 'zone', rrSide = null } = params;
+
+  if (!nightId || !uiKey) {
+    throw new Error('nightId and uiKey are required for deleteZoneAssignment');
+  }
+
+  // Always compute the canonical DB key
+  let canonical: { slot_key: string; slot_type: string; rr_side: string | null };
+  try {
+    canonical = uiToDb(uiKey) as any;
+  } catch {
+    canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
+  }
+
+  const variants = [
+    canonical, // preferred
+    // Legacy variants for old data
+    { slot_key: uiKey, slot_type: slotType, rr_side: rrSide },
+    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: rrSide },
+  ];
+
+  let totalDeleted = 0;
+
+  for (const v of variants) {
+    let q = client
+      .from('zone_assignments')
+      .delete()
+      .eq('night_id', nightId)
+      .eq('slot_key', v.slot_key)
+      .eq('slot_type', v.slot_type);
+
+    if (v.rr_side) {
+      q = q.eq('rr_side', v.rr_side);
+    }
+
+    const { error, count } = await q;
+
+    if (error) {
+      logSupabaseError('robust delete failed on variant', error);
+      continue;
+    }
+
+    if (count) totalDeleted += count;
+  }
+
+  return { success: true, rowsDeleted: totalDeleted };
 }
 
 /**
@@ -1735,8 +1831,10 @@ export function createNightAssignmentChannel(
 ) {
   const client = getSupabaseClient();
 
-  return client
-    .channel(`shiftbuilder-zone-assignments-${nightId}`)
+  // Always-fresh channel (unique topic) — prevents "callbacks after subscribe" on reuse.
+  const channel = freshChannel(`shiftbuilder-zone-assignments-${nightId}`);
+
+  return channel
     .on(
       'postgres_changes',
       {
@@ -1764,6 +1862,22 @@ export async function unsubscribeChannel(channel: any) {
   if (channel) {
     await supabase.removeChannel(channel);
   }
+}
+
+/**
+ * Always returns a brand-new, never-before-subscribed Supabase Realtime channel.
+ * 
+ * Using a unique topic suffix on every call completely eliminates the
+ * "cannot add `postgres_changes` callbacks ... after `subscribe()`" error
+ * that occurs when React effects, HMR, StrictMode, or rapid date changes
+ * cause overlapping channel creation for the same logical topic.
+ * 
+ * Callers are responsible for calling removeChannel on the exact instance returned.
+ * We never reuse a channel instance or rely on topic-name deduping.
+ */
+function freshChannel(prefix: string) {
+  const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return supabase.channel(`${prefix}-${nonce}`);
 }
 
 /**
@@ -1809,8 +1923,11 @@ export function createCallOffsChannel(
 ) {
   const client = getSupabaseClient();
 
-  return client
-    .channel(`shiftbuilder-call-offs-${nightDateIso}`)
+  // Always-fresh channel (unique topic) — the direct fix for the runtime error:
+  // "cannot add `postgres_changes` callbacks for realtime:shiftbuilder-call-offs-... after `subscribe()`"
+  const channel = freshChannel(`shiftbuilder-call-offs-${nightDateIso}`);
+
+  return channel
     .on(
       'postgres_changes',
       {
@@ -1826,10 +1943,6 @@ export function createCallOffsChannel(
     )
     .subscribe((status) => {
       console.log('[shiftbuilder] call_offs subscription status:', status);
-      // Expose to OpsStatusBar (permanent prod telemetry)
-      (window as any).__realtimeState =
-        status === 'SUBSCRIBED' ? 'LIVE' :
-        status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'OFFLINE' : 'SYNCING';
     });
 }
 
@@ -1843,8 +1956,8 @@ export function createTMDefaultSchedulesChannel(
 ) {
   const client = getSupabaseClient();
 
-  return client
-    .channel('shiftbuilder-tm-default-schedules')
+  // Unique topic per creation so rapid effect re-runs / HMR never collide.
+  return freshChannel('shiftbuilder-tm-default-schedules')
     .on(
       'postgres_changes',
       {
@@ -1871,8 +1984,8 @@ export function createTMOnCallSchedulesChannel(
 ) {
   const client = getSupabaseClient();
 
-  return client
-    .channel('shiftbuilder-tm-on-call-schedules')
+  // Unique topic per creation so rapid effect re-runs / HMR never collide.
+  return freshChannel('shiftbuilder-tm-on-call-schedules')
     .on(
       'postgres_changes',
       {

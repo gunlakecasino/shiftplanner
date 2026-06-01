@@ -24,7 +24,7 @@ import {
   batchRunEngineForNight,
   type BatchNightResult,
   type BatchRunOptions,
-} from "@/lib/shiftbuilder/sudoActions";
+} from "@/lib/shiftbuilder/sudoBatchPlanner";
 
 // -----------------------------------------------------------------------
 // Types

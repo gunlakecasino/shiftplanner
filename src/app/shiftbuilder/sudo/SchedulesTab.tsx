@@ -39,7 +39,8 @@ import {
   resolveDisplayName,
   type ParsedSchedule,
 } from "@/lib/shiftbuilder/adpSchedule";
-import { getGraveAvailableTeamMembers, getActiveTeamMembers } from "@/lib/shiftbuilder/data";
+// Legacy roster helpers from data.ts are dynamically imported inside the preview function
+// to avoid pulling the heavy data module into the top-level static graph (Turbopack HMR fix).
 import {
   listSchedules,
   downloadScheduleFile,
@@ -148,6 +149,7 @@ export function SchedulesTab({ onDataChanged, isDark = false, canSeeDraftData = 
     setView("preview");
     try {
       // Download + parse
+      const { getGraveAvailableTeamMembers, getActiveTeamMembers } = await import("@/lib/shiftbuilder/data");
       const [buffer, grave, active] = await Promise.all([
         downloadScheduleFile(record.schedulePath),
         getGraveAvailableTeamMembers(),
@@ -197,6 +199,7 @@ export function SchedulesTab({ onDataChanged, isDark = false, canSeeDraftData = 
       // Build lookups: gravePool (for the sheet filter) AND display name
       // (so night_tm_status.tm_name stores the Display Name we use
       // everywhere, not the Full Name from the ADP cell).
+      const { getGraveAvailableTeamMembers, getActiveTeamMembers } = await import("@/lib/shiftbuilder/data");
       const [grave, active] = await Promise.all([
         getGraveAvailableTeamMembers(),
         getActiveTeamMembers(),
@@ -389,6 +392,7 @@ export function SchedulesTab({ onDataChanged, isDark = false, canSeeDraftData = 
               try {
                 const buffer = await downloadScheduleFile(rec.schedulePath);
                 const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+                const { getGraveAvailableTeamMembers, getActiveTeamMembers } = await import("@/lib/shiftbuilder/data");
                 const [grave, active] = await Promise.all([
                   getGraveAvailableTeamMembers(),
                   getActiveTeamMembers(),

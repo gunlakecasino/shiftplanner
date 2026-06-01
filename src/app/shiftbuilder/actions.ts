@@ -1,15 +1,13 @@
 "use server";
 
-import {
-  callGrok,
-  buildShiftBuilderSystemPrompt,
-  buildGrokIntelligenceSystemPrompt,
-  parseGrokStructuredResponse,
-  guardGrokActions,
-  type GrokMessage,
-  type GrokBoardSnapshot,
-  type GrokStructuredResponse,
-  type ReasoningEffort,
+// Heavy xai / grokIntelligence symbols dynamically imported inside the functions below.
+// This breaks the top-level static edge that was causing Turbopack "module factory is not available"
+// errors when the giant ShiftBuilderClient dynamically imports this actions module.
+import type {
+  GrokMessage,
+  GrokBoardSnapshot,
+  GrokStructuredResponse,
+  ReasoningEffort,
 } from "@/lib/xai";
 
 // Vercel AI SDK (Phase 3 migration) — structured output + official xAI provider
@@ -48,6 +46,7 @@ export type GrokContext = {
  * Legacy text-only flow (still used as fallback / for the simple button).
  */
 export async function askGrokForShiftSuggestions(context: GrokContext): Promise<string> {
+  const { buildShiftBuilderSystemPrompt, callGrok } = await import("@/lib/xai");
   const systemPrompt = buildShiftBuilderSystemPrompt();
 
   let userPrompt = "";
@@ -122,6 +121,13 @@ export async function askGrokForStructuredSuggestions(
   usedStructured: boolean;
 }> {
   const { snapshot, userQuestion, rosterForGuard } = request;
+
+  const {
+    buildGrokIntelligenceSystemPrompt,
+    parseGrokStructuredResponse,
+    guardGrokActions,
+    callGrok,
+  } = await import("@/lib/xai");
 
   const systemPrompt = buildGrokIntelligenceSystemPrompt(snapshot);
 

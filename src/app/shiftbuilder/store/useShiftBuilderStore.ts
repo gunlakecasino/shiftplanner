@@ -55,9 +55,13 @@ interface ShiftBuilderState {
   // the weekly roster without depending on the service role key path.
   weeklyRosterScheduled: {
     weekStart: string | null;
-    grave: string[];      // tm ids considered scheduled for grave this week
+    grave: string[];      // union across the week (legacy / diagnostics)
     pmOverlap: string[];
     amOverlap: string[];
+    /** Per-night scheduled sets keyed by local YYYY-MM-DD (Thu→Wed roster week). */
+    graveByNight?: Record<string, string[]>;
+    pmOverlapByNight?: Record<string, string[]>;
+    amOverlapByNight?: Record<string, string[]>;
   };
   setWeeklyRosterScheduled: (data: ShiftBuilderState['weeklyRosterScheduled']) => void;
 
@@ -169,6 +173,9 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       grave: [],
       pmOverlap: [],
       amOverlap: [],
+      graveByNight: {},
+      pmOverlapByNight: {},
+      amOverlapByNight: {},
     },
 
     liveEngineConfigForAI: null,

@@ -19,15 +19,8 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import {
-  getSlotTaskCatalog,
-  updateCatalogTask,
-  deleteCatalogTask,
-  getCatalogTaskUsageCount,
-  updateCatalogSortOrders,
-  seedDefaultTasksForNight,
-  type CatalogTask,
-} from "@/lib/shiftbuilder/data";
+// All catalog/task functions dynamically imported inside handlers (full aggressive sweep for Turbopack HMR stability)
+import type { CatalogTask } from "@/lib/shiftbuilder/data";
 
 export interface TasksTabProps {
   onDataChanged?: () => void;
@@ -102,6 +95,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
     setLoading(true);
     setError(null);
     try {
+      const { getSlotTaskCatalog } = await import("@/lib/shiftbuilder/data");
       const rows = await getSlotTaskCatalog();
       setCatalog(rows);
     } catch (e: any) {
@@ -176,6 +170,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
     const trimmed = newLabel.trim();
     if (!trimmed || trimmed === t.label) return;
     try {
+      const { updateCatalogTask } = await import("@/lib/shiftbuilder/data");
       await updateCatalogTask({ id: t.id, label: trimmed });
       await refresh();
       onDataChanged?.();
@@ -187,6 +182,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
 
   // Delete with usage guard
   const handleDelete = async (t: CatalogTask) => {
+    const { getCatalogTaskUsageCount } = await import("@/lib/shiftbuilder/data");
     const usage = await getCatalogTaskUsageCount(t.id);
     const msg = usage > 0
       ? `Delete "${t.label}"? It is currently used on ${usage} night(s). Historical sheets will keep the label.`
@@ -194,6 +190,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
     if (!confirm(msg)) return;
 
     try {
+      const { deleteCatalogTask } = await import("@/lib/shiftbuilder/data");
       await deleteCatalogTask(t.id);
       await refresh();
       onDataChanged?.();
@@ -207,6 +204,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
   // TODO: replace with proper @dnd-kit/sortable vertical list once the tab is stable
   const toggleDefault = async (t: CatalogTask) => {
     try {
+      const { updateCatalogTask } = await import("@/lib/shiftbuilder/data");
       await updateCatalogTask({
         id: t.id,
         isDefaultOnNewNight: !t.isDefaultOnNewNight,
@@ -225,6 +223,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
       return;
     }
     try {
+      const { seedDefaultTasksForNight } = await import("@/lib/shiftbuilder/data");
       const count = await seedDefaultTasksForNight(currentNightId);
       showToast(`Seeded ${count} default tasks to the current night`);
       onDataChanged?.();
@@ -246,6 +245,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
       { id: b.id, sortOrder: a.sortOrder },
     ];
     try {
+      const { updateCatalogSortOrders } = await import("@/lib/shiftbuilder/data");
       await updateCatalogSortOrders(updates);
       await refresh();
       onDataChanged?.();

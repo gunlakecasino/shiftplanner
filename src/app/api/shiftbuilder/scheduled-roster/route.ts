@@ -29,6 +29,14 @@ export async function GET(request: NextRequest) {
   try {
     const result = await getScheduledTmsForNight(nightDate);
 
+    // Log when we get empty results — very common when service role key is missing
+    if (!result.allScheduled?.length) {
+      console.warn("[scheduled-roster] API returned empty scheduled data", {
+        date: dateParam,
+        hasAdminClient: !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY,
+      });
+    }
+
     return NextResponse.json({
       date: dateParam,
       allScheduled: result.allScheduled,
@@ -40,7 +48,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[scheduled-roster] Error:", error);
     return NextResponse.json(
-      { error: "Failed to compute canonical scheduled roster" },
+      { 
+        error: "Failed to compute canonical scheduled roster",
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

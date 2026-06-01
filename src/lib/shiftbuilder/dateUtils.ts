@@ -75,6 +75,36 @@ export function sameDay(a: Date, b: Date): boolean {
   );
 }
 
+/** YYYY-MM-DD in local timezone (avoids UTC drift from `toISOString().slice(0, 10)`). */
+export function formatLocalDateISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Parse YYYY-MM-DD as local midnight (not UTC). */
+export function parseLocalDateISO(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+/** Canonical roster-week Thursday for a calendar day, as local YYYY-MM-DD. */
+export function rosterWeekStartISO(date: Date): string {
+  return formatLocalDateISO(startOfRosterWeek(date));
+}
+
+/** True when `day` falls in the Thu→Wed roster week starting `rosterWeekStart` (local). */
+export function isDayInRosterWeek(day: Date, rosterWeekStart: string): boolean {
+  const start = parseLocalDateISO(rosterWeekStart);
+  const end = addDays(start, 6);
+  const probe = new Date(day);
+  probe.setHours(12, 0, 0, 0);
+  start.setHours(12, 0, 0, 0);
+  end.setHours(12, 0, 0, 0);
+  return probe.getTime() >= start.getTime() && probe.getTime() <= end.getTime();
+}
+
 export const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export const MONTH_LONG  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 export const DAY_LONG    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];

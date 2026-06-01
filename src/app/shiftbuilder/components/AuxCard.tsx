@@ -102,6 +102,20 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </span>
         </div>
         <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+        {/* Explicit remove button for Aux slots (including Z9SR) so clearing is reliable and doesn't require drag or refresh */}
+        {hasTM && !isLocked && onLiveUnassign && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onLiveUnassign(def.key);
+            }}
+            className="ml-auto text-[#9CA3AF] hover:text-[#EF4444] leading-none"
+            aria-label="Remove TM from slot"
+            title="Clear this slot"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">

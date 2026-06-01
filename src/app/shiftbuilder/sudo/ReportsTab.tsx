@@ -20,11 +20,11 @@ import {
   getZoneColor, getRRAccent, getAuxAccent,
 } from "@/lib/shiftbuilder/constants";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
-import {
-  getZoneDetailReport,
-  type ZoneDetailEntry,
-  type ZoneDetailReport,
-  type ReportWindow,
+// getZoneDetailReport dynamically imported (avoids pulling heavy data.ts at top level for Turbopack HMR)
+import type {
+  ZoneDetailEntry,
+  ZoneDetailReport,
+  ReportWindow,
 } from "@/lib/shiftbuilder/data";
 
 // ---------------------------------------------------------------------------
@@ -650,6 +650,7 @@ export function ReportsTab() {
     setLoading(true);
     setError(null);
     try {
+      const { getZoneDetailReport } = await import("@/lib/shiftbuilder/data");
       const r = await getZoneDetailReport(w);
       setReport(r);
       if (r.entries.length > 0) setSelectedTm(r.entries[0].tmId);
