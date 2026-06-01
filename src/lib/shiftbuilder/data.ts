@@ -560,7 +560,18 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
   if (legacyRows.length > 0) {
     await Promise.all(legacyRows.map(async (r: any) => {
       try {
-        const canonical = uiToDb(r.slot_key); // works because of passthrough + mapping
+        let canonical: any;
+        try {
+          canonical = uiToDb(r.slot_key);
+        } catch {
+          // Last-ditch: treat whatever is in the DB as already-canonical for aux/overlap
+          const sk = String(r.slot_key || '');
+          canonical = {
+            slot_key: sk,
+            slot_type: r.slot_type || (sk.includes('overlap') ? 'overlap' : 'aux'),
+            rr_side: r.rr_side ?? null,
+          };
+        }
         await supabase
           .from('zone_assignments')
           .update({

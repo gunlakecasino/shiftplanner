@@ -46,6 +46,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
+import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
@@ -154,8 +155,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
         // 4. Optimistically update BOTH layers (instant UI for this client + any live listeners)
         const patch = getOptimisticPatch(params as TParams);
 
-        // Query cache
-        queryClient.setQueryData(["night", dateKey], (old: any) => {
+        // Query cache — write to BOTH the legacy key (for any remaining listeners) AND the real one
+        // used by useCurrentNight (nightCore). This is why live updates were invisible.
+        const applyPatchToAssignmentsShape = (old: any) => {
           if (!old) return old;
           const nextAssignments = { ...(old.assignments || {}) };
           if (patch.tmId === null || patch.tmId === undefined) {
@@ -167,31 +169,66 @@ export function useLiveAssignments(selectedDay: DayDef) {
             };
           }
           return { ...old, assignments: nextAssignments };
-        });
+        };
 
-        // Zustand mirror
+        queryClient.setQueryData(["night", dateKey], applyPatchToAssignmentsShape);
+        queryClient.setQueryData(["nightCore", dateKey], applyPatchToAssignmentsShape);
+
+        // Zustand mirror (liveAssignmentsStore for cross-client / listeners)
         if (patch.tmId === null) {
           liveAssignmentsStore.getState().removeAssignment(dateKey, params.uiKey);
         } else {
           liveAssignmentsStore.getState().patchAssignment(dateKey, params.uiKey, patch as any);
         }
 
-        return { previousNightData, previousStoreState, dateKey, uiKey: params.uiKey };
+        // === CRITICAL FIX: also drive the main board store ===
+        // ShiftBuilderBoard + cards now primarily subscribe via useAssignments() (narrow Zustand).
+        // Without this, live.assign / live.unassign / realtime updates are invisible until refresh.
+        try {
+          const mainStore = useShiftBuilderStore.getState();
+          if (patch.tmId === null || patch.tmId === undefined) {
+            mainStore.setAssignments((prev: any) => {
+              const copy = { ...prev };
+              delete copy[params.uiKey];
+              return copy;
+            });
+          } else {
+            mainStore.setAssignments((prev: any) => ({
+              ...prev,
+              [params.uiKey]: {
+                ...prev[params.uiKey],
+                ...patch,
+                tmId: patch.tmId,
+                tmName: (patch as any).tmName ?? prev[params.uiKey]?.tmName,
+                slotKey: params.uiKey,
+              },
+            }));
+          }
+        } catch (e) {
+          console.warn("[useLiveAssignments] failed to patch main useShiftBuilderStore", e);
+        }
+
+        return { previousNightData, previousStoreState, dateKey, uiKey: params.uiKey, previousMainAssignments: useShiftBuilderStore.getState().assignments };
       },
 
       onError: (err, params, context: any) => {
-        // PERFECT ROLLBACK
+        // PERFECT ROLLBACK (all three layers + correct core key)
         if (context?.previousNightData) {
           queryClient.setQueryData(["night", context.dateKey], context.previousNightData);
+          queryClient.setQueryData(["nightCore", context.dateKey], context.previousNightData);
         }
         if (context?.previousStoreState) {
-          // Restore the whole night's assignments from snapshot (simple & correct)
           liveAssignmentsStore.setState((s) => ({
             assignmentsByNight: {
               ...s.assignmentsByNight,
               [context.dateKey]: context.previousStoreState,
             },
           }));
+        }
+        if (context?.previousMainAssignments) {
+          try {
+            useShiftBuilderStore.getState().setAssignments(context.previousMainAssignments);
+          } catch {}
         }
 
         const message = err instanceof Error ? err.message : "unknown error";

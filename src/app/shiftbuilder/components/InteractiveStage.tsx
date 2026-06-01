@@ -69,7 +69,7 @@ export default function InteractiveStage({
         createPortal(
           <DragOverlay dropAnimation={null}>
             {activeDrag ? (
-              activeDrag.kind === "task" ? (
+              (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
                 <div
                   className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
                   style={{
@@ -88,6 +88,9 @@ export default function InteractiveStage({
                   <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
                   {activeDrag.fromSlot && (
                     <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
+                  )}
+                  {activeDrag.kind === "assigned" && (
+                    <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>reassign</span>
                   )}
                 </div>
               ) : null

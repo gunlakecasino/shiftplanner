@@ -64,14 +64,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       ref={setRef}
       onClick={(e) => { if (!isLocked) onCardClick(slotKey, e.currentTarget, e); }}
       {...penHoverHandlers}
+      {/* Clean dnd-kit listeners — manual forwarding was interfering with drag start. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        clearLongHoverTimer();
-        if (hasTM && !isLocked && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
       data-slot-key={slotKey}
       className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
         isOver ? "drop-target-active" : ""

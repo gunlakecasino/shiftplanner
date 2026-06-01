@@ -25,6 +25,7 @@ import {
   addDays,
 } from "@/lib/shiftbuilder/dateUtils";
 import { debugSessionLog, persistWeeklyRosterScheduled } from "@/lib/shiftbuilder/debugSessionLog";
+import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";  // static import for reliable cross-bundle store access
 interface Props {
   onDataChanged?: () => void;
   isDark?: boolean;
@@ -291,7 +292,6 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
       }
 
       try {
-        const store = await import("@/app/shiftbuilder/store/useShiftBuilderStore");
         const applied = {
           weekStart: canonicalWeekStart,
           grave: Array.from(grave),
@@ -301,7 +301,8 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
           pmOverlapByNight,
           amOverlapByNight,
         };
-        store.useShiftBuilderStore.getState().setWeeklyRosterScheduled(applied);
+        // Use the statically imported store for reliable cross-component / bundle access
+        useShiftBuilderStore.getState().setWeeklyRosterScheduled(applied);
         persistWeeklyRosterScheduled(applied);
         // #region agent log
         debugSessionLog({

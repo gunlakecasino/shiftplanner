@@ -72,14 +72,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
+      {/* Clean dnd-kit listener attachment for reliable assigned TM drag. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        clearLongHoverTimer();
-        if (hasTM && !isLocked && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
       data-slot-key={def.key}
       className={`assignment-card relative cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
       style={{

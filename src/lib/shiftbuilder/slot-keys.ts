@@ -68,6 +68,14 @@ const AUX_DB_TO_UI: Record<string, string> = {
  * development rather than silently writing junk rows.
  */
 export function uiToDb(uiKey: string): DbSlot {
+  // Tolerate being fed raw DB keys during legacy normalization sweeps (prevents the
+  // "cannot translate UI key 'admin' / 'z9_sr'" errors and the resulting 400s).
+  if (/^zone_\d+$/.test(uiKey)) return { slot_key: uiKey, slot_type: "zone", rr_side: null };
+  if (/^rr_\d+(_\d+)?$/.test(uiKey)) return { slot_key: uiKey, slot_type: "rr", rr_side: null };
+  if (/^(aux_|support_|trash_|overlap_|z9_sr|admin)\d*$/.test(uiKey)) {
+    return { slot_key: uiKey, slot_type: "aux", rr_side: null };
+  }
+
   // Zones: Z1 … Z10
   const zMatch = uiKey.match(/^Z(\d+)$/);
   if (zMatch) {
@@ -87,9 +95,13 @@ export function uiToDb(uiKey: string): DbSlot {
     };
   }
 
-  // Default AUX (Z9SR, ADM, …)
+  // Default AUX (Z9SR, ADM, …) — accept both UI keys and the matching DB keys (idempotent for legacy rows)
   if (AUX_UI_TO_DB[uiKey]) {
     return { slot_key: AUX_UI_TO_DB[uiKey], slot_type: "aux", rr_side: null };
+  }
+  // If someone passed the DB key by mistake (common during normalization of old rows), map it back
+  if (AUX_DB_TO_UI[uiKey]) {
+    return { slot_key: uiKey, slot_type: "aux", rr_side: null };
   }
 
   // Numbered family AUX — support / trash / generic. Mirror the same naming

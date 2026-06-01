@@ -50,6 +50,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "../supabase"; // re-exported singleton from the data layer root
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys"; // correct DB→UI reverse (z9_sr + aux → Z9SR, zone_9 + zone → Z9, etc.)
+import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore"; // main board store (what ShiftBuilderBoard subscribes to)
 
 // ============================================================================
 // ZUSTAND LIVE STORE (lightweight mirror of committed server state)
@@ -228,28 +229,40 @@ function handleAssignmentChange(
     // Removal / unassign
     store.removeAssignment(dateKey, uiKey);
 
-    // Also patch the TanStack cache so useCurrentNight consumers see it instantly
-    queryClient.setQueryData(["night", dateKey], (old: any) => {
+    // Patch both the legacy + correct core TanStack keys
+    const removeFromCache = (old: any) => {
       if (!old) return old;
-      const nextAssignments = { ...(old.assignments || {}) };
-      delete nextAssignments[uiKey];
-      return { ...old, assignments: nextAssignments };
-    });
+      const next = { ...(old.assignments || {}) };
+      delete next[uiKey];
+      return { ...old, assignments: next };
+    };
+    queryClient.setQueryData(["night", dateKey], removeFromCache);
+    queryClient.setQueryData(["nightCore", dateKey], removeFromCache);
+
+    // Drive the main board store (the one ShiftBuilderBoard + cards actually read)
+    try {
+      useShiftBuilderStore.getState().setAssignments((prev: any) => {
+        const copy = { ...prev };
+        delete copy[uiKey];
+        return copy;
+      });
+    } catch {}
+
     return;
   }
 
   if ((eventType === "INSERT" || eventType === "UPDATE") && newRow?.tm_id) {
     const liveAssignment: LiveAssignment = {
       tmId: newRow.tm_id,
-      tmName: newRow.tm_name || newRow.tm_id, // fallback; real enrichment happens in loader
+      tmName: newRow.tm_name || newRow.tm_id,
       isLocked: newRow.is_locked ?? false,
       updatedAt: newRow.updated_at,
     };
 
     store.patchAssignment(dateKey, uiKey, liveAssignment);
 
-    // Keep the Query cache authoritative for the night data shape
-    queryClient.setQueryData(["night", dateKey], (old: any) => {
+    // Patch both legacy and the real core key used by the board
+    const patchCache = (old: any) => {
       if (!old) return old;
       return {
         ...old,
@@ -258,11 +271,27 @@ function handleAssignmentChange(
           [uiKey]: {
             tmId: liveAssignment.tmId,
             tmName: liveAssignment.tmName,
-            // other fields (isLocked etc.) can be merged when we enrich the cache shape
+            isLocked: liveAssignment.isLocked,
           },
         },
       };
-    });
+    };
+    queryClient.setQueryData(["night", dateKey], patchCache);
+    queryClient.setQueryData(["nightCore", dateKey], patchCache);
+
+    // Drive the main board store so cards re-render instantly (fixes the "must refresh" bug)
+    try {
+      useShiftBuilderStore.getState().setAssignments((prev: any) => ({
+        ...prev,
+        [uiKey]: {
+          ...prev[uiKey],
+          tmId: liveAssignment.tmId,
+          tmName: liveAssignment.tmName,
+          isLocked: liveAssignment.isLocked,
+          slotKey: uiKey,
+        },
+      }));
+    } catch {}
   }
 }
 

@@ -181,7 +181,18 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     liveEngineConfigForAI: null,
     setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
 
-    setWeeklyRosterScheduled: (data) => set({ weeklyRosterScheduled: data }),
+    setWeeklyRosterScheduled: (data) => {
+      set({ weeklyRosterScheduled: data });
+      // Always persist so the feed survives reloads / tab switches and the
+      // MarkerPad default list (the strict scheduled+eligible+unassigned list)
+      // stays correct after "Apply Roster".
+      try {
+        // dynamic import to avoid pulling the debug helper at module top level
+        import("@/lib/shiftbuilder/debugSessionLog").then(({ persistWeeklyRosterScheduled }) => {
+          if (data && (data as any).weekStart) persistWeeklyRosterScheduled(data);
+        });
+      } catch {}
+    },
   }))
 );
 

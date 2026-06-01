@@ -2466,28 +2466,38 @@ function AuthedShiftBuilder() {
     const captureDayName = selectedDay.name;
     const tmIdBeingRemoved = assignments[slotKey]?.tmId ?? null;
 
-    setAssignments((prev: any) => {
-      const copy = { ...prev };
-      delete copy[slotKey];
-      return copy;
-    });
+    // Prefer the live optimistic layer (now wired to the main board store + correct nightCore key).
+    // This makes clear/X buttons instant like task drag, and keeps realtime + rollback working.
+    if (live?.unassign) {
+      live.unassign(slotKey, {
+        captureDate,
+        captureDayName,
+        targetNightId,
+        isDraftMode,
+      });
+    } else {
+      // Fallback (legacy direct path)
+      setAssignments((prev: any) => {
+        const copy = { ...prev };
+        delete copy[slotKey];
+        return copy;
+      });
 
-    // Use the robust delete that handles both canonical and legacy slot keys
-    // (e.g. "Z9" vs "zone_9"). Resolve nightId if not yet available.
-    (async () => {
-      let nid = targetNightId;
-      if (!nid) {
-        nid = await resolveNightIdForDate(captureDate, captureDayName);
-      }
-      if (nid) {
-        import("@/lib/shiftbuilder/data").then(({ deleteZoneAssignment }) =>
-          deleteZoneAssignment({
-            nightId: nid,
-            uiKey: slotKey,
-          }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
-        );
-      }
-    })();
+      (async () => {
+        let nid = targetNightId;
+        if (!nid) {
+          nid = await resolveNightIdForDate(captureDate, captureDayName);
+        }
+        if (nid) {
+          import("@/lib/shiftbuilder/data").then(({ deleteZoneAssignment }) =>
+            deleteZoneAssignment({
+              nightId: nid,
+              uiKey: slotKey,
+            }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
+          );
+        }
+      })();
+    }
 
     // Drop the break_assignments row for this TM so a re-assign gets a fresh
     // group instead of inheriting a stale one. Fire-and-forget.
@@ -3530,7 +3540,22 @@ function AuthedShiftBuilder() {
   // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
 
   // === Direct Weekly Roster feed (the primary source we want) ===
-  const weeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
+  const rawWeeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
+
+  // Late hydration safety net (handles Apply Roster while main board is mounted,
+  // HMR, or Sudo opened in another tab). This is the #1 reason the picker stayed
+  // on the tiny fallback list in previous sessions.
+  const weeklyRoster = React.useMemo(() => {
+    const r = rawWeeklyRoster as any;
+    if (r?.weekStart) return r;
+    if (typeof window === 'undefined') return r;
+    const saved = readWeeklyRosterScheduledFromStorage() as any;
+    if (saved?.weekStart) {
+      useShiftBuilderStore.getState().setWeeklyRosterScheduled(saved);
+      return saved;
+    }
+    return r;
+  }, [rawWeeklyRoster]);
 
   // Compute the roster week (Thu-Wed) that the currently selected day belongs to.
   // "Apply Roster" stores the roster week (startOfRosterWeek ISO). We only trust
@@ -3555,6 +3580,14 @@ function AuthedShiftBuilder() {
 
   // Heavy debug for the persistent "picker always empty" problem
   if (process.env.NODE_ENV !== 'production' && markerSlotKey) {
+    const isFeedEmpty = !weeklyRoster?.weekStart && (weeklyRoster?.grave?.length ?? 0) === 0;
+    if (isFeedEmpty) {
+      console.warn(
+        '%c[MARKER-PICKER] Direct feed is EMPTY. Open Sudo → Weekly Roster tab → click "Apply Roster" for the week containing today. ' +
+        'Until you do this the picker default list will stay on the small fallback pool.',
+        'color:#f59e0b; font-weight:bold'
+      );
+    }
     console.log('%c[MARKER-PICKER DEBUG - CRITICAL]', 'color: red; font-weight: bold; font-size: 14px', {
       selectedDay: selectedDay.date.toISOString().slice(0,10),
       currentRosterWeekISO,
@@ -3566,7 +3599,7 @@ function AuthedShiftBuilder() {
       effectiveRealRosterSize: effectiveRealRoster?.length ?? 0,
       alreadyAssignedCount: alreadyAssignedThisNight?.size ?? 0,
       calledOffCount: calledOffIds?.size ?? 0,
-      fullStoreWeeklyRoster: weeklyRoster,   // full object for inspection
+      fullStoreWeeklyRoster: weeklyRoster,
     });
   }
 
@@ -3589,9 +3622,9 @@ function AuthedShiftBuilder() {
   const buildScheduledUnassignedList = React.useCallback(
     (pathLabel: string) => {
       const scheduledRoleIds = new Set<string>([
-        ...effectiveGrave,
-        ...effectivePM,
-        ...effectiveAM,
+        ...((effectiveGrave as any) || []),
+        ...((effectivePM as any) || []),
+        ...((effectiveAM as any) || []),
       ]);
       const seen = new Set<string>();
       const list: { tmId: string; tmName: string }[] = [];
@@ -3631,7 +3664,7 @@ function AuthedShiftBuilder() {
           console.warn("[MARKER-PICKER] Direct feed is active but produced 0 results for this night. The emptiness is coming from the Apply Roster data itself (graveByNight for this date is empty). Check the Sudo Weekly Roster tab data.");
         }
         if (list.length === 0) {
-          const graveTonight = Array.from(effectiveGrave);
+          const graveTonight = Array.from((effectiveGrave as any) || []);
           console.log("[MARKER-PICKER][ZERO DIAG]", {
             pathLabel,
             selectedNightISO,
@@ -3733,9 +3766,9 @@ function AuthedShiftBuilder() {
         const tm = resolveTmFromLookup(markerRosterLookup, entry.tmId);
         if (!tm) return false;
 
-        if (isFullNightSlot && !roleSetHasTm(effectiveGrave, entry.tmId)) return false;
-        if (isOLPMSlot && !roleSetHasTm(effectivePM, entry.tmId)) return false;
-        if (isOLAMSlot && !roleSetHasTm(effectiveAM, entry.tmId)) return false;
+        if (isFullNightSlot && !roleSetHasTm((effectiveGrave as any) || new Set(), entry.tmId)) return false;
+        if (isOLPMSlot && !roleSetHasTm((effectivePM as any) || new Set(), entry.tmId)) return false;
+        if (isOLAMSlot && !roleSetHasTm((effectiveAM as any) || new Set(), entry.tmId)) return false;
 
         try {
           return isEligibleForSlot(tm, markerSlotKey);
@@ -3808,11 +3841,11 @@ function AuthedShiftBuilder() {
   // #region agent log — NDJSON debug session a52e65 (picker contract)
   React.useEffect(() => {
     if (!markerSlotKey) return;
-    const graveTonight = Array.from(effectiveGrave);
+    const graveTonight = Array.from((effectiveGrave as any) || []);
     const graveInReal = graveTonight.filter((id: string) =>
       effectiveRealRoster.some((r: any) => r.id === id)
     ).length;
-    const scheduledIds = new Set([...effectiveGrave, ...effectivePM, ...effectiveAM]);
+    const scheduledIds = new Set([...((effectiveGrave as any) || []), ...((effectivePM as any) || []), ...((effectiveAM as any) || [])]);
     const scheduledInReal = effectiveRealRoster.filter((t: any) => scheduledIds.has(t.id)).length;
     debugSessionLog({
       runId: "post-fix",
@@ -4048,6 +4081,13 @@ function AuthedShiftBuilder() {
 
     // Already-assigned TM being moved
     if (a.type === "assigned") {
+      console.log('[DRAG ASSIGNED] drop detected', {
+        from: a.fromSlot,
+        overType: over?.data?.current?.type,
+        overKey: over?.data?.current?.slotKey,
+        liveAvailable: !!live?.assign,
+      });
+
       // → another slot: atomic swap (or move if target empty)
       if (over?.data.current?.type === "slot") {
         const toKey = (over.data.current as any).slotKey;
@@ -4062,12 +4102,19 @@ function AuthedShiftBuilder() {
         const captureDate = selectedDay.date;
         const captureDayName = selectedDay.name;
 
-        // Read TM IDs BEFORE setAssignments — React calls the updater lazily
-        // during reconciliation, not synchronously. If we set these inside the
-        // updater and then read them in the async IIFE below, they are still
-        // null when persistAssign runs, causing a DELETE instead of an upsert.
-        const movingTmId: string | null = assignments[fromKey]?.tmId ?? null;
-        const displacedTmId: string | null = assignments[toKey]?.tmId ?? null;
+        // Read the *authoritative* current values from the main board store
+        // (ShiftBuilderBoard + cards subscribe to this). The local `assignments`
+        // useState is only for history/undo now and can be stale for visuals.
+        const mainAssignments = useShiftBuilderStore.getState().assignments || {};
+        const movingFromMain = mainAssignments[fromKey];
+        const displacedFromMain = mainAssignments[toKey];
+
+        const movingTmId: string | null = movingFromMain?.tmId ?? null;
+        const displacedTmId: string | null = displacedFromMain?.tmId ?? null;
+
+        // Optimistic update on the local state (for history / undo stack).
+        const movingSnap = movingFromMain;
+        const displacedSnap = displacedFromMain;
 
         setAssignments((prev: any) => {
           const next = { ...prev };
@@ -4079,36 +4126,59 @@ function AuthedShiftBuilder() {
           return next;
         });
 
-        // IMPORTANT BUG FIX (discovered while adding task drag):
-        // The old code passed the possibly-null `targetNightId` to two independent
-        // fire-and-forget persistAssign calls. When the night row didn't exist yet
-        // for this day, both could concurrently call getOrCreateNightForDate and
-        // create *two different* night rows. One (or both) assignments would land
-        // on the "loser" night and disappear on reload.
-        //
-        // Fix: resolve once (serializing the creation), then pass the concrete nid
-        // to both persists. This also makes the upcoming task-move drag safe.
-        (async () => {
-          let nid = nightId;
-          if (!nid) {
-            // Use the day values captured at drag-start — not selectedDay, which
-            // could have changed if the operator switched days during the drag.
-            nid = await resolveNightIdForDate(captureDate, captureDayName);
+        // Primary visual update: directly mutate the store the board/cards actually read.
+        // This makes the move feel instant even if live layer has any internal delay.
+        try {
+          useShiftBuilderStore.getState().setAssignments((prev: any) => {
+            const next = { ...prev };
+            // Clear source
+            if (displacedSnap) {
+              next[fromKey] = { ...displacedSnap, slotKey: fromKey };
+            } else {
+              delete next[fromKey];
+            }
+            // Place moving TM in target
+            if (movingSnap) {
+              next[toKey] = { ...movingSnap, slotKey: toKey };
+            }
+            return next;
+          });
+          console.log('[DRAG ASSIGNED] optimistic store patch applied', { fromKey, toKey, movingTmId, displacedTmId });
+        } catch (e) {
+          console.warn("[drag] direct store patch failed", e);
+        }
+
+        // Persistence + realtime via live layer (secondary — the visual is already done).
+        if (live?.assign) {
+          const movingName = movingSnap?.tmName || "";
+          if (movingTmId) {
+            live.assign(toKey, movingTmId, movingName, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
           }
-          if (!nid) {
-            showToast("Move recorded locally but failed to create night row — refresh may lose it");
-            return;
+          const displacedName = displacedSnap?.tmName || "";
+          if (displacedTmId) {
+            live.assign(fromKey, displacedTmId, displacedName, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
+          } else {
+            live.unassign?.(fromKey, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
           }
-          try {
-            // MUST await sequentially: fire-and-forget means a quick refresh
-            // races the DB writes and both slots reload as empty from Supabase.
-            await persistAssign(nid, captureDate, captureDayName, toKey, movingTmId);
-            await persistAssign(nid, captureDate, captureDayName, fromKey, displacedTmId);
-          } catch (e: any) {
-            console.error("[shiftbuilder] drag persist failed", e);
-            showToast("Move couldn't be saved — refresh may revert it");
-          }
-        })();
+        } else {
+          // Legacy fallback only
+          (async () => {
+            let nid = nightId;
+            if (!nid) nid = await resolveNightIdForDate(captureDate, captureDayName);
+            if (!nid) return;
+            try {
+              await persistAssign(nid, captureDate, captureDayName, toKey, movingTmId);
+              await persistAssign(nid, captureDate, captureDayName, fromKey, displacedTmId);
+            } catch (e: any) {
+              console.error("[shiftbuilder] legacy drag persist failed", e);
+            }
+          })();
+        }
+
+        // Do NOT aggressively invalidate nightCore right after a drag — it can
+        // cause the server snapshot (pre-write) to overwrite our optimistic move.
+        // The live layer + realtime should keep things in sync. Only invalidate on error paths.
+
         return;
       }
 
@@ -5662,7 +5732,9 @@ function AuthedShiftBuilder() {
           // break, task, and note changes pushed from Sudo.
           try {
             const dateKey = selectedDay.date.toISOString().slice(0, 10);
-            currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+            // Use the real core key that powers the board + live layer
+          currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+          currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] }); // legacy listeners too
           } catch {}
 
           // Force-refresh the current night's break data (and other day-specific data)

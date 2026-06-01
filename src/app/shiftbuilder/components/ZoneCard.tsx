@@ -94,15 +94,10 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
+      {/* Let dnd-kit's listeners handle activation cleanly for both mouse and touch/Pencil.
+         Manual forwarding was interfering with reliable drag start for assigned TMs. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
-      onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
-        if (isLocked) return;
-        clearLongHoverTimer();
-        if (hasTM && (listeners as any)?.onPointerDown) {
-          (listeners as any).onPointerDown(e);
-        }
-      }}
 
       data-slot-key={def.key}
       className={`assignment-card relative overflow-hidden cursor-pointer flex flex-col rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
