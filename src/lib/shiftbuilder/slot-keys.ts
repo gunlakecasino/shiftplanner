@@ -68,8 +68,17 @@ const AUX_DB_TO_UI: Record<string, string> = {
  * development rather than silently writing junk rows.
  */
 export function uiToDb(uiKey: string): DbSlot {
-  // Tolerate being fed raw DB keys during legacy normalization sweeps (prevents the
-  // "cannot translate UI key 'admin' / 'z9_sr'" errors and the resulting 400s).
+  // === LEGACY KEY TOLERANCE (critical for drag-and-drop + old data) ===
+  // These prevent the "cannot translate UI key 'admin' / 'z9_sr'" errors
+  // that were causing 400s on zone_assignments during reassignment drags.
+  const legacyToCanonical: Record<string, DbSlot> = {
+    admin:   { slot_key: "admin",   slot_type: "aux", rr_side: null },
+    z9_sr:   { slot_key: "z9_sr",   slot_type: "aux", rr_side: null },
+    Z9SR:    { slot_key: "z9_sr",   slot_type: "aux", rr_side: null },
+    ADM:     { slot_key: "admin",   slot_type: "aux", rr_side: null },
+  };
+  if (legacyToCanonical[uiKey]) return legacyToCanonical[uiKey];
+
   if (/^zone_\d+$/.test(uiKey)) return { slot_key: uiKey, slot_type: "zone", rr_side: null };
   if (/^rr_\d+(_\d+)?$/.test(uiKey)) return { slot_key: uiKey, slot_type: "rr", rr_side: null };
   if (/^(aux_|support_|trash_|overlap_|z9_sr|admin)\d*$/.test(uiKey)) {

@@ -72,7 +72,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
-      {/* Clean dnd-kit listener attachment for reliable assigned TM drag. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={def.key}

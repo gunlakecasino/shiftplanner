@@ -564,7 +564,8 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
         try {
           canonical = uiToDb(r.slot_key);
         } catch {
-          // Last-ditch: treat whatever is in the DB as already-canonical for aux/overlap
+          // Last-ditch safety: never throw during normalization.
+          // This prevents 400s and keeps drag-and-drop from breaking on weird legacy rows.
           const sk = String(r.slot_key || '');
           canonical = {
             slot_key: sk,

@@ -94,8 +94,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={handleSpotlightMove}
       {...penHoverHandlers}
-      {/* Let dnd-kit's listeners handle activation cleanly for both mouse and touch/Pencil.
-         Manual forwarding was interfering with reliable drag start for assigned TMs. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
 

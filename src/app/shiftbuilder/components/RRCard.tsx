@@ -79,8 +79,6 @@ const RRSide: React.FC<{
       ref={setRef}
       onClick={(e) => { if (!isLocked) onClick(slotKey, e.currentTarget, e); }}
       {...penHoverHandlers}
-      {/* Let dnd-kit's listeners handle activation cleanly.
-         Manual onPointerDown forwarding was causing unreliable drag start for assigned cards. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}

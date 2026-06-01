@@ -64,7 +64,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       ref={setRef}
       onClick={(e) => { if (!isLocked) onCardClick(slotKey, e.currentTarget, e); }}
       {...penHoverHandlers}
-      {/* Clean dnd-kit listeners — manual forwarding was interfering with drag start. */}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}

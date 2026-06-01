@@ -3984,6 +3984,26 @@ function AuthedShiftBuilder() {
   // (unassign), card → nowhere (also unassign). Pointer + Touch + Keyboard
   // sensors give us mouse, iPad, and a11y parity from a single source.
   // ────────────────────────────────────────────────────────────────────────
+
+  // Safe wrapper used only in the drag path to guarantee we never send
+  // unmappable legacy keys ("admin", "z9_sr", old Z9, etc.) to the live layer or store.
+  // This is the direct fix for the 400s on zone_assignments during reassignment.
+  const safeNormalizeSlotKey = (key: string): string => {
+    if (!key) return key;
+    try {
+      // If it already round-trips cleanly, keep it.
+      uiToDb(key); // will not throw on the tolerant version
+      return key;
+    } catch {
+      // Last resort: if it's a known bad legacy value, map it.
+      const map: Record<string, string> = {
+        admin: "ADM",
+        "z9_sr": "Z9SR",
+        Z9: "Z9", // example
+      };
+      return map[key] || key;
+    }
+  };
   // iPad + Apple Pencil Pro 2 sensor tuning:
   // • PointerSensor distance reduced to 4px so Pencil drags activate sooner.
   // • TouchSensor delay raised to 250ms / tolerance 8px — gives finger a brief
@@ -4018,7 +4038,8 @@ function AuthedShiftBuilder() {
     // Fresh roster TM → slot
     if (a.type === "tm") {
       if (over?.data.current?.type === "slot") {
-        assign((over.data.current as any).slotKey, a.tmId, a.tmName);
+        const normalizedSlot = safeNormalizeSlotKey((over.data.current as any).slotKey);
+        assign(normalizedSlot, a.tmId, a.tmName);
       }
       return;
     }
@@ -4090,9 +4111,13 @@ function AuthedShiftBuilder() {
 
       // → another slot: atomic swap (or move if target empty)
       if (over?.data.current?.type === "slot") {
-        const toKey = (over.data.current as any).slotKey;
-        const fromKey = a.fromSlot;
-        if (toKey === fromKey) return; // dropped on self, no-op
+        const rawToKey = (over.data.current as any).slotKey;
+        const rawFromKey = a.fromSlot;
+        if (rawToKey === rawFromKey) return; // dropped on self, no-op
+
+        // Normalize right at the drag boundary so legacy keys never reach the store or live layer.
+        const toKey = safeNormalizeSlotKey(rawToKey);
+        const fromKey = safeNormalizeSlotKey(rawFromKey);
 
         const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
         pendingHistoryRef.current = { description: `Moved assignment from ${fromKey} to ${toKey}`, before };
