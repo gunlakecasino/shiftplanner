@@ -3473,28 +3473,33 @@ function AuthedShiftBuilder() {
   // that come out of useCurrentNight → getScheduledTmsForNight (schedules.ts).
   // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
 
-  // Direct weekly roster feed from Sudo "Apply Roster" (bypasses service key issues)
+  // === Direct Weekly Roster feed from Sudo "Apply Roster" ===
+  // This is the authoritative source the operator just configured.
+  // When present for the current week, the TM Picker must use this instead of
+  // the (often empty) canonical path that requires the service role key.
   const weeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
 
-  const markerScheduledUnassigned = React.useMemo(() => {
-    // Prefer the direct feed from the Weekly Roster tab when "Apply Roster" has been used.
-    // This is the explicit "pull directly from the weekly roster" path.
-    let scheduledIds = new Set<string>();
+  // Effective role sets: prefer the direct feed from "Apply Roster" when available.
+  // This makes the picker (and eligibility filtering) pull directly from the weekly roster.
+  const effectiveFullGraveScheduled = (weeklyRoster?.weekStart && weeklyRoster.grave?.length > 0)
+    ? new Set(weeklyRoster.grave)
+    : fullGraveScheduledTonight;
 
-    if (weeklyRoster && weeklyRoster.weekStart) {
-      // When the user has hit "Apply Roster" for this week, prefer that data directly.
-      // This is the explicit "pull directly from the weekly roster" behavior.
-      weeklyRoster.grave.forEach((id: string) => scheduledIds.add(id));
-      weeklyRoster.pmOverlap.forEach((id: string) => scheduledIds.add(id));
-      weeklyRoster.amOverlap.forEach((id: string) => scheduledIds.add(id));
-    } else {
-      // Fallback to the normal canonical partitioned sets from the hook
-      scheduledIds = new Set<string>([
-        ...fullGraveScheduledTonight,
-        ...pmOverlapScheduledTonight,
-        ...amOverlapScheduledTonight,
-      ]);
-    }
+  const effectivePMOverlapScheduled = (weeklyRoster?.weekStart && weeklyRoster.pmOverlap?.length > 0)
+    ? new Set(weeklyRoster.pmOverlap)
+    : pmOverlapScheduledTonight;
+
+  const effectiveAMOverlapScheduled = (weeklyRoster?.weekStart && weeklyRoster.amOverlap?.length > 0)
+    ? new Set(weeklyRoster.amOverlap)
+    : amOverlapScheduledTonight;
+
+  const markerScheduledUnassigned = React.useMemo(() => {
+    // Build from the effective sets (direct weekly roster feed takes priority)
+    const scheduledIds = new Set<string>([
+      ...effectiveFullGraveScheduled,
+      ...effectivePMOverlapScheduled,
+      ...effectiveAMOverlapScheduled,
+    ]);
 
     const list = effectiveRealRoster
       .filter((t: any) =>
@@ -3513,12 +3518,13 @@ function AuthedShiftBuilder() {
       const watched = ['alec','daryl','jason','nikki','sam'];
       const leaked = list.filter(e => watched.some(w => e.tmName.toLowerCase().includes(w)));
       if (leaked.length > 0) {
-        console.warn('[MARKER-PICKER-DIAG] Watched TMs in (weekly roster direct or canonical) default list:', leaked.map(e => e.tmName));
+        console.warn('[MARKER-PICKER-DIAG] Watched TMs in default list:', leaked.map(e => e.tmName));
       }
-      console.log('[MARKER-PICKER-DIAG] markerScheduledUnassigned size=', list.length, weeklyRoster?.weekStart ? '(from direct Apply Roster feed)' : '(from canonical)');
+      const source = (weeklyRoster?.weekStart) ? 'direct Apply Roster feed' : 'canonical';
+      console.log(`[MARKER-PICKER-DIAG] markerScheduledUnassigned size=${list.length} (from ${source})`);
     }
     return list;
-  }, [effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight, alreadyAssignedThisNight, calledOffIds, weeklyRoster, selectedDay]);
+  }, [effectiveRealRoster, effectiveFullGraveScheduled, effectivePMOverlapScheduled, effectiveAMOverlapScheduled, alreadyAssignedThisNight, calledOffIds, weeklyRoster]);
 
   // Broad pool used *only* when the operator types in the TM picker search box.
   // No scheduled filter — any TM that passes core isEligibleForSlot is allowed.
@@ -3553,13 +3559,13 @@ function AuthedShiftBuilder() {
         if (!tm) return false;
 
         if (isFullNightSlot) {
-          if (!fullGraveScheduledTonight.has(entry.tmId)) return false;
+          if (!effectiveFullGraveScheduled.has(entry.tmId)) return false;
         }
         if (isOLPMSlot) {
-          if (!pmOverlapScheduledTonight.has(entry.tmId)) return false;
+          if (!effectivePMOverlapScheduled.has(entry.tmId)) return false;
         }
         if (isOLAMSlot) {
-          if (!amOverlapScheduledTonight.has(entry.tmId)) return false;
+          if (!effectiveAMOverlapScheduled.has(entry.tmId)) return false;
         }
 
         try {
@@ -3569,7 +3575,7 @@ function AuthedShiftBuilder() {
         }
       });
     },
-    [markerSlotKey, effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight]
+    [markerSlotKey, effectiveRealRoster, effectiveFullGraveScheduled, effectivePMOverlapScheduled, effectiveAMOverlapScheduled]
   );
 
   // getBasicEligibleForSlot: used only for the search pool.
@@ -3598,6 +3604,8 @@ function AuthedShiftBuilder() {
     [getEligibleForCurrentSlot, markerScheduledUnassigned]
   );
 
+  // Note: getBasicEligibleForSlot still uses the old hook sets for the broad search pool.
+  // When we have time we can make it also respect the direct feed.
   const markerSlotAllEligibleTms = React.useMemo(
     () => getBasicEligibleForSlot(markerAllEligibleTms),
     [getBasicEligibleForSlot, markerAllEligibleTms]
