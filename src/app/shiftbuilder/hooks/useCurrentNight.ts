@@ -99,7 +99,12 @@ export function useCurrentNight(selectedDay: DayDef) {
       try {
         canonicalScheduled = await getScheduledTmsForNight(selectedDay.date);
       } catch (e) {
-        console.warn("[useCurrentNight] failed to load canonical scheduled data", e);
+        const railwayEnv = process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown';
+        console.error("[useCurrentNight] failed to load canonical scheduled data", {
+          error: e,
+          railwayEnvironment: railwayEnv,
+          nodeEnv: process.env.NODE_ENV,
+        });
       }
 
       const fullGraveScheduledTonight = new Set(canonicalScheduled.fullGraveScheduled.map((t: any) => t.id));
