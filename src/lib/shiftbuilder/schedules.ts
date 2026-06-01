@@ -179,13 +179,40 @@ export async function getScheduledTmsForNight(
     (defaultsForWeek || []).forEach((d: any) => { if (!effectiveByTm[d.tm_id]) effectiveByTm[d.tm_id] = d.weekly_pattern || []; });
     (weekOnCall || []).forEach((s: any) => { effectiveByTm[s.tm_id] = s.weekly_pattern || []; });
 
-    const scheduled: any[] = [];
+    // Build from the raw weekly roster data.
+    // To make "scheduled but unassigned" work well for the picker even with partial data,
+    // we include any TM that has a weekly special containing a "Full Grave" (or equivalent) pattern
+    // into the grave partition for the whole week. Same idea for overlaps.
+    const graveFromRoster = new Set<string>();
+    const pmFromRoster = new Set<string>();
+    const amFromRoster = new Set<string>();
+
     Object.entries(effectiveByTm).forEach(([tmId, pattern]) => {
-      const entry = pattern?.[dayIndex];
-      if (entry && isWorkingShift(entry)) scheduled.push({ id: tmId });
+      const labels = (pattern || []).map((p: any) => (p?.label || "").toLowerCase()).join(" ");
+      const hasWorking = (pattern || []).some((p: any) => isWorkingShift(p));
+
+      if (!hasWorking) return;
+
+      if (labels.includes("full grave") || labels.includes("grave")) {
+        graveFromRoster.add(tmId);
+      }
+      if (labels.includes("pm overlap")) {
+        pmFromRoster.add(tmId);
+      }
+      if (labels.includes("am overlap")) {
+        amFromRoster.add(tmId);
+      }
     });
 
-    return { allScheduled: scheduled, fullGraveScheduled: scheduled, pmOverlapScheduled: scheduled, amOverlapScheduled: scheduled, scheduledWithRoles: [] };
+    const allFromRoster = [...new Set([...graveFromRoster, ...pmFromRoster, ...amFromRoster])].map(id => ({ id } as any));
+
+    return {
+      allScheduled: allFromRoster,
+      fullGraveScheduled: [...graveFromRoster].map(id => ({ id } as any)),
+      pmOverlapScheduled: [...pmFromRoster].map(id => ({ id } as any)),
+      amOverlapScheduled: [...amFromRoster].map(id => ({ id } as any)),
+      scheduledWithRoles: [],
+    };
   }
 
   const night = new Date(nightDate);
