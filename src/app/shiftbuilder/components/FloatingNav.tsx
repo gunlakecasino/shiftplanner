@@ -16,6 +16,7 @@ import {
   Moon,
   User,
   Search,
+  Printer,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, startOfWeek } from "date-fns";
@@ -92,6 +93,7 @@ export interface FloatingNavProps {
   onZoomIn?: () => void;
   onCommandOpen?: () => void;
   onThemeToggle?: () => void;
+  onPrint?: () => void;
   isDark?: boolean;
   userInitials?: string;
 
@@ -130,6 +132,7 @@ export default function FloatingNav({
   onZoomIn,
   onCommandOpen,
   onThemeToggle,
+  onPrint,
   isDark = false,
   userInitials = "BC",
   currentUser,
@@ -455,6 +458,12 @@ export default function FloatingNav({
                   >
                     <Redo2 className="h-4 w-4" /> <span>Redo</span>
                   </button>
+                  <button
+                    onClick={() => { setMobileActionsOpen(false); onPrint?.(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
+                  >
+                    <Printer className="h-4 w-4" /> <span>Print</span>
+                  </button>
                   <div className="h-px bg-white/10 dark:bg-white/10 my-1 mx-3" />
                   <div className="px-4 py-1.5 text-[11px] text-[#6B7280] font-medium">Zoom</div>
                   <div className="flex items-center gap-1 px-3 pb-2">
@@ -467,6 +476,16 @@ export default function FloatingNav({
               </div>
             )}
           </div>
+
+          {/* Print — always visible direct access to Print Command Center */}
+          <button 
+            onClick={onPrint} 
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" 
+            title="Print (⌘P)"
+            aria-label="Open print command center"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
 
           {/* Theme toggle — always visible (tiny, high value) */}
           <button onClick={onThemeToggle} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Toggle theme">

@@ -4215,40 +4215,49 @@ function AuthedShiftBuilder() {
           console.warn("[drag] direct store patch failed", e);
         }
 
-        // Persistence strategy for assigned drag (especially swaps):
-        // - Primary moving TM goes through the live optimistic layer (good for UI + realtime).
-        // - In a true swap (displacedTmId present), we use a background persist for the
-        //   displaced TM instead of a second live.assign. This avoids two near-simultaneous
-        //   optimistic store patches fighting each other on related slots.
-        if (live?.assign) {
-          const movingName = movingSnap?.tmName || "";
-          if (movingTmId) {
-            live.assign(toKey, movingTmId, movingName, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
-          }
+        // Persistence strategy for assigned drag (the cleanest path for both move and swap):
+        // Do the optimistic visual update via the main store (already done above).
+        // Then use pure background persistence for the actual DB writes.
+        // This completely removes the live optimistic layer from the drag gesture,
+        // which was the source of the partial re-patches that broke swaps while
+        // move-to-empty started working.
+        (async () => {
+          try {
+            const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
+            const nid = nightId || await resolveNightIdForDate(captureDate, captureDayName);
+            if (!nid) return;
 
-          if (displacedTmId) {
-            // Background persist for the displaced TM (swap case)
-            (async () => {
-              try {
-                const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
-                const nid = nightId || await resolveNightIdForDate(captureDate, captureDayName);
-                if (!nid) return;
-                const { slot_key, slot_type, rr_side } = uiToDb(fromKey);
-                await upsertZoneAssignment({
-                  nightId: nid,
-                  slotKey: slot_key,
-                  slotType: slot_type,
-                  rrSide: rr_side,
-                  tmId: displacedTmId,
-                });
-              } catch (e) {
-                console.error("[drag] background persist for displaced TM (swap) failed", e);
-              }
-            })();
-          } else if (fromKey) {
-            live.unassign?.(fromKey, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
+            // Moving TM → target slot
+            if (movingTmId) {
+              const { slot_key, slot_type, rr_side } = uiToDb(toKey);
+              await upsertZoneAssignment({
+                nightId: nid,
+                slotKey: slot_key,
+                slotType: slot_type,
+                rrSide: rr_side,
+                tmId: movingTmId,
+              });
+            }
+
+            // Displaced TM (swap) or clear source (move-to-empty)
+            if (displacedTmId) {
+              const { slot_key, slot_type, rr_side } = uiToDb(fromKey);
+              await upsertZoneAssignment({
+                nightId: nid,
+                slotKey: slot_key,
+                slotType: slot_type,
+                rrSide: rr_side,
+                tmId: displacedTmId,
+              });
+            } else {
+              // Source slot should be cleared
+              const { deleteZoneAssignment } = await import("@/lib/shiftbuilder/data");
+              await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
+            }
+          } catch (e) {
+            console.error("[drag] background persist failed", e);
           }
-        } else {
+        })();
           // Legacy fallback only
           (async () => {
             let nid = nightId;
@@ -4261,11 +4270,8 @@ function AuthedShiftBuilder() {
               console.error("[shiftbuilder] legacy drag persist failed", e);
             }
           })();
-        }
 
-        // Do NOT aggressively invalidate nightCore right after a drag — it can
-        // cause the server snapshot (pre-write) to overwrite our optimistic move.
-        // The live layer + realtime should keep things in sync. Only invalidate on error paths.
+        // (Legacy fallback removed for assigned drag.)
 
         return;
       }
@@ -5178,6 +5184,7 @@ function AuthedShiftBuilder() {
         onZoomFit={handleZoomFit}
         onZoomOut={handleZoomOut}
         onZoomIn={handleZoomIn}
+        onPrint={() => setIsPrintCenterOpen(true)}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
@@ -5775,12 +5782,23 @@ function AuthedShiftBuilder() {
           : null}
       />
 
-      {/* Command Palette temporarily disabled due to JSX balance issues from previous aggressive edits.
-          The static import of useCommandActions has been removed (addressing the runtime factory errors).
-          Re-introduce a clean lazy version once this area is stable. */}
-      {/* {cmdkOpen && CommandPaletteComponent && (
-        <CommandPaletteComponent ... />
-      )} */}
+      {/* Command Palette — re-enabled with lazy loading + key handlers wired.
+          Uses the modern CommandPalette implementation. */}
+      {cmdkOpen && CommandPaletteComponent && (
+        <CommandPaletteComponent
+          open={cmdkOpen}
+          onOpenChange={setCmdkOpen}
+          initialContext={cmdkInitialContext}
+          onAddTask={handleCmdkAddTask}
+          onCycleBreak={handleCmdkCycleBreak}
+          onSetGravePool={handleCmdkSetGravePool}
+          onSetDisplayName={handleCmdkSetDisplayName}
+          onRemoveFromSchedule={handleCmdkRemoveFromSchedule}
+          onAddCoverage={handleCmdkAddCoverage}
+          // Pass through any other context the palette needs
+          selectedSlotAssignment={markerSlotKey ? markerPadAssignments[markerSlotKey] : null}
+        />
+      )}
 
       {/* Night picker edge arrows removed — navigation lives in the bottom dock ← / → buttons */}
 
