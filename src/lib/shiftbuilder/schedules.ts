@@ -18,6 +18,7 @@ import { createAdminClient, createAdminClientSafe } from "@/app/api/admin/_lib/c
 import { startOfRosterWeek, daysBetween } from "./dateUtils";
 import type { WeeklyShift } from "./types/schedules";
 import { isWorkingShift } from "./types/schedules";
+import { createClient } from '@supabase/supabase-js';
 
 // === DIAGNOSTIC: the five TMs the operator reports are leaking into the default picker list
 // when they are marked OFF (or not in the correct group) in the Sudo Weekly Roster.
@@ -156,14 +157,35 @@ export async function getScheduledTmsForNight(
 ): Promise<ScheduledTmsForNightResult> {
   const supabase = createAdminClientSafe();
   if (!supabase) {
-    // Graceful degradation when service role key is missing at runtime
-    return {
-      allScheduled: [],
-      fullGraveScheduled: [],
-      pmOverlapScheduled: [],
-      amOverlapScheduled: [],
-      scheduledWithRoles: [],
-    };
+    // Fallback: read the weekly roster tables directly with anon key.
+    // This makes the TM Picker see scheduled TMs exactly as configured in the Sudo Weekly Roster tab.
+    const anonUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!anonUrl || !anonKey) {
+      return { allScheduled: [], fullGraveScheduled: [], pmOverlapScheduled: [], amOverlapScheduled: [], scheduledWithRoles: [] };
+    }
+    const anon = createClient(anonUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    const night = new Date(nightDate);
+    night.setHours(12, 0, 0, 0);
+    const rosterWeekStart = startOfRosterWeek(night);
+    const rosterWeekStartIso = rosterWeekStart.toISOString().slice(0, 10);
+    const dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+
+    const { data: weekOnCall } = await anon.from("tm_on_call_schedules").select("tm_id, weekly_pattern").eq("week_start", rosterWeekStartIso);
+    const { data: defaultsForWeek } = await anon.from("tm_default_schedules").select("tm_id, effective_from, weekly_pattern").lte("effective_from", rosterWeekStartIso).order("effective_from", { ascending: false });
+
+    const effectiveByTm: Record<string, any[]> = {};
+    (defaultsForWeek || []).forEach((d: any) => { if (!effectiveByTm[d.tm_id]) effectiveByTm[d.tm_id] = d.weekly_pattern || []; });
+    (weekOnCall || []).forEach((s: any) => { effectiveByTm[s.tm_id] = s.weekly_pattern || []; });
+
+    const scheduled: any[] = [];
+    Object.entries(effectiveByTm).forEach(([tmId, pattern]) => {
+      const entry = pattern?.[dayIndex];
+      if (entry && isWorkingShift(entry)) scheduled.push({ id: tmId });
+    });
+
+    return { allScheduled: scheduled, fullGraveScheduled: scheduled, pmOverlapScheduled: scheduled, amOverlapScheduled: scheduled, scheduledWithRoles: [] };
   }
 
   const night = new Date(nightDate);
@@ -200,14 +222,6 @@ export async function getScheduledTmsForNight(
       tm_group_members (tm_id)
     `);
 
-  // Load all weekly specials for this roster week in one query.
-  // This lets us treat the Weekly Roster tab as the direct source of truth
-  // for who is scheduled (and in which role) for the week.
-  const { data: weekSpecials } = await supabase
-    .from("tm_on_call_schedules")
-    .select("tm_id, weekly_pattern")
-    .eq("week_start", rosterWeekStartIso);
-
   const graveMemberIds = new Set<string>();
   const pmOverlapMemberIds = new Set<string>();
   const amOverlapMemberIds = new Set<string>();
@@ -226,14 +240,6 @@ export async function getScheduledTmsForNight(
       const isScheduled = shift.label !== "OFF";
       const labelLower = shift.label.toLowerCase();
 
-      // Direct from Weekly Roster: if this TM has a weekly special for the week,
-      // inspect their pattern labels to determine role (grave/overlap) even if
-      // the per-day resolved label is slightly different.
-      const thisTMsSpecial = (weekSpecials || []).find((s: any) => s.tm_id === tm.id);
-      const specialLabelsLower = (thisTMsSpecial?.weekly_pattern || [])
-        .map((p: any) => (p?.label || "").toLowerCase())
-        .join(" ");
-
       const scheduledTm: ScheduledTm = {
         id: tm.id,
         tmId: tm.tm_id,
@@ -247,22 +253,19 @@ export async function getScheduledTmsForNight(
         shift,
         isScheduled,
         isFullGrave: isScheduled && (
-          labelLower.includes("full grave") ||
-          specialLabelsLower.includes("full grave") ||
+          labelLower.includes("full grave") || 
           graveMemberIds.has(tm.id) || 
-          graveMemberIds.has(tm.tmId)
+          graveMemberIds.has(tm.tm_id)
         ),
         isPMOverlap: isScheduled && (
-          labelLower.includes("pm overlap") ||
-          specialLabelsLower.includes("pm overlap") ||
+          labelLower.includes("pm overlap") || 
           pmOverlapMemberIds.has(tm.id) || 
-          pmOverlapMemberIds.has(tm.tmId)
+          pmOverlapMemberIds.has(tm.tm_id)
         ),
         isAMOverlap: isScheduled && (
-          labelLower.includes("am overlap") ||
-          specialLabelsLower.includes("am overlap") ||
+          labelLower.includes("am overlap") || 
           amOverlapMemberIds.has(tm.id) || 
-          amOverlapMemberIds.has(tm.tmId)
+          amOverlapMemberIds.has(tm.tm_id)
         ),
       };
     })
