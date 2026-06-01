@@ -200,6 +200,14 @@ export async function getScheduledTmsForNight(
       tm_group_members (tm_id)
     `);
 
+  // Load all weekly specials for this roster week in one query.
+  // This lets us treat the Weekly Roster tab as the direct source of truth
+  // for who is scheduled (and in which role) for the week.
+  const { data: weekSpecials } = await supabase
+    .from("tm_on_call_schedules")
+    .select("tm_id, weekly_pattern")
+    .eq("week_start", rosterWeekStartIso);
+
   const graveMemberIds = new Set<string>();
   const pmOverlapMemberIds = new Set<string>();
   const amOverlapMemberIds = new Set<string>();
@@ -218,6 +226,14 @@ export async function getScheduledTmsForNight(
       const isScheduled = shift.label !== "OFF";
       const labelLower = shift.label.toLowerCase();
 
+      // Direct from Weekly Roster: if this TM has a weekly special for the week,
+      // inspect their pattern labels to determine role (grave/overlap) even if
+      // the per-day resolved label is slightly different.
+      const thisTMsSpecial = (weekSpecials || []).find((s: any) => s.tm_id === tm.id);
+      const specialLabelsLower = (thisTMsSpecial?.weekly_pattern || [])
+        .map((p: any) => (p?.label || "").toLowerCase())
+        .join(" ");
+
       const scheduledTm: ScheduledTm = {
         id: tm.id,
         tmId: tm.tm_id,
@@ -231,19 +247,22 @@ export async function getScheduledTmsForNight(
         shift,
         isScheduled,
         isFullGrave: isScheduled && (
-          labelLower.includes("full grave") || 
+          labelLower.includes("full grave") ||
+          specialLabelsLower.includes("full grave") ||
           graveMemberIds.has(tm.id) || 
-          graveMemberIds.has(tm.tm_id)
+          graveMemberIds.has(tm.tmId)
         ),
         isPMOverlap: isScheduled && (
-          labelLower.includes("pm overlap") || 
+          labelLower.includes("pm overlap") ||
+          specialLabelsLower.includes("pm overlap") ||
           pmOverlapMemberIds.has(tm.id) || 
-          pmOverlapMemberIds.has(tm.tm_id)
+          pmOverlapMemberIds.has(tm.tmId)
         ),
         isAMOverlap: isScheduled && (
-          labelLower.includes("am overlap") || 
+          labelLower.includes("am overlap") ||
+          specialLabelsLower.includes("am overlap") ||
           amOverlapMemberIds.has(tm.id) || 
-          amOverlapMemberIds.has(tm.tm_id)
+          amOverlapMemberIds.has(tm.tmId)
         ),
       };
     })

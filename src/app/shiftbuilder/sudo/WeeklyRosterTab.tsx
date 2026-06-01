@@ -50,6 +50,7 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
 
   // For adding shift to non-scheduled TM
   const [addSearch, setAddSearch] = useState("");
+  const [applying, setApplying] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -177,6 +178,48 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
     await load();
   };
 
+  /**
+   * Apply Roster button handler.
+   * 
+   * "Reloads the selected week roster entirely":
+   * - Re-fetches all raw data for the week (defaults + on-call schedules + groups)
+   * - Forces the canonical scheduler (getScheduledTmsForNight) to re-compute for every day in the week.
+   *   This ensures the main ShiftBuilder board and TM Picker see the latest roster decisions
+   *   directly from this Weekly Roster tab's data.
+   */
+  const handleApplyRoster = async () => {
+    setApplying(true);
+    try {
+      await load();
+      onDataChanged?.();
+
+      // Force canonical computation for the entire selected week so the TM Picker
+      // and main board pull the latest "scheduled" status directly from this roster.
+      const rosterWeekStartDate = startOfRosterWeek(new Date(weekStart));
+      const weekDates: string[] = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(rosterWeekStartDate);
+        d.setDate(d.getDate() + i);
+        return d.toISOString().slice(0, 10);
+      });
+
+      await Promise.all(
+        weekDates.map(async (dateStr) => {
+          try {
+            await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+          } catch {
+            // non-fatal, just warming the canonical view
+          }
+        })
+      );
+
+      // Optional: small success feedback
+      // In a real UI we'd use a toast, but alert is fine for now.
+      alert("Roster applied for the selected week. The main board and TM Picker will now see the updated scheduled TMs.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center opacity-60">Loading current week roster…</div>;
   }
@@ -224,6 +267,15 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
             />
             Only scheduled groups (Grave/On Call/Overlaps)
           </label>
+
+          <button
+            onClick={handleApplyRoster}
+            disabled={applying}
+            className="ml-4 px-4 py-1.5 text-sm rounded-xl bg-[#C5A26F] text-black font-semibold hover:bg-[#d4b17f] disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Reload and apply the entire selected week's roster so the main board and TM Picker see it immediately"
+          >
+            {applying ? "Applying..." : "Apply Roster"}
+          </button>
         </div>
       </div>
 
