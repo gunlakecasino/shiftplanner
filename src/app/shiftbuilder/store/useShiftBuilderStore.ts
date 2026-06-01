@@ -65,6 +65,14 @@ interface ShiftBuilderState {
   };
   setWeeklyRosterScheduled: (data: ShiftBuilderState['weeklyRosterScheduled']) => void;
 
+  // Short-lived pending drag state (used to keep source cards stable during reassignment)
+  pendingDrag: null | {
+    fromSlot: string;
+    tmId: string;
+    tmName: string;
+  };
+  setPendingDrag: (drag: ShiftBuilderState['pendingDrag']) => void;
+
   // auxDefs moved to store for narrow subscription in Board/cards (changes infrequently but reduces prop surface)
   auxDefs: AuxDef[];
   setAuxDefs: (updater: AuxDef[] | ((prev: AuxDef[]) => AuxDef[])) => void;
@@ -178,6 +186,14 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       amOverlapByNight: {},
     },
 
+    // Short-lived pending drag state to prevent mid-gesture mutation of source cards.
+    // This is the #1 root cause of assigned TM drag being unreliable compared to tasks.
+    pendingDrag: null as null | {
+      fromSlot: string;
+      tmId: string;
+      tmName: string;
+    },
+
     liveEngineConfigForAI: null,
     setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
 
@@ -193,6 +209,8 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         });
       } catch {}
     },
+
+    setPendingDrag: (drag) => set({ pendingDrag: drag }),
   }))
 );
 

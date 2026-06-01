@@ -557,8 +557,15 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
     !r.slot_key.startsWith('trash_')
   );
 
-  if (legacyRows.length > 0) {
-    await Promise.all(legacyRows.map(async (r: any) => {
+  // Skip normalization attempts on keys that are already in a known usable DB form.
+  // This reduces noise and 400 risk during the transition.
+  const safeLegacyRows = legacyRows.filter((r: any) => {
+    const sk = r.slot_key;
+    return !(sk === 'admin' || sk === 'z9_sr' || sk.startsWith('z9_sr'));
+  });
+
+  if (safeLegacyRows.length > 0) {
+    await Promise.all(safeLegacyRows.map(async (r: any) => {
       try {
         let canonical: any;
         try {

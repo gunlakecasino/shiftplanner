@@ -3549,13 +3549,14 @@ function AuthedShiftBuilder() {
     const r = rawWeeklyRoster as any;
     if (r?.weekStart) return r;
     if (typeof window === 'undefined') return r;
+
     const saved = readWeeklyRosterScheduledFromStorage() as any;
     if (saved?.weekStart) {
       useShiftBuilderStore.getState().setWeeklyRosterScheduled(saved);
       return saved;
     }
     return r;
-  }, [rawWeeklyRoster]);
+  }, [rawWeeklyRoster, markerSlotKey]); // re-evaluate when Marker Pad opens
 
   // Compute the roster week (Thu-Wed) that the currently selected day belongs to.
   // "Apply Roster" stores the roster week (startOfRosterWeek ISO). We only trust
@@ -3571,11 +3572,14 @@ function AuthedShiftBuilder() {
   );
 
   // When the operator has hit "Apply Roster" for the roster week that contains the canvas night.
+  // Made more forgiving: if we have per-night data for today, we activate the direct feed
+  // even if the weekStart string has minor anchoring differences.
+  const hasDataForToday = !!(weeklyRoster?.graveByNight?.[selectedNightISO]?.length);
   const useDirectFeed = !!(
-    weeklyRoster?.weekStart &&
     hasDirectRosterData &&
-    (weeklyRoster.weekStart === currentRosterWeekISO ||
-      isDayInRosterWeek(selectedDay.date, weeklyRoster.weekStart))
+    (weeklyRoster?.weekStart === currentRosterWeekISO ||
+      isDayInRosterWeek(selectedDay.date, weeklyRoster?.weekStart) ||
+      hasDataForToday)
   );
 
   // Heavy debug for the persistent "picker always empty" problem
@@ -4024,13 +4028,50 @@ function AuthedShiftBuilder() {
   const onDragStart = (event: DragStartEvent) => {
     const d = event.active.data.current as any;
     if (!d) return;
-    if (d.type === "tm") setActiveDrag({ kind: "tm", label: d.tmName });
-    else if (d.type === "assigned") setActiveDrag({ kind: "assigned", label: d.tmName, fromSlot: d.fromSlot });
-    else if (d.type === "task") setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot });
+
+    if (d.type === "tm") {
+      setActiveDrag({ kind: "tm", label: d.tmName });
+    } 
+    else if (d.type === "assigned") {
+      setActiveDrag({ kind: "assigned", label: d.tmName, fromSlot: d.fromSlot });
+      
+      // CRITICAL: Mark this as a pending drag so the source card does NOT lose its
+      // draggable state mid-gesture.
+      // Use defensive access because of Turbopack HMR store module duplication issues
+      // that have historically affected this project.
+      const store = useShiftBuilderStore.getState();
+      if (typeof store.setPendingDrag === 'function') {
+        store.setPendingDrag({
+          fromSlot: d.fromSlot,
+          tmId: d.tmId,
+          tmName: d.tmName,
+        });
+      } else {
+        // Fallback: store the value directly on the state if setter is missing (HMR edge case)
+        useShiftBuilderStore.setState({ pendingDrag: {
+          fromSlot: d.fromSlot,
+          tmId: d.tmId,
+          tmName: d.tmName,
+        }});
+      }
+    } 
+    else if (d.type === "task") {
+      setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot });
+    }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveDrag(null);
+    
+    // Always clear pending drag when the gesture ends.
+    // Defensive access due to known Turbopack + Zustand HMR quirks in this project.
+    const store = useShiftBuilderStore.getState();
+    if (typeof store.setPendingDrag === 'function') {
+      store.setPendingDrag(null);
+    } else {
+      useShiftBuilderStore.setState({ pendingDrag: null });
+    }
+
     const { active, over } = event;
     const a = active.data.current as any;
     if (!a) return;
@@ -4137,19 +4178,13 @@ function AuthedShiftBuilder() {
         const movingTmId: string | null = movingFromMain?.tmId ?? null;
         const displacedTmId: string | null = displacedFromMain?.tmId ?? null;
 
-        // Optimistic update on the local state (for history / undo stack).
+        // We keep a minimal local update only for the history/undo snapshot.
+        // The real visual path is the main store (below). This reduces fighting layers.
         const movingSnap = movingFromMain;
         const displacedSnap = displacedFromMain;
 
-        setAssignments((prev: any) => {
-          const next = { ...prev };
-          const moving = next[fromKey];
-          const displaced = next[toKey];
-          if (displaced) next[fromKey] = { ...displaced, slotKey: fromKey };
-          else delete next[fromKey];
-          next[toKey] = { ...moving, slotKey: toKey };
-          return next;
-        });
+        // Minimal local state for history only (not for rendering the cards)
+        setAssignments((prev: any) => ({ ...prev })); // no-op visual, just trigger history capture if needed
 
         // Primary visual update: directly mutate the store the board/cards actually read.
         // This makes the move feel instant even if live layer has any internal delay.
@@ -4168,21 +4203,49 @@ function AuthedShiftBuilder() {
             }
             return next;
           });
-          console.log('[DRAG ASSIGNED] optimistic store patch applied', { fromKey, toKey, movingTmId, displacedTmId });
+          const isSwap = !!displacedTmId;
+        console.log('[DRAG ASSIGNED] optimistic store patch applied', { 
+          fromKey, 
+          toKey, 
+          movingTmId, 
+          displacedTmId,
+          operation: isSwap ? 'SWAP' : 'MOVE_TO_EMPTY'
+        });
         } catch (e) {
           console.warn("[drag] direct store patch failed", e);
         }
 
-        // Persistence + realtime via live layer (secondary — the visual is already done).
+        // Persistence strategy for assigned drag (especially swaps):
+        // - Primary moving TM goes through the live optimistic layer (good for UI + realtime).
+        // - In a true swap (displacedTmId present), we use a background persist for the
+        //   displaced TM instead of a second live.assign. This avoids two near-simultaneous
+        //   optimistic store patches fighting each other on related slots.
         if (live?.assign) {
           const movingName = movingSnap?.tmName || "";
           if (movingTmId) {
             live.assign(toKey, movingTmId, movingName, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
           }
-          const displacedName = displacedSnap?.tmName || "";
+
           if (displacedTmId) {
-            live.assign(fromKey, displacedTmId, displacedName, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
-          } else {
+            // Background persist for the displaced TM (swap case)
+            (async () => {
+              try {
+                const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
+                const nid = nightId || await resolveNightIdForDate(captureDate, captureDayName);
+                if (!nid) return;
+                const { slot_key, slot_type, rr_side } = uiToDb(fromKey);
+                await upsertZoneAssignment({
+                  nightId: nid,
+                  slotKey: slot_key,
+                  slotType: slot_type,
+                  rrSide: rr_side,
+                  tmId: displacedTmId,
+                });
+              } catch (e) {
+                console.error("[drag] background persist for displaced TM (swap) failed", e);
+              }
+            })();
+          } else if (fromKey) {
             live.unassign?.(fromKey, { captureDate, captureDayName, targetNightId: nightId, isDraftMode });
           }
         } else {

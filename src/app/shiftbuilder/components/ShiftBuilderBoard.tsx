@@ -14,7 +14,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import { useAssignments, useDraftAssignments, useAuxDefs } from "../store/useShiftBuilderStore";
+import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -120,7 +120,32 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // when the selected slice actually mutates. Falls back to props during transition.
   const assignments = useAssignments() ?? assignmentsProp ?? {};
   const draftAssignments = useDraftAssignments() ?? draftAssignmentsProp ?? {};
-  const auxDefs = useAuxDefs() ?? auxDefsProp ?? [];
+  const auxDefs = useAuxDefs() ?? auxDefsProp ?? {};
+
+  // Respect pending drag so source cards do not lose their draggable state
+  // or visual TM during an active reassignment drag. This is critical for
+  // making assigned TM drag feel solid like task drag.
+  const pendingDrag = useShiftBuilderStore(s => s.pendingDrag) ?? null;
+
+  // Derived assignments for rendering that respects active pending drag.
+  // This ensures the source card stays visually "occupied" and draggable throughout the gesture.
+  const displayAssignments = React.useMemo(() => {
+    if (!pendingDrag?.fromSlot) return assignments;
+
+    const copy = { ...assignments };
+    // Force the original TM to remain visible on the source slot during drag.
+    // This prevents the card from losing its useDraggable mid-gesture.
+    if (pendingDrag.fromSlot && pendingDrag.tmId) {
+      copy[pendingDrag.fromSlot] = {
+        ...(copy[pendingDrag.fromSlot] || {}),
+        tmId: pendingDrag.tmId,
+        tmName: pendingDrag.tmName,
+      };
+    }
+    return copy;
+  }, [assignments, pendingDrag]);
+
+  const isAnyDragActive = !!pendingDrag;
   // === Local derived (was in giant parent; now scoped to board only) ===
   // Always call the hook (Rules of Hooks). Prefer worker value when available.
   const computedBreakCounts = React.useMemo(() => {
@@ -407,7 +432,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   <ZoneCard
                     key={def.key}
                     def={def}
-                    assignments={assignments}
+                    assignments={displayAssignments}
                     selectedTasks={selectedTasks}
                     setBreakGroupForSlot={setBreakGroupForSlot}
                     onCardClick={onCardClick}
@@ -444,7 +469,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   <RRCard
                     key={def.num}
                     def={def}
-                    assignments={assignments}
+                    assignments={displayAssignments}
                     selectedTasks={selectedTasks}
                     setBreakGroupForSlot={setBreakGroupForSlot}
                     onGenderClick={onGenderClick ?? ((k: string) => {})}
@@ -483,7 +508,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   <AuxCard
                     key={def.key}
                     def={def}
-                    assignments={assignments}
+                    assignments={displayAssignments}
                     selectedTasks={selectedTasks}
                     setBreakGroupForSlot={setBreakGroupForSlot}
                     onCardClick={onCardClick}
@@ -653,7 +678,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           <OverlapSlot
                             key={i}
                             slotKey={`OL-${row.key}-${i}`}
-                            assignments={assignments}
+                            assignments={displayAssignments}
                             selectedTasks={selectedTasks}
                             onCardClick={onCardClick}
                             loading={loadingAssignments}
