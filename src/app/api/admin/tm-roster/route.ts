@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '../_lib/createAdminClient';
 
-const supabase = createAdminClient();
-
 /**
  * Lightweight roster for Sudo TM Defaults admin.
  * Returns active TMs with grave_pool or all active for picker use.
  */
 export async function GET() {
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('tm_profiles')
     .select('id, full_name, display_name, employee_name, active, grave_pool, gender')

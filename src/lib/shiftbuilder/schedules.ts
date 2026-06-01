@@ -19,8 +19,6 @@ import { startOfRosterWeek, daysBetween } from "./dateUtils";
 import type { WeeklyShift } from "./types/schedules";
 import { isWorkingShift } from "./types/schedules";
 
-const supabase = createAdminClient();
-
 // === DIAGNOSTIC: the five TMs the operator reports are leaking into the default picker list
 // when they are marked OFF (or not in the correct group) in the Sudo Weekly Roster.
 const WATCHED_NAMES_LOWER = ['alec', 'daryl', 'jason', 'nikki', 'sam', 'scott'];
@@ -64,6 +62,8 @@ export async function getTmShiftForNight(
   tmId: string, // tm_profiles.id (UUID) — same space used by Sudo tabs
   nightDate: Date
 ): Promise<NightShift> {
+  const supabase = createAdminClient();
+
   const night = new Date(nightDate);
   night.setHours(12, 0, 0, 0);
 
@@ -150,6 +150,8 @@ export async function getTmShiftForNight(
 export async function getScheduledTmsForNight(
   nightDate: Date
 ): Promise<ScheduledTmsForNightResult> {
+  const supabase = createAdminClient();
+
   const night = new Date(nightDate);
   night.setHours(12, 0, 0, 0);
 

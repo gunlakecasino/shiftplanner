@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '../_lib/createAdminClient';
 
-const supabase = createAdminClient();
-
 /**
  * GET /api/admin/tm-groups
  * Returns all groups + their members (for the new static TM schedule system).
  */
 export async function GET() {
+  const supabase = createAdminClient();
   const { data: groups, error: gErr } = await supabase
     .from('tm_groups')
     .select('*')
@@ -38,6 +37,7 @@ export async function GET() {
  *  - { action: 'remove_member', group_id, tm_id }
  */
 export async function POST(request: NextRequest) {
+  const supabase = createAdminClient();
   try {
     const body = await request.json();
 

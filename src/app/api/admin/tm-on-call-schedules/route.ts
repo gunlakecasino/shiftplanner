@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { UpsertTMOnCallScheduleInput } from '@/lib/shiftbuilder/types/schedules';
 import { createAdminClient } from '../_lib/createAdminClient';
 
-const supabase = createAdminClient();
-
 export async function GET(request: NextRequest) {
+  const supabase = createAdminClient();
   const { searchParams } = new URL(request.url);
   const weekStart = searchParams.get('week_start');
   const tmId = searchParams.get('tm_id');
@@ -24,6 +23,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = createAdminClient();
   try {
     const body: UpsertTMOnCallScheduleInput = await request.json();
 
