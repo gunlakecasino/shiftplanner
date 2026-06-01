@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '../_lib/createAdminClient';
+import { createAdminClientSafe } from '../_lib/createAdminClient';
 
 /**
  * Lightweight roster for Sudo TM Defaults admin.
  * Returns active TMs with grave_pool or all active for picker use.
  */
 export async function GET() {
-  const supabase = createAdminClient();
+  const supabase = createAdminClientSafe();
+  if (!supabase) {
+    return NextResponse.json({ data: [], note: "Service role key not available on this environment" });
+  }
+
   const { data, error } = await supabase
     .from('tm_profiles')
     .select('id, full_name, display_name, employee_name, active, grave_pool, gender')

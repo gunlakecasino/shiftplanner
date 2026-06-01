@@ -14,7 +14,7 @@
  * NO MORE DIVERGENCE.
  */
 
-import { createAdminClient } from "@/app/api/admin/_lib/createAdminClient";
+import { createAdminClient, createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { startOfRosterWeek, daysBetween } from "./dateUtils";
 import type { WeeklyShift } from "./types/schedules";
 import { isWorkingShift } from "./types/schedules";
@@ -62,7 +62,11 @@ export async function getTmShiftForNight(
   tmId: string, // tm_profiles.id (UUID) — same space used by Sudo tabs
   nightDate: Date
 ): Promise<NightShift> {
-  const supabase = createAdminClient();
+  const supabase = createAdminClientSafe();
+  if (!supabase) {
+    // No service key available (common on Railway if the secret isn't attached to the right env)
+    return { label: "OFF", startTime: null, endTime: null };
+  }
 
   const night = new Date(nightDate);
   night.setHours(12, 0, 0, 0);
@@ -150,7 +154,17 @@ export async function getTmShiftForNight(
 export async function getScheduledTmsForNight(
   nightDate: Date
 ): Promise<ScheduledTmsForNightResult> {
-  const supabase = createAdminClient();
+  const supabase = createAdminClientSafe();
+  if (!supabase) {
+    // Graceful degradation when service role key is missing at runtime
+    return {
+      allScheduled: [],
+      fullGraveScheduled: [],
+      pmOverlapScheduled: [],
+      amOverlapScheduled: [],
+      scheduledWithRoles: [],
+    };
+  }
 
   const night = new Date(nightDate);
   night.setHours(12, 0, 0, 0);

@@ -100,7 +100,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         canonicalScheduled = await getScheduledTmsForNight(selectedDay.date);
       } catch (e) {
         const railwayEnv = process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown';
-        console.error("[useCurrentNight] failed to load canonical scheduled data", {
+        console.error("[useCurrentNight] failed to load canonical scheduled data (this is expected if SUPABASE_SERVICE_ROLE_KEY is not set on Railway)", {
           error: e,
           railwayEnvironment: railwayEnv,
           nodeEnv: process.env.NODE_ENV,

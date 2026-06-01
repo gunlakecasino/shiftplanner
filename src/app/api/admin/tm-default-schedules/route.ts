@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { UpsertTMDefaultScheduleInput } from '@/lib/shiftbuilder/types/schedules';
-import { createAdminClient } from '../_lib/createAdminClient';
+import { createAdminClientSafe } from '../_lib/createAdminClient';
 
 /**
  * GET /api/admin/tm-default-schedules
  * Returns all (or filtered) TM default schedules.
  */
 export async function GET(request: NextRequest) {
-  const supabase = createAdminClient();
+  const supabase = createAdminClientSafe();
+  if (!supabase) {
+    return NextResponse.json({ data: [] });
+  }
   const { searchParams } = new URL(request.url);
   const tmId = searchParams.get('tm_id');
 
@@ -34,7 +37,10 @@ export async function GET(request: NextRequest) {
  * Upsert a TM default schedule (for Sudo or import scripts).
  */
 export async function POST(request: NextRequest) {
-  const supabase = createAdminClient();
+  const supabase = createAdminClientSafe();
+  if (!supabase) {
+    return NextResponse.json({ error: "Service role key not configured" }, { status: 503 });
+  }
   try {
     const body: UpsertTMDefaultScheduleInput = await request.json();
 
