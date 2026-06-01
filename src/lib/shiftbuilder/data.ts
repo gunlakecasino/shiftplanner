@@ -1,5 +1,5 @@
 import { supabase, getSupabaseClient } from '../supabase';
-import { dbToUi } from './slot-keys';
+import { dbToUi, uiToDb } from './slot-keys';
 import { startOfRosterWeek, daysBetween } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
 import { isWorkingShift } from './types/schedules';

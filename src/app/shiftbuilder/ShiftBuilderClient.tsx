@@ -2471,15 +2471,23 @@ function AuthedShiftBuilder() {
       delete copy[slotKey];
       return copy;
     });
+
     // Use the robust delete that handles both canonical and legacy slot keys
-    // (e.g. "Z9" vs "zone_9"). This permanently fixes ghost assignments from
-    // old data while we migrate everything to normalized keys.
-    import("@/lib/shiftbuilder/data").then(({ deleteZoneAssignment }) =>
-      deleteZoneAssignment({
-        nightId: targetNightId,
-        uiKey: slotKey,
-      }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
-    );
+    // (e.g. "Z9" vs "zone_9"). Resolve nightId if not yet available.
+    (async () => {
+      let nid = targetNightId;
+      if (!nid) {
+        nid = await resolveNightIdForDate(captureDate, captureDayName);
+      }
+      if (nid) {
+        import("@/lib/shiftbuilder/data").then(({ deleteZoneAssignment }) =>
+          deleteZoneAssignment({
+            nightId: nid,
+            uiKey: slotKey,
+          }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
+        );
+      }
+    })();
 
     // Drop the break_assignments row for this TM so a re-assign gets a fresh
     // group instead of inheriting a stale one. Fire-and-forget.
