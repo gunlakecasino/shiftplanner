@@ -532,24 +532,24 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             {/* 3 Break Wave Columns — Golden tight layout */}
             <div className="grid grid-cols-3 gap-1 mb-1.5">
               {[1, 2, 3].map((wave) => {
-                // Prefer pre-processed data from the worker when available (big perf win)
-                let waveAssignments: any[];
-                if (processedWaves && processedWaves[wave - 1]) {
-                  waveAssignments = processedWaves[wave - 1].items || [];
-                } else {
-                  // Fallback (main thread) – will be removed once worker is fully wired
-                  waveAssignments = Object.entries(assignments)
-                    .map(([slotKey, a]: [string, any]) => {
-                      if (!a?.tmId || a.breakGroup !== wave) return null;
-                      return {
-                        ...a,
-                        slotKey,
-                        type: slotRefType(slotKey),
-                        tmName: a.tmName,
-                      };
-                    })
-                    .filter(Boolean) as any[];
-                }
+                // Always derive wave membership from the live Zustand assignments.
+                // This is the exact same data source the BreakBadge pills read on the
+                // deployment view. Pill taps via setBreakGroupForSlot mutate the store
+                // directly, so the break sheet columns now instantly reflect the selected
+                // break groups without waiting for realtime, worker snapshots, or day reload.
+                // (processedWaves is a day-switch perf cache only; live mutations win for
+                // the on-screen "breaks" view and for what the operator just selected.)
+                const waveAssignments: any[] = Object.entries(assignments)
+                  .map(([slotKey, a]: [string, any]) => {
+                    if (!a?.tmId || (a.breakGroup ?? 0) !== wave) return null;
+                    return {
+                      ...a,
+                      slotKey,
+                      type: slotRefType(slotKey),
+                      tmName: a.tmName,
+                    };
+                  })
+                  .filter(Boolean) as any[];
 
                 const count = waveAssignments.length;
                 const waveColor =

@@ -289,6 +289,8 @@ function handleAssignmentChange(
           tmName: liveAssignment.tmName,
           isLocked: liveAssignment.isLocked,
           slotKey: uiKey,
+          // Preserve breakGroup from previous state (realtime updates don't carry break info)
+          breakGroup: prev[uiKey]?.breakGroup,
         },
       }));
     } catch {}

@@ -189,6 +189,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
           if (patch.tmId === null || patch.tmId === undefined) {
             mainStore.setAssignments((prev: any) => {
               const copy = { ...prev };
+              // When deleting, we intentionally drop the whole entry (including breakGroup).
+              // A future re-assign will get a fresh break group.
               delete copy[params.uiKey];
               return copy;
             });
@@ -201,6 +203,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
                 tmId: patch.tmId,
                 tmName: (patch as any).tmName ?? prev[params.uiKey]?.tmName,
                 slotKey: params.uiKey,
+                // Preserve existing breakGroup unless the new patch explicitly provides one
+                breakGroup: (patch as any).breakGroup ?? prev[params.uiKey]?.breakGroup,
               },
             }));
           }
