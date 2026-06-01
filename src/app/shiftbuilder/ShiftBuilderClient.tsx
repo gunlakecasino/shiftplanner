@@ -1910,6 +1910,38 @@ function AuthedShiftBuilder() {
     }
   }, [effectiveAssignments]);
 
+  // === Ensure breakGroup from Supabase (break_assignments) makes it into the store ===
+  // The board and BreakBadge read from the narrow Zustand hook. After the core
+  // query enriches currentNight.assignments with breakGroup, we must explicitly
+  // patch the store so the pills show live data + defaults instead of blank/0.
+  React.useEffect(() => {
+    const breakRows = currentNight?.rawBreakRows || currentNight?.breakAssignments;
+    if (!breakRows || !Array.isArray(breakRows) || breakRows.length === 0) return;
+
+    const breakByTm: Record<string, number> = {};
+    breakRows.forEach((r: any) => {
+      if (r?.tmId && r.groupNum != null) {
+        breakByTm[r.tmId] = r.groupNum;
+      }
+    });
+    if (Object.keys(breakByTm).length === 0) return;
+
+    try {
+      useShiftBuilderStore.getState().setAssignments((prev: any) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((k) => {
+          const a = next[k];
+          if (a?.tmId && breakByTm[a.tmId] != null) {
+            next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
+          }
+        });
+        return next;
+      });
+    } catch (e) {
+      console.warn('[ShiftBuilder] Failed to enrich store with breakGroups from Supabase', e);
+    }
+  }, [currentNight?.rawBreakRows, currentNight?.breakAssignments]);
+
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
   // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
   // the optimistic live layer or realtime bridge mutates placements for this night.
