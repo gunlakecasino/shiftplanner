@@ -589,7 +589,9 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
           })
           .eq('id', r.id);
       } catch (e) {
-        console.warn('[shiftbuilder] Failed to normalize legacy slot key', r.slot_key, e);
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[shiftbuilder] Failed to normalize legacy slot key', r.slot_key, e);
+        }
       }
     }));
   }

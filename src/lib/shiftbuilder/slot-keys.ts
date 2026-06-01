@@ -141,7 +141,9 @@ export function uiToDb(uiKey: string): DbSlot {
 
   // FINAL SAFETY NET — never throw on legacy/unknown keys.
   // This stops the repeated normalization warnings and the resulting 400s on zone_assignments.
-  console.warn(`[slot-keys] uiToDb received unknown key "${uiKey}" — passing through safely.`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(`[slot-keys] uiToDb received unknown key "${uiKey}" — passing through safely.`);
+  }
   return {
     slot_key: uiKey,
     slot_type: uiKey.includes('overlap') ? 'overlap' : 'aux',
