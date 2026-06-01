@@ -71,3 +71,21 @@ export interface UpsertTMOnCallScheduleInput {
  * We will add a system-level mapping later if we want calendar-day semantics.
  */
 export const GRAVE_WEEK_PATTERN_LENGTH = 7;
+
+/**
+ * Returns true only if the shift entry represents an actual working day.
+ * Explicitly treats:
+ *   - missing entry
+ *   - startTime: null
+ *   - label === "OFF"
+ * as non-working (OFF / not scheduled).
+ *
+ * This is the canonical check used by the board picker (getScheduledTmIdsForNightFromNewRoster)
+ * and should be used in any sudo preview logic too.
+ */
+export function isWorkingShift(entry: WeeklyShift | null | undefined): boolean {
+  if (!entry) return false;
+  if (entry.label === "OFF") return false;
+  if (!entry.startTime) return false;
+  return true;
+}

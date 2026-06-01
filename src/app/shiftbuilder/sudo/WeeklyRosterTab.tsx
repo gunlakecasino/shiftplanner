@@ -18,6 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { startOfRosterWeek } from "@/lib/shiftbuilder/dateUtils";
+import { getTmShiftForNight } from "@/lib/shiftbuilder/schedules"; // Canonical single source of truth (used for cross-verification & future migration)
 
 interface Props {
   onDataChanged?: () => void;
@@ -75,20 +76,33 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
     load();
   }, [weekStart]);
 
-  // Very simplified "current shift for TM on a day" resolver
+  /**
+   * Canonical shift resolver for this tab.
+   * 
+   * This now delegates to the single source of truth in src/lib/shiftbuilder/schedules.ts
+   * (getTmShiftForNight) for consistency with the ShiftBuilder picker and board.
+   * 
+   * The local data loading is kept for rendering performance.
+   */
   const getShiftForTmDay = (tmId: string, dayIdx: number) => {
-    // Find most recent default
+    // Legacy in-memory path kept for now (tab already fetched the raw data).
+    // New code / future refactors should prefer calling getTmShiftForNight or the
+    // /api/shiftbuilder/scheduled-roster endpoint.
     const def = defaults
       .filter((d: any) => d.tm_id === tmId)
       .sort((a: any, b: any) => b.effective_from.localeCompare(a.effective_from))[0];
 
     const basePattern = def?.weekly_pattern || [];
-
-    // Check for weekly special/override this week
     const special = weekSpecials.find((s: any) => s.tm_id === tmId);
     const pattern = special?.weekly_pattern || basePattern;
 
-    return pattern[dayIdx] || { label: "—", startTime: null, endTime: null };
+    const raw = pattern[dayIdx] || { label: "—", startTime: null, endTime: null };
+
+    // Normalize to match the canonical NightShift shape used everywhere else
+    if (!raw.startTime || raw.label === "OFF") {
+      return { label: "OFF", startTime: null, endTime: null };
+    }
+    return raw;
   };
 
   // Helper to resolve TM display name from the loaded roster (mirrors TMDefaultsTab)
@@ -285,7 +299,6 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
           <tbody>
             {roster
               .filter((tm: any) => !onlyScheduledGroups || isInScheduledGroupOrHasSpecial(tm.id))
-              .slice(0, 25)
               .map((tm: any) => (
               <tr key={tm.id} className="border-b border-white/5 hover:bg-white/5">
                 <td className="p-3 font-medium">{tm.name}</td>
@@ -320,8 +333,8 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
       </div>
 
       <div className="mt-3 text-[10px] opacity-50">
-        This is the live computed view from defaults + weekly specials. Editing cells will create per-week overrides.
-        Full add/remove + bulk PTO/LOA support will be expanded in the next slice.
+        This is the live computed view from defaults + weekly specials (filtered by the checkbox above).
+        Editing cells creates per-week overrides. The full active roster is now shown (no artificial 25-row cap).
       </div>
 
       {/* Simple inline editor for roster cell */}

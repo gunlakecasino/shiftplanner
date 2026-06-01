@@ -11,12 +11,14 @@ import {
   getNightBreakAssignments,
   getNightCardBorders,
   getRecentZoneHistory,
-  getScheduledTmIdsForNight,
-  getScheduledTmIdsForNightFromNewRoster,
   getGraveAvailableTeamMembers,
   getOnScheduleTmIdsForNight,
   getActiveTeamMembers,
 } from "@/lib/shiftbuilder/data";
+
+import {
+  getScheduledTmsForNight,
+} from "@/lib/shiftbuilder/schedules";
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
 
 // Server-cached roster (huge win for day switch speed)
@@ -48,16 +50,12 @@ export function useCurrentNight(selectedDay: DayDef) {
       const [
         members,
         dbAssignments,
-        scheduledTonightSet,
-        newRosterScheduledSet,
         graveMembers,
         weekOnScheduleSet,
       ] = await Promise.all([
         // Use server-cached roster — this is the big remaining win for day switches
         id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
         id ? getNightAssignments(id) : Promise.resolve([]),
-        id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
-        id ? getScheduledTmIdsForNightFromNewRoster(selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
         getGraveAvailableTeamMembers(),
         id ? getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
       ]);
@@ -87,17 +85,63 @@ export function useCurrentNight(selectedDay: DayDef) {
         isAMOverlap: m.gravePool === 'AM',
       }));
 
-      // Strict new roster system (groups + defaults + weekly specials). Old night_tm_status is transitional only.
-      const scheduledTmIdsTonight: Set<string> = newRosterScheduledSet;
+      // === CANONICAL SCHEDULED DATA (single source of truth) ===
+      // Uses the exact same resolver logic as the Sudo Weekly Roster tab.
+      // This replaces the old getScheduledTmIdsForNightFromNewRoster + getNightRosterClassification path.
+      let canonicalScheduled: Awaited<ReturnType<typeof getScheduledTmsForNight>> = {
+        allScheduled: [],
+        fullGraveScheduled: [],
+        pmOverlapScheduled: [],
+        amOverlapScheduled: [],
+        scheduledWithRoles: [],
+      };
+
+      try {
+        canonicalScheduled = await getScheduledTmsForNight(selectedDay.date);
+      } catch (e) {
+        console.warn("[useCurrentNight] failed to load canonical scheduled data", e);
+      }
+
+      const fullGraveScheduledTonight = new Set(canonicalScheduled.fullGraveScheduled.map((t: any) => t.id));
+      const pmOverlapScheduledTonight = new Set(canonicalScheduled.pmOverlapScheduled.map((t: any) => t.id));
+      const amOverlapScheduledTonight = new Set(canonicalScheduled.amOverlapScheduled.map((t: any) => t.id));
+
+      // Enrich the main realRoster using the canonical partitioned sets
+      const enrichedRealRoster = (members || []).map((m: any) => ({
+        ...m,
+        isPMOverlapTonight: pmOverlapScheduledTonight.has(m.id),
+        isAMOverlapTonight: amOverlapScheduledTonight.has(m.id),
+        isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
+      }));
+
+      const enrichedGraveRoster = graveRoster.map((m: any) => ({
+        ...m,
+        isPMOverlapTonight: pmOverlapScheduledTonight.has(m.id),
+        isAMOverlapTonight: amOverlapScheduledTonight.has(m.id),
+        isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
+      }));
+
+      // Legacy shape kept for broad compatibility during migration
+      const scheduledTmIdsTonight: Set<string> = new Set(
+        canonicalScheduled.allScheduled.map((t: any) => t.id)
+      );
 
       return {
         nightId: id,
         assignments,
         members,
         scheduledTmIdsTonight,
-        realRoster: members,
-        graveRoster,
-        // Raw data for the Web Worker (3.2) so it can do heavy post-processing off main thread
+        realRoster: enrichedRealRoster,
+        graveRoster: enrichedGraveRoster,
+        // Partitioned scheduled sets from the Weekly Roster classification (Grave group + overlap groups).
+        // These are the authoritative "who is scheduled in this specific roster role tonight".
+        // Used by the MarkerPad picker to ensure a pure grave card only offers full-grave scheduled TMs,
+        // and overlap cards only offer the corresponding overlap TMs.
+        fullGraveScheduledTonight,
+        pmOverlapScheduledTonight,
+        amOverlapScheduledTonight,
+        // All scheduled data now comes exclusively from the canonical getScheduledTmsForNight
+        // (src/lib/shiftbuilder/schedules.ts) — the single source of truth.
         rawDbAssignments: dbAssignments,
         rawBreakRows: [], // will be populated from secondary when available
       };
@@ -167,9 +211,9 @@ export function useCurrentNight(selectedDay: DayDef) {
           // Cached server roster for speed
           id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
           id ? getNightAssignments(id) : Promise.resolve([]),
-          // legacy kept only for transitional reads during migration
-          id ? getScheduledTmIdsForNight(id) : Promise.resolve(new Set<string>()),
-          id ? getScheduledTmIdsForNightFromNewRoster(date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
+          // Old scheduled functions removed — using canonical getScheduledTmsForNight instead
+          Promise.resolve(new Set<string>()),
+          Promise.resolve(new Set<string>()),
           getGraveAvailableTeamMembers(),
           id ? getOnScheduleTmIdsForNight(id, date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
         ]);

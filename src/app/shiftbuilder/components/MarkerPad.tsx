@@ -757,7 +757,7 @@ const HistoryOverlay: React.FC<{
 
 const TmPicker: React.FC<{
   tms: TmEntry[];
-  allTms?: TmEntry[];   // full roster — searched when filter is non-empty
+  allTms?: TmEntry[];   // broader eligible pool — only used when the operator types in the search box
   currentTmName?: string;
   onPick: (tm: TmEntry) => void;
   onCancel?: () => void;
@@ -766,9 +766,10 @@ const TmPicker: React.FC<{
   isDark: boolean;
 }> = ({ tms, allTms, currentTmName, onPick, onCancel, confirmed, accent, isDark }) => {
   const [filter, setFilter] = useState("");
-  // Strict roster mode: always prefer the scheduled-unassigned list (tms).
-  // Only fall back to the broader roster (allTms) if explicitly passed and user is searching for exceptions.
-  // This makes clicking a zone only show available/unassigned TMs from the weekly roster.
+  // Rule:
+  // 1. Default list (no text in box) = scheduled + eligible + unassigned only (tms prop)
+  // 2. When typing → switch to all eligible (allTms prop) for search
+  // 3. The default list must *never* contain anyone who is not scheduled tonight for the correct role group.
   const searchPool = filter.trim() && allTms ? allTms : tms;
   const filtered = filter.trim()
     ? searchPool.filter(t => t.tmName.toLowerCase().includes(filter.toLowerCase()))
@@ -799,7 +800,9 @@ const TmPicker: React.FC<{
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
           {currentTmName ? `Replace ${currentTmName}…` : "Assign TM"}
-          <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.55 }}>(eligible for this slot)</span>
+          <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.55 }}>
+            {filter.trim() ? "all eligible" : "scheduled + eligible"}
+          </span>
         </span>
         {onCancel && (
           <button
@@ -829,6 +832,20 @@ const TmPicker: React.FC<{
           outline: "none", caretColor: accent,
         }}
       />
+
+      {/* Mode indicator — makes the three rules visible on screen */}
+      <div style={{
+        fontSize: 9,
+        fontWeight: 600,
+        letterSpacing: "0.3px",
+        color: filter.trim() ? "rgba(255,255,255,0.4)" : accent,
+        padding: "0 4px",
+        flexShrink: 0,
+      }}>
+        {filter.trim()
+          ? "Search: all eligible TMs (broad pool)"
+          : "Default: scheduled + eligible + unassigned only (Weekly Roster)"}
+      </div>
 
       {/* TM list */}
       <div className="no-scrollbar" style={{ overflowY: "auto", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -902,40 +919,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   isDark,
   tmGender,
 }) => {
-  // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug resolved) ===
-  // Fires when a card is tapped and the drawer mounts with the lists for that specific slot.
-  // Opt-in on production: localStorage.setItem('__DEBUG_MARKER_PICKER__', '1') or ?debug=picker
-  const __DEBUG_MARKER_PICKER__ =
-    process.env.NODE_ENV !== 'production' ||
-    (typeof window !== 'undefined' &&
-      (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
-        window.location?.search?.includes('debug=picker')));
-  if (__DEBUG_MARKER_PICKER__ && slotKey && typeof console !== 'undefined') {
-    console.groupCollapsed(`[MARKER-PICKER-DEBUG] MarkerPad opened for slot=${slotKey}`);
-    console.log('received scheduledUnassigned (tms prop) count:', scheduledUnassigned?.length ?? 0);
-    console.log('names:', (scheduledUnassigned || []).map((t: any) => t.tmName));
-    console.log('received allEligibleTms count:', allEligibleTms?.length ?? 0);
-    console.log('search pool names:', (allEligibleTms || []).map((t: any) => t.tmName));
-
-    // Highlight the operator-reported names and note that full roster attributes
-    // (gravePool, gender, etc.) are now being dumped from the memos in ShiftBuilderClient
-    // on the next list computation.
-    const watched = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
-    const matched = (scheduledUnassigned || []).filter((t: any) =>
-      watched.some(w => t.tmName.toLowerCase().includes(w))
-    );
-    if (matched.length > 0) {
-      console.warn('[MARKER-PICKER-DEBUG] These watched names are currently offered for this slot:', matched.map((t: any) => t.tmName));
-      console.log('→ Look for "[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name" logs from the parent memos for their gravePool/gender/etc.');
-    }
-    console.groupEnd();
-  }
-  // === END TEMP DIAGNOSTIC ===
-
-  // After the heavy perf refactor (narrow Zustand selectors + Board memo island + TanStack Query split),
-  // the orchestrator-level props can lag or come from a different source than the live board.
-  // MarkerPad (a floating panel) must read live assignments directly so the current TM, picker logic,
-  // and action results always match what the user sees on the artboard.
+  // MarkerPad reads live assignments directly (Zustand) so the occupant + picker
+  // always reflect what is painted on the board, even if parent props are slightly behind.
   const storeAssignments = useAssignments();
   const assignments = (storeAssignments && Object.keys(storeAssignments).length > 0)
     ? storeAssignments
@@ -1062,31 +1047,10 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   // Show TM picker when slot is empty OR when operator tapped Swap
   const showTmPicker = onAssign && (!a.tmId || assignMode);
 
-  // === Phase 3: Slot-specific eligibility narrowing for the TM picker ===
-  // When clicking a card, the lists should be further restricted to TMs who are
-  // actually eligible for *this* slot (in addition to being scheduled + unplaced).
-  // Start with the highest-impact rule that was frequently violated: RR gender.
-  const requiredGenderForSlot: 'M' | 'F' | null = (() => {
-    if (!slotKey) return null;
-    if (slotKey.startsWith('MRR')) return 'M';
-    if (slotKey.startsWith('WRR')) return 'F';
-    // Future: for Z* we could require gravePool etc., but that needs richer TM objects
-    // passed down. The scheduled list from the weekly roster is already a strong gate.
-    return null;
-  })();
-
-  const applySlotEligibility = (list: TmEntry[] | undefined): TmEntry[] => {
-    if (!list || !requiredGenderForSlot) return list || [];
-    // We don't have per-TM gender on the TmEntry passed to MarkerPad today.
-    // The heavy lifting (full isEligibleForSlot using the real roster rows + engine rules)
-    // should live in the parent when building the lists for a known slotKey.
-    // For now we document the intent and do the easy win when the parent starts passing gender.
-    // (The tmGender prop is only for the *current occupant* of the slot.)
-    return list;
-  };
-
-  const slotEligibleScheduled = applySlotEligibility(scheduledUnassigned);
-  const slotEligibleAll = applySlotEligibility(allEligibleTms);
+  // The lists arriving here are already final:
+  // - scheduledUnassigned = scheduled (correct role group) + eligible for slot + unassigned
+  // - allEligibleTms     = any eligible for slot (used only when the operator types in search)
+  // Default view in TmPicker uses the first; typing switches to the second.
 
   const isDarkPanel = isDark !== false;
   const panelStyle: React.CSSProperties = {
@@ -1231,8 +1195,8 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
       {/* ── Body: TM picker, Coverage picker, or Tasks section ──────────── */}
       {showTmPicker ? (
         <TmPicker
-          tms={slotEligibleScheduled}
-          allTms={slotEligibleAll}
+          tms={scheduledUnassigned}
+          allTms={allEligibleTms}
           currentTmName={a.tmId ? a.tmName : undefined}
           onPick={handlePickTm}
           onCancel={a.tmId ? () => { setAssignMode(false); setAssignConfirmed(false); } : undefined}

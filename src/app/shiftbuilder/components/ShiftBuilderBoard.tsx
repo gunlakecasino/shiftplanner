@@ -50,6 +50,7 @@ export interface ShiftBuilderBoardProps {
   onDayPillClick?: (idx: number) => void;
   onBreakGroupChange?: (g: 1 | 2 | 3) => void;
   onCardClick?: any;
+  onGenderClick?: (k: string, el?: HTMLElement, e?: React.MouseEvent) => void;
   onRemoveTask?: any;
   onSetTaskColor?: any;
   onEditTask?: any;
@@ -101,6 +102,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onDayPillClick,
   onBreakGroupChange,
   onCardClick,
+  onGenderClick,
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
@@ -445,10 +447,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     assignments={assignments}
                     selectedTasks={selectedTasks}
                     setBreakGroupForSlot={setBreakGroupForSlot}
-                    onGenderClick={(_k: string, _el?: HTMLElement) => {
-                      // No-op for isolated board (gender task palette is triggered via the main onCardClick path in parent).
-                      // Full wiring can be added by passing a real handler from orchestrator if needed for RR-specific flows.
-                    }}
+                    onGenderClick={onGenderClick ?? ((k: string) => {})}
                     loading={loadingAssignments}
                     borderColor={cardBorders[`RR${def.num}`] || cardBorders[`MRR${def.num}`] || cardBorders[`WRR${def.num}`]}
                     isDraftMode={isDraftMode}

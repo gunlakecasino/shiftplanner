@@ -23,6 +23,7 @@ import type {
   TMGroup,
   TMOnCallSchedule,
 } from "@/lib/shiftbuilder/types/schedules";
+import { startOfRosterWeek } from "@/lib/shiftbuilder/dateUtils";
 
 interface Props {
   onDataChanged?: () => void;
@@ -76,7 +77,7 @@ const PRESETS: { label: string; pattern: WeeklyShift[] }[] = [
   },
 ];
 
-export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }: Props) {
+export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, weekStart }: Props) {
   const [subView, setSubView] = useState<SubView>("defaults");
 
   // Data
@@ -91,8 +92,26 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }
   // Editor state for Defaults
   const [selectedTmId, setSelectedTmId] = useState<string | null>(null);
   const [editingPattern, setEditingPattern] = useState<WeeklyPattern | null>(null);
-  const [effectiveFrom, setEffectiveFrom] = useState<string>(new Date().toISOString().slice(0, 10));
+  // Default the Effective From to the start of the passed roster week if available,
+  // otherwise today. This makes "mark OFF for this week" actually take effect
+  // immediately for the weeks the user is managing in the board.
+  const initialEffectiveFrom = React.useMemo(() => {
+    if (weekStart) {
+      // weekStart is the Thursday of the roster week
+      return weekStart.toISOString().slice(0, 10);
+    }
+    return new Date().toISOString().slice(0, 10);
+  }, [weekStart]);
+  const [effectiveFrom, setEffectiveFrom] = useState<string>(initialEffectiveFrom);
   const [notes, setNotes] = useState("");
+
+  // Keep effectiveFrom in sync if the parent passes a different week context
+  React.useEffect(() => {
+    if (weekStart) {
+      const weekStartIso = weekStart.toISOString().slice(0, 10);
+      setEffectiveFrom(weekStartIso);
+    }
+  }, [weekStart]);
 
   // Groups editor
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -184,7 +203,8 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }
     if (!selectedTmId || !editingPattern) return;
 
     try {
-      const res = await fetch("/api/admin/tm-default-schedules", {
+      // 1. Save the rolling default (as before)
+      const defaultRes = await fetch("/api/admin/tm-default-schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,8 +215,31 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }
           notes,
         }),
       });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      const defaultJson = await defaultRes.json();
+      if (defaultJson.error) throw new Error(defaultJson.error);
+
+      // 2. If we have a specific roster week context (from Sudo), also write
+      //    this exact pattern as a weekly special/override for that week.
+      //    We *always* normalize to the canonical roster Thursday using startOfRosterWeek
+      //    so that the lookup in getScheduledTmIdsForNightFromNewRoster (which does the
+      //    exact same computation on the night date) will always find the special we just wrote.
+      //    This is the key to making "mark OFF in defaults while a week is selected" actually
+      //    remove the TM from the board picker for days in that week.
+      if (weekStart) {
+        const rosterThursday = startOfRosterWeek(weekStart);
+        const weekStartIso = rosterThursday.toISOString().slice(0, 10);
+        await fetch("/api/admin/tm-on-call-schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tm_id: selectedTmId,
+            week_start: weekStartIso,
+            weekly_pattern: editingPattern,
+            is_active: true,
+            notes: notes || "From Weekly Defaults edit",
+          }),
+        }).catch(() => {}); // best effort
+      }
 
       await loadAll();
       setSelectedTmId(null);
@@ -422,38 +465,98 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }
                   <div>
                     <label className="text-xs opacity-60 block mb-1">Weekly Pattern (Grave week order)</label>
                     <div className="grid grid-cols-7 gap-1.5">
-                      {(safeEditingPattern || []).map((shift, idx) => (
-                        <div key={idx} className="border border-white/10 rounded-2xl p-2 text-center text-[10px]">
-                          <div className="font-mono mb-1 text-[#C5A26F]">{DAY_LABELS[idx]}</div>
-                          <div className="space-y-1">
-                            <input
-                              type="time"
-                              value={shift.startTime}
-                              onChange={(e) => {
-                                const next = [...(editingPattern || [])];
-                                next[idx] = { ...next[idx], startTime: e.target.value || null };
-                                setEditingPattern(next as WeeklyPattern);
-                              }}
-                              className="bg-black/40 text-xs w-full"
-                            />
-                            <input
-                              type="time"
-                              value={shift.endTime}
-                              onChange={(e) => {
-                                const next = [...(editingPattern || [])];
-                                next[idx] = { ...next[idx], endTime: e.target.value || null };
-                                setEditingPattern(next as WeeklyPattern);
-                              }}
-                              className="bg-black/40 text-xs w-full"
-                            />
-                            <div className="text-[9px] opacity-70 truncate">{shift.label}</div>
+                      {(safeEditingPattern || []).map((shift, idx) => {
+                        const isOff = shift.label === "OFF" || (!shift.startTime && !shift.endTime);
+                        return (
+                          <div
+                            key={idx}
+                            className={`border rounded-2xl p-2 text-center text-[10px] transition-colors ${
+                              isOff
+                                ? "border-red-500/60 bg-red-950/30"
+                                : "border-white/10"
+                            }`}
+                          >
+                            <div className="font-mono mb-1 text-[#C5A26F]">{DAY_LABELS[idx]}</div>
+                            <div className="space-y-1">
+                              <input
+                                type="time"
+                                value={toTimeInputValue(shift.startTime)}
+                                onChange={(e) => {
+                                  const next = [...(editingPattern || [])];
+                                  const newStart = e.target.value || null;
+                                  // Typing a time automatically un-marks OFF and sets a working label
+                                  const newLabel = newStart
+                                    ? (next[idx]?.label === "OFF" ? "Custom" : (next[idx]?.label || "Custom"))
+                                    : "OFF";
+                                  next[idx] = {
+                                    ...next[idx],
+                                    startTime: newStart,
+                                    endTime: newStart ? (next[idx]?.endTime ?? null) : null,
+                                    label: newLabel,
+                                  };
+                                  setEditingPattern(next as WeeklyPattern);
+                                }}
+                                className="bg-black/40 text-xs w-full"
+                              />
+                              <input
+                                type="time"
+                                value={toTimeInputValue(shift.endTime)}
+                                onChange={(e) => {
+                                  const next = [...(editingPattern || [])];
+                                  const newEnd = e.target.value || null;
+                                  const current = next[idx] || {};
+                                  // If we were OFF and now setting an end time, un-OFF it
+                                  const newLabel = (current.startTime || newEnd)
+                                    ? (current.label === "OFF" ? "Custom" : (current.label || "Custom"))
+                                    : "OFF";
+                                  next[idx] = {
+                                    ...current,
+                                    endTime: newEnd,
+                                    label: newLabel,
+                                  };
+                                  setEditingPattern(next as WeeklyPattern);
+                                }}
+                                className="bg-black/40 text-xs w-full"
+                              />
+
+                              <div className="flex items-center justify-between gap-1 mt-1">
+                                <div className={`text-[9px] truncate flex-1 text-left ${isOff ? "text-red-400 font-medium" : "opacity-70"}`}>
+                                  {isOff ? "OFF" : (shift.label || "—")}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = [...(editingPattern || [])];
+                                    if (isOff) {
+                                      // Un-mark OFF — set a sensible default shift or leave blank for user to fill
+                                      next[idx] = {
+                                        startTime: "21:00", // common default, user can change
+                                        endTime: "07:00",
+                                        label: "Custom",
+                                      };
+                                    } else {
+                                      next[idx] = { startTime: null, endTime: null, label: "OFF" };
+                                    }
+                                    setEditingPattern(next as WeeklyPattern);
+                                  }}
+                                  className={`text-[8px] px-1.5 py-0 rounded border transition-colors ${
+                                    isOff
+                                      ? "border-green-500/60 bg-green-900/30 text-green-300 hover:bg-green-900/50"
+                                      : "border-red-500/40 hover:bg-red-950/40 text-red-300"
+                                  }`}
+                                  title={isOff ? "Mark this day as working and set a shift time" : "Mark this day as OFF (no shift)"}
+                                >
+                                  {isOff ? "Set Working" : "OFF"}
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 items-center">
                     {PRESETS.map((p, i) => (
                       <button
                         key={i}
@@ -463,6 +566,21 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator }
                         {p.label}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const offPattern = Array.from({ length: 7 }, () => ({
+                          startTime: null,
+                          endTime: null,
+                          label: "OFF" as const,
+                        }));
+                        setEditingPattern(offPattern);
+                      }}
+                      className="text-xs px-2.5 py-1 rounded-2xl border border-red-500/50 text-red-300 hover:bg-red-950/40"
+                      title="Mark the entire weekly default as OFF (no shifts any day)"
+                    >
+                      All OFF
+                    </button>
                   </div>
 
                   <textarea

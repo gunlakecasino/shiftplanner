@@ -45,6 +45,7 @@
 "use client";
 
 import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
 import { QueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "../supabase"; // re-exported singleton from the data layer root
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -76,7 +77,8 @@ interface LiveAssignmentsState {
   setConnectionStatus: (dateKey: string, status: LiveAssignmentsState["connectionStatus"][string]) => void;
 }
 
-export const liveAssignmentsStore = create<LiveAssignmentsState>((set) => ({
+export const liveAssignmentsStore = create<LiveAssignmentsState>()(
+  subscribeWithSelector((set) => ({
   assignmentsByNight: {},
   breakAssignmentsByNight: {},
   lastUpdated: {},
@@ -117,7 +119,7 @@ export const liveAssignmentsStore = create<LiveAssignmentsState>((set) => ({
     set((state) => ({
       connectionStatus: { ...state.connectionStatus, [dateKey]: status },
     })),
-}));
+})));
 
 // ============================================================================
 // REALTIME BRIDGE

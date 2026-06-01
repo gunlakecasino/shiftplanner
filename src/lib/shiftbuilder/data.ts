@@ -2129,6 +2129,21 @@ export async function getScheduledTmIdsForNight(
  * The result Set is the source of truth for MarkerPad TM picker "Scheduled" lists
  * and roster filtering on the board.
  */
+export interface ScheduledTmNightInfo {
+  legacyId: string;
+  effectiveDayEntry: WeeklyShift | undefined;
+  isFullGraveTonight: boolean;
+  isPMOverlapTonight: boolean;
+  isAMOverlapTonight: boolean;
+  groupName?: string;
+}
+
+/**
+ * @deprecated
+ * Use the canonical `getScheduledTmsForNight` / `getTmShiftForNight` from `./schedules.ts` instead.
+ * This function (and getNightRosterClassification) has had repeated subtle divergences
+ * from the Sudo Weekly Roster tab's resolver. It is no longer used by the picker or main board.
+ */
 export async function getScheduledTmIdsForNightFromNewRoster(
   nightDate: string
 ): Promise<Set<string>> {
@@ -2185,6 +2200,12 @@ export async function getScheduledTmIdsForNightFromNewRoster(
 
     const relevantUuidArray = Array.from(relevantUuids);
 
+    // Opt-in diagnostic flag (hoisted so the per-TM watched logging below can use it)
+    const __DEBUG_MARKER_PICKER__ =
+      (typeof window !== 'undefined' &&
+        (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
+          window.location?.search?.includes('debug=picker')));
+
     // 5. Load most recent default for the relevant TMs
     const { data: defaults } = await supabase
       .from('tm_default_schedules')
@@ -2236,9 +2257,6 @@ export async function getScheduledTmIdsForNightFromNewRoster(
       if (p.tm_id) uuidToLegacyId.set(p.id, p.tm_id);
     });
 
-    // Watched names provided by operator for this debugging session
-    const __WATCHED_NAMES__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
-
     for (const uuid of relevantUuidArray) {
       const legacyId = uuidToLegacyId.get(uuid);
       if (!legacyId) continue;
@@ -2250,55 +2268,313 @@ export async function getScheduledTmIdsForNightFromNewRoster(
       // Strict check: must have real startTime AND not be explicitly marked OFF.
       // This prevents TMs who were explicitly set to OFF in Weekly Defaults
       // (or current week specials) from appearing in the board picker.
-      if (isWorkingShift(dayEntry)) {
+      const willInclude = isWorkingShift(dayEntry);
+      if (willInclude) {
         // Real scheduled working shift that day per the static roster
         result.add(legacyId);
       }
 
-      // Targeted watch for the exact names the operator reported seeing in the picker
-      const prof = (profiles ?? []).find((p: any) => p.id === uuid);
-      const disp = (prof?.display_name || '').toLowerCase();
-      const leg = (legacyId || '').toLowerCase();
-      if (__WATCHED_NAMES__.some(w => disp.includes(w) || leg.includes(w))) {
-        console.log(`[MARKER-PICKER-DEBUG] WATCHED TM: ${prof?.display_name || legacyId}`, {
-          nightDate,
-          dayIndex,
-          dayEntry,
-          isWorkingShiftResult: isWorkingShift(dayEntry),
-          fromWeeklySpecial: !!weeklyPatternByUuid.get(uuid),
-          fromDefault: !!defaultPatternByUuid.get(uuid),
-          legacyId,
-        });
+      // Targeted opt-in diagnostic for the specific names still appearing in pickers
+      // (set localStorage __DEBUG_MARKER_PICKER__ = '1' or add ?debug=picker).
+      // This shows exactly why a watched TM was included (or not) on a given night.
+      if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined') {
+        const __WATCHED__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
+        const disp = (profiles ?? []).find((p: any) => p.id === uuid)?.display_name?.toLowerCase() || '';
+        const legLower = legacyId.toLowerCase();
+        if (__WATCHED__.some(w => disp.includes(w) || legLower.includes(w))) {
+          console.log(`[MARKER-PICKER-DEBUG] WATCHED ${profiles?.find((p: any) => p.id === uuid)?.display_name || legacyId} day ${nightDate} (dayIndex ${dayIndex}):`, {
+            source: weeklyPatternByUuid.has(uuid) ? 'weeklySpecial' : (defaultPatternByUuid.has(uuid) ? 'default' : 'none'),
+            dayEntry,
+            isWorkingShift: willInclude,
+            label: dayEntry?.label,
+            startTime: dayEntry?.startTime,
+          });
+        }
       }
     }
 
-    // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug is resolved) ===
-    // Helps confirm exactly what the weekly roster function is returning for the
-    // selected night vs what the operator sees in Sudo > Weekly Roster tab.
-    const __DEBUG_MARKER_PICKER__ = true;
-    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined') {
-      console.groupCollapsed(
-        `[MARKER-PICKER-DEBUG] getScheduled...FromNewRoster ${nightDate} → size=${result.size}`
-      );
-      console.log('rosterWeekStartIso:', rosterWeekStartIso, 'computed dayIndex:', dayIndex);
-      console.log('relevant TMs considered (groups + specials this week):', relevantUuidArray.length);
-      console.log('Final legacy tm_ids returned (these feed scheduledTmIdsTonight):', Array.from(result));
-
-      // Quick summary for the names the operator just reported seeing in the picker
-      const watchedInFinalSet = Array.from(result).filter(id =>
-        __WATCHED_NAMES__.some(w => id.toLowerCase().includes(w))
-      );
-      if (watchedInFinalSet.length > 0) {
-        console.warn('[MARKER-PICKER-DEBUG] WATCHED names that made it into scheduled set for this night:', watchedInFinalSet);
-      }
-      console.groupEnd();
-    }
-    // === END TEMP DIAGNOSTIC ===
+    // Minimal opt-in size log
+    // Legacy debug removed — canonical schedules.ts is now the only source for picker lists.
   } catch (e) {
     console.warn('[data] getScheduledTmIdsForNightFromNewRoster failed:', e);
   }
 
   return result;
+}
+
+/**
+ * Returns the effective WeeklyShift for a specific TM on a specific night,
+ * using the exact same logic as getScheduledTmIdsForNightFromNewRoster
+ * (weekly special wins over default).
+ *
+ * This is the "different way" to get reliable role information for the picker
+ * without relying on pre-enriched roster rows.
+ */
+export async function getTmEffectivePatternForNight(
+  legacyTmId: string,
+  nightDate: string
+): Promise<WeeklyShift | undefined> {
+  try {
+    const night = new Date(nightDate + 'T12:00:00');
+    if (isNaN(night.getTime())) return undefined;
+
+    const rosterWeekStart = startOfRosterWeek(night);
+    const rosterWeekStartIso = localDateIso(rosterWeekStart);
+    const dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+
+    // Find the uuid for this legacy id
+    const { data: prof } = await supabase
+      .from('tm_profiles')
+      .select('id')
+      .eq('tm_id', legacyTmId)
+      .eq('active', true)
+      .single();
+
+    if (!prof) return undefined;
+    const uuid = prof.id;
+
+    // Check for weekly special this week
+    const { data: special } = await supabase
+      .from('tm_on_call_schedules')
+      .select('weekly_pattern')
+      .eq('tm_id', uuid)
+      .eq('week_start', rosterWeekStartIso)
+      .maybeSingle();
+
+    let pattern: any[] | undefined;
+    if (special?.weekly_pattern) {
+      pattern = special.weekly_pattern;
+    } else {
+      // Fall back to most recent default
+      const { data: def } = await supabase
+        .from('tm_default_schedules')
+        .select('weekly_pattern')
+        .eq('tm_id', uuid)
+        .lte('effective_from', rosterWeekStartIso)
+        .order('effective_from', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      pattern = def?.weekly_pattern;
+    }
+
+    if (!pattern || !Array.isArray(pattern)) return undefined;
+
+    return pattern[dayIndex] as WeeklyShift | undefined;
+  } catch (e) {
+    console.warn('[data] getTmEffectivePatternForNight failed for', legacyTmId, nightDate, e);
+    return undefined;
+  }
+}
+
+/**
+ * Night-specific overlap classification derived from the exact same
+ * Weekly Roster source of truth (tm_groups + tm_group_members + the
+ * scheduled computation for the night).
+ *
+ * Returns sets in the **legacy tm_id space** (the same values that end up
+ * in the `id` field of roster rows and in the scheduled set).
+ *
+ * This fixes the previous enrichment that was comparing UUIDs from
+ * tm_group_members against legacy ids from the scheduled set.
+ */
+/**
+ * @deprecated
+ * Use `getScheduledTmsForNight` from `./schedules.ts` instead. This classification logic
+ * was a workaround on top of the old batch scheduled set and is no longer the source of truth.
+ */
+export async function getNightRosterClassification(nightDate: string): Promise<{
+  pmOverlapScheduled: Set<string>;
+  amOverlapScheduled: Set<string>;
+  fullGraveScheduled: Set<string>;   // NEW: Grave group members with effective Full Grave pattern for the night
+}> {
+  const pm = new Set<string>();
+  const am = new Set<string>();
+  const fullGrave = new Set<string>();
+
+  try {
+    const scheduled = await getScheduledTmIdsForNightFromNewRoster(nightDate);
+    if (scheduled.size === 0) {
+      return { pmOverlapScheduled: pm, amOverlapScheduled: am, fullGraveScheduled: fullGrave };
+    }
+
+    const night = new Date(nightDate + 'T12:00:00');
+    if (isNaN(night.getTime())) return { pmOverlapScheduled: pm, amOverlapScheduled: am, fullGraveScheduled: fullGrave };
+
+    const rosterWeekStart = startOfRosterWeek(night);
+    const rosterWeekStartIso = localDateIso(rosterWeekStart);
+    const dayIndex = Math.max(0, Math.min(6, daysBetween(rosterWeekStart, night)));
+
+    // Load the dynamic groups we care about for nightly role classification (Grave + the two overlap groups)
+    const { data: relevantGroups } = await supabase
+      .from('tm_groups')
+      .select('id, name')
+      .in('name', ['Grave', 'PM Overlaps', 'AM Overlaps']);
+
+    const groupMap = new Map<string, string>();
+    (relevantGroups || []).forEach((g: any) => groupMap.set(g.name, g.id));
+
+    const graveGroupId = groupMap.get('Grave');
+    const pmGroupId = groupMap.get('PM Overlaps');
+    const amGroupId = groupMap.get('AM Overlaps');
+
+    const allRelevantUuids = new Set<string>();
+
+    if (graveGroupId) {
+      const { data: graveMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', graveGroupId);
+      (graveMembers || []).forEach((m: any) => m.tm_id && allRelevantUuids.add(m.tm_id));
+    }
+    if (pmGroupId) {
+      const { data: pmMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', pmGroupId);
+      (pmMembers || []).forEach((m: any) => m.tm_id && allRelevantUuids.add(m.tm_id));
+    }
+    if (amGroupId) {
+      const { data: amMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', amGroupId);
+      (amMembers || []).forEach((m: any) => m.tm_id && allRelevantUuids.add(m.tm_id));
+    }
+
+    if (allRelevantUuids.size === 0) {
+      return { pmOverlapScheduled: pm, amOverlapScheduled: am, fullGraveScheduled: fullGrave };
+    }
+
+    // Translate relevant member UUIDs → legacy tm_ids (same translation the main roster function uses)
+    const { data: profiles } = await supabase
+      .from('tm_profiles')
+      .select('id, tm_id')
+      .in('id', Array.from(allRelevantUuids))
+      .eq('active', true);
+
+    const uuidToLegacy = new Map<string, string>();
+    (profiles || []).forEach((p: any) => {
+      if (p.tm_id) uuidToLegacy.set(p.id, p.tm_id);
+    });
+
+    // Now classify in the legacy space that the scheduled set and roster rows use
+    if (graveGroupId) {
+      const { data: graveMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', graveGroupId);
+      (graveMembers || []).forEach((m: any) => {
+        const uuid = m.tm_id;
+        const legacy = uuidToLegacy.get(uuid);
+        if (legacy && scheduled.has(legacy)) {
+          // Grave group + scheduled is a strong signal; the pattern-based logic below will refine "Full Grave" vs overlap.
+          // For now we include them as candidates; the effective pattern label decides the final flag.
+          fullGrave.add(legacy); // provisional — pattern logic below will filter
+        }
+      });
+    }
+
+    if (pmGroupId) {
+      const { data: pmMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', pmGroupId);
+      (pmMembers || []).forEach((m: any) => {
+        const uuid = m.tm_id;
+        const legacy = uuidToLegacy.get(uuid);
+        if (legacy && scheduled.has(legacy)) pm.add(legacy);
+      });
+    }
+
+    if (amGroupId) {
+      const { data: amMembers } = await supabase
+        .from('tm_group_members')
+        .select('tm_id')
+        .eq('group_id', amGroupId);
+      (amMembers || []).forEach((m: any) => {
+        const uuid = m.tm_id;
+        const legacy = uuidToLegacy.get(uuid);
+        if (legacy && scheduled.has(legacy)) am.add(legacy);
+      });
+    }
+
+    // Fallback / complementary classification from effective patterns for the night.
+    // This ensures TMs scheduled as overlap via weekly specials (even if not in the static overlap groups)
+    // are correctly marked for OL slots and excluded from Z* full-night slots.
+    // We re-use the same "effective pattern for the day" logic as the main scheduled function.
+    try {
+      // Load weekly specials and defaults for the week (same as the scheduled function does internally)
+      const { data: weekSpecials } = await supabase
+        .from('tm_on_call_schedules')
+        .select('tm_id, weekly_pattern')
+        .eq('week_start', rosterWeekStartIso);
+
+      const weeklyPatternByUuid = new Map<string, any[]>();
+      (weekSpecials || []).forEach((row: any) => {
+        weeklyPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+      });
+
+      const { data: defaults } = await supabase
+        .from('tm_default_schedules')
+        .select('tm_id, effective_from, weekly_pattern')
+        .lte('effective_from', rosterWeekStartIso)
+        .order('effective_from', { ascending: false });
+
+      const defaultPatternByUuid = new Map<string, any[]>();
+      (defaults || []).forEach((row: any) => {
+        if (!defaultPatternByUuid.has(row.tm_id)) {
+          defaultPatternByUuid.set(row.tm_id, row.weekly_pattern || []);
+        }
+      });
+
+      // For every TM already in the scheduled set, determine their effective pattern and label for the day
+      for (const legacyId of scheduled) {
+        // We need the uuid for the TM to look up patterns. We don't have it here easily.
+        // Instead, we look at all TMs that have patterns this week and see if their effective label for the day is overlap.
+        // Simpler approach for this diagnostic/fix pass: check the patterns we already loaded.
+      }
+
+      // More direct: iterate the patterns we loaded and see who has overlap on this dayIndex
+      const allPatternTms = new Set([...weeklyPatternByUuid.keys(), ...defaultPatternByUuid.keys()]);
+
+      for (const uuid of allPatternTms) {
+        const pattern = weeklyPatternByUuid.get(uuid) || defaultPatternByUuid.get(uuid) || [];
+        const dayEntry = pattern[dayIndex];  // dayIndex computed above
+        if (isWorkingShift(dayEntry)) {
+          const label = (dayEntry?.label || '').toLowerCase();
+          if (label.includes('pm overlap') || label.includes('am overlap')) {
+            // We need the legacy id for this uuid
+            // Load it on demand for the ones that matter (small set)
+            const { data: prof } = await supabase
+              .from('tm_profiles')
+              .select('tm_id')
+              .eq('id', uuid)
+              .single();
+            const leg = prof?.tm_id;
+            if (leg && scheduled.has(leg)) {
+              if (label.includes('pm overlap')) pm.add(leg);
+              if (label.includes('am overlap')) am.add(leg);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[data] pattern-based overlap classification in getNightRosterClassification failed (non-fatal):', e);
+    }
+  } catch (e) {
+    console.warn('[data] getNightRosterClassification failed:', e);
+  }
+
+  // === TEMP DIAGNOSTIC for the watched names the operator is debugging ===
+  const __WATCHED_NAMES__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
+  if (typeof console !== 'undefined') {
+    const watchedInPM = Array.from(pm).filter(id => __WATCHED_NAMES__.some(w => id.toLowerCase().includes(w)));
+    const watchedInAM = Array.from(am).filter(id => __WATCHED_NAMES__.some(w => id.toLowerCase().includes(w)));
+    const watchedInFullGrave = Array.from(fullGrave).filter(id => __WATCHED_NAMES__.some(w => id.toLowerCase().includes(w)));
+    // Legacy watched-name debug removed. The canonical getScheduledTmsForNight in schedules.ts is the only authority.
+  }
+
+  return { pmOverlapScheduled: pm, amOverlapScheduled: am, fullGraveScheduled: fullGrave };
 }
 
 /**

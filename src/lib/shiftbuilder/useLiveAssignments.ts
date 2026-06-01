@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
 import {
   upsertZoneAssignment,
+  getOrCreateNightForDate,
   type UpsertAssignmentParams,
 } from "@/lib/shiftbuilder/data";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
@@ -98,9 +99,25 @@ export function useLiveAssignments(selectedDay: DayDef) {
   ) => {
     return useMutation({
       mutationFn: async (params: any) => {
-        const { resolvedNightId, uiKey, ...rest } = params;
+        let { resolvedNightId, uiKey, captureDate, captureDayName, ...rest } = params;
 
-        const { slot_key, slot_type, rr_side } = uiToDb(uiKey); // assume uiToDb is in scope or imported
+        // Robust nightId resolution (the key fix for unassign not persisting)
+        if (!resolvedNightId && captureDate && captureDayName) {
+          try {
+            resolvedNightId = await getOrCreateNightForDate(
+              new Date(captureDate),
+              captureDayName
+            );
+          } catch (e) {
+            console.error("[useLiveAssignments] Failed to resolve nightId", e);
+          }
+        }
+
+        if (!resolvedNightId) {
+          throw new Error(`Could not resolve nightId for ${uiKey} — assignment not saved to Supabase`);
+        }
+
+        const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
 
         const upsertParams: UpsertAssignmentParams = {
           nightId: resolvedNightId,
@@ -189,27 +206,23 @@ export function useLiveAssignments(selectedDay: DayDef) {
     });
   };
 
-  // Public API – thin wrappers that resolve nightId + call the mutation with correct patch logic
+  // Public API – the mutationFn is provided by the factory (which now reliably calls upsertZoneAssignment)
   const assignMutation = createOptimisticMutation(
-    // mutationFn is actually handled inside createOptimisticMutation via upsert
-    async () => ({} as any),
+    async () => ({} as any), // ignored by factory
     (p: any) => ({ tmId: p.tmId, tmName: p.tmName })
   );
 
   const unassignMutation = createOptimisticMutation(
-    async () => ({} as any),
+    async () => ({} as any), // ignored by factory
     () => ({ tmId: null, tmName: null })
   );
 
   const assign = useCallback(
     (uiKey: string, tmId: string, tmName: string, opts: LiveAssignOptions) => {
-      // Resolve nightId (re-using the battle-tested capture logic from the client)
-      // For Phase 1 we expect the caller to have passed targetNightId when possible.
       const resolvedNightId = opts.targetNightId;
 
       if (!resolvedNightId) {
-        // Fallback – the caller should almost always have captured it.
-        console.warn("[useLiveAssignments] assign called without resolved nightId – using fire-and-forget path");
+        console.warn("[useLiveAssignments] assign called without targetNightId — will resolve inside mutation");
       }
 
       assignMutation.mutate({
@@ -217,10 +230,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
         tmId,
         tmName,
         ...opts,
-        resolvedNightId: resolvedNightId || "",
+        resolvedNightId, // pass as-is; mutationFn will resolve if missing
       } as any);
 
-      // Also ensure realtime is active for this night (cheap)
       ensureRealtime(resolvedNightId ?? null);
     },
     [assignMutation, ensureRealtime]
@@ -229,11 +241,19 @@ export function useLiveAssignments(selectedDay: DayDef) {
   const unassign = useCallback(
     (uiKey: string, opts: LiveAssignOptions) => {
       const resolvedNightId = opts.targetNightId;
+
+      if (!resolvedNightId) {
+        console.warn("[useLiveAssignments] unassign called without targetNightId — will resolve inside mutation (this was the main cause of DB not updating)");
+      }
+
       unassignMutation.mutate({
         uiKey,
         ...opts,
-        resolvedNightId: resolvedNightId || "",
+        resolvedNightId, // pass as-is; mutationFn will resolve if missing
+        // Explicitly ensure tmId is null for the delete path
+        tmId: null,
       } as any);
+
       ensureRealtime(resolvedNightId ?? null);
     },
     [unassignMutation, ensureRealtime]

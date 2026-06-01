@@ -30,6 +30,19 @@ self.onmessage = (event: MessageEvent) => {
     const { dbAssignments, breakRows = [], auxDefs = [] } = payload as ProcessNightPayload;
 
     try {
+      if (!dbAssignments || !Array.isArray(dbAssignments) || dbAssignments.length === 0) {
+        // Nothing to process yet — send empty result instead of error
+        self.postMessage({
+          type: 'PROCESSED_NIGHT',
+          payload: {
+            assignments: {},
+            breakCounts: { 1: 0, 2: 0, 3: 0 },
+            waves: [],
+          },
+        });
+        return;
+      }
+
       const assignments = buildAssignmentsRecord(dbAssignments);
       const breakCounts = computeBreakCounts(assignments);
       const waves = prepareBreaksWaveData(assignments, auxDefs);

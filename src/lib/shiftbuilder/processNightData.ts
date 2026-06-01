@@ -39,9 +39,12 @@ export interface BreakCounts {
  * The mapping that used to live inside useCurrentNight coreQuery.
  * Pure and fast — ideal for worker.
  */
-export function buildAssignmentsRecord(dbAssignments: any[]): Record<string, any> {
+export function buildAssignmentsRecord(dbAssignments: any[] | undefined | null): Record<string, any> {
   const assignments: Record<string, any> = {};
-  (dbAssignments as any[]).forEach((row: any) => {
+  if (!Array.isArray(dbAssignments)) {
+    return assignments; // defensive: nothing to process
+  }
+  dbAssignments.forEach((row: any) => {
     try {
       const uiKey = row.slotKey;
       if (row.tmId) {
@@ -61,8 +64,9 @@ export function buildAssignmentsRecord(dbAssignments: any[]): Record<string, any
  * Was a useMemo in the giant client (and now also in the isolated board).
  * Moving the source of truth here lets a worker pre-compute it.
  */
-export function computeBreakCounts(assignments: Record<string, any>): BreakCounts {
+export function computeBreakCounts(assignments: Record<string, any> | undefined | null): BreakCounts {
   const counts: BreakCounts = { 1: 0, 2: 0, 3: 0 };
+  if (!assignments) return counts;
   Object.values(assignments).forEach((a: any) => {
     if (!a?.tmName) return;
     const g = (a.breakGroup ?? 0) as 1 | 2 | 3;
@@ -94,9 +98,10 @@ export interface WaveColumn {
 }
 
 export function prepareBreaksWaveData(
-  assignments: Record<string, any>,
+  assignments: Record<string, any> | undefined | null,
   auxDefs: AuxDef[] = []
 ): WaveColumn[] {
+  if (!assignments) return [];
   const slotRefType = (ref: string | null): "zone" | "rr" | "aux" => {
     if (!ref) return "zone";
     if (ref.startsWith("MRR") || ref.startsWith("WRR")) return "rr";

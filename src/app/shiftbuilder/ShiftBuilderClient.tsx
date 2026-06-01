@@ -94,7 +94,6 @@ import {
   getTMSkillScores,
   getRecentZoneHistory,
   getScheduledTmIdsForNight,
-  getScheduledTmIdsForNightFromNewRoster,
   setNightLocked,
   getNightLocked,
   getTmZoneMatrix,
@@ -105,6 +104,7 @@ import {
   unsubscribeChannel,
 } from "@/lib/shiftbuilder/data";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
+import { getScheduledTmsForNight } from "@/lib/shiftbuilder/schedules";
 import {
   buildGrokEngineSnapshot,
   mergeGrokOverridesIntoDraft,
@@ -1859,6 +1859,12 @@ function AuthedShiftBuilder() {
   const effectiveRealRoster = currentNight.realRoster ?? realRoster;
   const effectiveGraveRoster = currentNight.graveRoster ?? graveRoster;
 
+  // Role-partitioned scheduled sets for the current night (from Weekly Roster classification).
+  // These ensure the picker for a specific card type only shows TMs scheduled in the matching roster role/group.
+  const fullGraveScheduledTonight: Set<string> = (currentNight.fullGraveScheduledTonight as Set<string> | undefined) ?? new Set();
+  const pmOverlapScheduledTonight: Set<string> = (currentNight.pmOverlapScheduledTonight as Set<string> | undefined) ?? new Set();
+  const amOverlapScheduledTonight: Set<string> = (currentNight.amOverlapScheduledTonight as Set<string> | undefined) ?? new Set();
+
   // === Phase 3.1 Unification for Scheduled Roster (MarkerPad + CMD-K picker fix) ===
   // Declared here (after hook, before the late memos that consume it).
   // This makes the modern useCurrentNight (which calls the authoritative new roster function)
@@ -1866,34 +1872,7 @@ function AuthedShiftBuilder() {
   const effectiveScheduledTmIdsTonight: Set<string> =
     (currentNight.scheduledTmIdsTonight as Set<string> | undefined) ?? scheduledTmIdsTonight;
 
-  // === LIVE DEBUG WATCH LIST (from operator-reported picker names) ===
-  // When any of these make it into the scheduledUnassigned / eligible lists for MarkerPad,
-  // we log their full roster record (gravePool, gender, primarySection, etc.) so we can
-  // immediately see eligibility issues for the clicked slot (e.g. Z8 zone).
-  const __WATCHED_PICKER_NAMES__ = ['alec', 'daryl', 'jason', 'nikki', 'sam'];
 
-  // === TEMP DIAGNOSTIC: compare hook vs legacy scheduled set (the root of the picker bug) ===
-  // Opt-in on production: localStorage.setItem('__DEBUG_MARKER_PICKER__', '1') or add ?debug=picker to URL.
-  const __DEBUG_MARKER_PICKER__ =
-    process.env.NODE_ENV !== 'production' ||
-    (typeof window !== 'undefined' &&
-      (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
-        window.location?.search?.includes('debug=picker')));
-  if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined') {
-    const hookScheduled = currentNight.scheduledTmIdsTonight as Set<string> | undefined;
-    const legacyScheduled = scheduledTmIdsTonight;
-    if (hookScheduled && legacyScheduled) {
-      const hookSize = hookScheduled.size;
-      const legacySize = legacyScheduled.size;
-      if (hookSize !== legacySize || [...hookScheduled].some(id => !legacyScheduled.has(id))) {
-        console.warn('[MARKER-PICKER-DEBUG] MISMATCH between hook.scheduledTmIdsTonight and legacy state!', {
-          hookSize, legacySize,
-          hookHasExtra: [...hookScheduled].filter(id => !legacyScheduled.has(id)),
-          legacyHasExtra: [...legacyScheduled].filter(id => !hookScheduled.has(id)),
-        });
-      }
-    }
-  }
   // === END TEMP DIAGNOSTIC ===
 
   // Assignments unification bridge (next major slice in 3.1)
@@ -2118,35 +2097,30 @@ function AuthedShiftBuilder() {
     const nightDateIso = selectedDay.date.toISOString().slice(0, 10);
 
     const statusChannel = createNightScheduleStatusChannel(nightId, async () => {
-      // Refetch schedule sets so roster filters and EngineRules update live
-      const freshScheduled = await getScheduledTmIdsForNight(nightId, nightDateIso);
-      const freshOnSchedule = await getOnScheduleTmIdsForNight(nightId, nightDateIso);
-      const newRosterScheduled = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
-      // Strict new roster for scheduled
-      setScheduledTmIdsTonight(newRosterScheduled);
-      // Note: we may want a separate state for onSchedule in future; for now the main filter uses scheduled
-      console.log('[shiftbuilder] night_tm_status changed — refreshed schedule sets');
+      // Refetch using the canonical resolver (schedules.ts)
+      const canonical = await getScheduledTmsForNight(selectedDay.date);
+      setScheduledTmIdsTonight(new Set(canonical.allScheduled.map((t: any) => t.id)));
+      console.log('[shiftbuilder] night_tm_status changed — refreshed via canonical schedules.ts');
     });
 
     const callOffChannel = createCallOffsChannel(nightDateIso, async () => {
       const freshCalledOff = await getCallOffsForDate(selectedDay.date);
-      setCalledOffIds(freshCalledOff); // already a Set<string> of tmIds
+      setCalledOffIds(freshCalledOff);
       console.log('[shiftbuilder] call_offs changed — refreshed called off set');
     });
 
-    // NEW: React to changes in the static roster (defaults + weekly specials).
-    // This makes "I marked someone OFF in Sudo Weekly Defaults / Roster" immediately
-    // reflected in the board picker without needing to switch days or hard refresh.
+    // React to changes in the static roster using the canonical source of truth.
+    // Sudo edits to defaults or weekly specials will now correctly update the picker & board.
     const defaultSchedulesChannel = createTMDefaultSchedulesChannel(async () => {
-      const freshNewRoster = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
-      setScheduledTmIdsTonight(freshNewRoster);
-      console.log('[shiftbuilder] tm_default_schedules changed — refreshed roster scheduled set');
+      const canonical = await getScheduledTmsForNight(selectedDay.date);
+      setScheduledTmIdsTonight(new Set(canonical.allScheduled.map((t: any) => t.id)));
+      console.log('[shiftbuilder] tm_default_schedules changed — refreshed via canonical schedules.ts');
     });
 
     const onCallSchedulesChannel = createTMOnCallSchedulesChannel(async () => {
-      const freshNewRoster = await getScheduledTmIdsForNightFromNewRoster(nightDateIso);
-      setScheduledTmIdsTonight(freshNewRoster);
-      console.log('[shiftbuilder] tm_on_call_schedules changed — refreshed roster scheduled set');
+      const canonical = await getScheduledTmsForNight(selectedDay.date);
+      setScheduledTmIdsTonight(new Set(canonical.allScheduled.map((t: any) => t.id)));
+      console.log('[shiftbuilder] tm_on_call_schedules changed — refreshed via canonical schedules.ts');
     });
 
     return () => {
@@ -3490,51 +3464,30 @@ function AuthedShiftBuilder() {
     return merged;
   }, [assignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
-  // Scheduled tonight, not yet placed — fed into MarkerPad TM picker (default list)
+  // === TM Picker lists (MarkerPad) — exactly the three rules (strict canonical only) ===
+  // 1. Default list = scheduled (tonight, correct role group from canonical) + eligible for slot + unassigned
+  // 2. Search box active → all eligible (no scheduled requirement)
+  // 3. The default list must *only ever* contain eligible + scheduled + unassigned TMs.
+  //
+  // This version builds the strict default list **exclusively** from the partitioned canonical sets
+  // that come out of useCurrentNight → getScheduledTmsForNight (schedules.ts).
+  // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
+
   const markerScheduledUnassigned = React.useMemo(() => {
-    const raw = Array.from(effectiveScheduledTmIdsTonight);
-    const filtered = raw
-      .filter((id) => !alreadyAssignedThisNight.has(id) && !calledOffIds.has(id))
-      .map((id) => {
-        const tm = effectiveRealRoster.find((t: any) => t.id === id);
-        const tmName = tm?.name || tm?.fullName;
-        if (!tmName) return null;
-        return { tmId: id, tmName };
-      })
-      .filter(Boolean) as { tmId: string; tmName: string }[];
+    // Start from the three canonical partitioned sets provided by the hook.
+    // These are the only "scheduled tonight in the correct roster group" source we trust.
+    const canonicalScheduledIds = new Set<string>([
+      ...fullGraveScheduledTonight,
+      ...pmOverlapScheduledTonight,
+      ...amOverlapScheduledTonight,
+    ]);
 
-    // === TEMP DIAGNOSTIC (remove after MarkerPad picker bug resolved) ===
-    const __DEBUG_MARKER_PICKER__ =
-      process.env.NODE_ENV !== 'production' ||
-      (typeof window !== 'undefined' &&
-        (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
-          window.location?.search?.includes('debug=picker')));
-    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined' && raw.length > 0) {
-      console.groupCollapsed(`[MARKER-PICKER-DEBUG] markerScheduledUnassigned (effective/hook-preferred) size=${filtered.length}`);
-      console.log('Source effectiveScheduled size:', raw.length);
-      console.log('After already-assigned + called-off filter + name lookup:', filtered.map(x => x.tmName));
-
-      // Enrich with full roster attributes for the exact names the operator is seeing
-      filtered.forEach(entry => {
-        const nameLower = entry.tmName.toLowerCase();
-        if (__WATCHED_PICKER_NAMES__.some(w => nameLower.includes(w))) {
-          const fullTm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
-          console.log(`[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name "${entry.tmName}" (in picker for current night):`, fullTm);
-        }
-      });
-      console.groupEnd();
-    }
-    // === END TEMP DIAGNOSTIC ===
-
-    return filtered;
-  }, [effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds, effectiveRealRoster]);
-
-  // Full roster minus currently-placed TMs — used when the operator types in the
-  // TM picker search box so they can find anyone, not just scheduled-unassigned.
-  const markerAllEligibleTms = React.useMemo(() => {
-    // Still limit to scheduled roster TMs (strict new system) + exclude already placed
-    const filtered = effectiveRealRoster
-      .filter((t: any) => effectiveScheduledTmIdsTonight.has(t.id) && !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
+    const list = effectiveRealRoster
+      .filter((t: any) =>
+        canonicalScheduledIds.has(t.id) &&
+        !alreadyAssignedThisNight.has(t.id) &&
+        !calledOffIds.has(t.id)
+      )
       .map((t: any) => {
         const tmName = t.name || t.fullName;
         if (!tmName) return null;
@@ -3542,46 +3495,83 @@ function AuthedShiftBuilder() {
       })
       .filter(Boolean) as { tmId: string; tmName: string }[];
 
-    // === TEMP DIAGNOSTIC ===
-    const __DEBUG_MARKER_PICKER__ =
-      process.env.NODE_ENV !== 'production' ||
-      (typeof window !== 'undefined' &&
-        (window.localStorage?.getItem('__DEBUG_MARKER_PICKER__') === '1' ||
-          window.location?.search?.includes('debug=picker')));
-    if (__DEBUG_MARKER_PICKER__ && typeof console !== 'undefined' && filtered.length > 0) {
-      console.log('[MARKER-PICKER-DEBUG] markerAllEligibleTms (search pool, hook-preferred) size=', filtered.length, filtered.map(x => x.tmName));
-
-      filtered.forEach(entry => {
-        const nameLower = entry.tmName.toLowerCase();
-        if (__WATCHED_PICKER_NAMES__.some(w => nameLower.includes(w))) {
-          const fullTm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
-          console.log(`[MARKER-PICKER-DEBUG] FULL ROSTER RECORD for watched name "${entry.tmName}" (in search pool):`, fullTm);
-        }
-      });
+    // === DIAGNOSTIC (new canonical path) ===
+    if (process.env.NODE_ENV !== 'production') {
+      const watched = ['alec','daryl','jason','nikki','sam'];
+      const leaked = list.filter(e => watched.some(w => e.tmName.toLowerCase().includes(w)));
+      if (leaked.length > 0) {
+        console.warn('[MARKER-PICKER-DIAG] Watched TMs in strict canonical default list:', leaked.map(e => e.tmName));
+      }
+      console.log('[MARKER-PICKER-DIAG] markerScheduledUnassigned (canonical partitions only) size=', list.length);
     }
-    // === END TEMP DIAGNOSTIC ===
+    return list;
+  }, [effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight, alreadyAssignedThisNight, calledOffIds]);
 
-    return filtered;
-  }, [effectiveRealRoster, effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, calledOffIds]);
+  // Broad pool used *only* when the operator types in the TM picker search box.
+  // No scheduled filter — any TM that passes core isEligibleForSlot is allowed.
+  const markerAllEligibleTms = React.useMemo(() => {
+    return effectiveRealRoster
+      .filter((t: any) => !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
+      .map((t: any) => {
+        const tmName = t.name || t.fullName;
+        if (!tmName) return null;
+        return { tmId: t.id as string, tmName: tmName as string };
+      })
+      .filter(Boolean) as { tmId: string; tmName: string }[];
+  }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds]);
 
-  // === Slot-aware eligibility filtering for MarkerPad picker ===
-  // When a specific card is clicked (markerSlotKey is set), we further narrow the
-  // "Scheduled + Unassigned" lists using the same isEligibleForSlot rules the
-  // engine and Grok paths use. This delivers the "Eligible + Scheduled + Unassigned"
-  // contract the user requested.
-  //
-  // This is the final piece that prevents PM Overlap TMs from appearing on core
-  // zone cards (and applies RR gender rules, etc.).
+  // getEligibleForCurrentSlot: used for the *default* list only.
+  // Enforces the scheduled role partition (grave vs PM/AM overlap) + core isEligibleForSlot.
   const getEligibleForCurrentSlot = React.useCallback(
     (baseList: { tmId: string; tmName: string }[]) => {
       if (!markerSlotKey) return baseList;
+
+      const isFullNightSlot = markerSlotKey.startsWith('Z') ||
+        markerSlotKey === 'ADM' ||
+        markerSlotKey.startsWith('TR') ||
+        markerSlotKey.startsWith('AUX') ||
+        markerSlotKey.startsWith('SP');
+
+      const isOLPMSlot = markerSlotKey.startsWith('OL-PM') || markerSlotKey.includes('PM-Overlap');
+      const isOLAMSlot = markerSlotKey.startsWith('OL-AM') || markerSlotKey.includes('AM-Overlap');
+
       return baseList.filter((entry) => {
         const tm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
         if (!tm) return false;
+
+        if (isFullNightSlot) {
+          if (!fullGraveScheduledTonight.has(entry.tmId)) return false;
+        }
+        if (isOLPMSlot) {
+          if (!pmOverlapScheduledTonight.has(entry.tmId)) return false;
+        }
+        if (isOLAMSlot) {
+          if (!amOverlapScheduledTonight.has(entry.tmId)) return false;
+        }
+
         try {
           return isEligibleForSlot(tm, markerSlotKey);
         } catch {
-          // Safe fallback during any edge case with the eligibility function
+          return true;
+        }
+      });
+    },
+    [markerSlotKey, effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight]
+  );
+
+  // getBasicEligibleForSlot: used only for the search pool.
+  // Core eligibility only — no "must be in the scheduled grave/overlap set" requirement.
+  const getBasicEligibleForSlot = React.useCallback(
+    (baseList: { tmId: string; tmName: string }[]) => {
+      if (!markerSlotKey) return baseList;
+
+      return baseList.filter((entry) => {
+        const tm = effectiveRealRoster.find((t: any) => t.id === entry.tmId);
+        if (!tm) return false;
+
+        try {
+          return isEligibleForSlot(tm, markerSlotKey);
+        } catch {
           return true;
         }
       });
@@ -3589,15 +3579,22 @@ function AuthedShiftBuilder() {
     [markerSlotKey, effectiveRealRoster]
   );
 
+  // Final lists passed to MarkerPad (when a specific card/slot is active).
   const markerSlotScheduledUnassigned = React.useMemo(
     () => getEligibleForCurrentSlot(markerScheduledUnassigned),
     [getEligibleForCurrentSlot, markerScheduledUnassigned]
   );
 
   const markerSlotAllEligibleTms = React.useMemo(
-    () => getEligibleForCurrentSlot(markerAllEligibleTms),
-    [getEligibleForCurrentSlot, markerAllEligibleTms]
+    () => getBasicEligibleForSlot(markerAllEligibleTms),
+    [getBasicEligibleForSlot, markerAllEligibleTms]
   );
+
+  // Final diagnostic for the strict list that MarkerPad will actually render.
+  React.useEffect(() => {
+    if (!markerSlotKey || process.env.NODE_ENV === 'production') return;
+    console.log('[MARKER-PICKER] Final strict list for slot', markerSlotKey, 'size=', markerSlotScheduledUnassigned.length);
+  }, [markerSlotKey, markerSlotScheduledUnassigned]);
 
   const cmdkCompletionUnplaced = React.useMemo(() => {
     return Array.from(effectiveScheduledTmIdsTonight)
@@ -4003,7 +4000,7 @@ function AuthedShiftBuilder() {
           callOffSet,
           recentHistory,
           scheduledTonightSet,
-          newRosterScheduledSet,
+          canonicalScheduledResult,
           isNightLocked,
         ] = await Promise.all([
           id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
@@ -4019,10 +4016,10 @@ function AuthedShiftBuilder() {
           getCallOffsForDate(selectedDay.date),
           getRecentZoneHistory(selectedDay.date, 7),
           id ? getScheduledTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
-          // NEW SYSTEM: also pull from the group-based static roster (Grave + On Call + Overlaps)
-          getScheduledTmIdsForNightFromNewRoster(selectedDay.date.toISOString().slice(0, 10)),
+          // Canonical scheduled set (single source of truth from schedules.ts)
+          getScheduledTmsForNight(selectedDay.date),
           id ? getNightLocked(id) : Promise.resolve(false),
-        ]);
+        ] as const);
 
         // Final epoch gate — if the user switched days while loading, drop
         // everything on the floor. The next effect run will load Day B
@@ -4033,8 +4030,10 @@ function AuthedShiftBuilder() {
         setNightId(id);
         setIsCurrentNightLocked(!!isNightLocked);
         setCalledOffIds(callOffSet);
-        // Use the new roster system strictly for who is scheduled this day
-        setScheduledTmIdsTonight(newRosterScheduledSet);
+
+        // Use canonical data for scheduled TMs
+        const canonicalScheduledIds = new Set(canonicalScheduledResult.allScheduled.map((t: any) => t.id));
+        setScheduledTmIdsTonight(canonicalScheduledIds);
 
         // === Phase 3.1: Roster + Assignments data now comes from useCurrentNight ===
         // Rosters retired in previous step.
@@ -4526,6 +4525,12 @@ function AuthedShiftBuilder() {
     openPaletteForSlot(slotKey);
   }, [openPaletteForSlot]);
 
+  // RR sides (MRR/WRR) use a dedicated gender-side click handler (each side is its own slot).
+  // Wired through the isolated board so restroom card sides open the MarkerPad.
+  const handleBoardGenderClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
+    openPaletteForSlot(slotKey);
+  }, [openPaletteForSlot]);
+
   // Stable wrapper for MarkerPad so its internal buttons (TM picker, Lock, Coverage, etc.)
   // don't receive a new function reference on every orchestrator render after the perf refactor.
   const handleMarkerPadAssign = React.useCallback((slotKey: string, tmId: string, tmName: string) => {
@@ -4978,6 +4983,7 @@ function AuthedShiftBuilder() {
               onDayPillClick={handleBoardDayPill}
               onBreakGroupChange={handleBoardBreakGroupChange}
               onCardClick={handleBoardCardClick}
+              onGenderClick={handleBoardGenderClick}
               onRemoveTask={handleBoardRemoveTask}
               onSetTaskColor={handleBoardSetTaskColor}
               onEditTask={handleBoardEditTask}
@@ -5228,6 +5234,8 @@ function AuthedShiftBuilder() {
         onClearSlot={handleMarkerPadClearSlot}
         onAddCoverage={handleMarkerPadAddCoverage}
         onAssign={handleMarkerPadAssign}
+        // When markerSlotKey is set we pass the slot-narrowed versions.
+        // Default (no search) is always the strict scheduled+eligible+unassigned set.
         scheduledUnassigned={markerSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
         allEligibleTms={markerSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
         onClose={() => setMarkerSlotKey(null)}
