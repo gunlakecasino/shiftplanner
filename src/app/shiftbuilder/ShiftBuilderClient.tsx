@@ -3841,7 +3841,7 @@ function AuthedShiftBuilder() {
   // #region agent log — NDJSON debug session a52e65 (picker contract)
   React.useEffect(() => {
     if (!markerSlotKey) return;
-    const graveTonight = Array.from((effectiveGrave as any) || []);
+    const graveTonight = Array.from((effectiveGrave as any) || []) as string[];
     const graveInReal = graveTonight.filter((id: string) =>
       effectiveRealRoster.some((r: any) => r.id === id)
     ).length;
