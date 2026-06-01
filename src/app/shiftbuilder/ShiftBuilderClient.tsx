@@ -3473,32 +3473,25 @@ function AuthedShiftBuilder() {
   // that come out of useCurrentNight → getScheduledTmsForNight (schedules.ts).
   // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
 
-  // === Direct Weekly Roster feed from Sudo "Apply Roster" ===
-  // This is the authoritative source the operator just configured.
-  // When present for the current week, the TM Picker must use this instead of
-  // the (often empty) canonical path that requires the service role key.
+  // === Direct Weekly Roster feed (the primary source we want) ===
   const weeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
 
-  // Effective role sets: prefer the direct feed from "Apply Roster" when available.
-  // This makes the picker (and eligibility filtering) pull directly from the weekly roster.
-  const effectiveFullGraveScheduled = (weeklyRoster?.weekStart && weeklyRoster.grave?.length > 0)
-    ? new Set(weeklyRoster.grave)
-    : fullGraveScheduledTonight;
+  // When the operator has hit "Apply Roster" for the current week, this becomes the
+  // single source of truth for who is scheduled (and in which role).
+  // The TM Picker default list should be driven almost entirely by this.
+  const useDirectFeed = !!(weeklyRoster?.weekStart && 
+    (weeklyRoster.grave?.length > 0 || weeklyRoster.pmOverlap?.length > 0 || weeklyRoster.amOverlap?.length > 0));
 
-  const effectivePMOverlapScheduled = (weeklyRoster?.weekStart && weeklyRoster.pmOverlap?.length > 0)
-    ? new Set(weeklyRoster.pmOverlap)
-    : pmOverlapScheduledTonight;
-
-  const effectiveAMOverlapScheduled = (weeklyRoster?.weekStart && weeklyRoster.amOverlap?.length > 0)
-    ? new Set(weeklyRoster.amOverlap)
-    : amOverlapScheduledTonight;
+  const effectiveGrave = useDirectFeed ? new Set(weeklyRoster.grave || []) : fullGraveScheduledTonight;
+  const effectivePM    = useDirectFeed ? new Set(weeklyRoster.pmOverlap || []) : pmOverlapScheduledTonight;
+  const effectiveAM    = useDirectFeed ? new Set(weeklyRoster.amOverlap || []) : amOverlapScheduledTonight;
 
   const markerScheduledUnassigned = React.useMemo(() => {
-    // Build from the effective sets (direct weekly roster feed takes priority)
+    // Build the strict default list directly from the weekly roster feed when available.
     const scheduledIds = new Set<string>([
-      ...effectiveFullGraveScheduled,
-      ...effectivePMOverlapScheduled,
-      ...effectiveAMOverlapScheduled,
+      ...effectiveGrave,
+      ...effectivePM,
+      ...effectiveAM,
     ]);
 
     const list = effectiveRealRoster
@@ -3515,16 +3508,10 @@ function AuthedShiftBuilder() {
       .filter(Boolean) as { tmId: string; tmName: string }[];
 
     if (process.env.NODE_ENV !== 'production') {
-      const watched = ['alec','daryl','jason','nikki','sam'];
-      const leaked = list.filter(e => watched.some(w => e.tmName.toLowerCase().includes(w)));
-      if (leaked.length > 0) {
-        console.warn('[MARKER-PICKER-DIAG] Watched TMs in default list:', leaked.map(e => e.tmName));
-      }
-      const source = (weeklyRoster?.weekStart) ? 'direct Apply Roster feed' : 'canonical';
-      console.log(`[MARKER-PICKER-DIAG] markerScheduledUnassigned size=${list.length} (from ${source})`);
+      console.log(`[MARKER-PICKER] markerScheduledUnassigned size=${list.length} (direct feed: ${useDirectFeed})`);
     }
     return list;
-  }, [effectiveRealRoster, effectiveFullGraveScheduled, effectivePMOverlapScheduled, effectiveAMOverlapScheduled, alreadyAssignedThisNight, calledOffIds, weeklyRoster]);
+  }, [effectiveRealRoster, effectiveGrave, effectivePM, effectiveAM, alreadyAssignedThisNight, calledOffIds, useDirectFeed]);
 
   // Broad pool used *only* when the operator types in the TM picker search box.
   // No scheduled filter — any TM that passes core isEligibleForSlot is allowed.
@@ -3540,7 +3527,8 @@ function AuthedShiftBuilder() {
   }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds]);
 
   // getEligibleForCurrentSlot: used for the *default* list only.
-  // Enforces the scheduled role partition (grave vs PM/AM overlap) + core isEligibleForSlot.
+  // When the direct weekly roster feed is active, it uses those sets for role partitioning.
+  // This is the clean "recreated" behavior.
   const getEligibleForCurrentSlot = React.useCallback(
     (baseList: { tmId: string; tmName: string }[]) => {
       if (!markerSlotKey) return baseList;
@@ -3559,13 +3547,13 @@ function AuthedShiftBuilder() {
         if (!tm) return false;
 
         if (isFullNightSlot) {
-          if (!effectiveFullGraveScheduled.has(entry.tmId)) return false;
+          if (!effectiveGrave.has(entry.tmId)) return false;
         }
         if (isOLPMSlot) {
-          if (!effectivePMOverlapScheduled.has(entry.tmId)) return false;
+          if (!effectivePM.has(entry.tmId)) return false;
         }
         if (isOLAMSlot) {
-          if (!effectiveAMOverlapScheduled.has(entry.tmId)) return false;
+          if (!effectiveAM.has(entry.tmId)) return false;
         }
 
         try {
@@ -3575,7 +3563,7 @@ function AuthedShiftBuilder() {
         }
       });
     },
-    [markerSlotKey, effectiveRealRoster, effectiveFullGraveScheduled, effectivePMOverlapScheduled, effectiveAMOverlapScheduled]
+    [markerSlotKey, effectiveRealRoster, effectiveGrave, effectivePM, effectiveAM]
   );
 
   // getBasicEligibleForSlot: used only for the search pool.
@@ -3598,14 +3586,14 @@ function AuthedShiftBuilder() {
     [markerSlotKey, effectiveRealRoster]
   );
 
-  // Final lists passed to MarkerPad (when a specific card/slot is active).
+  // Final lists passed to MarkerPad.
+  // These are now very direct: the "Apply Roster" feed drives the scheduled sets,
+  // and we only apply slot-specific eligibility on top.
   const markerSlotScheduledUnassigned = React.useMemo(
     () => getEligibleForCurrentSlot(markerScheduledUnassigned),
     [getEligibleForCurrentSlot, markerScheduledUnassigned]
   );
 
-  // Note: getBasicEligibleForSlot still uses the old hook sets for the broad search pool.
-  // When we have time we can make it also respect the direct feed.
   const markerSlotAllEligibleTms = React.useMemo(
     () => getBasicEligibleForSlot(markerAllEligibleTms),
     [getBasicEligibleForSlot, markerAllEligibleTms]
@@ -5255,8 +5243,8 @@ function AuthedShiftBuilder() {
         onClearSlot={handleMarkerPadClearSlot}
         onAddCoverage={handleMarkerPadAddCoverage}
         onAssign={handleMarkerPadAssign}
-        // When markerSlotKey is set we pass the slot-narrowed versions.
-        // Default (no search) is always the strict scheduled+eligible+unassigned set.
+        // The TM Picker now strongly prefers the direct feed from "Apply Roster".
+        // This is the clean, recreated behavior the user requested.
         scheduledUnassigned={markerSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
         allEligibleTms={markerSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
         onClose={() => setMarkerSlotKey(null)}

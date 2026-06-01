@@ -1,5 +1,9 @@
 /**
- * ADP schedule XLSX parser.
+ * @deprecated — This entire file is legacy ADP/Kronos Excel parsing from the old system.
+ * The weekly roster is now 100% driven by tm_default_schedules + tm_on_call_schedules + tm_group_members.
+ * Do not use or extend. Safe to delete when all call sites are gone.
+ *
+ * ADP schedule XLSX parser. (old)
  *
  * Takes an ADP / Kronos "Shifts and Pay Code Edits" export and produces a
  * structured (tmId, nightDate, shiftCode) result the sudo Schedules tab can
