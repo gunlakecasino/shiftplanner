@@ -19,7 +19,10 @@
  * DB writes happen.
  */
 
-import * as XLSX from "xlsx";
+// @deprecated — ADP XLSX parsing is no longer used. The weekly roster is now driven by
+// tm_default_schedules + tm_on_call_schedules + tm_group_members.
+// This import is kept only for historical reference and can be removed.
+import * as XLSX from "xlsx"; // LEGACY - safe to delete once all callers are gone
 import type { TeamMember } from "./data";
 
 // =====================================================================

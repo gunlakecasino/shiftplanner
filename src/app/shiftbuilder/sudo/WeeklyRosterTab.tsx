@@ -193,28 +193,58 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
       await load();
       onDataChanged?.();
 
-      // Force canonical computation for the entire selected week so the TM Picker
-      // and main board pull the latest "scheduled" status directly from this roster.
-      const rosterWeekStartDate = startOfRosterWeek(new Date(weekStart));
-      const weekDates: string[] = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(rosterWeekStartDate);
-        d.setDate(d.getDate() + i);
-        return d.toISOString().slice(0, 10);
+      // Compute scheduled TMs directly from this tab's current data (the source the user just edited).
+      // This is the authoritative "weekly roster" view.
+      const SPECIAL = ["Grave", "On Call", "AM Overlaps", "PM Overlaps"];
+      const groupSets = new Map<string, Set<string>>();
+      SPECIAL.forEach(name => {
+        const g = groups.find((gg: any) => gg.name === name);
+        groupSets.set(name, new Set(g?.members || []));
       });
 
-      await Promise.all(
-        weekDates.map(async (dateStr) => {
-          try {
-            await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
-          } catch {
-            // non-fatal, just warming the canonical view
-          }
-        })
-      );
+      const grave = new Set<string>();
+      const pm = new Set<string>();
+      const am = new Set<string>();
 
-      // Optional: small success feedback
-      // In a real UI we'd use a toast, but alert is fine for now.
-      alert("Roster applied for the selected week. The main board and TM Picker will now see the updated scheduled TMs.");
+      // TMs with weekly specials this week
+      (weekSpecials || []).forEach((sp: any) => {
+        if (!sp.tm_id) return;
+        const labels = (sp.weekly_pattern || []).map((p: any) => String(p?.label || "").toLowerCase()).join(" ");
+        const hasWork = (sp.weekly_pattern || []).some((p: any) => p && p.label && p.label !== "OFF");
+
+        if (!hasWork) return;
+
+        if (labels.includes("grave") || groupSets.get("Grave")?.has(sp.tm_id)) grave.add(sp.tm_id);
+        if (labels.includes("pm overlap") || groupSets.get("PM Overlaps")?.has(sp.tm_id)) pm.add(sp.tm_id);
+        if (labels.includes("am overlap") || groupSets.get("AM Overlaps")?.has(sp.tm_id)) am.add(sp.tm_id);
+      });
+
+      // Explicit group members
+      groupSets.get("Grave")?.forEach(id => grave.add(id));
+      groupSets.get("PM Overlaps")?.forEach(id => pm.add(id));
+      groupSets.get("AM Overlaps")?.forEach(id => am.add(id));
+
+      // Push directly to the main board store so the TM Picker default list uses it immediately.
+      // This is the "pull directly from the weekly roster" path the user requested.
+      try {
+        const store = await import("@/app/shiftbuilder/store/useShiftBuilderStore");
+        store.useShiftBuilderStore.getState().setWeeklyRosterScheduled({
+          weekStart,
+          grave: Array.from(grave),
+          pmOverlap: Array.from(pm),
+          amOverlap: Array.from(am),
+        });
+      } catch {}
+
+      // Also warm the server canonical (useful when service key is present)
+      const start = startOfRosterWeek(new Date(weekStart));
+      const dates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(start); d.setDate(d.getDate() + i);
+        return d.toISOString().slice(0, 10);
+      });
+      await Promise.all(dates.map(d => fetch(`/api/shiftbuilder/scheduled-roster?date=${d}`).catch(() => {})));
+
+      alert("Roster applied. The TM Picker should now reflect the weekly roster for scheduled but unassigned TMs.");
     } finally {
       setApplying(false);
     }

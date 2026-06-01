@@ -3473,18 +3473,32 @@ function AuthedShiftBuilder() {
   // that come out of useCurrentNight → getScheduledTmsForNight (schedules.ts).
   // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
 
+  // Direct weekly roster feed from Sudo "Apply Roster" (bypasses service key issues)
+  const weeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
+
   const markerScheduledUnassigned = React.useMemo(() => {
-    // Start from the three canonical partitioned sets provided by the hook.
-    // These are the only "scheduled tonight in the correct roster group" source we trust.
-    const canonicalScheduledIds = new Set<string>([
-      ...fullGraveScheduledTonight,
-      ...pmOverlapScheduledTonight,
-      ...amOverlapScheduledTonight,
-    ]);
+    // Prefer the direct feed from the Weekly Roster tab when "Apply Roster" has been used.
+    // This is the explicit "pull directly from the weekly roster" path.
+    let scheduledIds = new Set<string>();
+
+    if (weeklyRoster && weeklyRoster.weekStart) {
+      // When the user has hit "Apply Roster" for this week, prefer that data directly.
+      // This is the explicit "pull directly from the weekly roster" behavior.
+      weeklyRoster.grave.forEach((id: string) => scheduledIds.add(id));
+      weeklyRoster.pmOverlap.forEach((id: string) => scheduledIds.add(id));
+      weeklyRoster.amOverlap.forEach((id: string) => scheduledIds.add(id));
+    } else {
+      // Fallback to the normal canonical partitioned sets from the hook
+      scheduledIds = new Set<string>([
+        ...fullGraveScheduledTonight,
+        ...pmOverlapScheduledTonight,
+        ...amOverlapScheduledTonight,
+      ]);
+    }
 
     const list = effectiveRealRoster
       .filter((t: any) =>
-        canonicalScheduledIds.has(t.id) &&
+        scheduledIds.has(t.id) &&
         !alreadyAssignedThisNight.has(t.id) &&
         !calledOffIds.has(t.id)
       )
@@ -3495,17 +3509,16 @@ function AuthedShiftBuilder() {
       })
       .filter(Boolean) as { tmId: string; tmName: string }[];
 
-    // === DIAGNOSTIC (new canonical path) ===
     if (process.env.NODE_ENV !== 'production') {
       const watched = ['alec','daryl','jason','nikki','sam'];
       const leaked = list.filter(e => watched.some(w => e.tmName.toLowerCase().includes(w)));
       if (leaked.length > 0) {
-        console.warn('[MARKER-PICKER-DIAG] Watched TMs in strict canonical default list:', leaked.map(e => e.tmName));
+        console.warn('[MARKER-PICKER-DIAG] Watched TMs in (weekly roster direct or canonical) default list:', leaked.map(e => e.tmName));
       }
-      console.log('[MARKER-PICKER-DIAG] markerScheduledUnassigned (canonical partitions only) size=', list.length);
+      console.log('[MARKER-PICKER-DIAG] markerScheduledUnassigned size=', list.length, weeklyRoster?.weekStart ? '(from direct Apply Roster feed)' : '(from canonical)');
     }
     return list;
-  }, [effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight, alreadyAssignedThisNight, calledOffIds]);
+  }, [effectiveRealRoster, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight, alreadyAssignedThisNight, calledOffIds, weeklyRoster, selectedDay]);
 
   // Broad pool used *only* when the operator types in the TM picker search box.
   // No scheduled filter — any TM that passes core isEligibleForSlot is allowed.

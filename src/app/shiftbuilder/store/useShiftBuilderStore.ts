@@ -49,6 +49,18 @@ interface ShiftBuilderState {
   setGraveOnly: (v: boolean) => void;
   setRosterSearch: (v: string) => void;
 
+  // Direct feed from Sudo Weekly Roster "Apply Roster" action.
+  // When the operator hits "Apply Roster" in the Sudo tab, this is populated
+  // so the main board + TM Picker can show exactly the scheduled TMs from
+  // the weekly roster without depending on the service role key path.
+  weeklyRosterScheduled: {
+    weekStart: string | null;
+    grave: string[];      // tm ids considered scheduled for grave this week
+    pmOverlap: string[];
+    amOverlap: string[];
+  };
+  setWeeklyRosterScheduled: (data: ShiftBuilderState['weeklyRosterScheduled']) => void;
+
   // auxDefs moved to store for narrow subscription in Board/cards (changes infrequently but reduces prop surface)
   auxDefs: AuxDef[];
   setAuxDefs: (updater: AuxDef[] | ((prev: AuxDef[]) => AuxDef[])) => void;
@@ -151,8 +163,18 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     addTrainingExample: (ex) =>
       set((state) => ({ trainingExamples: [ex, ...state.trainingExamples].slice(0, 200) })),
 
+    // Direct "Apply Roster" feed from Sudo Weekly Roster tab
+    weeklyRosterScheduled: {
+      weekStart: null,
+      grave: [],
+      pmOverlap: [],
+      amOverlap: [],
+    },
+
     liveEngineConfigForAI: null,
     setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
+
+    setWeeklyRosterScheduled: (data) => set({ weeklyRosterScheduled: data }),
   }))
 );
 

@@ -578,7 +578,9 @@ export async function setDatesPublished(
 // Team management (SUDO Team tab)
 // =====================================================================
 
-import * as XLSX from "xlsx";
+// @deprecated — legacy ADP/Excel handling. Weekly roster is now purely Supabase-driven
+// (tm_default_schedules + tm_on_call_schedules + groups). Remove when safe.
+import * as XLSX from "xlsx"; // LEGACY - can be removed
 import { parseWorkbookAggregate } from "./adpSchedule";
 
 export interface TMRecord {
