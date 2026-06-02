@@ -347,6 +347,14 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
  *   field on tm_profiles — currently not present; operator must swap M/W manually.
  * - Breaks are ignored for placement decisions.
  */
+export function normalizeGender(val: any): 'M' | 'F' | '' {
+  const s = String(val || '').toUpperCase().trim();
+  if (!s) return '';
+  if (s === 'F' || s === 'FEMALE' || s === 'WOMAN' || s === 'WOMEN' || s.startsWith('F')) return 'F';
+  if (s === 'M' || s === 'MALE' || s === 'MAN' || s === 'MEN' || s.startsWith('M')) return 'M';
+  return '';
+}
+
 export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: any[] = []): boolean {
   // 2026-05-28: First check custom rules from the resolved engine config (engine_eligibility_rules table).
   // This is the injection point for operator-defined hard excludes / restrictions.
@@ -387,19 +395,19 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
     return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
   }
 
-  // Men's Restrooms — full-night, male TMs only (null gender = eligible as safe fallback)
+  // Men's Restrooms — full-night, male TMs only (null/unknown gender = eligible as safe fallback)
   if (slotKey.startsWith("MRR")) {
     if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const gender = String(tm.gender ?? "").toUpperCase();
-    if (gender && gender !== "M") return false;
+    const g = normalizeGender(tm.gender);
+    if (g === 'F') return false;
     return true;
   }
 
-  // Women's Restrooms — full-night, female TMs only (null gender = eligible as safe fallback)
+  // Women's Restrooms — full-night, female TMs only (null/unknown gender = eligible as safe fallback)
   if (slotKey.startsWith("WRR")) {
     if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const gender = String(tm.gender ?? "").toUpperCase();
-    if (gender && gender !== "F") return false;
+    const g = normalizeGender(tm.gender);
+    if (g === 'M') return false;
     return true;
   }
 

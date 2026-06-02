@@ -2548,6 +2548,15 @@ function AuthedShiftBuilder() {
     const captureDayName = selectedDay.name;
     const tmIdBeingRemoved = assignments[slotKey]?.tmId ?? null;
 
+    // Derive side for RR clears (MRR/WRR) so legacy direct delete path (if live layer not available) still targets the correct rr_side row.
+    let derivedRrSide: 'mens' | 'womens' | null = null;
+    let derivedSlotType: string | undefined;
+    try {
+      const { rr_side, slot_type } = uiToDb(slotKey);
+      derivedRrSide = rr_side;
+      derivedSlotType = slot_type;
+    } catch {}
+
     // Prefer the live optimistic layer (now wired to the main board store + correct nightCore key).
     // This makes clear/X buttons instant like task drag, and keeps realtime + rollback working.
     if (live?.unassign) {
@@ -2575,6 +2584,8 @@ function AuthedShiftBuilder() {
             deleteZoneAssignment({
               nightId: nid,
               uiKey: slotKey,
+              slotType: derivedSlotType,
+              rrSide: derivedRrSide,
             }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
           );
         }
@@ -5891,7 +5902,7 @@ function AuthedShiftBuilder() {
         auxDefs={auxDefs}
         isDark={isDark}
         tmGender={markerSlotKey && markerPadAssignments[markerSlotKey]?.tmId
-          ? (effectiveRealRoster.find((r: any) => r.id === markerPadAssignments[markerSlotKey].tmId)?.gender ?? null)
+          ? (effectiveRealRoster.find((r: any) => (r.id === markerPadAssignments[markerSlotKey].tmId || r.tmId === markerPadAssignments[markerSlotKey].tmId || r.tm_id === markerPadAssignments[markerSlotKey].tmId))?.gender ?? null)
           : null}
       />
 

@@ -831,11 +831,21 @@ export async function deleteZoneAssignment(params: {
     }
   }
 
+  // IMPORTANT for per-side RR (MRR/WRR clears via focusedSk in unilateral dash):
+  // Never use a variant that omits rr_side filter entirely — that would match+delete
+  // the sibling side (e.g. clearing mens would also nuke womens for the same rr_1_2).
+  // Instead: exact side (from UI key or explicit), plus explicit IS NULL for legacy
+  // null-side rows (which dbToUi treats as MRR by default). This keeps clears precise.
   const variants = [
-    canonical, // preferred
-    // Legacy variants for old data
+    canonical, // preferred (with side if the uiKey encoded one, e.g. MRR -> mens)
+    // Legacy null-side row cleanup for the *same physical RR slot* (safe: only nulls).
+    { slot_key: canonical.slot_key, slot_type: canonical.slot_type, rr_side: null },
+    // Legacy UI key variants (for old data that might have UI keys in the table)
     { slot_key: uiKey, slot_type: slotType, rr_side: rrSide },
     { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: rrSide },
+    // Also try legacy UI key + explicit null (covers old null rows under UI key form)
+    { slot_key: uiKey, slot_type: slotType, rr_side: null },
+    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: null },
   ];
 
   let totalDeleted = 0;
@@ -848,9 +858,14 @@ export async function deleteZoneAssignment(params: {
       .eq('slot_key', v.slot_key)
       .eq('slot_type', v.slot_type);
 
-    if (v.rr_side) {
+    if (v.rr_side != null) {
       q = q.eq('rr_side', v.rr_side);
+    } else if (v.rr_side === null) {
+      q = q.is('rr_side', null);
     }
+    // No "else" broad case — we always constrain to a side or to nulls only.
+    // This fixes cross-side clear on mens/womens RR and ensures legacy nulls for the
+    // targeted side (MRR defaults) get cleaned without touching the other gender.
 
     const { error, count } = await q;
 

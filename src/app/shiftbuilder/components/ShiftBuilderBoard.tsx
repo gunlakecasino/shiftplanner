@@ -809,16 +809,21 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     // Gender-aware RR sides for this TM (so a male TM doesn't show female RR pills in their last-14 matrix, etc.)
                                     const dashA = displayAssignments[dashSlotKey] || a;
                                     const tmId = dashA?.tmId;
-                                    const tmGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId))?.gender ?? null;
-                                    const g = (tmGender || '').toUpperCase();
+                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
+                                    const g = (() => {
+                                      const s = String(rawGender || '').toUpperCase().trim();
+                                      if (s === 'F' || s === 'FEMALE' || s.startsWith('F')) return 'F';
+                                      if (s === 'M' || s === 'MALE' || s.startsWith('M')) return 'M';
+                                      return '';
+                                    })();
 
                                     const locs: { ui: string; label: string }[] = [
                                       ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
                                       // Only eligible RR side(s) for the current TM's gender (both if unknown/missing data)
                                       ...RR_DEFS.flatMap((d) => {
                                         const sides: { ui: string; label: string }[] = [];
-                                        if (!g || g === 'M' || g === 'MALE') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
-                                        if (!g || g === 'F' || g === 'FEMALE') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
+                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
+                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
                                         return sides;
                                       }),
                                       ...auxDefs
@@ -1172,14 +1177,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     const localSideKey = focusedSk;
                                     const dashA = displayAssignments[dashSlotKey] || (localSideKey.startsWith('M') ? mA : wA);
                                     const tmId = dashA?.tmId;
-                                    const tmGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId))?.gender ?? null;
-                                    const g = (tmGender || '').toUpperCase();
+                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
+                                    const g = (() => {
+                                      const s = String(rawGender || '').toUpperCase().trim();
+                                      if (s === 'F' || s === 'FEMALE' || s.startsWith('F')) return 'F';
+                                      if (s === 'M' || s === 'MALE' || s.startsWith('M')) return 'M';
+                                      return '';
+                                    })();
                                     const locs: { ui: string; label: string }[] = [
                                       ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
                                       ...RR_DEFS.flatMap((d) => {
                                         const sides: { ui: string; label: string }[] = [];
-                                        if (!g || g === 'M' || g === 'MALE') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
-                                        if (!g || g === 'F' || g === 'FEMALE') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
+                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
+                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
                                         return sides;
                                       }),
                                       ...auxDefs.filter((d) => !d.key.startsWith('SP')).map((d) => {

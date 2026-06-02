@@ -126,6 +126,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
           return deleteZoneAssignment({
             nightId: resolvedNightId,
             uiKey,
+            slotType: slot_type,
             // pass explicit rrSide so delete is side-aware even if uiKey ever arrives in DB form
             rrSide: rr_side,
           });

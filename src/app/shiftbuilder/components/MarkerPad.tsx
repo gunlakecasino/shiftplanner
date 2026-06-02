@@ -420,8 +420,12 @@ function fmtShortDate(isoDate: string): string {
 /** Filter out slots irrelevant to this TM's gender (opposite RR side). */
 function genderFilter(uiKey: string, gender: string | null | undefined): boolean {
   if (!gender) return true;
-  if (/^WRR/.test(uiKey) && gender === "M") return false;
-  if (/^MRR/.test(uiKey) && gender === "F") return false;
+  const g = String(gender).toUpperCase().trim();
+  const norm = (g === 'F' || g === 'FEMALE' || g.startsWith('F')) ? 'F' :
+               (g === 'M' || g === 'MALE' || g.startsWith('M')) ? 'M' : '';
+  if (!norm) return true;
+  if (/^WRR/.test(uiKey) && norm === 'M') return false;
+  if (/^MRR/.test(uiKey) && norm === 'F') return false;
   return true;
 }
 
