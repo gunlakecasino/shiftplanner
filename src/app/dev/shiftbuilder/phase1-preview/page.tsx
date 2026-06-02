@@ -2,8 +2,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { PlanningCard } from "@/components/planner/PlanningCard";
-import type { ShiftAssignment } from "@/app/shiftbuilder/types/shift-plan";
+// Use relative imports for this throwaway dev preview page to ensure robust module resolution
+// during production builds (Turbopack / Railway) where @/ alias can sometimes misresolve in sub-routes.
+// The @/ versions are kept commented for local dev convenience.
+import { PlanningCard } from "../../../../components/planner/PlanningCard";
+// import { PlanningCard } from "@/components/planner/PlanningCard";
+import type { ShiftAssignment } from "../../../shiftbuilder/types/shift-plan";
+// import type { ShiftAssignment } from "@/app/shiftbuilder/types/shift-plan";
 
 // Demo data — realistic GRAVE night
 const initialAssignments: Record<string, ShiftAssignment> = {

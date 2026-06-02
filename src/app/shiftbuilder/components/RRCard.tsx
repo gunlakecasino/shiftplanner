@@ -62,7 +62,10 @@ const RRSide: React.FC<{
 
   // Locked state for the night
   isLocked?: boolean;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false }) => {
+
+  // For stacked side cards: hide the internal badge row so badge can live in the side card header (to pin name to upper corner like other cards)
+  showBreakBadge?: boolean;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -82,13 +85,20 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
+      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
     >
-      {/* Label + badge row */}
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[8px] font-bold tracking-[0.8px] text-[#1C1C1E] dark:text-[#9CA3AF] uppercase" style={{ fontFamily: 'var(--font-ui, var(--font-inter-tight), system-ui)' }}>{label}</span>
-        <BreakBadge value={breakNum} onCycle={cycle} size="sm" />
-      </div>
+      {/* Label + badge row (skip label if empty, for stacked side cards where header already includes the side info). Badge row only if showBreakBadge (for stacked, badge lives in side-card header to pin name upper like Zone/Aux cards) */}
+      {showBreakBadge && label && (
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[8px] font-bold tracking-[0.8px] text-[#1C1C1E] dark:text-[#9CA3AF] uppercase" style={{ fontFamily: 'var(--font-ui, var(--font-inter-tight), system-ui)' }}>{label}</span>
+          <BreakBadge value={breakNum} onCycle={cycle} size="sm" />
+        </div>
+      )}
+      {showBreakBadge && !label && (
+        <div className="flex items-center justify-end mb-1">
+          <BreakBadge value={breakNum} onCycle={cycle} size="sm" />
+        </div>
+      )}
       {/* Name immediately under label */}
       <div className="min-w-0">
         {loading && !hasTM ? (
@@ -160,67 +170,65 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wEmpty = !assignments[wKey]?.tmName;
   const bothEmpty = mEmpty && wEmpty && !loading;
 
-  // Separate coverage tasks from regular tasks so coverage bars span the full
-  // card width rather than sitting inside one narrow gender column.
+  // For stacked side cards: compute breaks per side so badge can be in the side card header (pins name to upper corner like Zone/Aux cards)
+  const mA = assignments[mKey] || {};
+  const wA = assignments[wKey] || {};
+  const mBreak = (mA.breakGroup ?? 0) as BreakGroup;
+  const wBreak = (wA.breakGroup ?? 0) as BreakGroup;
+  const cycleW = () => setBreakGroupForSlot(wKey, nextBreakGroup(wBreak));
+  const cycleM = () => setBreakGroupForSlot(mKey, nextBreakGroup(mBreak));
+
+  // Separate coverage tasks per side now that sides are independent stacked cards.
+  // Women's RR cards need their own coverage banners (e.g. "AND ZONE X" style).
   const mTasks = selectedTasks[mKey] || [];
   const wTasks = selectedTasks[wKey] || [];
   const mRegular = mTasks.filter(t => !t.isCoverage);
   const wRegular = wTasks.filter(t => !t.isCoverage);
-  const rrCoverageTasks: NightSlotTask[] = [];
-  const seenCoverageLabels = new Set<string>();
-  for (const t of [...mTasks, ...wTasks]) {
-    if (t.isCoverage && !seenCoverageLabels.has(t.taskLabel)) {
-      seenCoverageLabels.add(t.taskLabel);
-      rrCoverageTasks.push(t);
-    }
-  }
+  const wCoverageTasks = wTasks.filter(t => t.isCoverage);
+  const mCoverageTasks = mTasks.filter(t => t.isCoverage);
 
   return (
     <div
       onPointerMove={handleSpotlightMove}
-      className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all ${bothEmpty ? "empty" : ""}`}
+      className={`relative overflow-hidden flex flex-col gap-1 ${bothEmpty ? "empty" : ""}`}
       style={{
         ["--card-accent" as any]: color,
-        ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
+      {/* WOMEN'S RR card (stacked above men's per the experiment: cut the shared card in half and stack so each side is its own visual card) */}
       <div
-        className="flex items-center gap-1 px-2 pt-1 pb-1 leading-none"
-        style={{ color, borderBottom: `1px solid ${color}33` }}
+        className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all flex-1 ${wEmpty && !loading ? "empty" : ""}`}
+        style={{
+          ["--card-accent" as any]: color,
+          ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
+        }}
       >
-        <span className="text-[11px] leading-none">{icon}</span>
-        <span
-          className="font-extrabold tracking-[0.4px] uppercase"
-          style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+        <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
+        <div
+          className="flex items-center gap-1 px-2 pt-0.5 pb-0.5 leading-none"
+          style={{ color, borderBottom: `1px solid ${color}33` }}
         >
-          {def.label}
-        </span>
-      </div>
-      <div
-        className="flex flex-col flex-1 px-2 pt-1.5"
-        style={{ paddingBottom: rrCoverageTasks.length > 0 ? rrCoverageTasks.length * COVERAGE_BAR_H + 8 : 6 }}
-      >
-        {isDraftMode && draftInfo && (
-          <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
-        )}
-        <div className="grid grid-cols-2 gap-2 flex-1">
-          <RRSide
-            slotKey={mKey}
-            label="MEN&rsquo;S"
-            assignment={assignments[mKey]}
-            tasks={mRegular}
-            setBreakGroupForSlot={setBreakGroupForSlot}
-            onClick={onGenderClick}
-            loading={loading}
-            onRemoveTask={onRemoveTask}
-            onSetTaskColor={onSetTaskColor}
-            onEditTask={onEditTask}
-            isLocked={isLocked}
-          />
+          <div className="flex items-center gap-1 leading-none" style={{ color }}>
+            <span className="text-[11px] leading-none">{icon}</span>
+            <span
+              className="font-extrabold tracking-[0.4px] uppercase"
+              style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+            >
+              {def.label} WOMEN'S
+            </span>
+          </div>
+          <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
+        </div>
+        <div
+          className="flex flex-col flex-1 px-2 pt-1"
+          style={{ paddingBottom: (wCoverageTasks.length > 0 ? wCoverageTasks.length * COVERAGE_BAR_H + 4 : 4) }}
+        >
+          {isDraftMode && draftInfo && (
+            <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
+          )}
           <RRSide
             slotKey={wKey}
-            label="WOMEN'S"
+            label=""
             assignment={assignments[wKey]}
             tasks={wRegular}
             setBreakGroupForSlot={setBreakGroupForSlot}
@@ -230,13 +238,68 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onSetTaskColor={onSetTaskColor}
             onEditTask={onEditTask}
             isLocked={isLocked}
+            showBreakBadge={false}
           />
+          {/* Women's coverage banners (independent per side now) */}
+          {wCoverageTasks.map(t => (
+            <CoverageBar key={t.id} task={t} slotKey={wKey} onRemoveTask={onRemoveTask} />
+          ))}
         </div>
       </div>
-      {/* Coverage bars span the full RR card width */}
-      {rrCoverageTasks.map(t => (
-        <CoverageBar key={t.id} task={t} slotKey={mKey} onRemoveTask={onRemoveTask} />
-      ))}
+
+      {/* MEN'S RR card (below the women's) */}
+      <div
+        className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all flex-1 ${mEmpty && !loading ? "empty" : ""}`}
+        style={{
+          ["--card-accent" as any]: color,
+          ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
+        }}
+      >
+        <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
+        <div
+          className="flex items-center gap-1 px-2 pt-0.5 pb-0.5 leading-none"
+          style={{ color, borderBottom: `1px solid ${color}33` }}
+        >
+          <div className="flex items-center gap-1 leading-none" style={{ color }}>
+            <span className="text-[11px] leading-none">{icon}</span>
+            <span
+              className="font-extrabold tracking-[0.4px] uppercase"
+              style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+            >
+              {def.label} MEN'S
+            </span>
+          </div>
+          <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
+        </div>
+        <div
+          className="flex flex-col flex-1 px-2 pt-1"
+          style={{ paddingBottom: (mCoverageTasks.length > 0 ? mCoverageTasks.length * COVERAGE_BAR_H + 4 : 4) }}
+        >
+          {isDraftMode && draftInfo && (
+            <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
+          )}
+          <RRSide
+            slotKey={mKey}
+            label=""
+            assignment={assignments[mKey]}
+            tasks={mRegular}
+            setBreakGroupForSlot={setBreakGroupForSlot}
+            onClick={onGenderClick}
+            loading={loading}
+            onRemoveTask={onRemoveTask}
+            onSetTaskColor={onSetTaskColor}
+            onEditTask={onEditTask}
+            isLocked={isLocked}
+            showBreakBadge={false}
+          />
+          {/* Men's coverage banners (independent per side now) */}
+          {mCoverageTasks.map(t => (
+            <CoverageBar key={t.id} task={t} slotKey={mKey} onRemoveTask={onRemoveTask} />
+          ))}
+        </div>
+      </div>
+
+      {/* Coverage bars are now rendered inside each side card (women's and men's independently) */}
     </div>
   );
 });

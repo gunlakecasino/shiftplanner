@@ -6,7 +6,27 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
-## 2026-06-05 16:05 — Grok 4.3 — FIXED: clearing a mens restroom (MRR via focusedSk + unilateral dash CLEAR) now persists on refresh. Root: deleteZoneAssignment variants used a "null rr_side" entry that omitted the .eq('rr_side') filter entirely (if(v.rr_side) only), causing broad deletes that could miss exact 'mens' rows (if legacy nulls present) or nuke sibling womens rows as collateral; also some unassign paths (legacy fallback in Client) and the live mutation delete call did not pass slotType explicitly (default 'zone' in delete could affect matching in edge cases). Board/Client/live already correctly forwarded focusedSk "MRR1" (with guards vs physical "RRn"), live hook derived rr_side via uiToDb("MRR1"), data guard for isDbForm already present. 
+## 2026-06-05 16:30 — Grok 4.3 — FIXED: marker dash now appears on opposite (left) side for right-column restroom cards RR8 and RR10 (both womens and mens sides). Previously only zones had the isRightSideDash logic (Z4/Z5/Z9/Z10); RR dash was hardcoded left-full + left rail/tail/close. 
+**User query**: "We need to add the marker dash appears on the opposite side for cards restroom 8 and 10 womens and mens"
+**Changes (only ShiftBuilderBoard.tsx)**:
+- Inside RR_DEFS.map: added `const isRightSideDash = [8, 10].includes(def.num);` (right cols in 5-col grid).
+- Dash container: className uses conditional `${isRightSideDash ? 'right-full mr-1.5' : 'left-full ml-1.5'}` (bottom-0 preserved for RR bottom-pin).
+- Rail: conditional style object (right:-1 + "3px 0 0 3px" radius for right-dash; else left).
+- Tail: conditional (right:"-7px" + borderLeft for right-dash; else left + borderRight).
+- Close button: `[isRightSideDash ? 'left' : 'right']: 8` in style (outer edge).
+- Updated comments. The rest of dash content (per-focusedSk header, matrix, last5, insights, footer using focusedSk for womens/mens) unchanged — flip only affects container attachment.
+**Verification**: tsc --noEmit --skipLibCheck exit 0. Grep confirmed conditionals only in zones before; now extended to RR. Mentally: for RR8/RR10 physical wrapper (or when dashSlotKey=MRR8/WRR8 etc. triggers isDashed), dash renders with right-full etc. on the relative h-full wrapper; left for others. Matches zone pattern exactly. No card changes (RRCard sacred, only Board wrapper + dash outer).
+**Decisions**: Only main shiftbuilder/Board.tsx. Reused exact zone conditional pattern for rail/tail/close. Physical key wrapper means flip applies regardless of womens/mens focusedSk (content inside handles side via focusedSk).
+**Status**: Opposite-side dash now works for RR8/RR10 womens+mens (as well as prior zones). Ready for test. Append complete. Protocol followed (re-reads, todo, targeted edit, tsc, log prepend).
+**User query**: "commit and push"
+**Artifacts**:
+- Commit: f0d0eec "fix(shiftbuilder): mens RR clear (MRR via focusedSk + unilateral dash CLEAR) now persists on refresh" (full body with details on delete hardening, prior WRR/gender/dash refinements, tsc, protocol).
+- Tag: deploy/2026-06-02-052746 (lightweight per ship skill recommendation for high-velocity UI).
+- Push: main updated on github.com:gunlakecasino/shiftplanner.git (b66fe57..f0d0eec); tag followed.
+**Railway**: git push to main triggers railpack build (strict pnpm build / tsc). Local `railway` CLI not linked in this shell (status/logs would require `railway link`). Monitor via Railway dashboard for the shiftplanner service (new deployment row after trigger). Recommended: `railway logs --build`, `railway deployment list`, `railway agent "Review latest... commit f0d0eec"`.
+**Protocol**: Re-read Agentic/ (log/THIS_IS/AGENTS + ship/SKILL.md) at start. todo_write for ship phase + gates. tsc re-run clean before stage. Selective per skill (never broad add). Appended this ship log block at top. No cards shipped.
+**Decisions**: Followed full ship/SKILL.md workflow exactly (preflight gates, analysis, selective, tag choice, monitoring commands, artifacts). Shipped the latest fix + the unilateral dash feature state the thread built toward "seamless awe".
+**Status**: Pushed. Ready for Railway deploy observation + user verification on prod /shiftbuilder (test mens clear roundtrip + dash UX). Append complete.
 **User query**: "Next issue, clearing a mens restroom is not persisting" + "Do it"
 **Changes**:
 - useLiveAssignments.ts: pass slotType: slot_type explicitly to deleteZoneAssignment in the tmId==null path.

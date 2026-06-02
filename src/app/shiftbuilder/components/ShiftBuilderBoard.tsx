@@ -132,6 +132,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // making assigned TM drag feel solid like task drag.
   const pendingDrag = useShiftBuilderStore(s => s.pendingDrag) ?? null;
 
+  // Refs for measuring grid heights to equalize the visual height of the three groups
+  // (ZONES, RESTROOMS, AUXILIARY). Cards can expand with tasks (natural content height),
+  // but we force the shorter groups' card areas (via minHeight on their grids) to match
+  // the tallest group's card area so that the overall group bands have equivalent height
+  // for consistency/alignment. Only structural wrappers and containers here; no card edits.
+  const zonesGridRef = React.useRef<HTMLDivElement>(null);
+  const restroomsGridRef = React.useRef<HTMLDivElement>(null);
+  const auxGridRef = React.useRef<HTMLDivElement>(null);
+
   // Derived assignments for rendering that respects active pending drag.
   // This ensures the source card stays visually "occupied" and draggable throughout the gesture.
   const displayAssignments = React.useMemo(() => {
@@ -229,6 +238,80 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         setDashHistoryLoading(false);
       });
   }, [dashSlotKey, displayAssignments]);
+
+  // Equalize the rendered height of the three groups (ZONES / RESTROOMS / AUXILIARY)
+  // so they have equivalent total height for visual consistency on the artboard.
+  // Cards keep their natural/expanding height as tasks are added (content-driven).
+  // We measure the natural height of each group's card grid, take the max, and
+  // apply minHeight to the shorter grids. This makes the single-row groups (RR/AUX)
+  // stretch their card area (and thus the h-full wrappers) to match the height of
+  // the ZONES card area (2 rows). The section headers + stretched card areas make
+  // the overall groups equivalent height. Structural only (no card file changes).
+  React.useEffect(() => {
+    const equalize = () => {
+      const zEl = zonesGridRef.current;
+      const rEl = restroomsGridRef.current;
+      const aEl = auxGridRef.current;
+      if (!zEl || !rEl || !aEl) return;
+
+      // Clear any previous minHeights on the grids (cards will clear their own inside the equalizer)
+      zEl.style.minHeight = '';
+      rEl.style.minHeight = '';
+      aEl.style.minHeight = '';
+
+      // Equalize cards *within each visual row* to the tallest card in that row first.
+      // This ensures that when we measure the grid heights below, the rows reflect
+      // consistent card heights (matched to tallest in row). This directly satisfies
+      // "these should all be a consistent height, matched to the tallest one" for the
+      // restroom cards (and applies the same principle to zone rows and aux row).
+      // Structural only.
+      const equalizeCardsInGrid = (gridEl: HTMLElement | null, colsPerRow: number) => {
+        if (!gridEl) return;
+        const wrappers = Array.from(gridEl.children) as HTMLElement[];
+        for (let i = 0; i < wrappers.length; i += colsPerRow) {
+          const rowWrappers = wrappers.slice(i, i + colsPerRow);
+          let maxCardH = 0;
+          const rowCards: HTMLElement[] = [];
+          rowWrappers.forEach((wrapper) => {
+            const card = wrapper.firstElementChild as HTMLElement | null;
+            if (card) {
+              card.style.minHeight = ''; // clear to measure natural
+              const h = card.offsetHeight || card.getBoundingClientRect().height;
+              if (h > maxCardH) maxCardH = h;
+              rowCards.push(card);
+            }
+          });
+          if (maxCardH > 0) {
+            rowCards.forEach((card) => {
+              card.style.minHeight = `${maxCardH}px`;
+            });
+          }
+        }
+      };
+
+      equalizeCardsInGrid(zEl, 10); // ZONES: equalize all 10 cards (top row + bottom row) to same height so top row cards match bottom row cards in height
+      equalizeCardsInGrid(rEl, 5); // RESTROOMS: 1 row of 5 (the 5 positions; each position is a stacked pair of side cards)
+      equalizeCardsInGrid(aEl, (auxDefs && auxDefs.length) || 6); // AUX: 1 row of N
+
+      // Note: We no longer force the 3 group bands (ZONES/RESTROOMS/AUX) to equivalent height via minHeight on the grids.
+      // With the stacked restroom layout (effectively 2 rows of side-cards), forcing equal bands was causing AUX
+      // (1 row) to stretch excessively tall and overflow the page/artboard. Groups now size naturally to their
+      // content rows * consistent per-row card heights. ZONES and RESTROOMS will be ~2x a row height, AUX ~1x,
+      // which fits without overflow while keeping cards consistent within their visual rows.
+    };
+
+    // Run after the browser has laid out the cards (tasks, assignments etc. affect heights)
+    const rafId = requestAnimationFrame(equalize);
+    return () => cancelAnimationFrame(rafId);
+  }, [
+    assignments,
+    auxDefs,
+    selectedTasks,
+    draftAssignments,
+    loadingAssignments,
+    isDraftMode,
+    cardBorders,
+  ]);
 
   // Helper used only inside breaks view wave rendering
   const slotRefType = (ref: string | null): "zone" | "rr" | "aux" => {
@@ -512,7 +595,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   {ZONE_DEFS.filter((d) => !!assignments[d.key]?.tmName).length} / 10 FILLED
                 </span>
               </div>
-              <div className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={zonesGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_DEFS.map((def) => {
                   const key = def.key;
                   const isDashed = dashSlotKey === key;
@@ -1000,7 +1083,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   }, 0)} / 10 FILLED
                 </span>
               </div>
-              <div className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={restroomsGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {RR_DEFS.map((def) => {
                   const key = `RR${def.num}`; // physical key for dash (sides use MRR/WRR internally)
                   const isDashed = dashSlotKey === key || (dashSlotKey && (dashSlotKey === `MRR${def.num}` || dashSlotKey === `WRR${def.num}`));
@@ -1014,8 +1097,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   // focusedSk: prefer live dashSlotKey (supports direct WRR click/assign for persist). Only falls back when no side dash active.
                   const focusedSk = (dashSlotKey && (dashSlotKey.startsWith('MRR') || dashSlotKey.startsWith('WRR'))) ? dashSlotKey : (!mA.tmName ? mKey : wKey);
 
+                  const isRightSideDash = [8, 10].includes(def.num); // right cols in 5-col RR grid (RR8 col4, RR10 col5) — open dash to LEFT (opposite side), matching zones Z4/Z5/Z9/Z10 behavior. Applies to both womens/mens since dash is per physical wrapper but content uses focusedSk.
+
                   return (
-                    <div key={def.num} className="relative" data-slot-key={key}>
+                    <div key={def.num} className="relative h-full" data-slot-key={key}>
                       <RRCard
                         def={def}
                         assignments={displayAssignments}
@@ -1035,7 +1120,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       />
                       {isDashed && (
                         <div
-                          className="placement-dash absolute bottom-0 left-full ml-1.5 w-[268px] z-[60] overflow-hidden flex flex-col"
+                          className={`placement-dash absolute bottom-0 ${isRightSideDash ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
                           style={{
                             borderRadius: 16,
                             background: "rgba(255,255,255,0.98)",
@@ -1045,12 +1130,71 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {/* Left accent rail + soft glow — matches Marker Pad (now bottom-pinned for RR/aux: opposite of zones' top-0) */}
-                          <div style={{ position: "absolute", bottom: 12, left: -1, width: 3, height: 44, borderRadius: "0 3px 3px 0", background: accent, boxShadow: `0 0 12px ${accent}77` }} />
-                          {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward) */}
-                          <div style={{ position: "absolute", left: "-7px", bottom: "20px", width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderRight: "6px solid rgba(0,0,0,0.08)" }} />
+                          {/* Accent rail + soft glow — matches Marker Pad (bottom-pinned for RR; flipped for right-side cards like RR8/RR10) */}
+                          <div
+                            style={isRightSideDash ? {
+                              position: "absolute",
+                              bottom: 12,
+                              right: -1,
+                              width: 3,
+                              height: 44,
+                              borderRadius: "3px 0 0 3px",
+                              background: accent,
+                              boxShadow: `0 0 12px ${accent}77`,
+                            } : {
+                              position: "absolute",
+                              bottom: 12,
+                              left: -1,
+                              width: 3,
+                              height: 44,
+                              borderRadius: "0 3px 3px 0",
+                              background: accent,
+                              boxShadow: `0 0 12px ${accent}77`,
+                            }}
+                          />
+                          {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward; flipped for right-side) */}
+                          <div
+                            style={isRightSideDash ? {
+                              position: "absolute",
+                              right: "-7px",
+                              bottom: "20px",
+                              width: 0,
+                              height: 0,
+                              borderTop: "5px solid transparent",
+                              borderBottom: "5px solid transparent",
+                              borderLeft: "6px solid rgba(0,0,0,0.08)",
+                            } : {
+                              position: "absolute",
+                              left: "-7px",
+                              bottom: "20px",
+                              width: 0,
+                              height: 0,
+                              borderTop: "5px solid transparent",
+                              borderBottom: "5px solid transparent",
+                              borderRight: "6px solid rgba(0,0,0,0.08)",
+                            }}
+                          />
 
-                          <button onClick={() => setDashSlotKey(null)} style={{ position: "absolute", bottom: 8, right: 8, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "#8E8E93", fontSize: 13, cursor: "pointer" }}>×</button>
+                          {/* Close — positioned on outer edge for flipped left-dash */}
+                          <button
+                            onClick={() => setDashSlotKey(null)}
+                            style={{
+                              position: "absolute",
+                              bottom: 8,
+                              [isRightSideDash ? 'left' : 'right']: 8,
+                              width: 22,
+                              height: 22,
+                              borderRadius: "50%",
+                              background: "rgba(0,0,0,0.04)",
+                              border: "1px solid rgba(0,0,0,0.08)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#8E8E93",
+                              fontSize: 13,
+                              cursor: "pointer",
+                            }}
+                          >×</button>
 
                           {/* RR header — per-side focused, velvet avatar + label (taller, larger comps) */}
                           {(() => {
@@ -1330,6 +1474,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 </span>
               </div>
               <div
+                ref={auxGridRef}
                 className="grid gap-1.5 flex-1"
                 style={{
                   gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
