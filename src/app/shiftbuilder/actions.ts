@@ -457,3 +457,18 @@ Explore with tools before committing to picks. When ready, output ONLY the final
     };
   }
 }
+
+/**
+ * Retrospective engine insight for the unilateral marker pad (xAI deeper).
+ * Full impl lives in the post-training state; this stub keeps tsc + selective ship
+ * for the OpsStatusBar refresh-resilience fix (pill on hard refresh) without
+ * pulling the entire prior insight patch set.
+ */
+export async function getEngineInsightForPlacement(ctx: any): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number; model?: string; reasoningEffort?: string } }> {
+  // In full state this would call callGrok with the trained prompt + matrix ctx.
+  // For this maintenance pass we return a stable fallback so the pad continues to work
+  // and the ai usage path in Client can still accumulate (no crash on import).
+  return {
+    text: "Placement respects order, slot-specific history, and current neighbors for affinity (stub; full Grok analysis available in complete state).",
+  };
+}

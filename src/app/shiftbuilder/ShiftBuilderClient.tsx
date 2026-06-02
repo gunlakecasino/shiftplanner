@@ -126,7 +126,7 @@ import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
-import { OpsStatusBar } from "./components/OpsStatusBar";
+import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar } from "./components/OpsStatusBar";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 import { 
   useShiftBuilderStore, 
@@ -639,8 +639,33 @@ function AuthedShiftBuilder() {
   // === Launchpad vs full Canvas (elegant new default homescreen) =============
   // The beautiful matching launchpad is now the default entry for ShiftBuilder.
   // "Enter Canvas" (or clicking any day) loads the sacred interactive editor.
-  const [viewMode, setViewMode] = useState<'launchpad' | 'canvas'>('launchpad');
+  // Persist viewMode (like oms_selected_date) so hard refresh while in canvas
+  // re-loads directly into canvas (ensures OpsStatusBar + session pill visible
+  // without forcing operator back through launchpad).
+  const [viewMode, setViewMode] = useState<'launchpad' | 'canvas'>(() => {
+    try {
+      const saved = localStorage.getItem("oms_view_mode");
+      if (saved === "canvas" || saved === "launchpad") return saved;
+    } catch {}
+    return "launchpad";
+  });
   const [pendingCanvasDayIndex, setPendingCanvasDayIndex] = useState<number | undefined>(undefined);
+
+  // Persisting setter used for all canvas/launchpad transitions so refresh keeps context.
+  const persistViewMode = React.useCallback((m: "launchpad" | "canvas") => {
+    try {
+      localStorage.setItem("oms_view_mode", m);
+    } catch {}
+    setViewMode(m);
+  }, []);
+
+  // Early ensure for the status bar on initial mount when we restored directly to canvas
+  // (the hard-refresh-in-canvas case). useLayoutEffect to run before browser paint.
+  React.useLayoutEffect(() => {
+    if (viewMode === "canvas") {
+      ensureOpsStatusBar();
+    }
+  }, [viewMode]);
 
   // Early initialization of the roster bridges (Phase 3.1 unification).
   // Declared with `let` + empty defaults *here* (near the top, before any useMemo
@@ -655,8 +680,12 @@ function AuthedShiftBuilder() {
     if (typeof targetDayIndex === 'number') {
       setPendingCanvasDayIndex(targetDayIndex);
     }
-    setViewMode('canvas');
-  }, []);
+    persistViewMode('canvas');
+    // Force-create the pill synchronously from the action path. Complements the
+    // conditional mount + launchpad effect ensure. Guarantees visibility on first
+    // click into canvas after a hard refresh.
+    ensureOpsStatusBar();
+  }, [persistViewMode]);
 
   // Apply a day pre-selected from the launchpad once we are in canvas mode
   React.useEffect(() => {
@@ -703,10 +732,14 @@ function AuthedShiftBuilder() {
     if (viewMode === 'launchpad') {
       root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
       console.log('[Launchpad] Rendered into body root (iPad reliable)');
+      hideOpsStatusBar();
     } else {
       // Safe way to "hide" the launchpad without unmounting the root.
       // This avoids the synchronous unmount race condition entirely.
       root.render(null);
+      // Explicit ensure here (in addition to <OpsStatusBar/> mount) defeats any timing
+      // where the conditional React tree hasn't committed the effect yet on refresh/enter.
+      ensureOpsStatusBar();
     }
 
     // This cleanup runs when AuthedShiftBuilder unmounts (leaving /shiftbuilder entirely).
@@ -1288,12 +1321,13 @@ function AuthedShiftBuilder() {
     // Decide whether to use Grok based on the live engine config
     const isGrokHybrid = engineConfig.placementMethod === "grok-hybrid";
 
-    let grokResult = {
+    let grokResult: any = {
       picks: [] as any[],
       explanation: "",
       warnings: [] as string[],
       usedGrok: false,
       rawText: "",
+      usage: undefined,
     };
 
     if (isGrokHybrid) {
@@ -1367,9 +1401,14 @@ function AuthedShiftBuilder() {
 
         const { askGrokEngineDraft } = await import("./actions");
         grokResult = await askGrokEngineDraft(snapshot, callOptions);
+        if (grokResult && grokResult.usage) {
+          try {
+            useShiftBuilderStore.getState().addAiUsage(grokResult.usage);
+          } catch {}
+        }
       } catch (err) {
         console.error("[engine] Grok call failed:", err);
-        grokResult = { picks: [], explanation: "", warnings: ["Grok call failed"], usedGrok: false, rawText: "" };
+        grokResult = { picks: [], explanation: "", warnings: ["Grok call failed"], usedGrok: false, rawText: "", usage: undefined as any };
       }
 
       // === Structured capture for training / refinement flywheel (2026-05-30) ===
@@ -1702,6 +1741,11 @@ function AuthedShiftBuilder() {
       userQuestion: resolvedQuestion,
     });
 
+    if ((result as any).usage) {
+      try {
+        useShiftBuilderStore.getState().addAiUsage((result as any).usage);
+      } catch {}
+    }
     return result;
   };
 
@@ -5237,25 +5281,60 @@ function AuthedShiftBuilder() {
     });
   }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode]);
 
-  // Initial wiring for xAI engine insights surfaced in the unilateral marker pad (the attached "marker pad").
-  // Delegates to existing askGrok action with slot context. Later passes can include padHistory zoneDates, side, full fairness for richer per-placement narrative.
-  const handleBoardRequestEngineInsight = React.useCallback(async (slotKey: string, sideKey?: string) => {
-    const effectiveKey = sideKey || slotKey;
+  // Marker pad engine insight handler.
+  // Accepts optional context (rationale, fairnessSignals, recentPlacements, rrSide) from the unilateral pad
+  // and calls the specialized getEngineInsightForPlacement for a retrospective explanation
+  // (why this placement, referencing Rot/Aff/Load + history) instead of generic suggestions.
+  const handleBoardRequestEngineInsight = React.useCallback(async (slotKey: string, sideKeyOrContext?: string | any) => {
+    let effectiveKey = slotKey;
+    let sideKey: string | undefined;
+    let extra: any = {};
+
+    if (typeof sideKeyOrContext === 'string') {
+      sideKey = sideKeyOrContext;
+      effectiveKey = sideKey;
+    } else if (sideKeyOrContext && typeof sideKeyOrContext === 'object') {
+      extra = sideKeyOrContext;
+    }
+
     const storeAssignments = useShiftBuilderStore.getState().assignments || {};
     const a = storeAssignments[effectiveKey] || {};
     const tmName = a.tmName || "the assigned TM";
+
     try {
-      const { askGrokForShiftSuggestions } = await import("@/app/shiftbuilder/actions");
-      const context = {
-        type: "slot" as const,
+      const { getEngineInsightForPlacement } = await import("@/app/shiftbuilder/actions");
+      const insightContext = {
         slotKey: effectiveKey,
-        currentAssignment: `${tmName} on ${effectiveKey}`,
+        tmName,
+        rationale: extra.rationale,
+        fairnessSignals: extra.fairnessSignals,
+        recentPlacements: extra.recentPlacements,
+        isRR: effectiveKey.startsWith('MRR') || effectiveKey.startsWith('WRR'),
+        rrSide: extra.rrSide || (effectiveKey.startsWith('M') ? 'mens' : effectiveKey.startsWith('W') ? 'womens' : null),
+        tmAttributes: extra.tmAttributes,
+        priorGoodExamples: extra.priorGoodExamples,
+        slotSpecificHistory: extra.slotSpecificHistory,
+        currentContext: extra.currentContext,
       };
-      const text = await askGrokForShiftSuggestions(context);
-      return text || `Current engine placement for ${effectiveKey} balances rotation, load, and coverage for ${tmName}.`;
+      const result = await getEngineInsightForPlacement(insightContext);
+      const text = typeof result === 'string' ? result : result.text;
+      const u = typeof result === 'string' ? null : result.usage;
+      if (u) {
+        // Accumulate for the session tokens/cost pill (bottom corner).
+        // This covers the unilateral marker pad deeper insights.
+        try {
+          useShiftBuilderStore.getState().addAiUsage({
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens,
+            model: u.model,
+            reasoningEffort: u.reasoningEffort,
+          });
+        } catch {}
+      }
+      return text;
     } catch (e) {
       console.warn("[marker pad] engine insight call failed", e);
-      return "Deeper xAI insight unavailable right now. Placement follows the active engine rules (eligibility, fairness Rot/Aff/Load, and coverage).";
+      return "Deeper xAI engine insight unavailable right now. The placement follows the active fairness model (Rot/Aff/Load) plus GRAVE eligibility and coverage needs.";
     }
   }, []);
 
@@ -6063,7 +6142,7 @@ function AuthedShiftBuilder() {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            setViewMode('launchpad');
+            persistViewMode('launchpad');
 
             // Extra reliability on iPad: directly render into the body root if it exists.
             // This helps in case the effect hasn't flushed yet due to device-specific timing.

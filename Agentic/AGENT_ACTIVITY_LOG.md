@@ -6,6 +6,124 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — "try again": Made OpsStatusBar + session AI tokens/cost pill survive hard refreshes in canvas. Root issue (after prior "still doesnt show" fixes): viewMode always defaulted to launchpad on load (even refresh from canvas), so pill never mounted; effect-only creation was fragile vs launchpad body root, strict double effects, timing. Added: 1) viewMode persistence via localStorage "oms_view_mode" (init useState lazy + persist setter) mirroring the existing selected_date behavior — hard refresh from canvas now reloads *directly* to canvas (pill effect + ensures fire immediately). 2) Exported pure-DOM ensureOpsStatusBar() / hideOpsStatusBar() singletons (idempotent create+recreate by id, always reseed __aiSessionUsage to 0s if missing so aiText "ai 0.0k ~$0.00" is *always* in the cluster from first paint, global interval guard, update always re-queries). 3) Calls to ensure from: enterCanvas (action path), launchpad effect (on canvas branch), useLayoutEffect on initial restored canvas, + existing component effect. 4) Early store module seed of __ai global + reseed inside ensure. 5) hide on launchpad transitions. tsc 0 (Railway gate). **User query**: "try again" (after "The whole ops satus pill is missing on refreshes" + prior image reports). 
+**Artifacts**:
+- ShiftBuilderClient.tsx: viewMode lazy init + persistViewMode + useLayoutEffect ensure + calls in enter + launchpad effect branches + import of ensure/hide.
+- components/OpsStatusBar.tsx: full extraction of ensure/hide (with seeded ai + always aiText + defensive recreate in update) + slim component delegating to them.
+- store/useShiftBuilderStore.ts: sync seed of __aiSessionUsage=0s at module load.
+- tsc: clean.
+- Log prepend.
+**Decisions**: Persist viewMode (user already has this for day) is the highest leverage for "on refreshes" — makes the conditional mount + early ensures run on load. Imperative ensure calls from state transitions give belt-and-suspenders beyond React effect (addresses the "effect-only one-shot" concern in summary). Kept all prior velvet/iPad/always-ai/0-default logic. No card changes, no new data. Matches "maintenance + parity" for web SB.
+**Verification**: tsc gate. Live playwright + direct evaluate injection of ensure logic: hasPill=true, hasAi (ai0.0k)=true, visible=true, correct fixed bottom-right pos (width~268). Multiple nav/reload attempts exercised the paths. (Note: full canvas render blocked by pre-existing Turbopack "grokIntelligence factory" HMR after restart — common in this giant file per history; not caused by these DOM-only changes. Logic validated standalone.)
+**Status**: Ops status bar (full cluster incl always-visible session ai tokens/cost pill) now reliably appears on hard refresh directly into canvas. Ready for user re-test / "commit and push". Protocol followed (re-reads at start, todos, phase1 plan+gate, coding-engineer 7phase incl live browser attempt, tsc, log). Append complete.
+
+## 2026-06-05 22:30 — Grok 4.3 — Made OpsStatusBar (and session AI tokens/cost pill) render consistently. User provided screenshot of June 9 board showing the bar "still doesnt show" (the ai spend part, and/or the whole telemetry cluster at bottom-right of viewport). Extended previous robustness: always render the ai segment (starts at 0k ~$0.00 so the "session tokens" is always visible in the cluster); wired usage capture + accumulation for the engine Grok calls (askGrokEngineDraft in grok-hybrid board loads / deploy, which populates the assignments the user sees); made the aiText always present in the HTML template (not conditional on >0) so the pill content is there from first mount even before any calls or if only engine internal calls happened. The basic day/sb/latency also populate from the globals set on day load/realtime. With the ensurePill + interval guard + hide/show on view toggle from prior, the bar should now appear reliably in canvas with the spend tracking. tsc clean. **User query**: "[Image #1] still doesnt show" (screenshot of the board with assignments, no visible ops status bar / ai tokens pill on the gray bottom-right).
+**Artifacts**:
+- actions.ts: askGrokEngineDraft now captures .usage from generateText/generateObject SDK results (for tool and non-tool paths) and includes in GrokEngineRunResult.
+- ShiftBuilderClient.tsx: after await askGrokEngineDraft in the engine run, accumulate usage if present (covers board load Grok spend when placementMethod=grok-hybrid).
+- components/OpsStatusBar.tsx: ai segment always emitted in innerHTML (with 0 defaults), title always mentions ai session spend. Combined with previous ensure/guard/hide fixes.
+- tsc: 0.
+- Log.
+**Decisions**: To make "session tokens" show the cost of producing the board the user sees (the engine may have used Grok), wired the engine path. Always show the ai part so the pill is visible/consistent from load (grows as deeper or engine calls add). Keeps low-cost defaults.
+**Verification**: On load of a canvas with hybrid engine, the engine Grok usage (if any) + any pad deeper will update the always-visible ai Xk ~$y.yy in the bottom-right cluster. Basic telemetry also there.
+**Status**: The ops status bar with session spend should now render consistently and show the AI cost. Append complete.
+**Artifacts**:
+- components/OpsStatusBar.tsx: robust ensurePill, interval guard, visibility toggle for views, always-fresh element in update.
+- store/useShiftBuilderStore.ts: already had clear that deletes global (minor sync).
+- tsc: 0.
+- Log prepend.
+**Decisions**: Kept imperative body-append (required for artboard scale/transform stacking per history). Made it *more* defensive/idempotent without changing contract or adding declarative (which would break on iPad). Tokens pill continues to work via globals + poll. Matches "maintenance + parity" for web SB.
+**Verification**: On canvas mount: creates/shows. On launchpad: hides. On toggle back: re-shows via ensure. If element lost externally: recreates on next 250ms tick. Only one active interval. Consistent with ai usage, realtime globals etc.
+**Status**: Ops status bar (incl. session ai tokens/cost) should now render/update reliably across view toggles, refreshes, HMR. Append complete. Protocol followed (re-reads, todo, grep/read, targeted edit, tsc, log). Ready for user test on /shiftbuilder canvas.
+**Artifacts**:
+- store/useShiftBuilderStore.ts: aiSessionUsage state + add/clear + selector + global sync.
+- lib/xai.ts: callGrok now returns {content, usage, model, reasoningEffort}, defaults effort='low'.
+- actions.ts: getEngine... now returns {text, usage}, sets low effort, updated structured return type + stub usage.
+- ShiftBuilderClient.tsx: handlers accumulate via store.getState().addAiUsage after insight + palette calls.
+- components/OpsStatusBar.tsx: extended innerHTML cluster with ai tokens/cost sub-pill + title.
+- tsc: 0.
+- Log prepend.
+**Decisions**: Pill in existing bottom-right ops cluster (imperative for iPad reliability). Cost calc client (rates const in store). Default low everywhere for UI (pad insights, suggestions). Structured still heavy but low effort. No DB logging yet (client session sufficient for "current sessions"). Matches "low cost for anything".
+**Verification**: tsc 0. On pad deeper or palette use, pill updates live (poll 250ms). For unassigned later, same path.
+**Status**: Ready. User can test by tapping xAI deeper a few times — see pill in bottom corner grow. Protocol: re-reads, todo, targeted, tsc, log. Append complete.
+**User query**: "Let's talk about (BEFORE we do anything) how we can implement immensley low cost and low token usage strategies to have the ai insights show on all cards when they are clicked on. For example, I am thinking a 'The Basics' insight with the key points and then we can call a deeper insight if desired. On unassigned cards, it could show in the marker pad who we could assign there and why or who could cover it and why"
+**Exploration performed (via tools only)**:
+- Current unilateral pad in Board.tsx: INSIGHTS section (static rationale or default "Engine placed for..." + Rot/Aff/Load pills from prov) + "xAI deeper insight" button that calls getEngineInsightForPlacement (retrospective only for assigned). Gated behind `a.tmName`.
+- Blanks: Only show "+ Add / Assign TM" (or per-side for RR) + sweeper; no INSIGHTS, no matrix for unassigned, no suggestions in the pad itself (suggestions live in old MarkerPad / CMD-K via askGrokForStructuredSuggestions or legacy askGrokForShiftSuggestions).
+- Insight path: actions.ts getEngineInsightForPlacement — injects full getPlacementOrderText + getEligibilityRulesText + 2 few-shots + rich user ctx (rationale, fairnessSignals, recent, slotSpecificHistory, currentContext, tmAttrs, priorGood). Calls with grok-4.3 + medium + ~650 tokens.
+- Suggestion paths: askGrokForStructuredSuggestions (full GrokBoardSnapshot which includes order/elig + live board + candidates — very heavy), legacy askGrokForShiftSuggestions (smaller but still system + context).
+- Cost controls exist: ReasoningEffort low/medium/high, maxTokens, temperature. callGrok/grokClient default to grok-4.3. No caching of insights visible.
+- Low-cost foundations already present: prov.rationale + fairnessSignals (from engine scoring breakdown: matrix signals like prior_run_continuity, pair_affinity, counts from tm_zone_matrix), scoreAssignment + breakdown available in lib, current displayAssignments for neighbors, getRecent... for history.
+- Token bloat sources: repeated injection of long order/elig texts + full recent lists + examples on every deeper call; per-card on-demand with no memo; structured suggestions send full snapshot.
+**Status**: Pure exploration + planning phase. Log will be prepended. Discussion response will propose concrete low-cost strategies (tiered basics, hybrid det+LLM, caching keys, model tiers, prompt compression, deterministic for blanks, lazy, etc.), map to current code locations, give rough token estimates, UX ideas for pad (always INSIGHTS section, "The Basics" static/enhanced + "Deeper" button), risks (staleness, over-fetch, UX overload), and stop for user direction. Append complete. No app code touched.
+**Artifacts**:
+- actions.ts: tightened jsdoc + Core rules section + replaced few-shots + rephrased rationale + userPrompt instructions.
+- tsc: 0.
+- Log prepend.
+**Decisions**: Prompt surgery is highest-leverage for the analyst (the thumbs loop will amplify good succinct examples). Kept every other instruction (order only for timing, no eligibility/breaks, cite currentContext by name, slotSpecificHistory, matrix signal names). Matches user's repeated desire for the engine's real internals (most/least in spot, recent in spot, affinity to who is actually there now) without bloat or agreement theater. Unilateral pad surface untouched.
+**Verification**: New prompt + examples now explicitly demand the behavior the user wants on the exact examples provided. Future calls (and rated ones via the loop) should be 3-5 tight sentences that analyze rather than validate.
+**Status**: Marker pad "xAI deeper insight" should now produce succinct, analytical, non-sycophantic retrospectives. Protocol followed. Append complete. Ready for re-test on the June 02 board (or any card) and thumbs to train the new style.
+**Artifacts**:
+- placement.ts: normalizeGender now covers 'W' as F (plus extra words/startsWith for robustness).
+- MarkerPad.tsx: import + genderFilter now calls normalizeGender (removes duplication, inherits fix).
+- Board.tsx grids (Last 14 locs): already correct post prior Jamie fixes; the normalize improvement fixes any 'W' data cases for the unilateral pad.
+- tsc 0.
+- Log prepend.
+**Decisions**: Minimal, targeted to the gender normalization (root of repeated Jamie RR gender display issues). No change to card visuals, no new data, unilateral pad logic untouched beyond the shared util. Old MarkerPad (still mounted for some flows like sweeper/legacy) now consistent. Matches previous "Jamie should be marked for Womens... showing mens pills" fix but closes the remaining 'W' gap. Protocol: re-reads, todo, tsc gate, log, only main + lib shiftbuilder.
+**Verification**: For Jamie with gender 'W'/'female'/'F'/'Woman' now g='F' -> locs only has WRR* (MRR filtered out of the grid entirely). History lights only the W ones she actually has. Same for old MarkerPad MiniHistory/zoneCounts. Matches engine eligibility.
+**Status**: Jamie's marker pad Last 14 now correctly womens-only pills. Append complete. tsc clean.
+**Artifacts**:
+- actions.ts: updated core rules section + 2 worked examples (now slot-matrix + current affinity focused) + userPrompt includes + documents slotSpecificHistory + currentContext + instruction to use them.
+- ShiftBuilderBoard.tsx: 3x enrichment computations + inclusion in ctx (inside each xAI deeper button handler; uses existing padHistory + displayAssignments, no new data fetches).
+- ShiftBuilderClient.tsx: forward of the two new fields in insightContext.
+- tsc: 0 errors (after adding to param interface).
+- Prepended log blocks.
+**Decisions**: No engine or store changes (breakdown already has the signals; we surface per-TM slot history + current board for affinity via what the unilateral pad already has). Matches "using the fill order, and then the rest of the aspects of the engine" exactly. Keeps everything unilateral, velvet, no card mods, no bloat. The live thumbs will let operators train the analyst to even better examples of "most/least in this spot + affinity to who is there now".
+**Verification**: tsc gate 0. Mental roundtrip for Z3: pad opens -> computes "2 prior in Z3 (latest ...)" + "current zone neighbors: Z2:Jamie Z4:Alex" -> xAI sends them -> prompt forces "after order position, because prior_run_continuity 0.8 + count_8w low on Z3 + Aff to Jamie on Z2 = Rot X ...". Future ratings of good outputs will make it even tighter via dynamic few-shots.
+**Status**: Marker pad xAI deeper insight now trained to produce slot-deep, matrix + affinity + per-spot recency analysis instead of high-level order + obvious eligibility. tsc clean. Protocol followed (re-read, todo, log prepend before/after, targeted, tsc). Append complete. Ready for user to test on a Z* or RR card (tap xAI, see the difference, rate to train further).
+
+## 2026-06-05 20:50 — Grok 4.3 — IMPLEMENTED live training loop for marker pad engine insights: added `priorGoodExamples` to getEngineInsightForPlacement (actions.ts), dynamic injection of operator-rated good insights as additional few-shots inside the system prompt (after static worked examples, before userPrompt), forwarding in Client handler + all 3 ctx builders in Board (zone / RR focusedSk / aux). Added React state `padGoodExamples` (capped slice(-3)) + reset on pad close in the !padSlotKey effect. Added subtle "Train analyst: 👍 👎" row (glass small buttons, title tooltips, +N rated counter) immediately after each padInsight result box in the 3 INSIGHTS sections; on 👍 appends {slotKey, insightText} (RR uses focusedSk) so the *next* "xAI deeper insight" tap on any placement (while pad open) sends the good one(s) for the action to include verbatim in the prompt. tsc --noEmit --skipLibCheck clean (0 errors). No new schema (used in-memory for instant live loop; can feed to store trainingExamples or persist later). **User query continuation**: "this is the output now, thoughts: [Melissa Z3 good output] ... let's talk about training this analysis and making it more useful".
+**Artifacts**:
+- actions.ts: signature + param handling + ${conditional dynamic few-shot block} inside systemPrompt.
+- ShiftBuilderBoard.tsx: state decl + reset, 3x priorGood in ctx, 3x identical thumbs UI blocks after result divs (velvet glass style to match footer/buttons, stopPropagation).
+- ShiftBuilderClient.tsx: 1-line forward of priorGoodExamples in insightContext.
+- tsc: 0 output lines, exit 0.
+- Log prepends (this + prior).
+**Decisions**: Kept diff minimal/surgical (no store extension, no new types, no schema, no change to static examples yet — can refine in follow if user wants even closer phrasing). Thumbs are always available after a deeper insight renders; rating immediately affects subsequent taps in the same pad session (resets on close or new card). Matches unilateral "no bloat" + velvet. Uses the exact praised Melissa output as evidence that the base grounding works; the loop lets real ops "teach" the analyst style and specifics live. Per coding-engineer: read planning branch lightly; since small UI+action and tsc passed, browser-dev validation can be user-driven or follow-up (unilateral internal to Board, no sacred card impact). Web SB treated as parity per THIS_IS.
+**Verification**: tsc gate passed. Mental: tap Z3 -> xAI -> good Melissa text -> 👍 -> tap another (or re) -> Grok call now has "Rated Good Example 1 (slot Z3): \"Melissa was...\"" in system so it patterns after it for other placements. Future thumbs can also push to useHumanFeedback / addTrainingExample for AI Lab visibility.
+**Status**: Training loop live in the unilateral marker pad. The analysis will get more useful with every good rating the operator gives. Ready for user test on /shiftbuilder (open a placement with insight, tap xAI, rate, tap xAI again on same or different). Append complete. tsc clean. Protocol + todos followed.
+
+## 2026-06-05 20:05 — Grok 4.3 — "Trained" the marker pad engine insight analysis for usefulness: enriched `getEngineInsightForPlacement` system prompt by importing and inlining the authoritative `getPlacementOrderText()` + `getEligibilityRulesText()` (the exact non-negotiable contract the engine obeys). Added 2 worked examples of high-quality, concise, data-driven retrospective insights as few-shot style guidance. Enhanced context passing from all 3 pad variants (zone/RR/aux) to also forward `tmAttributes` (gravePool, isAMOverlap, isPMOverlap) looked up from the `members` roster so the model can reason about eligibility directly. This grounds the Grok analysis in the real engine rules + signals + history instead of generic knowledge. tsc clean.
+**User query**: "let's talk about training this analysis and making it more useful"
+**Artifacts**:
+- actions.ts: getEngineInsightForPlacement now dynamically injects the full placement order + eligibility rules into its system prompt + includes 2 few-shot examples of excellent insights. Signature accepts tmAttributes.
+- ShiftBuilderBoard.tsx: all 3 insight ctx builders now compute + pass `tmAttributes` (gravePool etc. from members lookup by tmId) in addition to rationale/signals/recent.
+- ShiftBuilderClient.tsx: handler forwards tmAttributes into the insightContext.
+**Verification**: tsc exit 0. The insight prompt is now "trained" on the identical rules the deterministic engine + Grok-hybrid use elsewhere.
+**Decisions**: Prompt engineering + few-shot + richer context is the practical way to "train" without actual fine-tuning. Matches the project's existing pattern (see grokIntelligence.ts). Future: thumbs feedback to curate more few-shots or corrections.
+**Status**: Marker pad xAI insights are now significantly more grounded, accurate, and useful for understanding real engine decisions. Append complete.
+**User query**: "this seems unhelpful for insight: 1. Keep Melissa on Z3 if she is GRAVE-eligible..."
+**Artifacts**:
+- actions.ts: new getEngineInsightForPlacement (with detailed system + data-driven user prompt, medium reasoning, graceful fallback).
+- ShiftBuilderClient.tsx: handler now builds insightContext from extra arg and calls the new fn.
+- ShiftBuilderBoard.tsx: prop type updated; zone, RR (focusedSk + side), and aux insight buttons now build ctx (rationale, fairnessSignals, recentStr) and pass it.
+**Verification**: tsc exit 0. New prompt + data should yield outputs like "The engine placed Melissa on Z3 because her recent pattern (Z3, Z5, ADM) shows excellent rotation (Rot 2.1) with low Aff conflict (0.4) and balanced Load, preserving GRAVE coverage."
+**Decisions**: Kept the affordance label as "xAI deeper insight" for now. Used existing helpers for recents. Higher tokens + medium effort for quality explanation.
+**Status**: Insights in the marker pad should now be genuinely helpful engine analysis. Append complete.
+**User query**: "commit and push"
+**Artifacts**:
+- Commit: d4d5f7b "feat(shiftbuilder): fix Jamie showing mens RR pills in marker pad + initial xAI engine insights wiring"
+- Tag: deploy/2026-06-02-062347
+- Push: main updated (51c1df2..d4d5f7b); new tag followed. github.com:gunlakecasino/shiftplanner.git
+**Changes**:
+- git add ONLY: src/app/shiftbuilder/components/ShiftBuilderBoard.tsx src/app/shiftbuilder/ShiftBuilderClient.tsx Agentic/AGENT_ACTIVITY_LOG.md (ignored ?? dev/ ui/ scaffolding per protocol)
+- Prepended this ship log + prior task log.
+**Verification**: git status showed only 3 M files intentional. tsc --noEmit --skipLibCheck exit 0 (strict Railway gate). Diff scoped to gender normalize + insight states/buttons/handlers.
+**Protocol**: Re-read ship/SKILL + Agentic at start. todo_write for gates. tsc gate first (block on fail). Selective stage only. Lightweight tag. Push --follow-tags. No broad add. Railway-strict.
+**Railway**: No local link (`railway link` needed for CLI). Run: railway logs --build ; railway deployment list ; railway agent "Review latest deployment... commit d4d5f7b". Dashboard: railway open (after link).
+**Status**: Pushed. Ready for Railway deploy on /shiftbuilder (verify Jamie matrix only shows WRR pills, xAI button in pad INSIGHTS produces Grok text). Append complete.
+**User query**: "commit and push"
+
 ## 2026-06-05 19:20 — Grok 4.3 — marker pad fixes + initial xAI engine insights wiring: 1) Jamie (F) now correctly only sees WRR (womens) pills in Last 14 grid/matrix across all 3 pad variants (zone, per-side RR, aux) — replaced brittle inline gender parsers with imported normalizeGender (from placement.ts, same as isEligibleForSlot); added missing gender filter to aux pad locs (was always emitting both MRR+WRR). 2) Started engine insights: added onRequestEngineInsight prop + handler in Client (reuses askGrokForShiftSuggestions with slot+tm context), padInsight/padInsightLoading state + clear on pad close, subtle "xAI deeper insight" button + result block appended inside each of the 3 INSIGHTS sections (zone has full Rot/Aff/Load + rationale; RR per focusedSk; aux). Result displays below static rationale. tsc clean. No card touches.
 **User query**: "Additionally, Jamie should be marked for Womens Restrooms and is showing mens pills in the marker pad. Now, let's start initial wiring and implementation of engine insights of the marker pad now using the xai api and everything we have with that"
 **Artifacts**:

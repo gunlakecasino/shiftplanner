@@ -114,6 +114,25 @@ interface ShiftBuilderState {
   // Live engine config snapshot for the AI Lab
   liveEngineConfigForAI: any | null;
   setLiveEngineConfigForAI: (cfg: any) => void;
+
+  // Session-level AI usage tracking for the tokens/cost pill (client-side accumulation from API responses)
+  // Focused on low-cost defaults; estimates use grok-4.3 rates (fast variants cheaper)
+  aiSessionUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    estimatedCostUsd: number;
+    callCount: number;
+    lastModel?: string;
+    lastReasoningEffort?: string;
+  };
+  addAiUsage: (usage: {
+    inputTokens?: number;
+    outputTokens?: number;
+    model?: string;
+    reasoningEffort?: string;
+  }) => void;
+  clearAiSessionUsage: () => void;
 }
 
 export const useShiftBuilderStore = create<ShiftBuilderState>()(
@@ -195,6 +214,59 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     addTrainingExample: (ex) =>
       set((state) => ({ trainingExamples: [ex, ...state.trainingExamples].slice(0, 200) })),
 
+    // AI session usage (for bottom-right tokens/cost pill). Accumulates across all Grok calls in the session.
+    // Cost calc uses main grok-4.3 rates; actual spend lower with fast models, caching, low effort.
+    aiSessionUsage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0,
+      callCount: 0,
+      lastModel: undefined,
+      lastReasoningEffort: undefined,
+    },
+    addAiUsage: (usage) =>
+      set((state) => {
+        const { inputTokens = 0, outputTokens = 0, model, reasoningEffort } = usage;
+        const newInput = state.aiSessionUsage.inputTokens + inputTokens;
+        const newOutput = state.aiSessionUsage.outputTokens + outputTokens;
+        const newTotal = newInput + newOutput;
+        // Rates: $1.25/M input, $2.50/M output for grok-4.3 (see previous cost discussion). Fast models ~6x cheaper.
+        const INPUT_RATE = 1.25 / 1_000_000;
+        const OUTPUT_RATE = 2.50 / 1_000_000;
+        const costDelta = (inputTokens * INPUT_RATE) + (outputTokens * OUTPUT_RATE);
+        const newCost = state.aiSessionUsage.estimatedCostUsd + costDelta;
+        const newUsageState = {
+          inputTokens: newInput,
+          outputTokens: newOutput,
+          totalTokens: newTotal,
+          estimatedCostUsd: Math.round(newCost * 10000) / 10000, // 4 decimals for pennies
+          callCount: state.aiSessionUsage.callCount + 1,
+          lastModel: model || state.aiSessionUsage.lastModel,
+          lastReasoningEffort: reasoningEffort || state.aiSessionUsage.lastReasoningEffort,
+        };
+        if (typeof window !== 'undefined') {
+          (window as any).__aiSessionUsage = newUsageState;
+        }
+        return { aiSessionUsage: newUsageState };
+      }),
+    clearAiSessionUsage: () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).__aiSessionUsage;
+      }
+      set({
+        aiSessionUsage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          callCount: 0,
+          lastModel: undefined,
+          lastReasoningEffort: undefined,
+        },
+      });
+    },
+
     // Direct "Apply Roster" feed from Sudo Weekly Roster tab
     weeklyRosterScheduled: {
       weekStart: null,
@@ -233,6 +305,23 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     setPendingDrag: (drag) => set({ pendingDrag: drag }),
   }))
 );
+
+// Seed the ai session global synchronously on module load (store import happens early
+// in the ShiftBuilderClient path). This guarantees the poll in OpsStatusBar sees a
+// shaped object with 0s on first canvas paint / hard refresh, so the "ai 0.0k ~$0.00"
+// session tokens pill the operator requested is always present in the cluster.
+if (typeof window !== "undefined") {
+  const initAi = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    estimatedCostUsd: 0,
+    callCount: 0,
+    lastModel: undefined,
+    lastReasoningEffort: undefined,
+  };
+  (window as any).__aiSessionUsage = initAi;
+}
 
 // Optional: Dev-only subscribe for debugging day-switch impact
 const __DEV__ =
@@ -301,3 +390,6 @@ export const useTrainingExamples = () =>
 
 export const useLiveEngineConfigForAI = () =>
   useShiftBuilderStore((state) => state.liveEngineConfigForAI);
+
+export const useAiSessionUsage = () =>
+  useShiftBuilderStore((state) => state.aiSessionUsage);
