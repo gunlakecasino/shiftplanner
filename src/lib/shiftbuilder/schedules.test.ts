@@ -6,6 +6,7 @@
  * (especially Alec on Sundays being OFF in the Sudo Weekly Roster).
  */
 
+// @ts-nocheck — vitest types not in main tsc path for Railway build; tests run separately via vitest
 import { describe, it, expect } from "vitest";
 import { getTmShiftForNight, getScheduledTmsForNight } from "./schedules";
 

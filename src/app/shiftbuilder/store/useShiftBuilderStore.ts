@@ -4,6 +4,26 @@ import type { AuxDef } from '@/lib/shiftbuilder/placement';
 import type { EngineAnalysis, HumanFeedback, TrainingExample } from '@/lib/shiftbuilder/ai/types';
 
 /**
+ * ShiftAssignment shape used by planner cards and dev previews.
+ * This satisfies the imports in src/app/shiftbuilder/components/planner/* and src/components/planner/*.
+ */
+export type ShiftAssignment = {
+  slotKey: string;
+  slotType: "zone" | "rr" | "aux" | "overlap" | string;
+  tmName?: string | null;
+  tmId?: string;
+  source?: string;
+  isLocked?: boolean;
+  provenance?: {
+    rationale?: string;
+    confidence?: number;
+    fairnessSignals?: Record<string, number>;
+  };
+  rrSide?: "mens" | "womens" | null;
+  [key: string]: any;
+};
+
+/**
  * Minimal Zustand store for the remaining local mutable state in ShiftBuilder.
  *
  * Goal (3.4): Reduce re-render surface in the orchestrator by moving

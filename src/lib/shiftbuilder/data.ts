@@ -733,16 +733,27 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
 
   // Defensive normalization: if someone passes a UI key by mistake,
   // convert it to the canonical DB key. This prevents future drift.
+  //
+  // CRITICAL for RR sides (MRR/WRR): the live optimistic layer (useLiveAssignments)
+  // and drag persist do `const {slot_key, rr_side} = uiToDb(uiKey)` first (getting
+  // correct "womens" for WRR1), then pass the DB form slotKey="rr_1_2" + explicit rrSide.
+  // uiToDb("rr_1_2") matches /^rr_\d+(_\d+)?$/ and returns rr_side:null, which would
+  // previously overwrite and cause womens assignments to be written with null side
+  // (loading as MRR on refresh via dbToUi). Only remap when the incoming value does
+  // NOT look like a DB key form.
   let finalSlotKey = slotKey;
   let finalSlotType = slotType;
   let finalRrSide = rrSide;
-  try {
-    const mapped = uiToDb(slotKey);
-    finalSlotKey = mapped.slot_key;
-    finalSlotType = mapped.slot_type;
-    finalRrSide = mapped.rr_side;
-  } catch {
-    // already a DB key or unknown — leave as-is
+  const isDbForm = /^(zone_|rr_|aux_|support_|trash_|overlap_|admin$|z9_sr$)/.test(slotKey);
+  if (!isDbForm) {
+    try {
+      const mapped = uiToDb(slotKey);
+      finalSlotKey = mapped.slot_key;
+      finalSlotType = mapped.slot_type;
+      finalRrSide = mapped.rr_side;
+    } catch {
+      // already a DB key or unknown — leave as-is
+    }
   }
 
   if (!tmId) {
@@ -806,11 +817,18 @@ export async function deleteZoneAssignment(params: {
   }
 
   // Always compute the canonical DB key
+  // (mirrors the fix in upsert: if a DB-form key + explicit rrSide is passed,
+  // trust it instead of letting uiToDb on "rr_xx" force null side for womens RR.)
   let canonical: { slot_key: string; slot_type: string; rr_side: string | null };
-  try {
-    canonical = uiToDb(uiKey) as any;
-  } catch {
+  const isDbForm = /^(zone_|rr_|aux_|support_|trash_|overlap_|admin$|z9_sr$)/.test(uiKey);
+  if (isDbForm) {
     canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
+  } else {
+    try {
+      canonical = uiToDb(uiKey) as any;
+    } catch {
+      canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
+    }
   }
 
   const variants = [

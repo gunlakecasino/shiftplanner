@@ -125,6 +125,7 @@ import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
 import RosterRail from "./components/RosterRail";
+import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar } from "./components/OpsStatusBar";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 import { 
@@ -737,6 +738,40 @@ function AuthedShiftBuilder() {
     const saved = localStorage.getItem("oms_current_view");
     return (saved === "breaks" || saved === "deployment") ? saved : "deployment";
   });
+
+  // Provenance glass (engine heart) — on-demand overlay. Board is the entire surface.
+  // Populated from card clicks when engine provenance data (rationale + fairnessSignals) is present.
+  // Card appearances are never altered.
+  const [provenanceKey, setProvenanceKey] = useState<string | null>(null);
+
+  // Resolve provenance data for glass (supports flat rrSide keys like MRR1/WRR1 and physical).
+  // Looks up in the current assignments (from store/live).
+  const getProvenanceDataForKey = React.useCallback((key: string) => {
+    // The main assignments come from the live cache / store.
+    // We use a broad lookup; in practice the board passes displayAssignments but we resolve here.
+    const a = (window as any).__OMS_ASSIGNMENTS__?.[key] || {}; // fallback if exposed; real lookup below
+
+    // Real lookup: the client has `assignments` and `markerPadAssignments` in scope in many places.
+    // For robustness we try several sources the component closes over.
+    const liveA = (typeof assignments !== 'undefined' && assignments) || {};
+    const mpA = (typeof markerPadAssignments !== 'undefined' && markerPadAssignments) || {};
+    const candidate = liveA[key] || mpA[key] || a;
+
+    if (!candidate) return null;
+
+    // For RR sides the key may be MRRxx / WRRxx; the provenance lives on the side assignment.
+    const prov = candidate.provenance || {};
+    const hasReal = prov.rationale || prov.fairnessSignals;
+
+    if (!hasReal) return null;
+
+    return {
+      name: candidate.tmName,
+      rationale: prov.rationale,
+      fairnessSignals: prov.fairnessSignals,
+      confidence: prov.confidence,
+    };
+  }, []);
 
   // Day picker popover state for the left-rail colored day number.
   // When true we render a floating horizontal strip of the 7 days immediately
@@ -1752,6 +1787,11 @@ function AuthedShiftBuilder() {
       showToast("This day is locked — editing disabled", "error");
       return;
     }
+    // Guard: physical "RRn" (not MRR/WRR) must never reach palette/assign — it would uiToDb to aux w/ null side and corrupt mens RR or lose womens side data.
+    if (/^RR\d+$/.test(slotKey)) {
+      console.warn('[shiftbuilder] physical RR key ignored for palette (use side MRR/WRR from card halves or dash)');
+      return;
+    }
     // If the pad is already showing this slot, toggle it closed
     setMarkerSlotKey(prev => prev === slotKey ? null : slotKey);
   }, [isCurrentNightLocked]);
@@ -2446,6 +2486,12 @@ function AuthedShiftBuilder() {
       showToast("This day is locked — changes are disabled", "error");
       return;
     }
+    // Guard physical RRn (prevents uiToDb treating as aux+null rr_side, which was source of womens assignments landing on mens or vanishing on reload)
+    if (/^RR\d+$/.test(slotKey)) {
+      console.warn('[shiftbuilder] assign with physical RR key blocked — womens/mens would be lost');
+      showToast('Select a specific side (M or W) on the RR card');
+      return;
+    }
 
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     pendingHistoryRef.current = { description: `Assigned ${tmName} to ${slotKey}`, before };
@@ -2487,6 +2533,10 @@ function AuthedShiftBuilder() {
     if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
+      return;
+    }
+    if (/^RR\d+$/.test(slotKey)) {
+      console.warn('[shiftbuilder] unassign with physical RR key blocked');
       return;
     }
 
@@ -5048,12 +5098,33 @@ function AuthedShiftBuilder() {
   }, []);
 
   const handleBoardCardClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
+    // Only trigger provenance glass for slots that actually have engine data (rationale or fairnessSignals).
+    // This avoids mounting the glass component unnecessarily, which was triggering React internal "static flag" errors
+    // in the Turbopack/React 19 setup when always rendered in the tree.
+    const assignments = useShiftBuilderStore.getState().assignments || {};
+    const a = assignments[slotKey] || {};
+    const prov = a.provenance || {};
+    // Provenance glass no longer auto-triggered here — the unilateral dash (attached callout) is now the baseline
+    // "what appears when you click a placement card" per the drawn spec. Engine heart (rationale + signals)
+    // is shown inside the rich dash. Full palette still opens for assign/edit flows.
+    const hasReal = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
+    // (no setProvenanceKey — dash surfaces the insights/matrix instead)
     openPaletteForSlot(slotKey);
   }, [openPaletteForSlot]);
 
   // RR sides (MRR/WRR) use a dedicated gender-side click handler (each side is its own slot).
   // Wired through the isolated board so restroom card sides open the MarkerPad.
   const handleBoardGenderClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
+    // Per-side provenance glass support (MENS / WOMENS independent).
+    // Only set if real engine data present.
+    const assignments = useShiftBuilderStore.getState().assignments || {};
+    const a = assignments[slotKey] || {};
+    const prov = a.provenance || {};
+    // Provenance glass no longer auto-triggered here — the unilateral dash (attached callout) is now the baseline
+    // "what appears when you click a placement card" per the drawn spec. Engine heart (rationale + signals)
+    // is shown inside the rich dash. Full palette still opens for assign/edit flows.
+    const hasReal = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
+    // (no setProvenanceKey — dash surfaces the insights/matrix instead)
     openPaletteForSlot(slotKey);
   }, [openPaletteForSlot]);
 
@@ -5127,6 +5198,10 @@ function AuthedShiftBuilder() {
   }, [handleEditTask]);
 
   const handleBoardLiveAssign = React.useCallback((uiKey: string, tmId: string, tmName: string) => {
+    if (/^RR\d+$/.test(uiKey)) {
+      console.warn('[shiftbuilder] live assign physical RR blocked');
+      return;
+    }
     // Always prefer the reliable modern source from useCurrentNight (the legacy [nightId] useState can be null on some paths)
     const reliableNightId = queryNightId || nightId;
     live?.assign?.(uiKey, tmId, tmName, {
@@ -5138,6 +5213,10 @@ function AuthedShiftBuilder() {
   }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode]);
 
   const handleBoardLiveUnassign = React.useCallback((uiKey: string) => {
+    if (/^RR\d+$/.test(uiKey)) {
+      console.warn('[shiftbuilder] live unassign physical RR blocked');
+      return;
+    }
     const reliableNightId = queryNightId || nightId;
     live?.unassign?.(uiKey, {
       captureDate: selectedDay.date,
@@ -5561,7 +5640,9 @@ function AuthedShiftBuilder() {
               live={live}
               amOverlapDayName={amOverlapDayName}
               amOverlapDateNum={amOverlapDateNum}
+              activeMarkerSlotKey={markerSlotKey}
               nextDayColor={nextDayColor}
+              members={effectiveRealRoster}
             />
             {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
                 has been carved out. This is the primary re-render boundary win for iPad day switches.
@@ -5845,6 +5926,17 @@ function AuthedShiftBuilder() {
         printProgress={printProgress}
         isDark={isDark}
       />
+
+      {/* Engine heart provenance glass kept for non-card entry points or explicit "why" flows.
+          The primary baseline for "what appears when you click a placement card" is now the unilateral
+          attached dash in ShiftBuilderBoard (rich matrix/insights/actions per the drawn spec).
+          Card appearances 100% unchanged. */}
+      {provenanceKey && (
+        <ProvenanceGlass
+          slotKey={provenanceKey}
+          onClose={() => setProvenanceKey(null)}
+        />
+      )}
 
       <SudoWindow
         open={sudoOpen}
