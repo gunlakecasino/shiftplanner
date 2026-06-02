@@ -6,7 +6,39 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
-## 2026-06-05 17:00 — Grok 4.3 — SHIPPED: commit + push for stacked per-side RR cards (W above M), opposite-side marker dash for RR8/RR10, height consistency + pinned names, women's coverage banners, dev preview build fix. tsc clean. Selective add (RRCard, Board, preview page, log only). Conventional commit + deploy/ tag + push --follow-tags.
+## 2026-06-05 19:20 — Grok 4.3 — marker pad fixes + initial xAI engine insights wiring: 1) Jamie (F) now correctly only sees WRR (womens) pills in Last 14 grid/matrix across all 3 pad variants (zone, per-side RR, aux) — replaced brittle inline gender parsers with imported normalizeGender (from placement.ts, same as isEligibleForSlot); added missing gender filter to aux pad locs (was always emitting both MRR+WRR). 2) Started engine insights: added onRequestEngineInsight prop + handler in Client (reuses askGrokForShiftSuggestions with slot+tm context), padInsight/padInsightLoading state + clear on pad close, subtle "xAI deeper insight" button + result block appended inside each of the 3 INSIGHTS sections (zone has full Rot/Aff/Load + rationale; RR per focusedSk; aux). Result displays below static rationale. tsc clean. No card touches.
+**User query**: "Additionally, Jamie should be marked for Womens Restrooms and is showing mens pills in the marker pad. Now, let's start initial wiring and implementation of engine insights of the marker pad now using the xai api and everything we have with that"
+**Artifacts**:
+- Board.tsx: import normalizeGender; replace 3x gender blocks + aux locs; added insight states + clear effects; inserted xAI button+result in 3 INSIGHTS divs (with onClick calling prop, stopProp, loading text, result glass box).
+- Client.tsx: implemented handleBoardRequestEngineInsight (store lookup + call askGrok action); passed onRequestEngineInsight=... to <ShiftBuilderBoard>.
+**Verification**: tsc exit 0. Code review: Jamie g=normalize('female')='F' => only WRR in locs for grids. Insight path: button -> prop -> action -> grok -> string in pad (initial, generic prompt but functional wiring; future can specialize prompt with padHistory + fairness + "explain engine choice for this exact placement").
+**Decisions**: Reuse existing askGrokForShiftSuggestions for speed (initial wiring); put affordance inside INSIGHTS to keep velvet minimal; state lives in Board (unilateral scope). Matches "start initial". Gender uses canonical normalize everywhere now for pad matrix. Protocol followed (re-read top of log/this_is/agents, todo, prepend this, tsc).
+**Status**: Marker pad gender correct for womens; xAI insight button live in pad (try on a placement card). Ready for user to test Jamie + tap the xAI button for first Grok-generated insight text. Append complete.
+**User query**: "lets talk about the marker dash now. First of all, for all furture references this is the marker pad now. Second, I do not believe it is pulling all matrix data correctly. for example, Jamie here is showing last 14 Z5 and Admin, but last 5 have been more than that. Also, next to the 'Last 14' i want a 'Last in SR' and under that it has days since last in Z9 and Z9 SR
+
+Additionally, add in that when we tap coverage on the marker pad, it then shows on the marker pad the coverage options instead of opening the marker side drawer."
+**Artifacts**:
+- Only edited: ShiftBuilderBoard.tsx (core unilateral pad + helpers + 3 variants + renames + SR + coverage mode + render fn + button handlers), ShiftBuilderClient.tsx (prop pass).
+- New: getRecentPlacementKeys + getDaysSinceForKey + renderInlineCoverage (compact grids).
+- State: pad* (renamed), + padCoverageSource.
+- Fetch widened to 90d for true last placements.
+**Verification**: tsc --noEmit --skipLibCheck exit 0. Manual code review of matrix/last5 using same recent14 source. Coverage buttons now set mode + render picker in matrix slot (stops prop, calls real handler). SR recency uses zoneDates dates. Renames + comments updated for "marker pad". No card changes, no other files, persist/gender/opposite/height/ bottom pin intact.
+**Decisions**: Inline picker duplicated compact (to avoid import/coupling), no confirmed flash (can add), last5/insights remain under picker for now (x exits mode). Used recent-N events so "last 14" truly last 14 assignments (fixes divergence for sparse or dense). Protocol: re-reads at start, todo, prepend log, targeted replaces, tsc gate.
+**Status**: Ready for user test on /shiftbuilder (Jamie-like TM should now have matching Last14 grid vs Last5; tapping Coverage in pad shows options in-pad; Last in SR visible next to Last14 with days). Append complete.
+
+## 2026-06-05 17:10 — Grok 4.3 — SHIPPED: commit + push to fix Railway build (Turbopack module not found for planner/PlanningCard in dev preview). Added the missing component to git, reverted preview imports to standard @/ aliases. tsc clean. Selective. New tag.
+**User query**: the latest build log showing the relative import failure for the preview page.
+**Artifacts**:
+- Commit: 51c1df2 "fix(build): include planner/PlanningCard and revert dev preview to @/ imports to fix Turbopack module resolution in Railway builds"
+- Tag: deploy/2026-06-02-060139
+- Push: main updated, tag followed.
+**Changes**:
+- git add src/components/planner/PlanningCard.tsx (was untracked ?? in prior status, hence not in git snapshots for Railway builds).
+- Reverted the preview page imports from ugly/broken relative back to clean @/ (the alias now works because the target file is committed).
+- Updated log.
+**Verification**: tsc clean. The relative path was correct on disk but the file wasn't in the committed snapshot before. Now included.
+**Protocol**: Followed ship workflow. Re-ran gates, selective add (only the 3 files + log; still ignored other ?? dev scaffolding), conventional commit, tag, push.
+**Status**: Pushed. Should unblock the build. The dev preview will now bundle correctly in prod builds since its dep is tracked. Append complete.
 **User query**: "commit and push"
 **Artifacts**:
 - Commit: 3f9a5e2 "feat(shiftbuilder): stacked per-side RR cards (W above M for RR8/RR10), opposite-side marker dash, consistent row/group heights + pinned names, women's coverage banners, dev preview build fix"

@@ -13,6 +13,7 @@ import {
   getAuxAccent,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { getTmPlacementHistory, type ZoneDetailEntry } from "@/lib/shiftbuilder/data";
@@ -58,6 +59,9 @@ export interface ShiftBuilderBoardProps {
   setBreakGroupForSlot?: any;
   onLiveAssign?: any;
   onLiveUnassign?: any;
+  onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
+  /** Initial wiring for xAI-powered engine insights in the unilateral marker pad. Called with the active slot (or focusedSk for RR). Returns a rich natural-language explanation. */
+  onRequestEngineInsight?: (slotKey: string, sideKey?: string) => Promise<string>;
 
   // Live cache interface (passed through for optimistic)
   live?: any;
@@ -66,7 +70,7 @@ export interface ShiftBuilderBoardProps {
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   nextDayColor?: string;
-  /** When the full MarkerPad is open for a slot, the unilateral dash for that slot should auto-close for clean UX */
+  /** When the full MarkerPad is open for a slot, the unilateral marker pad for that slot should auto-close for clean UX */
   activeMarkerSlotKey?: string | null;
 }
 
@@ -112,6 +116,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   setBreakGroupForSlot,
   onLiveAssign,
   onLiveUnassign,
+  onAddCoverage,
+  onRequestEngineInsight,
   live,
   amOverlapDayName,
   amOverlapDateNum,
@@ -176,68 +182,84 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
 
-  // Unilateral subtle "dash" callout for the selected card.
+  // Unilateral subtle "marker pad" callout for the selected card.
   // Contains provenance area + marker pad functionality.
   // Comes off one side of the card (right by default), subtle, paper-like.
   // Card components (ZoneCard etc) appearances are completely unchanged.
   // Selection is local to board for the visual; full drawer can still be triggered if needed.
-  const [dashSlotKey, setDashSlotKey] = React.useState<string | null>(null);
+  const [padSlotKey, setPadSlotKey] = React.useState<string | null>(null);
 
-  // Clear the dash when day or view changes (keeps it scoped to current artboard content)
+  // Clear the marker pad when day or view changes (keeps it scoped to current artboard content)
   React.useEffect(() => {
-    setDashSlotKey(null);
+    setPadSlotKey(null);
+    setPadCoverageSource(null);
+    setPadInsight(null);
+    setPadInsightLoading(false);
   }, [selectedDayIndex, currentView]);
 
-  // Close dash on outside click (document level) when open — makes the unilateral dash feel light and non-drawer.
+  // Close marker pad on outside click (document level) when open — makes the unilateral marker pad feel light and non-drawer.
   React.useEffect(() => {
-    if (!dashSlotKey) return;
+    if (!padSlotKey) return;
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // If click is not inside any data-slot-key wrapper or the placement dash callout, close.
-      // (dash is the unilateral attached baseline for click-on-placement-card per drawn spec)
-      if (!target.closest('[data-slot-key]') && !target.closest('.placement-dash')) {
-        setDashSlotKey(null);
+      // If click is not inside any data-slot-key wrapper or the placement pad callout, close.
+      // (pad is the unilateral attached baseline for click-on-placement-card per drawn spec)
+      if (!target.closest('[data-slot-key]') && !target.closest('.placement-pad')) {
+        setPadSlotKey(null);
       }
     };
     document.addEventListener('click', onDocClick, true);
     return () => document.removeEventListener('click', onDocClick, true);
-  }, [dashSlotKey]);
+  }, [padSlotKey]);
 
-  // When the full MarkerPad drawer opens for the current dashed slot, auto-close the unilateral dash
-  // so the two surfaces don't compete (clean UX for "new unilateral marker dash").
+  // When the full MarkerPad drawer opens for the current padded slot, auto-close the unilateral marker pad
+  // so the two surfaces don't compete (clean UX for "new unilateral marker pad").
   React.useEffect(() => {
-    if (dashSlotKey && activeMarkerSlotKey && dashSlotKey === activeMarkerSlotKey) {
-      setDashSlotKey(null);
+    if (padSlotKey && activeMarkerSlotKey && padSlotKey === activeMarkerSlotKey) {
+      setPadSlotKey(null);
+      setPadInsight(null);
+      setPadInsightLoading(false);
     }
-  }, [activeMarkerSlotKey, dashSlotKey]);
+  }, [activeMarkerSlotKey, padSlotKey]);
 
-  // History for the current dashed slot's TM (for Last 5 and Last 14 matrix)
-  const [dashHistory, setDashHistory] = React.useState<ZoneDetailEntry | null>(null);
-  const [dashHistoryLoading, setDashHistoryLoading] = React.useState(false);
+  // History for the current marker pad slot's TM (for Last 5 and Last 14 matrix)
+  const [padHistory, setPadHistory] = React.useState<ZoneDetailEntry | null>(null);
+  const [padHistoryLoading, setPadHistoryLoading] = React.useState(false);
+
+  // When set to a slotKey (or focusedSk for RR), the unilateral marker pad shows the inline coverage picker
+  // (instead of delegating to full MarkerPad drawer). Tapping COVERAGE in pad footer sets this.
+  const [padCoverageSource, setPadCoverageSource] = React.useState<string | null>(null);
+
+  // Engine insight state (xAI powered) for the current marker pad. Initial wiring.
+  const [padInsight, setPadInsight] = React.useState<string | null>(null);
+  const [padInsightLoading, setPadInsightLoading] = React.useState(false);
 
   React.useEffect(() => {
-    if (!dashSlotKey) {
-      setDashHistory(null);
-      setDashHistoryLoading(false);
+    if (!padSlotKey) {
+      setPadHistory(null);
+      setPadHistoryLoading(false);
+      setPadCoverageSource(null);
+      setPadInsight(null);
+      setPadInsightLoading(false);
       return;
     }
-    const a = displayAssignments[dashSlotKey] || {};
+    const a = displayAssignments[padSlotKey] || {};
     if (!a.tmId) {
-      setDashHistory(null);
-      setDashHistoryLoading(false);
+      setPadHistory(null);
+      setPadHistoryLoading(false);
       return;
     }
-    setDashHistoryLoading(true);
-    getTmPlacementHistory(a.tmId, 14)
+    setPadHistoryLoading(true);
+    getTmPlacementHistory(a.tmId, 90)
       .then((h) => {
-        setDashHistory(h);
-        setDashHistoryLoading(false);
+        setPadHistory(h);
+        setPadHistoryLoading(false);
       })
       .catch(() => {
-        setDashHistory(null);
-        setDashHistoryLoading(false);
+        setPadHistory(null);
+        setPadHistoryLoading(false);
       });
-  }, [dashSlotKey, displayAssignments]);
+  }, [padSlotKey, displayAssignments]);
 
   // Equalize the rendered height of the three groups (ZONES / RESTROOMS / AUXILIARY)
   // so they have equivalent total height for visual consistency on the artboard.
@@ -321,20 +343,20 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return "aux";
   };
 
-  // Wrapped handlers so clicks on cards (or card sub-parts) set the unilateral dash.
+  // Wrapped handlers so clicks on cards (or card sub-parts) set the unilateral marker pad.
   // IMPORTANT: We no longer auto-delegate to the parent onCardClick/onGenderClick here.
-  // The rich dash (the drawn baseline with Placement Matrix / Last 5 / Insights + quick actions)
+  // The rich marker pad (the drawn baseline with Placement Matrix / Last 5 / Insights + quick actions)
   // is now the primary thing that appears when you click a placement card.
-  // Actions inside the dash (Lock / Coverage / Swap / Assign Sweeper) explicitly call the
-  // original onCardClick / onGenderClick (which opens the full MarkerPad) + close the dash.
-  // Clear is direct + fast. This prevents the "both dash + full drawer at once" clutter.
-  const handleCardClickForDash = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
-    setDashSlotKey(k);
+  // Actions inside the pad (Lock / Coverage / Swap / Assign Sweeper) explicitly call the
+  // original onCardClick / onGenderClick (which opens the full MarkerPad) + close the pad.
+  // Clear is direct + fast. This prevents the "both pad + full drawer at once" clutter.
+  const handleCardClickForPad = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
+    setPadSlotKey(k);
     // Intentionally do NOT call onCardClick here for the initial trigger.
   }, []);
 
-  const handleGenderClickForDash = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
-    setDashSlotKey(k);
+  const handleGenderClickForPad = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
+    setPadSlotKey(k);
     // Intentionally do NOT call onGenderClick here for the initial trigger.
   }, []);
 
@@ -376,6 +398,116 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     }
     const def = auxDefs.find((d) => d.key === a.slotKey);
     return def ? def.label : a.slotKey;
+  };
+
+  // Helper: compute the locations from the *most recent N placement events* (chronological last assignments)
+  // for a TM's pad history. Used to make "LAST 14 PLACEMENTS" grid + counts truly reflect the last 14
+  // assignments (not just any in a calendar window), so it matches what Last 5 shows and pulls full data.
+  // Filters to prior to viewed day if beforeIso provided. Returns unique ui keys in recency order (newest first).
+  const getRecentPlacementKeys = (h: ZoneDetailEntry | null, n: number, beforeIso?: string): string[] => {
+    if (!h?.zoneDates) return [];
+    const events: Array<{ ui: string; d: string }> = [];
+    for (const [ui, ds] of Object.entries(h.zoneDates)) {
+      for (const d of (ds || [])) {
+        if (beforeIso && d >= beforeIso) continue; // prior only
+        events.push({ ui, d });
+      }
+    }
+    events.sort((a, b) => b.d.localeCompare(a.d)); // newest first
+    const topN = events.slice(0, n);
+    // unique preserving first-seen (most recent) order
+    const seen = new Set<string>();
+    const uniques: string[] = [];
+    for (const e of topN) {
+      if (!seen.has(e.ui)) {
+        seen.add(e.ui);
+        uniques.push(e.ui);
+      }
+    }
+    return uniques;
+  };
+
+  // Days since most recent placement in a given ui key (Z9 or Z9SR), using viewed day's iso as 'now'.
+  // Returns e.g. "3d" or "today" or "—" if none prior.
+  const getDaysSinceForKey = (h: ZoneDetailEntry | null, key: string, beforeIso: string): string => {
+    const dates = (h?.zoneDates?.[key] || []).filter((d: string) => d <= beforeIso);
+    if (!dates.length) return "—";
+    const latest = dates.sort().reverse()[0];
+    if (latest === beforeIso) return "today";
+    const d1 = new Date(beforeIso + "T12:00:00");
+    const d2 = new Date(latest + "T12:00:00");
+    const diffMs = d1.getTime() - d2.getTime();
+    const days = Math.max(0, Math.floor(diffMs / (1000 * 3600 * 24)));
+    return `${days}d`;
+  };
+
+  // Compact inline coverage options for the unilateral marker pad (shown when COVERAGE tapped in pad footer).
+  // Mirrors the spirit + colors of MarkerPad's CoveragePicker but sized to fit the 268px velvet pad.
+  // Self is disabled (can't cover self). onPick(target) will call the real onAddCoverage then reset mode.
+  const renderInlineCoverage = (sourceKey: string, onPick: (target: string) => void, onCancel: () => void) => {
+    const isDarkLocal = isDark;
+    const textMuted = isDarkLocal ? "rgba(255,255,255,0.40)" : "rgba(0,0,0,0.35)";
+    const chipBase: React.CSSProperties = {
+      borderRadius: 6, border: "1px solid", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.3px",
+      fontFamily: "var(--font-atkinson)", cursor: "pointer", padding: "3px 0", textAlign: "center", lineHeight: 1,
+    };
+    const sectionLabel: React.CSSProperties = {
+      fontSize: 6.5, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+      color: isDarkLocal ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.3)", marginBottom: 2, display: "block",
+    };
+    return (
+      <div style={{ padding: "6px 10px 8px", borderTop: "1px solid rgba(0,0,0,0.06)", background: "rgba(0,0,0,0.015)", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: isDarkLocal ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)" }}>Add coverage to…</span>
+          <button type="button" onClick={(e)=>{e.stopPropagation(); onCancel();}} style={{ fontSize: 10, color: textMuted, background: "none", border: "none", padding: 0, cursor: "pointer" }}>✕</button>
+        </div>
+        {/* Zones compact 5col */}
+        <div>
+          <span style={sectionLabel}>Zones</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
+            {ZONE_DEFS.map(z => {
+              const color = getZoneColor(z.key);
+              const isSelf = z.key === sourceKey;
+              return (
+                <button key={z.key} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(z.key);}} style={{
+                  ...chipBase, borderColor: isSelf ? "rgba(0,0,0,0.08)" : `${color}99`, color: isSelf ? "rgba(0,0,0,0.2)" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}18`,
+                }}>{z.key.replace("Z","")}</button>
+              );
+            })}
+          </div>
+        </div>
+        {/* RR compact */}
+        <div>
+          <span style={sectionLabel}>Restrooms</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
+            {RR_DEFS.map(rr => {
+              const color = getRRAccent(rr.num);
+              const isSelf = sourceKey === `MRR${rr.num}` || sourceKey === `WRR${rr.num}`;
+              return (
+                <button key={rr.num} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(`MRR${rr.num}`);}} style={{
+                  ...chipBase, fontSize: 7, borderColor: isSelf ? "rgba(0,0,0,0.08)" : `${color}99`, color: isSelf ? "rgba(0,0,0,0.2)" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}18`,
+                }}>{rr.label}</button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Aux / support */}
+        <div>
+          <span style={sectionLabel}>Aux</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 3 }}>
+            {auxDefs.filter(d=>!d.key.startsWith('SP')).map(aux => {
+              const color = getAuxAccent(aux.key);
+              const isSelf = aux.key === sourceKey;
+              return (
+                <button key={aux.key} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(aux.key);}} style={{
+                  ...chipBase, fontSize: 7, borderColor: isSelf ? "#ccc" : `${color}99`, color: isSelf ? "#999" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}15`,
+                }}>{aux.label.replace(/ .*/,'').slice(0,5)}</button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Build tmId → assignment reverse lookup for breaks view (only when needed)
@@ -598,13 +730,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div ref={zonesGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_DEFS.map((def) => {
                   const key = def.key;
-                  const isDashed = dashSlotKey === key;
+                  const isPadOpen = padSlotKey === key;
                   const accent = getZoneColor(key);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
-                  const isRightSideDash = ['Z4', 'Z5', 'Z9', 'Z10'].includes(key); // zone 4/5 and below (right cols in 5-col grid) open dash to LEFT
+                  const isRightSidePad = ['Z4', 'Z5', 'Z9', 'Z10'].includes(key); // zone 4/5 and below (right cols in 5-col grid) open marker pad to LEFT
 
                   return (
                     <div key={key} className="relative h-full" data-slot-key={key}>
@@ -613,7 +745,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         assignments={displayAssignments}
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
-                        onCardClick={handleCardClickForDash}
+                        onCardClick={handleCardClickForPad}
                         loading={loadingAssignments}
                         borderColor={cardBorders[key]}
                         isDraftMode={isDraftMode}
@@ -625,9 +757,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isDashed && (
+                      {isPadOpen && (
                         <div
-                          className={`placement-dash absolute top-0 ${isRightSideDash ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
+                          className={`placement-pad absolute top-0 ${isRightSidePad ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
                           style={{
                             borderRadius: 16,
                             background: "rgba(255,255,255,0.98)",
@@ -639,7 +771,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         >
                           {/* Accent rail + soft glow — matches Marker Pad velvet treatment (flipped for right-side cards) */}
                           <div
-                            style={isRightSideDash ? {
+                            style={isRightSidePad ? {
                               position: "absolute",
                               top: 12,
                               right: -1,
@@ -661,7 +793,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           />
                           {/* Unilateral tail/pointer for stronger "comes off the card" attachment (flipped for right-side cards) */}
                           <div
-                            style={isRightSideDash ? {
+                            style={isRightSidePad ? {
                               position: "absolute",
                               right: "-7px",
                               top: "20px",
@@ -684,11 +816,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
                           {/* Close — matches Marker Pad round subtle × (positioned on outer edge for flipped left-dash) */}
                           <button
-                            onClick={() => setDashSlotKey(null)}
+                            onClick={() => setPadSlotKey(null)}
                             style={{
                               position: "absolute",
                               top: 8,
-                              [isRightSideDash ? 'left' : 'right']: 8,
+                              [isRightSidePad ? 'left' : 'right']: 8,
                               width: 22,
                               height: 22,
                               borderRadius: "50%",
@@ -794,7 +926,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
                             <button
-                              onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
                               style={{
                                 fontSize: 8, fontWeight: 700, letterSpacing: "0.2px",
                                 padding: "2px 6px", borderRadius: 6,
@@ -821,7 +953,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {!a.tmName && (
                             <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                               <button
-                                onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                                onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
                                 style={{
                                   width: "100%",
                                   padding: "6px 8px",
@@ -843,7 +975,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {/* History sections only for assigned TMs */}
                           {a.tmName && (
                             <>
-                              {/* PLACEMENT MATRIX — wired to real dashHistory (prior placements only, per current TM) */}
+                              {/* PLACEMENT MATRIX or inline coverage when tapped in pad footer */}
+                              {padCoverageSource === key ? (
+                                renderInlineCoverage(key, (tgt) => { if (onAddCoverage) { onAddCoverage(key, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
+                              ) : (
                               <div style={{ padding: "5px 12px 7px" }}>
                                 <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -868,21 +1003,37 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       transform: 'translate(-50%, -50%)',
                                     }} />
                                   </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15 }}>
-                                    <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                    <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                      <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let r = 0; if (dashHistory?.zoneDates) Object.entries(dashHistory.zoneDates).forEach(([ui,ds]) => { if ((ui.startsWith('MRR')||ui.startsWith('WRR')) && ds.some(d=>d<curIso)) r += (ds.filter(d=>d<curIso).length); }); return r;
-                                      })()}</span></span>
-                                      <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let z = 0; if (dashHistory?.zoneDates) Object.entries(dashHistory.zoneDates).forEach(([ui,ds]) => { if (/^Z\d+$/.test(ui) && ds.some(d=>d<curIso)) z += (ds.filter(d=>d<curIso).length); }); return z;
-                                      })()}</span></span>
+                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
+                                    <div>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
+                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
+                                          return recent.filter(k => k.startsWith('MRR') || k.startsWith('WRR')).length;
+                                        })()}</span></span>
+                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
+                                          return recent.filter(k => /^Z\d+$/.test(k)).length;
+                                        })()}</span></span>
+                                      </div>
+                                    </div>
+                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
+                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        {(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
+                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
+                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
+                                        })()}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                              )}
 
                               {/* LAST 14 PLACEMENTS GRID — pills for zones, RRs (eligible), aux. Filled if placed in last 14 */}
                               <div style={{ padding: "5px 12px 7px" }}>
@@ -890,15 +1041,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                                   {(() => {
                                     // Gender-aware RR sides for this TM (so a male TM doesn't show female RR pills in their last-14 matrix, etc.)
-                                    const dashA = displayAssignments[dashSlotKey] || a;
-                                    const tmId = dashA?.tmId;
+                                    const padA = displayAssignments[padSlotKey] || a;
+                                    const tmId = padA?.tmId;
                                     const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
-                                    const g = (() => {
-                                      const s = String(rawGender || '').toUpperCase().trim();
-                                      if (s === 'F' || s === 'FEMALE' || s.startsWith('F')) return 'F';
-                                      if (s === 'M' || s === 'MALE' || s.startsWith('M')) return 'M';
-                                      return '';
-                                    })();
+                                    const g = normalizeGender(rawGender);
 
                                     const locs: { ui: string; label: string }[] = [
                                       ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
@@ -920,18 +1066,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                           return { ui: d.key, label };
                                         }),
                                     ];
-                                    // Filter to *prior* placements only (exclude current selected day's placement + any future relative to viewed night)
+                                    // Use most recent 14 placements (by event recency) prior to viewed day for "LAST 14" accuracy.
                                     const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    let effectiveCounts: Record<string, number> = {};
-                                    if (dashHistory?.zoneDates) {
-                                      for (const [z, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length > 0) effectiveCounts[z] = prior.length;
-                                      }
-                                    } else {
-                                      effectiveCounts = dashHistory?.zoneCounts || {};
-                                    }
-                                    const placed = new Set(Object.keys(effectiveCounts));
+                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
+                                    const placed = new Set(recent14Keys);
                                     const getPillAccent = (ui: string): string => {
                                       if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
                                       if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
@@ -973,17 +1111,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                                   {(() => {
                                     let pills: string[] = ["Z1", "RR3", "Z4"];
-                                    if (dashHistory && dashSlotKey === key && dashHistory.zoneDates) {
+                                    if (padHistory && padSlotKey === key) {
                                       const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const filteredDates: Record<string, string[]> = {};
-                                      for (const [ui, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length) filteredDates[ui] = prior;
-                                      }
-                                      const sorted = Object.entries(filteredDates)
-                                        .map(([ui, dates]) => ({ ui, latest: dates.sort().reverse()[0] || '' }))
-                                        .sort((a, b) => b.latest.localeCompare(a.latest));
-                                      pills = sorted.slice(0, 5).map(({ ui }) => {
+                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
+                                      pills = recent5.map((ui) => {
                                         if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
                                         if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
                                         if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
@@ -1000,7 +1131,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       if (label.includes('Z9SR') || label.includes('SR')) return getAuxAccent('Z9SR');
                                       if (label.includes('TRASH')) return getAuxAccent('TR1');
                                       if (label.includes('SUPPORT')) return getAuxAccent('SP1');
-                                      return accent; // fallback current dash accent
+                                      return accent; // fallback current pad accent
                                     };
                                     return pills.map((b, i) => {
                                       const pAccent = getColorForPill(b);
@@ -1025,7 +1156,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ fontSize: 7, color: "#8E8E93", marginTop: 2 }}>NOT RECENTLY PLACED</div>
                               </div>
 
-                              {/* INSIGHTS — engine heart, velvet typography (responsive, no internal scroll; content drives dash height) */}
+                              {/* INSIGHTS — engine heart, velvet typography (responsive, no internal scroll; content drives pad height) */}
                               <div style={{ padding: "6px 12px 7px" }}>
                                 <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 2 }}>INSIGHTS</div>
                                 <div style={{ fontSize: 10, lineHeight: 1.25, color: "#2F2F2D" }}>
@@ -1039,6 +1170,39 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     })}
                                   </div>
                                 )}
+                                {/* Initial xAI engine insight wiring — subtle affordance in unilateral marker pad */}
+                                {onRequestEngineInsight && (
+                                  <div style={{ marginTop: 6 }}>
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!onRequestEngineInsight || !padSlotKey) return;
+                                        setPadInsight(null);
+                                        setPadInsightLoading(true);
+                                        try {
+                                          const insight = await onRequestEngineInsight(padSlotKey);
+                                          setPadInsight(insight || "No additional insight available right now.");
+                                        } catch (err) {
+                                          setPadInsight("xAI insight unavailable (check connection).");
+                                        } finally {
+                                          setPadInsightLoading(false);
+                                        }
+                                      }}
+                                      style={{
+                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
+                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
+                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
+                                      }}
+                                    >
+                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
+                                    </button>
+                                    {padInsight && (
+                                      <div style={{ marginTop: 4, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "4px 6px", borderRadius: 4 }}>
+                                        {padInsight}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
@@ -1046,19 +1210,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {/* Footer actions — EXACT visual language from Marker Pad (glass, radius 9, hover, red Clear) */}
                           <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
                             <button
-                              onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
                               style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
                             >Lock</button>
                             <button
-                              onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setDashSlotKey(null); }}
+                              onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setPadSlotKey(null); }}
                               style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935", cursor: "pointer" }}
                             >Clear</button>
                             <button
-                              onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                              onClick={(e) => { e.stopPropagation(); const src = key; setPadCoverageSource(src); }}
                               style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
                             >Coverage</button>
                             <button
-                              onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
                               style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
                             >Swap</button>
                           </div>
@@ -1085,8 +1249,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
               <div ref={restroomsGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {RR_DEFS.map((def) => {
-                  const key = `RR${def.num}`; // physical key for dash (sides use MRR/WRR internally)
-                  const isDashed = dashSlotKey === key || (dashSlotKey && (dashSlotKey === `MRR${def.num}` || dashSlotKey === `WRR${def.num}`));
+                  const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
+                  const isPadOpen = padSlotKey === key || (padSlotKey && (padSlotKey === `MRR${def.num}` || padSlotKey === `WRR${def.num}`));
                   const accent = getRRAccent(def.num);
                   const mKey = `MRR${def.num}`;
                   const wKey = `WRR${def.num}`;
@@ -1094,10 +1258,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const wA = displayAssignments[wKey] || {};
                   const mProv = mA.provenance || {};
                   const wProv = wA.provenance || {};
-                  // focusedSk: prefer live dashSlotKey (supports direct WRR click/assign for persist). Only falls back when no side dash active.
-                  const focusedSk = (dashSlotKey && (dashSlotKey.startsWith('MRR') || dashSlotKey.startsWith('WRR'))) ? dashSlotKey : (!mA.tmName ? mKey : wKey);
+                  // focusedSk: prefer live padSlotKey (supports direct WRR click/assign for persist). Only falls back when no side marker pad active.
+                  const focusedSk = (padSlotKey && (padSlotKey.startsWith('MRR') || padSlotKey.startsWith('WRR'))) ? padSlotKey : (!mA.tmName ? mKey : wKey);
 
-                  const isRightSideDash = [8, 10].includes(def.num); // right cols in 5-col RR grid (RR8 col4, RR10 col5) — open dash to LEFT (opposite side), matching zones Z4/Z5/Z9/Z10 behavior. Applies to both womens/mens since dash is per physical wrapper but content uses focusedSk.
+                  const isRightSidePad = [8, 10].includes(def.num); // right cols in 5-col RR grid (RR8 col4, RR10 col5) — open marker pad to LEFT (opposite side), matching zones Z4/Z5/Z9/Z10 behavior. Applies to both womens/mens since pad is per physical wrapper but content uses focusedSk.
 
                   return (
                     <div key={def.num} className="relative h-full" data-slot-key={key}>
@@ -1106,7 +1270,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         assignments={displayAssignments}
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
-                        onGenderClick={handleGenderClickForDash}
+                        onGenderClick={handleGenderClickForPad}
                         loading={loadingAssignments}
                         borderColor={cardBorders[`RR${def.num}`] || cardBorders[mKey] || cardBorders[wKey]}
                         isDraftMode={isDraftMode}
@@ -1118,9 +1282,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isDashed && (
+                      {isPadOpen && (
                         <div
-                          className={`placement-dash absolute bottom-0 ${isRightSideDash ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
+                          className={`placement-pad absolute bottom-0 ${isRightSidePad ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
                           style={{
                             borderRadius: 16,
                             background: "rgba(255,255,255,0.98)",
@@ -1132,7 +1296,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         >
                           {/* Accent rail + soft glow — matches Marker Pad (bottom-pinned for RR; flipped for right-side cards like RR8/RR10) */}
                           <div
-                            style={isRightSideDash ? {
+                            style={isRightSidePad ? {
                               position: "absolute",
                               bottom: 12,
                               right: -1,
@@ -1154,7 +1318,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           />
                           {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward; flipped for right-side) */}
                           <div
-                            style={isRightSideDash ? {
+                            style={isRightSidePad ? {
                               position: "absolute",
                               right: "-7px",
                               bottom: "20px",
@@ -1177,11 +1341,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
                           {/* Close — positioned on outer edge for flipped left-dash */}
                           <button
-                            onClick={() => setDashSlotKey(null)}
+                            onClick={() => setPadSlotKey(null)}
                             style={{
                               position: "absolute",
                               bottom: 8,
-                              [isRightSideDash ? 'left' : 'right']: 8,
+                              [isRightSidePad ? 'left' : 'right']: 8,
                               width: 22,
                               height: 22,
                               borderRadius: "50%",
@@ -1243,14 +1407,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
                           <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
-                            <button onClick={() => { onGenderClick?.(focusedSk); setDashSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
+                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
                           </div>
 
-                          {/* Ability to add TM on blank cards (per side) — uses focusedSk (dashSlotKey side or sensible default) so WRR +Add persists to womens */}
+                          {/* Ability to add TM on blank cards (per side) — uses focusedSk (padSlotKey side or sensible default) so WRR +Add persists to womens */}
                           {!(( focusedSk.startsWith('M') ? mA : wA).tmName) && (
                             <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                               <button
-                                onClick={() => { onGenderClick?.(focusedSk); setDashSlotKey(null); }}
+                                onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }}
                                 style={{
                                   width: "100%",
                                   padding: "6px 8px",
@@ -1272,7 +1436,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {/* History sections only for assigned TMs (per side) */}
                           {(( focusedSk.startsWith('M') ? mA : wA).tmName) && (
                             <>
-                              {/* Matrix + last 5 + insights — same premium treatment */}
+                              {/* Matrix + last 5 + insights — same premium treatment (or coverage options if tapped) */}
+                              {padCoverageSource === focusedSk ? (
+                                renderInlineCoverage(focusedSk, (tgt) => { if (onAddCoverage) { onAddCoverage(focusedSk, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
+                              ) : (
                               <div style={{ padding: "5px 12px 7px" }}>
                                 <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1297,21 +1464,35 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       transform: 'translate(-50%, -50%)',
                                     }} />
                                   </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15 }}>
-                                    <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                    <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                      <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let r = 0; const dh = dashHistory; if (dh?.zoneDates) Object.entries(dh.zoneDates).forEach(([ui,ds]) => { if ((ui.startsWith('MRR')||ui.startsWith('WRR')) && ds.some(d=>d<curIso)) r += ds.filter(d=>d<curIso).length; }); return r;
-                                      })()}</span></span>
-                                      <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let z = 0; const dh = dashHistory; if (dh?.zoneDates) Object.entries(dh.zoneDates).forEach(([ui,ds]) => { if (/^Z\d+$/.test(ui) && ds.some(d=>d<curIso)) z += ds.filter(d=>d<curIso).length; }); return z;
-                                      })()}</span></span>
+                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
+                                    <div>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
+                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso); return recent.filter(k => k.startsWith('MRR') || k.startsWith('WRR')).length;
+                                        })()}</span></span>
+                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso); return recent.filter(k => /^Z\d+$/.test(k)).length;
+                                        })()}</span></span>
+                                      </div>
+                                    </div>
+                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
+                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        {(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
+                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
+                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
+                                        })()}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                              )}
 
                               {/* LAST 14 PLACEMENTS GRID — full, same as zone (eligible RR sides, no support, T1/T2, prior filter, equal width colored pills) */}
                               <div style={{ padding: "5px 12px 7px" }}>
@@ -1319,15 +1500,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                                   {(() => {
                                     const localSideKey = focusedSk;
-                                    const dashA = displayAssignments[dashSlotKey] || (localSideKey.startsWith('M') ? mA : wA);
-                                    const tmId = dashA?.tmId;
+                                    const padA = displayAssignments[padSlotKey] || (localSideKey.startsWith('M') ? mA : wA);
+                                    const tmId = padA?.tmId;
                                     const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
-                                    const g = (() => {
-                                      const s = String(rawGender || '').toUpperCase().trim();
-                                      if (s === 'F' || s === 'FEMALE' || s.startsWith('F')) return 'F';
-                                      if (s === 'M' || s === 'MALE' || s.startsWith('M')) return 'M';
-                                      return '';
-                                    })();
+                                    const g = normalizeGender(rawGender);
                                     const locs: { ui: string; label: string }[] = [
                                       ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
                                       ...RR_DEFS.flatMap((d) => {
@@ -1343,16 +1519,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       }),
                                     ];
                                     const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    let effectiveCounts: Record<string, number> = {};
-                                    if (dashHistory?.zoneDates) {
-                                      for (const [z, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length > 0) effectiveCounts[z] = prior.length;
-                                      }
-                                    } else {
-                                      effectiveCounts = dashHistory?.zoneCounts || {};
-                                    }
-                                    const placed = new Set(Object.keys(effectiveCounts));
+                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
+                                    const placed = new Set(recent14Keys);
                                     const getPillAccent = (ui: string): string => {
                                       if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
                                       if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
@@ -1393,17 +1561,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                                   {(() => {
                                     let pills: string[] = ["Z2", "RR"];
-                                    if (dashHistory && dashSlotKey && (dashSlotKey === mKey || dashSlotKey === wKey || dashSlotKey.startsWith('MRR') || dashSlotKey.startsWith('WRR')) && dashHistory.zoneDates) {
+                                    if (padHistory && padSlotKey && (padSlotKey === mKey || padSlotKey === wKey || padSlotKey.startsWith('MRR') || padSlotKey.startsWith('WRR'))) {
                                       const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const filteredDates: Record<string, string[]> = {};
-                                      for (const [ui, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length) filteredDates[ui] = prior;
-                                      }
-                                      const sorted = Object.entries(filteredDates)
-                                        .map(([ui, dates]) => ({ ui, latest: dates.sort().reverse()[0] || '' }))
-                                        .sort((a, b) => b.latest.localeCompare(a.latest));
-                                      pills = sorted.slice(0, 5).map(({ ui }) => {
+                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
+                                      pills = recent5.map((ui) => {
                                         if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
                                         if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
                                         if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
@@ -1445,16 +1606,49 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     return sa.provenance?.rationale || "Per-side fairness for restroom coverage.";
                                   })()}
                                 </div>
+                                {/* Initial xAI engine insight wiring (per-side via focusedSk) */}
+                                {onRequestEngineInsight && (
+                                  <div style={{ marginTop: 4 }}>
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!onRequestEngineInsight) return;
+                                        setPadInsight(null);
+                                        setPadInsightLoading(true);
+                                        try {
+                                          const insight = await onRequestEngineInsight(focusedSk);
+                                          setPadInsight(insight || "No additional insight available right now.");
+                                        } catch {
+                                          setPadInsight("xAI insight unavailable (check connection).");
+                                        } finally {
+                                          setPadInsightLoading(false);
+                                        }
+                                      }}
+                                      style={{
+                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
+                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
+                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
+                                      }}
+                                    >
+                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
+                                    </button>
+                                    {padInsight && (
+                                      <div style={{ marginTop: 3, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "3px 5px", borderRadius: 4 }}>
+                                        {padInsight}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
 
                           <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                            {/* All actions target the currently focused side in this dash (prevents cross-side overwrite bugs on add/refresh). focusedSk guarantees WRR when womens side active. */}
-                            <button onClick={() => { onGenderClick?.(focusedSk); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
-                            <button onClick={() => { onLiveUnassign?.(focusedSk); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
-                            <button onClick={() => { onGenderClick?.(focusedSk); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
-                            <button onClick={() => { onGenderClick?.(focusedSk); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
+                            {/* All actions target the currently focused side in this marker pad (prevents cross-side overwrite bugs on add/refresh). focusedSk guarantees WRR when womens side active. */}
+                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
+                            <button onClick={() => { onLiveUnassign?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
+                            <button onClick={(e) => { e.stopPropagation(); setPadCoverageSource(focusedSk); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
+                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
                           </div>
                         </div>
                       )}
@@ -1483,7 +1677,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               >
                 {auxDefs.map((def) => {
                   const key = def.key;
-                  const isDashed = dashSlotKey === key;
+                  const isPadOpen = padSlotKey === key;
                   const accent = getAuxAccent(key);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
@@ -1496,7 +1690,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         assignments={displayAssignments}
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
-                        onCardClick={handleCardClickForDash}
+                        onCardClick={handleCardClickForPad}
                         loading={loadingAssignments}
                         borderColor={cardBorders[key]}
                         isDraftMode={isDraftMode}
@@ -1508,9 +1702,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isDashed && (
+                      {isPadOpen && (
                         <div
-                          className="placement-dash absolute bottom-0 left-full ml-1.5 w-[268px] z-[60] overflow-hidden flex flex-col"
+                          className="placement-pad absolute bottom-0 left-full ml-1.5 w-[268px] z-[60] overflow-hidden flex flex-col"
                           style={{
                             borderRadius: 16,
                             background: "rgba(255,255,255,0.98)",
@@ -1525,7 +1719,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward) */}
                           <div style={{ position: "absolute", left: "-7px", bottom: "20px", width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderRight: "6px solid rgba(0,0,0,0.08)" }} />
 
-                          <button onClick={() => setDashSlotKey(null)} style={{ position: "absolute", bottom: 8, right: 8, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "#8E8E93", fontSize: 13, cursor: "pointer" }}>×</button>
+                          <button onClick={() => setPadSlotKey(null)} style={{ position: "absolute", bottom: 8, right: 8, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "#8E8E93", fontSize: 13, cursor: "pointer" }}>×</button>
 
                           {/* AUX header — premium avatar style (taller, larger comps) */}
                           <div style={{ padding: "11px 15px 7px 15px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1566,14 +1760,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
                           <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
-                            <button onClick={() => { onCardClick?.(key); setDashSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
+                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
                           </div>
 
                           {/* Ability to add TM on blank cards */}
                           {!a.tmName && (
                             <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                               <button
-                                onClick={() => { onCardClick?.(key); setDashSlotKey(null); }}
+                                onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
                                 style={{
                                   width: "100%",
                                   padding: "6px 8px",
@@ -1595,6 +1789,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {/* History sections only for assigned TMs */}
                           {a.tmName && (
                             <>
+                              {padCoverageSource === key ? (
+                                renderInlineCoverage(key, (tgt) => { if (onAddCoverage) { onAddCoverage(key, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
+                              ) : (
                               <div style={{ padding: "5px 12px 7px" }}>
                                 <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1619,33 +1816,58 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       transform: 'translate(-50%, -50%)',
                                     }} />
                                   </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15 }}>
-                                    <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                    <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                      <span style={{ color: accent, fontWeight: 700 }}>AUX <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let a = 0; const dh = dashHistory; if (dh?.zoneDates) Object.entries(dh.zoneDates).forEach(([ui,ds]) => { if (!/^Z\d+$/.test(ui) && !(ui.startsWith('MRR')||ui.startsWith('WRR')) && ds.some(d=>d<curIso)) a += ds.filter(d=>d<curIso).length; }); return a;
-                                      })()}</span></span>
-                                      <span style={{ color: "#8E8E93", fontWeight: 700 }}>OTHER <span style={{ color: "#111" }}>{(() => {
-                                        const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                        let o = 0; const dh = dashHistory; if (dh?.zoneDates) Object.entries(dh.zoneDates).forEach(([ui,ds]) => { if (/^Z\d+$/.test(ui) && ds.some(d=>d<curIso)) o += ds.filter(d=>d<curIso).length; }); return o;
-                                      })()}</span></span>
+                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
+                                    <div>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
+                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        <span style={{ color: accent, fontWeight: 700 }}>AUX <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
+                                          return recent.filter(k => !/^Z\d+$/.test(k) && !(k.startsWith('MRR')||k.startsWith('WRR'))).length;
+                                        })()}</span></span>
+                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>OTHER <span style={{ color: "#111" }}>{(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
+                                          return recent.filter(k => /^Z\d+$/.test(k)).length;
+                                        })()}</span></span>
+                                      </div>
+                                    </div>
+                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
+                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
+                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
+                                        {(() => {
+                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
+                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
+                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
+                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
+                                        })()}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                              )}
 
                               {/* LAST 14 PLACEMENTS GRID — full, same as zone (no support, T1/T2, prior filter, equal width colored pills) */}
                               <div style={{ padding: "5px 12px 7px" }}>
                                 <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 14 PLACEMENTS</div>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                                   {(() => {
+                                    // Gender-aware RR sides (consistent with zone + RR pads). Lookup may be for the aux-assigned TM.
+                                    const padA = displayAssignments[padSlotKey] || a;
+                                    const tmId = padA?.tmId;
+                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
+                                    const g = normalizeGender(rawGender);
+
                                     const locs: { ui: string; label: string }[] = [
                                       ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
-                                      ...RR_DEFS.flatMap((d) => [
-                                        { ui: `MRR${d.num}`, label: `RR${d.num}M` },
-                                        { ui: `WRR${d.num}`, label: `RR${d.num}W` },
-                                      ]),
+                                      // Only eligible RR side(s) for the current TM's gender
+                                      ...RR_DEFS.flatMap((d) => {
+                                        const sides: { ui: string; label: string }[] = [];
+                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
+                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
+                                        return sides;
+                                      }),
                                       ...auxDefs.filter((d) => !d.key.startsWith('SP')).map((d) => {
                                         let label = d.label || d.key;
                                         if (d.key.startsWith('TR')) { const num = d.key.replace(/\D/g, ''); label = `T${num}`; }
@@ -1653,16 +1875,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       }),
                                     ];
                                     const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    let effectiveCounts: Record<string, number> = {};
-                                    if (dashHistory?.zoneDates) {
-                                      for (const [z, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length > 0) effectiveCounts[z] = prior.length;
-                                      }
-                                    } else {
-                                      effectiveCounts = dashHistory?.zoneCounts || {};
-                                    }
-                                    const placed = new Set(Object.keys(effectiveCounts));
+                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
+                                    const placed = new Set(recent14Keys);
                                     const getPillAccent = (ui: string): string => {
                                       if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
                                       if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
@@ -1703,17 +1917,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                                   {(() => {
                                     let pills: string[] = ["Z9", "AUX"];
-                                    if (dashHistory && dashSlotKey === key && dashHistory.zoneDates) {
+                                    if (padHistory && padSlotKey === key) {
                                       const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const filteredDates: Record<string, string[]> = {};
-                                      for (const [ui, ds] of Object.entries(dashHistory.zoneDates)) {
-                                        const prior = (ds || []).filter((d: string) => d < currentIso);
-                                        if (prior.length) filteredDates[ui] = prior;
-                                      }
-                                      const sorted = Object.entries(filteredDates)
-                                        .map(([ui, dates]) => ({ ui, latest: dates.sort().reverse()[0] || '' }))
-                                        .sort((a, b) => b.latest.localeCompare(a.latest));
-                                      pills = sorted.slice(0, 5).map(({ ui }) => {
+                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
+                                      pills = recent5.map((ui) => {
                                         if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
                                         if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
                                         if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
@@ -1759,15 +1966,48 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     })}
                                   </div>
                                 )}
+                                {/* Initial xAI engine insight wiring */}
+                                {onRequestEngineInsight && (
+                                  <div style={{ marginTop: 4 }}>
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!onRequestEngineInsight || !padSlotKey) return;
+                                        setPadInsight(null);
+                                        setPadInsightLoading(true);
+                                        try {
+                                          const insight = await onRequestEngineInsight(padSlotKey);
+                                          setPadInsight(insight || "No additional insight available right now.");
+                                        } catch {
+                                          setPadInsight("xAI insight unavailable (check connection).");
+                                        } finally {
+                                          setPadInsightLoading(false);
+                                        }
+                                      }}
+                                      style={{
+                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
+                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
+                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
+                                      }}
+                                    >
+                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
+                                    </button>
+                                    {padInsight && (
+                                      <div style={{ marginTop: 3, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "3px 5px", borderRadius: 4 }}>
+                                        {padInsight}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
 
                           <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                            <button onClick={() => { onCardClick?.(key); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
-                            <button onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
-                            <button onClick={() => { onCardClick?.(key); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
-                            <button onClick={() => { onCardClick?.(key); setDashSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
+                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
+                            <button onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
+                            <button onClick={(e) => { e.stopPropagation(); setPadCoverageSource(key); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
+                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
                           </div>
                         </div>
                       )}

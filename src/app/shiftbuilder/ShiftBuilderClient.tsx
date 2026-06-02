@@ -5237,6 +5237,28 @@ function AuthedShiftBuilder() {
     });
   }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode]);
 
+  // Initial wiring for xAI engine insights surfaced in the unilateral marker pad (the attached "marker pad").
+  // Delegates to existing askGrok action with slot context. Later passes can include padHistory zoneDates, side, full fairness for richer per-placement narrative.
+  const handleBoardRequestEngineInsight = React.useCallback(async (slotKey: string, sideKey?: string) => {
+    const effectiveKey = sideKey || slotKey;
+    const storeAssignments = useShiftBuilderStore.getState().assignments || {};
+    const a = storeAssignments[effectiveKey] || {};
+    const tmName = a.tmName || "the assigned TM";
+    try {
+      const { askGrokForShiftSuggestions } = await import("@/app/shiftbuilder/actions");
+      const context = {
+        type: "slot" as const,
+        slotKey: effectiveKey,
+        currentAssignment: `${tmName} on ${effectiveKey}`,
+      };
+      const text = await askGrokForShiftSuggestions(context);
+      return text || `Current engine placement for ${effectiveKey} balances rotation, load, and coverage for ${tmName}.`;
+    } catch (e) {
+      console.warn("[marker pad] engine insight call failed", e);
+      return "Deeper xAI insight unavailable right now. Placement follows the active engine rules (eligibility, fairness Rot/Aff/Load, and coverage).";
+    }
+  }, []);
+
   return (
     <div className="h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative" style={{ background: "var(--sb-substrate, #FAFAF8)" }}>
       {/* ═══════════════════════════════════════════════════════════
@@ -5648,6 +5670,8 @@ function AuthedShiftBuilder() {
               setBreakGroupForSlot={setBreakGroupForSlot}
               onLiveAssign={handleBoardLiveAssign}
               onLiveUnassign={handleBoardLiveUnassign}
+              onAddCoverage={handleCmdkAddCoverage}
+              onRequestEngineInsight={handleBoardRequestEngineInsight}
               live={live}
               amOverlapDayName={amOverlapDayName}
               amOverlapDateNum={amOverlapDateNum}
