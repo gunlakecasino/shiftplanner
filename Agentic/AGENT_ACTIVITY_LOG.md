@@ -6,7 +6,16 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
-## 2026-06-05 16:30 — Grok 4.3 — FIXED: marker dash now appears on opposite (left) side for right-column restroom cards RR8 and RR10 (both womens and mens sides). Previously only zones had the isRightSideDash logic (Z4/Z5/Z9/Z10); RR dash was hardcoded left-full + left rail/tail/close. 
+## 2026-06-05 17:00 — Grok 4.3 — SHIPPED: commit + push for stacked per-side RR cards (W above M), opposite-side marker dash for RR8/RR10, height consistency + pinned names, women's coverage banners, dev preview build fix. tsc clean. Selective add (RRCard, Board, preview page, log only). Conventional commit + deploy/ tag + push --follow-tags.
+**User query**: "commit and push"
+**Artifacts**:
+- Commit: 3f9a5e2 "feat(shiftbuilder): stacked per-side RR cards (W above M for RR8/RR10), opposite-side marker dash, consistent row/group heights + pinned names, women's coverage banners, dev preview build fix"
+- Tag: deploy/2026-06-02-055909 (lightweight per ship skill).
+- Push: main updated (f0d0eec..3f9a5e2); tag followed. github.com:gunlakecasino/shiftplanner.git
+**Railway**: git push to main triggers railpack (strict pnpm build). Local CLI: "No linked project" (run `railway link` for follow-up). Monitor: `railway logs --build`, `railway deployment list`, `railway agent "Review latest deployment... commit 3f9a5e2"`. Dashboard: `railway open` after link.
+**Protocol**: Re-read Agentic/ (log/THIS_IS/AGENTS + ship/SKILL.md) at start. todo_write for ship steps + gates. tsc --noEmit --skipLibCheck clean (exit 0) before stage. git status --porcelain + scoped diff. Selective `git add` ONLY intentional (RRCard.tsx, ShiftBuilderBoard.tsx, phase1-preview/page.tsx, AGENT_ACTIVITY_LOG.md; ?? dev/ scaffolding ignored). Prepended this ship log. No cards shipped (RRCard internal layout only for user stack request; sacred appearances preserved).
+**Decisions**: Followed ship/SKILL.md exactly (preflight, selective, conventional msg with details, lightweight tag, push --follow-tags, monitoring cmds). Cumulative of RR stacked visual (from image request), opposite for RR8/10 (womens/mens), height fixes (groups, ZONES rows match, RR shorter, names pinned upper), per-side coverage for W, relative imports in dev preview (unblocked build from prior log). Continues 'seamless awe' unilateral dash + per-side RR.
+**Status**: Pushed. Ready for Railway deploy + prod test on /shiftbuilder (verify stacked RR8/10 with opposite dash, consistent heights, coverage on W sides, no aux overflow). Append complete.
 **User query**: "We need to add the marker dash appears on the opposite side for cards restroom 8 and 10 womens and mens"
 **Changes (only ShiftBuilderBoard.tsx)**:
 - Inside RR_DEFS.map: added `const isRightSideDash = [8, 10].includes(def.num);` (right cols in 5-col grid).
