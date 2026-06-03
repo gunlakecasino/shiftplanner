@@ -3,81 +3,29 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import type { PlacementCandidateProfile } from "@/lib/shiftbuilder/engineInsightForPlacement";
+import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import {
-  buildMatrixSlotKeysForTm,
   collectDeploymentSlotKeys,
-  computePlacementRotationBasics,
-  getLastPlacementSequence,
-  getSpreadPlacementCounts,
   PLACEMENT_SPREAD_NIGHTS,
   shouldShowPlacementFitChip,
-  type PlacementTmProfile,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import {
-  scorePlacementFit,
-  type PrerenderedPlacementFit,
-} from "@/app/shiftbuilder/components/placementFitScore";
+  computeSlotPlacementFit,
+  memberToPlacementProfile,
+  resolveSlotAssignmentRow,
+  type DraftAssignmentRow,
+  type SlotAssignmentRow,
+} from "@/app/shiftbuilder/components/placementFitForSlot";
+import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
-
-const LAST5_COUNT = 5;
-
-function memberProfile(
-  members: Array<Record<string, unknown>>,
-  tmId: string | undefined,
-): PlacementTmProfile | null {
-  if (!tmId) return null;
-  const m = members.find(
-    (mem) => mem.id === tmId || mem.tmId === tmId || mem.tm_id === tmId,
-  );
-  if (!m) return null;
-  return {
-    gender: m.gender as string | null | undefined,
-    gravePool: (m.gravePool ?? m.grave_pool) as string | null | undefined,
-    isAMOverlap: !!(m.isAMOverlap ?? m.is_am_overlap),
-    isPMOverlap: !!(m.isPMOverlap ?? m.is_pm_overlap),
-  };
-}
-
-function assignmentRowForSlot(
-  slotKey: string,
-  assignments: Record<string, { tmId?: string; tmName?: string; provenance?: { rationale?: string; fairnessSignals?: Record<string, number | string> } }>,
-  isDraftMode: boolean,
-  draftAssignments: Record<
-    string,
-    {
-      proposedTmId?: string;
-      proposedTmName?: string;
-      proposedClear?: boolean;
-    }
-  >,
-): { tmId?: string; tmName?: string; provenance?: { rationale?: string; fairnessSignals?: Record<string, number | string> } } | null {
-  const draft = draftAssignments[slotKey];
-  if (isDraftMode && draft && !draft.proposedClear && draft.proposedTmName) {
-    return {
-      tmId: draft.proposedTmId,
-      tmName: draft.proposedTmName,
-      provenance: assignments[slotKey]?.provenance,
-    };
-  }
-  const live = assignments[slotKey];
-  if (!live?.tmName && !live?.tmId) return null;
-  return live;
-}
+import type { PlacementTmProfile } from "@/app/shiftbuilder/components/placementPadHelpers";
 
 export type UsePlacementFitMapArgs = {
   enabled: boolean;
-  assignments: Record<string, { tmId?: string; tmName?: string; provenance?: { rationale?: string; fairnessSignals?: Record<string, number | string> } }>;
+  assignments: Record<string, SlotAssignmentRow>;
   isDraftMode?: boolean;
-  draftAssignments?: Record<
-    string,
-    {
-      proposedTmId?: string;
-      proposedTmName?: string;
-      proposedClear?: boolean;
-    }
-  >;
+  draftAssignments?: Record<string, DraftAssignmentRow>;
   members?: Array<Record<string, unknown>>;
   auxDefs: AuxDef[];
   currentIso: string;
@@ -172,7 +120,7 @@ export function usePlacementFitMap({
   const otherTmProfiles = useMemo(() => {
     const out: Record<string, PlacementTmProfile | null> = {};
     for (const id of tmIdsKey.split(",").filter(Boolean)) {
-      out[id] = memberProfile(members, id);
+      out[id] = memberToPlacementProfile(members, id);
     }
     return out;
   }, [tmIdsKey, members]);
@@ -194,7 +142,7 @@ export function usePlacementFitMap({
         })
         .slice(0, 14)
         .map((t) => {
-          const profile = memberProfile(members, t.tmId);
+          const profile = memberToPlacementProfile(members, t.tmId);
           const eligible = profile
             ? isEligibleForSlot(
                 {
@@ -228,7 +176,7 @@ export function usePlacementFitMap({
     for (const slotKey of slotKeys) {
       if (!shouldShowPlacementFitChip(slotKey)) continue;
 
-      const row = assignmentRowForSlot(
+      const row = resolveSlotAssignmentRow(
         slotKey,
         assignments,
         isDraftMode,
@@ -236,66 +184,19 @@ export function usePlacementFitMap({
       );
       const assigned = !!(row?.tmName || row?.tmId);
 
-      if (!assigned) {
-        out[slotKey] = scorePlacementFit({
-          slotKey,
-          assigned: false,
-          candidateProfiles: buildCandidates(slotKey),
-          preferredCandidateIds,
-        });
-        continue;
-      }
-
-      const tmId = row?.tmId;
-      const history = tmId ? histories[tmId] ?? null : null;
-      const spreadCounts = getSpreadPlacementCounts(
-        history,
-        PLACEMENT_SPREAD_NIGHTS,
-        currentIso,
-      );
-      const timesInSpread = spreadCounts.get(slotKey) ?? 0;
-      const last5 = getLastPlacementSequence(history, LAST5_COUNT, currentIso);
-      const currentTm = memberProfile(members, tmId);
-      const tmEligibleForSlot = currentTm
-        ? isEligibleForSlot(
-            {
-              gender: currentTm.gender,
-              gravePool: currentTm.gravePool,
-              isAMOverlap: currentTm.isAMOverlap,
-              isPMOverlap: currentTm.isPMOverlap,
-            },
-            slotKey,
-          )
-        : true;
-
-      const matrixSlotKeys = buildMatrixSlotKeysForTm(tmId, members, auxDefs);
-      const rotationBasics =
-        tmId && history
-          ? computePlacementRotationBasics(
-              history,
-              slotKey,
-              tmId,
-              matrixSlotKeys,
-              assignments,
-              histories,
-              currentIso,
-              PLACEMENT_SPREAD_NIGHTS,
-              currentTm,
-              otherTmProfiles,
-            )
-          : null;
-
-      out[slotKey] = scorePlacementFit({
+      out[slotKey] = computeSlotPlacementFit({
         slotKey,
-        tmName: row?.tmName,
-        assigned: true,
-        tmEligibleForSlot,
-        timesInSpread,
-        inLast5: last5.includes(slotKey),
-        padHistoryLoading: historiesLoading && !!tmId && !history,
-        rotationBasics,
-        rationale: row?.provenance?.rationale,
-        fairnessSignals: row?.provenance?.fairnessSignals,
+        assignments,
+        isDraftMode,
+        draftAssignments,
+        members,
+        auxDefs,
+        currentIso,
+        histories,
+        historiesLoading,
+        otherTmProfiles,
+        candidateProfiles: assigned ? undefined : buildCandidates(slotKey),
+        preferredCandidateIds: assigned ? undefined : preferredCandidateIds,
       });
     }
 

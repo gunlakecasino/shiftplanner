@@ -50,7 +50,6 @@ export interface ZoneCardProps {
   isLocked?: boolean;
   /** Screen-only rotation fit chip (excluded from print). */
   fitChip?: PrerenderedPlacementFit | null;
-  fitChipLoading?: boolean;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
@@ -70,7 +69,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
-  fitChipLoading = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -129,11 +127,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           </span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <PlacementFitChip
-            fit={fitChip}
-            loading={fitChipLoading && !!hasTM}
-            empty={isEmpty && !loading}
-          />
+          <PlacementFitChip fit={fitChip} />
           <BreakBadge value={currentBreak} onCycle={cycleBreak} />
         </div>
       </div>

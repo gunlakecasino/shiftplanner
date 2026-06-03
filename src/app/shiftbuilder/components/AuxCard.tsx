@@ -37,7 +37,6 @@ export interface AuxCardProps {
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
-  fitChipLoading?: boolean;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -57,7 +56,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
-  fitChipLoading = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -102,11 +100,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <PlacementFitChip
-            fit={fitChip}
-            loading={fitChipLoading && !!hasTM}
-            empty={isEmpty && !loading}
-          />
+          <PlacementFitChip fit={fitChip} />
           <BreakBadge value={currentBreak} onCycle={cycleBreak} />
         </div>
         {/* Explicit remove button for Aux slots (including Z9SR) so clearing is reliable and doesn't require drag or refresh */}

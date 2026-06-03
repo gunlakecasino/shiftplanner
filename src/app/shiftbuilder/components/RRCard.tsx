@@ -43,7 +43,6 @@ export interface RRCardProps {
   isLocked?: boolean;
   fitChipW?: PrerenderedPlacementFit | null;
   fitChipM?: PrerenderedPlacementFit | null;
-  fitChipLoading?: boolean;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -168,7 +167,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
-  fitChipLoading = false,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -226,11 +224,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip
-              fit={fitChipW}
-              loading={fitChipLoading && !wEmpty}
-              empty={wEmpty && !loading}
-            />
+            <PlacementFitChip fit={fitChipW} />
             <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
           </div>
         </div>
@@ -285,11 +279,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip
-              fit={fitChipM}
-              loading={fitChipLoading && !mEmpty}
-              empty={mEmpty && !loading}
-            />
+            <PlacementFitChip fit={fitChipM} />
             <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
           </div>
         </div>

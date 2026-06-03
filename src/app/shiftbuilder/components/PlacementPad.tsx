@@ -10,10 +10,8 @@ import {
   fitVerdictLabel,
   fitVerdictStyles,
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
-import {
-  computePrerenderedPlacementFit,
-  type PrerenderedPlacementFit,
-} from "./placementFitPrerender";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
+import { computeSlotPlacementFit } from "./placementFitForSlot";
 import type { PlacementInsightMode } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import {
   ZONE_DEFS,
@@ -75,6 +73,17 @@ export interface PlacementPadProps {
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
+  /** Board-computed instant fit (same object as card chip). */
+  boardPrerenderedFit?: PrerenderedPlacementFit;
+  isDraftMode?: boolean;
+  draftAssignments?: Record<
+    string,
+    {
+      proposedTmId?: string;
+      proposedTmName?: string;
+      proposedClear?: boolean;
+    }
+  >;
 }
 
 const PAD_W = 272;
@@ -582,6 +591,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   scheduledUnassigned = [],
   allEligibleTms,
   onAddOnCall,
+  boardPrerenderedFit,
+  isDraftMode = false,
+  draftAssignments = {},
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -837,57 +849,42 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const candidatePoolSize = scheduledUnassigned.length + (allEligibleTms?.length ?? 0);
 
-  const tmEligibleForSlot =
-    !a.tmName || !currentPlacementTm
-      ? true
-      : isEligibleForSlot(
-          {
-            gender: currentPlacementTm.gender,
-            gravePool: currentPlacementTm.gravePool,
-            isAMOverlap: currentPlacementTm.isAMOverlap,
-            isPMOverlap: currentPlacementTm.isPMOverlap,
-          },
-          slotKey,
-        );
-
   const preferredCandidateIds = React.useMemo(
     () => scheduledUnassigned.map((t) => t.tmId).filter(Boolean),
     [scheduledUnassigned],
   );
 
-  const prerenderedFit = React.useMemo(
-    () =>
-      computePrerenderedPlacementFit({
-        slotKey,
-        tmName: a.tmName,
-        assigned: !!a.tmName,
-        tmEligibleForSlot,
-        timesInSpread,
-        inLast5: last5Sequence.includes(slotKey),
-        padHistoryLoading: !!a.tmId && padHistoryLoading,
-        rotationBasics,
-        rationale: prov.rationale as string | undefined,
-        fairnessSignals: prov.fairnessSignals as
-          | Record<string, number | string>
-          | undefined,
-        candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
-        preferredCandidateIds: a.tmName ? undefined : preferredCandidateIds,
-      }),
-    [
+  const prerenderedFit = React.useMemo((): PrerenderedPlacementFit => {
+    if (boardPrerenderedFit) return boardPrerenderedFit;
+    return computeSlotPlacementFit({
       slotKey,
-      a.tmName,
-      a.tmId,
-      tmEligibleForSlot,
-      timesInSpread,
-      last5Sequence,
-      padHistoryLoading,
-      rotationBasics,
-      prov.rationale,
-      prov.fairnessSignals,
-      buildCandidateProfiles,
-      preferredCandidateIds,
-    ],
-  );
+      assignments,
+      isDraftMode,
+      draftAssignments,
+      members: members as Array<Record<string, unknown>>,
+      auxDefs,
+      currentIso,
+      histories: padHistory && a.tmId ? { [a.tmId]: padHistory } : {},
+      historiesLoading: !!a.tmId && padHistoryLoading,
+      candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
+      preferredCandidateIds: a.tmName ? undefined : preferredCandidateIds,
+    });
+  }, [
+    boardPrerenderedFit,
+    slotKey,
+    assignments,
+    isDraftMode,
+    draftAssignments,
+    members,
+    auxDefs,
+    currentIso,
+    padHistory,
+    a.tmId,
+    padHistoryLoading,
+    a.tmName,
+    buildCandidateProfiles,
+    preferredCandidateIds,
+  ]);
 
   const insightContextSig = React.useMemo(
     () =>

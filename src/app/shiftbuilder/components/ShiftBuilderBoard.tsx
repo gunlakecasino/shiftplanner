@@ -441,6 +441,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         scheduledUnassigned={scheduledUnassigned}
         allEligibleTms={allEligibleTms}
         onAddOnCall={onAddOnCall}
+        boardPrerenderedFit={fitBySlot[slotKey]}
+        isDraftMode={isDraftMode}
+        draftAssignments={draftAssignments}
       />
     );
   };
@@ -734,7 +737,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                         fitChip={fitBySlot[key]}
-                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -791,7 +793,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveUnassign={onLiveUnassign}
                         fitChipW={fitBySlot[wKey]}
                         fitChipM={fitBySlot[mKey]}
-                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -844,7 +845,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                         fitChip={fitBySlot[key]}
-                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
