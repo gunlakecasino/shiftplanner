@@ -64,6 +64,8 @@ export interface PlacementPadProps {
 }
 
 const PAD_W = 272;
+/** Max pad height — fits iPad landscape with internal scroll for overflow */
+const PAD_MAX_HEIGHT = 600;
 
 function anchorClass(anchor: PlacementPadAnchor): string {
   if (anchor === "left") return "placement-pad absolute top-0 right-full mr-1.5";
@@ -83,7 +85,7 @@ function computePortalStyle(
   const rect = host.getBoundingClientRect();
   const gap = 6;
   const padW = PAD_W;
-  const maxH = Math.min(window.innerHeight - 20, 480);
+  const maxH = Math.min(window.innerHeight - 24, PAD_MAX_HEIGHT);
 
   let left = rect.right + gap;
   let top = rect.top;
@@ -93,7 +95,8 @@ function computePortalStyle(
     top = rect.top;
   } else if (anchor === "bottom") {
     left = rect.right + gap;
-    top = rect.bottom;
+    // Pin bottom edge to host — avoid translateY(-100%) which jumps when content height changes
+    top = Math.max(8, rect.bottom - maxH);
   }
 
   if (left + padW > window.innerWidth - 8) {
@@ -107,27 +110,20 @@ function computePortalStyle(
     width: padW,
     zIndex: 200,
     maxHeight: maxH,
+    display: "flex",
+    flexDirection: "column",
     overflow: "hidden",
   };
 
-  if (anchor === "bottom") {
-    const bottomAlignedTop = rect.bottom;
-    const wouldOverflowTop = bottomAlignedTop - maxH < 8;
-    if (wouldOverflowTop) {
-      return { ...base, top: 8 };
+  if (anchor !== "bottom") {
+    let clampedTop = top;
+    if (clampedTop + maxH > window.innerHeight - 8) {
+      clampedTop = Math.max(8, window.innerHeight - maxH - 8);
     }
-    return {
-      ...base,
-      top: bottomAlignedTop,
-      transform: "translateY(-100%)",
-    };
+    return { ...base, top: clampedTop };
   }
 
-  let clampedTop = top;
-  if (clampedTop + maxH > window.innerHeight - 8) {
-    clampedTop = Math.max(8, window.innerHeight - maxH - 8);
-  }
-  return { ...base, top: clampedTop };
+  return { ...base, top };
 }
 
 function usePortalPlacementStyle(
@@ -135,13 +131,18 @@ function usePortalPlacementStyle(
   anchor: PlacementPadAnchor,
 ): React.CSSProperties | null {
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const update = useCallback(() => {
     if (!hostId) {
       setStyle(null);
       return;
     }
-    setStyle(computePortalStyle(hostId, anchor));
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setStyle(computePortalStyle(hostId, anchor));
+    });
   }, [hostId, anchor]);
 
   useLayoutEffect(() => {
@@ -149,6 +150,7 @@ function usePortalPlacementStyle(
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
@@ -577,8 +579,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const padEl = (
     <div
-      className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex max-h-[min(480px,calc(100vh-20px))] flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
-      style={usePortal ? portalStyle! : { width: PAD_W }}
+      className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
+      style={
+        usePortal
+          ? portalStyle!
+          : { width: PAD_W, maxHeight: PAD_MAX_HEIGHT, display: "flex", flexDirection: "column" }
+      }
       onClick={(e) => e.stopPropagation()}
     >
       {/* Accent rail */}
@@ -604,8 +610,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         ×
       </button>
 
-      <div className="flex flex-col">
-        {/* Header */}
+      {/* Header — fixed, never scrolls away */}
+      <div className="shrink-0">
         <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2 pr-10">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
@@ -633,11 +639,18 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             </div>
           )}
         </div>
-
         <div className="mx-3 border-t border-black/[0.06]" />
+      </div>
 
+      {/* Body — only this region scrolls when content is tall */}
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
+          showTmPicker ? "min-h-[300px]" : ""
+        }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         {showTmPicker ? (
-          <div className="px-2.5 py-2">
+          <div className="flex h-full min-h-[280px] flex-col px-2.5 py-2">
             <TmPicker
               tms={scheduledUnassigned}
               allTms={allEligibleTms}
