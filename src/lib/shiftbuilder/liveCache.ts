@@ -50,7 +50,33 @@ import { QueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "../supabase"; // re-exported singleton from the data layer root
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys"; // correct DB→UI reverse (z9_sr + aux → Z9SR, zone_9 + zone → Z9, etc.)
+import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore"; // main board store (what ShiftBuilderBoard subscribes to)
+
+/** Local YYYY-MM-DD — use everywhere live cache keys assignments (never UTC slice). */
+export function nightDateKey(date: Date): string {
+  return formatLocalDateISO(date);
+}
+
+/**
+ * After drag/swap paths that only patch the main board store, mirror into
+ * liveAssignmentsStore so MarkerPad / picker / padAssignments stay in sync.
+ */
+export function mirrorMainAssignmentsToLiveStore(date: Date): void {
+  const dateKey = nightDateKey(date);
+  const main = useShiftBuilderStore.getState().assignments ?? {};
+  const liveForNight: Record<string, LiveAssignment> = {};
+  for (const [uiKey, row] of Object.entries(main)) {
+    if (row?.tmId) {
+      liveForNight[uiKey] = {
+        tmId: row.tmId,
+        tmName: row.tmName ?? null,
+        isLocked: !!row.isLocked,
+      };
+    }
+  }
+  liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
+}
 
 // ============================================================================
 // ZUSTAND LIVE STORE (lightweight mirror of committed server state)

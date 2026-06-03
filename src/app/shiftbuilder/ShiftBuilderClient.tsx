@@ -103,7 +103,13 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
-import { initLiveCacheForNight, teardownAllLiveCache, liveAssignmentsStore } from "@/lib/shiftbuilder/liveCache";
+import {
+  initLiveCacheForNight,
+  teardownAllLiveCache,
+  liveAssignmentsStore,
+  mirrorMainAssignmentsToLiveStore,
+  nightDateKey,
+} from "@/lib/shiftbuilder/liveCache";
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -1991,13 +1997,22 @@ function AuthedShiftBuilder() {
   // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
   const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
   React.useEffect(() => {
-    const dateKey = selectedDay.date.toISOString().slice(0, 10);
-    const unsubscribe = liveAssignmentsStore.subscribe(
+    const dateKey = nightDateKey(selectedDay.date);
+    const bump = () => setLiveAssignVersion((v) => v + 1);
+    const unsubLive = liveAssignmentsStore.subscribe(
       (state) => state.assignmentsByNight[dateKey],
-      () => setLiveAssignVersion((v) => v + 1),
-      { fireImmediately: false }
+      bump,
+      { fireImmediately: false },
     );
-    return unsubscribe;
+    const unsubMain = useShiftBuilderStore.subscribe(
+      (state) => state.assignments,
+      bump,
+      { fireImmediately: false },
+    );
+    return () => {
+      unsubLive();
+      unsubMain();
+    };
   }, [selectedDay]);
 
   React.useEffect(() => {
@@ -2181,7 +2196,7 @@ function AuthedShiftBuilder() {
   // Teardown on unmount / major day change is handled via effect below.
   React.useEffect(() => {
     if (queryNightId) {
-      const cleanup = initLiveCacheForNight(queryNightId, selectedDay.date.toISOString().slice(0, 10), /* queryClient from useCurrentNight */ currentNight.queryClient);
+      const cleanup = initLiveCacheForNight(queryNightId, nightDateKey(selectedDay.date), /* queryClient from useCurrentNight */ currentNight.queryClient);
       return () => {
         cleanup?.();
       };
@@ -3670,17 +3685,16 @@ function AuthedShiftBuilder() {
   // This caused filled cards to appear "unassigned" inside the pad → it would
   // immediately show the big TM picker list instead of the normal occupant UI + Swap.
   const padAssignments = React.useMemo(() => {
-    const merged: Record<string, any> = { ...assignments };
-    if (currentNight?.assignments) {
-      Object.assign(merged, currentNight.assignments);
-    }
-    // Pull whatever the cards are currently rendering (this is the key fix for
-    // "clicking a filled card still shows the big assign list")
+    const dateKey = nightDateKey(selectedDay.date);
+    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+    const merged: Record<string, any> = {
+      ...assignments,
+      ...(currentNight?.assignments ?? {}),
+      ...liveForNight,
+    };
+    // Main board store + draft overlay win — never let stale live cache override drag/swap.
     Object.assign(merged, storeAssignments);
     Object.assign(merged, storeDraftAssignments);
-    const dateKey = selectedDay.date.toISOString().slice(0, 10);
-    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    Object.assign(merged, liveForNight);
     return merged;
   }, [assignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
@@ -4446,6 +4460,9 @@ function AuthedShiftBuilder() {
         } catch (e) {
           console.warn("[drag] direct store patch failed", e);
         }
+
+        mirrorMainAssignmentsToLiveStore(captureDate);
+        setLiveAssignVersion((v) => v + 1);
 
         // Persistence strategy for assigned drag (the cleanest path for both move and swap):
         // Do the optimistic visual update via the main store (already done above).

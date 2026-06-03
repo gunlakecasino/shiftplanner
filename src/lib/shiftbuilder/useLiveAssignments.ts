@@ -48,7 +48,7 @@ import { toast } from "sonner";
 import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
-import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import { formatLocalDateISO, type DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
 import {
   resolveEffectiveBreakGroup,
@@ -83,7 +83,7 @@ export interface UseLiveAssignmentsResult {
 
 export function useLiveAssignments(selectedDay: DayDef) {
   const queryClient = useQueryClient();
-  const dateKey = selectedDay.date.toISOString().slice(0, 10);
+  const dateKey = formatLocalDateISO(selectedDay.date);
 
   // Ensure realtime is listening for this night (idempotent).
   // The caller (ShiftBuilderClient) should call initLiveCacheForNight once we have a real nightId.
