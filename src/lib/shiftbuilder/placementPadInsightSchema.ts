@@ -23,7 +23,13 @@ export const PlacementPadInsightSchema = z.object({
   swapRecommendations: z
     .array(
       z.object({
-        summary: z.string().min(1).max(280),
+        summary: z
+          .string()
+          .min(1)
+          .max(280)
+          .describe(
+            "Bilateral swap only: both slots must have a TM tonight. Never swap into empty/open/unassigned slots — use rankedAssignees or fitSummary for assigns.",
+          ),
         priority: z.enum(["high", "medium", "low"]),
       }),
     )

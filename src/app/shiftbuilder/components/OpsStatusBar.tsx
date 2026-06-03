@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { hydrateAiUsageGlobals } from "@/lib/shiftbuilder/aiUsageTracker";
 
 /**
  * OpsStatusBar (permanent, production-visible)
@@ -12,7 +13,7 @@ import React, { useEffect } from "react";
  *   - Day-switch performance (data ms from worker+store + paint delta)
  *   - Realtime connection health (green LIVE / amber / red)
  *   - Server latency (last successful Supabase roundtrip)
- *   - AI session tokens/cost (always visible "ai 0.0k ~$0.00" for the requested session spend tracking)
+ *   - xAI tokens/cost — rolling 30-day totals (localStorage); session breakdown in tooltip
  *
  * Design constraints:
  *   - Display-only (no tap targets, no popovers per spec)
@@ -62,6 +63,8 @@ function getPillStyles(): string {
 /** Idempotent. Creates (or reuses) the body-fixed pill and starts the 250ms poller if needed. Safe to call from anywhere (enterCanvas, effects, early boot). */
 export function ensureOpsStatusBar(): void {
   if (typeof document === "undefined" || typeof window === "undefined") return;
+
+  hydrateAiUsageGlobals();
 
   // Clean any legacy dev pill that could be in the way.
   const old = document.getElementById("dev-day-switch-pill");
@@ -124,20 +127,55 @@ export function ensureOpsStatusBar(): void {
       rt === "LIVE" ? "#22c55e" :
       rt === "SYNCING" ? "#eab308" : "#ef4444";
 
-    // Always show ai segment (0.0k ~$0.00 until first usage). This guarantees the "session tokens" pill
-    // the operator requested is visible from first canvas paint, even on hard refresh before any Grok calls.
-    let aiTokens = 0;
-    let aiCost = 0;
-    const aiRaw = (window as any).__aiSessionUsage as { totalTokens?: number; estimatedCostUsd?: number } | undefined;
-    if (aiRaw) {
-      aiTokens = aiRaw.totalTokens || 0;
-      aiCost = aiRaw.estimatedCostUsd || 0;
+    // Rolling 30-day xAI totals (persisted in localStorage via aiUsageTracker).
+    let ai30Tokens = 0;
+    let ai30Cost = 0;
+    let ai30Calls = 0;
+    const ai30Raw = (window as any).__aiUsage30d as {
+      totalTokens?: number;
+      estimatedCostUsd?: number;
+      callCount?: number;
+    } | undefined;
+    if (ai30Raw) {
+      ai30Tokens = ai30Raw.totalTokens || 0;
+      ai30Cost = ai30Raw.estimatedCostUsd || 0;
+      ai30Calls = ai30Raw.callCount || 0;
     } else {
-      // Synchronously seed the global on first ensure so poll always has shape and ai segment is live.
-      const seeded = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUsd: 0, callCount: 0 };
-      (window as any).__aiSessionUsage = seeded;
+      const seeded30 = {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        callCount: 0,
+        windowDays: 30,
+      };
+      (window as any).__aiUsage30d = seeded30;
     }
-    const aiText = `<span style="color:#3a3a3c;margin:0 1px">·</span><span style="color:#a1a1aa;margin-right:1px">ai</span><span style="font-weight:600;color:#fff">${(aiTokens / 1000).toFixed(1)}k</span><span style="color:#a1a1aa;margin:0 2px">~</span><span style="font-weight:600;color:#fff">$${aiCost.toFixed(2)}</span>`;
+
+    let sessionTokens = 0;
+    let sessionCost = 0;
+    let sessionCalls = 0;
+    const sessionRaw = (window as any).__aiSessionUsage as {
+      totalTokens?: number;
+      estimatedCostUsd?: number;
+      callCount?: number;
+    } | undefined;
+    if (sessionRaw) {
+      sessionTokens = sessionRaw.totalTokens || 0;
+      sessionCost = sessionRaw.estimatedCostUsd || 0;
+      sessionCalls = sessionRaw.callCount || 0;
+    } else {
+      const seededSession = {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        callCount: 0,
+      };
+      (window as any).__aiSessionUsage = seededSession;
+    }
+
+    const aiText = `<span style="color:#3a3a3c;margin:0 1px">·</span><span style="color:#a1a1aa;margin-right:1px">ai30</span><span style="font-weight:600;color:#fff">${(ai30Tokens / 1000).toFixed(1)}k</span><span style="color:#a1a1aa;margin:0 2px">~</span><span style="font-weight:600;color:#fff">$${ai30Cost.toFixed(2)}</span>`;
 
     p.innerHTML = `
       <span style="color:#a1a1aa;margin-right:1px">day</span>
@@ -152,7 +190,7 @@ export function ensureOpsStatusBar(): void {
       <span style="font-weight:600;color:#fff">${latencyText}</span>
       ${aiText}
     `;
-    p.title = `Ops telemetry — day switch: ${perfText} | realtime: ${rt} | server: ${latencyText} | ai session: ${aiTokens} tokens (~$${aiCost.toFixed(2)}). Low-cost defaults (reasoning=low) active for insights.`;
+    p.title = `Ops telemetry — day switch: ${perfText} | realtime: ${rt} | server: ${latencyText} | xAI 30d: ${ai30Tokens} tokens (~$${ai30Cost.toFixed(2)}, ${ai30Calls} calls) | session: ${sessionTokens} tokens (~$${sessionCost.toFixed(2)}, ${sessionCalls} calls). Persisted ${30} days on this device.`;
   };
 
   update();

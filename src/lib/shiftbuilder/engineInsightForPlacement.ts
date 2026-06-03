@@ -7,6 +7,12 @@ import { generateObject, generateText } from "ai";
 import { createGrokSuggestionModel } from "@/lib/shiftbuilder/grokClient";
 import { getPlacementOrderText, getEligibilityRulesText } from "@/lib/shiftbuilder/placement";
 import {
+  getXaiFillOrderHardRules,
+  getXaiSwapHardRules,
+  formatFillOrderBoardContext,
+  sanitizePlacementPadInsight,
+} from "@/lib/shiftbuilder/xaiFillOrderContract";
+import {
   PlacementPadInsightSchema,
   formatPlacementPadInsightText,
   type PlacementPadInsight,
@@ -59,6 +65,10 @@ export type EngineInsightContext = {
   rotationBasicsText?: string;
   /** Client fingerprint — cache invalidation when board/history changes. */
   contextSig?: string;
+  /** Slot keys with a TM assigned tonight — drives fill-order guard context. */
+  filledSlotKeys?: string[];
+  /** Slot keys on the board with no TM — swap into these is forbidden. */
+  emptySlotKeys?: string[];
   /** Instant prerender from placementFitScore — xAI may override with verdictOverrideReason. */
   prerenderVerdict?: string;
   prerenderSummary?: string;
@@ -80,7 +90,14 @@ export type EngineInsightResult = {
 const STATIC_FEW_SHOTS = `EXAMPLE (zone Z3, assigned):
 Headline: Melissa belongs on Z3 tonight after RR/admin cleared.
 Why: prior_run_continuity on Z3 (2/30 nights) plus pair_affinity 0.72 with Jamie on Z2; pulling to Z5 would spike count_8w there.
-Swaps: Only suggest eligible zone↔zone or RR↔RR gender matches — never Admin or overlap cards.
+Swaps: Bilateral only (both slots occupied). Zone↔zone or RR↔RR gender match — never Admin, overlap, empty targets, or restroom↔zone.
+
+EXAMPLE (Z3, assigned — FORBIDDEN pattern):
+WRONG: "Move Chris from MRR6 to Z3 for rotation." RIGHT: "Chris stays on MRR6; assign a different grave TM to Z3 if open."
+
+EXAMPLE (Z4 unassigned):
+Headline: Staff Z4 after restrooms — best pick is Jamie.
+Why: Slot empty; rank Jamie first (0× Z4 in 30, eligible full-grave). swapRecommendations: [].
 
 EXAMPLE (WRR4, assigned):
 Headline: Alex fits WRR4 as the womens chain closes.
@@ -112,22 +129,29 @@ function buildAnalystSystemPrompt(ctx: EngineInsightContext): string {
     kind === "rr"
       ? "Focus on restroom chain order, gender rules (MRR male-only, WRR female-only), and paired coverage with adjacent RR slots."
       : kind === "zone"
-        ? "Focus on full-grave zone continuity, neighbor affinity on the artboard, and rotation vs count_8w tradeoffs."
+        ? "Focus on full-grave zone continuity, neighbor affinity on the artboard, and rotation vs count_8w tradeoffs. NEVER pull someone off MRR/WRR onto this zone — assign unassigned grave TMs instead."
         : kind === "aux"
           ? "Focus on full-night aux coverage, sweep/load, and who is already committed on zones/RR."
           : "Respect eligibility; do not recommend overlap or admin swaps.";
+
+  const hardRules = getXaiFillOrderHardRules();
 
   return `You are the GRAVE placement analyst for a single expert operator (Brian). Your job is decisive, floor-ready judgment — not generic advice.
 
 VOICE: 3–5 tight sentences in whyTonight; headline is one crisp line. Name people and slots. Never say "you". Never re-list the full fill order verbatim.
 
-AUTHORITY: The DETERMINISTIC FACTS block below is ground truth from the engine and history. Use fairnessSignals and engine rationale when present. If rotationBrief lists swap lanes, refine them — do not invent ineligible swaps (no Admin, no Overlap OL-*, no cross-gender RR).
+FILL ORDER (CONSTITUTION — overrides rotation, affinity, and convenience):
+${hardRules}
+
+${getXaiSwapHardRules()}
+
+AUTHORITY: The DETERMINISTIC FACTS block below is ground truth from the engine and history. Use fairnessSignals and engine rationale when present. If rotationBrief lists swap lanes, refine them — do not invent ineligible swaps (no Admin, no Overlap OL-*, no cross-gender RR, no swap into empty slots, no restroom↔zone moves). NEVER recommend staffing a lower-priority core slot while higher-priority core slots in the JSON order remain empty.
 
 ${kindFocus}
 
 OUTPUT: Structured JSON only (schema enforced). REQUIRED: fitSummary (one plain sentence) and fitVerdict (strong_fit | acceptable | questionable | poor_fit | needs_swap).
 
-INSTANT PRERENDER: When PRERENDER block is present, treat it as the default verdict. You MAY change fitVerdict/fitSummary only if deterministic facts clearly support a different judgment — then set verdictOverrideReason (one short sentence). Questionable only when a better-suited placement or swap exists; repeat exposure (2×–3× in 30) alone is acceptable if no better gap. Unassigned slots: fitSummary must name one best pick.
+INSTANT PRERENDER: When PRERENDER block is present, treat it as the default verdict. You MAY change fitVerdict/fitSummary only if deterministic facts clearly support a different judgment — then set verdictOverrideReason (one short sentence). Questionable only when a better-suited placement or bilateral swap exists; repeat exposure (2×+ in 30, or in last-5 trail) alone is acceptable if no better gap — use strong_fit for 0–1× spread and not in last-5. Unassigned slots: fitSummary must name one best pick; swapRecommendations MUST be [].
 
 REFERENCE CONTRACT (do not paste back verbatim):
 ${orderText}
@@ -137,13 +161,30 @@ ${priorGood}
 ${STATIC_FEW_SHOTS}`;
 }
 
+function assignmentsFromFilledKeys(
+  filledSlotKeys?: string[],
+): Record<string, { tmId: string }> {
+  const map: Record<string, { tmId: string }> = {};
+  for (const key of filledSlotKeys ?? []) {
+    if (key) map[key] = { tmId: "assigned" };
+  }
+  return map;
+}
+
 function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
   const mode = ctx.mode ?? "deep";
+  const boardAssignments = assignmentsFromFilledKeys(ctx.filledSlotKeys);
+  const fillOrderCtx = formatFillOrderBoardContext(ctx.slotKey, boardAssignments);
+
   const lines: string[] = [
     `MODE: ${mode}`,
     `Slot: ${ctx.slotKey}`,
+    fillOrderCtx,
     ctx.isRR ? `RR side: ${ctx.rrSide ?? "n/a"}` : null,
     `Assigned TM: ${ctx.tmName || "(unassigned)"}`,
+    ctx.emptySlotKeys?.length
+      ? `Empty slots tonight (assign only — never swap into): ${ctx.emptySlotKeys.slice(0, 24).join(", ")}`
+      : null,
     "",
     "=== DETERMINISTIC FACTS ===",
     ctx.rotationBrief ? `Rotation / swaps:\n${ctx.rotationBrief}` : null,
@@ -184,7 +225,7 @@ function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
   } else {
     lines.push(
       "",
-      "Explain why this placement fits tonight OR what to change. Populate swapRecommendations only for legal, high-value swaps already implied in rotation facts.",
+      "Explain why this placement fits tonight OR what to change. swapRecommendations: bilateral swaps only (both slots occupied); never swap into empty slots listed above.",
     );
   }
 
@@ -213,7 +254,21 @@ function cacheKeyFor(ctx: EngineInsightContext, mode: PlacementInsightMode): str
     sig: ctx.contextSig,
     rot: ctx.rotationBrief?.slice(0, 200),
     board: ctx.currentContext?.slice(0, 120),
+    guard: "v3-cross-tier",
   });
+}
+
+function guardInsightResult(
+  insight: PlacementPadInsight,
+  ctx: EngineInsightContext,
+): PlacementPadInsight {
+  const boardAssignments = assignmentsFromFilledKeys(ctx.filledSlotKeys);
+  const slotUnassigned =
+    !ctx.tmName || ctx.tmName === "Unassigned" || !boardAssignments[ctx.slotKey];
+  return sanitizePlacementPadInsight(insight, ctx.slotKey, boardAssignments, {
+    emptySlotKeys: ctx.emptySlotKeys,
+    slotUnassigned,
+  }).insight;
 }
 
 /** Primary analyst — structured output, medium reasoning for quality. */
@@ -239,6 +294,15 @@ export async function runPlacementPadAnalyst(
 
   const key = cacheKeyFor(ctx, mode);
   const cached = getInsightCache<EngineInsightResult>(key);
+  if (cached?.structured) {
+    const guarded = guardInsightResult(cached.structured, ctx);
+    return {
+      ...cached,
+      structured: guarded,
+      text: formatPlacementPadInsightText(guarded),
+      cached: true,
+    };
+  }
   if (cached) {
     return { ...cached, cached: true };
   }
@@ -264,9 +328,26 @@ export async function runPlacementPadAnalyst(
     });
 
     if (object) {
+      const boardAssignments = assignmentsFromFilledKeys(ctx.filledSlotKeys);
+      const slotUnassigned =
+        !ctx.tmName || ctx.tmName === "Unassigned" || !boardAssignments[ctx.slotKey];
+      const { insight: sanitized, stripped } = sanitizePlacementPadInsight(
+        object,
+        ctx.slotKey,
+        boardAssignments,
+        {
+          emptySlotKeys: ctx.emptySlotKeys,
+          slotUnassigned,
+        },
+      );
+      if (stripped.length > 0) {
+        console.warn(
+          `[placementPadAnalyst] guard stripped ${stripped.length} illegal swap line(s) for ${ctx.slotKey}`,
+        );
+      }
       const result: EngineInsightResult = {
-        text: formatPlacementPadInsightText(object),
-        structured: object,
+        text: formatPlacementPadInsightText(sanitized),
+        structured: sanitized,
         usage: {
           inputTokens: usage?.promptTokens,
           outputTokens: usage?.completionTokens,

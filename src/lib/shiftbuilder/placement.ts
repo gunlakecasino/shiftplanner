@@ -464,6 +464,23 @@ export function validatePlacementOrder(auxDefs: AuxDef[]): string[] {
  * Returns the exact PLACEMENT_ORDER as a human-readable string
  * suitable for injection into LLM system prompts.
  */
+/**
+ * Re-export for prompts and guards — single xAI constitution block.
+ */
+export {
+  getXaiFillOrderHardRules,
+  getXaiSwapHardRules,
+  assignViolatesFillOrder,
+  swapViolatesFillOrder,
+  swapViolatesOccupancy,
+  swapViolatesCrossTierFamily,
+  areSwapLanePeers,
+  slotSwapFamily,
+  textSuggestsCrossTierMove,
+  sanitizePlacementPadInsight,
+  formatFillOrderBoardContext,
+} from "./xaiFillOrderContract";
+
 export function getPlacementOrderText(): string {
   return `AUTHORITATIVE PLACEMENT / FILL ORDER (strict, non-negotiable unless impossible due to hard constraints):
 

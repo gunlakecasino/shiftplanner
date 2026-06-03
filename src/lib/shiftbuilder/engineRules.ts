@@ -30,6 +30,7 @@ import {
   type AuxDef,
   type CoveragePlannerResult,
 } from "./placement";
+import { getXaiFillOrderHardRules, getXaiSwapHardRules } from "./xaiFillOrderContract";
 
 // Wire in the new granular AI-native skill as the preferred source for eligibility
 import {
@@ -250,6 +251,12 @@ export class EngineRules {
     return `
 # GRAVE Shift Placement Rules Engine
 
+## 0. Fill Order Constitution (xAI — non-negotiable)
+${getXaiFillOrderHardRules()}
+
+## 0b. Swap vs Assign (xAI — non-negotiable)
+${getXaiSwapHardRules()}
+
 ## 1. Placement Sequence (Strict Order)
 ${this.getPlacementOrderAsText()}
 
@@ -271,11 +278,12 @@ Key signals include:
 - within_repeat (hard constraint)
 
 ## 4. Guidance for Intelligent Agents
-You must respect all hard eligibility rules. 
-You may use the scoring signals as strong guidance, but you have authority to override the pure mathematical top pick when higher-order context (operator notes, rotation health, team dynamics, tonight-specific conditions) justifies it.
+You must respect all hard eligibility rules and the fill-order constitution (PLACEMENT_ORDER / coverage tiers).
+You may override WHICH candidate fills a slot when higher-order context justifies it — never reorder which slots are filled first.
+The deterministic engine walks the sequence; your job is to pick the best eligible TM per slot, not to skip restrooms/zones for convenience.
 
 The deterministic engine provides the constraint system and candidate generation.
-Your job as the intelligent layer is to make final placement decisions that optimize for real-world outcomes the math cannot fully see.
+Your job as the intelligent layer is to optimize WHO is placed while the fill sequence remains non-negotiable.
 `.trim();
   }
 

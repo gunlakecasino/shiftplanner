@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import {
+  estimateAiCostUsd,
+  hydrateAiUsageGlobals,
+  recordAiUsageEvent,
+} from '@/lib/shiftbuilder/aiUsageTracker';
 import type { AuxDef } from '@/lib/shiftbuilder/placement';
 import type { EngineAnalysis, HumanFeedback, TrainingExample } from '@/lib/shiftbuilder/ai/types';
 
@@ -232,9 +237,7 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         const newOutput = state.aiSessionUsage.outputTokens + outputTokens;
         const newTotal = newInput + newOutput;
         // Rates: $1.25/M input, $2.50/M output for grok-4.3 (see previous cost discussion). Fast models ~6x cheaper.
-        const INPUT_RATE = 1.25 / 1_000_000;
-        const OUTPUT_RATE = 2.50 / 1_000_000;
-        const costDelta = (inputTokens * INPUT_RATE) + (outputTokens * OUTPUT_RATE);
+        const costDelta = estimateAiCostUsd(inputTokens, outputTokens);
         const newCost = state.aiSessionUsage.estimatedCostUsd + costDelta;
         const newUsageState = {
           inputTokens: newInput,
@@ -247,24 +250,25 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         };
         if (typeof window !== 'undefined') {
           (window as any).__aiSessionUsage = newUsageState;
+          recordAiUsageEvent({ inputTokens, outputTokens, model, reasoningEffort });
         }
         return { aiSessionUsage: newUsageState };
       }),
     clearAiSessionUsage: () => {
+      const cleared = {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        callCount: 0,
+        lastModel: undefined,
+        lastReasoningEffort: undefined,
+      };
       if (typeof window !== 'undefined') {
-        delete (window as any).__aiSessionUsage;
+        (window as any).__aiSessionUsage = cleared;
+        hydrateAiUsageGlobals(cleared);
       }
-      set({
-        aiSessionUsage: {
-          inputTokens: 0,
-          outputTokens: 0,
-          totalTokens: 0,
-          estimatedCostUsd: 0,
-          callCount: 0,
-          lastModel: undefined,
-          lastReasoningEffort: undefined,
-        },
-      });
+      set({ aiSessionUsage: cleared });
     },
 
     // Direct "Apply Roster" feed from Sudo Weekly Roster tab
@@ -320,7 +324,7 @@ if (typeof window !== "undefined") {
     lastModel: undefined,
     lastReasoningEffort: undefined,
   };
-  (window as any).__aiSessionUsage = initAi;
+  hydrateAiUsageGlobals(initAi);
 }
 
 // Optional: Dev-only subscribe for debugging day-switch impact

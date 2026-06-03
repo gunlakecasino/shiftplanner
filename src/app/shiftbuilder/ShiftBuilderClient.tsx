@@ -5202,6 +5202,12 @@ function AuthedShiftBuilder() {
       slotSpecificHistory: extra.slotSpecificHistory,
       currentContext: extra.currentContext,
       suggestedCandidates: extra.suggestedCandidates,
+      filledSlotKeys: Object.entries(storeAssignments)
+        .filter(([, row]) => !!(row as { tmId?: string })?.tmId)
+        .map(([key]) => key),
+      emptySlotKeys: Object.entries(storeAssignments)
+        .filter(([, row]) => !(row as { tmId?: string })?.tmId)
+        .map(([key]) => key),
     };
 
     try {
@@ -5669,18 +5675,6 @@ function AuthedShiftBuilder() {
             {/* Quick Action Fan removed... */}
           </div> {/* /print-stage-inner (the scaled content) */}
 
-          {deploymentRotationFitEnabled && (
-            <RotationHealthFloater
-              visible
-              placement="below-page"
-              auxDefs={auxDefsForFit}
-              assignments={storeAssignmentsForFit}
-              fitBySlot={deploymentFitBySlot}
-              isDraftMode={isDraftMode}
-              draftAssignments={draftAssignments}
-            />
-          )}
-
           {/* Unscaled artboard overlay — centered inside the visual (scaled-size) frame.
               This + the relative wrapper above restore proper containment while giving
               Command Palette true "center of the artboard" behavior at 1:1 size. */}
@@ -6050,6 +6044,18 @@ function AuthedShiftBuilder() {
 
       {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
       {viewMode === 'canvas' && <OpsStatusBar />}
+
+      {viewMode === 'canvas' && deploymentRotationFitEnabled && (
+        <RotationHealthFloater
+          visible
+          placement="above-ops-pill"
+          auxDefs={auxDefsForFit}
+          assignments={storeAssignmentsForFit}
+          fitBySlot={deploymentFitBySlot}
+          isDraftMode={isDraftMode}
+          draftAssignments={draftAssignments}
+        />
+      )}
 
       {/* Back to Launchpad — positioned below the custom top nav bar so it doesn't cover it.
           Higher z-index to sit above all header elements. Moved down to ~76px to clear the

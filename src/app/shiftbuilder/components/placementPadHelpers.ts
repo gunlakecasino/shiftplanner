@@ -1,7 +1,7 @@
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import { ZONE_DEFS, RR_DEFS } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import { isEligibleForSlot, normalizeGender } from "@/lib/shiftbuilder/placement";
+import { isEligibleForSlot, normalizeGender, areSwapLanePeers } from "@/lib/shiftbuilder/placement";
 
 /** Minimal TM fields for swap / eligibility checks. */
 export type PlacementTmProfile = {
@@ -31,6 +31,7 @@ export function canSuggestSwapBetween(
   otherSlotKey: string,
 ): boolean {
   if (!currentTm || !otherTm) return false;
+  if (!areSwapLanePeers(currentSlotKey, otherSlotKey)) return false;
   const cur = normalizeTmForEligibility(currentTm);
   const other = normalizeTmForEligibility(otherTm);
   return (

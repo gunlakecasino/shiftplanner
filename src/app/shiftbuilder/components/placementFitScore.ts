@@ -5,6 +5,7 @@ import {
   isSwapEligibleSlotKey,
   type PlacementRotationBasics,
 } from "./placementPadHelpers";
+import { areSwapLanePeers } from "@/lib/shiftbuilder/placement";
 
 export type PrerenderedPlacementFit = {
   fitVerdict: PlacementFitVerdict;
@@ -46,7 +47,10 @@ function rotationGapSlots(
   currentSlotKey: string,
 ): string[] {
   return (basics?.notRecentlyPlaced ?? []).filter(
-    (k) => k !== currentSlotKey && isSwapEligibleSlotKey(k),
+    (k) =>
+      k !== currentSlotKey &&
+      isSwapEligibleSlotKey(k) &&
+      areSwapLanePeers(currentSlotKey, k),
   );
 }
 
@@ -193,37 +197,23 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     };
   }
 
-  if (times === 0) {
+  // Strong fit: light spread load (0–1× in 30), not in last-5 trail, no better gap elsewhere.
+  if (times <= 1 && !inLast5) {
     const engineOk = !!input.rationale;
     return {
-      fitVerdict: engineOk ? "acceptable" : "acceptable",
+      fitVerdict: "strong_fit",
       fitSummary: engineOk
-        ? `${name} on ${slotLabel} — engine placement; first exposure in the 30-night spread.`
-        : `${name} on ${slotLabel} — acceptable; no recent spread history here.`,
+        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.`
+        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.`,
       fitFactLine: buildFactLine([
         spreadFact,
-        engineOk ? "engine continuity" : null,
-        gapFact,
+        eightFact,
+        engineOk ? "engine continuity" : gapFact,
       ]),
     };
   }
 
-  if (input.rationale && times <= 1 && !inLast5) {
-    return {
-      fitVerdict: "strong_fit",
-      fitSummary: `${name} is a strong fit on ${slotLabel} tonight.`,
-      fitFactLine: buildFactLine([spreadFact, eightFact, "matches engine placement"]),
-    };
-  }
-
-  if (times === 1 && !inLast5) {
-    return {
-      fitVerdict: "acceptable",
-      fitSummary: `${name} fits ${slotLabel} — light spread exposure, no better gap tonight.`,
-      fitFactLine: buildFactLine([spreadFact, eightFact, gapFact]),
-    };
-  }
-
+  // Acceptable: repeat exposure (2×+) or back-to-back in last-5 — still fine unless a better gap exists.
   if (times >= 2 || inLast5) {
     return {
       fitVerdict: "acceptable",

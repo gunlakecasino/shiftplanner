@@ -21,6 +21,7 @@
 import type { CoveragePlannerResult, SlotRanking } from "./placement";
 import type { EngineConfig } from "./engineConfig";
 import { getPlacementOrderText, getEligibilityRulesText } from "./placement";
+import { getXaiFillOrderHardRules, getXaiSwapHardRules } from "./xaiFillOrderContract";
 import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
 import { buildFewShotCorrectionsBlock } from "./ai/promptUtils"; // wire AI Lab feedback into production placements
 
@@ -239,10 +240,16 @@ export function buildGrokEngineSystemPrompt(snapshot: GrokEngineSnapshot): strin
 The deterministic engine (defined in code + live engine_config + historical matrix) acts as the authoritative **Rules Engine**.
 
 Your job is to produce high-quality placements while deeply respecting that rule system.
-You may use the provided per-slot candidate rankings and their scores as strong guidance,
-but you have the authority (and responsibility) to make final placement decisions using
-higher-order judgment the pure math cannot capture: operator intent from notes, rotation health,
-team dynamics, risk posture for tonight, and patterns not fully encoded in the weights.
+You may override WHICH CANDIDATE fills a slot (rotation health, notes, chemistry) — you may
+NEVER reorder which slots get filled first. The engine walk order is constitutional.
+
+=== FILL ORDER (NON-NEGOTIABLE) ===
+
+${getXaiFillOrderHardRules()}
+
+=== SWAP vs ASSIGN (NON-NEGOTIABLE) ===
+
+${getXaiSwapHardRules()}
 
 === AUTHORITATIVE RULES ENGINE ===
 
@@ -275,9 +282,10 @@ CRITICAL CONSTRAINTS:
 - The \`reason\` field is mandatory for every pick.
 
 GUIDANCE:
-- The deterministic engine has already done the hard filtering and weighted scoring.
-  Treat its output as a very strong recommendation, not as gospel.
-- Override the top candidate when higher-order context justifies it:
+- The deterministic engine has already walked PLACEMENT_ORDER sequentially. Your picks must
+  align with that sequence — only choose among each slot's ranked candidates; do not skip
+  ahead to staff a zone while restrooms or earlier core slots are still empty.
+- Override the top candidate (WHO) when higher-order context justifies it:
     - Tonight's specific conditions (notes, call-offs, weather, events, morale)
     - Rotation health and long-term fairness not fully captured in the matrix
     - Pair dynamics and team chemistry

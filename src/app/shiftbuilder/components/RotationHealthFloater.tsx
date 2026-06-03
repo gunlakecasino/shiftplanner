@@ -11,7 +11,11 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
 
-export type RotationHealthPlacement = "below-page" | "page-corner";
+/** above-ops-pill: fixed bottom-right, stacked above #ops-status-bar (default). */
+export type RotationHealthPlacement = "above-ops-pill" | "below-page" | "page-corner";
+
+/** Viewport offset from bottom — clears the ops status pill (~28px) + 10px margin. */
+const OPS_PILL_STACK_BOTTOM_PX = 44;
 
 export type RotationHealthFloaterProps = {
   visible: boolean;
@@ -20,7 +24,7 @@ export type RotationHealthFloaterProps = {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   isDraftMode?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
-  /** below-page: under the artboard, right-aligned; page-corner: bottom-right on the sheet */
+  /** above-ops-pill (default): fixed above ops telemetry; below-page: under artboard frame */
   placement?: RotationHealthPlacement;
 };
 
@@ -38,7 +42,7 @@ function breakdownTitle(health: ShiftRotationHealth): string {
   return lines.join("\n");
 }
 
-/** Fixed above OpsStatusBar; screen-only (no-print). */
+/** Pinned above OpsStatusBar on canvas; screen-only (no-print). */
 export function RotationHealthFloater({
   visible,
   auxDefs,
@@ -46,7 +50,7 @@ export function RotationHealthFloater({
   fitBySlot,
   isDraftMode,
   draftAssignments,
-  placement = "below-page",
+  placement = "above-ops-pill",
 }: RotationHealthFloaterProps) {
   const health = React.useMemo(
     () =>
@@ -64,20 +68,27 @@ export function RotationHealthFloater({
     health.percent !== null ? `${health.percent}%` : "—%";
 
   const anchorStyle: React.CSSProperties =
-    placement === "page-corner"
+    placement === "above-ops-pill"
       ? {
-          position: "absolute",
-          bottom: 10,
+          position: "fixed",
+          bottom: OPS_PILL_STACK_BOTTOM_PX,
           right: 10,
-          zIndex: 30,
+          zIndex: 2147483646,
         }
-      : {
-          position: "absolute",
-          top: "100%",
-          right: 0,
-          marginTop: 8,
-          zIndex: 30,
-        };
+      : placement === "page-corner"
+        ? {
+            position: "absolute",
+            bottom: 10,
+            right: 10,
+            zIndex: 30,
+          }
+        : {
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            marginTop: 8,
+            zIndex: 30,
+          };
 
   return (
     <div

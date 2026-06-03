@@ -954,6 +954,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             .join(", ")
         : undefined,
       contextSig: insightContextSig,
+      filledSlotKeys: Object.entries(assignments)
+        .filter(([, row]) => !!(row as { tmId?: string })?.tmId)
+        .map(([key]) => key),
+      emptySlotKeys: Object.entries(assignments)
+        .filter(([, row]) => !(row as { tmId?: string })?.tmId)
+        .map(([key]) => key),
     }),
     [
       slotKey,
@@ -970,6 +976,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       spreadGapsList,
       buildCandidateProfiles,
       insightContextSig,
+      assignments,
       prerenderedFit.fitVerdict,
       prerenderedFit.fitSummary,
       prerenderedFit.fitFactLine,

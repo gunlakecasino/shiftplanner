@@ -18,6 +18,14 @@ import {
   isEligibleForSlot,
   type AuxDef,
 } from "./placement";
+import {
+  getXaiFillOrderHardRules,
+  getXaiSwapHardRules,
+  assignViolatesFillOrder,
+  swapViolatesFillOrder,
+  swapViolatesOccupancy,
+  swapViolatesCrossTierFamily,
+} from "./xaiFillOrderContract";
 import type { TeamMember } from "./data";
 
 // ========================================================
@@ -265,9 +273,15 @@ You have access to the live board state via the JSON snapshot below.
 
 CRITICAL RULES — THESE ARE NON-NEGOTIABLE:
 
+${getXaiFillOrderHardRules()}
+
 ${orderText}
 
 ${eligibilityText}
+
+FILL ORDER ENFORCEMENT: You may change WHO is placed, never the sequence in which core slots must be filled. The server guard deletes any assign/swap that skips ahead of empty higher-priority slots.
+
+${getXaiSwapHardRules()}
 
 DRAFT MODE CONTRACT:
 - The operator is almost always working in (or will be moved into) "Draft Mode".
@@ -299,7 +313,7 @@ CRITICAL FIELD RULES (the server-side guard rejects anything that violates these
 - For \`assign\` actions: provide BOTH \`slotKey\` AND \`tmId\`.
     - \`slotKey\` is a literal key from the \`placementOrder\` array or one of the keys in \`auxDefs\` (e.g. "Z7", "MRR8", "WRR6", "ADM", "Z9SR", "TR1", "SP1", "OL-AM-2").
     - \`tmId\` is the literal \`id\` field from the \`candidates\` array (e.g. "tm_darlene", "tm_jack"). DO NOT emit a display name like "Darlene Sebright"; the guard cannot resolve names and will reject the action.
-- For \`swap\` actions: provide \`fromSlot\` (the slotKey the person currently occupies) and \`toSlot\` (the slotKey to move them to). Do not provide \`slotKey\` or \`tmId\` for swaps.
+- For \`swap\` actions: provide \`fromSlot\` and \`toSlot\` — BOTH must already have a TM in the snapshot's assignments. Bilateral exchange only. If \`toSlot\` is empty, use \`assign\` with \`slotKey\` + \`tmId\` instead. Do not provide \`slotKey\` or \`tmId\` for swaps.
 - For \`remove\` actions: provide only \`slotKey\`.
 - For \`note\` actions: provide only \`reason\`.
 - Every action MUST include a clear, one-sentence \`reason\`.
@@ -498,9 +512,45 @@ export function guardGrokActions(
         continue;
       }
 
+      const fillOrder = assignViolatesFillOrder(action.slotKey, currentAssignments);
+      if (fillOrder.violates) {
+        warnings.push(
+          `Grok suggestion rejected (fill order): ${fillOrder.reason ?? action.slotKey}`,
+        );
+        continue;
+      }
+
       validActions.push(action);
     } else if (action.type === "swap" && action.fromSlot && action.toSlot) {
-      // For now, accept swaps — the guard can be strengthened later
+      const crossTier = swapViolatesCrossTierFamily(action.fromSlot, action.toSlot);
+      if (crossTier.violates) {
+        warnings.push(
+          `Grok swap rejected (cross-tier): ${crossTier.reason ?? `${action.fromSlot}→${action.toSlot}`}`,
+        );
+        continue;
+      }
+      const occupancy = swapViolatesOccupancy(
+        action.fromSlot,
+        action.toSlot,
+        currentAssignments,
+      );
+      if (occupancy.violates) {
+        warnings.push(
+          `Grok swap rejected (occupancy): ${occupancy.reason ?? `${action.fromSlot}→${action.toSlot}`}`,
+        );
+        continue;
+      }
+      const fillOrder = swapViolatesFillOrder(
+        action.fromSlot,
+        action.toSlot,
+        currentAssignments,
+      );
+      if (fillOrder.violates) {
+        warnings.push(
+          `Grok swap rejected (fill order): ${fillOrder.reason ?? `${action.fromSlot}→${action.toSlot}`}`,
+        );
+        continue;
+      }
       validActions.push(action);
     } else if (action.type === "remove" && action.slotKey) {
       validActions.push(action);
