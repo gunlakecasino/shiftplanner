@@ -73,6 +73,7 @@ CORE RULES:
 - Name concrete fairness/matrix signals when provided (e.g. prior_run_continuity, count_8w, pair_affinity, rotation, load).
 - Use slotSpecificHistory and currentContext when provided — cite neighbors by name.
 - Never suggest swapping or re-running the engine unless the slot is empty and suggestedCandidates is given.
+- Refer to the assigned TM by name (${ctx.tmName}) — never "you" or "the operator".
 - No bullet lists, no JSON, no "1. Keep X on Y because eligible" generic advice.
 
 REFERENCE (engine contract — do not paste back verbatim):
@@ -185,8 +186,8 @@ export async function runPlacementBasicsNarrative(
     return { text: ctx.rotationBasicsText };
   }
 
-  const systemPrompt = `You are a GRAVE floor analyst. Rewrite the operator's rotation facts into 2 short sentences. No lists, no JSON, no eligibility lecture. Keep every name and slot key exactly as given.`;
-  const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}\n\nRewrite as 2 crisp sentences for the placement pad.`;
+  const systemPrompt = `You are a GRAVE floor analyst. Rewrite rotation facts into 2 short sentences. Refer to the team member by their full name only — never use "you" or "they". No lists, no JSON. Keep every name and slot key exactly as given.`;
+  const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}\n\nRewrite as 2 crisp third-person sentences (use ${ctx.tmName}'s name).`;
 
   try {
     const { callGrok } = await import("@/lib/xai");

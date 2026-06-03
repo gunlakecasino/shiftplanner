@@ -25,8 +25,11 @@ import {
   formatPlacementUiLabel,
   nightIsoFromDate,
   computePlacementRotationBasics,
+  formatPlacementRotationDisplay,
   type PlacementRotationBasics,
+  type PlacementRotationDisplay,
 } from "./placementPadHelpers";
+import { postEngineInsight } from "../lib/engineInsightClient";
 
 const Z9_STAT_RED = "#E53935";
 const LAST5_COUNT = 5;
@@ -80,7 +83,7 @@ function computePortalStyle(
   const rect = host.getBoundingClientRect();
   const gap = 6;
   const padW = PAD_W;
-  const maxH = Math.min(window.innerHeight - 16, 560);
+  const maxH = Math.min(window.innerHeight - 20, 480);
 
   let left = rect.right + gap;
   let top = rect.top;
@@ -104,7 +107,7 @@ function computePortalStyle(
     width: padW,
     zIndex: 200,
     maxHeight: maxH,
-    overflowY: "auto",
+    overflow: "hidden",
   };
 
   if (anchor === "bottom") {
@@ -333,14 +336,15 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const [padHistory, setPadHistory] = useState<ZoneDetailEntry | null>(null);
   const [padHistoryLoading, setPadHistoryLoading] = useState(false);
-  const [padInsight, setPadInsight] = useState<string | null>(null);
-  const [padInsightLoading, setPadInsightLoading] = useState(false);
+  const [rotationDisplay, setRotationDisplay] = useState<PlacementRotationDisplay | null>(null);
+  const [deepInsight, setDeepInsight] = useState<string | null>(null);
+  const [deepInsightLoading, setDeepInsightLoading] = useState(false);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
   >([]);
   const [rotationBasics, setRotationBasics] = useState<PlacementRotationBasics | null>(null);
   const [rotationLoading, setRotationLoading] = useState(false);
-  const [basicsNarrativeLoading, setBasicsNarrativeLoading] = useState(false);
+
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
@@ -357,12 +361,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setCoverageMode(false);
     setAssignMode(false);
     setAssignConfirmed(false);
-    setPadInsight(null);
-    setPadInsightLoading(false);
+    setRotationDisplay(null);
+    setDeepInsight(null);
+    setDeepInsightLoading(false);
     setPadGoodExamples([]);
     setRotationBasics(null);
     setRotationLoading(false);
-    setBasicsNarrativeLoading(false);
     setTaskInput("");
     setSweeperOpen(false);
   }, [slotKey]);
@@ -541,30 +545,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           currentIso,
         );
         setRotationBasics(basics);
-        setPadInsight(basics.summary);
-
-        setBasicsNarrativeLoading(true);
-        try {
-          const polishRes = await fetch("/api/shiftbuilder/engine-insight", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "basics",
-              slotKey,
-              tmName: a.tmName,
-              rotationBasicsText: basics.summary,
-              currentContext: boardNeighborSummary || undefined,
-              slotSpecificHistory: slotHistorySummary,
-            }),
-          });
-          if (!cancelled && polishRes.ok) {
-            const polished = await polishRes.json();
-            if (polished?.text) setPadInsight(polished.text);
-          }
-        } catch {
-          /* keep deterministic basics */
-        } finally {
-          if (!cancelled) setBasicsNarrativeLoading(false);
+        if (a.tmName) {
+          setRotationDisplay(
+            formatPlacementRotationDisplay(a.tmName, slotKey, basics, PLACEMENT_SPREAD_NIGHTS),
+          );
         }
       } finally {
         if (!cancelled) setRotationLoading(false);
@@ -588,33 +572,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     slotHistorySummary,
   ]);
 
-  async function fetchEngineInsight(
-    context: Record<string, unknown>,
-    mode: "deep" | "basics" = "deep",
-  ): Promise<string> {
-    const res = await fetch("/api/shiftbuilder/engine-insight", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...context, slotKey, tmName: a.tmName || context.tmName, mode }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.error || `Insight failed (${res.status})`);
-    }
-    if (data.usage) {
-      try {
-        useShiftBuilderStore.getState().addAiUsage(data.usage);
-      } catch {}
-    }
-    return data.text || "";
-  }
-
   const cellGap = (ui: string) => rotationBasics?.highlightGapKeys.has(ui) ?? false;
   const cellCross = (ui: string) => rotationBasics?.highlightCrossKeys.has(ui) ?? false;
 
   const padEl = (
     <div
-      className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex h-auto max-h-none flex-col rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
+      className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex max-h-[min(480px,calc(100vh-20px))] flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
       style={usePortal ? portalStyle! : { width: PAD_W }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -721,31 +684,37 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     </p>
                     <button
                       type="button"
-                      disabled={padInsightLoading}
+                      disabled={deepInsightLoading}
                       onClick={async (e) => {
                         e.stopPropagation();
-                        setPadInsight(null);
-                        setPadInsightLoading(true);
+                        setDeepInsight(null);
+                        setDeepInsightLoading(true);
                         try {
-                          const insight = await fetchEngineInsight(
-                            buildInsightContext(),
-                            "deep",
-                          );
-                          setPadInsight(insight || "No suggestions.");
+                          const data = await postEngineInsight({
+                            ...buildInsightContext(),
+                            slotKey,
+                            tmName: a.tmName || "Unassigned",
+                          });
+                          if (data.usage) {
+                            try {
+                              useShiftBuilderStore.getState().addAiUsage(data.usage);
+                            } catch {}
+                          }
+                          setDeepInsight(data.text || "No suggestions.");
                         } catch (err) {
-                          setPadInsight(
+                          setDeepInsight(
                             err instanceof Error ? err.message : "Suggestions unavailable.",
                           );
                         } finally {
-                          setPadInsightLoading(false);
+                          setDeepInsightLoading(false);
                         }
                       }}
                       className="mt-1.5 rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
                     >
-                      {padInsightLoading ? "Thinking…" : "xAI suggest assignee"}
+                      {deepInsightLoading ? "Thinking…" : "xAI suggest assignee"}
                     </button>
-                    {padInsight && (
-                      <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{padInsight}</p>
+                    {deepInsight && (
+                      <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{deepInsight}</p>
                     )}
                   </div>
               </div>
@@ -853,32 +822,42 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   <p className="text-[10px] text-neutral-400">Loading placement history…</p>
                 ) : (
                   <>
-                    <SectionLabel>Insight — the basics</SectionLabel>
-                    <p className="mt-1 text-[10px] leading-snug text-neutral-600">
-                      {rotationLoading
-                        ? "Computing rotation gaps…"
-                        : padInsight ||
-                          (rotationBasics?.summary ?? "Placed for rotation balance and coverage.")}
-                    </p>
-                    {(rotationLoading || basicsNarrativeLoading) && (
-                      <p className="mt-0.5 text-[8px] text-neutral-400">
-                        {basicsNarrativeLoading ? "xAI polishing…" : "Loading board histories…"}
-                      </p>
-                    )}
-                    {rotationBasics && (
-                      <div className="mt-1.5 flex flex-wrap gap-2 text-[8px] text-neutral-500">
-                        <span className="inline-flex items-center gap-1">
-                          <span className="h-2.5 w-4 rounded border border-dashed border-amber-500/60 bg-amber-100/80" />
-                          Not in 30 nights
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <span className="h-2.5 w-4 rounded border border-sky-500/50 bg-sky-50" />
-                          Cross-rotation lane
-                        </span>
+                    <SectionLabel>Rotation · 30 nights</SectionLabel>
+                    {rotationLoading ? (
+                      <p className="mt-1 text-[10px] text-neutral-400">Loading histories…</p>
+                    ) : rotationDisplay ? (
+                      <div className="mt-1 space-y-1 text-[10px] leading-snug text-neutral-700">
+                        {rotationDisplay.gapsLine && (
+                          <p>{rotationDisplay.gapsLine}</p>
+                        )}
+                        {rotationDisplay.swapLines.length > 0 && (
+                          <div>
+                            <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                              Swap lanes
+                            </p>
+                            {rotationDisplay.swapLines.map((line) => (
+                              <p key={line} className="text-[9.5px] text-neutral-600">
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-0.5 text-[8px] text-neutral-400">
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border border-dashed border-amber-500/60 bg-amber-50" />
+                            gap
+                          </span>
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border border-sky-400/50 bg-sky-50" />
+                            cross
+                          </span>
+                        </div>
                       </div>
+                    ) : (
+                      <p className="mt-1 text-[10px] text-neutral-500">No history yet.</p>
                     )}
 
-                    <SectionLabel>Placement matrix</SectionLabel>
+                    <SectionLabel>Matrix</SectionLabel>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px]">
                       <span>
                         <span className="font-semibold" style={{ color: accent }}>
@@ -996,93 +975,74 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       })}
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-black/[0.05]">
-                      {hasProv && prov.rationale && (
-                        <p className="text-[9px] leading-snug text-neutral-500 mb-1.5">
-                          Engine: {prov.rationale}
-                        </p>
-                      )}
-                      {prov.fairnessSignals &&
-                        typeof prov.fairnessSignals === "object" && (
-                          <div className="mb-1.5 flex flex-wrap gap-1">
-                            {Object.entries(prov.fairnessSignals)
-                              .slice(0, 6)
-                              .map(([k, v]) => (
-                                <span
-                                  key={k}
-                                  className="rounded-md border border-black/[0.06] bg-neutral-100/90 px-1.5 py-0.5 font-mono text-[8px] text-neutral-600"
-                                >
-                                  {k}: {String(v)}
-                                </span>
-                              ))}
-                          </div>
-                        )}
-                      <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setPadInsightLoading(true);
-                              try {
-                                const insight = await fetchEngineInsight(
-                                  buildInsightContext(),
-                                  "deep",
-                                );
-                                setPadInsight(insight || "No additional insight.");
-                              } catch (err) {
-                                const msg = err instanceof Error ? err.message : "Insight unavailable.";
-                                setPadInsight(msg);
-                              } finally {
-                                setPadInsightLoading(false);
+                    <div className="mt-2 pt-2 border-t border-black/[0.05]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setDeepInsightLoading(true);
+                            try {
+                              const data = await postEngineInsight({
+                                ...buildInsightContext(),
+                                slotKey,
+                                tmName: a.tmName!,
+                              });
+                              if (data.usage) {
+                                try {
+                                  useShiftBuilderStore.getState().addAiUsage(data.usage);
+                                } catch {}
                               }
-                            }}
-                            className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
-                            disabled={padInsightLoading}
-                          >
-                            {padInsightLoading ? "Thinking…" : "xAI deeper insight"}
-                          </button>
-                          {padInsight && (
-                            <>
-                              <p className="mt-1.5 rounded-lg border border-black/[0.06] bg-neutral-50/90 px-2 py-1.5 text-[9px] leading-snug text-neutral-600">
-                                {padInsight}
-                              </p>
-                              <div className="mt-1 flex items-center gap-1.5">
-                                <span className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
-                                  Train
-                                </span>
-                                <button
-                                  type="button"
-                                  title="Good — use as example for next insights this session"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPadGoodExamples((prev) =>
-                                      [...prev, { slotKey, insightText: padInsight }].slice(-3),
-                                    );
-                                  }}
-                                  className="rounded-md border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px] hover:bg-neutral-50"
-                                >
-                                  👍
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Discard this insight"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPadInsight(null);
-                                  }}
-                                  className="rounded-md border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px] hover:bg-neutral-50"
-                                >
-                                  👎
-                                </button>
-                                {padGoodExamples.length > 0 && (
-                                  <span className="text-[8px] text-neutral-400">
-                                    +{padGoodExamples.length} rated
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          )}
+                              setDeepInsight(data.text || "No additional insight.");
+                            } catch (err) {
+                              setDeepInsight(
+                                err instanceof Error ? err.message : "Insight unavailable.",
+                              );
+                            } finally {
+                              setDeepInsightLoading(false);
+                            }
+                          }}
+                          className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
+                          disabled={deepInsightLoading}
+                        >
+                          {deepInsightLoading ? "Thinking…" : "xAI deeper"}
+                        </button>
+                        {hasProv && prov.rationale && (
+                          <span className="text-[8px] text-neutral-400 truncate max-w-[140px]" title={prov.rationale}>
+                            {prov.rationale}
+                          </span>
+                        )}
                       </div>
+                      {deepInsight && (
+                        <>
+                          <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{deepInsight}</p>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              title="Good example for next deeper insights"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPadGoodExamples((prev) =>
+                                  [...prev, { slotKey, insightText: deepInsight }].slice(-3),
+                                );
+                              }}
+                              className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
+                            >
+                              👍
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeepInsight(null);
+                              }}
+                              className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )}

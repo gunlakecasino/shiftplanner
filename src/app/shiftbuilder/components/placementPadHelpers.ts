@@ -109,12 +109,16 @@ export type PlacementCrossPattern = {
 };
 
 export type PlacementRotationBasics = {
-  summary: string;
   notRecentlyPlaced: string[];
   crossPatterns: PlacementCrossPattern[];
   /** Slot keys to emphasize on the matrix (gaps + cross targets) */
   highlightGapKeys: Set<string>;
   highlightCrossKeys: Set<string>;
+};
+
+export type PlacementRotationDisplay = {
+  gapsLine: string | null;
+  swapLines: string[];
 };
 
 /**
@@ -166,45 +170,56 @@ export function computePlacementRotationBasics(
     if (c.otherMissingFromCurrentSlot) highlightGapKeys.add(currentSlotKey);
   }
 
-  const gapPreview = notRecentlyPlaced
-    .slice(0, 4)
-    .map((k) => formatPlacementUiLabel(k))
-    .join(", ");
-  const crossPreview = crossPatterns
-    .filter((c) => c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot)
-    .slice(0, 2)
-    .map(
-      (c) =>
-        `${c.otherTmName} on ${formatPlacementUiLabel(c.theirSlotKey)} ↔ you on ${formatPlacementUiLabel(currentSlotKey)} (both due for swap lanes)`,
-    )
-    .join("; ");
-
-  let summary = "";
-  if (notRecentlyPlaced.length > 0) {
-    summary += `Not in last ${nightCount} nights: ${gapPreview}${notRecentlyPlaced.length > 4 ? "…" : ""}.`;
-  } else {
-    summary += `Worked all matrix slots in the last ${nightCount} nights.`;
-  }
-  if (crossPreview) {
-    summary += ` Cross-rotation: ${crossPreview}.`;
-  } else if (crossPatterns.length > 0) {
-    const partial = crossPatterns[0];
-    summary += ` ${partial.otherTmName} on ${formatPlacementUiLabel(partial.theirSlotKey)}: ${
-      partial.tmMissingFromTheirSlot ? "you haven't been there recently" : ""
-    }${partial.tmMissingFromTheirSlot && partial.otherMissingFromCurrentSlot ? "; " : ""}${
-      partial.otherMissingFromCurrentSlot
-        ? `they haven't been on ${formatPlacementUiLabel(currentSlotKey)} recently`
-        : ""
-    }.`;
-  }
-
   return {
-    summary: summary.trim(),
     notRecentlyPlaced,
     crossPatterns,
     highlightGapKeys,
     highlightCrossKeys,
   };
+}
+
+/** Operator-facing rotation copy — always uses the TM's name, never "you". */
+export function formatPlacementRotationDisplay(
+  tmName: string,
+  currentSlotKey: string,
+  basics: PlacementRotationBasics,
+  nightCount: number = PLACEMENT_SPREAD_NIGHTS,
+): PlacementRotationDisplay {
+  const slotLabel = formatPlacementUiLabel(currentSlotKey);
+  const gaps = basics.notRecentlyPlaced;
+
+  let gapsLine: string | null;
+  if (gaps.length === 0) {
+    gapsLine = `${tmName} — covered every matrix slot in the last ${nightCount} nights.`;
+  } else {
+    const labels = gaps.slice(0, 5).map((k) => formatPlacementUiLabel(k));
+    const more = gaps.length > 5 ? ` (+${gaps.length - 5} more)` : "";
+    gapsLine = `${tmName} — not in ${nightCount} nights: ${labels.join(", ")}${more}.`;
+  }
+
+  const bilateral = basics.crossPatterns.filter(
+    (c) => c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot,
+  );
+
+  const swapLines = bilateral.slice(0, 2).map((c) => {
+    const their = formatPlacementUiLabel(c.theirSlotKey);
+    return `${c.otherTmName} (${their}) ↔ ${tmName} (${slotLabel})`;
+  });
+
+  const partial = basics.crossPatterns.filter(
+    (c) => !(c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot),
+  );
+  for (const c of partial.slice(0, 2 - swapLines.length)) {
+    if (swapLines.length >= 2) break;
+    const their = formatPlacementUiLabel(c.theirSlotKey);
+    if (c.tmMissingFromTheirSlot) {
+      swapLines.push(`${tmName} not recently on ${their} — ${c.otherTmName} is there now.`);
+    } else if (c.otherMissingFromCurrentSlot) {
+      swapLines.push(`${c.otherTmName} not recently on ${slotLabel} — ${tmName} is there now.`);
+    }
+  }
+
+  return { gapsLine, swapLines };
 }
 
 /** Compact label for matrix cells and last-5 pills (no spaces). */

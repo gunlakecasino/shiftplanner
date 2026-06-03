@@ -5180,30 +5180,21 @@ function AuthedShiftBuilder() {
     };
 
     try {
-      const res = await fetch("/api/shiftbuilder/engine-insight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(insightContext),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result?.error || `HTTP ${res.status}`);
-      }
-      const text = result.text ?? "";
-      const u = result.usage;
-      if (u) {
+      const { postEngineInsight } = await import("@/app/shiftbuilder/lib/engineInsightClient");
+      const result = await postEngineInsight(insightContext);
+      if (result.usage) {
         try {
           useShiftBuilderStore.getState().addAiUsage({
-            inputTokens: u.inputTokens,
-            outputTokens: u.outputTokens,
-            model: u.model,
-            reasoningEffort: u.reasoningEffort,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            model: result.usage.model,
+            reasoningEffort: result.usage.reasoningEffort,
           });
         } catch {}
       }
-      return text;
+      return result.text ?? "";
     } catch (e) {
-      console.warn("[placement pad] engine insight API failed", e);
+      console.warn("[placement pad] engine insight failed", e);
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("XAI_API_KEY") || msg.includes("not configured")) {
         return "xAI is not configured on the server (XAI_API_KEY). Rotation highlights above are still live.";
