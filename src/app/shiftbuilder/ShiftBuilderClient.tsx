@@ -5875,15 +5875,16 @@ function AuthedShiftBuilder() {
             style={{
               width: NATURAL_WIDTH * scale,
               height: NATURAL_HEIGHT * scale,
-              overflow: "visible",
+              overflow: "hidden",
             }}
           >
             {/* The actual scaled artboard (original print-stage-inner) */}
             <div
-              className="print-stage-inner relative"
+              className="print-stage-inner relative overflow-hidden"
               ref={positioningRef}
               style={{
                 width: NATURAL_WIDTH,
+                height: NATURAL_HEIGHT,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
               }}
@@ -5941,6 +5942,7 @@ function AuthedShiftBuilder() {
               nextDayColor={nextDayColor}
               members={effectiveRealRoster}
               fitBySlot={deploymentFitBySlot}
+              artboardScale={scale}
             />
             {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
                 has been carved out. This is the primary re-render boundary win for iPad day switches.

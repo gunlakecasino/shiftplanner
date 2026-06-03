@@ -105,6 +105,13 @@ export interface ShiftBuilderBoardProps {
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
   /** When set by ShiftBuilderClient, avoids duplicate history fetch + powers rotation health floater. */
   fitBySlot?: Record<string, PrerenderedPlacementFit>;
+  /** Stage zoom — re-equalize card rows when fit changes (see layoutHeight below). */
+  artboardScale?: number;
+}
+
+/** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
+function layoutHeight(el: HTMLElement): number {
+  return el.offsetHeight;
 }
 
 /**
@@ -171,6 +178,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onAddTask,
   members = [],
   fitBySlot: fitBySlotProp,
+  artboardScale,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -318,7 +326,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           const card = wrapper.querySelector(":scope > .assignment-card") as HTMLElement | null;
           if (!card) return;
           card.style.minHeight = "";
-          const h = card.getBoundingClientRect().height;
+          const h = layoutHeight(card);
           if (h > maxCardH) maxCardH = h;
           rowCards.push(card);
         });
@@ -344,7 +352,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         let maxH = 0;
         cards.forEach((card) => {
           card.style.minHeight = "";
-          const h = card.getBoundingClientRect().height;
+          const h = layoutHeight(card);
           if (h > maxH) maxH = h;
         });
         if (maxH > 0) {
@@ -405,6 +413,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     isDraftMode,
     cardBorders,
     selectedSlotKey,
+    artboardScale,
   ]);
 
   // Helper used only inside breaks view wave rendering

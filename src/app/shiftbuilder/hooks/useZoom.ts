@@ -40,7 +40,7 @@ export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
     const byW = w / NATURAL_WIDTH;
     const byH = h / NATURAL_HEIGHT;
     const fit = isTabletTouchDevice()
-      ? Math.min(max, byW)
+      ? Math.min(max, byW, byH)
       : Math.min(1, byW, byH);
     return Math.max(0.35, fit);
   });
@@ -64,10 +64,11 @@ export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
     const byHeight = availH / NATURAL_HEIGHT;
     const tablet = isTabletTouchDevice();
 
-    // Tablet: prefer filling horizontal space (vertical scroll is fine).
+    // Tablet may upscale to max (1.25) when the viewport allows; always fit both axes
+    // so the scaled artboard does not paint outside the stage (CSS transform overflow).
     // Desktop: never upscale past 100% — keeps card typography crisp.
     const next = tablet
-      ? Math.min(max, byWidth)
+      ? Math.min(max, byWidth, byHeight)
       : Math.min(1, byWidth, byHeight);
 
     setFitScale(Math.max(0.25, next));
