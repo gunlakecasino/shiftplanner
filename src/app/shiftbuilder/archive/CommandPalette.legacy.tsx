@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Command as CommandPrimitive } from "cmdk";
 import { cn } from "@/lib/utils";
 import type { CommandItem, CommandGroup } from "@/lib/shiftbuilder/useCommandActions";
-import { askGrokForShiftSuggestions, askGrokForStructuredSuggestions } from "./actions";
+import { askGrokForShiftSuggestions, askGrokForStructuredSuggestions } from "../actions";
 import {
   parseCommand,
   applyCompletion,
