@@ -17,6 +17,7 @@ import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
+import { shiftBuilderVersionLabel } from "../version";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
@@ -1074,7 +1075,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           <span className="text-[#C8C8CC] mx-1">·</span>
           <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
         </div>
-        <div className="text-[#9CA3AF] text-center">v0.81</div>
+        <div className="text-[#9CA3AF] text-center">{shiftBuilderVersionLabel()}</div>
         <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
       </div>
 
