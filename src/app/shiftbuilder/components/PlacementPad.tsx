@@ -398,55 +398,32 @@ function PlacementAnalystBlock({
 function PlacementCell({
   label,
   spreadCount,
-  accent,
   title,
-  gapHighlight,
-  crossHighlight,
 }: {
   label: string;
   /** Times placed in last-30 spread (0 = not in spread). */
   spreadCount: number;
-  accent: string;
   title?: string;
-  gapHighlight?: boolean;
-  crossHighlight?: boolean;
 }) {
   const placed = spreadCount > 0;
-  const freqAccent = spreadFrequencyAccent(spreadCount);
-  const pillAccent = freqAccent ?? accent;
-  const gap = gapHighlight && !placed;
-  const cross = crossHighlight;
+  const pillAccent = spreadFrequencyAccent(spreadCount);
 
   return (
     <span
       title={title ?? label}
-      className={`flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums transition-colors ${
-        gap ? "ring-1 ring-amber-400/70" : cross ? "ring-1 ring-sky-500/60" : ""
-      }`}
+      className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums transition-colors"
       style={
-        placed
+        placed && pillAccent
           ? {
               background: `${pillAccent}22`,
               border: `1px solid ${pillAccent}55`,
               color: pillAccent,
             }
-          : gap
-            ? {
-                background: "rgba(251,191,36,0.12)",
-                border: "1px dashed rgba(245,158,11,0.55)",
-                color: "rgba(180,83,9,0.95)",
-              }
-            : cross
-              ? {
-                  background: "rgba(14,165,233,0.08)",
-                  border: "1px solid rgba(14,165,233,0.35)",
-                  color: "rgba(3,105,161,0.9)",
-                }
-              : {
-                  background: "rgba(115,115,115,0.14)",
-                  border: "1px dashed rgba(115,115,115,0.38)",
-                  color: "rgba(82,82,82,0.72)",
-                }
+          : {
+              background: "rgba(115,115,115,0.14)",
+              border: "1px dashed rgba(115,115,115,0.38)",
+              color: "rgba(82,82,82,0.72)",
+            }
       }
     >
       {label}
@@ -1073,7 +1050,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     assignments,
   ]);
 
-  const cellCross = (ui: string) => rotationBasics?.highlightCrossKeys.has(ui) ?? false;
+
 
   const padEl = (
     <div
@@ -1427,9 +1404,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             key={z.key}
                             label={z.key}
                             spreadCount={n}
-                            accent={getZoneColor(z.key)}
                             title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key}
-                            crossHighlight={cellCross(z.key)}
                           />
                         );
                       })}
@@ -1447,9 +1422,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               key={loc.ui}
                               label={loc.label}
                               spreadCount={n}
-                              accent={getPillAccent(loc.ui)}
                               title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
-                              crossHighlight={cellCross(loc.ui)}
                             />
                           );
                         })}
@@ -1468,9 +1441,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               key={loc.ui}
                               label={loc.label}
                               spreadCount={n}
-                              accent={getPillAccent(loc.ui)}
                               title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
-                              crossHighlight={cellCross(loc.ui)}
                             />
                           );
                         })}
