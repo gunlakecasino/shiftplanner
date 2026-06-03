@@ -441,6 +441,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
                   <th className="text-left px-4 py-2.5 font-medium">Full name</th>
                   <th className="text-left px-4 py-2.5 font-medium">tm_id</th>
                   <th className="text-left px-4 py-2.5 font-medium">Pool</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Gender</th>
                   <th className="text-right px-4 py-2.5 font-medium">Skill</th>
                   <th className="text-left px-4 py-2.5 font-medium">Status</th>
                 </tr>
@@ -461,6 +462,9 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
                     <td className={cn("px-4 py-2.5 font-mono text-[11px]", isDark ? "text-zinc-500" : "text-[#8E8E93]")}>{tm.tmId}</td>
                     <td className="px-4 py-2.5">
                       <PoolPill pool={tm.gravePool} isDark={isDark} />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <GenderPill gender={tm.gender} isDark={isDark} />
                     </td>
                     <td className={cn("px-4 py-2.5 text-right font-mono text-[11px]", isDark ? "text-zinc-300" : "text-[#3C3C43]")}>
                       {tm.skillScore === null ? "—" : tm.skillScore.toFixed(1)}
@@ -530,6 +534,24 @@ function PoolPill({ pool, isDark = false }: { pool: string | null; isDark?: bool
       )}
     >
       {label}
+    </span>
+  );
+}
+
+function GenderPill({ gender, isDark = false }: { gender?: 'M' | 'F' | null; isDark?: boolean }) {
+  if (!gender) return <span className="text-zinc-600 text-[10px] font-mono">—</span>;
+  const isM = gender === 'M';
+  return (
+    <span
+      className={cn(
+        "text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider font-mono border",
+        isM
+          ? "bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/20"
+          : "bg-[#FF2D55]/10 text-[#FF2D55] border-[#FF2D55]/20"
+      )}
+      title={isM ? "Male — eligible for MRR (men's restrooms)" : "Female — eligible for WRR (women's restrooms)"}
+    >
+      {isM ? "M" : "F"}
     </span>
   );
 }
@@ -634,6 +656,7 @@ function TMEditDrawer({
         active: form.active,
         gravePool: form.gravePool,
         primarySection: form.primarySection,
+        gender: form.gender,
         tieBreakRank: form.tieBreakRank,
         skillScore: form.skillScore,
         status: form.status,
@@ -914,6 +937,40 @@ function IdentityForm({
         </div>
         <p className={cn("text-[10px] mt-1", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
           Inactive TMs are hidden from the engine roster and the active filter. Hit Save to persist.
+        </p>
+      </Field>
+      <Field label="Gender (restroom eligibility)" isDark={isDark}>
+        <div className="flex gap-1.5 items-center">
+          {([
+            { val: 'M', label: 'Male (MRR)' },
+            { val: 'F', label: 'Female (WRR)' },
+            { val: null, label: 'Unknown (both ok)' },
+          ] as const).map((opt) => (
+            <button
+              key={String(opt.val)}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, gender: opt.val }))}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border transition-colors",
+                form.gender === opt.val
+                  ? opt.val === 'M'
+                    ? "bg-[#007AFF]/15 text-[#007AFF] border-[#007AFF]/30"
+                    : opt.val === 'F'
+                    ? "bg-[#FF2D55]/15 text-[#FF2D55] border-[#FF2D55]/30"
+                    : isDark
+                    ? "bg-white/5 text-zinc-400 border-white/10"
+                    : "bg-black/5 text-[#6C6C72] border-black/10"
+                  : isDark
+                  ? "bg-white/5 text-zinc-400 border-white/10 hover:text-zinc-200"
+                  : "bg-black/5 text-[#6C6C72] border-black/10 hover:text-[#111]"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className={cn("text-[10px] mt-1", isDark ? "text-zinc-500" : "text-[#6C6C72]")}>
+          Drives isEligibleForSlot (MRR only M, WRR only F; unknown = safe fallback for both). Edit here then Save. Picker / marker / engine pick up on next roster load (or invalidate).
         </p>
       </Field>
       <Field label="Notes" isDark={isDark}>

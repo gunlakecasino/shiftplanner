@@ -70,6 +70,7 @@ export function useCurrentNight(selectedDay: DayDef) {
             assignments[uiKey] = {
               tmId: row.tmId,
               tmName: row.tmName || row.tmId,
+              breakGroup: row.breakGroup ?? 0,
             };
           }
         } catch {}
@@ -107,9 +108,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         isAMOverlap: m.gravePool === 'AM',
       }));
 
-      // === CANONICAL SCHEDULED DATA (single source of truth) ===
-      // Uses the exact same resolver logic as the Sudo Weekly Roster tab.
-      // This replaces the old getScheduledTmIdsForNightFromNewRoster + getNightRosterClassification path.
+      // === CANONICAL SCHEDULED DATA — graves_default_schedule + night_on_call ===
       let canonicalScheduled = {
         allScheduled: [] as any[],
         fullGraveScheduled: [] as any[],
@@ -120,7 +119,10 @@ export function useCurrentNight(selectedDay: DayDef) {
 
       try {
         const dateStr = formatLocalDateISO(selectedDay.date);
-        const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+        const rosterUrl = id
+          ? `/api/shiftbuilder/scheduled-roster?date=${dateStr}&night_id=${id}`
+          : `/api/shiftbuilder/scheduled-roster?date=${dateStr}`;
+        const res = await fetch(rosterUrl);
         
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -290,7 +292,7 @@ export function useCurrentNight(selectedDay: DayDef) {
               console.warn("[useCurrentNight prefetch] unrecognized DB slot, skipping:", row);
               return;
             }
-            if (row.tmId) assignments[uiKey] = { tmId: row.tmId, tmName: row.tmName || row.tmId };
+            if (row.tmId) assignments[uiKey] = { tmId: row.tmId, tmName: row.tmName || row.tmId, breakGroup: row.breakGroup ?? 0 };
           } catch {}
         });
         const graveRoster = graveMembers.map((m: any) => ({

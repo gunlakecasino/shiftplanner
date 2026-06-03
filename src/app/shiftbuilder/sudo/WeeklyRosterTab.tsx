@@ -342,12 +342,16 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
 
   return (
     <div>
+      <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+        <strong>Scheduling authority moved.</strong> TM Picker now reads only the{" "}
+        <a href="/shiftbuilder/graves-schedule" className="underline font-semibold">
+          Graves Default Schedule
+        </a>{" "}
+        page (Fri–Thu grid) plus on-call adds from the canvas picker. This tab is legacy reference only.
+      </div>
       {!hasScheduledData && !loading && (
         <div className="mb-4 rounded border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm text-yellow-200">
-          <strong>No scheduled data loaded for this week.</strong><br />
-          The TM Default Schedules and/or Weekly On-Call specials appear to be empty. 
-          "Apply Roster" will produce an empty list for the picker until you populate defaults (in the Defaults tab) or add weekly specials.
-          This is why the MarkerPad shows 0 scheduled TMs even in DIRECT mode.
+          <strong>No legacy weekly data loaded.</strong> Use Graves Default Schedule for picker lists.
         </div>
       )}
 

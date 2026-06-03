@@ -12,7 +12,7 @@ export interface OverlapSlotProps {
   slotKey: string;
   assignments: any;
   selectedTasks: Record<string, NightSlotTask[]>;
-  onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
+  onCardClick?: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string };
@@ -55,14 +55,16 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
 
   // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => { if (!isLocked) onCardClick(slotKey, el); },
+  const { isPenHovering, penHoverHandlers } = usePencilHover(
+    (el) => { if (!isLocked && onCardClick) onCardClick(slotKey, el); },
   );
 
   return (
     <div
       ref={setRef}
-      onClick={(e) => { if (!isLocked) onCardClick(slotKey, e.currentTarget, e); }}
+      onClick={(e) => {
+        if (!isLocked && onCardClick) onCardClick(slotKey, e.currentTarget, e);
+      }}
       {...penHoverHandlers}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}

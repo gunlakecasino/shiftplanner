@@ -78,6 +78,15 @@ const PRESETS: { label: string; pattern: WeeklyShift[] }[] = [
 ];
 
 export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, weekStart }: Props) {
+  const scheduleMovedBanner = (
+    <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+      <strong>Picker scheduling moved.</strong> Edit who works each night on{" "}
+      <a href="/shiftbuilder/graves-schedule" className="underline font-semibold">
+        Graves Default Schedule
+      </a>
+      . On-call for a specific night is added from the TM Picker search on the canvas.
+    </div>
+  );
   const [subView, setSubView] = useState<SubView>("defaults");
 
   // Data
@@ -332,6 +341,7 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, 
 
   return (
     <div className="space-y-6">
+      {scheduleMovedBanner}
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[15px] font-semibold tracking-[-0.2px]">TM Default Schedules</div>

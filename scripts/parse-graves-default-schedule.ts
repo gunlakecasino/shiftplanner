@@ -7,7 +7,8 @@
  * Run with: npx tsx scripts/parse-graves-default-schedule.ts
  */
 
-import fs from 'fs';
+import fs from "fs";
+import path from "path";
 
 export interface WeeklyShift {
   dayIndex: number;           // 0-6 (order from the CSV)
@@ -76,9 +77,14 @@ function normalizeTime(raw: string): { startTime?: string; endTime?: string; dur
   };
 }
 
-export function parseGravesDefaultSchedule(): ParsedTM[] {
-  const filePath = '/Users/briankillian/Downloads/Graves Initial TM Schedule.csv';
-  const content = fs.readFileSync(filePath, 'utf8');
+export function parseGravesDefaultSchedule(
+  filePath?: string,
+): ParsedTM[] {
+  const resolved =
+    filePath ||
+    process.env.GRAVES_CSV_PATH ||
+    path.join(__dirname, "../data/graves-initial-tm-schedule.csv");
+  const content = fs.readFileSync(resolved, "utf8");
   const lines = content.trim().split(/\r?\n/);
 
   const results: ParsedTM[] = [];

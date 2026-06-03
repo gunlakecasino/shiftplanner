@@ -596,6 +596,8 @@ export interface TMRecord {
   active: boolean;
   gravePool: string | null;
   primarySection: string | null;
+  /** Biological gender for MRR vs WRR restroom eligibility. 'M' | 'F' | null (null = unknown = eligible for both as safe fallback). */
+  gender?: 'M' | 'F' | null;
   tieBreakRank: number | null;
   skillScore: number | null;
   status: string;
@@ -780,6 +782,7 @@ function rowToTMRecord(r: any): TMRecord {
     active: !!r.active,
     gravePool: r.grave_pool,
     primarySection: r.primary_section,
+    gender: (r.gender as 'M' | 'F' | null) ?? null,
     tieBreakRank: r.tie_break_rank,
     skillScore: r.skill_score === null ? null : Number(r.skill_score),
     status: r.status ?? "active",
@@ -805,6 +808,8 @@ export async function upsertTM(input: {
   active?: boolean;
   gravePool?: string | null;
   primarySection?: string | null;
+  /** 'M' | 'F' | null — persisted to tm_profiles.gender for restroom eligibility */
+  gender?: 'M' | 'F' | null;
   tieBreakRank?: number | null;
   skillScore?: number | null;
   status?: string;
@@ -822,6 +827,7 @@ export async function upsertTM(input: {
     active: input.active ?? true,
     grave_pool: input.gravePool ?? null,
     primary_section: input.primarySection ?? null,
+    gender: input.gender ?? null,
     tie_break_rank: input.tieBreakRank ?? null,
     skill_score: input.skillScore ?? null,
     status: input.status ?? "active",

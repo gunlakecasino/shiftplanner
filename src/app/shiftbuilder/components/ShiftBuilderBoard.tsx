@@ -16,7 +16,8 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
-import { getTmPlacementHistory, type ZoneDetailEntry } from "@/lib/shiftbuilder/data";
+import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
+import type { TmEntry } from "./MarkerPad";
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -59,6 +60,7 @@ export interface ShiftBuilderBoardProps {
   setBreakGroupForSlot?: any;
   onLiveAssign?: any;
   onLiveUnassign?: any;
+  onClearSlot?: (slotKey: string) => void;
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   /** Initial wiring for xAI-powered engine insights in the unilateral marker pad. Called with the active slot (or focusedSk for RR). Returns a rich natural-language explanation. */
   onRequestEngineInsight?: (slotKey: string, sideKey?: string) => Promise<string>;
@@ -70,8 +72,19 @@ export interface ShiftBuilderBoardProps {
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   nextDayColor?: string;
-  /** When the full MarkerPad is open for a slot, the unilateral marker pad for that slot should auto-close for clean UX */
-  activeMarkerSlotKey?: string | null;
+  /** Active anchored placement pad slot (controlled by orchestrator). */
+  selectedSlotKey?: string | null;
+  onSlotToggle?: (slotKey: string) => void;
+  onSlotClose?: () => void;
+  /** Merged assignments for pad display (store + live). */
+  padAssignments?: Record<string, any>;
+  scheduledUnassigned?: TmEntry[];
+  allEligibleTms?: TmEntry[];
+  onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
+  onToggleLock?: (slotKey: string) => void;
+  onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
+  onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
+  onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
 }
 
 /**
@@ -124,7 +137,18 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   nextDayColor,
   processedWaves,
   processedBreakCounts,
-  activeMarkerSlotKey,
+  selectedSlotKey = null,
+  onSlotToggle,
+  onSlotClose,
+  padAssignments,
+  scheduledUnassigned = [],
+  allEligibleTms,
+  onAddOnCall,
+  onClearSlot,
+  onToggleLock,
+  onAssign,
+  onAssignSweeper,
+  onAddTask,
   members = [],
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
@@ -182,150 +206,161 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
 
-  // Unilateral subtle "marker pad" callout for the selected card.
-  // Contains provenance area + marker pad functionality.
-  // Comes off one side of the card (right by default), subtle, paper-like.
-  // Card components (ZoneCard etc) appearances are completely unchanged.
-  // Selection is local to board for the visual; full drawer can still be triggered if needed.
-  const [padSlotKey, setPadSlotKey] = React.useState<string | null>(null);
+  const padDisplayAssignments = padAssignments ?? displayAssignments;
 
-  // Clear the marker pad when day or view changes (keeps it scoped to current artboard content)
-  React.useEffect(() => {
-    setPadSlotKey(null);
-    setPadCoverageSource(null);
-    setPadInsight(null);
-    setPadInsightLoading(false);
-  }, [selectedDayIndex, currentView]);
+  /** Exactly one anchored pad host — prevents duplicate RR pads. */
+  const activePlacementPad = React.useMemo((): {
+    slotKey: string;
+    anchor: PlacementPadAnchor;
+    hostId: string;
+  } | null => {
+    if (!selectedSlotKey || /^RR\d+$/.test(selectedSlotKey)) return null;
 
-  // Close marker pad on outside click (document level) when open — makes the unilateral marker pad feel light and non-drawer.
+    const rrMatch = selectedSlotKey.match(/^(MRR|WRR)(\d+)$/);
+    if (rrMatch) {
+      const num = parseInt(rrMatch[2], 10);
+      return {
+        slotKey: selectedSlotKey,
+        anchor: [8, 10].includes(num) ? "left" : "bottom",
+        hostId: `rr-${num}`,
+      };
+    }
+
+    if (/^Z\d+$/.test(selectedSlotKey)) {
+      return {
+        slotKey: selectedSlotKey,
+        anchor: ["Z4", "Z5", "Z9", "Z10"].includes(selectedSlotKey) ? "left" : "right",
+        hostId: selectedSlotKey,
+      };
+    }
+
+    if (auxDefs.some((d) => d.key === selectedSlotKey)) {
+      return {
+        slotKey: selectedSlotKey,
+        anchor: "bottom",
+        hostId: selectedSlotKey,
+      };
+    }
+
+    if (/^OL-(PM|AM)-\d+$/.test(selectedSlotKey)) {
+      return {
+        slotKey: selectedSlotKey,
+        anchor: "bottom",
+        hostId: selectedSlotKey,
+      };
+    }
+
+    return null;
+  }, [selectedSlotKey, auxDefs]);
+
+  // Close placement pad on outside click
   React.useEffect(() => {
-    if (!padSlotKey) return;
+    if (!selectedSlotKey) return;
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // If click is not inside any data-slot-key wrapper or the placement pad callout, close.
-      // (pad is the unilateral attached baseline for click-on-placement-card per drawn spec)
-      if (!target.closest('[data-slot-key]') && !target.closest('.placement-pad')) {
-        setPadSlotKey(null);
+      if (!target.closest("[data-slot-key]") && !target.closest(".placement-pad")) {
+        onSlotClose?.();
       }
     };
-    document.addEventListener('click', onDocClick, true);
-    return () => document.removeEventListener('click', onDocClick, true);
-  }, [padSlotKey]);
+    document.addEventListener("click", onDocClick, true);
+    return () => document.removeEventListener("click", onDocClick, true);
+  }, [selectedSlotKey, onSlotClose]);
 
-  // When the full MarkerPad drawer opens for the current padded slot, auto-close the unilateral marker pad
-  // so the two surfaces don't compete (clean UX for "new unilateral marker pad").
+  // Equalize card heights within each grid row on the deployment sheet.
+  // Re-runs when returning from the breaks view (grids unmount/remount) so heights
+  // do not stay at natural uneven sizes after tab switches.
   React.useEffect(() => {
-    if (padSlotKey && activeMarkerSlotKey && padSlotKey === activeMarkerSlotKey) {
-      setPadSlotKey(null);
-      setPadInsight(null);
-      setPadInsightLoading(false);
-    }
-  }, [activeMarkerSlotKey, padSlotKey]);
+    if (currentView !== "deployment") return;
 
-  // History for the current marker pad slot's TM (for Last 5 and Last 14 matrix)
-  const [padHistory, setPadHistory] = React.useState<ZoneDetailEntry | null>(null);
-  const [padHistoryLoading, setPadHistoryLoading] = React.useState(false);
+    const equalizeCardsInGrid = (gridEl: HTMLElement, colsPerRow: number) => {
+      const wrappers = Array.from(gridEl.children) as HTMLElement[];
+      for (let i = 0; i < wrappers.length; i += colsPerRow) {
+        const rowWrappers = wrappers.slice(i, i + colsPerRow);
+        let maxCardH = 0;
+        const rowCards: HTMLElement[] = [];
+        rowWrappers.forEach((wrapper) => {
+          const card = wrapper.querySelector(":scope > .assignment-card") as HTMLElement | null;
+          if (!card) return;
+          card.style.minHeight = "";
+          const h = card.getBoundingClientRect().height;
+          if (h > maxCardH) maxCardH = h;
+          rowCards.push(card);
+        });
+        if (maxCardH > 0) {
+          rowCards.forEach((card) => {
+            card.style.minHeight = `${maxCardH}px`;
+          });
+        }
+      }
+    };
 
-  // When set to a slotKey (or focusedSk for RR), the unilateral marker pad shows the inline coverage picker
-  // (instead of delegating to full MarkerPad drawer). Tapping COVERAGE in pad footer sets this.
-  const [padCoverageSource, setPadCoverageSource] = React.useState<string | null>(null);
-
-  // Engine insight state (xAI powered) for the current marker pad. Initial wiring.
-  const [padInsight, setPadInsight] = React.useState<string | null>(null);
-  const [padInsightLoading, setPadInsightLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!padSlotKey) {
-      setPadHistory(null);
-      setPadHistoryLoading(false);
-      setPadCoverageSource(null);
-      setPadInsight(null);
-      setPadInsightLoading(false);
-      return;
-    }
-    const a = displayAssignments[padSlotKey] || {};
-    if (!a.tmId) {
-      setPadHistory(null);
-      setPadHistoryLoading(false);
-      return;
-    }
-    setPadHistoryLoading(true);
-    getTmPlacementHistory(a.tmId, 90)
-      .then((h) => {
-        setPadHistory(h);
-        setPadHistoryLoading(false);
-      })
-      .catch(() => {
-        setPadHistory(null);
-        setPadHistoryLoading(false);
+    /** RR columns stack women's + men's cards; equalize each band across the 5 columns. */
+    const equalizeRRGrid = (gridEl: HTMLElement) => {
+      const wrappers = Array.from(gridEl.children) as HTMLElement[];
+      const womenCards: HTMLElement[] = [];
+      const menCards: HTMLElement[] = [];
+      wrappers.forEach((wrapper) => {
+        const cards = wrapper.querySelectorAll(":scope .assignment-card");
+        if (cards[0]) womenCards.push(cards[0] as HTMLElement);
+        if (cards[1]) menCards.push(cards[1] as HTMLElement);
       });
-  }, [padSlotKey, displayAssignments]);
+      const applyBand = (cards: HTMLElement[]) => {
+        let maxH = 0;
+        cards.forEach((card) => {
+          card.style.minHeight = "";
+          const h = card.getBoundingClientRect().height;
+          if (h > maxH) maxH = h;
+        });
+        if (maxH > 0) {
+          cards.forEach((card) => {
+            card.style.minHeight = `${maxH}px`;
+          });
+        }
+      };
+      applyBand(womenCards);
+      applyBand(menCards);
+    };
 
-  // Equalize the rendered height of the three groups (ZONES / RESTROOMS / AUXILIARY)
-  // so they have equivalent total height for visual consistency on the artboard.
-  // Cards keep their natural/expanding height as tasks are added (content-driven).
-  // We measure the natural height of each group's card grid, take the max, and
-  // apply minHeight to the shorter grids. This makes the single-row groups (RR/AUX)
-  // stretch their card area (and thus the h-full wrappers) to match the height of
-  // the ZONES card area (2 rows). The section headers + stretched card areas make
-  // the overall groups equivalent height. Structural only (no card file changes).
-  React.useEffect(() => {
     const equalize = () => {
       const zEl = zonesGridRef.current;
       const rEl = restroomsGridRef.current;
       const aEl = auxGridRef.current;
       if (!zEl || !rEl || !aEl) return;
 
-      // Clear any previous minHeights on the grids (cards will clear their own inside the equalizer)
-      zEl.style.minHeight = '';
-      rEl.style.minHeight = '';
-      aEl.style.minHeight = '';
-
-      // Equalize cards *within each visual row* to the tallest card in that row first.
-      // This ensures that when we measure the grid heights below, the rows reflect
-      // consistent card heights (matched to tallest in row). This directly satisfies
-      // "these should all be a consistent height, matched to the tallest one" for the
-      // restroom cards (and applies the same principle to zone rows and aux row).
-      // Structural only.
-      const equalizeCardsInGrid = (gridEl: HTMLElement | null, colsPerRow: number) => {
-        if (!gridEl) return;
-        const wrappers = Array.from(gridEl.children) as HTMLElement[];
-        for (let i = 0; i < wrappers.length; i += colsPerRow) {
-          const rowWrappers = wrappers.slice(i, i + colsPerRow);
-          let maxCardH = 0;
-          const rowCards: HTMLElement[] = [];
-          rowWrappers.forEach((wrapper) => {
-            const card = wrapper.firstElementChild as HTMLElement | null;
-            if (card) {
-              card.style.minHeight = ''; // clear to measure natural
-              const h = card.offsetHeight || card.getBoundingClientRect().height;
-              if (h > maxCardH) maxCardH = h;
-              rowCards.push(card);
-            }
-          });
-          if (maxCardH > 0) {
-            rowCards.forEach((card) => {
-              card.style.minHeight = `${maxCardH}px`;
-            });
-          }
-        }
-      };
-
-      equalizeCardsInGrid(zEl, 10); // ZONES: equalize all 10 cards (top row + bottom row) to same height so top row cards match bottom row cards in height
-      equalizeCardsInGrid(rEl, 5); // RESTROOMS: 1 row of 5 (the 5 positions; each position is a stacked pair of side cards)
-      equalizeCardsInGrid(aEl, (auxDefs && auxDefs.length) || 6); // AUX: 1 row of N
-
-      // Note: We no longer force the 3 group bands (ZONES/RESTROOMS/AUX) to equivalent height via minHeight on the grids.
-      // With the stacked restroom layout (effectively 2 rows of side-cards), forcing equal bands was causing AUX
-      // (1 row) to stretch excessively tall and overflow the page/artboard. Groups now size naturally to their
-      // content rows * consistent per-row card heights. ZONES and RESTROOMS will be ~2x a row height, AUX ~1x,
-      // which fits without overflow while keeping cards consistent within their visual rows.
+      equalizeCardsInGrid(zEl, 5);
+      equalizeRRGrid(rEl);
+      equalizeCardsInGrid(aEl, auxDefs?.length || 6);
     };
 
-    // Run after the browser has laid out the cards (tasks, assignments etc. affect heights)
-    const rafId = requestAnimationFrame(equalize);
-    return () => cancelAnimationFrame(rafId);
+    let innerRaf = 0;
+    let ro: ResizeObserver | null = null;
+    const attachResizeObserver = () => {
+      const grids = [zonesGridRef.current, restroomsGridRef.current, auxGridRef.current].filter(
+        Boolean,
+      ) as HTMLElement[];
+      if (!grids.length || typeof ResizeObserver === "undefined") return;
+      ro?.disconnect();
+      ro = new ResizeObserver(() => {
+        requestAnimationFrame(equalize);
+      });
+      grids.forEach((el) => ro!.observe(el));
+    };
+
+    const outerRaf = requestAnimationFrame(() => {
+      equalize();
+      innerRaf = requestAnimationFrame(() => {
+        equalize();
+        attachResizeObserver();
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+      ro?.disconnect();
+    };
   }, [
+    currentView,
     assignments,
     auxDefs,
     selectedTasks,
@@ -333,6 +368,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     loadingAssignments,
     isDraftMode,
     cardBorders,
+    selectedSlotKey,
   ]);
 
   // Helper used only inside breaks view wave rendering
@@ -350,15 +386,48 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Actions inside the pad (Lock / Coverage / Swap / Assign Sweeper) explicitly call the
   // original onCardClick / onGenderClick (which opens the full MarkerPad) + close the pad.
   // Clear is direct + fast. This prevents the "both pad + full drawer at once" clutter.
-  const handleCardClickForPad = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
-    setPadSlotKey(k);
-    // Intentionally do NOT call onCardClick here for the initial trigger.
-  }, []);
+  const handleCardClickForPad = React.useCallback((k: string) => {
+    onSlotToggle?.(k);
+  }, [onSlotToggle]);
 
-  const handleGenderClickForPad = React.useCallback((k: string, el?: HTMLElement, e?: React.MouseEvent) => {
-    setPadSlotKey(k);
-    // Intentionally do NOT call onGenderClick here for the initial trigger.
-  }, []);
+  const handleGenderClickForPad = React.useCallback((k: string) => {
+    onSlotToggle?.(k);
+  }, [onSlotToggle]);
+
+  const renderPlacementPad = (
+    slotKey: string,
+    anchor: PlacementPadAnchor,
+    hostId: string,
+  ) => {
+    if (selectedSlotKey !== slotKey) return null;
+    return (
+      <PlacementPad
+        slotKey={slotKey}
+        anchor={anchor}
+        hostId={hostId}
+        onClose={() => onSlotClose?.()}
+        assignments={padDisplayAssignments}
+        selectedTasks={selectedTasks}
+        selectedDay={selectedDay}
+        members={members}
+        auxDefs={auxDefs}
+        isDark={isDark}
+        isCurrentNightLocked={isCurrentNightLocked}
+        setBreakGroupForSlot={setBreakGroupForSlot}
+        onAddCoverage={onAddCoverage}
+        onLiveUnassign={onClearSlot ?? onLiveUnassign}
+        onToggleLock={onToggleLock}
+        onAssign={onAssign}
+        onAddTask={onAddTask}
+        onRemoveTask={onRemoveTask}
+        onAssignSweeper={onAssignSweeper}
+        onRequestEngineInsight={onRequestEngineInsight}
+        scheduledUnassigned={scheduledUnassigned}
+        allEligibleTms={allEligibleTms}
+        onAddOnCall={onAddOnCall}
+      />
+    );
+  };
 
   const getLocs = (a: any) => {
     if (a.type === "zone") {
@@ -401,114 +470,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   };
 
   // Helper: compute the locations from the *most recent N placement events* (chronological last assignments)
-  // for a TM's pad history. Used to make "LAST 14 PLACEMENTS" grid + counts truly reflect the last 14
+  // for a TM's pad history. Used to make the Last 30 Spread grid + counts reflect the last 30 nights
   // assignments (not just any in a calendar window), so it matches what Last 5 shows and pulls full data.
   // Filters to prior to viewed day if beforeIso provided. Returns unique ui keys in recency order (newest first).
-  const getRecentPlacementKeys = (h: ZoneDetailEntry | null, n: number, beforeIso?: string): string[] => {
-    if (!h?.zoneDates) return [];
-    const events: Array<{ ui: string; d: string }> = [];
-    for (const [ui, ds] of Object.entries(h.zoneDates)) {
-      for (const d of (ds || [])) {
-        if (beforeIso && d >= beforeIso) continue; // prior only
-        events.push({ ui, d });
-      }
-    }
-    events.sort((a, b) => b.d.localeCompare(a.d)); // newest first
-    const topN = events.slice(0, n);
-    // unique preserving first-seen (most recent) order
-    const seen = new Set<string>();
-    const uniques: string[] = [];
-    for (const e of topN) {
-      if (!seen.has(e.ui)) {
-        seen.add(e.ui);
-        uniques.push(e.ui);
-      }
-    }
-    return uniques;
-  };
-
-  // Days since most recent placement in a given ui key (Z9 or Z9SR), using viewed day's iso as 'now'.
-  // Returns e.g. "3d" or "today" or "—" if none prior.
-  const getDaysSinceForKey = (h: ZoneDetailEntry | null, key: string, beforeIso: string): string => {
-    const dates = (h?.zoneDates?.[key] || []).filter((d: string) => d <= beforeIso);
-    if (!dates.length) return "—";
-    const latest = dates.sort().reverse()[0];
-    if (latest === beforeIso) return "today";
-    const d1 = new Date(beforeIso + "T12:00:00");
-    const d2 = new Date(latest + "T12:00:00");
-    const diffMs = d1.getTime() - d2.getTime();
-    const days = Math.max(0, Math.floor(diffMs / (1000 * 3600 * 24)));
-    return `${days}d`;
-  };
-
-  // Compact inline coverage options for the unilateral marker pad (shown when COVERAGE tapped in pad footer).
-  // Mirrors the spirit + colors of MarkerPad's CoveragePicker but sized to fit the 268px velvet pad.
-  // Self is disabled (can't cover self). onPick(target) will call the real onAddCoverage then reset mode.
-  const renderInlineCoverage = (sourceKey: string, onPick: (target: string) => void, onCancel: () => void) => {
-    const isDarkLocal = isDark;
-    const textMuted = isDarkLocal ? "rgba(255,255,255,0.40)" : "rgba(0,0,0,0.35)";
-    const chipBase: React.CSSProperties = {
-      borderRadius: 6, border: "1px solid", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.3px",
-      fontFamily: "var(--font-atkinson)", cursor: "pointer", padding: "3px 0", textAlign: "center", lineHeight: 1,
-    };
-    const sectionLabel: React.CSSProperties = {
-      fontSize: 6.5, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-      color: isDarkLocal ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.3)", marginBottom: 2, display: "block",
-    };
-    return (
-      <div style={{ padding: "6px 10px 8px", borderTop: "1px solid rgba(0,0,0,0.06)", background: "rgba(0,0,0,0.015)", display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: isDarkLocal ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)" }}>Add coverage to…</span>
-          <button type="button" onClick={(e)=>{e.stopPropagation(); onCancel();}} style={{ fontSize: 10, color: textMuted, background: "none", border: "none", padding: 0, cursor: "pointer" }}>✕</button>
-        </div>
-        {/* Zones compact 5col */}
-        <div>
-          <span style={sectionLabel}>Zones</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
-            {ZONE_DEFS.map(z => {
-              const color = getZoneColor(z.key);
-              const isSelf = z.key === sourceKey;
-              return (
-                <button key={z.key} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(z.key);}} style={{
-                  ...chipBase, borderColor: isSelf ? "rgba(0,0,0,0.08)" : `${color}99`, color: isSelf ? "rgba(0,0,0,0.2)" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}18`,
-                }}>{z.key.replace("Z","")}</button>
-              );
-            })}
-          </div>
-        </div>
-        {/* RR compact */}
-        <div>
-          <span style={sectionLabel}>Restrooms</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
-            {RR_DEFS.map(rr => {
-              const color = getRRAccent(rr.num);
-              const isSelf = sourceKey === `MRR${rr.num}` || sourceKey === `WRR${rr.num}`;
-              return (
-                <button key={rr.num} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(`MRR${rr.num}`);}} style={{
-                  ...chipBase, fontSize: 7, borderColor: isSelf ? "rgba(0,0,0,0.08)" : `${color}99`, color: isSelf ? "rgba(0,0,0,0.2)" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}18`,
-                }}>{rr.label}</button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Aux / support */}
-        <div>
-          <span style={sectionLabel}>Aux</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 3 }}>
-            {auxDefs.filter(d=>!d.key.startsWith('SP')).map(aux => {
-              const color = getAuxAccent(aux.key);
-              const isSelf = aux.key === sourceKey;
-              return (
-                <button key={aux.key} disabled={isSelf} onClick={(e)=>{e.stopPropagation(); if(!isSelf) onPick(aux.key);}} style={{
-                  ...chipBase, fontSize: 7, borderColor: isSelf ? "#ccc" : `${color}99`, color: isSelf ? "#999" : color, background: isSelf ? "rgba(0,0,0,0.02)" : `${color}15`,
-                }}>{aux.label.replace(/ .*/,'').slice(0,5)}</button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // Build tmId → assignment reverse lookup for breaks view (only when needed)
   const tmToAssignment = React.useMemo(() => {
@@ -730,16 +694,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div ref={zonesGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_DEFS.map((def) => {
                   const key = def.key;
-                  const isPadOpen = padSlotKey === key;
                   const accent = getZoneColor(key);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
-                  const isRightSidePad = ['Z4', 'Z5', 'Z9', 'Z10'].includes(key); // zone 4/5 and below (right cols in 5-col grid) open marker pad to LEFT
-
                   return (
-                    <div key={key} className="relative h-full" data-slot-key={key}>
+                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
                       <ZoneCard
                         def={def}
                         assignments={displayAssignments}
@@ -757,477 +718,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isPadOpen && (
-                        <div
-                          className={`placement-pad absolute top-0 ${isRightSidePad ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
-                          style={{
-                            borderRadius: 16,
-                            background: "rgba(255,255,255,0.98)",
-                            border: "1px solid rgba(0,0,0,0.08)",
-                            boxShadow: "0 20px 48px -16px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.75)",
-                            maxWidth: '268px',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* Accent rail + soft glow — matches Marker Pad velvet treatment (flipped for right-side cards) */}
-                          <div
-                            style={isRightSidePad ? {
-                              position: "absolute",
-                              top: 12,
-                              right: -1,
-                              width: 3,
-                              height: 44,
-                              borderRadius: "3px 0 0 3px",
-                              background: accent,
-                              boxShadow: `0 0 12px ${accent}77`,
-                            } : {
-                              position: "absolute",
-                              top: 12,
-                              left: -1,
-                              width: 3,
-                              height: 44,
-                              borderRadius: "0 3px 3px 0",
-                              background: accent,
-                              boxShadow: `0 0 12px ${accent}77`,
-                            }}
-                          />
-                          {/* Unilateral tail/pointer for stronger "comes off the card" attachment (flipped for right-side cards) */}
-                          <div
-                            style={isRightSidePad ? {
-                              position: "absolute",
-                              right: "-7px",
-                              top: "20px",
-                              width: 0,
-                              height: 0,
-                              borderTop: "5px solid transparent",
-                              borderBottom: "5px solid transparent",
-                              borderLeft: "6px solid rgba(0,0,0,0.08)",
-                            } : {
-                              position: "absolute",
-                              left: "-7px",
-                              top: "20px",
-                              width: 0,
-                              height: 0,
-                              borderTop: "5px solid transparent",
-                              borderBottom: "5px solid transparent",
-                              borderRight: "6px solid rgba(0,0,0,0.08)",
-                            }}
-                          />
-
-                          {/* Close — matches Marker Pad round subtle × (positioned on outer edge for flipped left-dash) */}
-                          <button
-                            onClick={() => setPadSlotKey(null)}
-                            style={{
-                              position: "absolute",
-                              top: 8,
-                              [isRightSidePad ? 'left' : 'right']: 8,
-                              width: 22,
-                              height: 22,
-                              borderRadius: "50%",
-                              background: "rgba(0,0,0,0.04)",
-                              border: "1px solid rgba(0,0,0,0.08)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#8E8E93",
-                              fontSize: 13,
-                              lineHeight: 1,
-                              cursor: "pointer",
-                            }}
-                            onMouseEnter={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.08)";
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.04)";
-                            }}
-                          >
-                            ×
-                          </button>
-
-                          {/* Header — premium avatar + name + break group pill like Marker Pad (taller for larger comps) */}
-                          <div style={{ padding: "10px 14px 6px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                              {/* Small avatar circle (velvet style) — slightly larger */}
-                              <div
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: "50%",
-                                  background: a.tmName ? accent : "rgba(0,0,0,0.06)",
-                                  color: "#fff",
-                                  fontSize: 11,
-                                  fontWeight: 800,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  flexShrink: 0,
-                                  boxShadow: a.tmName ? "inset 0 1px 0 rgba(255,255,255,0.25)" : "none",
-                                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                                }}
-                              >
-                                {a.tmName ? a.tmName[0].toUpperCase() : "–"}
-                              </div>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.1px", color: accent, textTransform: "uppercase", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
-                                  {def.label}
-                                </div>
-                                <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.2px", color: "#111", fontFamily: "var(--font-bricolage, var(--font-atkinson))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {a.tmName || "— Unassigned —"}
-                                </div>
-                                {(a.hours || a.pool) && (
-                                  <div style={{ fontSize: 10, color: "#8E8E93", fontFamily: "var(--font-jetbrains, monospace)", marginTop: 1 }}>
-                                    {a.hours ?? "11p–7a"} · {a.pool ?? "Full"}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Break Group pill — velvet active pill treatment, compact + optional clear x to build out UX (larger) */}
-                            <div style={{ textAlign: "right", flexShrink: 0, marginRight: 24 }}>
-                              <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "1px", color: "#6C6C72", textTransform: "uppercase" }}>BREAK GROUP</div>
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                <div
-                                  style={{
-                                    marginTop: 2,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    width: 26,
-                                    height: 26,
-                                    borderRadius: 8,
-                                    background: `linear-gradient(180deg, ${accent}cc, ${accent}88)`,
-                                    border: `1px solid ${accent}`,
-                                    color: "#fff",
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-                                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 4px -2px ${accent}88`,
-                                  }}
-                                >
-                                  {a.breakGroup ?? "—"}
-                                </div>
-                                {a.breakGroup != null && setBreakGroupForSlot && (
-                                  <div
-                                    onClick={(e) => { e.stopPropagation(); setBreakGroupForSlot(key, 0); }}
-                                    style={{ width: 14, height: 14, borderRadius: '50%', background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 4 }}
-                                    title="Clear break group"
-                                  >
-                                    <span style={{ fontSize: 9, color: '#666', lineHeight: 1 }}>×</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Soft separator */}
-                          <div style={{ height: 1, background: "rgba(0,0,0,0.06)", margin: "0 10px" }} />
-
-                          {/* Tasks header + Assign Sweeper (premium pill like drawer) */}
-                          <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
-                            <button
-                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
-                              style={{
-                                fontSize: 8, fontWeight: 700, letterSpacing: "0.2px",
-                                padding: "2px 6px", borderRadius: 6,
-                                background: "rgba(0,0,0,0.06)",
-                                border: "1px solid rgba(0,0,0,0.12)",
-                                color: "rgba(0,0,0,0.65)",
-                                cursor: "pointer",
-                                fontFamily: "var(--font-atkinson)",
-                              }}
-                              onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.10)";
-                                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,0,0,0.20)";
-                              }}
-                              onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.06)";
-                                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,0,0,0.12)";
-                              }}
-                            >
-                              sweeper
-                            </button>
-                          </div>
-
-                          {/* Ability to add TM on blank cards */}
-                          {!a.tmName && (
-                            <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                              <button
-                                onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
-                                style={{
-                                  width: "100%",
-                                  padding: "6px 8px",
-                                  borderRadius: 8,
-                                  background: accent,
-                                  color: "#fff",
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontFamily: "var(--font-atkinson)",
-                                }}
-                              >
-                                + Add / Assign TM
-                              </button>
-                            </div>
-                          )}
-
-                          {/* History sections only for assigned TMs */}
-                          {a.tmName && (
-                            <>
-                              {/* PLACEMENT MATRIX or inline coverage when tapped in pad footer */}
-                              {padCoverageSource === key ? (
-                                renderInlineCoverage(key, (tgt) => { if (onAddCoverage) { onAddCoverage(key, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
-                              ) : (
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                  {/* Simple red ring icon matching the screenshot (red border, white fill, small red center dot) — larger */}
-                                  <div style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: '50%',
-                                    border: `3px solid ${accent}`,
-                                    background: 'white',
-                                    position: 'relative',
-                                    flexShrink: 0,
-                                  }}>
-                                    <div style={{
-                                      width: 10,
-                                      height: 10,
-                                      borderRadius: '50%',
-                                      background: accent,
-                                      position: 'absolute',
-                                      top: '50%',
-                                      left: '50%',
-                                      transform: 'translate(-50%, -50%)',
-                                    }} />
-                                  </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
-                                    <div>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
-                                          return recent.filter(k => k.startsWith('MRR') || k.startsWith('WRR')).length;
-                                        })()}</span></span>
-                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
-                                          return recent.filter(k => /^Z\d+$/.test(k)).length;
-                                        })()}</span></span>
-                                      </div>
-                                    </div>
-                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
-                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        {(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
-                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
-                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
-                                        })()}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              )}
-
-                              {/* LAST 14 PLACEMENTS GRID — pills for zones, RRs (eligible), aux. Filled if placed in last 14 */}
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 14 PLACEMENTS</div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                                  {(() => {
-                                    // Gender-aware RR sides for this TM (so a male TM doesn't show female RR pills in their last-14 matrix, etc.)
-                                    const padA = displayAssignments[padSlotKey] || a;
-                                    const tmId = padA?.tmId;
-                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
-                                    const g = normalizeGender(rawGender);
-
-                                    const locs: { ui: string; label: string }[] = [
-                                      ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
-                                      // Only eligible RR side(s) for the current TM's gender (both if unknown/missing data)
-                                      ...RR_DEFS.flatMap((d) => {
-                                        const sides: { ui: string; label: string }[] = [];
-                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
-                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
-                                        return sides;
-                                      }),
-                                      ...auxDefs
-                                        .filter((d) => !d.key.startsWith('SP'))
-                                        .map((d) => {
-                                          let label = d.label || d.key;
-                                          if (d.key.startsWith('TR')) {
-                                            const num = d.key.replace(/\D/g, '');
-                                            label = `T${num}`; // short per request; ui key stays TR* so history matching works
-                                          }
-                                          return { ui: d.key, label };
-                                        }),
-                                    ];
-                                    // Use most recent 14 placements (by event recency) prior to viewed day for "LAST 14" accuracy.
-                                    const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
-                                    const placed = new Set(recent14Keys);
-                                    const getPillAccent = (ui: string): string => {
-                                      if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
-                                      if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
-                                        const num = parseInt(ui.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num);
-                                      }
-                                      return getAuxAccent(ui);
-                                    };
-                                    return locs.map((loc, idx) => {
-                                      const was = placed.has(loc.ui);
-                                      const locAccent = getPillAccent(loc.ui);
-                                      return (
-                                        <span
-                                          key={idx}
-                                          style={{
-                                            width: "40px",
-                                            textAlign: "center",
-                                            whiteSpace: "nowrap",
-                                            fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                                            background: was ? `${locAccent}33` : "transparent",
-                                            border: was ? `1px solid ${locAccent}` : "1px solid #ccc",
-                                            color: was ? locAccent : "#666",
-                                            fontFamily: "var(--font-jetbrains, monospace)",
-                                            boxSizing: "border-box",
-                                          }}
-                                          title={loc.ui}
-                                        >
-                                          {loc.label}
-                                        </span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                              </div>
-
-                              {/* LAST 5 PLACEMENTS — dynamic from history, RR shows number */}
-                              <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 5 PLACEMENTS</div>
-                                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                  {(() => {
-                                    let pills: string[] = ["Z1", "RR3", "Z4"];
-                                    if (padHistory && padSlotKey === key) {
-                                      const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
-                                      pills = recent5.map((ui) => {
-                                        if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
-                                        if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
-                                        if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
-                                        if (ui.startsWith('SP')) return ui.replace('SP', 'SUPPORT');
-                                        return ui;
-                                      });
-                                    }
-                                    const getColorForPill = (label: string): string => {
-                                      if (label.includes('RR')) {
-                                        const num = parseInt(label.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num); // now match the RR card accent, like last14 grid
-                                      }
-                                      if (/^Z\d+$/.test(label)) return getZoneColor(label);
-                                      if (label.includes('Z9SR') || label.includes('SR')) return getAuxAccent('Z9SR');
-                                      if (label.includes('TRASH')) return getAuxAccent('TR1');
-                                      if (label.includes('SUPPORT')) return getAuxAccent('SP1');
-                                      return accent; // fallback current pad accent
-                                    };
-                                    return pills.map((b, i) => {
-                                      const pAccent = getColorForPill(b);
-                                      const bg = `${pAccent}22`;
-                                      const border = `${pAccent}44`;
-                                      const col = pAccent;
-                                      return (
-                                        <span
-                                          key={i}
-                                          style={{
-                                            fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4,
-                                            background: bg, border: `1px solid ${border}`, color: col,
-                                            fontFamily: "var(--font-jetbrains, monospace)", letterSpacing: "0.2px",
-                                          }}
-                                        >
-                                          {b}
-                                        </span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                                <div style={{ fontSize: 7, color: "#8E8E93", marginTop: 2 }}>NOT RECENTLY PLACED</div>
-                              </div>
-
-                              {/* INSIGHTS — engine heart, velvet typography (responsive, no internal scroll; content drives pad height) */}
-                              <div style={{ padding: "6px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 2 }}>INSIGHTS</div>
-                                <div style={{ fontSize: 10, lineHeight: 1.25, color: "#2F2F2D" }}>
-                                  {hasProv && prov.rationale ? prov.rationale : "Engine placed for rotation balance + coverage."}
-                                </div>
-                                {prov.fairnessSignals && (
-                                  <div style={{ marginTop: 4, display: "flex", gap: 6, fontSize: 8.5, color: "#5C4A2E", fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                    {Object.entries(prov.fairnessSignals).slice(0, 3).map(([k, v]: [string, any]) => {
-                                      const lab = k.toLowerCase().includes('rot') ? 'Rot' : k.toLowerCase().includes('aff') ? 'Aff' : 'Load';
-                                      return <span key={k}>{lab} {Number(v).toFixed(1)}</span>;
-                                    })}
-                                  </div>
-                                )}
-                                {/* Initial xAI engine insight wiring — subtle affordance in unilateral marker pad */}
-                                {onRequestEngineInsight && (
-                                  <div style={{ marginTop: 6 }}>
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        if (!onRequestEngineInsight || !padSlotKey) return;
-                                        setPadInsight(null);
-                                        setPadInsightLoading(true);
-                                        try {
-                                          const insight = await onRequestEngineInsight(padSlotKey);
-                                          setPadInsight(insight || "No additional insight available right now.");
-                                        } catch (err) {
-                                          setPadInsight("xAI insight unavailable (check connection).");
-                                        } finally {
-                                          setPadInsightLoading(false);
-                                        }
-                                      }}
-                                      style={{
-                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
-                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
-                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
-                                      }}
-                                    >
-                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
-                                    </button>
-                                    {padInsight && (
-                                      <div style={{ marginTop: 4, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "4px 6px", borderRadius: 4 }}>
-                                        {padInsight}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-
-                          {/* Footer actions — EXACT visual language from Marker Pad (glass, radius 9, hover, red Clear) */}
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)", flexShrink: 0 }}>
-                            <button
-                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
-                              style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
-                            >Lock</button>
-                            <button
-                              onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setPadSlotKey(null); }}
-                              style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935", cursor: "pointer" }}
-                            >Clear</button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); const src = key; setPadCoverageSource(src); }}
-                              style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
-                            >Coverage</button>
-                            <button
-                              onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
-                              style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: "-0.1px", fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)", cursor: "pointer" }}
-                            >Swap</button>
-                          </div>
-                        </div>
-                      )}
+                      {activePlacementPad?.hostId === key &&
+                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
                     </div>
                   );
                 })}
@@ -1250,21 +742,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div ref={restroomsGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {RR_DEFS.map((def) => {
                   const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
-                  const isPadOpen = padSlotKey === key || (padSlotKey && (padSlotKey === `MRR${def.num}` || padSlotKey === `WRR${def.num}`));
                   const accent = getRRAccent(def.num);
                   const mKey = `MRR${def.num}`;
                   const wKey = `WRR${def.num}`;
-                  const mA = displayAssignments[mKey] || {};
-                  const wA = displayAssignments[wKey] || {};
-                  const mProv = mA.provenance || {};
-                  const wProv = wA.provenance || {};
-                  // focusedSk: prefer live padSlotKey (supports direct WRR click/assign for persist). Only falls back when no side marker pad active.
-                  const focusedSk = (padSlotKey && (padSlotKey.startsWith('MRR') || padSlotKey.startsWith('WRR'))) ? padSlotKey : (!mA.tmName ? mKey : wKey);
-
-                  const isRightSidePad = [8, 10].includes(def.num); // right cols in 5-col RR grid (RR8 col4, RR10 col5) — open marker pad to LEFT (opposite side), matching zones Z4/Z5/Z9/Z10 behavior. Applies to both womens/mens since pad is per physical wrapper but content uses focusedSk.
+                  const rrHostId = `rr-${def.num}`;
 
                   return (
-                    <div key={def.num} className="relative h-full" data-slot-key={key}>
+                    <div
+                      key={def.num}
+                      className="relative h-full"
+                      data-slot-key={key}
+                      data-pad-host={rrHostId}
+                      data-placement-host={rrHostId}
+                    >
                       <RRCard
                         def={def}
                         assignments={displayAssignments}
@@ -1282,376 +772,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isPadOpen && (
-                        <div
-                          className={`placement-pad absolute bottom-0 ${isRightSidePad ? 'right-full mr-1.5' : 'left-full ml-1.5'} w-[268px] z-[60] overflow-hidden flex flex-col`}
-                          style={{
-                            borderRadius: 16,
-                            background: "rgba(255,255,255,0.98)",
-                            border: "1px solid rgba(0,0,0,0.08)",
-                            boxShadow: "0 20px 48px -16px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.75)",
-                            maxWidth: '268px',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* Accent rail + soft glow — matches Marker Pad (bottom-pinned for RR; flipped for right-side cards like RR8/RR10) */}
-                          <div
-                            style={isRightSidePad ? {
-                              position: "absolute",
-                              bottom: 12,
-                              right: -1,
-                              width: 3,
-                              height: 44,
-                              borderRadius: "3px 0 0 3px",
-                              background: accent,
-                              boxShadow: `0 0 12px ${accent}77`,
-                            } : {
-                              position: "absolute",
-                              bottom: 12,
-                              left: -1,
-                              width: 3,
-                              height: 44,
-                              borderRadius: "0 3px 3px 0",
-                              background: accent,
-                              boxShadow: `0 0 12px ${accent}77`,
-                            }}
-                          />
-                          {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward; flipped for right-side) */}
-                          <div
-                            style={isRightSidePad ? {
-                              position: "absolute",
-                              right: "-7px",
-                              bottom: "20px",
-                              width: 0,
-                              height: 0,
-                              borderTop: "5px solid transparent",
-                              borderBottom: "5px solid transparent",
-                              borderLeft: "6px solid rgba(0,0,0,0.08)",
-                            } : {
-                              position: "absolute",
-                              left: "-7px",
-                              bottom: "20px",
-                              width: 0,
-                              height: 0,
-                              borderTop: "5px solid transparent",
-                              borderBottom: "5px solid transparent",
-                              borderRight: "6px solid rgba(0,0,0,0.08)",
-                            }}
-                          />
-
-                          {/* Close — positioned on outer edge for flipped left-dash */}
-                          <button
-                            onClick={() => setPadSlotKey(null)}
-                            style={{
-                              position: "absolute",
-                              bottom: 8,
-                              [isRightSidePad ? 'left' : 'right']: 8,
-                              width: 22,
-                              height: 22,
-                              borderRadius: "50%",
-                              background: "rgba(0,0,0,0.04)",
-                              border: "1px solid rgba(0,0,0,0.08)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#8E8E93",
-                              fontSize: 13,
-                              cursor: "pointer",
-                            }}
-                          >×</button>
-
-                          {/* RR header — per-side focused, velvet avatar + label (taller, larger comps) */}
-                          {(() => {
-                            const isMens = focusedSk.startsWith('M');
-                            const sideA = isMens ? mA : wA;
-                            const sideLabel = isMens ? "MEN'S" : "WOMEN'S";
-                            const sideName = sideA.tmName || "— OPEN —";
-                            return (
-                              <div style={{ padding: "11px 15px 7px 15px", display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: sideA.tmName ? accent : "rgba(0,0,0,0.06)", color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: sideA.tmName ? "inset 0 1px 0 rgba(255,255,255,0.25)" : "none" }}>
-                                    {sideA.tmName ? sideA.tmName[0].toUpperCase() : "–"}
-                                  </div>
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.1px", color: accent, textTransform: "uppercase" }}>{def.label} · {sideLabel}</div>
-                                    <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.2px", color: "#111", fontFamily: "var(--font-bricolage, var(--font-atkinson))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sideName}</div>
-                                    {(sideA.hours || sideA.pool) && (
-                                      <div style={{ fontSize: 10, color: "#8E8E93", fontFamily: "var(--font-jetbrains, monospace)", marginTop: 1 }}>
-                                        {sideA.hours ?? "11p–7a"} · {sideA.pool ?? "Full"}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right", flexShrink: 0, marginRight: 24 }}>
-                                  <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "1px", color: "#6C6C72", textTransform: "uppercase" }}>BREAK GROUP</div>
-                                  <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                    <div style={{ marginTop: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, background: `linear-gradient(180deg, ${accent}cc, ${accent}88)`, border: `1px solid ${accent}`, color: "#fff", fontSize: 15, fontWeight: 800, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25)` }}>
-                                      {sideA.breakGroup ?? mA.breakGroup ?? wA.breakGroup ?? "—"}
-                                    </div>
-                                    {(sideA.breakGroup ?? mA.breakGroup ?? wA.breakGroup) != null && setBreakGroupForSlot && (
-                                      <div
-                                        onClick={(e) => { e.stopPropagation(); setBreakGroupForSlot(focusedSk, 0); }}
-                                        style={{ width: 14, height: 14, borderRadius: '50%', background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 4 }}
-                                        title="Clear break group"
-                                      >
-                                        <span style={{ fontSize: 9, color: '#666', lineHeight: 1 }}>×</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          <div style={{ height: 1, background: "rgba(0,0,0,0.06)", margin: "0 10px" }} />
-
-                          <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
-                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
-                          </div>
-
-                          {/* Ability to add TM on blank cards (per side) — uses focusedSk (padSlotKey side or sensible default) so WRR +Add persists to womens */}
-                          {!(( focusedSk.startsWith('M') ? mA : wA).tmName) && (
-                            <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                              <button
-                                onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }}
-                                style={{
-                                  width: "100%",
-                                  padding: "6px 8px",
-                                  borderRadius: 8,
-                                  background: accent,
-                                  color: "#fff",
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontFamily: "var(--font-atkinson)",
-                                }}
-                              >
-                                + Add / Assign TM (this side)
-                              </button>
-                            </div>
-                          )}
-
-                          {/* History sections only for assigned TMs (per side) */}
-                          {(( focusedSk.startsWith('M') ? mA : wA).tmName) && (
-                            <>
-                              {/* Matrix + last 5 + insights — same premium treatment (or coverage options if tapped) */}
-                              {padCoverageSource === focusedSk ? (
-                                renderInlineCoverage(focusedSk, (tgt) => { if (onAddCoverage) { onAddCoverage(focusedSk, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
-                              ) : (
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                  {/* Simple red ring icon matching the screenshot (red border, white fill, small red center dot) — larger */}
-                                  <div style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: '50%',
-                                    border: `3px solid ${accent}`,
-                                    background: 'white',
-                                    position: 'relative',
-                                    flexShrink: 0,
-                                  }}>
-                                    <div style={{
-                                      width: 10,
-                                      height: 10,
-                                      borderRadius: '50%',
-                                      background: accent,
-                                      position: 'absolute',
-                                      top: '50%',
-                                      left: '50%',
-                                      transform: 'translate(-50%, -50%)',
-                                    }} />
-                                  </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
-                                    <div>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        <span style={{ color: accent, fontWeight: 700 }}>RR <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso); return recent.filter(k => k.startsWith('MRR') || k.startsWith('WRR')).length;
-                                        })()}</span></span>
-                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>ZONE <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso); return recent.filter(k => /^Z\d+$/.test(k)).length;
-                                        })()}</span></span>
-                                      </div>
-                                    </div>
-                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
-                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        {(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
-                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
-                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
-                                        })()}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              )}
-
-                              {/* LAST 14 PLACEMENTS GRID — full, same as zone (eligible RR sides, no support, T1/T2, prior filter, equal width colored pills) */}
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 14 PLACEMENTS</div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                                  {(() => {
-                                    const localSideKey = focusedSk;
-                                    const padA = displayAssignments[padSlotKey] || (localSideKey.startsWith('M') ? mA : wA);
-                                    const tmId = padA?.tmId;
-                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
-                                    const g = normalizeGender(rawGender);
-                                    const locs: { ui: string; label: string }[] = [
-                                      ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
-                                      ...RR_DEFS.flatMap((d) => {
-                                        const sides: { ui: string; label: string }[] = [];
-                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
-                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
-                                        return sides;
-                                      }),
-                                      ...auxDefs.filter((d) => !d.key.startsWith('SP')).map((d) => {
-                                        let label = d.label || d.key;
-                                        if (d.key.startsWith('TR')) { const num = d.key.replace(/\D/g, ''); label = `T${num}`; }
-                                        return { ui: d.key, label };
-                                      }),
-                                    ];
-                                    const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
-                                    const placed = new Set(recent14Keys);
-                                    const getPillAccent = (ui: string): string => {
-                                      if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
-                                      if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
-                                        const num = parseInt(ui.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num);
-                                      }
-                                      return getAuxAccent(ui);
-                                    };
-                                    return locs.map((loc, idx) => {
-                                      const was = placed.has(loc.ui);
-                                      const locAccent = getPillAccent(loc.ui);
-                                      return (
-                                        <span
-                                          key={idx}
-                                          style={{
-                                            width: "40px",
-                                            textAlign: "center",
-                                            whiteSpace: "nowrap",
-                                            fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                                            background: was ? `${locAccent}33` : "transparent",
-                                            border: was ? `1px solid ${locAccent}` : "1px solid #ccc",
-                                            color: was ? locAccent : "#666",
-                                            fontFamily: "var(--font-jetbrains, monospace)",
-                                            boxSizing: "border-box",
-                                          }}
-                                          title={loc.ui}
-                                        >
-                                          {loc.label}
-                                        </span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 5 PLACEMENTS</div>
-                                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                  {(() => {
-                                    let pills: string[] = ["Z2", "RR"];
-                                    if (padHistory && padSlotKey && (padSlotKey === mKey || padSlotKey === wKey || padSlotKey.startsWith('MRR') || padSlotKey.startsWith('WRR'))) {
-                                      const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
-                                      pills = recent5.map((ui) => {
-                                        if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
-                                        if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
-                                        if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
-                                        if (ui.startsWith('SP')) return ui.replace('SP', 'SUPPORT');
-                                        return ui;
-                                      });
-                                    }
-                                    const getColorForPill = (label: string): string => {
-                                      if (label.includes('RR')) {
-                                        const num = parseInt(label.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num);
-                                      }
-                                      if (/^Z\d+$/.test(label)) return getZoneColor(label);
-                                      if (label.includes('Z9SR') || label.includes('SR')) return getAuxAccent('Z9SR');
-                                      if (label.includes('TRASH')) return getAuxAccent('TR1');
-                                      if (label.includes('SUPPORT')) return getAuxAccent('SP1');
-                                      return accent;
-                                    };
-                                    return pills.map((b, i) => {
-                                      const pAccent = getColorForPill(b);
-                                      const bg = `${pAccent}22`;
-                                      const border = `${pAccent}44`;
-                                      const col = pAccent;
-                                      return (
-                                        <span key={i} style={{ fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: bg, border: `1px solid ${border}`, color: col, fontFamily: "var(--font-jetbrains, monospace)" }}>{b}</span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                                <div style={{ fontSize: 7, color: "#8E8E93", marginTop: 2 }}>NOT RECENTLY PLACED</div>
-                              </div>
-
-                              <div style={{ padding: "6px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 2 }}>INSIGHTS</div>
-                                <div style={{ fontSize: 10, lineHeight: 1.25, color: "#2F2F2D" }}>
-                                  {(() => {
-                                    const sk = focusedSk;
-                                    const sa = sk.startsWith('M') ? mA : wA;
-                                    return sa.provenance?.rationale || "Per-side fairness for restroom coverage.";
-                                  })()}
-                                </div>
-                                {/* Initial xAI engine insight wiring (per-side via focusedSk) */}
-                                {onRequestEngineInsight && (
-                                  <div style={{ marginTop: 4 }}>
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        if (!onRequestEngineInsight) return;
-                                        setPadInsight(null);
-                                        setPadInsightLoading(true);
-                                        try {
-                                          const insight = await onRequestEngineInsight(focusedSk);
-                                          setPadInsight(insight || "No additional insight available right now.");
-                                        } catch {
-                                          setPadInsight("xAI insight unavailable (check connection).");
-                                        } finally {
-                                          setPadInsightLoading(false);
-                                        }
-                                      }}
-                                      style={{
-                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
-                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
-                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
-                                      }}
-                                    >
-                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
-                                    </button>
-                                    {padInsight && (
-                                      <div style={{ marginTop: 3, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "3px 5px", borderRadius: 4 }}>
-                                        {padInsight}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                            {/* All actions target the currently focused side in this marker pad (prevents cross-side overwrite bugs on add/refresh). focusedSk guarantees WRR when womens side active. */}
-                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
-                            <button onClick={() => { onLiveUnassign?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
-                            <button onClick={(e) => { e.stopPropagation(); setPadCoverageSource(focusedSk); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
-                            <button onClick={() => { onGenderClick?.(focusedSk); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
-                          </div>
-                        </div>
-                      )}
+                      {activePlacementPad?.hostId === rrHostId &&
+                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
                     </div>
                   );
                 })}
@@ -1677,14 +799,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               >
                 {auxDefs.map((def) => {
                   const key = def.key;
-                  const isPadOpen = padSlotKey === key;
                   const accent = getAuxAccent(key);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
                   return (
-                    <div key={key} className="relative h-full" data-slot-key={key}>
+                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
                       <AuxCard
                         def={def}
                         assignments={displayAssignments}
@@ -1702,315 +823,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                       />
-                      {isPadOpen && (
-                        <div
-                          className="placement-pad absolute bottom-0 left-full ml-1.5 w-[268px] z-[60] overflow-hidden flex flex-col"
-                          style={{
-                            borderRadius: 16,
-                            background: "rgba(255,255,255,0.98)",
-                            border: "1px solid rgba(0,0,0,0.08)",
-                            boxShadow: "0 20px 48px -16px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.75)",
-                            maxWidth: '268px',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* Left accent rail + soft glow (bottom-pinned for aux: opposite of zones' top pin down) */}
-                          <div style={{ position: "absolute", bottom: 12, left: -1, width: 3, height: 44, borderRadius: "0 3px 3px 0", background: accent, boxShadow: `0 0 12px ${accent}77` }} />
-                          {/* Unilateral tail/pointer (bottom-pinned so attachment near card bottom, dash extends upward) */}
-                          <div style={{ position: "absolute", left: "-7px", bottom: "20px", width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderRight: "6px solid rgba(0,0,0,0.08)" }} />
-
-                          <button onClick={() => setPadSlotKey(null)} style={{ position: "absolute", bottom: 8, right: 8, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "#8E8E93", fontSize: 13, cursor: "pointer" }}>×</button>
-
-                          {/* AUX header — premium avatar style (taller, larger comps) */}
-                          <div style={{ padding: "11px 15px 7px 15px", display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: "50%", background: a.tmName ? accent : "rgba(0,0,0,0.06)", color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: a.tmName ? "inset 0 1px 0 rgba(255,255,255,0.25)" : "none" }}>
-                                {a.tmName ? a.tmName[0].toUpperCase() : "–"}
-                              </div>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.1px", color: accent, textTransform: "uppercase" }}>{def.label}</div>
-                                <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.2px", color: "#111", fontFamily: "var(--font-bricolage, var(--font-atkinson))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.tmName || "— Unassigned —"}</div>
-                                {(a.hours || a.pool) && (
-                                  <div style={{ fontSize: 10, color: "#8E8E93", fontFamily: "var(--font-jetbrains, monospace)", marginTop: 1 }}>
-                                    {a.hours ?? "11p–7a"} · {a.pool ?? "Full"}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div style={{ textAlign: "right", flexShrink: 0, marginRight: 24 }}>
-                              <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "1px", color: "#6C6C72", textTransform: "uppercase" }}>BREAK GROUP</div>
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                <div style={{ marginTop: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, background: `linear-gradient(180deg, ${accent}cc, ${accent}88)`, border: `1px solid ${accent}`, color: "#fff", fontSize: 15, fontWeight: 800, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25)` }}>
-                                  {a.breakGroup ?? "—"}
-                                </div>
-                                {a.breakGroup != null && setBreakGroupForSlot && (
-                                  <div
-                                    onClick={(e) => { e.stopPropagation(); setBreakGroupForSlot(key, 0); }}
-                                    style={{ width: 14, height: 14, borderRadius: '50%', background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginLeft: 4 }}
-                                    title="Clear break group"
-                                  >
-                                    <span style={{ fontSize: 9, color: '#666', lineHeight: 1 }}>×</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ height: 1, background: "rgba(0,0,0,0.06)", margin: "0 10px" }} />
-
-                          <div style={{ padding: "7px 12px 5px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "#6C6C72" }}>TASKS</span>
-                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.2px", padding: "2px 6px", borderRadius: 6, background: "rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.65)" }}>sweeper</button>
-                          </div>
-
-                          {/* Ability to add TM on blank cards */}
-                          {!a.tmName && (
-                            <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                              <button
-                                onClick={() => { onCardClick?.(key); setPadSlotKey(null); }}
-                                style={{
-                                  width: "100%",
-                                  padding: "6px 8px",
-                                  borderRadius: 8,
-                                  background: accent,
-                                  color: "#fff",
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontFamily: "var(--font-atkinson)",
-                                }}
-                              >
-                                + Add / Assign TM
-                              </button>
-                            </div>
-                          )}
-
-                          {/* History sections only for assigned TMs */}
-                          {a.tmName && (
-                            <>
-                              {padCoverageSource === key ? (
-                                renderInlineCoverage(key, (tgt) => { if (onAddCoverage) { onAddCoverage(key, tgt); } setPadCoverageSource(null); }, () => setPadCoverageSource(null))
-                              ) : (
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 4 }}>PLACEMENT MATRIX</div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                  {/* Simple red ring icon matching the screenshot (red border, white fill, small red center dot) — larger */}
-                                  <div style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: '50%',
-                                    border: `3px solid ${accent}`,
-                                    background: 'white',
-                                    position: 'relative',
-                                    flexShrink: 0,
-                                  }}>
-                                    <div style={{
-                                      width: 10,
-                                      height: 10,
-                                      borderRadius: '50%',
-                                      background: accent,
-                                      position: 'absolute',
-                                      top: '50%',
-                                      left: '50%',
-                                      transform: 'translate(-50%, -50%)',
-                                    }} />
-                                  </div>
-                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, display: "flex", gap: 12 }}>
-                                    <div>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST 14 PLACEMENTS</div>
-                                      <div style={{ display: "flex", gap: 8, marginTop: 2, fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        <span style={{ color: accent, fontWeight: 700 }}>AUX <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
-                                          return recent.filter(k => !/^Z\d+$/.test(k) && !(k.startsWith('MRR')||k.startsWith('WRR'))).length;
-                                        })()}</span></span>
-                                        <span style={{ color: "#8E8E93", fontWeight: 700 }}>OTHER <span style={{ color: "#111" }}>{(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const recent = getRecentPlacementKeys(padHistory, 14, curIso);
-                                          return recent.filter(k => /^Z\d+$/.test(k)).length;
-                                        })()}</span></span>
-                                      </div>
-                                    </div>
-                                    <div style={{ paddingLeft: 10, borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
-                                      <div style={{ color: "#6C6C72", fontSize: 7.5 }}>LAST IN SR</div>
-                                      <div style={{ fontSize: 8, lineHeight: 1.05, marginTop: 2, color: "#111", fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                        {(() => {
-                                          const curIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth()+1).padStart(2,'0')}-${String(selectedDay.date.getDate()).padStart(2,'0')}`;
-                                          const dZ = getDaysSinceForKey(padHistory, "Z9", curIso);
-                                          const dZsr = getDaysSinceForKey(padHistory, "Z9SR", curIso);
-                                          return <><div>{dZ} since Z9</div><div>{dZsr} since Z9SR</div></>;
-                                        })()}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              )}
-
-                              {/* LAST 14 PLACEMENTS GRID — full, same as zone (no support, T1/T2, prior filter, equal width colored pills) */}
-                              <div style={{ padding: "5px 12px 7px" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 14 PLACEMENTS</div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                                  {(() => {
-                                    // Gender-aware RR sides (consistent with zone + RR pads). Lookup may be for the aux-assigned TM.
-                                    const padA = displayAssignments[padSlotKey] || a;
-                                    const tmId = padA?.tmId;
-                                    const rawGender = members?.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId))?.gender ?? null;
-                                    const g = normalizeGender(rawGender);
-
-                                    const locs: { ui: string; label: string }[] = [
-                                      ...ZONE_DEFS.map((d) => ({ ui: d.key, label: d.key })),
-                                      // Only eligible RR side(s) for the current TM's gender
-                                      ...RR_DEFS.flatMap((d) => {
-                                        const sides: { ui: string; label: string }[] = [];
-                                        if (!g || g === 'M') sides.push({ ui: `MRR${d.num}`, label: `RR${d.num}M` });
-                                        if (!g || g === 'F') sides.push({ ui: `WRR${d.num}`, label: `RR${d.num}W` });
-                                        return sides;
-                                      }),
-                                      ...auxDefs.filter((d) => !d.key.startsWith('SP')).map((d) => {
-                                        let label = d.label || d.key;
-                                        if (d.key.startsWith('TR')) { const num = d.key.replace(/\D/g, ''); label = `T${num}`; }
-                                        return { ui: d.key, label };
-                                      }),
-                                    ];
-                                    const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                    const recent14Keys = getRecentPlacementKeys(padHistory, 14, currentIso);
-                                    const placed = new Set(recent14Keys);
-                                    const getPillAccent = (ui: string): string => {
-                                      if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
-                                      if (ui.startsWith('MRR') || ui.startsWith('WRR')) {
-                                        const num = parseInt(ui.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num);
-                                      }
-                                      return getAuxAccent(ui);
-                                    };
-                                    return locs.map((loc, idx) => {
-                                      const was = placed.has(loc.ui);
-                                      const locAccent = getPillAccent(loc.ui);
-                                      return (
-                                        <span
-                                          key={idx}
-                                          style={{
-                                            width: "40px",
-                                            textAlign: "center",
-                                            whiteSpace: "nowrap",
-                                            fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                                            background: was ? `${locAccent}33` : "transparent",
-                                            border: was ? `1px solid ${locAccent}` : "1px solid #ccc",
-                                            color: was ? locAccent : "#666",
-                                            fontFamily: "var(--font-jetbrains, monospace)",
-                                            boxSizing: "border-box",
-                                          }}
-                                          title={loc.ui}
-                                        >
-                                          {loc.label}
-                                        </span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                              </div>
-
-                              <div style={{ padding: "5px 12px 7px", background: "rgba(0,0,0,0.02)", borderTop: "1px solid rgba(0,0,0,0.05)", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                                <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: "0.6px", color: "#6C6C72", marginBottom: 3 }}>LAST 5 PLACEMENTS</div>
-                                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                  {(() => {
-                                    let pills: string[] = ["Z9", "AUX"];
-                                    if (padHistory && padSlotKey === key) {
-                                      const currentIso = `${selectedDay.date.getFullYear()}-${String(selectedDay.date.getMonth() + 1).padStart(2, '0')}-${String(selectedDay.date.getDate()).padStart(2, '0')}`;
-                                      const recent5 = getRecentPlacementKeys(padHistory, 5, currentIso);
-                                      pills = recent5.map((ui) => {
-                                        if (ui.startsWith('MRR')) return ui.replace('MRR', 'RR') + 'M';
-                                        if (ui.startsWith('WRR')) return ui.replace('WRR', 'RR') + 'W';
-                                        if (ui.startsWith('TR')) return ui.replace('TR', 'TRASH');
-                                        if (ui.startsWith('SP')) return ui.replace('SP', 'SUPPORT');
-                                        return ui;
-                                      });
-                                    }
-                                    const getColorForPill = (label: string): string => {
-                                      if (label.includes('RR')) {
-                                        const num = parseInt(label.replace(/\D/g, ''), 10) || 1;
-                                        return getRRAccent(num);
-                                      }
-                                      if (/^Z\d+$/.test(label)) return getZoneColor(label);
-                                      if (label.includes('Z9SR') || label.includes('SR')) return getAuxAccent('Z9SR');
-                                      if (label.includes('TRASH')) return getAuxAccent('TR1');
-                                      if (label.includes('SUPPORT')) return getAuxAccent('SP1');
-                                      return accent;
-                                    };
-                                    return pills.map((b, i) => {
-                                      const pAccent = getColorForPill(b);
-                                      const bg = `${pAccent}22`;
-                                      const border = `${pAccent}44`;
-                                      const col = pAccent;
-                                      return (
-                                        <span key={i} style={{ fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, background: bg, border: `1px solid ${border}`, color: col, fontFamily: "var(--font-jetbrains, monospace)" }}>{b}</span>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                                <div style={{ fontSize: 7, color: "#8E8E93", marginTop: 2 }}>NOT RECENTLY PLACED</div>
-                              </div>
-
-                              <div style={{ padding: "6px 12px 7px" }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", color: "#6C6C72", marginBottom: 2 }}>INSIGHTS</div>
-                                <div style={{ fontSize: 10, lineHeight: 1.25, color: "#2F2F2D" }}>
-                                  {hasProv && prov.rationale ? prov.rationale : "Aux support placement per load + coverage."}
-                                </div>
-                                {prov.fairnessSignals && (
-                                  <div style={{ marginTop: 4, display: "flex", gap: 6, fontSize: 8.5, color: "#5C4A2E", fontFamily: "var(--font-jetbrains, monospace)" }}>
-                                    {Object.entries(prov.fairnessSignals).slice(0, 3).map(([k, v]) => {
-                                      const lab = k.toLowerCase().includes("rot") ? "Rot" : k.toLowerCase().includes("aff") ? "Aff" : "Load";
-                                      return <span key={k}>{lab} {Number(v).toFixed(1)}</span>;
-                                    })}
-                                  </div>
-                                )}
-                                {/* Initial xAI engine insight wiring */}
-                                {onRequestEngineInsight && (
-                                  <div style={{ marginTop: 4 }}>
-                                    <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        if (!onRequestEngineInsight || !padSlotKey) return;
-                                        setPadInsight(null);
-                                        setPadInsightLoading(true);
-                                        try {
-                                          const insight = await onRequestEngineInsight(padSlotKey);
-                                          setPadInsight(insight || "No additional insight available right now.");
-                                        } catch {
-                                          setPadInsight("xAI insight unavailable (check connection).");
-                                        } finally {
-                                          setPadInsightLoading(false);
-                                        }
-                                      }}
-                                      style={{
-                                        fontSize: 8, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
-                                        background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)",
-                                        color: "#007AFF", cursor: "pointer", fontFamily: "var(--font-atkinson)"
-                                      }}
-                                    >
-                                      {padInsightLoading ? "xAI thinking…" : "xAI deeper insight"}
-                                    </button>
-                                    {padInsight && (
-                                      <div style={{ marginTop: 3, fontSize: 9, lineHeight: 1.3, color: "#2F2F2D", background: "rgba(0,0,0,0.025)", border: "1px solid rgba(0,0,0,0.06)", padding: "3px 5px", borderRadius: 4 }}>
-                                        {padInsight}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Lock</button>
-                            <button onClick={() => { if (onLiveUnassign) onLiveUnassign(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(229,57,53,0.15)", border: "1px solid rgba(229,57,53,0.4)", color: "#E53935" }}>Clear</button>
-                            <button onClick={(e) => { e.stopPropagation(); setPadCoverageSource(key); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Coverage</button>
-                            <button onClick={() => { onCardClick?.(key); setPadSlotKey(null); }} style={{ flex: 1, height: 26, borderRadius: 8, fontSize: 9.5, fontWeight: 700, background: "rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.12)", color: "rgba(0,0,0,0.75)" }}>Swap</button>
-                          </div>
-                        </div>
-                      )}
+                      {activePlacementPad?.hostId === key &&
+                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
                     </div>
                   );
                 })}
@@ -2164,22 +978,39 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         {row.time}
                       </div>
                       <div className="flex-1 grid grid-cols-6 gap-1.5">
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <OverlapSlot
-                            key={i}
-                            slotKey={`OL-${row.key}-${i}`}
-                            assignments={displayAssignments}
-                            selectedTasks={selectedTasks}
-                            onCardClick={onCardClick}
-                            loading={loadingAssignments}
-                            isDraftMode={isDraftMode}
-                            draftInfo={draftAssignments[`OL-${row.key}-${i}`]}
-                            onRemoveTask={onRemoveTask}
-                            onSetTaskColor={onSetTaskColor}
-                            onEditTask={onEditTask}
-                            isLocked={isCurrentNightLocked}
-                          />
-                        ))}
+                        {Array.from({ length: 6 }).map((_, i) => {
+                          const slotKey = `OL-${row.key}-${i}`;
+                          return (
+                            <div
+                              key={i}
+                              className="relative h-full"
+                              data-slot-key={slotKey}
+                              data-placement-host={slotKey}
+                            >
+                              <OverlapSlot
+                                slotKey={slotKey}
+                                assignments={displayAssignments}
+                                selectedTasks={selectedTasks}
+                                onCardClick={handleCardClickForPad}
+                                loading={loadingAssignments}
+                                isDraftMode={isDraftMode}
+                                draftInfo={draftAssignments[slotKey]}
+                                onRemoveTask={onRemoveTask}
+                                onSetTaskColor={onSetTaskColor}
+                                onEditTask={onEditTask}
+                                isLocked={isCurrentNightLocked}
+                                onLiveAssign={onLiveAssign}
+                                onLiveUnassign={onLiveUnassign}
+                              />
+                              {activePlacementPad?.hostId === slotKey &&
+                                renderPlacementPad(
+                                  activePlacementPad.slotKey,
+                                  activePlacementPad.anchor,
+                                  slotKey,
+                                )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

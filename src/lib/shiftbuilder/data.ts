@@ -3386,6 +3386,7 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
     const tmId = assignMap.get(mapKey);
     if (!tmId) continue; // nobody assigned here tonight
 
+    // Write to break_assignments (for break sheet / print / TM-centric group)
     upserts.push(
       upsertBreakAssignment({
         nightId,
@@ -3393,6 +3394,12 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
         groupNum: def.defaultBreakGroup,
         slotRef: def.slotKey,
       })
+    );
+    // ALSO write to zone_assignments.break_group so the placement card pills (which may
+    // source from the assignment row in some paths) and the "canonical display column"
+    // get the default immediately. Matches what manual cycle does.
+    upserts.push(
+      updateSlotBreakGroup(nightId, def.slotKey, def.rrSide || null, def.defaultBreakGroup)
     );
     applied++;
   }

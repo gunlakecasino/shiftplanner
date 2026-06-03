@@ -46,14 +46,18 @@ import {
 // runWeightedPlanner + logEngineRunSummary dynamically imported inside the engine handler (placement is a heavy module)
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 import type { EngineRulesContext } from "@/lib/shiftbuilder/engineRules";
-import { buildDefaultAdjacency } from "@/lib/shiftbuilder/scoring";
+// buildDefaultAdjacency dynamically imported inside the engine handler (any static edge into scoring still triggers Turbopack "module factory" errors on this giant file, per the pattern for placement/grok/data/etc.)
 // getActiveEngineConfig dynamically imported (engineConfig is small but any static edge into heavy modules still triggers Turbopack factory issues after the big refactor)
 import type { EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 // All remaining data.ts functions (preferences, channels, locked, etc.) dynamically imported to eliminate the last static edge causing Turbopack module factory HMR errors.
 // Scheduled data is now fetched via /api/shiftbuilder/scheduled-roster to avoid client-side admin client creation.
 // grokEngine (buildGrokEngineSnapshot / mergeGrokOverridesIntoDraft) dynamically imported in handlers to shrink HMR surface
 import type { GrokEngineSnapshot } from "@/lib/shiftbuilder/grokEngine";
-import { SudoWindow } from "./sudo/SudoWindow";
+// Command palette and Sudo surfaces are *fully dynamically loaded* (the Lazy* modules
+// themselves are imported via `import()` inside effects/handlers, not at the top level
+// of this file). This is the current state of the long-running "shrink the static
+// dependency graph" effort to stop Turbopack from treating useCommandActions (and
+// other heavy modules) as required from the giant Client at module evaluation time.
 // XAISphere import removed — was creating a static dependency chain through ./xai → @/lib/xai barrel → grokIntelligence.ts
 // If the sphere is still needed, it should be dynamically imported inside the render where the panel is toggled.
 import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
@@ -119,7 +123,7 @@ import ZoneCard from "./components/ZoneCard";
 import RRCard from "./components/RRCard";
 import AuxCard from "./components/AuxCard";
 import OverlapSlot from "./components/OverlapSlot";
-import MarkerPad from "./components/MarkerPad";
+
 import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
@@ -128,6 +132,10 @@ import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar } from "./components/OpsStatusBar";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
+// LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
+// their (and their transitive deps like useCommandActions) out of the initial static
+// module graph of this giant file. This is the latest step in the long-running effort
+// to eliminate Turbopack "module factory is not available" errors during Client evaluation/HMR.
 import { 
   useShiftBuilderStore, 
   useAssignments, 
@@ -657,6 +665,13 @@ function AuthedShiftBuilder() {
       localStorage.setItem("oms_view_mode", m);
     } catch {}
     setViewMode(m);
+    // Extra defensive ensure for the OpsStatusBar + ai session pill when we go
+    // (or restore) to canvas. Complements the useLayoutEffect and the launchpad effect.
+    if (m === "canvas") {
+      ensureOpsStatusBar();
+    } else {
+      hideOpsStatusBar();
+    }
   }, []);
 
   // Early ensure for the status bar on initial mount when we restored directly to canvas
@@ -784,10 +799,10 @@ function AuthedShiftBuilder() {
     // We use a broad lookup; in practice the board passes displayAssignments but we resolve here.
     const a = (window as any).__OMS_ASSIGNMENTS__?.[key] || {}; // fallback if exposed; real lookup below
 
-    // Real lookup: the client has `assignments` and `markerPadAssignments` in scope in many places.
+    // Real lookup: the client has `assignments` and `padAssignments` in scope in many places.
     // For robustness we try several sources the component closes over.
     const liveA = (typeof assignments !== 'undefined' && assignments) || {};
-    const mpA = (typeof markerPadAssignments !== 'undefined' && markerPadAssignments) || {};
+    const mpA = (typeof padAssignments !== 'undefined' && padAssignments) || {};
     const candidate = liveA[key] || mpA[key] || a;
 
     if (!candidate) return null;
@@ -992,6 +1007,11 @@ function AuthedShiftBuilder() {
     cmdkInitialContext, setCmdkInitialContext,
   } = useRosterPanels();
 
+  // Loader components for heavy surfaces, dynamically imported at runtime (see effects below).
+  // Declared here (after useRosterPanels) so hook call order is stable.
+  const [CommandPaletteLoader, setCommandPaletteLoader] = useState<React.ComponentType<any> | null>(null);
+  const [SudoWindowLoader, setSudoWindowLoader] = useState<React.ComponentType<any> | null>(null);
+
   // Ops auth (PIN gate) — available only inside the authenticated tree.
   const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
 
@@ -1007,8 +1027,39 @@ function AuthedShiftBuilder() {
     canLockUnlock = false,
   } = permissions || {};
 
+  // Load the heavy admin surfaces (CommandPalette + SudoWindow) via their thin
+  // wrapper modules ONLY when first opened. The wrappers themselves do a second
+  // dynamic import of the real heavy component. This double-indirect + effect-driven
+  // pattern keeps the import() expressions and the useCommandActions / Sudo dep
+  // graphs completely out of the top-level static module evaluation of this giant
+  // Client file. This is required to avoid repeated Turbopack "module factory is not
+  // available" and follow-on ReferenceErrors (e.g. bare LazySudoWindow) after HMR
+  // or hard refresh. The canvas (and OpsStatusBar with ai session tokens pill) can
+  // only mount if Client itself evaluates cleanly.
+  React.useEffect(() => {
+    if (cmdkOpen && !CommandPaletteLoader) {
+      import("./components/LazyCommandPalette").then((mod) => {
+        if (mod.LazyCommandPalette) {
+          setCommandPaletteLoader(() => mod.LazyCommandPalette);
+        }
+      });
+    }
+  }, [cmdkOpen, CommandPaletteLoader]);
+
+  React.useEffect(() => {
+    if (sudoOpen && !SudoWindowLoader) {
+      import("./components/LazySudoWindow").then((mod) => {
+        if (mod.LazySudoWindow) {
+          setSudoWindowLoader(() => mod.LazySudoWindow);
+        }
+      });
+    }
+  }, [sudoOpen, SudoWindowLoader]);
+
   const handleOpenSudo = useCallback(() => {
-    // Prefer the new granular permission system
+    // Prefer the new granular permission system. Just flip the flag; the effect
+    // above will perform the dynamic import of the thin loader if not already
+    // present (matching the cmdkOpen pattern exactly).
     if (permissions?.canAccessSudo) {
       setSudoOpen(true);
     } else {
@@ -1067,23 +1118,6 @@ function AuthedShiftBuilder() {
   const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState<{ current: number; total: number; label: string } | null>(null);
-
-  // True on-demand lazy loading of the Command Palette (including useCommandActions).
-  // Nothing related to the palette is part of the initial module evaluation graph.
-  const [CommandPaletteComponent, setCommandPaletteComponent] = useState<React.ComponentType<any> | null>(null);
-
-  // When the palette is first opened, load the heavy CommandPalette + useCommandActions bundle
-  // with a true runtime dynamic import. This is the most effective way to keep these
-  // modules out of the initial static graph.
-  React.useEffect(() => {
-    if (cmdkOpen && !CommandPaletteComponent) {
-      import("./CommandPalette").then((mod) => {
-        if (mod.CommandPalette) {
-          setCommandPaletteComponent(() => mod.CommandPalette);
-        }
-      });
-    }
-  }, [cmdkOpen, CommandPaletteComponent]);
 
   // Card borders for attention / marking (visual only)
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
@@ -1297,6 +1331,10 @@ function AuthedShiftBuilder() {
 
     // Step 1: deterministic weighted planner (always used as the base)
     const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
+    // buildDefaultAdjacency dynamically imported here (matching the pattern for runWeightedPlanner, grokEngine, data, etc.)
+    // to keep any static edge out of Client's initial module graph. This file's size + many dynamic imports
+    // is a known source of Turbopack "module factory is not available" errors for siblings like useCommandActions.
+    const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
     const plannerResult = runWeightedPlanner({
       // Phase 2 opportunity: After the planner + Grok merge produces a draft proposal,
       // the live optimistic layer (useLiveAssignments + liveCache) can be used for
@@ -1822,23 +1860,29 @@ function AuthedShiftBuilder() {
   }, [shiftHistory]);
 
   // === Velvet Marker Pad — floating right panel for quick slot edits ===
-  const [markerSlotKey, setMarkerSlotKey] = useState<string | null>(null);
+  /** Active anchored placement pad slot (card-attached inspector + editor). */
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
 
-  // === Phase 1: Clean contextual palette openers (will replace fan behavior) ===
-  // Card tap now opens the Marker Pad; ⌘K still opens the full palette.
-  const openPaletteForSlot = React.useCallback((slotKey: string) => {
+  const handleSlotToggle = React.useCallback((slotKey: string) => {
     if (isCurrentNightLocked) {
       showToast("This day is locked — editing disabled", "error");
       return;
     }
-    // Guard: physical "RRn" (not MRR/WRR) must never reach palette/assign — it would uiToDb to aux w/ null side and corrupt mens RR or lose womens side data.
+    let resolved = slotKey;
+    // Physical RR wrapper (RR6) → open the correct MRR/WRR side (never fan out to all 5 cards)
     if (/^RR\d+$/.test(slotKey)) {
-      console.warn('[shiftbuilder] physical RR key ignored for palette (use side MRR/WRR from card halves or dash)');
-      return;
+      const num = slotKey.replace(/^RR/, "");
+      const mKey = `MRR${num}`;
+      const wKey = `WRR${num}`;
+      const merged = useShiftBuilderStore.getState().assignments ?? {};
+      resolved = !merged[mKey]?.tmName ? mKey : wKey;
     }
-    // If the pad is already showing this slot, toggle it closed
-    setMarkerSlotKey(prev => prev === slotKey ? null : slotKey);
-  }, [isCurrentNightLocked]);
+    setSelectedSlotKey((prev) => (prev === resolved ? null : resolved));
+  }, [isCurrentNightLocked, showToast]);
+
+  const handleSlotClose = React.useCallback(() => {
+    setSelectedSlotKey(null);
+  }, []);
 
   const openPaletteForPerson = React.useCallback((tm: any) => {
     // Use id when available for stability; fall back to name
@@ -1856,12 +1900,12 @@ function AuthedShiftBuilder() {
     }
   }, [cmdkOpen]);
 
-  // When the main palette opens, close the MarkerPad (they fight for input + focus on iPad)
+  // When the main palette opens, close the placement pad (focus conflict on iPad)
   React.useEffect(() => {
-    if (cmdkOpen && markerSlotKey) {
-      setMarkerSlotKey(null);
+    if (cmdkOpen && selectedSlotKey) {
+      setSelectedSlotKey(null);
     }
-  }, [cmdkOpen]);
+  }, [cmdkOpen, selectedSlotKey]);
 
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
 
@@ -1912,10 +1956,17 @@ function AuthedShiftBuilder() {
         // Find the nearest ancestor that represents a slot/card
         const cardEl = (pe.target as HTMLElement | null)?.closest?.('[data-slot-key]');
         if (cardEl) {
-          const slotKey = cardEl.getAttribute('data-slot-key');
-          if (slotKey) {
-            openPaletteForSlot(slotKey);
+          let slotKey = cardEl.getAttribute('data-slot-key');
+          if (!slotKey) return;
+          // Physical RR wrapper (RR6) — resolve to MRR/WRR side, never open 5 pads
+          if (/^RR\d+$/.test(slotKey)) {
+            const num = slotKey.replace(/^RR/, "");
+            const mKey = `MRR${num}`;
+            const wKey = `WRR${num}`;
+            const merged = useShiftBuilderStore.getState().assignments ?? {};
+            slotKey = !merged[mKey]?.tmName ? mKey : wKey;
           }
+          handleSlotToggle(slotKey);
         }
       }
     };
@@ -1927,7 +1978,7 @@ function AuthedShiftBuilder() {
         stage.removeEventListener("pointerrawupdate", handlePointerRaw);
       };
     }
-  }, [openPaletteForSlot]);
+  }, [handleSlotToggle]);
 
   // Use deferred value for the heavy board rendering.
   // The nav/chrome uses the immediate index for snappy feedback.
@@ -2447,7 +2498,20 @@ function AuthedShiftBuilder() {
     const targetNightId = nightId;
     const captureDate = selectedDay.date;
     const captureDayName = selectedDay.name;
-    const tmId = assignments[slotKey]?.tmId ?? null;
+    const slotAssignment = assignments[slotKey] || {};
+    const tmId = slotAssignment.tmId ?? null;
+    const rrSide = slotAssignment.rrSide ?? null;
+
+    // Pre-translate the slot key + rrSide to the canonical DB form used in zone_assignments
+    // (regular persistAssign does uiToDb; updateSlotBreakGroup does not, so we must).
+    // Capture so the async write always targets the real row even if render state changes.
+    let dbSlotKey = slotKey;
+    let dbRrSide = rrSide;
+    try {
+      const translated = uiToDb(slotKey);
+      dbSlotKey = translated.slot_key;
+      dbRrSide = translated.rr_side ?? rrSide ?? null;
+    } catch {}
 
     setAssignments((prev: any) => ({
       ...prev,
@@ -2472,13 +2536,8 @@ function AuthedShiftBuilder() {
       }
       try {
         const { updateSlotBreakGroup, deleteBreakAssignment, upsertBreakAssignment } = await import("@/lib/shiftbuilder/data");
-        // Always persist to zone_assignments.break_group — the canonical card display source.
-        await updateSlotBreakGroup(
-          nid,
-          slotKey,
-          assignments[slotKey]?.rrSide ?? null,
-          group,
-        );
+        // Write using the canonical db keys so it hits the actual zone_assignments row.
+        await updateSlotBreakGroup(nid, dbSlotKey, dbRrSide, group);
 
         // Also keep break_assignments in sync for the break-sheet / print path.
         if (tmId) {
@@ -2489,7 +2548,7 @@ function AuthedShiftBuilder() {
               nightId: nid,
               tmId,
               groupNum: group,
-              slotRef: slotKey,
+              slotRef: slotKey,  // ui form is fine here (match key is night+tm_id)
             });
           }
         }
@@ -3212,7 +3271,7 @@ function AuthedShiftBuilder() {
           for (const dayConf of overviewDays.slice().sort((a, b) => a.dayIndex - b.dayIndex)) {
             const def = DAY_DEFS[dayConf.dayIndex];
             const nightId = def ? await getNightIdForDate(def.date) : null;
-            const assignments: Record<string, { tmId: string; tmName: string } | null> = {};
+            const assignments: Record<string, { tmId: string; tmName: string; breakGroup?: number } | null> = {};
             if (nightId) {
               const rows = await getNightAssignments(nightId);
               rows.forEach(row => {
@@ -3222,6 +3281,7 @@ function AuthedShiftBuilder() {
                     assignments[uiKey] = {
                       tmId: row.tmId,
                       tmName: row.tmName || tmNames.get(row.tmId) || row.tmId,
+                      breakGroup: row.breakGroup ?? 0,
                     };
                   }
                 } catch { /* unmappable slot — skip */ }
@@ -3652,7 +3712,7 @@ function AuthedShiftBuilder() {
   // but MarkerPad was still receiving the stale local `assignments` useState.
   // This caused filled cards to appear "unassigned" inside the pad → it would
   // immediately show the big TM picker list instead of the normal occupant UI + Swap.
-  const markerPadAssignments = React.useMemo(() => {
+  const padAssignments = React.useMemo(() => {
     const merged: Record<string, any> = { ...assignments };
     if (currentNight?.assignments) {
       Object.assign(merged, currentNight.assignments);
@@ -3667,92 +3727,14 @@ function AuthedShiftBuilder() {
     return merged;
   }, [assignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
-  // === TM Picker lists (MarkerPad) — exactly the three rules (strict canonical only) ===
-  // 1. Default list = scheduled (tonight, correct role group from canonical) + eligible for slot + unassigned
-  // 2. Search box active → all eligible (no scheduled requirement)
-  // 3. The default list must *only ever* contain eligible + scheduled + unassigned TMs.
-  //
-  // This version builds the strict default list **exclusively** from the partitioned canonical sets
-  // that come out of useCurrentNight → getScheduledTmsForNight (schedules.ts).
-  // It no longer consults the legacy effectiveScheduledTmIdsTonight or the old FromNewRoster path.
+  // === TM Picker lists — Graves Default Schedule (graves_default_schedule + night_on_call) ===
+  // 1. Default = scheduled tonight (correct band) + eligible + unassigned
+  // 2. Search = all eligible roster TMs; can add on-call for tonight
+  const [pickerScheduleEpoch, setPickerScheduleEpoch] = React.useState(0);
 
-  // === Direct Weekly Roster feed (the primary source we want) ===
-  const rawWeeklyRoster = useShiftBuilderStore(s => s.weeklyRosterScheduled);
-
-  // Late hydration safety net (handles Apply Roster while main board is mounted,
-  // HMR, or Sudo opened in another tab). This is the #1 reason the picker stayed
-  // on the tiny fallback list in previous sessions.
-  const weeklyRoster = React.useMemo(() => {
-    const r = rawWeeklyRoster as any;
-    if (r?.weekStart) return r;
-    if (typeof window === 'undefined') return r;
-
-    const saved = readWeeklyRosterScheduledFromStorage() as any;
-    if (saved?.weekStart) {
-      useShiftBuilderStore.getState().setWeeklyRosterScheduled(saved);
-      return saved;
-    }
-    return r;
-  }, [rawWeeklyRoster, markerSlotKey]); // re-evaluate when Marker Pad opens
-
-  // Compute the roster week (Thu-Wed) that the currently selected day belongs to.
-  // "Apply Roster" stores the roster week (startOfRosterWeek ISO). We only trust
-  // the direct feed when the stored week exactly matches the current canvas day.
-  const currentRosterWeekISO = rosterWeekStartISO(selectedDay.date);
-  const selectedNightISO = formatLocalDateISO(selectedDay.date);
-
-  const hasDirectRosterData = !!(
-    (weeklyRoster?.grave?.length ?? 0) > 0 ||
-    (weeklyRoster?.pmOverlap?.length ?? 0) > 0 ||
-    (weeklyRoster?.amOverlap?.length ?? 0) > 0 ||
-    Object.keys(weeklyRoster?.graveByNight ?? {}).length > 0
-  );
-
-  // When the operator has hit "Apply Roster" for the roster week that contains the canvas night.
-  // Made more forgiving: if we have per-night data for today, we activate the direct feed
-  // even if the weekStart string has minor anchoring differences.
-  const hasDataForToday = !!(weeklyRoster?.graveByNight?.[selectedNightISO]?.length);
-  const useDirectFeed = !!(
-    hasDirectRosterData &&
-    (weeklyRoster?.weekStart === currentRosterWeekISO ||
-      isDayInRosterWeek(selectedDay.date, weeklyRoster?.weekStart) ||
-      hasDataForToday)
-  );
-
-  // Heavy debug for the persistent "picker always empty" problem
-  if (process.env.NODE_ENV !== 'production' && markerSlotKey) {
-    const isFeedEmpty = !weeklyRoster?.weekStart && (weeklyRoster?.grave?.length ?? 0) === 0;
-    if (isFeedEmpty) {
-      console.warn(
-        '%c[MARKER-PICKER] Direct feed is EMPTY. Open Sudo → Weekly Roster tab → click "Apply Roster" for the week containing today. ' +
-        'Until you do this the picker default list will stay on the small fallback pool.',
-        'color:#f59e0b; font-weight:bold'
-      );
-    }
-    console.log('%c[MARKER-PICKER DEBUG - CRITICAL]', 'color: red; font-weight: bold; font-size: 14px', {
-      selectedDay: selectedDay.date.toISOString().slice(0,10),
-      currentRosterWeekISO,
-      storedWeekStart: weeklyRoster?.weekStart,
-      weekMatch: weeklyRoster?.weekStart === currentRosterWeekISO,
-      useDirectFeed,
-      directGraveCount: weeklyRoster?.grave?.length ?? 0,
-      directPMCount: weeklyRoster?.pmOverlap?.length ?? 0,
-      effectiveRealRosterSize: effectiveRealRoster?.length ?? 0,
-      alreadyAssignedCount: alreadyAssignedThisNight?.size ?? 0,
-      calledOffCount: calledOffIds?.size ?? 0,
-      fullStoreWeeklyRoster: weeklyRoster,
-    });
-  }
-
-  const effectiveGrave = useDirectFeed
-    ? new Set(weeklyRoster.graveByNight?.[selectedNightISO] ?? weeklyRoster.grave ?? [])
-    : fullGraveScheduledTonight;
-  const effectivePM = useDirectFeed
-    ? new Set(weeklyRoster.pmOverlapByNight?.[selectedNightISO] ?? weeklyRoster.pmOverlap ?? [])
-    : pmOverlapScheduledTonight;
-  const effectiveAM = useDirectFeed
-    ? new Set(weeklyRoster.amOverlapByNight?.[selectedNightISO] ?? weeklyRoster.amOverlap ?? [])
-    : amOverlapScheduledTonight;
+  const effectiveGrave = fullGraveScheduledTonight;
+  const effectivePM = pmOverlapScheduledTonight;
+  const effectiveAM = amOverlapScheduledTonight;
 
   // Resolve scheduled ids (tm_id or UUID) → board roster rows for the picker.
   const markerRosterLookup = React.useMemo(
@@ -3794,51 +3776,6 @@ function AuthedShiftBuilder() {
         list.push({ tmId, tmName });
       }
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log(
-          `[MARKER-PICKER] markerScheduledUnassigned size=${list.length} (${pathLabel})`,
-          `graveTonight=${effectiveGrave.size}`,
-          `lookupMisses=${lookupMisses}`,
-          `excludedAssigned=${excludedAssigned}`
-        );
-        if (useDirectFeed && list.length === 0) {
-          console.warn("[MARKER-PICKER] Direct feed is active but produced 0 results for this night. The emptiness is coming from the Apply Roster data itself (graveByNight for this date is empty). Check the Sudo Weekly Roster tab data.");
-        }
-        if (list.length === 0) {
-          const graveTonight = Array.from((effectiveGrave as any) || []);
-          console.log("[MARKER-PICKER][ZERO DIAG]", {
-            pathLabel,
-            selectedNightISO,
-            graveTonightCount: graveTonight.length,
-            lookupMisses,
-            excludedAssigned,
-            alreadyAssignedCount: alreadyAssignedThisNight.size,
-            calledOffCount: calledOffIds.size,
-            rosterLookupSize: markerRosterLookup.size,
-            sampleGraveIds: graveTonight.slice(0, 5),
-            sampleRosterIds: effectiveRealRoster.slice(0, 5).map((r: any) => assignmentTmId(r)),
-            note: useDirectFeed 
-              ? "Direct feed active but Apply Roster produced 0 grave TMs for this night (check Sudo Weekly Roster data / defaults)"
-              : "Using fallback scheduled data (Apply Roster not active or week mismatch)",
-          });
-        }
-      }
-
-      debugSessionLog({
-        runId: "post-fix",
-        hypothesisId: "C",
-        location: "ShiftBuilderClient.tsx:buildScheduledUnassignedList",
-        message: "picker list built",
-        data: {
-          pathLabel,
-          listSize: list.length,
-          graveTonight: effectiveGrave.size,
-          lookupMisses,
-          excludedAssigned,
-          useDirectFeed,
-        },
-      });
-
       return list;
     },
     [
@@ -3848,20 +3785,12 @@ function AuthedShiftBuilder() {
       markerRosterLookup,
       alreadyAssignedThisNight,
       calledOffIds,
-      effectiveRealRoster,
-      selectedNightISO,
-      useDirectFeed,
     ]
   );
 
   const markerScheduledUnassigned = React.useMemo(
-    () =>
-      buildScheduledUnassignedList(
-        useDirectFeed
-          ? `DIRECT from Apply Roster, week=${weeklyRoster?.weekStart}`
-          : `fallback path, useDirectFeed=${useDirectFeed}`
-      ),
-    [buildScheduledUnassignedList, useDirectFeed, weeklyRoster?.weekStart]
+    () => buildScheduledUnassignedList("graves-default-schedule"),
+    [buildScheduledUnassignedList, pickerScheduleEpoch, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight]
   );
 
   // Broad pool used *only* when the operator types in the TM picker search box.
@@ -3877,8 +3806,7 @@ function AuthedShiftBuilder() {
       .filter(Boolean) as { tmId: string; tmName: string }[];
   }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds]);
 
-  // getEligibleForCurrentSlot: used for the *default* list only.
-  // When the direct feed from "Apply Roster" is active, role partitioning comes from it.
+  // getEligibleForCurrentSlot: used for the *default* list only (grave / PM / AM bands).
   const roleSetHasTm = React.useCallback(
     (roleSet: Set<string>, entryTmId: string) => {
       if (roleSet.has(entryTmId)) return true;
@@ -3892,16 +3820,16 @@ function AuthedShiftBuilder() {
 
   const getEligibleForCurrentSlot = React.useCallback(
     (baseList: { tmId: string; tmName: string }[]) => {
-      if (!markerSlotKey) return baseList;
+      if (!selectedSlotKey) return baseList;
 
-      const isFullNightSlot = markerSlotKey.startsWith('Z') ||
-        markerSlotKey === 'ADM' ||
-        markerSlotKey.startsWith('TR') ||
-        markerSlotKey.startsWith('AUX') ||
-        markerSlotKey.startsWith('SP');
+      const isFullNightSlot = selectedSlotKey.startsWith('Z') ||
+        selectedSlotKey === 'ADM' ||
+        selectedSlotKey.startsWith('TR') ||
+        selectedSlotKey.startsWith('AUX') ||
+        selectedSlotKey.startsWith('SP');
 
-      const isOLPMSlot = markerSlotKey.startsWith('OL-PM') || markerSlotKey.includes('PM-Overlap');
-      const isOLAMSlot = markerSlotKey.startsWith('OL-AM') || markerSlotKey.includes('AM-Overlap');
+      const isOLPMSlot = selectedSlotKey.startsWith('OL-PM') || selectedSlotKey.includes('PM-Overlap');
+      const isOLAMSlot = selectedSlotKey.startsWith('OL-AM') || selectedSlotKey.includes('AM-Overlap');
 
       return baseList.filter((entry) => {
         const tm = resolveTmFromLookup(markerRosterLookup, entry.tmId);
@@ -3912,38 +3840,35 @@ function AuthedShiftBuilder() {
         if (isOLAMSlot && !roleSetHasTm((effectiveAM as any) || new Set(), entry.tmId)) return false;
 
         try {
-          return isEligibleForSlot(tm, markerSlotKey);
+          return isEligibleForSlot(tm, selectedSlotKey);
         } catch {
           return true;
         }
       });
     },
-    [markerSlotKey, markerRosterLookup, effectiveGrave, effectivePM, effectiveAM, roleSetHasTm]
+    [selectedSlotKey, markerRosterLookup, effectiveGrave, effectivePM, effectiveAM, roleSetHasTm]
   );
 
   // getBasicEligibleForSlot: used only for the search pool.
   // Core eligibility only — no "must be in the scheduled grave/overlap set" requirement.
   const getBasicEligibleForSlot = React.useCallback(
     (baseList: { tmId: string; tmName: string }[]) => {
-      if (!markerSlotKey) return baseList;
+      if (!selectedSlotKey) return baseList;
 
       return baseList.filter((entry) => {
         const tm = resolveTmFromLookup(markerRosterLookup, entry.tmId);
         if (!tm) return false;
 
         try {
-          return isEligibleForSlot(tm, markerSlotKey);
+          return isEligibleForSlot(tm, selectedSlotKey);
         } catch {
           return true;
         }
       });
     },
-    [markerSlotKey, markerRosterLookup]
+    [selectedSlotKey, markerRosterLookup]
   );
 
-  // Final lists passed to MarkerPad.
-  // These are now very direct: the "Apply Roster" feed drives the scheduled sets,
-  // and we only apply slot-specific eligibility on top.
   const markerSlotScheduledUnassigned = React.useMemo(
     () => getEligibleForCurrentSlot(markerScheduledUnassigned),
     [getEligibleForCurrentSlot, markerScheduledUnassigned]
@@ -3954,108 +3879,32 @@ function AuthedShiftBuilder() {
     [getBasicEligibleForSlot, markerAllEligibleTms]
   );
 
-  // Final diagnostic for the strict list that MarkerPad will actually render.
-  React.useEffect(() => {
-    if (!markerSlotKey || process.env.NODE_ENV === 'production') return;
-    console.log(
-      '[MARKER-PICKER] Final strict list for slot',
-      markerSlotKey,
-      'size=',
-      markerSlotScheduledUnassigned.length,
-      'via=',
-      useDirectFeed ? 'DIRECT (Apply Roster)' : 'fallback'
-    );
-  }, [markerSlotKey, markerSlotScheduledUnassigned, useDirectFeed]);
-
-  // Extra diagnostics when the direct feed status flips (helps debug week mismatches)
-  React.useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
-    console.log(
-      '[MARKER-PICKER] useDirectFeed changed →',
-      useDirectFeed,
-      'storeWeek=', weeklyRoster?.weekStart,
-      'currentRosterWeek=', currentRosterWeekISO,
-      'graveCount=', weeklyRoster?.grave?.length ?? 0
-    );
-  }, [useDirectFeed, weeklyRoster?.weekStart, currentRosterWeekISO]);
-
-  // #region agent log — NDJSON debug session a52e65 (picker contract)
-  React.useEffect(() => {
-    if (!markerSlotKey) return;
-    const graveTonight = Array.from((effectiveGrave as any) || []) as string[];
-    const graveInReal = graveTonight.filter((id: string) =>
-      effectiveRealRoster.some((r: any) => r.id === id)
-    ).length;
-    const scheduledIds = new Set([...((effectiveGrave as any) || []), ...((effectivePM as any) || []), ...((effectiveAM as any) || [])]);
-    const scheduledInReal = effectiveRealRoster.filter((t: any) => scheduledIds.has(t.id)).length;
-    debugSessionLog({
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "ShiftBuilderClient.tsx:pickerDiag",
-      message: "useDirectFeed gate",
-      data: {
-        markerSlotKey,
-        selectedNightISO,
-        currentRosterWeekISO,
-        storedWeekStart: weeklyRoster?.weekStart ?? null,
-        weekMatch: weeklyRoster?.weekStart === currentRosterWeekISO,
-        inStoredWeek: weeklyRoster?.weekStart
-          ? isDayInRosterWeek(selectedDay.date, weeklyRoster.weekStart)
-          : false,
-        useDirectFeed,
-        directGraveTonight: effectiveGrave.size,
-        graveByNightKeyPresent: !!(weeklyRoster?.graveByNight?.[selectedNightISO]),
-        fallbackGraveSize: fullGraveScheduledTonight?.size ?? 0,
-      },
-    });
-    debugSessionLog({
-      runId: "post-fix",
-      hypothesisId: "C",
-      location: "ShiftBuilderClient.tsx:pickerDiag",
-      message: "ID universe overlap",
-      data: {
-        effectiveRealRosterSize: effectiveRealRoster.length,
-        graveInReal,
-        scheduledInReal,
-        alreadyAssignedCount: alreadyAssignedThisNight.size,
-        calledOffCount: calledOffIds.size,
-      },
-    });
-    debugSessionLog({
-      runId: "post-fix",
-      hypothesisId: "D",
-      location: "ShiftBuilderClient.tsx:pickerDiag",
-      message: "scheduled-unassigned pipeline",
-      data: {
-        markerSlotKey,
-        useDirectFeed,
-        markerScheduledUnassignedSize: markerScheduledUnassigned.length,
-        markerSlotScheduledUnassignedSize: markerSlotScheduledUnassigned.length,
-        slotFilterDropped:
-          markerScheduledUnassigned.length - markerSlotScheduledUnassigned.length,
-      },
-    });
-    if (markerScheduledUnassigned.length > 0 && markerSlotScheduledUnassigned.length === 0) {
-      const dropped = markerScheduledUnassigned.slice(0, 5).map((e) => {
-        const tm = effectiveRealRoster.find((t: any) => t.id === e.tmId);
-        let reason = 'unknown';
-        const isFullNight = markerSlotKey.startsWith('Z') || markerSlotKey === 'ADM' || markerSlotKey.startsWith('TR') || markerSlotKey.startsWith('AUX') || markerSlotKey.startsWith('SP');
-        if (isFullNight && !effectiveGrave.has(e.tmId)) reason = 'not_in_grave_set';
-        else if (tm) {
-          try { if (!isEligibleForSlot(tm, markerSlotKey)) reason = 'isEligibleForSlot_false'; } catch { reason = 'isEligibleForSlot_throw'; }
-        } else reason = 'tm_not_in_realRoster';
-        return { tmId: e.tmId, reason };
-      });
-      debugSessionLog({
-        runId: "post-fix",
-        hypothesisId: "E",
-        location: "ShiftBuilderClient.tsx:pickerDiag",
-        message: "slot filter zeroed list",
-        data: { markerSlotKey, dropped },
-      });
-    }
-  }, [markerSlotKey, useDirectFeed, weeklyRoster, currentRosterWeekISO, selectedNightISO, markerScheduledUnassigned, markerSlotScheduledUnassigned, effectiveRealRoster, effectiveGrave, effectivePM, effectiveAM, alreadyAssignedThisNight, calledOffIds, selectedDay, fullGraveScheduledTonight]);
-  // #endregion
+  const handlePadAddOnCall = React.useCallback(
+    async (tmId: string, tmName: string) => {
+      const reliableNightId = queryNightId || nightId;
+      const dateStr = formatLocalDateISO(selectedDay.date);
+      try {
+        const res = await fetch("/api/shiftbuilder/night-on-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nightId: reliableNightId,
+            date: dateStr,
+            tmId,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setPickerScheduleEpoch((e) => e + 1);
+        const dateKey = selectedDay.date.toISOString().slice(0, 10);
+        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        showToast(`${tmName} added on-call for tonight`, "success");
+      } catch (e) {
+        console.error("[shiftbuilder] on-call add failed", e);
+        showToast("Failed to add on-call", "error");
+      }
+    },
+    [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
+  );
 
   const cmdkCompletionUnplaced = React.useMemo(() => {
     return Array.from(effectiveScheduledTmIdsTonight)
@@ -4087,8 +3936,8 @@ function AuthedShiftBuilder() {
     [cmdkInitialContext, assignments]
   );
 
-  const handleGenderClick = (slotKey: string, element?: HTMLElement, event?: React.MouseEvent) => {
-    openPaletteForSlot(slotKey);
+  const handleGenderClick = (slotKey: string) => {
+    handleSlotToggle(slotKey);
   };
 
   // ESC closes the task selector popover too.
@@ -5152,48 +5001,15 @@ function AuthedShiftBuilder() {
     setBreakGroup(g);
   }, []);
 
-  const handleBoardCardClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
-    // Only trigger provenance glass for slots that actually have engine data (rationale or fairnessSignals).
-    // This avoids mounting the glass component unnecessarily, which was triggering React internal "static flag" errors
-    // in the Turbopack/React 19 setup when always rendered in the tree.
-    const assignments = useShiftBuilderStore.getState().assignments || {};
-    const a = assignments[slotKey] || {};
-    const prov = a.provenance || {};
-    // Provenance glass no longer auto-triggered here — the unilateral dash (attached callout) is now the baseline
-    // "what appears when you click a placement card" per the drawn spec. Engine heart (rationale + signals)
-    // is shown inside the rich dash. Full palette still opens for assign/edit flows.
-    const hasReal = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
-    // (no setProvenanceKey — dash surfaces the insights/matrix instead)
-    openPaletteForSlot(slotKey);
-  }, [openPaletteForSlot]);
-
-  // RR sides (MRR/WRR) use a dedicated gender-side click handler (each side is its own slot).
-  // Wired through the isolated board so restroom card sides open the MarkerPad.
-  const handleBoardGenderClick = React.useCallback((slotKey: string, _el?: HTMLElement, _event?: React.MouseEvent) => {
-    // Per-side provenance glass support (MENS / WOMENS independent).
-    // Only set if real engine data present.
-    const assignments = useShiftBuilderStore.getState().assignments || {};
-    const a = assignments[slotKey] || {};
-    const prov = a.provenance || {};
-    // Provenance glass no longer auto-triggered here — the unilateral dash (attached callout) is now the baseline
-    // "what appears when you click a placement card" per the drawn spec. Engine heart (rationale + signals)
-    // is shown inside the rich dash. Full palette still opens for assign/edit flows.
-    const hasReal = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
-    // (no setProvenanceKey — dash surfaces the insights/matrix instead)
-    openPaletteForSlot(slotKey);
-  }, [openPaletteForSlot]);
-
-  // Stable wrapper for MarkerPad so its internal buttons (TM picker, Lock, Coverage, etc.)
-  // don't receive a new function reference on every orchestrator render after the perf refactor.
-  const handleMarkerPadAssign = React.useCallback((slotKey: string, tmId: string, tmName: string) => {
+  const handlePadAssign = React.useCallback((slotKey: string, tmId: string, tmName: string) => {
     assign(slotKey, tmId, tmName);
   }, [assign]);
 
-  const handleMarkerPadToggleLock = React.useCallback((slotKey: string) => {
+  const handlePadToggleLock = React.useCallback((slotKey: string) => {
     toggleLock(slotKey);
   }, [toggleLock]);
 
-  const handleMarkerPadClearSlot = React.useCallback((slotKey: string) => {
+  const handlePadClearSlot = React.useCallback((slotKey: string) => {
     // Prefer the live optimistic path (updates TanStack Query cache + liveAssignmentsStore
     // + the main useShiftBuilderStore that the isolated board + cards subscribe to via
     // useAssignments()). This is the only way the removal is visible on regular Zone cards
@@ -5208,7 +5024,7 @@ function AuthedShiftBuilder() {
     const isProblemDate = selectedDay.date.toISOString().slice(0, 10) === "2026-06-01";
     const isZ9 = slotKey === "Z9";
     if (isProblemDate && isZ9) {
-      const currentAssignment = markerPadAssignments?.[slotKey] || assignments[slotKey];
+      const currentAssignment = padAssignments?.[slotKey] || assignments[slotKey];
       console.log('%c[DEBUG] Clear attempt on problematic assignment (2026-06-01 Z9)', 'color: orange; font-weight: bold', {
         slotKey,
         currentAssignment,
@@ -5233,10 +5049,10 @@ function AuthedShiftBuilder() {
     } else {
       unassign(slotKey);
     }
-    setMarkerSlotKey(null);
-  }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, markerPadAssignments]);
+    setSelectedSlotKey(null);
+  }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments]);
 
-  const handleMarkerPadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
+  const handlePadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
     handleCmdkAddCoverage(sourceKey, targetKey);
   }, [handleCmdkAddCoverage]);
 
@@ -5689,7 +5505,7 @@ function AuthedShiftBuilder() {
             //              16px gap); when collapsed, 64px so the sphere
             //              (left-3, 48px wide) has air around it.
             paddingTop: 72,
-            paddingRight: markerSlotKey ? 308 : 64,
+            paddingRight: 64,
             paddingBottom: 80,
             paddingLeft: rosterOpen ? 296 : 64,
           }}
@@ -5741,20 +5557,29 @@ function AuthedShiftBuilder() {
               // auxDefs now from narrow Zustand selector in Board (3.4)
               onDayPillClick={handleBoardDayPill}
               onBreakGroupChange={handleBoardBreakGroupChange}
-              onCardClick={handleBoardCardClick}
-              onGenderClick={handleBoardGenderClick}
               onRemoveTask={handleBoardRemoveTask}
               onSetTaskColor={handleBoardSetTaskColor}
               onEditTask={handleBoardEditTask}
               setBreakGroupForSlot={setBreakGroupForSlot}
               onLiveAssign={handleBoardLiveAssign}
               onLiveUnassign={handleBoardLiveUnassign}
-              onAddCoverage={handleCmdkAddCoverage}
+              onAddCoverage={handlePadAddCoverage}
               onRequestEngineInsight={handleBoardRequestEngineInsight}
               live={live}
               amOverlapDayName={amOverlapDayName}
               amOverlapDateNum={amOverlapDateNum}
-              activeMarkerSlotKey={markerSlotKey}
+              selectedSlotKey={selectedSlotKey}
+              onSlotToggle={handleSlotToggle}
+              onSlotClose={handleSlotClose}
+              padAssignments={padAssignments}
+              scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+              allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+              onAddOnCall={handlePadAddOnCall}
+              onClearSlot={handlePadClearSlot}
+              onToggleLock={handlePadToggleLock}
+              onAssign={handlePadAssign}
+              onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
+              onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
               nextDayColor={nextDayColor}
               members={effectiveRealRoster}
             />
@@ -5983,36 +5808,15 @@ function AuthedShiftBuilder() {
         ))}
       </div>
 
-      {/* Velvet Marker Pad — floating right panel, opens on card tap */}
-      <MarkerPad
-        slotKey={markerSlotKey}
-        assignments={markerPadAssignments}
-        selectedTasks={selectedTasks}
-        recentTasks={recentTasks}
-        setBreakGroupForSlot={setBreakGroupForSlot}
-        onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
-        onRemoveTask={handleRemoveTask}
-        onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
-        onToggleLock={handleMarkerPadToggleLock}
-        onClearSlot={handleMarkerPadClearSlot}
-        onAddCoverage={handleMarkerPadAddCoverage}
-        onAssign={handleMarkerPadAssign}
-        // The TM Picker now strongly prefers the direct feed from "Apply Roster".
-        // This is the clean, recreated behavior the user requested.
-        scheduledUnassigned={markerSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
-        allEligibleTms={markerSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
-        onClose={() => setMarkerSlotKey(null)}
-        auxDefs={auxDefs}
-        isDark={isDark}
-        tmGender={markerSlotKey && markerPadAssignments[markerSlotKey]?.tmId
-          ? (effectiveRealRoster.find((r: any) => (r.id === markerPadAssignments[markerSlotKey].tmId || r.tmId === markerPadAssignments[markerSlotKey].tmId || r.tm_id === markerPadAssignments[markerSlotKey].tmId))?.gender ?? null)
-          : null}
-      />
-
-      {/* Command Palette — re-enabled with lazy loading + key handlers wired.
-          Uses the modern CommandPalette implementation. */}
-      {cmdkOpen && CommandPaletteComponent && (
-        <CommandPaletteComponent
+      {/* Command Palette — loaded via thin LazyCommandPalette wrapper.
+          The wrapper isolates the dynamic import("./CommandPalette") (and its dep on
+          useCommandActions) into a tiny file. This prevents the giant Client.tsx from
+          having the import() expression in its source, which was a major source of
+          Turbopack "module factory is not available" errors during HMR/eval (the error
+          would claim useCommandActions was "required from" the Client).
+          The canvas (and thus OpsStatusBar) can now evaluate and mount reliably. */}
+      {cmdkOpen && CommandPaletteLoader && (
+        <CommandPaletteLoader
           open={cmdkOpen}
           onOpenChange={setCmdkOpen}
           initialContext={cmdkInitialContext}
@@ -6023,7 +5827,7 @@ function AuthedShiftBuilder() {
           onRemoveFromSchedule={handleCmdkRemoveFromSchedule}
           onAddCoverage={handleCmdkAddCoverage}
           // Pass through any other context the palette needs
-          selectedSlotAssignment={markerSlotKey ? markerPadAssignments[markerSlotKey] : null}
+          selectedSlotAssignment={selectedSlotKey ? padAssignments[selectedSlotKey] : null}
         />
       )}
 
@@ -6052,85 +5856,106 @@ function AuthedShiftBuilder() {
         />
       )}
 
-      <SudoWindow
-        open={sudoOpen}
-        onClose={() => setSudoOpen(false)}
-        currentNightId={nightId}
-        weekStart={weekStart}
-        currentOperator={currentOperator ? {
-          id: currentOperator.id,
-          full_name: currentOperator.full_name,
-          username: currentOperator.username,
-          role: currentOperator.role,
-        } : null}
-        onSignOut={logoutOperator}
-        isDark={isDark}
-        permissions={permissions}
-        onDataChanged={async () => {
-          // Refresh anything the sudo window might have mutated
-          setTMCommandEpoch((e) => e + 1);
-          setSudoDataEpoch((e) => e + 1);
+      {/* Sudo admin window — loaded via runtime dynamic import of the thin loader. */}
+      {sudoOpen && SudoWindowLoader && (
+        <SudoWindowLoader
+          open={sudoOpen}
+          onClose={() => setSudoOpen(false)}
+          currentNightId={nightId}
+          weekStart={weekStart}
+          currentOperator={currentOperator ? {
+            id: currentOperator.id,
+            full_name: currentOperator.full_name,
+            username: currentOperator.username,
+            role: currentOperator.role,
+          } : null}
+          onSignOut={logoutOperator}
+          isDark={isDark}
+          permissions={permissions}
+          onDataChanged={async () => {
+            // Refresh anything the sudo window might have mutated
+            setTMCommandEpoch((e) => e + 1);
+            setSudoDataEpoch((e) => e + 1);
 
-          // Force the TanStack Query layer (useCurrentNight) to refetch the current night.
-          // This is the primary source for many surfaces and will pick up assignment,
-          // break, task, and note changes pushed from Sudo.
-          try {
-            const dateKey = selectedDay.date.toISOString().slice(0, 10);
-            // Use the real core key that powers the board + live layer
-          currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-          currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] }); // legacy listeners too
-          } catch {}
-
-          // Force-refresh the current night's break data (and other day-specific data)
-          // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
-          if (nightId) {
+            // Force the TanStack Query layer (useCurrentNight) to refetch the current night.
+            // This is the primary source for many surfaces and will pick up assignment,
+            // break, task, and note changes pushed from Sudo.
             try {
-              const { getNightBreakAssignments } = await import("@/lib/shiftbuilder/data");
-              const freshBreaks = await getNightBreakAssignments(nightId);
-              const breakByTm: Record<string, BreakGroup> = {};
-              freshBreaks.forEach((r: any) => {
-                if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
-              });
+              const dateKey = selectedDay.date.toISOString().slice(0, 10);
+              // Use the real core key that powers the board + live layer
+            currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+            currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] }); // legacy listeners too
+            } catch {}
 
-              setAssignments((prev: any) => {
-                const next = { ...prev };
-                Object.keys(next).forEach(k => {
-                  const a = next[k];
-                  if (a.tmId && breakByTm[a.tmId] !== undefined) {
-                    next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
-                  }
+            // Force-refresh the current night's break data (and other day-specific data)
+            // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
+            if (nightId) {
+              try {
+                const { getNightBreakAssignments } = await import("@/lib/shiftbuilder/data");
+                const freshBreaks = await getNightBreakAssignments(nightId);
+                const breakByTm: Record<string, any> = {};
+                freshBreaks.forEach((r: any) => {
+                  if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
                 });
-                return next;
-              });
 
-              // Per operator rule: after Sudo changes (e.g. Defaults push), only keep
-              // break rows for TMs who are actually placed on the current deployment.
-              // Scheduled-but-not-placed TMs must not appear on the break sheet.
-              const currentPlaced = new Set(
-                Object.values(assignments || {})
-                  .map((a: any) => a?.tmId)
-                  .filter((id: any): id is string => !!id)
-              );
-              setNightBreakRows(
-                freshBreaks
-                  .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-                    (currentPlaced.size === 0 || currentPlaced.has(r.tmId)))
-                  .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
-              );
-            } catch (e) {
-              console.warn("[sudo] failed to refresh break data after Sudo change", e);
+                setAssignments((prev: any) => {
+                  const next = { ...prev };
+                  Object.keys(next).forEach(k => {
+                    const a = next[k];
+                    if (a.tmId && breakByTm[a.tmId] !== undefined) {
+                      next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
+                    }
+                  });
+                  return next;
+                });
+
+                // Also patch the Zustand store that the isolated Board (and BreakBadge on cards)
+                // subscribes to via useAssignments(). This makes defaults push from Sudo
+                // immediately visible on placement cards without waiting for the query refetch.
+                try {
+                  useShiftBuilderStore.getState().setAssignments((prev: any) => {
+                    const next = { ...prev };
+                    Object.keys(next).forEach(k => {
+                      const a = next[k];
+                      if (a?.tmId && breakByTm[a.tmId] !== undefined) {
+                        next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
+                      }
+                    });
+                    return next;
+                  });
+                } catch (e) {
+                  console.warn('[sudo] failed to patch store with breakGroups after Sudo change', e);
+                }
+
+                // Per operator rule: after Sudo changes (e.g. Defaults push), only keep
+                // break rows for TMs who are actually placed on the current deployment.
+                // Scheduled-but-not-placed TMs must not appear on the break sheet.
+                const currentPlaced = new Set(
+                  Object.values(assignments || {})
+                    .map((a: any) => a?.tmId)
+                    .filter((id: any): id is string => !!id)
+                );
+                setNightBreakRows(
+                  freshBreaks
+                    .filter((r: any) => r.groupNum && r.groupNum > 0 &&
+                      (currentPlaced.size === 0 || currentPlaced.has(r.tmId)))
+                    .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
+                );
+              } catch (e) {
+                console.warn("[sudo] failed to refresh break data after Sudo change", e);
+              }
             }
-          }
 
-          // Also refresh the live engine config
-          try {
-            const fresh = await (await import("@/lib/shiftbuilder/engineConfig")).getActiveEngineConfig();
-            setEngineConfig(fresh);
-          } catch (e) {
-            console.warn("[sudo] failed to refresh engineConfig after change", e);
-          }
-        }}
-      />
+            // Also refresh the live engine config
+            try {
+              const fresh = await (await import("@/lib/shiftbuilder/engineConfig")).getActiveEngineConfig();
+              setEngineConfig(fresh);
+            } catch (e) {
+              console.warn("[sudo] failed to refresh engineConfig after change", e);
+            }
+          }}
+        />
+      )}
 
       {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
       {viewMode === 'canvas' && <OpsStatusBar />}

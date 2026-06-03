@@ -18,6 +18,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
@@ -54,12 +55,12 @@ export interface MarkerPadProps {
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   onClose: () => void;
   isDark?: boolean;
-  tmGender?: string | null;    // "M" | "F" | null — used for gender-aware RR filtering in history
+  tmGender?: string | null;    // "M" | "F" | null — passed through normalizeGender for gender-aware RR filtering in history (Last 14 / Last 5 etc)
 }
 
 // ── Slot metadata lookup ─────────────────────────────────────────────────────
 
-function getSlotMeta(slotKey: string): { label: string; loc: string; icon: string; accent: string } {
+export function getSlotMeta(slotKey: string): { label: string; loc: string; icon: string; accent: string } {
   const zd = ZONE_DEFS.find(z => z.key === slotKey);
   if (zd) return {
     label: zd.label,
@@ -189,7 +190,7 @@ const BreakWave: React.FC<{
 
 // ── CoveragePicker ────────────────────────────────────────────────────────────
 
-const CoveragePicker: React.FC<{
+export const CoveragePicker: React.FC<{
   currentSlotKey: string;
   auxDefs: AuxDef[];
   onPick: (targetKey: string) => void;
@@ -417,15 +418,12 @@ function fmtShortDate(isoDate: string): string {
 
 // ── MiniHistorySection ────────────────────────────────────────────────────────
 
-/** Filter out slots irrelevant to this TM's gender (opposite RR side). */
+/** Filter out slots irrelevant to this TM's gender (opposite RR side). Uses the single source of truth normalizeGender. */
 function genderFilter(uiKey: string, gender: string | null | undefined): boolean {
-  if (!gender) return true;
-  const g = String(gender).toUpperCase().trim();
-  const norm = (g === 'F' || g === 'FEMALE' || g.startsWith('F')) ? 'F' :
-               (g === 'M' || g === 'MALE' || g.startsWith('M')) ? 'M' : '';
-  if (!norm) return true;
-  if (/^WRR/.test(uiKey) && norm === 'M') return false;
-  if (/^MRR/.test(uiKey) && norm === 'F') return false;
+  const g = normalizeGender(gender);
+  if (!g) return true;
+  if (/^WRR/.test(uiKey) && g === 'M') return false;
+  if (/^MRR/.test(uiKey) && g === 'F') return false;
   return true;
 }
 
@@ -758,22 +756,24 @@ const HistoryOverlay: React.FC<{
 
 // ── TmPicker ──────────────────────────────────────────────────────────────────
 
-const TmPicker: React.FC<{
+export const TmPicker: React.FC<{
   tms: TmEntry[];
   allTms?: TmEntry[];   // broader eligible pool — only used when the operator types in the search box
   currentTmName?: string;
   onPick: (tm: TmEntry) => void;
+  onAddOnCall?: (tm: TmEntry) => void;
   onCancel?: () => void;
   confirmed: boolean;
   accent: string;
   isDark: boolean;
-}> = ({ tms, allTms, currentTmName, onPick, onCancel, confirmed, accent, isDark }) => {
+}> = ({ tms, allTms, currentTmName, onPick, onAddOnCall, onCancel, confirmed, accent, isDark }) => {
   const [filter, setFilter] = useState("");
   // Rule:
   // 1. Default list (no text in box) = scheduled + eligible + unassigned only (tms prop)
   // 2. When typing → switch to all eligible (allTms prop) for search
   // 3. The default list must *never* contain anyone who is not scheduled tonight for the correct role group.
   const searchPool = filter.trim() && allTms ? allTms : tms;
+  const scheduledIds = new Set(tms.map((t) => t.tmId));
   const filtered = filter.trim()
     ? searchPool.filter(t => t.tmName.toLowerCase().includes(filter.toLowerCase()))
     : tms;
@@ -847,7 +847,7 @@ const TmPicker: React.FC<{
       }}>
         {filter.trim()
           ? "Search: all eligible TMs (broad pool)"
-          : "Default: scheduled + eligible + unassigned only (Weekly Roster)"}
+          : "Default: Graves Default Schedule + on-call (unassigned)"}
       </div>
 
       {/* TM list */}
@@ -858,41 +858,68 @@ const TmPicker: React.FC<{
           </div>
         ) : filtered.map(tm => {
           const initial = tm.tmName.charAt(0).toUpperCase();
+          const inDefaultList = scheduledIds.has(tm.tmId);
+          const showOnCall =
+            filter.trim() && onAddOnCall && !inDefaultList;
           return (
-            <button
+            <div
               key={tm.tmId}
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onPick(tm); }}
-              onPointerDown={(e) => e.stopPropagation()}
               style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "7px 10px", borderRadius: 10, flexShrink: 0,
-                background: rowBg, border: `1px solid ${rowBorder}`,
-                cursor: "pointer", transition: "all 0.12s", textAlign: "left",
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = `${accent}22`;
-                (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = rowBg;
-                (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
+                display: "flex", flexDirection: "column", gap: 4, flexShrink: 0,
               }}
             >
-              {/* Avatar chip */}
-              <span style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                background: `${accent}22`, border: `1px solid ${accent}66`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 800, color: accent,
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              }}>{initial}</span>
-              <span style={{
-                fontSize: 12.5, fontWeight: 600, color: textPrimary,
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                letterSpacing: "-0.15px",
-              }}>{tm.tmName}</span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPick(tm); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "7px 10px", borderRadius: 10,
+                  background: rowBg, border: `1px solid ${rowBorder}`,
+                  cursor: "pointer", transition: "all 0.12s", textAlign: "left",
+                  width: "100%",
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.background = `${accent}22`;
+                  (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.background = rowBg;
+                  (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
+                }}
+              >
+                <span style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: `${accent}22`, border: `1px solid ${accent}66`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 800, color: accent,
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                }}>{initial}</span>
+                <span style={{
+                  fontSize: 12.5, fontWeight: 600, color: textPrimary,
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                  letterSpacing: "-0.15px",
+                }}>{tm.tmName}</span>
+              </button>
+              {showOnCall && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddOnCall(tm);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    fontSize: 10, fontWeight: 600, color: accent,
+                    background: `${accent}14`, border: `1px dashed ${accent}55`,
+                    borderRadius: 8, padding: "4px 8px", cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  Add on-call for tonight
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

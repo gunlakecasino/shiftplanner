@@ -191,6 +191,19 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
           <div style={{ marginTop: 14, fontSize: 12, color: isDark ? '#6B7280' : '#9CA3AF' }}>
             Today lands on <span style={{ color: tonight.color, fontWeight: 600 }}>{tonight.name}</span> • Week of {weekStart.getDate()} {MONTH_LONG[weekStart.getMonth()].slice(0,3)}
           </div>
+
+          <a
+            href="/shiftbuilder/graves-schedule"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold transition-colors hover:bg-neutral-100"
+            style={{
+              borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+              color: isDark ? '#E5E5E7' : '#1C1C1E',
+              background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+            }}
+          >
+            Graves Default Schedule
+            <span className="text-neutral-400">→</span>
+          </a>
         </div>
       </div>
 
