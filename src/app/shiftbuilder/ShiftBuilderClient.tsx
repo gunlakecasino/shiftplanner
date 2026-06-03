@@ -142,6 +142,38 @@ import {
   useDraftAssignments 
 } from "./store/useShiftBuilderStore";
 import { createRoot, Root } from "react-dom/client";
+
+/** Body-mounted launchpad shell — must not intercept clicks when canvas is active. */
+const LAUNCHPAD_ROOT_ID = "shiftbuilder-launchpad-root";
+
+function setLaunchpadRootVisible(container: HTMLDivElement, visible: boolean) {
+  if (visible) {
+    container.style.display = "block";
+    container.style.visibility = "visible";
+    container.style.pointerEvents = "auto";
+  } else {
+    container.style.display = "none";
+    container.style.visibility = "hidden";
+    container.style.pointerEvents = "none";
+  }
+}
+
+/** Defensive teardown when leaving ShiftBuilder (avoids invisible full-screen blockers). */
+function teardownShiftBuilderBodyChrome() {
+  if (typeof document === "undefined") return;
+  document.getElementById(LAUNCHPAD_ROOT_ID)?.remove();
+  const wasPrinting = document.body.classList.contains("printing-dual-mode");
+  document.body.classList.remove("printing-dual-mode");
+  document.querySelector(".print-dual-container")?.remove();
+  document.getElementById("__pcc-print-override")?.remove();
+  if (!wasPrinting) return;
+  Array.from(document.body.children).forEach((child) => {
+    const el = child as HTMLElement;
+    if (el.style.display === "none" && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
+      el.style.display = "";
+    }
+  });
+}
 // Phase 4 — extracted hooks
 import { useTheme } from "./hooks/useTheme";
 import { useRosterPanels } from "./hooks/useRosterPanels";
@@ -722,19 +754,28 @@ function AuthedShiftBuilder() {
   //
   // Instead we use root.render(null) to clear it, which is safe.
   // Real unmount + DOM removal only happens on final component teardown.
-  React.useEffect(() => {
+  //
+  // CRITICAL: The container is position:fixed + inset:0. When canvas mode clears
+  // children via render(null), the empty div still captures all pointer events on
+  // iPad/desktop — page feels frozen after refresh (oms_view_mode=canvas) or after
+  // entering canvas. Always toggle display/pointer-events when hiding.
+  React.useLayoutEffect(() => {
     if (typeof document === 'undefined') return;
 
     // Ensure we have a persistent container + root (create only once)
     if (!launchpadContainerRef.current) {
+      // Orphan from a prior navigation if deferred cleanup did not run in time.
+      document.getElementById(LAUNCHPAD_ROOT_ID)?.remove();
+
       const container = document.createElement('div');
-      container.id = 'shiftbuilder-launchpad-root';
+      container.id = LAUNCHPAD_ROOT_ID;
       container.style.cssText = `
         position: fixed !important;
         inset: 0 !important;
         z-index: 2147483640 !important;
         background: transparent !important;
       `;
+      setLaunchpadRootVisible(container, false);
       document.body.appendChild(container);
       launchpadContainerRef.current = container;
 
@@ -742,9 +783,11 @@ function AuthedShiftBuilder() {
       launchpadRootRef.current = root;
     }
 
+    const container = launchpadContainerRef.current;
     const root = launchpadRootRef.current!;
 
     if (viewMode === 'launchpad') {
+      setLaunchpadRootVisible(container, true);
       root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
       console.log('[Launchpad] Rendered into body root (iPad reliable)');
       hideOpsStatusBar();
@@ -752,6 +795,7 @@ function AuthedShiftBuilder() {
       // Safe way to "hide" the launchpad without unmounting the root.
       // This avoids the synchronous unmount race condition entirely.
       root.render(null);
+      setLaunchpadRootVisible(container, false);
       // Explicit ensure here (in addition to <OpsStatusBar/> mount) defeats any timing
       // where the conditional React tree hasn't committed the effect yet on refresh/enter.
       ensureOpsStatusBar();
@@ -765,18 +809,20 @@ function AuthedShiftBuilder() {
       const r = launchpadRootRef.current;
       const c = launchpadContainerRef.current;
 
-      if (r || c) {
-        // Defer to the next macrotask so we are guaranteed to be outside
-        // React's current render/commit phase.
+      // Remove the full-screen shell immediately so client navigations to other
+      // routes are never left with a pointer-blocking layer.
+      if (c) {
+        setLaunchpadRootVisible(c, false);
+        try { c.remove(); } catch {}
+        launchpadContainerRef.current = null;
+      }
+      teardownShiftBuilderBodyChrome();
+
+      if (r) {
+        // Defer .unmount() only — safe outside React's commit phase.
         setTimeout(() => {
-          if (r) {
-            try { r.unmount(); } catch {}
-            launchpadRootRef.current = null;
-          }
-          if (c?.parentNode) {
-            try { c.parentNode.removeChild(c); } catch {}
-            launchpadContainerRef.current = null;
-          }
+          try { r.unmount(); } catch {}
+          launchpadRootRef.current = null;
         }, 0);
       }
     };
@@ -5972,8 +6018,9 @@ function AuthedShiftBuilder() {
             // Extra reliability on iPad: directly render into the body root if it exists.
             // This helps in case the effect hasn't flushed yet due to device-specific timing.
             const root = launchpadRootRef.current;
-            if (root) {
-              // We pass a fresh enterCanvas here; the component will receive the latest via its own props if needed.
+            const launchContainer = launchpadContainerRef.current;
+            if (root && launchContainer) {
+              setLaunchpadRootVisible(launchContainer, true);
               root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
             }
           }}
