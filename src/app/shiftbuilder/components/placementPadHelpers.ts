@@ -1,4 +1,40 @@
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
+import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
+
+/** Minimal TM fields for swap / eligibility checks. */
+export type PlacementTmProfile = {
+  gender?: string | null;
+  gravePool?: string | null;
+  grave_pool?: string | null;
+  isAMOverlap?: boolean;
+  is_am_overlap?: boolean;
+  isPMOverlap?: boolean;
+  is_pm_overlap?: boolean;
+};
+
+function normalizeTmForEligibility(tm: PlacementTmProfile): Record<string, unknown> {
+  return {
+    gender: tm.gender,
+    gravePool: tm.gravePool ?? tm.grave_pool,
+    isAMOverlap: tm.isAMOverlap ?? tm.is_am_overlap,
+    isPMOverlap: tm.isPMOverlap ?? tm.is_pm_overlap,
+  };
+}
+
+/** Both TMs must be eligible for the other's slot (gender, overlap pool, etc.). */
+export function canSuggestSwapBetween(
+  currentTm: PlacementTmProfile | null | undefined,
+  currentSlotKey: string,
+  otherTm: PlacementTmProfile | null | undefined,
+  otherSlotKey: string,
+): boolean {
+  if (!currentTm || !otherTm) return false;
+  const cur = normalizeTmForEligibility(currentTm);
+  const other = normalizeTmForEligibility(otherTm);
+  return (
+    isEligibleForSlot(cur, otherSlotKey) && isEligibleForSlot(other, currentSlotKey)
+  );
+}
 
 /** Nights of history used for the placement spread grid. */
 export const PLACEMENT_SPREAD_NIGHTS = 30;
@@ -99,6 +135,18 @@ export function getLastPlacementSequence(
   return events.slice(0, n).map((e) => e.ui);
 }
 
+/** Admin and overlap slots are never suggested in Swap lanes. */
+export function isSwapEligibleSlotKey(slotKey: string): boolean {
+  const k = slotKey.trim();
+  if (!k) return false;
+  const upper = k.toUpperCase();
+  if (upper === "ADM" || upper === "ADMIN" || upper === "AUX_ADMIN") return false;
+  if (upper.includes("ADMIN")) return false;
+  if (k.startsWith("OL-") || upper.startsWith("OVERLAP")) return false;
+  if (/^overlap_(am|pm)/i.test(k)) return false;
+  return true;
+}
+
 export type PlacementCrossPattern = {
   otherTmName: string;
   theirSlotKey: string;
@@ -135,6 +183,8 @@ export function computePlacementRotationBasics(
   otherHistories: Record<string, ZoneDetailEntry | null>,
   beforeIso: string,
   nightCount: number = PLACEMENT_SPREAD_NIGHTS,
+  currentTm?: PlacementTmProfile | null,
+  otherTmProfiles?: Record<string, PlacementTmProfile | null>,
 ): PlacementRotationBasics {
   const spreadKeys = new Set(
     getSpreadPlacementKeys(tmHistory, nightCount, beforeIso),
@@ -143,9 +193,28 @@ export function computePlacementRotationBasics(
   const notRecentlyPlaced = matrixSlotKeys.filter((k) => !spreadKeys.has(k));
 
   const crossPatterns: PlacementCrossPattern[] = [];
+  const highlightGapKeys = new Set(notRecentlyPlaced);
+  const highlightCrossKeys = new Set<string>();
+
+  if (!isSwapEligibleSlotKey(currentSlotKey)) {
+    return {
+      notRecentlyPlaced,
+      crossPatterns: [],
+      highlightGapKeys,
+      highlightCrossKeys,
+    };
+  }
 
   for (const [theirSlotKey, row] of Object.entries(assignments)) {
     if (!row?.tmId || row.tmId === currentTmId || !row.tmName) continue;
+    if (!isSwapEligibleSlotKey(theirSlotKey)) continue;
+
+    const otherTm = otherTmProfiles?.[row.tmId] ?? null;
+    if (
+      !canSuggestSwapBetween(currentTm, currentSlotKey, otherTm, theirSlotKey)
+    ) {
+      continue;
+    }
 
     const tmMissingFromTheirSlot = !spreadKeys.has(theirSlotKey);
     const otherSpread = new Set(
@@ -163,8 +232,6 @@ export function computePlacementRotationBasics(
     }
   }
 
-  const highlightGapKeys = new Set(notRecentlyPlaced);
-  const highlightCrossKeys = new Set<string>();
   for (const c of crossPatterns) {
     if (c.tmMissingFromTheirSlot) highlightCrossKeys.add(c.theirSlotKey);
     if (c.otherMissingFromCurrentSlot) highlightGapKeys.add(currentSlotKey);
@@ -197,7 +264,12 @@ export function formatPlacementRotationDisplay(
     gapsLine = `${tmName} — not in ${nightCount} nights: ${labels.join(", ")}${more}.`;
   }
 
-  const bilateral = basics.crossPatterns.filter(
+  const eligibleCross = basics.crossPatterns.filter(
+    (c) =>
+      isSwapEligibleSlotKey(c.theirSlotKey) && isSwapEligibleSlotKey(currentSlotKey),
+  );
+
+  const bilateral = eligibleCross.filter(
     (c) => c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot,
   );
 
@@ -206,7 +278,7 @@ export function formatPlacementRotationDisplay(
     return `${c.otherTmName} (${their}) ↔ ${tmName} (${slotLabel})`;
   });
 
-  const partial = basics.crossPatterns.filter(
+  const partial = eligibleCross.filter(
     (c) => !(c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot),
   );
   for (const c of partial.slice(0, 2 - swapLines.length)) {
@@ -220,6 +292,19 @@ export function formatPlacementRotationDisplay(
   }
 
   return { gapsLine, swapLines };
+}
+
+/** Single block sent to the placement analyst (deterministic ground truth). */
+export function formatRotationBriefForAnalyst(
+  display: PlacementRotationDisplay | null,
+): string | undefined {
+  if (!display) return undefined;
+  const parts: string[] = [];
+  if (display.gapsLine) parts.push(display.gapsLine);
+  if (display.swapLines.length > 0) {
+    parts.push(`Swap lanes:\n${display.swapLines.map((l) => `• ${l}`).join("\n")}`);
+  }
+  return parts.length ? parts.join("\n\n") : undefined;
 }
 
 /** Compact label for matrix cells and last-5 pills (no spaces). */

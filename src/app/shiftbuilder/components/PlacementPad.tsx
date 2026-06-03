@@ -4,7 +4,13 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from "react-dom";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import { normalizeGender } from "@/lib/shiftbuilder/placement";
+import { normalizeGender, isEligibleForSlot } from "@/lib/shiftbuilder/placement";
+import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import {
+  fitVerdictLabel,
+  fitVerdictStyles,
+} from "@/lib/shiftbuilder/placementPadInsightSchema";
+import type { PlacementInsightMode } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import {
   ZONE_DEFS,
   RR_DEFS,
@@ -26,8 +32,10 @@ import {
   nightIsoFromDate,
   computePlacementRotationBasics,
   formatPlacementRotationDisplay,
+  formatRotationBriefForAnalyst,
   type PlacementRotationBasics,
   type PlacementRotationDisplay,
+  type PlacementTmProfile,
 } from "./placementPadHelpers";
 import { postEngineInsight } from "../lib/engineInsightClient";
 
@@ -167,6 +175,202 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function PlacementAnalystBlock({
+  loading,
+  text,
+  structured,
+  cached,
+  assigned,
+  onRefresh,
+  onTrain,
+  onClear,
+}: {
+  loading: boolean;
+  text: string | null;
+  structured?: PlacementPadInsight | null;
+  cached?: boolean;
+  assigned: boolean;
+  onRefresh: () => void;
+  onTrain?: () => void;
+  onClear: () => void;
+}) {
+  const verdictStyles = structured ? fitVerdictStyles(structured.fitVerdict) : null;
+
+  return (
+    <div className="mx-3 mb-2 rounded-xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
+      {structured && verdictStyles ? (
+        <div
+          className="px-2.5 py-2 border-b"
+          style={{
+            borderColor: verdictStyles.border,
+            background: verdictStyles.bg,
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${verdictStyles.badge}`}
+            >
+              {fitVerdictLabel(structured.fitVerdict)}
+            </span>
+            {cached && (
+              <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
+                cached
+              </span>
+            )}
+          </div>
+          <p
+            className="text-[11px] font-semibold leading-snug"
+            style={{ color: verdictStyles.text }}
+          >
+            {structured.fitSummary}
+          </p>
+        </div>
+      ) : (
+        <div className="px-2.5 py-2 border-b border-black/[0.05] bg-white/60">
+          {loading ? (
+            <p className="text-[10px] text-neutral-500 animate-pulse">
+              {assigned
+                ? "Analyzing whether this placement is a good fit…"
+                : "Ranking who fits this slot…"}
+            </p>
+          ) : (
+            <p className="text-[10px] text-neutral-500">
+              {assigned
+                ? "Fit verdict will appear when analysis completes."
+                : "Assignee ranking will appear when analysis completes."}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="px-2.5 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionLabel>Details</SectionLabel>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRefresh();
+            }}
+            disabled={loading}
+            className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
+          >
+            {loading ? "Analyzing…" : "Refresh"}
+          </button>
+        </div>
+
+        {structured ? (
+          <div className="mt-1.5 space-y-2 text-[9px] leading-snug text-neutral-700">
+            <div>
+              <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                Tonight
+              </p>
+              <p className="mt-0.5 font-medium text-neutral-900">{structured.headline}</p>
+              <p className="mt-0.5 text-neutral-600">{structured.whyTonight}</p>
+            </div>
+            {structured.rotationNote && (
+              <div>
+                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                  Rotation
+                </p>
+                <p className="mt-0.5 text-neutral-600">{structured.rotationNote}</p>
+              </div>
+            )}
+            {structured.neighborDynamics && (
+              <div>
+                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                  Neighbors
+                </p>
+                <p className="mt-0.5 text-neutral-600">{structured.neighborDynamics}</p>
+              </div>
+            )}
+            {structured.swapRecommendations.length > 0 && (
+              <div>
+                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                  Swap lanes
+                </p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {structured.swapRecommendations.map((s, i) => (
+                    <li key={i} className="text-neutral-600">
+                      {s.priority === "high" ? "★ " : s.priority === "medium" ? "· " : "○ "}
+                      {s.summary}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {structured.watchouts.length > 0 && (
+              <div>
+                <p className="text-[8px] font-semibold uppercase tracking-wide text-amber-700/90">
+                  Watchouts
+                </p>
+                <ul className="mt-0.5 list-disc pl-3 text-neutral-600">
+                  {structured.watchouts.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {structured.rankedAssignees && structured.rankedAssignees.length > 0 && (
+              <div>
+                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                  Best picks
+                </p>
+                <ol className="mt-0.5 space-y-0.5 pl-3 list-decimal text-neutral-600">
+                  {[...structured.rankedAssignees]
+                    .sort((a, b) => a.rank - b.rank)
+                    .map((r) => (
+                      <li key={`${r.rank}-${r.tmName}`}>
+                        <span className="font-medium text-neutral-800">{r.tmName}</span>
+                        {" — "}
+                        {r.fitSummary}
+                        {r.caveats ? (
+                          <span className="text-neutral-400"> ({r.caveats})</span>
+                        ) : null}
+                      </li>
+                    ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        ) : text ? (
+          <p className="mt-1.5 text-[9px] leading-snug text-neutral-600 whitespace-pre-wrap">
+            {text}
+          </p>
+        ) : null}
+
+        {text && (
+          <div className="mt-2 flex items-center gap-1.5">
+            {onTrain && (
+              <button
+                type="button"
+                title="Save as gold example for future insights"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrain();
+                }}
+                className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
+              >
+                👍 Gold
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+              className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PlacementCell({
   label,
   placed,
@@ -211,9 +415,9 @@ function PlacementCell({
                   color: "rgba(3,105,161,0.9)",
                 }
               : {
-                  background: "rgba(0,0,0,0.02)",
-                  border: "1px solid rgba(0,0,0,0.06)",
-                  color: "rgba(0,0,0,0.28)",
+                  background: "rgba(115,115,115,0.14)",
+                  border: "1px dashed rgba(115,115,115,0.38)",
+                  color: "rgba(82,82,82,0.72)",
                 }
       }
     >
@@ -340,7 +544,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [padHistoryLoading, setPadHistoryLoading] = useState(false);
   const [rotationDisplay, setRotationDisplay] = useState<PlacementRotationDisplay | null>(null);
   const [deepInsight, setDeepInsight] = useState<string | null>(null);
+  const [insightStructured, setInsightStructured] = useState<PlacementPadInsight | null>(null);
+  const [insightCached, setInsightCached] = useState(false);
   const [deepInsightLoading, setDeepInsightLoading] = useState(false);
+  const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
   >([]);
@@ -365,6 +572,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setAssignConfirmed(false);
     setRotationDisplay(null);
     setDeepInsight(null);
+    setInsightStructured(null);
+    setInsightCached(false);
     setDeepInsightLoading(false);
     setPadGoodExamples([]);
     setRotationBasics(null);
@@ -459,6 +668,21 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       )
     : undefined;
 
+  const placementTmProfile = React.useCallback(
+    (m: typeof tmMember): PlacementTmProfile | null => {
+      if (!m) return null;
+      return {
+        gender: m.gender,
+        gravePool: m.gravePool ?? m.grave_pool,
+        isAMOverlap: m.isAMOverlap ?? m.is_am_overlap,
+        isPMOverlap: m.isPMOverlap ?? m.is_pm_overlap,
+      };
+    },
+    [],
+  );
+
+  const currentPlacementTm = placementTmProfile(tmMember);
+
   const boardNeighborSummary = Object.entries(assignments)
     .filter(([k, v]) => k !== slotKey && v?.tmName)
     .slice(0, 16)
@@ -471,29 +695,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       ? `${timesInSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights; in last-5 trail: ${last5Sequence.includes(slotKey) ? "yes" : "no"}`
       : `Not in last ${PLACEMENT_SPREAD_NIGHTS}-night spread`
     : undefined;
-
-  const buildInsightContext = () => ({
-    rationale: prov.rationale as string | undefined,
-    fairnessSignals: prov.fairnessSignals as Record<string, number | string> | undefined,
-    recentPlacements: last5Sequence.filter(Boolean).join(" → ") || undefined,
-    slotSpecificHistory: slotHistorySummary,
-    currentContext: boardNeighborSummary || undefined,
-    tmAttributes: tmMember
-      ? {
-          gravePool: tmMember.gravePool ?? tmMember.grave_pool,
-          isAMOverlap: !!(tmMember.isAMOverlap ?? tmMember.is_am_overlap),
-          isPMOverlap: !!(tmMember.isPMOverlap ?? tmMember.is_pm_overlap),
-        }
-      : undefined,
-    priorGoodExamples: padGoodExamples.slice(-3),
-    suggestedCandidates: !a.tmName
-      ? [...scheduledUnassigned, ...(allEligibleTms || [])]
-          .slice(0, 8)
-          .map((t) => t.tmName)
-          .join(", ")
-      : undefined,
-    tmName: a.tmName,
-  });
 
   const auxKeysSig = React.useMemo(
     () => auxDefs.filter((d) => !d.key.startsWith("SP")).map((d) => d.key).join(","),
@@ -527,6 +728,196 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     [assignments],
   );
 
+  const spreadGapsList = matrixSlotKeys.filter((k) => !placedSet.has(k));
+
+  const buildCandidateProfiles = React.useCallback(() => {
+    const seen = new Set<string>();
+    const pool = [...scheduledUnassigned, ...(allEligibleTms || [])];
+    return pool
+      .filter((t) => {
+        if (seen.has(t.tmId)) return false;
+        seen.add(t.tmId);
+        return true;
+      })
+      .slice(0, 14)
+      .map((t) => {
+        const m = members.find(
+          (mem: { id?: string; tmId?: string; tm_id?: string }) =>
+            mem.id === t.tmId || mem.tmId === t.tmId || mem.tm_id === t.tmId,
+        );
+        const profile = placementTmProfile(m);
+        const eligible = profile
+          ? isEligibleForSlot(
+              {
+                gender: profile.gender,
+                gravePool: profile.gravePool,
+                isAMOverlap: profile.isAMOverlap,
+                isPMOverlap: profile.isPMOverlap,
+              },
+              slotKey,
+            )
+          : true;
+        return {
+          tmName: t.tmName,
+          tmId: t.tmId,
+          eligible,
+          gender: profile?.gender ?? null,
+          gravePool: profile?.gravePool ?? null,
+          isAMOverlap: profile?.isAMOverlap,
+          isPMOverlap: profile?.isPMOverlap,
+        };
+      });
+  }, [scheduledUnassigned, allEligibleTms, members, placementTmProfile, slotKey]);
+
+  const padHistorySig = React.useMemo(
+    () =>
+      padHistory
+        ? `${padHistory.tmId}:${padHistory.lastDate}:${padHistory.totalAssignments}`
+        : "",
+    [padHistory?.tmId, padHistory?.lastDate, padHistory?.totalAssignments],
+  );
+
+  const matrixSlotKeysSig = React.useMemo(
+    () => matrixSlotKeys.join(","),
+    [matrixSlotKeys],
+  );
+
+  const candidatePoolSize = scheduledUnassigned.length + (allEligibleTms?.length ?? 0);
+
+  const insightContextSig = React.useMemo(
+    () =>
+      [
+        slotKey,
+        a.tmId ?? "",
+        boardSig,
+        currentIso,
+        padHistorySig,
+        rotationDisplay?.gapsLine ?? "",
+        (rotationDisplay?.swapLines ?? []).join("|"),
+        prov.rationale ?? "",
+        JSON.stringify(prov.fairnessSignals ?? {}),
+        String(candidatePoolSize),
+      ].join("§"),
+    [
+      slotKey,
+      a.tmId,
+      boardSig,
+      currentIso,
+      padHistorySig,
+      rotationDisplay?.gapsLine,
+      rotationDisplay?.swapLines,
+      prov.rationale,
+      prov.fairnessSignals,
+      candidatePoolSize,
+    ],
+  );
+
+  const buildInsightContext = React.useCallback(
+    (mode: PlacementInsightMode) => ({
+      slotKey,
+      tmName: a.tmName || "Unassigned",
+      mode,
+      isRR: slotKey.startsWith("MRR") || slotKey.startsWith("WRR"),
+      rrSide: slotKey.startsWith("MRR")
+        ? "mens"
+        : slotKey.startsWith("WRR")
+          ? "womens"
+          : null,
+      rationale: prov.rationale as string | undefined,
+      fairnessSignals: prov.fairnessSignals as Record<string, number | string> | undefined,
+      recentPlacements: last5Sequence.filter(Boolean).join(" → ") || undefined,
+      slotSpecificHistory: slotHistorySummary,
+      currentContext: boardNeighborSummary || undefined,
+      tmAttributes: tmMember
+        ? {
+            gravePool: tmMember.gravePool ?? tmMember.grave_pool,
+            isAMOverlap: !!(tmMember.isAMOverlap ?? tmMember.is_am_overlap),
+            isPMOverlap: !!(tmMember.isPMOverlap ?? tmMember.is_pm_overlap),
+            gender: tmMember.gender ?? null,
+          }
+        : undefined,
+      priorGoodExamples: padGoodExamples.slice(-3),
+      rotationBrief: formatRotationBriefForAnalyst(rotationDisplay),
+      spreadPlaced: spreadKeys.slice(0, 24).join(", ") || undefined,
+      spreadGaps: spreadGapsList.slice(0, 24).join(", ") || undefined,
+      candidateProfiles: !a.tmName ? buildCandidateProfiles() : undefined,
+      suggestedCandidates: !a.tmName
+        ? buildCandidateProfiles()
+            .filter((c) => c.eligible)
+            .slice(0, 8)
+            .map((c) => c.tmName)
+            .join(", ")
+        : undefined,
+      contextSig: insightContextSig,
+    }),
+    [
+      slotKey,
+      a.tmName,
+      prov.rationale,
+      prov.fairnessSignals,
+      last5Sequence,
+      slotHistorySummary,
+      boardNeighborSummary,
+      tmMember,
+      padGoodExamples,
+      rotationDisplay,
+      spreadKeys,
+      spreadGapsList,
+      buildCandidateProfiles,
+      insightContextSig,
+    ],
+  );
+
+  const runPlacementAnalyst = React.useCallback(
+    async (mode: PlacementInsightMode) => {
+      const reqId = ++analystRequestRef.current;
+      setDeepInsightLoading(true);
+      try {
+        const data = await postEngineInsight(buildInsightContext(mode));
+        if (analystRequestRef.current !== reqId) return;
+        if (data.usage) {
+          try {
+            useShiftBuilderStore.getState().addAiUsage(data.usage);
+          } catch {}
+        }
+        setDeepInsight(data.text || null);
+        setInsightStructured(data.structured ?? null);
+        setInsightCached(!!data.cached);
+      } catch (err) {
+        if (analystRequestRef.current !== reqId) return;
+        setDeepInsight(
+          err instanceof Error ? err.message : "Analyst unavailable.",
+        );
+        setInsightStructured(null);
+        setInsightCached(false);
+      } finally {
+        if (analystRequestRef.current === reqId) {
+          setDeepInsightLoading(false);
+        }
+      }
+    },
+    [buildInsightContext],
+  );
+
+  const autoAnalystSigRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (padHistoryLoading) return;
+
+    const mode: PlacementInsightMode = a.tmName ? "auto" : "assignee";
+    if (mode === "assignee" && candidatePoolSize === 0) return;
+    if (mode === "auto" && (!a.tmName || !rotationDisplay)) return;
+
+    if (autoAnalystSigRef.current === insightContextSig && deepInsight) return;
+    autoAnalystSigRef.current = insightContextSig;
+
+    void runPlacementAnalyst(mode);
+  }, [a.tmName, insightContextSig, padHistoryLoading, runPlacementAnalyst, candidatePoolSize, rotationDisplay, deepInsight]);
+
+  useEffect(() => {
+    autoAnalystSigRef.current = null;
+  }, [slotKey]);
+
   useEffect(() => {
     if (!a.tmId) {
       setRotationBasics(null);
@@ -536,10 +927,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     }
     if (padHistoryLoading || !padHistory) return;
 
-    const historySig = padHistory
-      ? `${padHistory.tmId}:${padHistory.lastDate}:${padHistory.totalAssignments}`
-      : "";
-    const sig = `${slotKey}|${a.tmId}|${currentIso}|${boardSig}|${auxKeysSig}|${historySig}`;
+    const sig = `${slotKey}|${a.tmId}|${currentIso}|${boardSig}|${auxKeysSig}|${padHistorySig}`;
     if (rotationSigRef.current === sig) return;
 
     let cancelled = false;
@@ -572,6 +960,17 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
       if (cancelled) return;
 
+      const otherTmProfiles: Record<string, PlacementTmProfile | null> = {};
+      for (const row of Object.values(assignments)) {
+        const id = row?.tmId;
+        if (!id || id === a.tmId) continue;
+        const mem = members.find(
+          (m: { id?: string; tmId?: string; tm_id?: string }) =>
+            m.id === id || m.tmId === id || m.tm_id === id,
+        );
+        otherTmProfiles[id] = placementTmProfile(mem);
+      }
+
       const basics = computePlacementRotationBasics(
         padHistory,
         slotKey,
@@ -580,6 +979,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         assignments,
         histories,
         currentIso,
+        PLACEMENT_SPREAD_NIGHTS,
+        currentPlacementTm,
+        otherTmProfiles,
       );
       rotationSigRef.current = sig;
       setRotationBasics(basics);
@@ -594,9 +996,19 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [a.tmId, a.tmName, padHistory, padHistoryLoading, slotKey, currentIso, boardSig, auxKeysSig, matrixSlotKeys]);
+  }, [
+    a.tmId,
+    a.tmName,
+    padHistoryLoading,
+    padHistorySig,
+    slotKey,
+    currentIso,
+    boardSig,
+    auxKeysSig,
+    matrixSlotKeysSig,
+    assignments,
+  ]);
 
-  const cellGap = (ui: string) => rotationBasics?.highlightGapKeys.has(ui) ?? false;
   const cellCross = (ui: string) => rotationBasics?.highlightCrossKeys.has(ui) ?? false;
 
   const padEl = (
@@ -712,46 +1124,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 >
                   Assign team member
                 </button>
-                <div className="rounded-lg border border-black/[0.05] bg-neutral-50/80 px-2.5 py-2">
-                    <SectionLabel>Who fits here</SectionLabel>
-                    <p className="mt-1 text-[9px] leading-snug text-neutral-500">
-                      Scheduled + eligible TMs only. Tap for xAI ranking.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={deepInsightLoading}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setDeepInsight(null);
-                        setDeepInsightLoading(true);
-                        try {
-                          const data = await postEngineInsight({
-                            ...buildInsightContext(),
-                            slotKey,
-                            tmName: a.tmName || "Unassigned",
-                          });
-                          if (data.usage) {
-                            try {
-                              useShiftBuilderStore.getState().addAiUsage(data.usage);
-                            } catch {}
-                          }
-                          setDeepInsight(data.text || "No suggestions.");
-                        } catch (err) {
-                          setDeepInsight(
-                            err instanceof Error ? err.message : "Suggestions unavailable.",
-                          );
-                        } finally {
-                          setDeepInsightLoading(false);
-                        }
-                      }}
-                      className="mt-1.5 rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
-                    >
-                      {deepInsightLoading ? "Thinking…" : "xAI suggest assignee"}
-                    </button>
-                    {deepInsight && (
-                      <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{deepInsight}</p>
-                    )}
-                  </div>
               </div>
             )}
 
@@ -851,6 +1223,30 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               )}
             </div>
 
+            <PlacementAnalystBlock
+              loading={deepInsightLoading}
+              text={deepInsight}
+              structured={insightStructured}
+              cached={insightCached}
+              assigned={!!a.tmName}
+              onRefresh={() =>
+                void runPlacementAnalyst(a.tmName ? "deep" : "assignee")
+              }
+              onTrain={
+                deepInsight
+                  ? () =>
+                      setPadGoodExamples((prev) =>
+                        [...prev, { slotKey, insightText: deepInsight }].slice(-3),
+                      )
+                  : undefined
+              }
+              onClear={() => {
+                setDeepInsight(null);
+                setInsightStructured(null);
+                autoAnalystSigRef.current = null;
+              }}
+            />
+
             {a.tmName && (
               <div className="border-t border-black/[0.05] px-3 py-2.5">
                 {padHistoryLoading && !rotationDisplay ? (
@@ -877,8 +1273,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         )}
                         <div className="flex flex-wrap gap-x-2 gap-y-0.5 pt-0.5 text-[8px] text-neutral-400">
                           <span className="inline-flex items-center gap-0.5">
-                            <span className="h-2 w-3 rounded border border-dashed border-amber-500/60 bg-amber-50" />
-                            gap
+                            <span className="h-2 w-3 rounded border border-dashed border-neutral-400/50 bg-neutral-200/60" />
+                            not in spread
                           </span>
                           <span className="inline-flex items-center gap-0.5">
                             <span className="h-2 w-3 rounded border border-sky-400/50 bg-sky-50" />
@@ -930,7 +1326,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                           placed={placedSet.has(z.key)}
                           accent={getZoneColor(z.key)}
                           title={z.key}
-                          gapHighlight={cellGap(z.key)}
                           crossHighlight={cellCross(z.key)}
                         />
                       ))}
@@ -948,7 +1343,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             placed={placedSet.has(loc.ui)}
                             accent={getPillAccent(loc.ui)}
                             title={loc.ui}
-                            gapHighlight={cellGap(loc.ui)}
                             crossHighlight={cellCross(loc.ui)}
                           />
                         ))}
@@ -967,7 +1361,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             placed={placedSet.has(loc.ui)}
                             accent={getPillAccent(loc.ui)}
                             title={loc.ui}
-                            gapHighlight={cellGap(loc.ui)}
                             crossHighlight={cellCross(loc.ui)}
                           />
                         ))}
@@ -1008,75 +1401,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       })}
                     </div>
 
-                    <div className="mt-2 pt-2 border-t border-black/[0.05]">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setDeepInsightLoading(true);
-                            try {
-                              const data = await postEngineInsight({
-                                ...buildInsightContext(),
-                                slotKey,
-                                tmName: a.tmName!,
-                              });
-                              if (data.usage) {
-                                try {
-                                  useShiftBuilderStore.getState().addAiUsage(data.usage);
-                                } catch {}
-                              }
-                              setDeepInsight(data.text || "No additional insight.");
-                            } catch (err) {
-                              setDeepInsight(
-                                err instanceof Error ? err.message : "Insight unavailable.",
-                              );
-                            } finally {
-                              setDeepInsightLoading(false);
-                            }
-                          }}
-                          className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
-                          disabled={deepInsightLoading}
-                        >
-                          {deepInsightLoading ? "Thinking…" : "xAI deeper"}
-                        </button>
-                        {hasProv && prov.rationale && (
-                          <span className="text-[8px] text-neutral-400 truncate max-w-[140px]" title={prov.rationale}>
-                            {prov.rationale}
-                          </span>
-                        )}
-                      </div>
-                      {deepInsight && (
-                        <>
-                          <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{deepInsight}</p>
-                          <div className="mt-1 flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              title="Good example for next deeper insights"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPadGoodExamples((prev) =>
-                                  [...prev, { slotKey, insightText: deepInsight }].slice(-3),
-                                );
-                              }}
-                              className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
-                            >
-                              👍
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeepInsight(null);
-                              }}
-                              className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    {hasProv && prov.rationale && (
+                      <p
+                        className="mt-2 text-[8px] text-neutral-400 leading-snug"
+                        title={prov.rationale}
+                      >
+                        Engine: {prov.rationale}
+                      </p>
+                    )}
                   </>
                 )}
               </div>

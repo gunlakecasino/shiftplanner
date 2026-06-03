@@ -1,15 +1,38 @@
 /**
- * Placement pad "Deeper insight" — retrospective Grok analysis for a single slot.
- * Server-only; called from shiftbuilder/actions.ts.
+ * Placement pad analyst — high-quality Grok 4.3 structured insights.
+ * Server-only; called from /api/shiftbuilder/engine-insight.
  */
 
-import { generateText } from "ai";
+import { generateObject, generateText } from "ai";
 import { createGrokSuggestionModel } from "@/lib/shiftbuilder/grokClient";
 import { getPlacementOrderText, getEligibilityRulesText } from "@/lib/shiftbuilder/placement";
+import {
+  PlacementPadInsightSchema,
+  formatPlacementPadInsightText,
+  type PlacementPadInsight,
+} from "@/lib/shiftbuilder/placementPadInsightSchema";
+import {
+  getInsightCache,
+  setInsightCache,
+  stableInsightKey,
+} from "@/lib/shiftbuilder/engineInsightCache";
+
+export type PlacementInsightMode = "auto" | "deep" | "assignee" | "basics" | "legacy";
+
+export type PlacementCandidateProfile = {
+  tmName: string;
+  tmId?: string;
+  eligible: boolean;
+  gender?: string | null;
+  gravePool?: string | null;
+  isAMOverlap?: boolean;
+  isPMOverlap?: boolean;
+};
 
 export type EngineInsightContext = {
   slotKey: string;
   tmName: string;
+  mode?: PlacementInsightMode;
   rationale?: string;
   fairnessSignals?: Record<string, number | string>;
   recentPlacements?: string;
@@ -19,64 +42,88 @@ export type EngineInsightContext = {
     gravePool?: string | boolean | null;
     isAMOverlap?: boolean;
     isPMOverlap?: boolean;
+    gender?: string | null;
   };
   priorGoodExamples?: Array<{ slotKey: string; insightText: string }>;
   slotSpecificHistory?: string;
   currentContext?: string;
-  /** Unassigned slot: short list of candidate names the pad computed */
   suggestedCandidates?: string;
+  /** Deterministic rotation copy from the pad (gaps + swap lanes). */
+  rotationBrief?: string;
+  /** Comma-separated keys placed in last-30 spread. */
+  spreadPlaced?: string;
+  /** Comma-separated matrix keys not in spread. */
+  spreadGaps?: string;
+  /** Pre-scored / filtered candidate rows for empty slots. */
+  candidateProfiles?: PlacementCandidateProfile[];
+  rotationBasicsText?: string;
+  /** Client fingerprint — cache invalidation when board/history changes. */
+  contextSig?: string;
 };
 
 export type EngineInsightResult = {
   text: string;
+  structured?: PlacementPadInsight;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
     model?: string;
     reasoningEffort?: string;
   };
+  cached?: boolean;
 };
 
-const STATIC_FEW_SHOTS = `EXAMPLE 1 (zone Z3, assigned):
-Melissa on Z3: After RR/Admin cleared, the engine favored her because prior_run_continuity on Z3 (2 of last 30 nights) plus pair_affinity 0.72 to Jamie on Z2 — rotation 2.1 vs pulling her to Z5 (count_8w elevated there).
+const STATIC_FEW_SHOTS = `EXAMPLE (zone Z3, assigned):
+Headline: Melissa belongs on Z3 tonight after RR/admin cleared.
+Why: prior_run_continuity on Z3 (2/30 nights) plus pair_affinity 0.72 with Jamie on Z2; pulling to Z5 would spike count_8w there.
+Swaps: Only suggest eligible zone↔zone or RR↔RR gender matches — never Admin or overlap cards.
 
-EXAMPLE 2 (RR WRR4, assigned):
-Alex on WRR4: Chosen once mens RR1–3 were set; womens side fill order step + low recent WRR4 load (0 in last 14) with affinity 0.65 to Maria already on WRR3 for paired coverage.`;
+EXAMPLE (WRR4, assigned):
+Headline: Alex fits WRR4 as the womens chain closes.
+Why: Fill-order step after MRR1–3; zero WRR4 in last 14 with Maria on WRR3 for paired coverage.`;
 
-function formatSignals(signals?: Record<string, number | string>): string {
-  if (!signals || Object.keys(signals).length === 0) return "(none recorded)";
-  return Object.entries(signals)
-    .slice(0, 12)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(", ");
+function slotKind(slotKey: string): "zone" | "rr" | "aux" | "overlap" | "other" {
+  if (slotKey.startsWith("OL-")) return "overlap";
+  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return "rr";
+  if (/^Z\d+$/.test(slotKey) || slotKey === "Z9SR") return "zone";
+  return "aux";
 }
 
-function buildSystemPrompt(ctx: EngineInsightContext): string {
+function buildAnalystSystemPrompt(ctx: EngineInsightContext): string {
+  const kind = slotKind(ctx.slotKey);
   const orderText = getPlacementOrderText();
   const eligText = getEligibilityRulesText();
 
   const priorGood =
     ctx.priorGoodExamples && ctx.priorGoodExamples.length > 0
-      ? `\nOPERATOR-RATED GOOD EXAMPLES (match this tone and depth):\n${ctx.priorGoodExamples
+      ? `\nOPERATOR-RATED GOLD EXAMPLES (match depth and tone exactly):\n${ctx.priorGoodExamples
           .map(
             (ex, i) =>
-              `${i + 1}. Slot ${ex.slotKey}: "${ex.insightText.replace(/"/g, "'")}"`,
+              `${i + 1}. ${ex.slotKey}: "${ex.insightText.replace(/"/g, "'").slice(0, 600)}"`,
           )
           .join("\n")}\n`
       : "";
 
-  return `You are a GRAVE placement analyst explaining why the deterministic engine (or operator) placed someone on a slot.
+  const kindFocus =
+    kind === "rr"
+      ? "Focus on restroom chain order, gender rules (MRR male-only, WRR female-only), and paired coverage with adjacent RR slots."
+      : kind === "zone"
+        ? "Focus on full-grave zone continuity, neighbor affinity on the artboard, and rotation vs count_8w tradeoffs."
+        : kind === "aux"
+          ? "Focus on full-night aux coverage, sweep/load, and who is already committed on zones/RR."
+          : "Respect eligibility; do not recommend overlap or admin swaps.";
 
-CORE RULES:
-- Write 3–5 tight sentences. Be analytical, not sycophantic. Do not repeat obvious eligibility rules.
-- Use placement ORDER only to explain timing ("after RR filled…"), not to re-list the whole order.
-- Name concrete fairness/matrix signals when provided (e.g. prior_run_continuity, count_8w, pair_affinity, rotation, load).
-- Use slotSpecificHistory and currentContext when provided — cite neighbors by name.
-- Never suggest swapping or re-running the engine unless the slot is empty and suggestedCandidates is given.
-- Refer to the assigned TM by name (${ctx.tmName}) — never "you" or "the operator".
-- No bullet lists, no JSON, no "1. Keep X on Y because eligible" generic advice.
+  return `You are the GRAVE placement analyst for a single expert operator (Brian). Your job is decisive, floor-ready judgment — not generic advice.
 
-REFERENCE (engine contract — do not paste back verbatim):
+VOICE: 3–5 tight sentences in whyTonight; headline is one crisp line. Name people and slots. Never say "you". Never re-list the full fill order verbatim.
+
+AUTHORITY: The DETERMINISTIC FACTS block below is ground truth from the engine and history. Use fairnessSignals and engine rationale when present. If rotationBrief lists swap lanes, refine them — do not invent ineligible swaps (no Admin, no Overlap OL-*, no cross-gender RR).
+
+${kindFocus}
+
+OUTPUT: Structured JSON only (schema enforced). REQUIRED: fitSummary (one plain sentence answering "Is this a good fit tonight?" for the assigned TM, or best pick if unassigned) and fitVerdict (strong_fit | acceptable | questionable | poor_fit | needs_swap). Be specific about matrix signals (prior_run_continuity, count_8w, pair_affinity, rotation, load) when data exists.
+
+REFERENCE CONTRACT (do not paste back verbatim):
 ${orderText}
 
 ${eligText}
@@ -84,47 +131,148 @@ ${priorGood}
 ${STATIC_FEW_SHOTS}`;
 }
 
-function buildUserPrompt(ctx: EngineInsightContext): string {
-  const unassigned = !ctx.tmName || ctx.tmName === "the assigned TM";
-  if (unassigned) {
-    return `Slot: ${ctx.slotKey} (UNASSIGNED)
-${ctx.suggestedCandidates ? `Candidates to consider: ${ctx.suggestedCandidates}` : ""}
-${ctx.currentContext ? `Board context: ${ctx.currentContext}` : ""}
-Explain who fits best here tonight and why (order position + 1–2 matrix-style reasons). Keep it practical for the floor lead.`;
-  }
-
-  const lines = [
+function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
+  const mode = ctx.mode ?? "deep";
+  const lines: string[] = [
+    `MODE: ${mode}`,
     `Slot: ${ctx.slotKey}`,
-    `Assigned TM: ${ctx.tmName}`,
     ctx.isRR ? `RR side: ${ctx.rrSide ?? "n/a"}` : null,
-    ctx.tmAttributes
-      ? `TM attrs: gravePool=${ctx.tmAttributes.gravePool ?? "?"} amOverlap=${!!ctx.tmAttributes.isAMOverlap} pmOverlap=${!!ctx.tmAttributes.isPMOverlap}`
-      : null,
-    ctx.rationale ? `Engine rationale (from provenance): ${ctx.rationale}` : null,
-    `Fairness / matrix signals: ${formatSignals(ctx.fairnessSignals)}`,
-    ctx.recentPlacements ? `Recent placement trail: ${ctx.recentPlacements}` : null,
-    ctx.slotSpecificHistory ? `Slot-specific history: ${ctx.slotSpecificHistory}` : null,
-    ctx.currentContext ? `Current board neighbors / context: ${ctx.currentContext}` : null,
+    `Assigned TM: ${ctx.tmName || "(unassigned)"}`,
     "",
-    "Explain why this placement makes sense for tonight in the engine's terms (rotation, affinity to who is actually nearby, recency in THIS slot).",
-  ].filter(Boolean);
+    "=== DETERMINISTIC FACTS ===",
+    ctx.rotationBrief ? `Rotation / swaps:\n${ctx.rotationBrief}` : null,
+    ctx.spreadPlaced ? `Last-30 spread (placed): ${ctx.spreadPlaced}` : null,
+    ctx.spreadGaps ? `Last-30 gaps (not placed): ${ctx.spreadGaps}` : null,
+    ctx.slotSpecificHistory ? `This slot history: ${ctx.slotSpecificHistory}` : null,
+    ctx.recentPlacements ? `Last-5 trail: ${ctx.recentPlacements}` : null,
+    ctx.currentContext ? `Board neighbors: ${ctx.currentContext}` : null,
+    ctx.tmAttributes
+      ? `TM attrs: gender=${ctx.tmAttributes.gender ?? "?"} gravePool=${ctx.tmAttributes.gravePool ?? "?"} amOverlap=${!!ctx.tmAttributes.isAMOverlap} pmOverlap=${!!ctx.tmAttributes.isPMOverlap}`
+      : null,
+    ctx.rationale ? `Engine rationale: ${ctx.rationale}` : null,
+    `Fairness signals: ${formatSignals(ctx.fairnessSignals)}`,
+    "=== END FACTS ===",
+  ].filter(Boolean) as string[];
+
+  if (mode === "assignee" && ctx.candidateProfiles?.length) {
+    lines.push(
+      "",
+      "Rank ONLY eligible candidates (eligible=false are forbidden picks). JSON must include rankedAssignees.",
+      "Candidates:",
+      JSON.stringify(ctx.candidateProfiles, null, 0),
+    );
+  } else if (mode === "assignee") {
+    lines.push("", `Candidates (names only): ${ctx.suggestedCandidates ?? "(none)"}`);
+  } else {
+    lines.push(
+      "",
+      "Explain why this placement fits tonight OR what to change. Populate swapRecommendations only for legal, high-value swaps already implied in rotation facts.",
+    );
+  }
 
   return lines.join("\n");
 }
 
-export async function runEngineInsightForPlacement(
+function formatSignals(signals?: Record<string, number | string>): string {
+  if (!signals || Object.keys(signals).length === 0) return "(none)";
+  return Object.entries(signals)
+    .slice(0, 16)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+}
+
+function reasoningForMode(mode: PlacementInsightMode): "none" | "low" | "medium" {
+  if (mode === "basics") return "none";
+  if (mode === "assignee") return "low";
+  return "medium";
+}
+
+function cacheKeyFor(ctx: EngineInsightContext, mode: PlacementInsightMode): string {
+  return stableInsightKey({
+    mode,
+    slot: ctx.slotKey,
+    tm: ctx.tmName,
+    sig: ctx.contextSig,
+    rot: ctx.rotationBrief?.slice(0, 200),
+    board: ctx.currentContext?.slice(0, 120),
+  });
+}
+
+/** Primary analyst — structured output, medium reasoning for quality. */
+export async function runPlacementPadAnalyst(
   ctx: EngineInsightContext,
 ): Promise<EngineInsightResult> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return {
-      text: "xAI is not configured (missing XAI_API_KEY). Showing engine rationale only.",
+      text: "xAI is not configured (missing XAI_API_KEY). Use rotation highlights and engine rationale above.",
     };
   }
 
-  const systemPrompt = buildSystemPrompt(ctx);
-  const userPrompt = buildUserPrompt(ctx);
-  const effort = "low" as const;
+  const mode: PlacementInsightMode =
+    ctx.mode === "legacy" ? "deep" : (ctx.mode ?? "deep");
+
+  if (mode === "basics" && ctx.rotationBasicsText) {
+    return runPlacementBasicsNarrative({
+      ...ctx,
+      rotationBasicsText: ctx.rotationBasicsText,
+    });
+  }
+
+  const key = cacheKeyFor(ctx, mode);
+  const cached = getInsightCache<EngineInsightResult>(key);
+  if (cached) {
+    return { ...cached, cached: true };
+  }
+
+  const systemPrompt = buildAnalystSystemPrompt(ctx);
+  const userPrompt = buildAnalystUserPrompt(ctx);
+  const effort = reasoningForMode(mode);
+
+  try {
+    const model = createGrokSuggestionModel();
+    const { object, usage } = await generateObject({
+      model,
+      schema: PlacementPadInsightSchema,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: mode === "assignee" ? 0.25 : 0.35,
+      maxTokens: mode === "assignee" ? 720 : 580,
+      providerOptions: {
+        xai: { reasoningEffort: effort },
+      },
+    });
+
+    if (object) {
+      const result: EngineInsightResult = {
+        text: formatPlacementPadInsightText(object),
+        structured: object,
+        usage: {
+          inputTokens: usage?.promptTokens,
+          outputTokens: usage?.completionTokens,
+          model: "grok-4.3",
+          reasoningEffort: effort,
+        },
+      };
+      setInsightCache(key, result);
+      return result;
+    }
+  } catch (err) {
+    console.warn("[placementPadAnalyst] generateObject failed, falling back to text:", err);
+  }
+
+  return runEngineInsightLegacy(ctx, effort);
+}
+
+/** Legacy prose fallback if structured generation fails. */
+async function runEngineInsightLegacy(
+  ctx: EngineInsightContext,
+  effort: "none" | "low" | "medium",
+): Promise<EngineInsightResult> {
+  const systemPrompt = buildAnalystSystemPrompt(ctx);
+  const userPrompt = buildAnalystUserPrompt(ctx);
 
   try {
     const model = createGrokSuggestionModel();
@@ -135,12 +283,9 @@ export async function runEngineInsightForPlacement(
         { role: "user", content: userPrompt },
       ],
       temperature: 0.35,
-      maxTokens: 420,
-      providerOptions: {
-        xai: { reasoningEffort: effort },
-      },
+      maxTokens: 520,
+      providerOptions: { xai: { reasoningEffort: effort } },
     });
-
     const trimmed = text?.trim();
     if (trimmed) {
       return {
@@ -154,30 +299,22 @@ export async function runEngineInsightForPlacement(
       };
     }
   } catch (err) {
-    console.warn("[engineInsight] AI SDK generateText failed, trying callGrok fallback:", err);
-    try {
-      const { callGrok } = await import("@/lib/xai");
-      const raw = await callGrok(
-        [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        { model: "grok-4.3", reasoningEffort: effort, temperature: 0.35, maxTokens: 420 },
-      );
-      if (raw?.trim()) {
-        return { text: raw.trim(), usage: { model: "grok-4.3", reasoningEffort: effort } };
-      }
-    } catch (fallbackErr) {
-      console.error("[engineInsight] callGrok fallback failed:", fallbackErr);
-    }
+    console.warn("[engineInsight] generateText failed:", err);
   }
 
   return {
-    text: "No additional insight returned. Use the rotation highlights and engine rationale above.",
+    text: "Analyst unavailable. Rotation highlights and engine rationale above are authoritative.",
   };
 }
 
-/** Compact on-pad-open narrative — polishes deterministic rotation basics (low cost). */
+/** @deprecated Use runPlacementPadAnalyst — kept for actions.ts import. */
+export async function runEngineInsightForPlacement(
+  ctx: EngineInsightContext,
+): Promise<EngineInsightResult> {
+  return runPlacementPadAnalyst({ ...ctx, mode: ctx.mode ?? "deep" });
+}
+
+/** Compact polish of deterministic rotation copy. */
 export async function runPlacementBasicsNarrative(
   ctx: EngineInsightContext & { rotationBasicsText: string },
 ): Promise<EngineInsightResult> {
@@ -186,8 +323,17 @@ export async function runPlacementBasicsNarrative(
     return { text: ctx.rotationBasicsText };
   }
 
-  const systemPrompt = `You are a GRAVE floor analyst. Rewrite rotation facts into 2 short sentences. Refer to the team member by their full name only — never use "you" or "they". No lists, no JSON. Keep every name and slot key exactly as given.`;
-  const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}\n\nRewrite as 2 crisp third-person sentences (use ${ctx.tmName}'s name).`;
+  const key = stableInsightKey({
+    mode: "basics",
+    slot: ctx.slotKey,
+    tm: ctx.tmName,
+    rot: ctx.rotationBasicsText.slice(0, 300),
+  });
+  const cached = getInsightCache<EngineInsightResult>(key);
+  if (cached) return { ...cached, cached: true };
+
+  const systemPrompt = `You are a GRAVE floor analyst. Rewrite rotation facts into 2 short sentences. Use ${ctx.tmName}'s name — never "you". No lists.`;
+  const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}`;
 
   try {
     const { callGrok } = await import("@/lib/xai");
@@ -196,12 +342,14 @@ export async function runPlacementBasicsNarrative(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { model: "grok-4.3", reasoningEffort: "none", temperature: 0.2, maxTokens: 120 },
+      { model: "grok-4.3", reasoningEffort: "none", temperature: 0.2, maxTokens: 140 },
     );
-    return {
+    const result: EngineInsightResult = {
       text: raw?.trim() || ctx.rotationBasicsText,
       usage: { model: "grok-4.3", reasoningEffort: "none" },
     };
+    setInsightCache(key, result);
+    return result;
   } catch {
     return { text: ctx.rotationBasicsText };
   }

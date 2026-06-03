@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  runEngineInsightForPlacement,
+  runPlacementPadAnalyst,
   runPlacementBasicsNarrative,
   type EngineInsightContext,
 } from "@/lib/shiftbuilder/engineInsightForPlacement";
@@ -8,7 +8,7 @@ import {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const ctx = body as EngineInsightContext & { mode?: string; rotationBasicsText?: string };
+    const ctx = body as EngineInsightContext;
     if (!ctx?.slotKey) {
       return NextResponse.json({ text: "Missing slotKey.", error: "bad_request" }, { status: 400 });
     }
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
             ...ctx,
             rotationBasicsText: ctx.rotationBasicsText,
           })
-        : await runEngineInsightForPlacement(ctx);
+        : await runPlacementPadAnalyst(ctx);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[api/engine-insight]", err);
