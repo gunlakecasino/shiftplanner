@@ -50,6 +50,7 @@ interface ShiftBuilderState {
     proposedClear?: boolean;
   }>;
   setDraftAssignments: (draft: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
+  clearDraft: () => void;
 
   // Future: auxDefs, etc.
 

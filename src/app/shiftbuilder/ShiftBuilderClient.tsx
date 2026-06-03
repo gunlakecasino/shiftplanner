@@ -1394,18 +1394,32 @@ function AuthedShiftBuilder() {
   };
 
   const applyDraft = async () => {
-    if (!isDraftMode || Object.keys(draftAssignments).length === 0) return;
+    const draft = useShiftBuilderStore.getState().draftAssignments;
+    const draftEntries = Object.entries(draft);
+    if (!isDraftMode && draftEntries.length === 0) return;
+    if (draftEntries.length === 0) {
+      showToast("No draft placements to save", "error");
+      return;
+    }
 
     if (!confirm("Apply the draft assignments and save them permanently? This cannot be undone automatically.")) {
       return;
     }
 
-    // Snapshot before state for undo
-    const before: Snapshot = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
+    const slotTypeForUiKey = (slotKey: string) =>
+      slotKey.startsWith("Z")
+        ? "zone"
+        : slotKey.startsWith("MRR") || slotKey.startsWith("WRR")
+          ? "rr"
+          : slotKey.startsWith("OL-")
+            ? "overlap"
+            : "aux";
 
-    // Compute the full new assignments state in one pass — no N separate setAssignments calls
-    const newAssignments = { ...assignments };
-    for (const [slotKey, info] of Object.entries(draftAssignments)) {
+    const storeBefore = useShiftBuilderStore.getState().assignments ?? {};
+    const before: Snapshot = { assignments: { ...storeBefore }, auxDefs: [...auxDefs] };
+
+    const newAssignments: Record<string, any> = { ...storeBefore };
+    for (const [slotKey, info] of draftEntries) {
       if (info.proposedClear) {
         delete newAssignments[slotKey];
       } else if (info.proposedTmId) {
@@ -1414,35 +1428,50 @@ function AuthedShiftBuilder() {
           tmId: info.proposedTmId,
           tmName: info.proposedTmName,
           breakGroup: newAssignments[slotKey]?.breakGroup ?? 0,
-          type: slotKey.startsWith("Z") ? "zone"
-            : slotKey.startsWith("MRR") || slotKey.startsWith("WRR") ? "rr"
-            : slotKey.startsWith("OL-") ? "overlap"
-            : "aux",
+          type: slotTypeForUiKey(slotKey),
           slotKey,
         };
       }
     }
 
-    // Single state update + one atomic history entry (we have before & after explicitly
-    // so we skip the pendingHistoryRef pattern entirely)
+    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const liveForNight: Record<string, { tmId: string; tmName: string | null }> = {};
+    for (const [slotKey, row] of Object.entries(newAssignments)) {
+      if (row?.tmId) {
+        liveForNight[slotKey] = {
+          tmId: row.tmId,
+          tmName: row.tmName ?? row.tmId,
+        };
+      }
+    }
+
+    // Board + cards read Zustand and live cache; React Query was overwriting local-only updates.
+    useShiftBuilderStore.getState().setAssignments(newAssignments);
+    liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
+    setLiveAssignVersion((v) => v + 1);
+
+    const patchNightCache = (old: { assignments?: Record<string, unknown> } | undefined) =>
+      old ? { ...old, assignments: newAssignments } : old;
+    currentNight.queryClient?.setQueryData(["nightCore", dateKey], patchNightCache);
+    currentNight.queryClient?.setQueryData(["night", dateKey], patchNightCache);
+
     setAssignments(newAssignments);
     const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
     recordChangeRef.current("Apply Engine Draft", before, after);
 
-    // Exit draft mode immediately (UI feels instant)
     setIsDraftMode(false);
     setDraftAssignments({});
+    useShiftBuilderStore.getState().clearDraft();
 
-    // Resolve night once, then batch-persist the whole draft in a single call
-    let nid = nightId;
+    let nid = nightId || queryNightId;
     if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
     if (!nid) {
-      showToast("Draft applied locally but couldn't save — no night context. Reload and try again.");
+      showToast("Draft applied on board but couldn't save — no night context. Reload and try again.", "error");
       return;
     }
 
     try {
-      const slots = Object.entries(draftAssignments).map(([slotKey, info]) => {
+      const slots = draftEntries.map(([slotKey, info]) => {
         const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
         return {
           slotKey: slot_key,
@@ -1455,9 +1484,12 @@ function AuthedShiftBuilder() {
       const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
       await batchApplyDraftAssignments(nid, slots);
       setLastSavedAt(new Date());
-    } catch (e: any) {
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      showToast(`Saved ${draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length} placements`, "success");
+    } catch (e: unknown) {
       console.error("[shiftbuilder] batchApplyDraft failed", e);
-      showToast(`Draft saved locally but DB write failed: ${e?.message ?? "unknown error"}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      showToast(`Board updated but database save failed: ${msg}`, "error");
     }
   };
 
@@ -1467,6 +1499,7 @@ function AuthedShiftBuilder() {
     if (confirm("Discard the current engine draft?")) {
       setIsDraftMode(false);
       setDraftAssignments({});
+      useShiftBuilderStore.getState().clearDraft();
     }
   };
 

@@ -252,7 +252,10 @@ export function CanvasEngineCluster({
               </button>
               <button
                 type="button"
-                onClick={() => onApplyDraft?.()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onApplyDraft?.();
+                }}
                 disabled={saveDisabled}
                 title={
                   saveDisabled
