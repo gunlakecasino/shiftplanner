@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { notifyGravesDefaultScheduleChanged } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
   GRAVES_DAY_KEYS,
   gravesDayColumnLabel,
@@ -283,6 +285,7 @@ function ScheduleSection({
 }
 
 export function GravesDefaultSchedulePage() {
+  const queryClient = useQueryClient();
   const [grid, setGrid] = useState<GridData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -329,13 +332,14 @@ export function GravesDefaultSchedulePage() {
         body: JSON.stringify({ updates: pending }),
       });
       if (!res.ok) throw new Error(await res.text());
+      await notifyGravesDefaultScheduleChanged(queryClient);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
       await load();
     } finally {
       setSaving(false);
     }
-  }, [load]);
+  }, [load, queryClient]);
 
   const queueSave = useCallback(
     (tmId: string, band: GravesBand, days: GravesDaysMap) => {
@@ -391,6 +395,7 @@ export function GravesDefaultSchedulePage() {
           throw new Error(msg);
         }
         applyGrid(body);
+        await notifyGravesDefaultScheduleChanged(queryClient);
         setNotice(`Added ${name} to ${titleForBand(band)}.`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to add TM");
@@ -399,7 +404,7 @@ export function GravesDefaultSchedulePage() {
         setMutating(false);
       }
     },
-    [applyGrid, grid, load],
+    [applyGrid, grid, load, queryClient],
   );
 
   const handleRemove = useCallback(
@@ -425,6 +430,7 @@ export function GravesDefaultSchedulePage() {
           throw new Error(msg);
         }
         applyGrid(body);
+        await notifyGravesDefaultScheduleChanged(queryClient);
         setNotice(`Removed ${name} from ${titleForBand(band)}.`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to remove TM");
@@ -433,7 +439,7 @@ export function GravesDefaultSchedulePage() {
         setMutating(false);
       }
     },
-    [grid, applyGrid, load],
+    [grid, applyGrid, load, queryClient],
   );
 
   return (

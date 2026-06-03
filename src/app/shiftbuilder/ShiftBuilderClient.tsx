@@ -110,6 +110,10 @@ import {
   mirrorMainAssignmentsToLiveStore,
   nightDateKey,
 } from "@/lib/shiftbuilder/liveCache";
+import {
+  GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
+  invalidateNightCoreQueries,
+} from "@/lib/shiftbuilder/scheduleCacheSync";
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -2191,6 +2195,40 @@ function AuthedShiftBuilder() {
   // Provides assign/unassign with instant UI (Query + Zustand), perfect rollback,
   // conflict toasts, and realtime sync from other clients.
   const live = useLiveAssignments(selectedDay);
+
+  // Graves Default Schedule page uses its own QueryClient — broadcast invalidates ours.
+  React.useEffect(() => {
+    const qc = currentNight.queryClient;
+    if (!qc) return;
+
+    const refreshScheduledData = async () => {
+      await invalidateNightCoreQueries(qc);
+      setPickerScheduleEpoch((e) => e + 1);
+      try {
+        const dateStr = formatLocalDateISO(selectedDay.date);
+        const nid = queryNightId || nightId;
+        const url = nid
+          ? `/api/shiftbuilder/scheduled-roster?date=${dateStr}&night_id=${nid}`
+          : `/api/shiftbuilder/scheduled-roster?date=${dateStr}`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
+        }
+      } catch {
+        /* nightCore refetch is the primary path */
+      }
+    };
+
+    const onScheduleChanged = () => {
+      void refreshScheduledData();
+    };
+
+    window.addEventListener(GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+    return () => {
+      window.removeEventListener(GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+    };
+  }, [currentNight.queryClient, selectedDay, queryNightId, nightId]);
 
   // Subscribe to realtime for this night when we have an ID (idempotent).
   // Teardown on unmount / major day change is handled via effect below.

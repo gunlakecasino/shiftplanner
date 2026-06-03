@@ -32,7 +32,7 @@ import {
  */
 export function useCurrentNight(selectedDay: DayDef) {
   const queryClient = useQueryClient();
-  const dateKey = selectedDay.date.toISOString().slice(0, 10);
+  const dateKey = formatLocalDateISO(selectedDay.date);
 
   // === CORE / FAST PATH (what the visible board actually needs) ===
   // This is the critical path for fast day switching. We want this as fast as possible.
@@ -168,7 +168,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
       };
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 30,
     placeholderData: keepPreviousData,
   });
 
@@ -223,8 +223,8 @@ export function useCurrentNight(selectedDay: DayDef) {
   };
 
   const prefetchNight = (date: Date) => {
-    const coreKey = ["nightCore", date.toISOString().slice(0, 10)];
-    const secondaryKey = ["nightSecondary", date.toISOString().slice(0, 10)];
+    const coreKey = ["nightCore", formatLocalDateISO(date)];
+    const secondaryKey = ["nightSecondary", formatLocalDateISO(date)];
 
     // Fast core prefetch (what makes the board appear)
     queryClient.prefetchQuery({
