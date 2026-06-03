@@ -1824,21 +1824,28 @@ function AuthedShiftBuilder() {
   // are retired with the bottom UI.
 
   // === Zoom & centering (extracted to useZoom) ===
-  const { zoomMode, setZoomMode, fitScale, stageHostRef, scale, recomputeScale } = useZoom({ rosterOpen });
-
-  const numericSteps: (0.5 | 0.75 | 1)[] = [0.5, 0.75, 1];
+  const {
+    zoomMode,
+    setZoomMode,
+    fitScale,
+    stageHostRef,
+    scale,
+    recomputeScale,
+    zoomSteps,
+    isTabletTouch,
+  } = useZoom({ rosterOpen });
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
-      setZoomMode(dir > 0 ? 1 : 0.75);
+      setZoomMode(dir > 0 ? zoomSteps[zoomSteps.length - 1] : zoomSteps[Math.max(0, zoomSteps.length - 2)]);
       return;
     }
-    const idx = numericSteps.indexOf(zoomMode as (typeof numericSteps)[number]);
+    const idx = zoomSteps.indexOf(zoomMode as (typeof zoomSteps)[number]);
     if (idx !== -1) {
-      const next = numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))];
+      const next = zoomSteps[Math.max(0, Math.min(zoomSteps.length - 1, idx + dir))];
       setZoomMode(next);
     } else {
-      setZoomMode(dir > 0 ? 1 : 0.75);
+      setZoomMode(dir > 0 ? zoomSteps[zoomSteps.length - 1] : 0.75);
     }
   };
 
@@ -5851,10 +5858,10 @@ function AuthedShiftBuilder() {
             //   • Left:   when roster panel is open, 296px (280px panel +
             //              16px gap); when collapsed, 64px so the sphere
             //              (left-3, 48px wide) has air around it.
-            paddingTop: 72,
-            paddingRight: 64,
-            paddingBottom: 80,
-            paddingLeft: rosterOpen ? 296 : 64,
+            paddingTop: isTabletTouch ? 56 : 72,
+            paddingRight: isTabletTouch ? 40 : 64,
+            paddingBottom: isTabletTouch ? 64 : 80,
+            paddingLeft: rosterOpen ? (isTabletTouch ? 276 : 296) : isTabletTouch ? 40 : 64,
           }}
         >
           {/* Visual frame sized to the *scaled* artboard.

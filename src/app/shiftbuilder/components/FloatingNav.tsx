@@ -222,7 +222,7 @@ export default function FloatingNav({
 
         {/* CENTER: 9-day strip + Deploy/Breaks */}
         <div className="flex-1 flex items-center justify-center gap-3 min-w-0 px-2">
-          <div className="relative flex items-center min-w-0 flex-1 justify-center max-w-[720px]">
+          <div className="relative flex items-stretch min-w-0 flex-1 justify-center w-full">
             {/* Left seamless half-circle cap — previous GRAVE week */}
             {onPrevWeek && (
               <motion.button
@@ -230,7 +230,7 @@ export default function FloatingNav({
                 whileHover={{ scale: 1.08, opacity: 0.95 }}
                 whileTap={{ scale: 0.88 }}
                 transition={SPRING}
-                className="absolute left-0.5 top-1/2 z-20 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full"
+                className="absolute left-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}
@@ -247,11 +247,10 @@ export default function FloatingNav({
             )}
 
             <div
-              className="flex items-center gap-0.5 px-7 py-1 rounded-2xl relative"
+              className="grid grid-cols-9 gap-1 px-8 py-1.5 rounded-2xl relative w-full min-h-[40px] items-stretch"
               style={{
                 background: "rgba(0,0,0,0.025)",
                 border: "1px solid var(--sb-glass-border)",
-                width: "100%",
               }}
             >
               {days.map((day) => {
@@ -266,11 +265,10 @@ export default function FloatingNav({
                     onTouchStart={() => onDayHover?.(day.id, day.date || new Date())}
                     className={cn(
                       datePillVariants({ active: isActive }),
-                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all flex-1 min-w-0 touch-manipulation",
-                      isActive ? "px-2 text-[12.5px]" : "px-1 text-[11px]",
+                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums min-h-[36px] w-full min-w-0 transition-all touch-manipulation",
+                      isActive ? "text-[13px] px-1" : "text-[12px] px-0.5",
                     )}
                     style={{
-                      maxWidth: isBridge ? 36 : 52,
                       background: isActive ? ACCENT : "transparent",
                       color: isActive ? "#fff" : isDark ? "#A1A1AA" : "#52525B",
                       border: isActive
@@ -299,16 +297,18 @@ export default function FloatingNav({
                       />
                     )}
 
-                    {isActive && day.shortLabel ? (
-                      <span
-                        className="mr-0.5 text-[8px] font-bold tracking-[0.5px] opacity-90"
-                        style={{ color: "#fff" }}
-                      >
-                        {day.shortLabel}
+                    <span className="leading-none tabular-nums flex flex-col items-center justify-center gap-0 min-w-0 w-full truncate">
+                      {isActive && day.shortLabel ? (
+                        <span
+                          className="text-[9px] font-bold tracking-[0.4px] opacity-90 leading-none"
+                          style={{ color: "#fff" }}
+                        >
+                          {day.shortLabel}
+                        </span>
+                      ) : null}
+                      <span className="leading-none">
+                        {isActive ? day.label : day.dayLetter ?? day.label}
                       </span>
-                    ) : null}
-                    <span className="leading-none tabular-nums inline-block text-center">
-                      {isActive ? day.label : day.dayLetter ?? day.label}
                     </span>
                   </button>
                 );
@@ -322,7 +322,7 @@ export default function FloatingNav({
                 whileHover={{ scale: 1.08, opacity: 0.95 }}
                 whileTap={{ scale: 0.88 }}
                 transition={SPRING}
-                className="absolute right-0.5 top-1/2 z-20 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full"
+                className="absolute right-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}
@@ -402,7 +402,7 @@ export default function FloatingNav({
             <button
               onClick={onZoomIn}
               className="px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all text-sm font-medium"
-              title="Zoom in (100% max)"
+              title="Zoom in"
               aria-label="Zoom in"
             >
               +
