@@ -856,7 +856,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const prerenderedFit = React.useMemo((): PrerenderedPlacementFit => {
     if (boardPrerenderedFit) return boardPrerenderedFit;
-    return computeSlotPlacementFit({
+    const fit = computeSlotPlacementFit({
       slotKey,
       assignments,
       isDraftMode,
@@ -869,6 +869,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
       preferredCandidateIds: a.tmName ? undefined : preferredCandidateIds,
     });
+    return fit;
   }, [
     boardPrerenderedFit,
     slotKey,

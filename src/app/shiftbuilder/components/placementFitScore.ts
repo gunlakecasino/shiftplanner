@@ -15,6 +15,11 @@ export type PrerenderedPlacementFit = {
 
 export type PlacementFitScoreInput = {
   slotKey: string;
+  /** Tonight's board — used to exclude empty slots from rotation gap targets. */
+  assignments?: Record<
+    string,
+    { tmId?: string | null; tmName?: string } | undefined
+  >;
   tmName?: string;
   assigned: boolean;
   tmEligibleForSlot?: boolean;
@@ -50,12 +55,17 @@ function signalNumber(
 export function rotationGapSlots(
   basics: PlacementRotationBasics | null | undefined,
   currentSlotKey: string,
+  assignments?: Record<
+    string,
+    { tmId?: string | null; tmName?: string } | undefined
+  >,
 ): string[] {
   return (basics?.notRecentlyPlaced ?? []).filter(
     (k) =>
       k !== currentSlotKey &&
       isSwapEligibleSlotKey(k) &&
-      areSwapLanePeers(currentSlotKey, k),
+      areSwapLanePeers(currentSlotKey, k) &&
+      (!assignments || !!assignments[k]?.tmId),
   );
 }
 
@@ -117,7 +127,7 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
   const slotLabel = formatPlacementUiLabel(input.slotKey);
   const gaps =
     input.actionableGapSlots ??
-    rotationGapSlots(input.rotationBasics, input.slotKey);
+    rotationGapSlots(input.rotationBasics, input.slotKey, input.assignments);
 
   if (!input.assigned) {
     if (isOptionalDeploymentSlot(input.slotKey)) {
@@ -186,9 +196,14 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     const gapLabel = better.primaryGap
       ? formatPlacementUiLabel(better.primaryGap)
       : formatGapList(gaps, 1);
+    const gapOccupant = better.primaryGap
+      ? input.assignments?.[better.primaryGap]?.tmName
+      : undefined;
     return {
       fitVerdict: "questionable",
-      fitSummary: `${name} on ${slotLabel} — better rotation on ${gapLabel} is available.`,
+      fitSummary: gapOccupant
+        ? `${name} on ${slotLabel} — consider a zone↔zone swap with ${gapOccupant} (${gapLabel}).`
+        : `${name} on ${slotLabel} — rotation pressure on ${gapLabel}; use bilateral swaps only (no moves into open slots).`,
       fitFactLine: buildFactLine([spreadFact, eightFact, gapFact]),
     };
   }

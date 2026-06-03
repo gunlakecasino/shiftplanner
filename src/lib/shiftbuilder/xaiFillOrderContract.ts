@@ -261,6 +261,7 @@ export function textSuggestsCrossTierMove(text: string): boolean {
 
 const SWAP_INTO_EMPTY_RE =
   /\b(empty|unassigned|vacant|open\s+slot|open\s+position|unfilled|no\s+one\s+on|nobody\s+on)\b/i;
+const BETTER_ROTATION_ON_RE = /better rotation on\s+([A-Za-z0-9]+)/i;
 const SWAP_ONE_SIDED_RE =
   /\b(swap|move|slide|shift|put|place|send).{0,40}\b(into|to|onto)\b/i;
 
@@ -283,6 +284,17 @@ export function swapSummaryTargetsEmptySlot(
   return false;
 }
 
+/** Instant/xAI copy that names an empty slot as a rotation improvement target. */
+export function fitSummaryTargetsEmptyGap(
+  text: string,
+  emptySlotKeys: string[],
+): boolean {
+  const m = text.match(BETTER_ROTATION_ON_RE);
+  if (!m) return false;
+  const cited = m[1].toUpperCase();
+  return emptySlotKeys.some((k) => k.toUpperCase() === cited);
+}
+
 function scrubIllegalSuggestionText(
   text: string,
   padSlotKey: string,
@@ -290,7 +302,8 @@ function scrubIllegalSuggestionText(
 ): { text: string; changed: boolean } {
   if (
     textSuggestsCrossTierMove(text) ||
-    swapSummaryTargetsEmptySlot(text, emptySlotKeys)
+    swapSummaryTargetsEmptySlot(text, emptySlotKeys) ||
+    fitSummaryTargetsEmptyGap(text, emptySlotKeys)
   ) {
     return { text: "", changed: true };
   }

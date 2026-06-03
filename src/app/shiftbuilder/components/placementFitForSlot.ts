@@ -67,7 +67,9 @@ function swapAssignmentsForTrade(
 function isRotationTradeWithOccupantWorthwhile(ctx: RotationTradeContext): boolean {
   const occupantRow = ctx.assignments[ctx.gapSlotKey];
   const occupantId = occupantRow?.tmId;
-  if (!occupantId || occupantId === ctx.currentTmId) return true;
+  /** Swap lanes require two occupants tonight — never treat an empty slot as a gap target. */
+  if (!occupantId) return false;
+  if (occupantId === ctx.currentTmId) return false;
 
   const fitArgs = {
     assignments: ctx.assignments,
@@ -260,6 +262,7 @@ export function computeSlotPlacementFit(
   if (!assigned) {
     return scorePlacementFit({
       slotKey,
+      assignments,
       assigned: false,
       candidateProfiles,
       preferredCandidateIds,
@@ -336,6 +339,7 @@ export function computeSlotPlacementFit(
 
   const input: PlacementFitScoreInput = {
     slotKey,
+    assignments,
     tmName: row?.tmName,
     assigned: true,
     tmEligibleForSlot,
