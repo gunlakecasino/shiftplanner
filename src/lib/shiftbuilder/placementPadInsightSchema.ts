@@ -15,6 +15,8 @@ export const PlacementPadInsightSchema = z.object({
   /** One-sentence operator verdict shown at top of pad (e.g. "Strong fit — rotation supports Z3 tonight."). */
   fitSummary: z.string().min(1).max(220),
   fitVerdict: PlacementFitVerdictSchema,
+  /** Set when xAI changes fitVerdict or fitSummary vs the instant prerender. */
+  verdictOverrideReason: z.string().max(280).optional(),
   headline: z.string().min(1).max(200),
   whyTonight: z.string().min(1).max(1200),
   rotationNote: z.string().max(500).optional(),

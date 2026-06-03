@@ -206,6 +206,13 @@ function PlacementAnalystBlock({
 }) {
   const headerStyles = fitVerdictStyles(prerendered.fitVerdict);
   const showXaiBody = detailsOpen && (loading || text || structured);
+  const xaiOverridesInstant =
+    !!structured &&
+    (structured.fitVerdict !== prerendered.fitVerdict ||
+      structured.fitSummary.trim() !== prerendered.fitSummary.trim());
+  const xaiHeaderStyles = structured
+    ? fitVerdictStyles(structured.fitVerdict)
+    : headerStyles;
 
   return (
     <div className="mx-3 mb-2 rounded-xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
@@ -232,6 +239,11 @@ function PlacementAnalystBlock({
         >
           {prerendered.fitSummary}
         </p>
+        {prerendered.fitFactLine ? (
+          <p className="mt-0.5 text-[9px] leading-snug text-neutral-500 tabular-nums">
+            {prerendered.fitFactLine}
+          </p>
+        ) : null}
       </div>
 
       <div className="px-2.5 py-2">
@@ -278,6 +290,38 @@ function PlacementAnalystBlock({
               : "Eligibility check above. Tap for ranked assignee picks."}
           </p>
         )}
+
+        {showXaiBody && structured && xaiOverridesInstant ? (
+          <div
+            className="mt-2 mb-1.5 rounded-lg border px-2 py-1.5"
+            style={{
+              borderColor: xaiHeaderStyles.border,
+              background: xaiHeaderStyles.bg,
+            }}
+          >
+            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${xaiHeaderStyles.badge}`}
+              >
+                {fitVerdictLabel(structured.fitVerdict)}
+              </span>
+              <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
+                xAI updated
+              </span>
+            </div>
+            <p
+              className="text-[10px] font-semibold leading-snug"
+              style={{ color: xaiHeaderStyles.text }}
+            >
+              {structured.fitSummary}
+            </p>
+            {structured.verdictOverrideReason ? (
+              <p className="mt-0.5 text-[9px] text-neutral-500 leading-snug">
+                {structured.verdictOverrideReason}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {showXaiBody && structured ? (
           <div className="mt-1.5 space-y-2 text-[9px] leading-snug text-neutral-700">
@@ -793,6 +837,58 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const candidatePoolSize = scheduledUnassigned.length + (allEligibleTms?.length ?? 0);
 
+  const tmEligibleForSlot =
+    !a.tmName || !currentPlacementTm
+      ? true
+      : isEligibleForSlot(
+          {
+            gender: currentPlacementTm.gender,
+            gravePool: currentPlacementTm.gravePool,
+            isAMOverlap: currentPlacementTm.isAMOverlap,
+            isPMOverlap: currentPlacementTm.isPMOverlap,
+          },
+          slotKey,
+        );
+
+  const preferredCandidateIds = React.useMemo(
+    () => scheduledUnassigned.map((t) => t.tmId).filter(Boolean),
+    [scheduledUnassigned],
+  );
+
+  const prerenderedFit = React.useMemo(
+    () =>
+      computePrerenderedPlacementFit({
+        slotKey,
+        tmName: a.tmName,
+        assigned: !!a.tmName,
+        tmEligibleForSlot,
+        timesInSpread,
+        inLast5: last5Sequence.includes(slotKey),
+        padHistoryLoading: !!a.tmId && padHistoryLoading,
+        rotationBasics,
+        rationale: prov.rationale as string | undefined,
+        fairnessSignals: prov.fairnessSignals as
+          | Record<string, number | string>
+          | undefined,
+        candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
+        preferredCandidateIds: a.tmName ? undefined : preferredCandidateIds,
+      }),
+    [
+      slotKey,
+      a.tmName,
+      a.tmId,
+      tmEligibleForSlot,
+      timesInSpread,
+      last5Sequence,
+      padHistoryLoading,
+      rotationBasics,
+      prov.rationale,
+      prov.fairnessSignals,
+      buildCandidateProfiles,
+      preferredCandidateIds,
+    ],
+  );
+
   const insightContextSig = React.useMemo(
     () =>
       [
@@ -826,6 +922,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       slotKey,
       tmName: a.tmName || "Unassigned",
       mode,
+      prerenderVerdict: prerenderedFit.fitVerdict,
+      prerenderSummary: prerenderedFit.fitSummary,
+      prerenderFactLine: prerenderedFit.fitFactLine,
       isRR: slotKey.startsWith("MRR") || slotKey.startsWith("WRR"),
       rrSide: slotKey.startsWith("MRR")
         ? "mens"
@@ -874,6 +973,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       spreadGapsList,
       buildCandidateProfiles,
       insightContextSig,
+      prerenderedFit.fitVerdict,
+      prerenderedFit.fitSummary,
+      prerenderedFit.fitFactLine,
     ],
   );
 
@@ -906,51 +1008,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       }
     },
     [buildInsightContext],
-  );
-
-  const tmEligibleForSlot =
-    !a.tmName || !currentPlacementTm
-      ? true
-      : isEligibleForSlot(
-          {
-            gender: currentPlacementTm.gender,
-            gravePool: currentPlacementTm.gravePool,
-            isAMOverlap: currentPlacementTm.isAMOverlap,
-            isPMOverlap: currentPlacementTm.isPMOverlap,
-          },
-          slotKey,
-        );
-
-  const prerenderedFit = React.useMemo(
-    () =>
-      computePrerenderedPlacementFit({
-        slotKey,
-        tmName: a.tmName,
-        assigned: !!a.tmName,
-        tmEligibleForSlot,
-        timesInSpread,
-        inLast5: last5Sequence.includes(slotKey),
-        padHistoryLoading: !!a.tmId && padHistoryLoading,
-        rotationBasics,
-        rationale: prov.rationale as string | undefined,
-        fairnessSignals: prov.fairnessSignals as
-          | Record<string, number | string>
-          | undefined,
-        candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
-      }),
-    [
-      slotKey,
-      a.tmName,
-      a.tmId,
-      tmEligibleForSlot,
-      timesInSpread,
-      last5Sequence,
-      padHistoryLoading,
-      rotationBasics,
-      prov.rationale,
-      prov.fairnessSignals,
-      buildCandidateProfiles,
-    ],
   );
 
   const handleMoreDetails = React.useCallback(() => {

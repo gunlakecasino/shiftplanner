@@ -59,6 +59,10 @@ export type EngineInsightContext = {
   rotationBasicsText?: string;
   /** Client fingerprint — cache invalidation when board/history changes. */
   contextSig?: string;
+  /** Instant prerender from placementFitScore — xAI may override with verdictOverrideReason. */
+  prerenderVerdict?: string;
+  prerenderSummary?: string;
+  prerenderFactLine?: string;
 };
 
 export type EngineInsightResult = {
@@ -121,7 +125,9 @@ AUTHORITY: The DETERMINISTIC FACTS block below is ground truth from the engine a
 
 ${kindFocus}
 
-OUTPUT: Structured JSON only (schema enforced). REQUIRED: fitSummary (one plain sentence answering "Is this a good fit tonight?" for the assigned TM, or best pick if unassigned) and fitVerdict (strong_fit | acceptable | questionable | poor_fit | needs_swap). Be specific about matrix signals (prior_run_continuity, count_8w, pair_affinity, rotation, load) when data exists.
+OUTPUT: Structured JSON only (schema enforced). REQUIRED: fitSummary (one plain sentence) and fitVerdict (strong_fit | acceptable | questionable | poor_fit | needs_swap).
+
+INSTANT PRERENDER: When PRERENDER block is present, treat it as the default verdict. You MAY change fitVerdict/fitSummary only if deterministic facts clearly support a different judgment — then set verdictOverrideReason (one short sentence). Questionable only when a better-suited placement or swap exists; repeat exposure (2×–3× in 30) alone is acceptable if no better gap. Unassigned slots: fitSummary must name one best pick.
 
 REFERENCE CONTRACT (do not paste back verbatim):
 ${orderText}
@@ -151,6 +157,18 @@ function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
       : null,
     ctx.rationale ? `Engine rationale: ${ctx.rationale}` : null,
     `Fairness signals: ${formatSignals(ctx.fairnessSignals)}`,
+    ctx.prerenderVerdict
+      ? [
+          "",
+          "=== INSTANT PRERENDER (default unless you override) ===",
+          `fitVerdict: ${ctx.prerenderVerdict}`,
+          ctx.prerenderSummary ? `fitSummary: ${ctx.prerenderSummary}` : null,
+          ctx.prerenderFactLine ? `fitFactLine: ${ctx.prerenderFactLine}` : null,
+          "=== END PRERENDER ===",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : null,
     "=== END FACTS ===",
   ].filter(Boolean) as string[];
 
