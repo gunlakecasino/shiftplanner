@@ -30,6 +30,8 @@ import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import {
   PLACEMENT_SPREAD_NIGHTS,
   getSpreadPlacementKeys,
+  getSpreadPlacementCounts,
+  spreadFrequencyAccent,
   getLastPlacementSequence,
   getDaysSinceForKey,
   formatPlacementUiLabel,
@@ -395,19 +397,23 @@ function PlacementAnalystBlock({
 
 function PlacementCell({
   label,
-  placed,
+  spreadCount,
   accent,
   title,
   gapHighlight,
   crossHighlight,
 }: {
   label: string;
-  placed: boolean;
+  /** Times placed in last-30 spread (0 = not in spread). */
+  spreadCount: number;
   accent: string;
   title?: string;
   gapHighlight?: boolean;
   crossHighlight?: boolean;
 }) {
+  const placed = spreadCount > 0;
+  const freqAccent = spreadFrequencyAccent(spreadCount);
+  const pillAccent = freqAccent ?? accent;
   const gap = gapHighlight && !placed;
   const cross = crossHighlight;
 
@@ -420,9 +426,9 @@ function PlacementCell({
       style={
         placed
           ? {
-              background: `${accent}22`,
-              border: `1px solid ${accent}55`,
-              color: accent,
+              background: `${pillAccent}22`,
+              border: `1px solid ${pillAccent}55`,
+              color: pillAccent,
             }
           : gap
             ? {
@@ -648,7 +654,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const showTmPicker = onAssign && (!a.tmId || assignMode);
   const currentIso = nightIsoFromDate(selectedDay.date);
   const spreadKeys = getSpreadPlacementKeys(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
+  const spreadCounts = getSpreadPlacementCounts(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
   const placedSet = new Set(spreadKeys);
+  const spreadCountFor = (ui: string) => spreadCounts.get(ui) ?? 0;
 
   const rrLocs = RR_DEFS.flatMap((d) => {
     const tmId = a?.tmId;
@@ -713,7 +721,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     .map(([k, v]) => `${k}:${v.tmName}`)
     .join(", ");
 
-  const timesInSpread = spreadKeys.filter((k) => k === slotKey).length;
+  const timesInSpread = spreadCountFor(slotKey);
   const slotHistorySummary = a.tmId
     ? timesInSpread > 0
       ? `${timesInSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights; in last-5 trail: ${last5Sequence.includes(slotKey) ? "yes" : "no"}`
@@ -1374,18 +1382,57 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
                       Last 30 Spread
                     </p>
+                    <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] text-neutral-400">
+                      <span className="inline-flex items-center gap-0.5">
+                        <span
+                          className="h-2 w-3 rounded border"
+                          style={{
+                            background: "#16a34a22",
+                            borderColor: "#16a34a55",
+                          }}
+                        />
+                        1×
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <span
+                          className="h-2 w-3 rounded border"
+                          style={{
+                            background: "#ea580c22",
+                            borderColor: "#ea580c55",
+                          }}
+                        />
+                        2×
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <span
+                          className="h-2 w-3 rounded border"
+                          style={{
+                            background: "#dc262622",
+                            borderColor: "#dc262655",
+                          }}
+                        />
+                        3×+
+                      </span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <span className="h-2 w-3 rounded border border-dashed border-neutral-400/50 bg-neutral-200/60" />
+                        not in spread
+                      </span>
+                    </div>
 
                     <div className="grid grid-cols-5 gap-1">
-                      {ZONE_DEFS.map((z) => (
-                        <PlacementCell
-                          key={z.key}
-                          label={z.key}
-                          placed={placedSet.has(z.key)}
-                          accent={getZoneColor(z.key)}
-                          title={z.key}
-                          crossHighlight={cellCross(z.key)}
-                        />
-                      ))}
+                      {ZONE_DEFS.map((z) => {
+                        const n = spreadCountFor(z.key);
+                        return (
+                          <PlacementCell
+                            key={z.key}
+                            label={z.key}
+                            spreadCount={n}
+                            accent={getZoneColor(z.key)}
+                            title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key}
+                            crossHighlight={cellCross(z.key)}
+                          />
+                        );
+                      })}
                     </div>
 
                     {rrLocs.length > 0 && (
@@ -1393,16 +1440,19 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         className="mt-1 grid gap-1"
                         style={{ gridTemplateColumns: `repeat(${Math.min(rrLocs.length, 5)}, 1fr)` }}
                       >
-                        {rrLocs.map((loc) => (
-                          <PlacementCell
-                            key={loc.ui}
-                            label={loc.label}
-                            placed={placedSet.has(loc.ui)}
-                            accent={getPillAccent(loc.ui)}
-                            title={loc.ui}
-                            crossHighlight={cellCross(loc.ui)}
-                          />
-                        ))}
+                        {rrLocs.map((loc) => {
+                          const n = spreadCountFor(loc.ui);
+                          return (
+                            <PlacementCell
+                              key={loc.ui}
+                              label={loc.label}
+                              spreadCount={n}
+                              accent={getPillAccent(loc.ui)}
+                              title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                              crossHighlight={cellCross(loc.ui)}
+                            />
+                          );
+                        })}
                       </div>
                     )}
 
@@ -1411,16 +1461,19 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         className="mt-1 grid gap-1"
                         style={{ gridTemplateColumns: `repeat(${Math.min(auxLocs.length, 5)}, 1fr)` }}
                       >
-                        {auxLocs.map((loc) => (
-                          <PlacementCell
-                            key={loc.ui}
-                            label={loc.label}
-                            placed={placedSet.has(loc.ui)}
-                            accent={getPillAccent(loc.ui)}
-                            title={loc.ui}
-                            crossHighlight={cellCross(loc.ui)}
-                          />
-                        ))}
+                        {auxLocs.map((loc) => {
+                          const n = spreadCountFor(loc.ui);
+                          return (
+                            <PlacementCell
+                              key={loc.ui}
+                              label={loc.label}
+                              spreadCount={n}
+                              accent={getPillAccent(loc.ui)}
+                              title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                              crossHighlight={cellCross(loc.ui)}
+                            />
+                          );
+                        })}
                       </div>
                     )}
 

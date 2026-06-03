@@ -67,6 +67,42 @@ export function getSpreadPlacementKeys(
   return Array.from(keys);
 }
 
+/** Times each slot was worked within the last N grave nights (same window as spread keys). */
+export function getSpreadPlacementCounts(
+  h: ZoneDetailEntry | null,
+  nightCount: number = PLACEMENT_SPREAD_NIGHTS,
+  beforeIso?: string,
+): Map<string, number> {
+  if (!h?.zoneDates) return new Map();
+  const events: Array<{ ui: string; d: string }> = [];
+  for (const [ui, ds] of Object.entries(h.zoneDates)) {
+    for (const d of ds || []) {
+      if (beforeIso && d >= beforeIso) continue;
+      events.push({ ui, d });
+    }
+  }
+  events.sort((a, b) => b.d.localeCompare(a.d));
+
+  const nightsIncluded = new Set<string>();
+  const counts = new Map<string, number>();
+
+  for (const e of events) {
+    if (nightsIncluded.size >= nightCount && !nightsIncluded.has(e.d)) continue;
+    nightsIncluded.add(e.d);
+    counts.set(e.ui, (counts.get(e.ui) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+/** Last-30 spread pill accent by placement count (1=green, 2=orange, 3+=red). */
+export function spreadFrequencyAccent(count: number): string | null {
+  if (count <= 0) return null;
+  if (count === 1) return "#16a34a";
+  if (count === 2) return "#ea580c";
+  return "#dc2626";
+}
+
 /** Most recent N placement UI keys for a TM, prior to viewed night. */
 export function getRecentPlacementKeys(
   h: ZoneDetailEntry | null,
