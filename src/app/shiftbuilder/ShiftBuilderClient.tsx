@@ -82,6 +82,8 @@ import {
 } from "@/lib/shiftbuilder/debugSessionLog";
 import {
   assignmentTmId,
+  boardTmId,
+  boardTmIdsFromScheduled,
   buildTmLookupIndex,
   resolveTmFromLookup,
 } from "@/lib/shiftbuilder/tmIdentity";
@@ -131,9 +133,17 @@ import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/Shi
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar } from "./components/OpsStatusBar";
-import { RotationHealthFloater } from "./components/RotationHealthFloater";
+import {
+  CanvasEngineCluster,
+  type CoverageEngineRunOptions,
+  type EngineRunPhase,
+} from "./components/CanvasEngineCluster";
+import { computeShiftRotationHealth } from "./components/shiftRotationHealth";
 import { usePlacementFitMap } from "./hooks/usePlacementFitMap";
-import { nightIsoFromDate } from "./components/placementPadHelpers";
+import {
+  collectDeploymentSlotKeys,
+  nightIsoFromDate,
+} from "./components/placementPadHelpers";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 // LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
 // their (and their transitive deps like useCommandActions) out of the initial static
@@ -1330,31 +1340,6 @@ function AuthedShiftBuilder() {
   // schedule imported yet), fall through with no extra filter so the
   // engine still works on nights without imported schedules. This is the
   // opt-in fix for the "JT shouldn't show up on Wednesday" problem.
-  const scheduleFilterActive = scheduledTmIdsTonight.size > 0;
-
-  // These internal "available" memos still operate on the legacy roster state
-  // during the Phase 3.1 transition. The islands and command layer consume
-  // the effective* versions (see bridge below).
-  const availableGraveRoster = React.useMemo(
-    () =>
-      (effectiveGraveRoster as any[]).filter(
-        (t: any) =>
-          !calledOffIds.has(t.id) &&
-          (!scheduleFilterActive || scheduledTmIdsTonight.has(t.id))
-      ),
-    [effectiveGraveRoster, calledOffIds, scheduleFilterActive, scheduledTmIdsTonight]
-  );
-  const availableRealRoster = React.useMemo(
-    () =>
-      (effectiveRealRoster as any[]).filter(
-        (t: any) =>
-          !calledOffIds.has(t.id) &&
-          (!scheduleFilterActive || scheduledTmIdsTonight.has(t.id))
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effectiveRealRoster, calledOffIds, scheduleFilterActive, scheduledTmIdsTonight]
-  );
-
   // === Draft Mode Controls ===
   //
   // Respects engineConfig.placementMethod:
@@ -1362,202 +1347,13 @@ function AuthedShiftBuilder() {
   //   - "grok-hybrid"  → Weighted planner + Grok 4.3 judgment layer on top
   //   - "greedy"       → Falls back to weighted (legacy)
   //
-  // Grok is only invoked when placementMethod === "grok-hybrid".
-  // The merge step is always safe (empty Grok picks = use deterministic).
-  const enterDraftMode = async () => {
-    if (!confirm("Run Coverage Planner and enter Draft Mode? This will generate a preview without changing current assignments.")) {
-      return;
-    }
+  const [engineRunPhase, setEngineRunPhase] = React.useState<EngineRunPhase>("idle");
+  const runCoverageEngineRef = React.useRef<
+    (options?: CoverageEngineRunOptions) => Promise<void>
+  >(async () => {});
 
-    if (!engineConfig) {
-      showToast("Engine config still loading — try again in a moment");
-      return;
-    }
-
-    const engineStart = performance.now();
-
-    const orderedSlots = getSlotsInPlacementOrder(auxDefs);
-    const rosterForEngine = graveOnly ? availableGraveRoster : availableRealRoster;
-
-    // Step 1: deterministic weighted planner (always used as the base)
-    const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
-    // buildDefaultAdjacency dynamically imported here (matching the pattern for runWeightedPlanner, grokEngine, data, etc.)
-    // to keep any static edge out of Client's initial module graph. This file's size + many dynamic imports
-    // is a known source of Turbopack "module factory is not available" errors for siblings like useCommandActions.
-    const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
-    const plannerResult = runWeightedPlanner({
-      // Phase 2 opportunity: After the planner + Grok merge produces a draft proposal,
-      // the live optimistic layer (useLiveAssignments + liveCache) can be used for
-      // instant UI feedback on the proposed assignments before the operator reviews/approves in Draft Mode.
-      // (The hooks already provide the optimistic machinery; this is the integration point.)
-      orderedSlots,
-      assignments,
-      roster: rosterForEngine,
-      graveOnly,
-      scoringCtx: {
-        config: engineConfig,
-        skillScores: tmSkillScores,
-        slotDifficulty,
-        preferencesByTm: tmPreferencesByTm,
-        pairAffinitiesByTm: tmPairAffinitiesByTm,
-        accommodationsByTm: tmAccommodationsByTm,
-        adjacency: buildDefaultAdjacency(),
-        zoneMatrix: tmZoneMatrix,
-      },
-    });
-
-    // Decide whether to use Grok based on the live engine config
-    const isGrokHybrid = engineConfig.placementMethod === "grok-hybrid";
-
-    let grokResult: any = {
-      picks: [] as any[],
-      explanation: "",
-      warnings: [] as string[],
-      usedGrok: false,
-      rawText: "",
-      usage: undefined,
-    };
-
-    if (isGrokHybrid) {
-      // Step 2: build Grok snapshot (only when hybrid mode is active)
-      const operatorNotes = notesRef.current?.innerText || "";
-      let snapshot: GrokEngineSnapshot;
-      try {
-        // Build a rich rules context so Grok receives the deterministic engine as a
-        // live, authoritative rule system (major step toward "Grok uses the engine as rules").
-        const rulesContext = {
-          config: engineConfig,
-          scoringContext: {
-            config: engineConfig,
-            skillScores: tmSkillScores,
-            slotDifficulty,
-            preferencesByTm: tmPreferencesByTm,
-            pairAffinitiesByTm: tmPairAffinitiesByTm,
-            accommodationsByTm: tmAccommodationsByTm,
-            zoneMatrix: tmZoneMatrix,
-          },
-          auxDefs,
-          currentDraft: undefined, // will be populated inside the planner
-          scheduledTmIds: effectiveScheduledTmIdsTonight,   // NEW: expose ADP schedule to Rules Engine + Grok tools
-        };
-
-        const { buildGrokEngineSnapshot } = await import("@/lib/shiftbuilder/grokEngine");
-        snapshot = buildGrokEngineSnapshot({
-          dayName: selectedDay.name,
-          shiftDate: selectedDay.date,
-          plannerResult,
-          roster: rosterForEngine,
-          operatorNotes,
-          calledOffTmIds: calledOffIds,
-          recentHistory: effectiveRecentZoneHistory,
-          config: engineConfig,
-          placementOrder: orderedSlots,
-          rulesContext,
-        });
-      } catch (err) {
-        console.error("[engine] snapshot build failed:", err);
-        showToast("Engine snapshot build failed — falling back to scoring only");
-        applyPlannerResultAsDraft(plannerResult, rosterForEngine, {});
-        return;
-      }
-
-      // Step 3: ask Grok (with timeout fallback)
-      try {
-        // Pass rich tool context when in grok-hybrid so tools can execute with real scoring + draft state
-        const callOptions = isGrokHybrid
-          ? {
-              toolContext: {
-                roster: rosterForEngine,
-                // Build currentDraft from live assignments so pair_affinity and within_repeat work correctly in tools
-                currentDraft: Object.fromEntries(
-                  Object.entries(assignments)
-                    .map(([slot, a]: [string, any]) => [slot, a?.tmId])
-                    .filter(([, v]) => !!v)
-                ),
-                scoringData: {
-                  skillScores: tmSkillScores,
-                  slotDifficulty,
-                  preferencesByTm: tmPreferencesByTm,
-                  pairAffinitiesByTm: tmPairAffinitiesByTm,
-                  accommodationsByTm: tmAccommodationsByTm,
-                  zoneMatrix: tmZoneMatrix,
-                },
-                scheduledTmIds: effectiveScheduledTmIdsTonight,  // NEW: for getTMScheduleStatus tool
-              },
-            }
-          : undefined;
-
-        const { askGrokEngineDraft } = await import("./actions");
-        grokResult = await askGrokEngineDraft(snapshot, callOptions);
-        if (grokResult && grokResult.usage) {
-          try {
-            useShiftBuilderStore.getState().addAiUsage(grokResult.usage);
-          } catch {}
-        }
-      } catch (err) {
-        console.error("[engine] Grok call failed:", err);
-        grokResult = { picks: [], explanation: "", warnings: ["Grok call failed"], usedGrok: false, rawText: "", usage: undefined as any };
-      }
-
-      // === Structured capture for training / refinement flywheel (2026-05-30) ===
-      // This data is gold for future optimization of both prompts and the underlying engine.
-      console.groupCollapsed(`[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"}`);
-      console.log("Placement Method:", engineConfig.placementMethod);
-      console.log("Grok Reasoning Effort:", engineConfig.grokReasoningEffort);
-      console.log("Snapshot size (candidates):", snapshot.slotRankings.reduce((sum, r) => sum + r.candidates.length, 0));
-      console.log("Grok picks returned (pre-guard):", snapshot._engineRules ? "see rawText" : grokResult.picks.length);
-      console.log("Grok warnings:", grokResult.warnings);
-      console.log("Grok explanation:", grokResult.explanation?.slice(0, 300));
-      console.log("Raw Grok response (for training data):", grokResult.rawText?.slice(0, 2000));
-
-      // Tool usage capture (new in this phase)
-      if (isGrokHybrid) {
-        console.log("Tool mode ENABLED — Grok had access to live Rules Engine (checkEligibility + real scoreCandidate)");
-        // The rawText will contain any tool calls the model made (visible in expanded console group)
-      }
-      console.groupEnd();
-    }
-
-    // Step 4: merge Grok overrides with deterministic picks (safe no-op when no picks)
-    const { mergeGrokOverridesIntoDraft } = await import("@/lib/shiftbuilder/grokEngine");
-    const { proposedAssignments, reasoningBySlot } = mergeGrokOverridesIntoDraft({
-      plannerResult,
-      picks: grokResult.picks,
-    });
-
-    // === Rich telemetry (added 2026-05-30) ===
-    const engineDuration = Math.round(performance.now() - engineStart);
-    const preservedCount = Object.values(plannerResult.breakdown).filter(b => b.preserved).length;
-    const filledCount = Object.keys(plannerResult.proposedAssignments).length;
-    const unfilled = plannerResult.notes.length; // rough but useful
-    const unfilledSlots = Object.keys(plannerResult.proposedAssignments).filter(k => !plannerResult.proposedAssignments[k]);
-
-    const { logEngineRunSummary } = await import("@/lib/shiftbuilder/placement");
-    logEngineRunSummary({
-      mode: 'interactive-draft',
-      dayName: selectedDay.name,
-      nightDate: selectedDay.date.toISOString().slice(0, 10),
-      durationMs: engineDuration,
-      rosterSize: rosterForEngine.length,
-      slotsProcessed: orderedSlots.length,
-      preservedSlots: preservedCount,
-      filledSlots: filledCount,
-      unfilledSlots: unfilled,
-      usedGrok: grokResult.usedGrok,
-      grokPicksApplied: grokResult.picks.length,
-      matrixPreloaded: !!tmZoneMatrix && tmZoneMatrix.size > 0,
-      warnings: grokResult.warnings,
-      topUnfilledSlots: unfilledSlots.slice(0, 6),
-      placementMethod: engineConfig.placementMethod,
-    });
-
-    applyPlannerResultAsDraft(
-      { ...plannerResult, proposedAssignments },
-      rosterForEngine,
-      reasoningBySlot,
-      grokResult.explanation,
-      grokResult.warnings
-    );
+  const enterDraftMode = async (options?: CoverageEngineRunOptions) => {
+    await runCoverageEngineRef.current(options);
   };
 
   /**
@@ -1572,20 +1368,24 @@ function AuthedShiftBuilder() {
     grokExplanation: string = "",
     warnings: string[] = []
   ) => {
+    const lookup = buildTmLookupIndex(rosterForLookup);
     const newDraft: typeof draftAssignments = {};
     Object.entries(result.proposedAssignments).forEach(([slotKey, tmId]) => {
+      if (!tmId) return;
       const current = assignments[slotKey];
-      const tm = rosterForLookup.find((t: any) => t.id === tmId);
+      const tm = resolveTmFromLookup(lookup, tmId);
       if (tm) {
+        const boardId = boardTmId(tm);
         newDraft[slotKey] = {
-          proposedTmId: tmId,
-          proposedTmName: tm.name || tm.fullName || tm.id,
+          proposedTmId: boardId,
+          proposedTmName: tm.name || tm.fullName || boardId,
           previousTmId: current?.tmId,
           previousTmName: current?.tmName,
         };
       }
     });
     setDraftAssignments(newDraft);
+    useShiftBuilderStore.getState().setDraftAssignments(newDraft);
     setDraftBreakdown(result.breakdown);
     setDraftGrokReasoning(reasoningBySlot);
     setDraftGrokExplanation(grokExplanation);
@@ -2081,6 +1881,32 @@ function AuthedShiftBuilder() {
   const effectiveScheduledTmIdsTonight: Set<string> =
     (currentNight.scheduledTmIdsTonight as Set<string> | undefined) ?? scheduledTmIdsTonight;
 
+  const scheduleFilterActive = effectiveScheduledTmIdsTonight.size > 0;
+
+  // Engine + picker pool — MUST run after effective* roster bridge (not the early `let` defaults).
+  const availableGraveRoster = React.useMemo(
+    () =>
+      (effectiveGraveRoster as any[]).filter((t: any) => {
+        const id = boardTmId(t);
+        if (!id || calledOffIds.has(id)) return false;
+        return !scheduleFilterActive || effectiveScheduledTmIdsTonight.has(id);
+      }),
+    [
+      effectiveGraveRoster,
+      calledOffIds,
+      scheduleFilterActive,
+      effectiveScheduledTmIdsTonight,
+    ],
+  );
+  const availableRealRoster = React.useMemo(
+    () =>
+      (effectiveRealRoster as any[]).filter((t: any) => {
+        const id = boardTmId(t);
+        if (!id || calledOffIds.has(id)) return false;
+        return !scheduleFilterActive || effectiveScheduledTmIdsTonight.has(id);
+      }),
+    [effectiveRealRoster, calledOffIds, scheduleFilterActive, effectiveScheduledTmIdsTonight],
+  );
 
   // === END TEMP DIAGNOSTIC ===
 
@@ -2363,7 +2189,7 @@ function AuthedShiftBuilder() {
           const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
           if (res.ok) {
             const data = await res.json();
-            setScheduledTmIdsTonight(new Set((data.allScheduled || []).map((t: any) => t.id)));
+            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
         console.log('[shiftbuilder] night_tm_status changed — refreshed via API');
@@ -2383,7 +2209,7 @@ function AuthedShiftBuilder() {
           const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
           if (res.ok) {
             const data = await res.json();
-            setScheduledTmIdsTonight(new Set((data.allScheduled || []).map((t: any) => t.id)));
+            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
         console.log('[shiftbuilder] tm_default_schedules changed — refreshed via API');
@@ -2396,7 +2222,7 @@ function AuthedShiftBuilder() {
           const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
           if (res.ok) {
             const data = await res.json();
-            setScheduledTmIdsTonight(new Set((data.allScheduled || []).map((t: any) => t.id)));
+            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
         console.log('[shiftbuilder] tm_on_call_schedules changed — refreshed via API');
@@ -3877,6 +3703,277 @@ function AuthedShiftBuilder() {
     allEligibleTms: markerAllEligibleTms,
   });
 
+  const runCoverageEngine = React.useCallback(
+    async (options?: CoverageEngineRunOptions) => {
+      const confirmMessage =
+        options?.confirmMessage ??
+        "Run Coverage Planner and enter Draft Mode? This will generate a preview without changing current assignments.";
+      if (!options?.skipConfirm && !confirm(confirmMessage)) {
+        return;
+      }
+
+      if (!engineConfig) {
+        showToast("Engine config still loading — try again in a moment");
+        return;
+      }
+
+      setEngineRunPhase("planner");
+      const engineStart = performance.now();
+
+      try {
+        const orderedSlots = getSlotsInPlacementOrder(auxDefs);
+        const rosterForEngine = graveOnly ? availableGraveRoster : availableRealRoster;
+
+        const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
+        const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
+        const plannerResult = runWeightedPlanner({
+          orderedSlots,
+          assignments,
+          roster: rosterForEngine,
+          graveOnly,
+          preserveOnlyLocked: !!options?.forceXai,
+          scoringCtx: {
+            config: engineConfig,
+            skillScores: tmSkillScores,
+            slotDifficulty,
+            preferencesByTm: tmPreferencesByTm,
+            pairAffinitiesByTm: tmPairAffinitiesByTm,
+            accommodationsByTm: tmAccommodationsByTm,
+            adjacency: buildDefaultAdjacency(),
+            zoneMatrix: tmZoneMatrix,
+          },
+        });
+
+        const plannerDraft = Object.fromEntries(
+          Object.entries(plannerResult.proposedAssignments).filter(([, tmId]) => !!tmId),
+        ) as Record<string, string>;
+
+        const isGrokHybrid =
+          !!options?.forceXai || engineConfig.placementMethod === "grok-hybrid";
+        const useTools = options?.useTools !== false && isGrokHybrid;
+
+        let grokResult: {
+          picks: Array<{ slotKey: string; tmId: string; reason: string }>;
+          explanation: string;
+          warnings: string[];
+          usedGrok: boolean;
+          rawText: string;
+          usage?: { inputTokens?: number; outputTokens?: number };
+        } = {
+          picks: [],
+          explanation: "",
+          warnings: [],
+          usedGrok: false,
+          rawText: "",
+        };
+
+        if (isGrokHybrid) {
+          setEngineRunPhase("xai");
+          const operatorNotes = notesRef.current?.innerText || "";
+          const rotationHealth = computeShiftRotationHealth(
+            auxDefsForFit,
+            storeAssignmentsForFit,
+            deploymentFitBySlot,
+            { isDraftMode, draftAssignments },
+          );
+          const fitVerdictBySlot = Object.fromEntries(
+            Object.entries(deploymentFitBySlot).map(([k, v]) => [
+              k,
+              { verdict: v.fitVerdict, summary: v.fitSummary },
+            ]),
+          );
+
+          const rulesContext = {
+            config: engineConfig,
+            scoringContext: {
+              config: engineConfig,
+              skillScores: tmSkillScores,
+              slotDifficulty,
+              preferencesByTm: tmPreferencesByTm,
+              pairAffinitiesByTm: tmPairAffinitiesByTm,
+              accommodationsByTm: tmAccommodationsByTm,
+              zoneMatrix: tmZoneMatrix,
+            },
+            auxDefs,
+            currentDraft: new Map(Object.entries(plannerDraft)),
+            scheduledTmIds: effectiveScheduledTmIdsTonight,
+          };
+
+          const { buildGrokEngineSnapshot } = await import("@/lib/shiftbuilder/grokEngine");
+          let snapshot;
+          try {
+            snapshot = buildGrokEngineSnapshot({
+              dayName: selectedDay.name,
+              shiftDate: selectedDay.date,
+              plannerResult,
+              roster: rosterForEngine,
+              operatorNotes,
+              calledOffTmIds: calledOffIds,
+              recentHistory: effectiveRecentZoneHistory,
+              config: engineConfig,
+              placementOrder: orderedSlots,
+              rulesContext,
+              rotationHealthPercent: rotationHealth.percent,
+              fitVerdictBySlot,
+            });
+          } catch (err) {
+            console.error("[engine] snapshot build failed:", err);
+            showToast("Engine snapshot build failed — falling back to scoring only");
+            applyPlannerResultAsDraft(plannerResult, rosterForEngine, {});
+            return;
+          }
+
+          try {
+            const { askGrokEngineDraft } = await import("./actions");
+            grokResult = await askGrokEngineDraft(snapshot, {
+              useTools,
+              toolContext: {
+                roster: rosterForEngine,
+                auxDefs,
+                engineConfig,
+                currentDraft: plannerDraft,
+                scoringData: {
+                  skillScores: tmSkillScores,
+                  slotDifficulty,
+                  preferencesByTm: tmPreferencesByTm,
+                  pairAffinitiesByTm: tmPairAffinitiesByTm,
+                  accommodationsByTm: tmAccommodationsByTm,
+                  zoneMatrix: tmZoneMatrix,
+                },
+                scheduledTmIds: effectiveScheduledTmIdsTonight,
+              },
+            });
+            if (grokResult?.usage) {
+              try {
+                useShiftBuilderStore.getState().addAiUsage(grokResult.usage);
+              } catch {
+                /* ignore */
+              }
+            }
+          } catch (err) {
+            console.error("[engine] Grok call failed:", err);
+            grokResult = {
+              picks: [],
+              explanation: "",
+              warnings: ["Grok call failed"],
+              usedGrok: false,
+              rawText: "",
+            };
+          }
+
+          console.groupCollapsed(
+            `[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"}`,
+          );
+          console.log("Placement Method:", options?.forceXai ? "xai-button-forced" : engineConfig.placementMethod);
+          console.log("Tools:", useTools ? "enabled" : "off");
+          console.log("Grok warnings:", grokResult.warnings);
+          console.groupEnd();
+        }
+
+        const { mergeGrokOverridesIntoDraft } = await import("@/lib/shiftbuilder/grokEngine");
+        const { proposedAssignments, reasoningBySlot } = mergeGrokOverridesIntoDraft({
+          plannerResult,
+          picks: grokResult.picks,
+        });
+
+        const engineDuration = Math.round(performance.now() - engineStart);
+        const preservedCount = Object.values(plannerResult.breakdown).filter(
+          (b) => b.preserved,
+        ).length;
+        const filledCount = Object.keys(plannerResult.proposedAssignments).length;
+        const unfilledSlots = Object.keys(plannerResult.proposedAssignments).filter(
+          (k) => !plannerResult.proposedAssignments[k],
+        );
+
+        const { logEngineRunSummary } = await import("@/lib/shiftbuilder/placement");
+        logEngineRunSummary({
+          mode: "interactive-draft",
+          dayName: selectedDay.name,
+          nightDate: selectedDay.date.toISOString().slice(0, 10),
+          durationMs: engineDuration,
+          rosterSize: rosterForEngine.length,
+          slotsProcessed: orderedSlots.length,
+          preservedSlots: preservedCount,
+          filledSlots: filledCount,
+          unfilledSlots: plannerResult.notes.length,
+          usedGrok: grokResult.usedGrok,
+          grokPicksApplied: grokResult.picks.length,
+          matrixPreloaded: !!tmZoneMatrix && tmZoneMatrix.size > 0,
+          warnings: grokResult.warnings,
+          topUnfilledSlots: unfilledSlots.slice(0, 6),
+          placementMethod: isGrokHybrid ? "grok-hybrid" : engineConfig.placementMethod,
+        });
+
+        applyPlannerResultAsDraft(
+          { ...plannerResult, proposedAssignments },
+          rosterForEngine,
+          reasoningBySlot,
+          grokResult.explanation,
+          grokResult.warnings,
+        );
+
+        if (options?.forceXai) {
+          const draftSlotCount = Object.keys(proposedAssignments).filter(Boolean).length;
+          const openSlots = orderedSlots.length - draftSlotCount;
+          showToast(
+            grokResult.usedGrok
+              ? `xAI draft: ${draftSlotCount} placements${openSlots > 0 ? ` (${openSlots} open — check schedule/gender pool)` : ""}`
+              : `Planner draft: ${draftSlotCount} placements (xAI skipped)`,
+            draftSlotCount > 0 ? "success" : "info",
+          );
+        }
+      } finally {
+        setEngineRunPhase("idle");
+      }
+    },
+    [
+      engineConfig,
+      auxDefs,
+      assignments,
+      graveOnly,
+      availableGraveRoster,
+      availableRealRoster,
+      tmSkillScores,
+      slotDifficulty,
+      tmPreferencesByTm,
+      tmPairAffinitiesByTm,
+      tmAccommodationsByTm,
+      tmZoneMatrix,
+      calledOffIds,
+      effectiveRecentZoneHistory,
+      selectedDay,
+      effectiveScheduledTmIdsTonight,
+      applyPlannerResultAsDraft,
+      showToast,
+      auxDefsForFit,
+      storeAssignmentsForFit,
+      deploymentFitBySlot,
+      isDraftMode,
+      draftAssignments,
+    ],
+  );
+
+  React.useEffect(() => {
+    runCoverageEngineRef.current = runCoverageEngine;
+  }, [runCoverageEngine]);
+
+  const runXaiEngineFromCanvas = React.useCallback(() => {
+    if (!canRunEngine) {
+      showToast("Insufficient privileges — you cannot run the engine", "error");
+      return;
+    }
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — engine cannot run", "error");
+      return;
+    }
+    void runCoverageEngine({
+      forceXai: true,
+      useTools: true,
+      confirmMessage:
+        "Run the xAI coverage engine for tonight? Weighted planner scores the board, then xAI uses engine rules, Graves Default Schedule, and rotation fit to propose a draft (nothing saves until you apply).",
+    });
+  }, [canRunEngine, isCurrentNightLocked, runCoverageEngine, showToast]);
+
   // getEligibleForCurrentSlot: used for the *default* list only (grave / PM / AM bands).
   const roleSetHasTm = React.useCallback(
     (roleSet: Set<string>, entryTmId: string) => {
@@ -4572,7 +4669,7 @@ function AuthedShiftBuilder() {
           const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
           if (res.ok) {
             const data = await res.json();
-            setScheduledTmIdsTonight(new Set((data.allScheduled || []).map((t: any) => t.id)));
+            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
 
@@ -5122,6 +5219,96 @@ function AuthedShiftBuilder() {
     }
     setSelectedSlotKey(null);
   }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments]);
+
+  const handleClearBoard = React.useCallback(() => {
+    if (!requireEdit()) return;
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — changes are disabled", "error");
+      return;
+    }
+
+    const slotKeys = collectDeploymentSlotKeys(auxDefs);
+    const clearable: string[] = [];
+    let lockedCount = 0;
+
+    for (const slotKey of slotKeys) {
+      const row = padAssignments[slotKey];
+      if (!row?.tmId && !row?.tmName) continue;
+      if (row.isLocked) {
+        lockedCount += 1;
+        continue;
+      }
+      if (/^RR\d+$/.test(slotKey)) continue;
+      clearable.push(slotKey);
+    }
+
+    if (clearable.length === 0) {
+      if (isDraftMode) {
+        if (confirm("Discard the engine draft?")) {
+          setIsDraftMode(false);
+          setDraftAssignments({});
+          showToast("Draft discarded", "info");
+        }
+        return;
+      }
+      showToast(
+        lockedCount > 0
+          ? "No clearable assignments — remaining slots are locked"
+          : "Board is already empty",
+        "info",
+      );
+      return;
+    }
+
+    const confirmMsg =
+      lockedCount > 0
+        ? `Clear ${clearable.length} assignment(s) on tonight's board? ${lockedCount} locked slot(s) will be kept.`
+        : `Clear all ${clearable.length} assignment(s) on tonight's board?`;
+    if (!confirm(confirmMsg)) return;
+
+    if (isDraftMode) {
+      setIsDraftMode(false);
+      setDraftAssignments({});
+    }
+
+    const before = getCurrentSnapshot();
+    const reliableNightId = queryNightId || nightId;
+    const captureDate = selectedDay.date;
+    const captureDayName = selectedDay.name;
+
+    for (const slotKey of clearable) {
+      if (live?.unassign) {
+        live.unassign(slotKey, {
+          captureDate,
+          captureDayName,
+          targetNightId: reliableNightId,
+          isDraftMode: false,
+        });
+      } else {
+        unassign(slotKey);
+      }
+    }
+
+    window.setTimeout(() => {
+      recordChangeRef.current("Clear board", before, getCurrentSnapshot());
+    }, 120);
+
+    setSelectedSlotKey(null);
+    showToast(`Cleared ${clearable.length} slot(s)`, "success");
+  }, [
+    requireEdit,
+    isCurrentNightLocked,
+    auxDefs,
+    padAssignments,
+    isDraftMode,
+    getCurrentSnapshot,
+    queryNightId,
+    nightId,
+    selectedDay,
+    live,
+    unassign,
+    showToast,
+  ]);
 
   const handlePadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
     handleCmdkAddCoverage(sourceKey, targetKey);
@@ -6046,9 +6233,16 @@ function AuthedShiftBuilder() {
       {viewMode === 'canvas' && <OpsStatusBar />}
 
       {viewMode === 'canvas' && deploymentRotationFitEnabled && (
-        <RotationHealthFloater
+        <CanvasEngineCluster
           visible
-          placement="above-ops-pill"
+          canRunEngine={canRunEngine}
+          canEditAssignments={canEditAssignments}
+          isCurrentNightLocked={isCurrentNightLocked}
+          engineRunPhase={engineRunPhase}
+          onRunXaiEngine={runXaiEngineFromCanvas}
+          onClearBoard={handleClearBoard}
+          onApplyDraft={() => void applyDraft()}
+          onDiscardDraft={discardDraft}
           auxDefs={auxDefsForFit}
           assignments={storeAssignmentsForFit}
           fitBySlot={deploymentFitBySlot}

@@ -13,12 +13,14 @@
  */
 
 import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
+import { assignmentTmId } from "./tmIdentity";
 
 // Single source of truth for placement order now lives in the AI-modifiable skill
 import {
   DEFAULT_PLACEMENT_ORDER,
   deriveTargetSlotsInOrder,
   calculateCoverageFeasibility,
+  COVERAGE_TIERS,
 } from "./skills/placement-engine";
 
 // Minimal interface to avoid circular imports
@@ -170,7 +172,16 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
   };
   /** Top K candidates to keep per slot for the breakdown surface. Default 5. */
   topK?: number;
+  /**
+   * When true (Run xAI Engine), only locked slots are kept from the live board.
+   * Unlocked placements are re-scored so the engine can propose a full deployment.
+   */
+  preserveOnlyLocked?: boolean;
 }
+
+const HARD_COVERAGE_SLOTS = new Set(
+  COVERAGE_TIERS.filter((t) => t.isHardCoverage).flatMap((t) => t.slots),
+);
 
 /**
  * Walks PLACEMENT_ORDER. For each slot, scores all eligible candidates not
@@ -187,7 +198,7 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
  * judgment to override the deterministic pick on individual slots.
  */
 export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlannerResult {
-  const { orderedSlots, assignments, roster, scoringCtx, topK = 5 } = input;
+  const { orderedSlots, assignments, roster, scoringCtx, topK = 5, preserveOnlyLocked = false } = input;
 
   const proposedAssignments: Record<string, string> = {};
   const breakdown: Record<string, SlotRanking> = {};
@@ -209,11 +220,13 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
   // Live mutable draft for within_repeat + pair_affinity awareness.
   const currentDraft = new Map<string, string>();
 
-  // Seed currentDraft from already-filled slots so the scorer knows who's
-  // taken and where they are (for pair affinity).
+  // Seed currentDraft from preserved slots so the scorer knows who's taken (pair affinity).
   for (const [slot, a] of Object.entries(assignments)) {
     const tmId = (a as any)?.tmId;
-    if (tmId) currentDraft.set(slot, tmId);
+    if (!tmId) continue;
+    const isLocked = !!(a as any)?.isLocked || !!(a as any)?.is_locked;
+    const shouldSeed = preserveOnlyLocked ? isLocked : true;
+    if (shouldSeed) currentDraft.set(slot, String(tmId));
   }
 
   const adjacency = scoringCtx.adjacency ?? buildDefaultAdjacency();
@@ -227,31 +240,36 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     const isLocked = !!(existing as any)?.isLocked || !!(existing as any)?.is_locked;
 
     if (existing?.tmId) {
-      proposedAssignments[slotKey] = existing.tmId;
-      breakdown[slotKey] = {
-        topCandidates: [],
-        pickedTmId: existing.tmId,
-        preserved: true,
-      };
+      const shouldPreserve = preserveOnlyLocked ? isLocked : true;
+      if (shouldPreserve) {
+        proposedAssignments[slotKey] = existing.tmId;
+        breakdown[slotKey] = {
+          topCandidates: [],
+          pickedTmId: existing.tmId,
+          preserved: true,
+        };
 
-      if (isLocked) {
-        notes.push(`Locked slot ${slotKey} respected (existing TM ${existing.tmId} kept)`);
+        if (isLocked) {
+          notes.push(`Locked slot ${slotKey} respected (existing TM ${existing.tmId} kept)`);
+        }
+        continue;
       }
-      continue;
     }
 
     // Build candidate set: eligible + not yet placed this run.
     const usedIds = new Set(currentDraft.values());
-    const candidates = roster.filter(
-      (tm: any) =>
-        !usedIds.has(tm.id) &&
-        isEligibleForSlot(tm, slotKey)
-    );
+    const candidates = roster.filter((tm: any) => {
+      const id = assignmentTmId(tm);
+      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey);
+    });
 
     // DEBUG — log details when candidates are unexpectedly empty
     if (candidates.length === 0) {
       const eligible = roster.filter((tm: any) => isEligibleForSlot(tm, slotKey));
-      const notUsed = roster.filter((tm: any) => !usedIds.has(tm.id));
+      const notUsed = roster.filter((tm: any) => {
+        const id = assignmentTmId(tm);
+        return id && !usedIds.has(id);
+      });
       console.warn(`[runWeightedPlanner] NO CANDIDATES for ${slotKey} — eligible=${eligible.length}  not-yet-used=${notUsed.length}  draft-size=${currentDraft.size}  roster=${roster.length}`);
       if (eligible.length > 0 && notUsed.length === 0) {
         console.warn(`  → ALL ${roster.length} TMs already placed. Used IDs:`, [...usedIds].join(", "));
@@ -277,9 +295,10 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     const scored = candidates
       .map((tm: any) => {
         const result = scoreAssignment(tm, slotKey, ctx);
+        const tmId = assignmentTmId(tm);
         return {
-          tmId: tm.id,
-          tmName: tm.name || tm.fullName || tm.id,
+          tmId,
+          tmName: tm.name || tm.fullName || tmId,
           total: result.total,
           breakdown: result.breakdown,
           excluded: result.excluded,
@@ -309,10 +328,9 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       // "Unless something goes crazy wrong" policy:
       // For high-priority slots (early in order), be much more aggressive about filling
       // even with lower-scoring candidates rather than leaving them empty.
-      const orderIndex = orderedSlots.indexOf(slotKey);
-      const isHighPriority = orderIndex < 10; // First 10 in the declared order (Restrooms through Z8)
+      const isHardCoverage = HARD_COVERAGE_SLOTS.has(slotKey);
 
-      if (isHighPriority && scored.length > 0) {
+      if (isHardCoverage && scored.length > 0) {
         // Take the best available (even if excluded or low score) for critical early slots
         const bestAvailable = scored[0];
         proposedAssignments[slotKey] = bestAvailable.tmId;
@@ -325,7 +343,10 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
   }
 
   const usedIds = new Set(currentDraft.values());
-  const unassignedPeople = roster.filter((tm: any) => !usedIds.has(tm.id));
+  const unassignedPeople = roster.filter((tm: any) => {
+    const id = assignmentTmId(tm);
+    return id && !usedIds.has(id);
+  });
 
   return { proposedAssignments, unassignedPeople, notes, breakdown };
 }

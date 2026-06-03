@@ -30,7 +30,8 @@ export interface RRCardProps {
   loading?: boolean;
   borderColor?: string;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
+  draftInfoW?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+  draftInfoM?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
@@ -69,7 +70,9 @@ const RRSide: React.FC<{
 
   // For stacked side cards: hide the internal badge row so badge can live in the side card header (to pin name to upper corner like other cards)
   showBreakBadge?: boolean;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true }) => {
+  isDraftMode?: boolean;
+  draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -105,8 +108,25 @@ const RRSide: React.FC<{
       )}
       {/* Name immediately under label */}
       <div className="min-w-0">
-        {loading && !hasTM ? (
+        {loading && !hasTM && !(isDraftMode && draftInfo?.proposedTmName) ? (
           <div className="h-[14px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
+        ) : isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear ? (
+          <div className="flex flex-col min-w-0">
+            <span
+              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+              style={{ fontSize: 17, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+            >
+              {draftInfo.proposedTmName}
+            </span>
+            {draftInfo.previousTmName && (
+              <span
+                className="text-[8.5px] text-[#9CA3AF] line-through opacity-60 mt-0.5"
+                style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+              >
+                was: {draftInfo.previousTmName}
+              </span>
+            )}
+          </div>
         ) : hasTM ? (
           <div className="flex items-center gap-1 min-w-0">
             {a.isLocked && (
@@ -158,7 +178,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   loading = false,
   borderColor,
   isDraftMode = false,
-  draftInfo,
+  draftInfoW,
+  draftInfoM,
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
@@ -172,8 +193,16 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wKey = `WRR${def.num}`;
   const color = getRRAccent(def.num);
   const icon = RR_ICONS[def.num] ?? "●";
-  const mEmpty = !assignments[mKey]?.tmName;
-  const wEmpty = !assignments[wKey]?.tmName;
+  const wDraftName =
+    isDraftMode && draftInfoW?.proposedTmName && !draftInfoW.proposedClear
+      ? draftInfoW.proposedTmName
+      : "";
+  const mDraftName =
+    isDraftMode && draftInfoM?.proposedTmName && !draftInfoM.proposedClear
+      ? draftInfoM.proposedTmName
+      : "";
+  const mEmpty = !assignments[mKey]?.tmName && !mDraftName;
+  const wEmpty = !assignments[wKey]?.tmName && !wDraftName;
   const bothEmpty = mEmpty && wEmpty && !loading;
 
   // For stacked side cards: compute breaks per side so badge can be in the side card header (pins name to upper corner like Zone/Aux cards)
@@ -232,9 +261,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
           className="flex flex-col flex-1 px-2 pt-1"
           style={{ paddingBottom: (wCoverageTasks.length > 0 ? wCoverageTasks.length * COVERAGE_BAR_H + 4 : 4) }}
         >
-          {isDraftMode && draftInfo && (
-            <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
-          )}
           <RRSide
             slotKey={wKey}
             label=""
@@ -248,6 +274,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onEditTask={onEditTask}
             isLocked={isLocked}
             showBreakBadge={false}
+            isDraftMode={isDraftMode}
+            draftInfo={draftInfoW}
           />
           {/* Women's coverage banners (independent per side now) */}
           {wCoverageTasks.map(t => (
@@ -287,9 +315,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
           className="flex flex-col flex-1 px-2 pt-1"
           style={{ paddingBottom: (mCoverageTasks.length > 0 ? mCoverageTasks.length * COVERAGE_BAR_H + 4 : 4) }}
         >
-          {isDraftMode && draftInfo && (
-            <div className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit mb-1 font-medium tracking-wider">DRAFT</div>
-          )}
           <RRSide
             slotKey={mKey}
             label=""
@@ -303,6 +328,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onEditTask={onEditTask}
             isLocked={isLocked}
             showBreakBadge={false}
+            isDraftMode={isDraftMode}
+            draftInfo={draftInfoM}
           />
           {/* Men's coverage banners (independent per side now) */}
           {mCoverageTasks.map(t => (

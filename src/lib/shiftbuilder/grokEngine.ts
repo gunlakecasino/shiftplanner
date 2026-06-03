@@ -19,9 +19,14 @@
  */
 
 import type { CoveragePlannerResult, SlotRanking } from "./placement";
+import { buildTmLookupIndex } from "./tmIdentity";
 import type { EngineConfig } from "./engineConfig";
 import { getPlacementOrderText, getEligibilityRulesText } from "./placement";
-import { getXaiFillOrderHardRules, getXaiSwapHardRules } from "./xaiFillOrderContract";
+import {
+  assignViolatesFillOrder,
+  getXaiFillOrderHardRules,
+  getXaiSwapHardRules,
+} from "./xaiFillOrderContract";
 import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
 import { buildFewShotCorrectionsBlock } from "./ai/promptUtils"; // wire AI Lab feedback into production placements
 
@@ -44,9 +49,16 @@ export interface GrokEngineSnapshot {
   slotRankings: Array<{
     slotKey: string;
     preserved: boolean;
+    preservedTmId?: string;
     preservedTmName?: string;
     candidates: GrokEnginePerSlotCandidate[];
   }>;
+  /** Deterministic planner draft (engine top pick per slot) — seeds fill-order guard. */
+  deterministicDraft?: Record<string, string>;
+  /** Board rotation health % from instant fit map (when available). */
+  rotationHealthPercent?: number | null;
+  /** Per-slot instant fit verdicts for judgment layer context. */
+  fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
   /** Operator's notes pad for tonight (raw text) */
   operatorNotes: string;
   /** TMs called off tonight (excluded from candidates already) */
@@ -118,6 +130,8 @@ export function buildGrokEngineSnapshot(args: {
 
   /** Human feedback from AI Lab training loop — will be injected as few-shot */
   recentHumanFeedback?: any[];
+  rotationHealthPercent?: number | null;
+  fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
 }): GrokEngineSnapshot {
   const {
     dayName,
@@ -132,8 +146,7 @@ export function buildGrokEngineSnapshot(args: {
     topK = 5,
   } = args;
 
-  const rosterById = new Map<string, any>();
-  roster.forEach((tm) => rosterById.set(tm.id, tm));
+  const rosterById = buildTmLookupIndex(roster);
 
   const slotRankings: GrokEngineSnapshot["slotRankings"] = placementOrder.map(
     (slotKey) => {
@@ -146,6 +159,7 @@ export function buildGrokEngineSnapshot(args: {
         return {
           slotKey,
           preserved: true,
+          preservedTmId: ranking.pickedTmId,
           preservedTmName: tm?.name || tm?.fullName || ranking.pickedTmId,
           candidates: [],
         };
@@ -197,6 +211,9 @@ export function buildGrokEngineSnapshot(args: {
     weights: config.weights,
     thresholds: config.thresholds,
     grokReasoningEffort: config.grokReasoningEffort,
+    deterministicDraft: { ...plannerResult.proposedAssignments },
+    rotationHealthPercent: args.rotationHealthPercent ?? null,
+    fitVerdictBySlot: args.fitVerdictBySlot,
   };
 
   // === 2026-05-30 Evolution: Inject rich rules representation ===
@@ -235,6 +252,18 @@ export function buildGrokEngineSystemPrompt(snapshot: GrokEngineSnapshot): strin
   const rulesText = snapshot.rulesSummary ||
     `${getPlacementOrderText()}\n\n${getEligibilityRulesText()}`;
 
+  const rotationBlock =
+    snapshot.rotationHealthPercent != null
+      ? `\n=== ROTATION HEALTH (instant fit map) ===\nBoard average: ${snapshot.rotationHealthPercent}% (target 85%). Respect strong_fit / acceptable slots; only override when judgment clearly improves net rotation health.\n`
+      : "";
+
+  const fitBlock = snapshot.fitVerdictBySlot
+    ? `\n=== INSTANT FIT BY SLOT (deterministic prerender) ===\n${Object.entries(snapshot.fitVerdictBySlot)
+        .slice(0, 40)
+        .map(([k, v]) => `${k}: ${v.verdict} — ${v.summary}`)
+        .join("\n")}\n`
+    : "";
+
   return `You are the planning brain for the ZDS grave shift.
 
 The deterministic engine (defined in code + live engine_config + historical matrix) acts as the authoritative **Rules Engine**.
@@ -254,7 +283,7 @@ ${getXaiSwapHardRules()}
 === AUTHORITATIVE RULES ENGINE ===
 
 ${rulesText}
-
+${rotationBlock}${fitBlock}
 OUTPUT CONTRACT — STRICT JSON SCHEMA (field names + casing are EXACT):
 
 1. Output exactly one fenced \`\`\`json block with this shape:
@@ -285,6 +314,7 @@ GUIDANCE:
 - The deterministic engine has already walked PLACEMENT_ORDER sequentially. Your picks must
   align with that sequence — only choose among each slot's ranked candidates; do not skip
   ahead to staff a zone while restrooms or earlier core slots are still empty.
+- Respect the **Graves Default Schedule** (Rules Engine §3 — graves_default_schedule + tonight's on-call overrides). Prefer on-schedule TMs when scores are close; use getTMScheduleStatus when unsure.
 - Override the top candidate (WHO) when higher-order context justifies it:
     - Tonight's specific conditions (notes, call-offs, weather, events, morale)
     - Rotation health and long-term fairness not fully captured in the matrix
@@ -347,6 +377,31 @@ export function parseGrokEngineResponse(raw: string): GrokEngineResponse {
  * snapshot, (b) the proposed tmId was in that slot's candidate list, (c) the
  * slot wasn't preserved. Returns the cleaned picks + warnings.
  */
+function slotOrderIndex(snapshot: GrokEngineSnapshot, slotKey: string): number {
+  const idx = snapshot.placementOrder.indexOf(slotKey);
+  return idx >= 0 ? idx : 9999;
+}
+
+/** Seed draft from deterministic planner tops + preserved slots for fill-order checks. */
+function buildDraftForFillOrderGuard(
+  snapshot: GrokEngineSnapshot,
+): Record<string, { tmId?: string | null }> {
+  const draft: Record<string, { tmId?: string | null }> = {};
+  if (snapshot.deterministicDraft) {
+    for (const [slot, tmId] of Object.entries(snapshot.deterministicDraft)) {
+      if (tmId) draft[slot] = { tmId };
+    }
+  }
+  for (const r of snapshot.slotRankings) {
+    if (r.preserved && r.preservedTmId) {
+      draft[r.slotKey] = { tmId: r.preservedTmId };
+    } else if (!draft[r.slotKey]?.tmId && r.candidates[0]?.tmId) {
+      draft[r.slotKey] = { tmId: r.candidates[0].tmId };
+    }
+  }
+  return draft;
+}
+
 export function guardGrokEnginePicks(
   picks: GrokEnginePick[],
   snapshot: GrokEngineSnapshot
@@ -354,8 +409,13 @@ export function guardGrokEnginePicks(
   const validPicks: GrokEnginePick[] = [];
   const warnings: string[] = [];
   const rankingsBySlot = new Map(snapshot.slotRankings.map((r) => [r.slotKey, r]));
+  const draft = buildDraftForFillOrderGuard(snapshot);
 
-  for (const p of picks) {
+  const orderedPicks = [...picks].sort(
+    (a, b) => slotOrderIndex(snapshot, a.slotKey) - slotOrderIndex(snapshot, b.slotKey),
+  );
+
+  for (const p of orderedPicks) {
     const r = rankingsBySlot.get(p.slotKey);
     if (!r) {
       warnings.push(`Grok proposed pick for unknown slot ${p.slotKey}`);
@@ -372,7 +432,15 @@ export function guardGrokEnginePicks(
       );
       continue;
     }
+    const fillOrder = assignViolatesFillOrder(p.slotKey, draft);
+    if (fillOrder.violates) {
+      warnings.push(
+        `Grok pick rejected (fill order): ${p.slotKey} — ${fillOrder.reason ?? "blocked"}`,
+      );
+      continue;
+    }
     validPicks.push(p);
+    draft[p.slotKey] = { tmId: p.tmId };
   }
 
   return { validPicks, warnings };

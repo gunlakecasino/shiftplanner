@@ -21,6 +21,21 @@ import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import type { DraftAssignmentRow } from "./placementFitForSlot";
+
+function slotShowsFilled(
+  slotKey: string,
+  assignments: Record<string, { tmName?: string }>,
+  isDraftMode: boolean,
+  draftAssignments: Record<string, DraftAssignmentRow>,
+): boolean {
+  if (isDraftMode) {
+    const d = draftAssignments[slotKey];
+    if (d?.proposedClear) return false;
+    if (d?.proposedTmName?.trim()) return true;
+  }
+  return !!assignments[slotKey]?.tmName;
+}
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -690,19 +705,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         </div>
       </div>
 
-      {isDraftMode && (
-        <div
-          className="mx-2 mt-1 mb-2 px-3 py-1.5 bg-amber-100 border border-amber-300 rounded text-amber-800 text-xs font-medium flex items-center justify-between gap-3"
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          <span className="truncate">
-            📝 DRAFT MODE — Engine suggestions shown. Previous assignments faded below.
-          </span>
-          {/* Apply/Discard buttons are wired in parent (they need full history + engine context). 
-              For visual parity we keep the banner; the buttons are provided by the orchestrator via portal or kept outside. */}
-        </div>
-      )}
-
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {currentView === "deployment" ? (
           <>
@@ -712,7 +714,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <span className="label">ZONES</span>
                 <div className="divider" />
                 <span className="count">
-                  {ZONE_DEFS.filter((d) => !!assignments[d.key]?.tmName).length} / 10 FILLED
+                  {ZONE_DEFS.filter((d) =>
+                    slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                  ).length} / 10 FILLED
                 </span>
               </div>
               <div ref={zonesGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
@@ -758,8 +762,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <div className="divider" />
                 <span className="count">
                   {RR_DEFS.reduce((acc, d) => {
-                    const m = !!assignments[`MRR${d.num}`]?.tmName;
-                    const w = !!assignments[`WRR${d.num}`]?.tmName;
+                    const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
+                    const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
                     return acc + (m ? 1 : 0) + (w ? 1 : 0);
                   }, 0)} / 10 FILLED
                 </span>
@@ -789,7 +793,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         loading={loadingAssignments}
                         borderColor={cardBorders[`RR${def.num}`] || cardBorders[mKey] || cardBorders[wKey]}
                         isDraftMode={isDraftMode}
-                        draftInfo={draftAssignments[mKey] || draftAssignments[wKey]}
+                        draftInfoW={draftAssignments[wKey]}
+                        draftInfoM={draftAssignments[mKey]}
                         onRemoveTask={onRemoveTask}
                         onSetTaskColor={onSetTaskColor}
                         onEditTask={onEditTask}
@@ -813,7 +818,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
                 <span className="count">
-                  {auxDefs.filter((d) => !!assignments[d.key]?.tmName).length} / {auxDefs.length} FILLED
+                  {auxDefs.filter((d) =>
+                    slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                  ).length} / {auxDefs.length} FILLED
                 </span>
               </div>
               <div

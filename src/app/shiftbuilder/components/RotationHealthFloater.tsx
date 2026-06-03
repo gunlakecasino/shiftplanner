@@ -11,8 +11,12 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
 
-/** above-ops-pill: fixed bottom-right, stacked above #ops-status-bar (default). */
-export type RotationHealthPlacement = "above-ops-pill" | "below-page" | "page-corner";
+/** above-ops-pill: fixed bottom-right; inline: parent flex cluster handles position. */
+export type RotationHealthPlacement =
+  | "above-ops-pill"
+  | "inline"
+  | "below-page"
+  | "page-corner";
 
 /** Viewport offset from bottom — clears the ops status pill (~28px) + 10px margin. */
 const OPS_PILL_STACK_BOTTOM_PX = 44;
@@ -68,14 +72,16 @@ export function RotationHealthFloater({
     health.percent !== null ? `${health.percent}%` : "—%";
 
   const anchorStyle: React.CSSProperties =
-    placement === "above-ops-pill"
-      ? {
-          position: "fixed",
-          bottom: OPS_PILL_STACK_BOTTOM_PX,
-          right: 10,
-          zIndex: 2147483646,
-        }
-      : placement === "page-corner"
+    placement === "inline"
+      ? { position: "relative", zIndex: 1 }
+      : placement === "above-ops-pill"
+        ? {
+            position: "fixed",
+            bottom: OPS_PILL_STACK_BOTTOM_PX,
+            right: 10,
+            zIndex: 2147483646,
+          }
+        : placement === "page-corner"
         ? {
             position: "absolute",
             bottom: 10,

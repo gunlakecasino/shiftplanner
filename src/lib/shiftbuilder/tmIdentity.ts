@@ -12,6 +12,29 @@ export function assignmentTmId(tm: {
   return (tm.tm_id || tm.tmId || tm.id || "").trim();
 }
 
+/**
+ * Canonical board id for schedule sets and roster rows.
+ * Prefer tm_id slug (matches zone_assignments + roster `id` from data.ts).
+ * Scheduled-roster API rows expose UUID as `id` and slug as `tmId`.
+ */
+export function boardTmId(tm: {
+  id?: string;
+  tmId?: string;
+  tm_id?: string;
+}): string {
+  return (tm.tmId || tm.tm_id || tm.id || "").trim();
+}
+
+/** Build a Set of board ids from scheduled-roster API payloads. */
+export function boardTmIdsFromScheduled(allScheduled: unknown[]): Set<string> {
+  const out = new Set<string>();
+  for (const row of allScheduled) {
+    const id = boardTmId(row as { id?: string; tmId?: string; tm_id?: string });
+    if (id) out.add(id);
+  }
+  return out;
+}
+
 /** Index a roster array by every known id form for O(1) lookup. */
 export function buildTmLookupIndex(roster: any[]): Map<string, any> {
   const map = new Map<string, any>();

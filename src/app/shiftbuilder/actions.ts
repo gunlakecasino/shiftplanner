@@ -21,7 +21,7 @@ import {
   GrokStructuredResponseSchema,
 } from "@/lib/shiftbuilder/grokSchemas";
 
-import type { GrokReasoningEffort } from "@/lib/shiftbuilder/engineConfig";
+import type { EngineConfig, GrokReasoningEffort } from "@/lib/shiftbuilder/engineConfig";
 import type { TeamMember } from "@/lib/shiftbuilder/data";
 import {
   buildGrokEngineSystemPrompt,
@@ -231,6 +231,7 @@ export type GrokEngineRunResult = {
  */
 export interface GrokEngineToolContext {
   roster?: any[];
+  auxDefs?: import("@/lib/shiftbuilder/placement").AuxDef[];
   currentDraft?: Record<string, string>;
   scoringData?: {
     skillScores?: Map<string, number>;
@@ -240,7 +241,8 @@ export interface GrokEngineToolContext {
     accommodationsByTm?: Map<string, any[]>;
     zoneMatrix?: Map<string, Map<string, any>>;
   };
-  scheduledTmIds?: Set<string>;   // NEW for schedule tools
+  scheduledTmIds?: Set<string>;
+  engineConfig?: EngineConfig;
 }
 
 export async function askGrokEngineDraft(
@@ -249,10 +251,12 @@ export async function askGrokEngineDraft(
     tools?: Record<string, any>;
     /** Additional data needed to make tools actually executable with real scoring */
     toolContext?: GrokEngineToolContext;
+    /** When true (default if toolContext.roster present), use live Rules Engine tools */
+    useTools?: boolean;
   }
 ): Promise<GrokEngineRunResult> {
-  const tools = options?.tools;
   const toolContext = options?.toolContext;
+  const useTools = options?.useTools !== false && !!toolContext?.roster;
   const systemPrompt = buildGrokEngineSystemPrompt(snapshot);
   const userPrompt = `Here is tonight's snapshot and per-slot ranking.
 
@@ -272,43 +276,50 @@ in the system prompt.`;
 
     const model = createGrokEngineModel();
 
-    if (tools && Object.keys(tools).length > 0) {
-      // === FULL TOOL-CALLING PATH (2026-05-30 implementation) ===
+    if (useTools) {
+      // === FULL TOOL-CALLING PATH — live Rules Engine + scoring tools ===
       console.log("[GrokEngine] FULL tool-calling mode enabled.");
 
-      // Build real executable tools if we have context data
-      let executableTools = tools;
-      if (toolContext?.roster) {
-        const safeRoster = toolContext.roster;
-        const currentDraftMap = new Map(Object.entries(toolContext.currentDraft ?? {}));
+      const safeRoster = toolContext!.roster!;
+      const currentDraftMap = new Map(Object.entries(toolContext!.currentDraft ?? {}));
 
-        // Rebuild a real scoring context from the data the client sent
-        const scoringCtx = toolContext.scoringData
-          ? {
-              config: snapshot as any,
-              skillScores: toolContext.scoringData.skillScores ?? new Map(),
-              slotDifficulty: toolContext.scoringData.slotDifficulty ?? new Map(),
-              preferencesByTm: toolContext.scoringData.preferencesByTm ?? new Map(),
-              pairAffinitiesByTm: toolContext.scoringData.pairAffinitiesByTm ?? new Map(),
-              accommodationsByTm: toolContext.scoringData.accommodationsByTm ?? new Map(),
-              currentDraft: currentDraftMap,
-              adjacency: buildDefaultAdjacency(),
-              zoneMatrix: toolContext.scoringData.zoneMatrix,
-            }
-          : ({} as any);
+      const engineConfig =
+        toolContext!.engineConfig ??
+        ({
+          weights: snapshot.weights,
+          thresholds: snapshot.thresholds,
+          placementMethod: "grok-hybrid",
+          grokReasoningEffort: snapshot.grokReasoningEffort,
+        } as EngineConfig);
 
-        const rulesForTools = new EngineRules({
-          config: snapshot as any,
-          scoringContext: scoringCtx,
-          auxDefs: [],
-          currentDraft: currentDraftMap,
-          scheduledTmIds: toolContext.scheduledTmIds,
-        });
+      const scoringCtx = toolContext!.scoringData
+        ? {
+            config: engineConfig,
+            skillScores: toolContext!.scoringData!.skillScores ?? new Map(),
+            slotDifficulty: toolContext!.scoringData!.slotDifficulty ?? new Map(),
+            preferencesByTm: toolContext!.scoringData!.preferencesByTm ?? new Map(),
+            pairAffinitiesByTm: toolContext!.scoringData!.pairAffinitiesByTm ?? new Map(),
+            accommodationsByTm: toolContext!.scoringData!.accommodationsByTm ?? new Map(),
+            currentDraft: currentDraftMap,
+            adjacency: buildDefaultAdjacency(),
+            zoneMatrix: toolContext!.scoringData!.zoneMatrix,
+          }
+        : ({} as Parameters<typeof scoreAssignment>[2]);
 
-        executableTools = {
-          ...tools,
+      const rulesForTools = new EngineRules({
+        config: engineConfig,
+        scoringContext: scoringCtx,
+        auxDefs: toolContext!.auxDefs ?? [],
+        currentDraft: currentDraftMap,
+        scheduledTmIds: toolContext!.scheduledTmIds,
+      });
+
+      const baseTools = createEngineRulesTools(rulesForTools);
+
+      const executableTools = {
+        ...baseTools,
           checkEligibility: {
-            ...tools.checkEligibility,
+            ...baseTools.checkEligibility,
             execute: async ({ tmId, slotKey }: any) => {
               const tm = safeRoster.find((t: any) => t.id === tmId);
               if (!tm) return { tmId, slotKey, isEligible: false, error: "TM not found in roster" };
@@ -320,7 +331,7 @@ in the system prompt.`;
             },
           },
           scoreCandidate: {
-            ...tools.scoreCandidate,
+            ...baseTools.scoreCandidate,
             execute: async ({ tmId, slotKey, includeBreakdown = true }: any) => {
               const tm = safeRoster.find((t: any) => t.id === tmId);
               if (!tm) return { tmId, slotKey, error: "TM not found in roster" };
@@ -355,7 +366,7 @@ in the system prompt.`;
 
           // Schedule status tool (now executable with real data)
           getTMScheduleStatus: {
-            ...tools.getTMScheduleStatus,
+            ...baseTools.getTMScheduleStatus,
             execute: async ({ tmId }: any) => {
               return {
                 tmId,
@@ -364,8 +375,7 @@ in the system prompt.`;
               };
             },
           },
-        };
-      }
+      };
 
       const enhancedUserPrompt = `${userPrompt}
 
@@ -373,7 +383,7 @@ You have access to powerful live tools from the authoritative Rules Engine. USE 
 - checkEligibility(tmId, slotKey)
 - scoreCandidate(tmId, slotKey) — your most important tool for understanding trade-offs
 - getCurrentBoardState() — see who's already placed where (global view)
-- getTMScheduleStatus(tmId) — check if someone is on the ADP schedule tonight (very important when schedule data exists)
+- getTMScheduleStatus(tmId) — check Graves Default Schedule for tonight (very important when schedule data is loaded)
 - getRulesSummary() — if you need to re-read the full rule system
 
 Explore with tools before committing to picks. When ready, output ONLY the final JSON block.`;

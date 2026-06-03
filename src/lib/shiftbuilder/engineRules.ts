@@ -71,7 +71,7 @@ export interface EngineRulesContext {
   /** Current draft state (for within_repeat + pair_affinity) */
   currentDraft?: Map<string, string>;
 
-  /** TMs that are on schedule for this night (from night_tm_status / ADP import) */
+  /** TMs on tonight's Graves Default Schedule (+ on-call overrides for this night) */
   scheduledTmIds?: Set<string>;
 }
 
@@ -214,7 +214,7 @@ export class EngineRules {
   }
 
   /**
-   * Returns whether a TM is on the official ADP schedule for tonight.
+   * Returns whether a TM is on the Graves Default Schedule for tonight.
    */
   isOnSchedule(tmId: string): boolean {
     if (!this.ctx.scheduledTmIds || this.ctx.scheduledTmIds.size === 0) {
@@ -228,11 +228,11 @@ export class EngineRules {
    */
   getScheduleStatus(tmId: string): string {
     if (!this.ctx.scheduledTmIds || this.ctx.scheduledTmIds.size === 0) {
-      return "No ADP schedule data loaded for this night (fallback mode)";
+      return "No Graves Default Schedule loaded for this night (engine uses full active roster)";
     }
-    return this.isOnSchedule(tmId) 
-      ? "On ADP schedule for tonight" 
-      : "NOT on ADP schedule for tonight";
+    return this.isOnSchedule(tmId)
+      ? "On Graves Default Schedule for tonight"
+      : "NOT on Graves Default Schedule for tonight";
   }
 
   // ------------------------------------------------------------
@@ -245,8 +245,8 @@ export class EngineRules {
    */
   getRulesSummaryForLLM(): string {
     const schedulePolicy = this.ctx.scheduledTmIds && this.ctx.scheduledTmIds.size > 0
-      ? "Schedule policy: Prefer TMs who are on the official ADP schedule for tonight when all other factors are equal. Scheduled-but-unassigned TMs are high-priority to place."
-      : "No ADP schedule loaded for this night — engine uses full active roster.";
+      ? "Schedule policy: Prefer TMs on the Graves Default Schedule for tonight (graves_default_schedule + night on-call overrides) when other factors are equal. Scheduled-but-unassigned TMs are high-priority to place."
+      : "No Graves Default Schedule loaded for this night — engine uses full active roster.";
 
     return `
 # GRAVE Shift Placement Rules Engine
@@ -263,7 +263,7 @@ ${this.getPlacementOrderAsText()}
 ## 2. Hard Eligibility Rules
 ${this.getEligibilityRulesAsText()}
 
-## 3. Schedule Policy (ADP / night_tm_status)
+## 3. Schedule Policy (Graves Default Schedule)
 ${schedulePolicy}
 
 ## 4. Active Scoring Signals & Weights
@@ -387,7 +387,8 @@ export function createEngineRulesTools(rules: EngineRules) {
     },
 
     getTMScheduleStatus: {
-      description: "Check the ADP schedule status for a specific team member tonight. Returns whether they are on schedule and any relevant note. Critical for respecting operator-loaded ADP schedules.",
+      description:
+        "Check whether a team member is on the Graves Default Schedule for tonight (canonical weekly default + on-call overrides). Returns on-schedule status and a short note. Use before placing someone who is not on tonight's grave roster.",
       parameters: z.object({
         tmId: z.string().describe("The tm_id of the team member"),
       }),
