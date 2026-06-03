@@ -8,11 +8,12 @@ import {
   getLastPlacementSequence,
   getSpreadPlacementCounts,
   PLACEMENT_SPREAD_NIGHTS,
+  type PlacementCrossPattern,
+  type PlacementRotationBasics,
   type PlacementTmProfile,
 } from "./placementPadHelpers";
+import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
-  findBetterSuited,
-  isStrongFitSpread,
   rotationGapSlots,
   scorePlacementFit,
   type PlacementFitScoreInput,
@@ -21,101 +22,143 @@ import {
 
 const LAST5_COUNT = 5;
 
-function signalNumberFromRow(
-  signals: Record<string, number | string> | undefined,
-  needle: string,
-): number | null {
-  if (!signals) return null;
-  for (const [k, v] of Object.entries(signals)) {
-    if (!k.toLowerCase().includes(needle)) continue;
-    const n = typeof v === "number" ? v : parseFloat(String(v));
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
+/** Post-swap verdicts that mean the trade hurts rotation health for the other TM. */
+const SWAP_HARM_VERDICTS: PlacementFitVerdict[] = [
+  "questionable",
+  "poor_fit",
+  "needs_swap",
+];
 
-/**
- * Drop gap slots where the current occupant is a strong fit or has no rotation
- * pressure elsewhere — don't suggest "better on Z5" when Z5's TM is already well placed.
- */
-function filterActionableRotationGaps(args: {
-  gaps: string[];
+type RotationTradeContext = {
+  gapSlotKey: string;
   currentSlotKey: string;
   currentTmId: string | undefined;
   assignments: Record<string, SlotAssignmentRow>;
   histories: Record<string, ZoneDetailEntry | null>;
+  historiesLoading: boolean;
   members: Array<Record<string, unknown>>;
   auxDefs: AuxDef[];
   currentIso: string;
   otherTmProfiles: Record<string, PlacementTmProfile | null>;
-}): string[] {
-  const {
-    gaps,
-    currentSlotKey,
-    currentTmId,
-    assignments,
-    histories,
-    members,
-    auxDefs,
-    currentIso,
-    otherTmProfiles,
-  } = args;
+  isDraftMode: boolean;
+  draftAssignments: Record<string, DraftAssignmentRow>;
+};
 
-  return gaps.filter((gapSlotKey) => {
-    const occupantRow = assignments[gapSlotKey];
-    const occupantId = occupantRow?.tmId;
-    if (!occupantId || occupantId === currentTmId) return true;
+function swapAssignmentsForTrade(
+  assignments: Record<string, SlotAssignmentRow>,
+  slotA: string,
+  slotB: string,
+): Record<string, SlotAssignmentRow> {
+  const rowA = assignments[slotA];
+  const rowB = assignments[slotB];
+  if (!rowA?.tmId || !rowB?.tmId) return assignments;
+  return {
+    ...assignments,
+    [slotA]: { ...rowB },
+    [slotB]: { ...rowA },
+  };
+}
 
-    const occupantHistory = histories[occupantId] ?? null;
-    const occupantSpread = getSpreadPlacementCounts(
-      occupantHistory,
-      PLACEMENT_SPREAD_NIGHTS,
-      currentIso,
-    );
-    const occupantTimes = occupantSpread.get(gapSlotKey) ?? 0;
-    const occupantLast5 = getLastPlacementSequence(
-      occupantHistory,
-      LAST5_COUNT,
-      currentIso,
-    );
-    const occupantInLast5 = occupantLast5.includes(gapSlotKey);
+/**
+ * A gap or bilateral swap only counts when it improves rotation health net —
+ * not when the occupant is strong/acceptable on their slot, or the trade would
+ * make them questionable (or worse) on the other slot.
+ */
+function isRotationTradeWithOccupantWorthwhile(ctx: RotationTradeContext): boolean {
+  const occupantRow = ctx.assignments[ctx.gapSlotKey];
+  const occupantId = occupantRow?.tmId;
+  if (!occupantId || occupantId === ctx.currentTmId) return true;
 
-    if (isStrongFitSpread(occupantTimes, occupantInLast5)) {
-      return false;
-    }
+  const fitArgs = {
+    assignments: ctx.assignments,
+    isDraftMode: ctx.isDraftMode,
+    draftAssignments: ctx.draftAssignments,
+    members: ctx.members,
+    auxDefs: ctx.auxDefs,
+    currentIso: ctx.currentIso,
+    histories: ctx.histories,
+    historiesLoading: ctx.historiesLoading,
+    otherTmProfiles: ctx.otherTmProfiles,
+    skipOccupantGapFilter: true as const,
+  };
 
-    const occupant8w =
-      signalNumberFromRow(occupantRow?.provenance?.fairnessSignals, "count_8w") ??
-      signalNumberFromRow(occupantRow?.provenance?.fairnessSignals, "8w");
-
-    const occupantMatrix = buildMatrixSlotKeysForTm(occupantId, members, auxDefs);
-    const occupantTm = otherTmProfiles[occupantId] ?? null;
-    const occupantBasics = computePlacementRotationBasics(
-      occupantHistory,
-      gapSlotKey,
-      occupantId,
-      occupantMatrix,
-      assignments,
-      histories,
-      currentIso,
-      PLACEMENT_SPREAD_NIGHTS,
-      occupantTm,
-      otherTmProfiles,
-    );
-    const occupantGaps = rotationGapSlots(occupantBasics, gapSlotKey);
-    const occupantPressure = findBetterSuited(
-      occupantGaps,
-      occupantTimes,
-      occupant8w,
-      occupantInLast5,
-    );
-
-    if (!occupantPressure.better) {
-      return false;
-    }
-
-    return true;
+  const occupantOnGap = computeSlotPlacementFit({
+    ...fitArgs,
+    slotKey: ctx.gapSlotKey,
   });
+
+  if (
+    occupantOnGap.fitVerdict === "strong_fit" ||
+    occupantOnGap.fitVerdict === "acceptable"
+  ) {
+    return false;
+  }
+
+  const afterSwap = computeSlotPlacementFit({
+    ...fitArgs,
+    slotKey: ctx.currentSlotKey,
+    assignments: swapAssignmentsForTrade(
+      ctx.assignments,
+      ctx.currentSlotKey,
+      ctx.gapSlotKey,
+    ),
+  });
+
+  if (SWAP_HARM_VERDICTS.includes(afterSwap.fitVerdict)) {
+    return false;
+  }
+
+  return true;
+}
+
+function filterActionableRotationGaps(
+  ctx: RotationTradeContext & { gaps: string[] },
+): string[] {
+  return ctx.gaps.filter((gapSlotKey) =>
+    isRotationTradeWithOccupantWorthwhile({ ...ctx, gapSlotKey }),
+  );
+}
+
+function filterActionableCrossPatterns(
+  ctx: RotationTradeContext & {
+    crossPatterns: PlacementCrossPattern[];
+  },
+): PlacementCrossPattern[] {
+  return ctx.crossPatterns.filter((c) => {
+    const bilateral =
+      c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot;
+    if (!bilateral) return true;
+    return isRotationTradeWithOccupantWorthwhile({
+      ...ctx,
+      gapSlotKey: c.theirSlotKey,
+    });
+  });
+}
+
+function rotationBasicsWithFilteredSwaps(
+  rotationBasics: PlacementRotationBasics,
+  ctx: RotationTradeContext & { currentSlotKey: string; actionableGaps: string[] },
+): PlacementRotationBasics {
+  const crossPatterns = filterActionableCrossPatterns({
+    ...ctx,
+    crossPatterns: rotationBasics.crossPatterns,
+  });
+
+  return {
+    ...rotationBasics,
+    crossPatterns,
+    highlightGapKeys: new Set([
+      ...ctx.actionableGaps,
+      ...crossPatterns
+        .filter((c) => c.tmMissingFromTheirSlot)
+        .map((c) => c.theirSlotKey),
+    ]),
+    highlightCrossKeys: new Set(
+      crossPatterns
+        .filter((c) => c.tmMissingFromTheirSlot)
+        .map((c) => c.theirSlotKey),
+    ),
+  };
 }
 
 export type SlotAssignmentRow = {
@@ -182,6 +225,8 @@ export type ComputeSlotPlacementFitArgs = {
   otherTmProfiles?: Record<string, PlacementTmProfile | null>;
   candidateProfiles?: PlacementCandidateProfile[];
   preferredCandidateIds?: string[];
+  /** Internal: avoid recursive occupant filtering when scoring trade partners. */
+  skipOccupantGapFilter?: boolean;
 };
 
 /** Single source of truth for pad instant fit + card chip. */
@@ -201,6 +246,7 @@ export function computeSlotPlacementFit(
     otherTmProfiles = {},
     candidateProfiles,
     preferredCandidateIds,
+    skipOccupantGapFilter = false,
   } = args;
 
   const row = resolveSlotAssignmentRow(
@@ -259,18 +305,34 @@ export function computeSlotPlacementFit(
         )
       : null;
 
-  const allGaps = rotationGapSlots(rotationBasics, slotKey);
-  const actionableGapSlots = filterActionableRotationGaps({
-    gaps: allGaps,
+  const tradeCtx: RotationTradeContext = {
+    gapSlotKey: slotKey,
     currentSlotKey: slotKey,
     currentTmId: tmId,
     assignments,
     histories,
+    historiesLoading,
     members,
     auxDefs,
     currentIso,
     otherTmProfiles,
-  });
+    isDraftMode,
+    draftAssignments,
+  };
+
+  const allGaps = rotationGapSlots(rotationBasics, slotKey);
+  const actionableGapSlots = skipOccupantGapFilter
+    ? allGaps
+    : filterActionableRotationGaps({ ...tradeCtx, gaps: allGaps });
+
+  const basicsForScore =
+    rotationBasics && !skipOccupantGapFilter
+      ? rotationBasicsWithFilteredSwaps(rotationBasics, {
+          ...tradeCtx,
+          currentSlotKey: slotKey,
+          actionableGaps: actionableGapSlots,
+        })
+      : rotationBasics;
 
   const input: PlacementFitScoreInput = {
     slotKey,
@@ -280,7 +342,7 @@ export function computeSlotPlacementFit(
     timesInSpread,
     inLast5: last5.includes(slotKey),
     padHistoryLoading: historiesLoading && !!tmId && !history,
-    rotationBasics,
+    rotationBasics: basicsForScore,
     actionableGapSlots,
     rationale: row?.provenance?.rationale,
     fairnessSignals: row?.provenance?.fairnessSignals,
