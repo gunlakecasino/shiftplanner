@@ -51,6 +51,16 @@ export interface AuxDef {
 export const PLACEMENT_ORDER: readonly string[] = DEFAULT_PLACEMENT_ORDER;
 
 /**
+ * Main-entry zones — engine does not auto-place here; operators staff manually when needed.
+ * (Z1 Main Entry North, Z2 Main Entry South)
+ */
+export const OPTIONAL_AUTO_FILL_ZONE_SLOTS = new Set<string>(["Z1", "Z2"]);
+
+export function isOptionalDeploymentSlot(slotKey: string): boolean {
+  return OPTIONAL_AUTO_FILL_ZONE_SLOTS.has(slotKey);
+}
+
+/**
  * Returns all slot keys in the exact order the Coverage Planner must process them.
  *
  * @param auxDefs - Currently active auxiliary/support slots (including user-added ones)
@@ -254,6 +264,16 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
         }
         continue;
       }
+    }
+
+    if (isOptionalDeploymentSlot(slotKey)) {
+      breakdown[slotKey] = {
+        topCandidates: [],
+        pickedTmId: null,
+        preserved: false,
+      };
+      notes.push(`Optional zone ${slotKey} left open (manual assign only)`);
+      continue;
     }
 
     // Build candidate set: eligible + not yet placed this run.

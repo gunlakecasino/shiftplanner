@@ -1,5 +1,6 @@
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import { isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
 import {
   collectDeploymentSlotKeys,
   shouldShowPlacementFitChip,
@@ -20,6 +21,7 @@ const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
   questionable: 55,
   needs_swap: 40,
   poor_fit: 0,
+  open_gap: 0,
 };
 
 export type ShiftRotationHealth = {
@@ -34,6 +36,7 @@ export type ShiftRotationHealth = {
     questionable: number;
     needs_swap: number;
     poor_fit: number;
+    open_gap: number;
   };
 };
 
@@ -55,6 +58,7 @@ export function computeShiftRotationHealth(
     questionable: 0,
     needs_swap: 0,
     poor_fit: 0,
+    open_gap: 0,
   };
 
   let openGaps = 0;
@@ -71,7 +75,7 @@ export function computeShiftRotationHealth(
     );
     const assigned = !!(row?.tmName || row?.tmId);
     if (!assigned) {
-      openGaps += 1;
+      if (!isOptionalDeploymentSlot(slotKey)) openGaps += 1;
       continue;
     }
 

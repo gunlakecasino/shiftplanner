@@ -19,6 +19,7 @@
  */
 
 import type { CoveragePlannerResult, SlotRanking } from "./placement";
+import { isOptionalDeploymentSlot } from "./placement";
 import { buildTmLookupIndex } from "./tmIdentity";
 import type { EngineConfig } from "./engineConfig";
 import { getPlacementOrderText, getEligibilityRulesText } from "./placement";
@@ -416,6 +417,10 @@ export function guardGrokEnginePicks(
   );
 
   for (const p of orderedPicks) {
+    if (isOptionalDeploymentSlot(p.slotKey)) {
+      warnings.push(`Grok pick rejected: ${p.slotKey} is manual-assign only`);
+      continue;
+    }
     const r = rankingsBySlot.get(p.slotKey);
     if (!r) {
       warnings.push(`Grok proposed pick for unknown slot ${p.slotKey}`);
@@ -477,6 +482,7 @@ export function mergeGrokOverridesIntoDraft(args: {
   // the engine and keep the label clean, but preserve Grok's reason text
   // for the Why? panel.
   picks.forEach((p) => {
+    if (isOptionalDeploymentSlot(p.slotKey)) return;
     const engineTopId = plannerResult.proposedAssignments[p.slotKey];
     proposed[p.slotKey] = p.tmId;
     if (engineTopId && engineTopId !== p.tmId) {

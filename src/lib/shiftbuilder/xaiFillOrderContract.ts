@@ -8,6 +8,7 @@ import {
   DEFAULT_PLACEMENT_ORDER,
   getPlacementOrderDescription,
 } from "./skills/placement-engine";
+import { isOptionalDeploymentSlot } from "./placement";
 
 const PLACEMENT_ORDER = DEFAULT_PLACEMENT_ORDER;
 import type { PlacementPadInsight, PlacementFitVerdict } from "./placementPadInsightSchema";
@@ -73,7 +74,9 @@ export function unfilledHigherPrioritySlots(
   const missing: string[] = [];
   for (let i = 0; i < targetIdx; i++) {
     const key = order[i];
-    if (!isSlotFilled(key, assignments)) missing.push(key);
+    if (!isSlotFilled(key, assignments) && !isOptionalDeploymentSlot(key)) {
+      missing.push(key);
+    }
   }
   return missing;
 }

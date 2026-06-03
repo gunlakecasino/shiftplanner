@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import { isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
 import type { PlacementCandidateProfile } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import {
@@ -183,6 +184,7 @@ export function usePlacementFitMap({
         draftAssignments,
       );
       const assigned = !!(row?.tmName || row?.tmId);
+      if (!assigned && isOptionalDeploymentSlot(slotKey)) continue;
 
       out[slotKey] = computeSlotPlacementFit({
         slotKey,

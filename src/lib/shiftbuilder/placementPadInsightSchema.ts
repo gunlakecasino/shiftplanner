@@ -6,6 +6,8 @@ export const PlacementFitVerdictSchema = z.enum([
   "questionable",
   "poor_fit",
   "needs_swap",
+  /** Open / unassigned slot — not an engine placement recommendation. */
+  "open_gap",
 ]);
 
 export type PlacementFitVerdict = z.infer<typeof PlacementFitVerdictSchema>;
@@ -64,6 +66,8 @@ export function fitVerdictLabel(verdict: PlacementFitVerdict): string {
       return "Poor fit";
     case "needs_swap":
       return "Consider swap";
+    case "open_gap":
+      return "Open";
     default:
       return "Fit";
   }
@@ -104,6 +108,13 @@ export function fitVerdictStyles(verdict: PlacementFitVerdict): {
         bg: "rgba(254,226,226,0.5)",
         text: "rgb(185,28,28)",
         badge: "bg-red-100 text-red-800",
+      };
+    case "open_gap":
+      return {
+        border: "rgba(0,0,0,0.1)",
+        bg: "rgba(0,0,0,0.03)",
+        text: "rgb(107,114,128)",
+        badge: "bg-neutral-100 text-neutral-600",
       };
     default:
       return {

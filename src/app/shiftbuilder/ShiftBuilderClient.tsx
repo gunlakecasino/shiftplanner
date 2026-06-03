@@ -1371,18 +1371,34 @@ function AuthedShiftBuilder() {
     const lookup = buildTmLookupIndex(rosterForLookup);
     const newDraft: typeof draftAssignments = {};
     Object.entries(result.proposedAssignments).forEach(([slotKey, tmId]) => {
-      if (!tmId) return;
       const current = assignments[slotKey];
-      const tm = resolveTmFromLookup(lookup, tmId);
-      if (tm) {
-        const boardId = boardTmId(tm);
-        newDraft[slotKey] = {
-          proposedTmId: boardId,
-          proposedTmName: tm.name || tm.fullName || boardId,
-          previousTmId: current?.tmId,
-          previousTmName: current?.tmName,
-        };
+      const currentTmId = current?.tmId;
+
+      if (!tmId) {
+        if (currentTmId) {
+          newDraft[slotKey] = {
+            proposedTmId: "",
+            proposedTmName: "",
+            previousTmId: currentTmId,
+            previousTmName: current?.tmName,
+            proposedClear: true,
+          };
+        }
+        return;
       }
+
+      const tm = resolveTmFromLookup(lookup, tmId);
+      if (!tm) return;
+
+      const boardId = boardTmId(tm);
+      if (currentTmId === boardId) return;
+
+      newDraft[slotKey] = {
+        proposedTmId: boardId,
+        proposedTmName: tm.name || tm.fullName || boardId,
+        previousTmId: currentTmId,
+        previousTmName: current?.tmName,
+      };
     });
     setDraftAssignments(newDraft);
     useShiftBuilderStore.getState().setDraftAssignments(newDraft);

@@ -5,7 +5,7 @@ import {
   isSwapEligibleSlotKey,
   type PlacementRotationBasics,
 } from "./placementPadHelpers";
-import { areSwapLanePeers } from "@/lib/shiftbuilder/placement";
+import { areSwapLanePeers, isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
 
 export type PrerenderedPlacementFit = {
   fitVerdict: PlacementFitVerdict;
@@ -120,34 +120,18 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     rotationGapSlots(input.rotationBasics, input.slotKey);
 
   if (!input.assigned) {
-    const eligible = (input.candidateProfiles ?? []).filter((c) => c.eligible);
-    if (eligible.length === 0) {
+    if (isOptionalDeploymentSlot(input.slotKey)) {
       return {
-        fitVerdict: "questionable",
-        fitSummary: `No eligible TMs for ${slotLabel} tonight.`,
-        fitFactLine: buildFactLine(["Grave pool / gender rules block all picks"]),
+        fitVerdict: "open_gap",
+        fitSummary: `${slotLabel} is open — manual assign only (engine does not auto-fill main entry).`,
+        fitFactLine: buildFactLine(["Optional deployment slot"]),
       };
     }
 
-    const pick = pickRecommendedCandidate(eligible, input.preferredCandidateIds);
-    const pickName = pick?.tmName ?? eligible[0].tmName;
-
-    if (eligible.length === 1) {
-      return {
-        fitVerdict: "strong_fit",
-        fitSummary: `Best pick: ${pickName} — only eligible TM for ${slotLabel}.`,
-        fitFactLine: buildFactLine(["Single eligible option"]),
-      };
-    }
-
-    const altCount = eligible.length - 1;
     return {
-      fitVerdict: "strong_fit",
-      fitSummary: `Best pick: ${pickName} for ${slotLabel} tonight.`,
-      fitFactLine: buildFactLine([
-        `${altCount} other eligible`,
-        input.rationale ? "engine-backed" : "rotation pool",
-      ]),
+      fitVerdict: "open_gap",
+      fitSummary: `${slotLabel} is open — assign from the roster when you are ready.`,
+      fitFactLine: buildFactLine(["No TM placed here tonight"]),
     };
   }
 
