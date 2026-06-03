@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   GRAVES_DAY_KEYS,
-  GRAVES_DAY_LABELS,
+  gravesDayColumnLabel,
   type GravesBand,
   type GravesDaysMap,
   type GravesEligibleTm,
@@ -205,9 +205,11 @@ function ScheduleSection({
               {GRAVES_DAY_KEYS.map((k) => (
                 <th
                   key={k}
-                  className="px-2 py-2 text-center font-semibold text-neutral-600 w-[52px]"
+                  className={`px-2 py-2 text-center font-semibold text-neutral-600 ${
+                    band === "am_overlap" ? "w-[58px] text-[10px]" : "w-[52px]"
+                  }`}
                 >
-                  {GRAVES_DAY_LABELS[k]}
+                  {gravesDayColumnLabel(k, band)}
                 </th>
               ))}
               <th className="px-2 py-2 text-center font-semibold text-neutral-500 w-[72px]">
@@ -249,7 +251,11 @@ function ScheduleSection({
                             ? "bg-emerald-600 text-white hover:bg-emerald-700"
                             : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"
                         }`}
-                        title={on ? "Scheduled — click for Off" : "Off — click for Scheduled"}
+                        title={
+                          on
+                            ? `Scheduled ${gravesDayColumnLabel(day, band)} — click for Off`
+                            : `Off ${gravesDayColumnLabel(day, band)} — click for Scheduled`
+                        }
                       >
                         {on ? "ON" : "—"}
                       </button>

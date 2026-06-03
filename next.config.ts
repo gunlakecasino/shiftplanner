@@ -23,7 +23,13 @@ const nextConfig: NextConfig = {
 
   // === Aggressive immutable caching for all fingerprinted assets ===
   // These are served with content hashes by Next — safe for 1 year.
+  // Only apply in production to avoid breaking Turbopack HMR revalidation in dev
+  // (the custom headers cause "module factory is not available" errors for large
+  // files like ShiftBuilderClient.tsx and its dynamic imports of the Supabase data layer).
   async headers() {
+    if (process.env.NODE_ENV !== 'production') {
+      return [];
+    }
     return [
       {
         source: "/_next/static/:path*",

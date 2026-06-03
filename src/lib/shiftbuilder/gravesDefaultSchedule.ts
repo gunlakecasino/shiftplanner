@@ -32,6 +32,14 @@ export const GRAVES_DAY_LABELS: Record<GravesDayKey, string> = {
   thu: "Thu",
 };
 
+/** Column header for the default schedule grid (AM overlap = shift night + next-day AM). */
+export function gravesDayColumnLabel(dayKey: GravesDayKey, band: GravesBand): string {
+  if (band !== "am_overlap") return GRAVES_DAY_LABELS[dayKey];
+  const idx = GRAVES_DAY_KEYS.indexOf(dayKey);
+  const nextKey = GRAVES_DAY_KEYS[(idx + 1) % GRAVES_DAY_KEYS.length];
+  return `${GRAVES_DAY_LABELS[dayKey]}/${GRAVES_DAY_LABELS[nextKey]}`;
+}
+
 export type GravesDaysMap = Record<GravesDayKey, boolean>;
 
 export const EMPTY_GRAVES_DAYS: GravesDaysMap = {
