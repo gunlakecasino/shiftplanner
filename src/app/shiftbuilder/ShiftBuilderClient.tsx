@@ -1022,6 +1022,8 @@ function AuthedShiftBuilder() {
   const [nightId, setNightId] = useState<string | null>(null);
   const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
+  // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
+  const loadingAssignmentsRef = useRef<boolean>(false);
 
   // === Slot task catalog + selections ===================================
   // catalog: the menu of POSSIBLE tasks per slot (slot_task_catalog rows),
@@ -4564,8 +4566,6 @@ function AuthedShiftBuilder() {
   // Combined with persistAssign capturing nightId at action time, this kills
   // the entire family of "wrong day got written" races.
   const loadEpochRef = useRef<number>(0);
-  // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
-  const loadingAssignmentsRef = useRef<boolean>(false);
 
   // === Session-stable data loader ===========================================
   //
