@@ -1,5 +1,7 @@
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
+import { ZONE_DEFS, RR_DEFS } from "@/lib/shiftbuilder/constants";
+import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import { isEligibleForSlot, normalizeGender } from "@/lib/shiftbuilder/placement";
 
 /** Minimal TM fields for swap / eligibility checks. */
 export type PlacementTmProfile = {
@@ -169,6 +171,53 @@ export function getLastPlacementSequence(
   }
   events.sort((a, b) => b.d.localeCompare(a.d));
   return events.slice(0, n).map((e) => e.ui);
+}
+
+/** Matrix keys shown in the placement pad spread for a given TM. */
+export function buildMatrixSlotKeysForTm(
+  tmId: string | undefined,
+  members: Array<{ id?: string; tmId?: string; tm_id?: string; gender?: string | null }>,
+  auxDefs: AuxDef[],
+): string[] {
+  const keys = ZONE_DEFS.map((z) => z.key);
+  const rawGender =
+    members.find(
+      (m) => m.id === tmId || m.tmId === tmId || m.tm_id === tmId,
+    )?.gender ?? null;
+  const g = normalizeGender(rawGender);
+  for (const d of RR_DEFS) {
+    if (!g || g === "M") keys.push(`MRR${d.num}`);
+    if (!g || g === "F") keys.push(`WRR${d.num}`);
+  }
+  for (const d of auxDefs) {
+    if (!d.key.startsWith("SP")) keys.push(d.key);
+  }
+  return keys;
+}
+
+/** All assignable keys on the deployment artboard (for board-wide fit map). */
+export function collectDeploymentSlotKeys(auxDefs: AuxDef[]): string[] {
+  const keys: string[] = ZONE_DEFS.map((z) => z.key);
+  for (const d of RR_DEFS) {
+    keys.push(`MRR${d.num}`, `WRR${d.num}`);
+  }
+  for (const d of auxDefs) {
+    if (!d.key.startsWith("SP")) keys.push(d.key);
+  }
+  return keys;
+}
+
+/** Canvas fit chips — never on admin/overlap/physical RR host keys. */
+export function shouldShowPlacementFitChip(slotKey: string): boolean {
+  const k = slotKey.trim();
+  if (!k) return false;
+  const upper = k.toUpperCase();
+  if (upper === "ADM" || upper === "ADMIN" || upper === "AUX_ADMIN") return false;
+  if (upper.includes("ADMIN")) return false;
+  if (k.startsWith("OL-") || upper.startsWith("OVERLAP")) return false;
+  if (/^overlap_(am|pm)/i.test(k)) return false;
+  if (/^RR\d+$/.test(k)) return false;
+  return true;
 }
 
 /** Admin and overlap slots are never suggested in Swap lanes. */

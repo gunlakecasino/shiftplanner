@@ -12,6 +12,8 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import CoverageBar from "./CoverageBar";
+import { PlacementFitChip } from "./PlacementFitChip";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
 
 /**
  * RRCard (Phase 1 Live Cache migration)
@@ -39,6 +41,9 @@ export interface RRCardProps {
 
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
+  fitChipW?: PrerenderedPlacementFit | null;
+  fitChipM?: PrerenderedPlacementFit | null;
+  fitChipLoading?: boolean;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -161,6 +166,9 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   onLiveAssign,
   onLiveUnassign,
   isLocked = false,
+  fitChipW,
+  fitChipM,
+  fitChipLoading = false,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -205,19 +213,26 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       >
         <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
         <div
-          className="flex items-center gap-1 px-2 pt-0.5 pb-0.5 leading-none"
+          className="flex items-center justify-between gap-1 px-2 pt-0.5 pb-0.5 leading-none"
           style={{ color, borderBottom: `1px solid ${color}33` }}
         >
-          <div className="flex items-center gap-1 leading-none" style={{ color }}>
+          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color }}>
             <span className="text-[11px] leading-none">{icon}</span>
             <span
-              className="font-extrabold tracking-[0.4px] uppercase"
+              className="font-extrabold tracking-[0.4px] uppercase truncate"
               style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
             >
               {def.label} WOMEN'S
             </span>
           </div>
-          <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <PlacementFitChip
+              fit={fitChipW}
+              loading={fitChipLoading && !wEmpty}
+              empty={wEmpty && !loading}
+            />
+            <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
+          </div>
         </div>
         <div
           className="flex flex-col flex-1 px-2 pt-1"
@@ -257,19 +272,26 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       >
         <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
         <div
-          className="flex items-center gap-1 px-2 pt-0.5 pb-0.5 leading-none"
+          className="flex items-center justify-between gap-1 px-2 pt-0.5 pb-0.5 leading-none"
           style={{ color, borderBottom: `1px solid ${color}33` }}
         >
-          <div className="flex items-center gap-1 leading-none" style={{ color }}>
+          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color }}>
             <span className="text-[11px] leading-none">{icon}</span>
             <span
-              className="font-extrabold tracking-[0.4px] uppercase"
+              className="font-extrabold tracking-[0.4px] uppercase truncate"
               style={{ fontSize: 10.5, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
             >
               {def.label} MEN'S
             </span>
           </div>
-          <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <PlacementFitChip
+              fit={fitChipM}
+              loading={fitChipLoading && !mEmpty}
+              empty={mEmpty && !loading}
+            />
+            <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
+          </div>
         </div>
         <div
           className="flex flex-col flex-1 px-2 pt-1"

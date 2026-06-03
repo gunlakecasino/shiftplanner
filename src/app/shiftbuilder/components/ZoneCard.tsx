@@ -12,6 +12,8 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
 import CoverageBar from "./CoverageBar";
+import { PlacementFitChip } from "./PlacementFitChip";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
 
 /**
  * ZoneCard (Phase 1 Live Cache migration)
@@ -46,6 +48,9 @@ export interface ZoneCardProps {
 
   /** When true, the entire card is read-only (no drag, no drop, no editing) */
   isLocked?: boolean;
+  /** Screen-only rotation fit chip (excluded from print). */
+  fitChip?: PrerenderedPlacementFit | null;
+  fitChipLoading?: boolean;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
@@ -64,6 +69,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   onLiveAssign,
   onLiveUnassign,
   isLocked = false,
+  fitChip,
+  fitChipLoading = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -121,7 +128,14 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             {def.label}
           </span>
         </div>
-        <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+        <div className="flex items-center gap-0.5 shrink-0">
+          <PlacementFitChip
+            fit={fitChip}
+            loading={fitChipLoading && !!hasTM}
+            empty={isEmpty && !loading}
+          />
+          <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+        </div>
       </div>
 
       {/* Body: large TM name + optional location lines */}

@@ -2814,6 +2814,7 @@ function AuthedShiftBuilder() {
   // setting. We default to landscape via @page and trust the operator's
   // print-dialog choice (or printer default) for duplex.
   const handlePrintBothPages = React.useCallback(async () => {
+    handleSlotClose();
     const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
     if (!liveArtboard) {
       // Fallback: best-effort single-page print if the artboard isn't in the DOM.
@@ -2987,12 +2988,13 @@ function AuthedShiftBuilder() {
       document.body.classList.remove("printing-dual-mode");
       document.querySelector(".print-dual-container")?.remove();
     }
-  }, [currentView]);
+  }, [currentView, handleSlotClose]);
 
   // Prints all 7 days in the active week: 14 pages (deployment + break sheet per day).
   // Cycles through each day, waits for Supabase data to load, captures both views,
   // then prints the full batch in one window.print() call.
   const handlePrintWeek = React.useCallback(async () => {
+    handleSlotClose();
     const originalDayIndex = selectedDayIndex;
     const originalView = currentView;
 
@@ -3131,7 +3133,7 @@ function AuthedShiftBuilder() {
       await waitForLoad().catch(() => {});
       flushSync(() => setCurrentView(originalView));
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast]);
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose]);
 
   // === Print Command Center — generalized multi-day, multi-config print handler ===
   //
@@ -3139,6 +3141,7 @@ function AuthedShiftBuilder() {
   // assembles them in the specified page order, and applies dynamic @page margins
   // + zoom so the output matches exactly what the Print Command Center previewed.
   const handlePrintWithConfig = React.useCallback(async (config: PrintConfig) => {
+    handleSlotClose();
     const originalDayIndex = selectedDayIndex;
     const originalView = currentView;
 
@@ -3475,7 +3478,7 @@ function AuthedShiftBuilder() {
       setPrintProgress(null);
       setIsPrintCenterOpen(false);
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast]);
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose]);
 
   // === Master Command Palette (Phase 2 core) ===
   // Stable callbacks for useCommandActions — keeping these out of the call-site

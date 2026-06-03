@@ -18,6 +18,8 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import type { TmEntry } from "./MarkerPad";
+import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
+import { nightIsoFromDate } from "./placementPadHelpers";
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -207,6 +209,20 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
 
   const padDisplayAssignments = padAssignments ?? displayAssignments;
+
+  const currentIso = nightIsoFromDate(selectedDay.date);
+
+  const { fitBySlot, historiesLoading: fitHistoriesLoading } = usePlacementFitMap({
+    enabled: currentView === "deployment",
+    assignments: displayAssignments,
+    isDraftMode,
+    draftAssignments,
+    members,
+    auxDefs,
+    currentIso,
+    scheduledUnassigned,
+    allEligibleTms,
+  });
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -717,6 +733,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
+                        fitChip={fitBySlot[key]}
+                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -771,6 +789,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
+                        fitChipW={fitBySlot[wKey]}
+                        fitChipM={fitBySlot[mKey]}
+                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -822,6 +843,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
+                        fitChip={fitBySlot[key]}
+                        fitChipLoading={fitHistoriesLoading}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}

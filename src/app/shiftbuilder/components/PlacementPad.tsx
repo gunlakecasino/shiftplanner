@@ -1111,7 +1111,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const padEl = (
     <div
-      className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
+      className={`placement-pad no-print ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
       style={
         usePortal
           ? portalStyle!

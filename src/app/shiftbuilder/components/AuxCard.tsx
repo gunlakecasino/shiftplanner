@@ -11,6 +11,8 @@ import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
+import { PlacementFitChip } from "./PlacementFitChip";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
 
 /** AuxCard — Phase 1 Live layer prep (same pattern as ZoneCard / RRCard). */
 
@@ -34,6 +36,8 @@ export interface AuxCardProps {
 
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
+  fitChip?: PrerenderedPlacementFit | null;
+  fitChipLoading?: boolean;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -52,6 +56,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onLiveAssign,
   onLiveUnassign,
   isLocked = false,
+  fitChip,
+  fitChipLoading = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -95,7 +101,14 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             {def.label}
           </span>
         </div>
-        <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+        <div className="flex items-center gap-0.5 shrink-0">
+          <PlacementFitChip
+            fit={fitChip}
+            loading={fitChipLoading && !!hasTM}
+            empty={isEmpty && !loading}
+          />
+          <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+        </div>
         {/* Explicit remove button for Aux slots (including Z9SR) so clearing is reliable and doesn't require drag or refresh */}
         {hasTM && !isLocked && onLiveUnassign && (
           <button

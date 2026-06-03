@@ -1329,7 +1329,9 @@ body {
     visibility: visible !important;
   }
 
-  /* Hide any UI elements that should never appear in printed output (e.g. LOCKED badge) */
+  /* Screen-only operator assist UI (fit chips, placement pads, LOCKED badge, etc.).
+     Any new canvas enhancement that must not appear on the deployment/breaks PDF
+     must use class `no-print` (or be outside `.print-artboard`). */
   .no-print {
     display: none !important;
   }
