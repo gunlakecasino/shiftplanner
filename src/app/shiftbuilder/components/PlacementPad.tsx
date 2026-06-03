@@ -10,6 +10,10 @@ import {
   fitVerdictLabel,
   fitVerdictStyles,
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import {
+  computePrerenderedPlacementFit,
+  type PrerenderedPlacementFit,
+} from "./placementFitPrerender";
 import type { PlacementInsightMode } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import {
   ZONE_DEFS,
@@ -176,90 +180,104 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function PlacementAnalystBlock({
+  prerendered,
   loading,
+  detailsOpen,
   text,
   structured,
   cached,
   assigned,
-  onRefresh,
+  onMoreDetails,
   onTrain,
-  onClear,
+  onClearDetails,
 }: {
+  prerendered: PrerenderedPlacementFit;
   loading: boolean;
+  detailsOpen: boolean;
   text: string | null;
   structured?: PlacementPadInsight | null;
   cached?: boolean;
   assigned: boolean;
-  onRefresh: () => void;
+  onMoreDetails: () => void;
   onTrain?: () => void;
-  onClear: () => void;
+  onClearDetails: () => void;
 }) {
-  const verdictStyles = structured ? fitVerdictStyles(structured.fitVerdict) : null;
+  const headerStyles = fitVerdictStyles(prerendered.fitVerdict);
+  const showXaiBody = detailsOpen && (loading || text || structured);
 
   return (
     <div className="mx-3 mb-2 rounded-xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
-      {structured && verdictStyles ? (
-        <div
-          className="px-2.5 py-2 border-b"
-          style={{
-            borderColor: verdictStyles.border,
-            background: verdictStyles.bg,
-          }}
-        >
-          <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${verdictStyles.badge}`}
-            >
-              {fitVerdictLabel(structured.fitVerdict)}
-            </span>
-            {cached && (
-              <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
-                cached
-              </span>
-            )}
-          </div>
-          <p
-            className="text-[11px] font-semibold leading-snug"
-            style={{ color: verdictStyles.text }}
+      <div
+        className="px-2.5 py-2 border-b"
+        style={{
+          borderColor: headerStyles.border,
+          background: headerStyles.bg,
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${headerStyles.badge}`}
           >
-            {structured.fitSummary}
-          </p>
+            {fitVerdictLabel(prerendered.fitVerdict)}
+          </span>
+          <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
+            instant
+          </span>
         </div>
-      ) : (
-        <div className="px-2.5 py-2 border-b border-black/[0.05] bg-white/60">
-          {loading ? (
-            <p className="text-[10px] text-neutral-500 animate-pulse">
-              {assigned
-                ? "Analyzing whether this placement is a good fit…"
-                : "Ranking who fits this slot…"}
-            </p>
-          ) : (
-            <p className="text-[10px] text-neutral-500">
-              {assigned
-                ? "Fit verdict will appear when analysis completes."
-                : "Assignee ranking will appear when analysis completes."}
-            </p>
-          )}
-        </div>
-      )}
+        <p
+          className="text-[11px] font-semibold leading-snug"
+          style={{ color: headerStyles.text }}
+        >
+          {prerendered.fitSummary}
+        </p>
+      </div>
 
       <div className="px-2.5 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <SectionLabel>Details</SectionLabel>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh();
-            }}
-            disabled={loading}
-            className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
-          >
-            {loading ? "Analyzing…" : "Refresh"}
-          </button>
+          {!detailsOpen ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoreDetails();
+              }}
+              disabled={loading}
+              className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
+            >
+              {loading ? "Loading…" : "More details (xAI)"}
+            </button>
+          ) : (
+            <>
+              <SectionLabel>xAI details</SectionLabel>
+              {cached && (
+                <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
+                  cached
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoreDetails();
+                }}
+                disabled={loading}
+                className="rounded-full border border-black/[0.08] bg-white px-2 py-0.5 text-[9px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-60"
+              >
+                {loading ? "Analyzing…" : "Refresh"}
+              </button>
+            </>
+          )}
         </div>
 
-        {structured ? (
+        {!detailsOpen && (
+          <p className="mt-1 text-[9px] text-neutral-400 leading-snug">
+            {assigned
+              ? "Rotation-based verdict above. Tap for narrative, neighbors, and swap analysis."
+              : "Eligibility check above. Tap for ranked assignee picks."}
+          </p>
+        )}
+
+        {showXaiBody && structured ? (
           <div className="mt-1.5 space-y-2 text-[9px] leading-snug text-neutral-700">
             <div>
               <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
@@ -333,13 +351,17 @@ function PlacementAnalystBlock({
               </div>
             )}
           </div>
-        ) : text ? (
+        ) : showXaiBody && loading ? (
+          <p className="mt-1.5 text-[9px] text-neutral-400 animate-pulse">
+            Building detailed analyst notes…
+          </p>
+        ) : showXaiBody && text ? (
           <p className="mt-1.5 text-[9px] leading-snug text-neutral-600 whitespace-pre-wrap">
             {text}
           </p>
         ) : null}
 
-        {text && (
+        {detailsOpen && text && (
           <div className="mt-2 flex items-center gap-1.5">
             {onTrain && (
               <button
@@ -358,11 +380,11 @@ function PlacementAnalystBlock({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onClear();
+                onClearDetails();
               }}
               className="rounded border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px]"
             >
-              Clear
+              Hide details
             </button>
           </div>
         )}
@@ -547,6 +569,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [insightStructured, setInsightStructured] = useState<PlacementPadInsight | null>(null);
   const [insightCached, setInsightCached] = useState(false);
   const [deepInsightLoading, setDeepInsightLoading] = useState(false);
+  const [analystDetailsOpen, setAnalystDetailsOpen] = useState(false);
   const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
@@ -575,6 +598,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setInsightStructured(null);
     setInsightCached(false);
     setDeepInsightLoading(false);
+    setAnalystDetailsOpen(false);
     setPadGoodExamples([]);
     setRotationBasics(null);
     rotationSigRef.current = null;
@@ -899,24 +923,56 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     [buildInsightContext],
   );
 
-  const autoAnalystSigRef = useRef<string | null>(null);
+  const tmEligibleForSlot =
+    !a.tmName || !currentPlacementTm
+      ? true
+      : isEligibleForSlot(
+          {
+            gender: currentPlacementTm.gender,
+            gravePool: currentPlacementTm.gravePool,
+            isAMOverlap: currentPlacementTm.isAMOverlap,
+            isPMOverlap: currentPlacementTm.isPMOverlap,
+          },
+          slotKey,
+        );
 
-  useEffect(() => {
-    if (padHistoryLoading) return;
+  const prerenderedFit = React.useMemo(
+    () =>
+      computePrerenderedPlacementFit({
+        slotKey,
+        tmName: a.tmName,
+        assigned: !!a.tmName,
+        tmEligibleForSlot,
+        timesInSpread,
+        inLast5: last5Sequence.includes(slotKey),
+        padHistoryLoading: !!a.tmId && padHistoryLoading,
+        rotationBasics,
+        rationale: prov.rationale as string | undefined,
+        fairnessSignals: prov.fairnessSignals as
+          | Record<string, number | string>
+          | undefined,
+        candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
+      }),
+    [
+      slotKey,
+      a.tmName,
+      a.tmId,
+      tmEligibleForSlot,
+      timesInSpread,
+      last5Sequence,
+      padHistoryLoading,
+      rotationBasics,
+      prov.rationale,
+      prov.fairnessSignals,
+      buildCandidateProfiles,
+    ],
+  );
 
-    const mode: PlacementInsightMode = a.tmName ? "auto" : "assignee";
-    if (mode === "assignee" && candidatePoolSize === 0) return;
-    if (mode === "auto" && (!a.tmName || !rotationDisplay)) return;
-
-    if (autoAnalystSigRef.current === insightContextSig && deepInsight) return;
-    autoAnalystSigRef.current = insightContextSig;
-
+  const handleMoreDetails = React.useCallback(() => {
+    setAnalystDetailsOpen(true);
+    const mode: PlacementInsightMode = a.tmName ? "deep" : "assignee";
     void runPlacementAnalyst(mode);
-  }, [a.tmName, insightContextSig, padHistoryLoading, runPlacementAnalyst, candidatePoolSize, rotationDisplay, deepInsight]);
-
-  useEffect(() => {
-    autoAnalystSigRef.current = null;
-  }, [slotKey]);
+  }, [a.tmName, runPlacementAnalyst]);
 
   useEffect(() => {
     if (!a.tmId) {
@@ -1224,14 +1280,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             </div>
 
             <PlacementAnalystBlock
+              prerendered={prerenderedFit}
               loading={deepInsightLoading}
+              detailsOpen={analystDetailsOpen}
               text={deepInsight}
               structured={insightStructured}
               cached={insightCached}
               assigned={!!a.tmName}
-              onRefresh={() =>
-                void runPlacementAnalyst(a.tmName ? "deep" : "assignee")
-              }
+              onMoreDetails={handleMoreDetails}
               onTrain={
                 deepInsight
                   ? () =>
@@ -1240,10 +1296,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       )
                   : undefined
               }
-              onClear={() => {
+              onClearDetails={() => {
+                setAnalystDetailsOpen(false);
                 setDeepInsight(null);
                 setInsightStructured(null);
-                autoAnalystSigRef.current = null;
+                setInsightCached(false);
               }}
             />
 
