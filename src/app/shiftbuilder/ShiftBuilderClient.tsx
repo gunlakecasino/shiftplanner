@@ -5161,15 +5161,16 @@ function AuthedShiftBuilder() {
 
     const storeAssignments = useShiftBuilderStore.getState().assignments || {};
     const a = storeAssignments[effectiveKey] || {};
-    const tmName = a.tmName || "the assigned TM";
+    const prov = a.provenance || {};
+    const tmName = a.tmName || extra.tmName || "the assigned TM";
 
     try {
       const { getEngineInsightForPlacement } = await import("@/app/shiftbuilder/actions");
       const insightContext = {
         slotKey: effectiveKey,
         tmName,
-        rationale: extra.rationale,
-        fairnessSignals: extra.fairnessSignals,
+        rationale: extra.rationale ?? prov.rationale,
+        fairnessSignals: extra.fairnessSignals ?? prov.fairnessSignals,
         recentPlacements: extra.recentPlacements,
         isRR: effectiveKey.startsWith('MRR') || effectiveKey.startsWith('WRR'),
         rrSide: extra.rrSide || (effectiveKey.startsWith('M') ? 'mens' : effectiveKey.startsWith('W') ? 'womens' : null),
@@ -5177,6 +5178,7 @@ function AuthedShiftBuilder() {
         priorGoodExamples: extra.priorGoodExamples,
         slotSpecificHistory: extra.slotSpecificHistory,
         currentContext: extra.currentContext,
+        suggestedCandidates: extra.suggestedCandidates,
       };
       const result = await getEngineInsightForPlacement(insightContext);
       const text = typeof result === 'string' ? result : result.text;

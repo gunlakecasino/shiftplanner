@@ -51,7 +51,7 @@ export interface PlacementPadProps {
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
-  onRequestEngineInsight?: (slotKey: string, sideKey?: string) => Promise<string>;
+  onRequestEngineInsight?: (slotKey: string, context?: string | Record<string, unknown>) => Promise<string>;
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
@@ -311,6 +311,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [padHistoryLoading, setPadHistoryLoading] = useState(false);
   const [padInsight, setPadInsight] = useState<string | null>(null);
   const [padInsightLoading, setPadInsightLoading] = useState(false);
+  const [padGoodExamples, setPadGoodExamples] = useState<
+    Array<{ slotKey: string; insightText: string }>
+  >([]);
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
@@ -329,6 +332,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setAssignConfirmed(false);
     setPadInsight(null);
     setPadInsightLoading(false);
+    setPadGoodExamples([]);
     setTaskInput("");
     setSweeperOpen(false);
   }, [slotKey]);
@@ -411,6 +415,49 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const last5Sequence = getLastPlacementSequence(padHistory, LAST5_COUNT, currentIso);
   const last5Pills: Array<string | null> = [...last5Sequence];
   while (last5Pills.length < LAST5_COUNT) last5Pills.push(null);
+
+  const tmMember = a.tmId
+    ? members.find(
+        (m: { id?: string; tmId?: string; tm_id?: string }) =>
+          m.id === a.tmId || m.tmId === a.tmId || m.tm_id === a.tmId,
+      )
+    : undefined;
+
+  const boardNeighborSummary = Object.entries(assignments)
+    .filter(([k, v]) => k !== slotKey && v?.tmName)
+    .slice(0, 16)
+    .map(([k, v]) => `${k}:${v.tmName}`)
+    .join(", ");
+
+  const timesInSpread = spreadKeys.filter((k) => k === slotKey).length;
+  const slotHistorySummary = a.tmId
+    ? timesInSpread > 0
+      ? `${timesInSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights; in last-5 trail: ${last5Sequence.includes(slotKey) ? "yes" : "no"}`
+      : `Not in last ${PLACEMENT_SPREAD_NIGHTS}-night spread`
+    : undefined;
+
+  const buildInsightContext = () => ({
+    rationale: prov.rationale as string | undefined,
+    fairnessSignals: prov.fairnessSignals as Record<string, number | string> | undefined,
+    recentPlacements: last5Sequence.filter(Boolean).join(" → ") || undefined,
+    slotSpecificHistory: slotHistorySummary,
+    currentContext: boardNeighborSummary || undefined,
+    tmAttributes: tmMember
+      ? {
+          gravePool: tmMember.gravePool ?? tmMember.grave_pool,
+          isAMOverlap: !!(tmMember.isAMOverlap ?? tmMember.is_am_overlap),
+          isPMOverlap: !!(tmMember.isPMOverlap ?? tmMember.is_pm_overlap),
+        }
+      : undefined,
+    priorGoodExamples: padGoodExamples.slice(-3),
+    suggestedCandidates: !a.tmName
+      ? [...scheduledUnassigned, ...(allEligibleTms || [])]
+          .slice(0, 8)
+          .map((t) => t.tmName)
+          .join(", ")
+      : undefined,
+    tmName: a.tmName,
+  });
 
   const padEl = (
     <div
@@ -504,7 +551,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         ) : (
           <div className="flex flex-col">
             {!a.tmName && (
-              <div className="px-3 pt-2 pb-1">
+              <div className="px-3 pt-2 pb-1 space-y-2">
                 <button
                   type="button"
                   disabled={isCurrentNightLocked}
@@ -514,6 +561,40 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 >
                   Assign team member
                 </button>
+                {onRequestEngineInsight && (
+                  <div className="rounded-lg border border-black/[0.05] bg-neutral-50/80 px-2.5 py-2">
+                    <SectionLabel>Who fits here</SectionLabel>
+                    <p className="mt-1 text-[9px] leading-snug text-neutral-500">
+                      Scheduled + eligible TMs only. Tap for xAI ranking.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={padInsightLoading}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setPadInsight(null);
+                        setPadInsightLoading(true);
+                        try {
+                          const insight = await onRequestEngineInsight(
+                            slotKey,
+                            buildInsightContext(),
+                          );
+                          setPadInsight(insight || "No suggestions.");
+                        } catch {
+                          setPadInsight("Suggestions unavailable.");
+                        } finally {
+                          setPadInsightLoading(false);
+                        }
+                      }}
+                      className="mt-1.5 rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
+                    >
+                      {padInsightLoading ? "Thinking…" : "xAI suggest assignee"}
+                    </button>
+                    {padInsight && (
+                      <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{padInsight}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -738,6 +819,21 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                           ? prov.rationale
                           : "Placed for rotation balance and coverage."}
                       </p>
+                      {prov.fairnessSignals &&
+                        typeof prov.fairnessSignals === "object" && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {Object.entries(prov.fairnessSignals)
+                              .slice(0, 6)
+                              .map(([k, v]) => (
+                                <span
+                                  key={k}
+                                  className="rounded-md border border-black/[0.06] bg-neutral-100/90 px-1.5 py-0.5 font-mono text-[8px] text-neutral-600"
+                                >
+                                  {k}: {String(v)}
+                                </span>
+                              ))}
+                          </div>
+                        )}
                       {onRequestEngineInsight && (
                         <div className="mt-2">
                           <button
@@ -747,7 +843,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               setPadInsight(null);
                               setPadInsightLoading(true);
                               try {
-                                const insight = await onRequestEngineInsight(slotKey);
+                                const insight = await onRequestEngineInsight(
+                                  slotKey,
+                                  buildInsightContext(),
+                                );
                                 setPadInsight(insight || "No additional insight.");
                               } catch {
                                 setPadInsight("Insight unavailable.");
@@ -758,12 +857,48 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
                             disabled={padInsightLoading}
                           >
-                            {padInsightLoading ? "Thinking…" : "Deeper insight"}
+                            {padInsightLoading ? "Thinking…" : "xAI deeper insight"}
                           </button>
                           {padInsight && (
-                            <p className="mt-1.5 rounded-lg border border-black/[0.06] bg-neutral-50/90 px-2 py-1.5 text-[9px] leading-snug text-neutral-600">
-                              {padInsight}
-                            </p>
+                            <>
+                              <p className="mt-1.5 rounded-lg border border-black/[0.06] bg-neutral-50/90 px-2 py-1.5 text-[9px] leading-snug text-neutral-600">
+                                {padInsight}
+                              </p>
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                                  Train
+                                </span>
+                                <button
+                                  type="button"
+                                  title="Good — use as example for next insights this session"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPadGoodExamples((prev) =>
+                                      [...prev, { slotKey, insightText: padInsight }].slice(-3),
+                                    );
+                                  }}
+                                  className="rounded-md border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px] hover:bg-neutral-50"
+                                >
+                                  👍
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Discard this insight"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPadInsight(null);
+                                  }}
+                                  className="rounded-md border border-black/[0.06] bg-white px-1.5 py-0.5 text-[10px] hover:bg-neutral-50"
+                                >
+                                  👎
+                                </button>
+                                {padGoodExamples.length > 0 && (
+                                  <span className="text-[8px] text-neutral-400">
+                                    +{padGoodExamples.length} rated
+                                  </span>
+                                )}
+                              </div>
+                            </>
                           )}
                         </div>
                       )}

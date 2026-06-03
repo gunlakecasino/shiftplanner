@@ -63,7 +63,7 @@ export interface ShiftBuilderBoardProps {
   onClearSlot?: (slotKey: string) => void;
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   /** Initial wiring for xAI-powered engine insights in the unilateral marker pad. Called with the active slot (or focusedSk for RR). Returns a rich natural-language explanation. */
-  onRequestEngineInsight?: (slotKey: string, sideKey?: string) => Promise<string>;
+  onRequestEngineInsight?: (slotKey: string, context?: string | Record<string, unknown>) => Promise<string>;
 
   // Live cache interface (passed through for optimistic)
   live?: any;
