@@ -114,6 +114,11 @@ import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
+import {
+  hydrateNightForPrint,
+  nextFrames as printNextFrames,
+  waitForPrintArtboardSettled,
+} from "./print/printHydrateNight";
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -1990,9 +1995,7 @@ function AuthedShiftBuilder() {
 
   // Sync into Zustand store (3.4) — fine-grained subscribers + reduced re-renders
   React.useEffect(() => {
-    if (Object.keys(effectiveAssignments).length > 0) {
-      useShiftBuilderStore.getState().setAssignments(effectiveAssignments);
-    }
+    useShiftBuilderStore.getState().setAssignments(effectiveAssignments);
   }, [effectiveAssignments]);
 
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
@@ -2954,22 +2957,35 @@ function AuthedShiftBuilder() {
   // Prints all 7 days in the active week: 14 pages (deployment + break sheet per day).
   // Cycles through each day, waits for Supabase data to load, captures both views,
   // then prints the full batch in one window.print() call.
+  const printHydrateApply = React.useMemo(
+    () => ({
+      setNightId,
+      setSelectedTasks,
+      setCardBorders,
+      setNightBreakRows,
+      setLoadingAssignments,
+      loadingAssignmentsRef,
+    }),
+    [],
+  );
+
+  const preparePrintDay = React.useCallback(
+    async (dayIdx: number) => {
+      const def = DAY_DEFS[dayIdx];
+      if (!def) return;
+      flushSync(() => setSelectedDayIndex(dayIdx));
+      await hydrateNightForPrint(def, currentNight.queryClient, printHydrateApply);
+      await printNextFrames(6);
+      await waitForPrintArtboardSettled();
+    },
+    [DAY_DEFS, currentNight.queryClient, printHydrateApply],
+  );
+
   const handlePrintWeek = React.useCallback(async () => {
     handleSlotClose();
     const originalDayIndex = selectedDayIndex;
     const originalView = currentView;
 
-    const nextFrames = (n: number) =>
-      new Promise<void>((resolve) => {
-        let count = 0;
-        const tick = () => { count++; if (count >= n) resolve(); else requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-      });
-
-    // Wait until night data is fully loaded for the current day.
-    // Fast path: if not loading right now, the data is already ready — resolve immediately.
-    // Slow path: a fetch is in flight — poll at 60ms intervals until loadingAssignmentsRef
-    //            goes false (fetch done) or we exceed the timeout.
     const waitForLoad = (timeoutMs = 15000) =>
       new Promise<void>((resolve, reject) => {
         if (!loadingAssignmentsRef.current) { resolve(); return; }
@@ -3010,24 +3026,21 @@ function AuthedShiftBuilder() {
 
     try {
       for (let dayIdx = 0; dayIdx < DAY_DEFS.length; dayIdx++) {
-        // Switch day and wait for Supabase data to settle.
-        flushSync(() => setSelectedDayIndex(dayIdx));
-        await waitForLoad();
-        await nextFrames(4); // Extra frames for React to fully commit all derived state
+        await preparePrintDay(dayIdx);
 
         const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
         if (!liveArtboard) continue;
 
         // ── Deployment capture ────────────────────────────────────────
         flushSync(() => setCurrentView("deployment"));
-        await nextFrames(2);
+        await printNextFrames(2);
         liveArtboard.style.visibility = "";
         const deploymentHTML = liveArtboard.outerHTML;
         liveArtboard.style.visibility = "hidden";
 
         // ── Breaks capture ────────────────────────────────────────────
         flushSync(() => setCurrentView("breaks"));
-        await nextFrames(2);
+        await printNextFrames(2);
 
         const prevH   = liveArtboard.style.height;
         const prevMH  = liveArtboard.style.minHeight;
@@ -3038,7 +3051,7 @@ function AuthedShiftBuilder() {
         liveArtboard.style.display       = "flex";
         liveArtboard.style.flexDirection = "column";
         liveArtboard.getBoundingClientRect();
-        await nextFrames(1);
+        await printNextFrames(1);
         liveArtboard.style.visibility = "";
         const breaksHTML = liveArtboard.outerHTML;
         // Restore inline overrides
@@ -3094,7 +3107,7 @@ function AuthedShiftBuilder() {
       await waitForLoad().catch(() => {});
       flushSync(() => setCurrentView(originalView));
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose]);
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, preparePrintDay]);
 
   // === Print Command Center — generalized multi-day, multi-config print handler ===
   //
@@ -3178,53 +3191,7 @@ function AuthedShiftBuilder() {
 
         setPrintProgress({ current: i, total: totalSteps, label: `Loading ${dayName}…` });
 
-        flushSync(() => setSelectedDayIndex(dayIdx));
-        await waitForLoad();
-        await nextFrames(4);
-
-        // Extra safety for break sheet data: explicitly re-fetch breaks for this exact night
-        // right before capture. This ensures the wave/group columns have the correct day's
-        // break selection even if the normal load effect's timing is racy during rapid day switching in print.
-        //
-        // CRITICAL: Everything here must be computed from *this specific dayIdx*, not from
-        // closed-over state captured when the user first opened the Command Center.
-        // Using stale day context for multi-day prints caused TMs like Robby (scheduled
-        // or placed on the original day but not on the target print day) to leak onto
-        // the wrong break sheet.
-        //
-        // We therefore compute the correct target nightId for *this iteration* and fetch
-        // breaks + scheduled + assignments explicitly for it. This matches the normal day-load
-        // filter logic (scheduled UNION placed) while being completely independent of React state
-        // timing and closure staleness.
-        if (dayConf.printBreaks) {
-          try {
-            const def = DAY_DEFS[dayIdx];
-            const { getNightIdForDate, getNightBreakAssignments, getNightAssignments } = await import("@/lib/shiftbuilder/data");
-            const targetNightId: string | null = def ? await getNightIdForDate(def.date) : null;
-            if (!targetNightId) {
-              console.warn("[print] could not resolve nightId for day", dayIdx, "— skipping break safety load");
-            } else {
-              const freshBreaks = await getNightBreakAssignments(targetNightId);
-              // Per operator rule: break sheet only includes TMs who are actually
-              // placed on the deployment this night. Scheduled-but-not-placed TMs
-              // (even with break_assignments rows) are excluded.
-              const nightAssignRows = await getNightAssignments(targetNightId);
-              const placed = new Set(
-                (nightAssignRows as any[]).map((r: any) => r.tmId).filter(Boolean)
-              );
-
-              setNightBreakRows(
-                (freshBreaks as any[])
-                  .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-                    (placed.size === 0 || placed.has(r.tmId)))
-                  .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
-              );
-              await nextFrames(2); // let React commit the new nightBreakRows before capture
-            }
-          } catch (e) {
-            console.warn("[print] extra break data load failed for day", dayIdx, e);
-          }
-        }
+        await preparePrintDay(dayIdx);
 
         const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
         if (!liveArtboard) continue;
@@ -3233,7 +3200,7 @@ function AuthedShiftBuilder() {
 
         if (dayConf.printDeploy) {
           flushSync(() => setCurrentView("deployment"));
-          await nextFrames(2);
+          await printNextFrames(2);
           liveArtboard.style.visibility = "";
           captured.deployHTML = liveArtboard.outerHTML;
           liveArtboard.style.visibility = "hidden";
@@ -3241,7 +3208,7 @@ function AuthedShiftBuilder() {
 
         if (dayConf.printBreaks) {
           flushSync(() => setCurrentView("breaks"));
-          await nextFrames(2);
+          await printNextFrames(2);
           const prevH = liveArtboard.style.height;
           const prevMH = liveArtboard.style.minHeight;
           const prevD = liveArtboard.style.display;
@@ -3251,7 +3218,7 @@ function AuthedShiftBuilder() {
           liveArtboard.style.display = "flex";
           liveArtboard.style.flexDirection = "column";
           liveArtboard.getBoundingClientRect();
-          await nextFrames(1);
+          await printNextFrames(1);
           liveArtboard.style.visibility = "";
           captured.breaksHTML = liveArtboard.outerHTML;
           liveArtboard.style.height = prevH || "";
@@ -3439,7 +3406,7 @@ function AuthedShiftBuilder() {
       setPrintProgress(null);
       setIsPrintCenterOpen(false);
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose]);
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, preparePrintDay]);
 
   // === Master Command Palette (Phase 2 core) ===
   // Stable callbacks for useCommandActions — keeping these out of the call-site

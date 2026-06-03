@@ -9,11 +9,8 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 // Scheduled roster now loaded via API route to keep admin client creation on the server
 // (prevents Multiple GoTrueClient warnings and auth issues in the browser).
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
-import {
-  buildSlotDefaultBreakMap,
-  enrichAssignmentsWithBreakGroups,
-  slotDefaultBreakMapToRecord,
-} from "@/lib/shiftbuilder/breakGroupResolve";
+import { fetchNightCoreData } from "./fetchNightCoreData";
+import { fetchNightSecondaryData } from "./fetchNightSecondaryData";
 
 // Server-cached roster (huge win for day switch speed)
 import {
@@ -38,136 +35,7 @@ export function useCurrentNight(selectedDay: DayDef) {
   // This is the critical path for fast day switching. We want this as fast as possible.
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
-    queryFn: async () => {
-      const {
-        getNightIdForDate,
-        getTeamMembersForNight,
-        getNightAssignments,
-        getGraveAvailableTeamMembers,
-        getOnScheduleTmIdsForNight,
-        getActiveTeamMembers,
-        getSlotDefaults,
-      } = await import("@/lib/shiftbuilder/data");
-
-      const id = await getNightIdForDate(selectedDay.date);
-
-      const [
-        members,
-        dbAssignments,
-        graveMembers,
-        weekOnScheduleSet,
-        slotDefaults,
-      ] = await Promise.all([
-        // Use server-cached roster — this is the big remaining win for day switches
-        id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
-        id ? getNightAssignments(id) : Promise.resolve([]),
-        getGraveAvailableTeamMembers(),
-        id ? getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
-        getSlotDefaults(),
-      ]);
-
-      const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults);
-      const assignments = enrichAssignmentsWithBreakGroups(
-        dbAssignments as any[],
-        defaultBreakMap,
-      );
-
-      // Enrich grave roster with week + overlap flags (authoritative source moved here for unification)
-      const graveRoster = graveMembers.map((m: any) => ({
-        ...m,
-        isOnWeek: weekOnScheduleSet.has(m.id),
-        isPMOverlap: m.gravePool === 'PM',
-        isAMOverlap: m.gravePool === 'AM',
-      }));
-
-      // === CANONICAL SCHEDULED DATA — graves_default_schedule + night_on_call ===
-      let canonicalScheduled = {
-        allScheduled: [] as any[],
-        fullGraveScheduled: [] as any[],
-        pmOverlapScheduled: [] as any[],
-        amOverlapScheduled: [] as any[],
-        scheduledWithRoles: [] as any[],
-      };
-
-      try {
-        const dateStr = formatLocalDateISO(selectedDay.date);
-        const rosterUrl = id
-          ? `/api/shiftbuilder/scheduled-roster?date=${dateStr}&night_id=${id}`
-          : `/api/shiftbuilder/scheduled-roster?date=${dateStr}`;
-        const res = await fetch(rosterUrl);
-        
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          console.error("[useCurrentNight] scheduled-roster API failed", {
-            status: res.status,
-            error: errorData,
-          });
-          throw new Error(`Scheduled roster API returned ${res.status}`);
-        }
-        
-        const data = await res.json();
-        canonicalScheduled = {
-          allScheduled: data.allScheduled || [],
-          fullGraveScheduled: data.fullGraveScheduled || [],
-          pmOverlapScheduled: data.pmOverlapScheduled || [],
-          amOverlapScheduled: data.amOverlapScheduled || [],
-          scheduledWithRoles: data.scheduledWithRoles || [],
-        };
-        
-        if (!canonicalScheduled.allScheduled.length) {
-          console.warn("[useCurrentNight] API returned empty scheduled roster — this usually means the service role key is missing or the weekly roster hasn't been applied yet");
-        }
-      } catch (e) {
-        console.error("[useCurrentNight] failed to load canonical scheduled data via API", e);
-        // Optional: surface to user in a future toast
-      }
-
-      const scheduledId = (t: any) => t.tmId || t.tm_id || t.id;
-      const fullGraveScheduledTonight = new Set(canonicalScheduled.fullGraveScheduled.map(scheduledId));
-      const pmOverlapScheduledTonight = new Set(canonicalScheduled.pmOverlapScheduled.map(scheduledId));
-      const amOverlapScheduledTonight = new Set(canonicalScheduled.amOverlapScheduled.map(scheduledId));
-
-      // Enrich the main realRoster using the canonical partitioned sets
-      const enrichedRealRoster = (members || []).map((m: any) => ({
-        ...m,
-        isPMOverlapTonight: pmOverlapScheduledTonight.has(m.id),
-        isAMOverlapTonight: amOverlapScheduledTonight.has(m.id),
-        isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
-      }));
-
-      const enrichedGraveRoster = graveRoster.map((m: any) => ({
-        ...m,
-        isPMOverlapTonight: pmOverlapScheduledTonight.has(m.id),
-        isAMOverlapTonight: amOverlapScheduledTonight.has(m.id),
-        isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
-      }));
-
-      // Legacy shape kept for broad compatibility during migration
-      const scheduledTmIdsTonight: Set<string> = new Set(
-        canonicalScheduled.allScheduled.map(scheduledId)
-      );
-
-      return {
-        nightId: id,
-        assignments,
-        members,
-        scheduledTmIdsTonight,
-        realRoster: enrichedRealRoster,
-        graveRoster: enrichedGraveRoster,
-        // Partitioned scheduled sets from the Weekly Roster classification (Grave group + overlap groups).
-        // These are the authoritative "who is scheduled in this specific roster role tonight".
-        // Used by the MarkerPad picker to ensure a pure grave card only offers full-grave scheduled TMs,
-        // and overlap cards only offer the corresponding overlap TMs.
-        fullGraveScheduledTonight,
-        pmOverlapScheduledTonight,
-        amOverlapScheduledTonight,
-        // All scheduled data now comes exclusively from the canonical getScheduledTmsForNight
-        // (src/lib/shiftbuilder/schedules.ts) — the single source of truth.
-        rawDbAssignments: dbAssignments,
-        rawBreakRows: [], // will be populated from secondary when available
-        slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
-      };
-    },
+    queryFn: () => fetchNightCoreData(selectedDay),
     staleTime: 1000 * 30,
     placeholderData: keepPreviousData,
   });
@@ -176,42 +44,7 @@ export function useCurrentNight(selectedDay: DayDef) {
   // These no longer block day switching. They load in background.
   const secondaryQuery = useQuery({
     queryKey: ["nightSecondary", dateKey],
-    queryFn: async () => {
-      const {
-        getNightIdForDate,
-        getNightNotes,
-        getNightSlotTasks,
-        getNightBreakAssignments,
-        getNightCardBorders,
-        getRecentZoneHistory,
-      } = await import("@/lib/shiftbuilder/data");
-
-      const id = await getNightIdForDate(selectedDay.date);
-
-      const [
-        notesText,
-        nightTaskRows,
-        breakRows,
-        nightBorderMap,
-        recentHistory,
-      ] = await Promise.all([
-        id ? getNightNotes(id) : Promise.resolve(""),
-        id ? getNightSlotTasks(id) : Promise.resolve([]),
-        id ? getNightBreakAssignments(id) : Promise.resolve([]),
-        id ? getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
-        getRecentZoneHistory(selectedDay.date, 7),
-      ]);
-
-      return {
-        notes: notesText,
-        tasks: nightTaskRows,
-        breakAssignments: breakRows,
-        cardBorders: nightBorderMap,
-        recentZoneHistory: recentHistory,
-        calledOffIds: new Set<string>(), // TODO: wire real one
-        rawBreakRows: breakRows,
-      };
-    },
+    queryFn: () => fetchNightSecondaryData(selectedDay),
     staleTime: 1000 * 60 * 5,
     // We don't use placeholder here — we want this to feel optional
   });
