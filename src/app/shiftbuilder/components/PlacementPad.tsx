@@ -345,7 +345,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     Array<{ slotKey: string; insightText: string }>
   >([]);
   const [rotationBasics, setRotationBasics] = useState<PlacementRotationBasics | null>(null);
-  const [rotationLoading, setRotationLoading] = useState(false);
+  const rotationSigRef = useRef<string | null>(null);
 
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
@@ -368,7 +368,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setDeepInsightLoading(false);
     setPadGoodExamples([]);
     setRotationBasics(null);
-    setRotationLoading(false);
+    rotationSigRef.current = null;
     setTaskInput("");
     setSweeperOpen(false);
   }, [slotKey]);
@@ -495,35 +495,66 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     tmName: a.tmName,
   });
 
-  const matrixSlotKeys = React.useMemo(
-    () => [
-      ...ZONE_DEFS.map((z) => z.key),
-      ...rrLocs.map((l) => l.ui),
-      ...auxLocs.map((l) => l.ui),
-    ],
-    [rrLocs, auxLocs],
+  const auxKeysSig = React.useMemo(
+    () => auxDefs.filter((d) => !d.key.startsWith("SP")).map((d) => d.key).join(","),
+    [auxDefs],
+  );
+
+  const matrixSlotKeys = React.useMemo(() => {
+    const keys = ZONE_DEFS.map((z) => z.key);
+    const tmId = a.tmId;
+    const rawGender =
+      members?.find((m: { id?: string; tmId?: string; tm_id?: string }) =>
+        m.id === tmId || m.tmId === tmId || m.tm_id === tmId,
+      )?.gender ?? null;
+    const g = normalizeGender(rawGender);
+    for (const d of RR_DEFS) {
+      if (!g || g === "M") keys.push(`MRR${d.num}`);
+      if (!g || g === "F") keys.push(`WRR${d.num}`);
+    }
+    for (const key of auxKeysSig.split(",").filter(Boolean)) keys.push(key);
+    return keys;
+  }, [a.tmId, auxKeysSig, members]);
+
+  /** Stable fingerprint so board changes do not retrigger rotation in a loop */
+  const boardSig = React.useMemo(
+    () =>
+      Object.entries(assignments)
+        .filter(([, row]) => row?.tmId)
+        .map(([k, row]) => `${k}:${row!.tmId}`)
+        .sort()
+        .join("|"),
+    [assignments],
   );
 
   useEffect(() => {
-    if (!a.tmId || padHistoryLoading) {
-      if (!a.tmId) setRotationBasics(null);
+    if (!a.tmId) {
+      setRotationBasics(null);
+      setRotationDisplay(null);
+      rotationSigRef.current = null;
       return;
     }
+    if (padHistoryLoading || !padHistory) return;
 
-    const otherIds = [
-      ...new Set(
-        Object.values(assignments)
-          .map((row: { tmId?: string }) => row?.tmId)
-          .filter((id): id is string => !!id && id !== a.tmId),
-      ),
-    ];
+    const historySig = padHistory
+      ? `${padHistory.tmId}:${padHistory.lastDate}:${padHistory.totalAssignments}`
+      : "";
+    const sig = `${slotKey}|${a.tmId}|${currentIso}|${boardSig}|${auxKeysSig}|${historySig}`;
+    if (rotationSigRef.current === sig) return;
 
     let cancelled = false;
 
     const run = async () => {
-      setRotationLoading(true);
+      const otherIds = [
+        ...new Set(
+          Object.values(assignments)
+            .map((row: { tmId?: string }) => row?.tmId)
+            .filter((id): id is string => !!id && id !== a.tmId),
+        ),
+      ];
+
+      let histories: Record<string, ZoneDetailEntry | null> = {};
       try {
-        let histories: Record<string, ZoneDetailEntry | null> = {};
         if (otherIds.length > 0) {
           const res = await fetch("/api/shiftbuilder/placement-histories", {
             method: "POST",
@@ -535,25 +566,27 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             histories = data.histories ?? {};
           }
         }
-        if (cancelled) return;
+      } catch {
+        /* rotation still works without cross-board histories */
+      }
 
-        const basics = computePlacementRotationBasics(
-          padHistory,
-          slotKey,
-          a.tmId,
-          matrixSlotKeys,
-          assignments,
-          histories,
-          currentIso,
+      if (cancelled) return;
+
+      const basics = computePlacementRotationBasics(
+        padHistory,
+        slotKey,
+        a.tmId,
+        matrixSlotKeys,
+        assignments,
+        histories,
+        currentIso,
+      );
+      rotationSigRef.current = sig;
+      setRotationBasics(basics);
+      if (a.tmName) {
+        setRotationDisplay(
+          formatPlacementRotationDisplay(a.tmName, slotKey, basics, PLACEMENT_SPREAD_NIGHTS),
         );
-        setRotationBasics(basics);
-        if (a.tmName) {
-          setRotationDisplay(
-            formatPlacementRotationDisplay(a.tmName, slotKey, basics, PLACEMENT_SPREAD_NIGHTS),
-          );
-        }
-      } finally {
-        if (!cancelled) setRotationLoading(false);
       }
     };
 
@@ -561,18 +594,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [
-    a.tmId,
-    a.tmName,
-    padHistory,
-    padHistoryLoading,
-    assignments,
-    slotKey,
-    matrixSlotKeys,
-    currentIso,
-    boardNeighborSummary,
-    slotHistorySummary,
-  ]);
+  }, [a.tmId, a.tmName, padHistory, padHistoryLoading, slotKey, currentIso, boardSig, auxKeysSig, matrixSlotKeys]);
 
   const cellGap = (ui: string) => rotationBasics?.highlightGapKeys.has(ui) ?? false;
   const cellCross = (ui: string) => rotationBasics?.highlightCrossKeys.has(ui) ?? false;
@@ -831,14 +853,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
             {a.tmName && (
               <div className="border-t border-black/[0.05] px-3 py-2.5">
-                {padHistoryLoading ? (
+                {padHistoryLoading && !rotationDisplay ? (
                   <p className="text-[10px] text-neutral-400">Loading placement history…</p>
                 ) : (
                   <>
                     <SectionLabel>Rotation · 30 nights</SectionLabel>
-                    {rotationLoading ? (
-                      <p className="mt-1 text-[10px] text-neutral-400">Loading histories…</p>
-                    ) : rotationDisplay ? (
+                    {rotationDisplay ? (
                       <div className="mt-1 space-y-1 text-[10px] leading-snug text-neutral-700">
                         {rotationDisplay.gapsLine && (
                           <p>{rotationDisplay.gapsLine}</p>
