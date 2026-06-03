@@ -27,6 +27,11 @@ export type PlacementFitScoreInput = {
   candidateProfiles?: PlacementCandidateProfile[];
   /** tmIds in priority order (e.g. scheduled unassigned first). */
   preferredCandidateIds?: string[];
+  /**
+   * Gap slots that count toward "better rotation elsewhere" (after occupant checks).
+   * When omitted, derived from rotationBasics via rotationGapSlots().
+   */
+  actionableGapSlots?: string[];
 };
 
 function signalNumber(
@@ -42,7 +47,7 @@ function signalNumber(
   return null;
 }
 
-function rotationGapSlots(
+export function rotationGapSlots(
   basics: PlacementRotationBasics | null | undefined,
   currentSlotKey: string,
 ): string[] {
@@ -74,8 +79,13 @@ function formatGapList(gaps: string[], max = 3): string {
   return labels.join(", ");
 }
 
+/** Light spread load — matches strong_fit spread criteria (eligibility handled separately). */
+export function isStrongFitSpread(times: number, inLast5: boolean): boolean {
+  return times <= 1 && !inLast5;
+}
+
 /** True when rotation gaps or swap lanes imply a clearly better placement than staying put. */
-function findBetterSuited(
+export function findBetterSuited(
   gaps: string[],
   times: number,
   count8w: number | null,
@@ -105,7 +115,9 @@ function buildFactLine(parts: Array<string | null | undefined>): string {
 /** Instant fit verdict on pad open — no xAI. */
 export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPlacementFit {
   const slotLabel = formatPlacementUiLabel(input.slotKey);
-  const gaps = rotationGapSlots(input.rotationBasics, input.slotKey);
+  const gaps =
+    input.actionableGapSlots ??
+    rotationGapSlots(input.rotationBasics, input.slotKey);
 
   if (!input.assigned) {
     const eligible = (input.candidateProfiles ?? []).filter((c) => c.eligible);

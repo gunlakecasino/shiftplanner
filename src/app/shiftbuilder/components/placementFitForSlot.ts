@@ -11,12 +11,112 @@ import {
   type PlacementTmProfile,
 } from "./placementPadHelpers";
 import {
+  findBetterSuited,
+  isStrongFitSpread,
+  rotationGapSlots,
   scorePlacementFit,
   type PlacementFitScoreInput,
   type PrerenderedPlacementFit,
 } from "./placementFitScore";
 
 const LAST5_COUNT = 5;
+
+function signalNumberFromRow(
+  signals: Record<string, number | string> | undefined,
+  needle: string,
+): number | null {
+  if (!signals) return null;
+  for (const [k, v] of Object.entries(signals)) {
+    if (!k.toLowerCase().includes(needle)) continue;
+    const n = typeof v === "number" ? v : parseFloat(String(v));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Drop gap slots where the current occupant is a strong fit or has no rotation
+ * pressure elsewhere — don't suggest "better on Z5" when Z5's TM is already well placed.
+ */
+function filterActionableRotationGaps(args: {
+  gaps: string[];
+  currentSlotKey: string;
+  currentTmId: string | undefined;
+  assignments: Record<string, SlotAssignmentRow>;
+  histories: Record<string, ZoneDetailEntry | null>;
+  members: Array<Record<string, unknown>>;
+  auxDefs: AuxDef[];
+  currentIso: string;
+  otherTmProfiles: Record<string, PlacementTmProfile | null>;
+}): string[] {
+  const {
+    gaps,
+    currentSlotKey,
+    currentTmId,
+    assignments,
+    histories,
+    members,
+    auxDefs,
+    currentIso,
+    otherTmProfiles,
+  } = args;
+
+  return gaps.filter((gapSlotKey) => {
+    const occupantRow = assignments[gapSlotKey];
+    const occupantId = occupantRow?.tmId;
+    if (!occupantId || occupantId === currentTmId) return true;
+
+    const occupantHistory = histories[occupantId] ?? null;
+    const occupantSpread = getSpreadPlacementCounts(
+      occupantHistory,
+      PLACEMENT_SPREAD_NIGHTS,
+      currentIso,
+    );
+    const occupantTimes = occupantSpread.get(gapSlotKey) ?? 0;
+    const occupantLast5 = getLastPlacementSequence(
+      occupantHistory,
+      LAST5_COUNT,
+      currentIso,
+    );
+    const occupantInLast5 = occupantLast5.includes(gapSlotKey);
+
+    if (isStrongFitSpread(occupantTimes, occupantInLast5)) {
+      return false;
+    }
+
+    const occupant8w =
+      signalNumberFromRow(occupantRow?.provenance?.fairnessSignals, "count_8w") ??
+      signalNumberFromRow(occupantRow?.provenance?.fairnessSignals, "8w");
+
+    const occupantMatrix = buildMatrixSlotKeysForTm(occupantId, members, auxDefs);
+    const occupantTm = otherTmProfiles[occupantId] ?? null;
+    const occupantBasics = computePlacementRotationBasics(
+      occupantHistory,
+      gapSlotKey,
+      occupantId,
+      occupantMatrix,
+      assignments,
+      histories,
+      currentIso,
+      PLACEMENT_SPREAD_NIGHTS,
+      occupantTm,
+      otherTmProfiles,
+    );
+    const occupantGaps = rotationGapSlots(occupantBasics, gapSlotKey);
+    const occupantPressure = findBetterSuited(
+      occupantGaps,
+      occupantTimes,
+      occupant8w,
+      occupantInLast5,
+    );
+
+    if (!occupantPressure.better) {
+      return false;
+    }
+
+    return true;
+  });
+}
 
 export type SlotAssignmentRow = {
   tmId?: string;
@@ -159,6 +259,19 @@ export function computeSlotPlacementFit(
         )
       : null;
 
+  const allGaps = rotationGapSlots(rotationBasics, slotKey);
+  const actionableGapSlots = filterActionableRotationGaps({
+    gaps: allGaps,
+    currentSlotKey: slotKey,
+    currentTmId: tmId,
+    assignments,
+    histories,
+    members,
+    auxDefs,
+    currentIso,
+    otherTmProfiles,
+  });
+
   const input: PlacementFitScoreInput = {
     slotKey,
     tmName: row?.tmName,
@@ -168,6 +281,7 @@ export function computeSlotPlacementFit(
     inLast5: last5.includes(slotKey),
     padHistoryLoading: historiesLoading && !!tmId && !history,
     rotationBasics,
+    actionableGapSlots,
     rationale: row?.provenance?.rationale,
     fairnessSignals: row?.provenance?.fairnessSignals,
   };

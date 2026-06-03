@@ -151,7 +151,7 @@ ${kindFocus}
 
 OUTPUT: Structured JSON only (schema enforced). REQUIRED: fitSummary (one plain sentence) and fitVerdict (strong_fit | acceptable | questionable | poor_fit | needs_swap).
 
-INSTANT PRERENDER: When PRERENDER block is present, treat it as the default verdict. You MAY change fitVerdict/fitSummary only if deterministic facts clearly support a different judgment — then set verdictOverrideReason (one short sentence). Questionable only when a better-suited placement or bilateral swap exists; repeat exposure (2×+ in 30, or in last-5 trail) alone is acceptable if no better gap — use strong_fit for 0–1× spread and not in last-5. Unassigned slots: fitSummary must name one best pick; swapRecommendations MUST be [].
+INSTANT PRERENDER: When PRERENDER block is present, treat it as the default verdict. You MAY change fitVerdict/fitSummary only if deterministic facts clearly support a different judgment — then set verdictOverrideReason (one short sentence). Questionable only when a better-suited placement or bilateral swap exists; do NOT suggest moving someone to a slot where the current occupant is a strong fit or has no rotation pressure elsewhere. Repeat exposure (2×+ in 30, or in last-5 trail) alone is acceptable if no better gap — use strong_fit for 0–1× spread and not in last-5. Unassigned slots: fitSummary must name one best pick; swapRecommendations MUST be [].
 
 REFERENCE CONTRACT (do not paste back verbatim):
 ${orderText}
