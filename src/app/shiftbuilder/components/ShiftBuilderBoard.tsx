@@ -987,14 +987,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="space-y-2">
                 {[
                   {
-                    time: "11p – 1a (swing)",
+                    time: "11p – 1a (swings)",
                     key: "PM" as const,
                     dayName: selectedDay.name,
                     dateNum: selectedDay.dateNum,
                     headerColor: selectedDay.color,
                   },
                   {
-                    time: "5a – 7a (day shift)",
+                    time: "5a – 7a (days)",
                     key: "AM" as const,
                     dayName: amOverlapDayName,
                     dateNum: amOverlapDateNum,
@@ -1074,7 +1074,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           <span className="text-[#C8C8CC] mx-1">·</span>
           <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
         </div>
-        <div className="text-[#9CA3AF] text-center">v0.7</div>
+        <div className="text-[#9CA3AF] text-center">v0.81</div>
         <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
       </div>
 
