@@ -5976,11 +5976,11 @@ function AuthedShiftBuilder() {
       {/* <DragOverlay dropAnimation={null}> */}
         {activeDrag ? (
           activeDrag.kind === "task" ? (
-            /* Task drag ghost — compact Velvet pill with drag_indicator */
+            /* Task drag ghost — label only */
             <div
-              className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
+              className="flex items-center rounded-lg pointer-events-none whitespace-nowrap"
               style={{
-                padding: "5px 10px 5px 7px",
+                padding: "5px 12px",
                 background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
                 color: isDark ? "#E5E5E7" : "#1C1C1E",
                 border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
@@ -5991,7 +5991,6 @@ function AuthedShiftBuilder() {
                 fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
               }}
             >
-              <span className="ms" style={{ fontSize: 16, color: "#9CA3AF", fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
               <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
               {activeDrag.fromSlot && (
                 <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>

@@ -29,7 +29,7 @@ export interface TaskRowProps {
   // Slight visual tweaks per context (Zone vs tight RR/Overlap)
   textSize?: string;
   textColorClass?: string;
-  /** When true (default), render a drag grip and make the row draggable for cross-card reassign.
+  /** When true (default), the task label is draggable for cross-card reassign.
    *  Can be overridden via localStorage key shiftbuilder:taskUxPrefs { dragEnabled: false }. */
   draggable?: boolean;
 }
@@ -65,8 +65,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   // Touch devices have no hover — a tap on the row pins/unpins the toolbar.
   const [toolbarPinned, setToolbarPinned] = React.useState(false);
 
-  // dnd-kit support for dragging this task to a different card (when the
-  // Sudo > Tasks tab has the feature enabled).
+  // dnd-kit: drag from the task label (not a separate grip).
   const {
     attributes: taskDragAttributes,
     listeners: taskDragListeners,
@@ -80,8 +79,10 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       catalogTaskId: task.catalogTaskId ?? null,
       color: task.color ?? null,
     },
-    disabled: !effectiveDraggable,
+    disabled: !effectiveDraggable || isEditing,
   });
+
+  const canDrag = effectiveDraggable && !isEditing;
 
   const startEditing = () => {
     setIsEditing(true);
@@ -105,37 +106,30 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     <div
       className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
       onPointerUp={(e) => {
-        // Touch tap on a task row: pin/unpin the toolbar instead of opening
-        // the card palette. stopPropagation prevents the card onClick from firing.
-        if (e.pointerType === 'touch') {
+        // Touch tap outside the label: pin/unpin toolbar (label uses drag delay).
+        if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-task-label]')) {
           e.stopPropagation();
           setToolbarPinned((p) => !p);
         }
       }}
     >
-      {effectiveDraggable && (
-        <div
-          ref={setTaskDragRef}
-          {...taskDragListeners}
-          {...taskDragAttributes}
-          // Stop the pointer event from bubbling to the card wrapper.
-          // Without this the card's own useDraggable listeners also fire,
-          // causing two simultaneous dnd-kit drags that conflict with each other.
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            (taskDragListeners as any)?.onPointerDown?.(e);
-          }}
-          className="mt-px mr-0.5 cursor-grab text-[#9CA3AF] opacity-40 group-hover/task:opacity-90 active:cursor-grabbing select-none touch-none flex items-center"
-          title="Drag to reassign"
-        >
-          <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
-        </div>
-      )}
-      {/* Label area — supports inline editing + hanging indent for wrapping.
-          When a highlight color is set, we apply a left border + subtle background
-          tint directly to the text block so the highlight extends the full length
-          of the task label (including wrapped lines). No separate sphere. */}
-      <div className="min-w-0 flex-1 leading-snug">
+      {/* Label — draggable surface for cross-card task moves */}
+      <div
+        ref={setTaskDragRef}
+        data-task-label
+        className={`min-w-0 flex-1 leading-snug ${canDrag ? 'cursor-grab active:cursor-grabbing touch-none select-none' : ''}`}
+        title={canDrag ? 'Drag to reassign' : undefined}
+        {...(canDrag ? taskDragListeners : {})}
+        {...(canDrag ? taskDragAttributes : {})}
+        onPointerDown={
+          canDrag
+            ? (e) => {
+                e.stopPropagation();
+                (taskDragListeners as { onPointerDown?: (ev: React.PointerEvent) => void })?.onPointerDown?.(e);
+              }
+            : undefined
+        }
+      >
         {isEditing ? (
           <input
             type="text"
@@ -151,7 +145,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           />
         ) : (
           <span
-            className={`block rounded-sm transition-colors ${hasColor ? '' : 'pl-[13px] -indent-[13px]'}`}
+            className="block rounded-sm transition-colors"
             style={hasColor ? {
               backgroundColor: `${task.color}15`,
               borderLeft: `3px solid ${task.color}`,
