@@ -131,6 +131,9 @@ import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/Shi
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar } from "./components/OpsStatusBar";
+import { RotationHealthFloater } from "./components/RotationHealthFloater";
+import { usePlacementFitMap } from "./hooks/usePlacementFitMap";
+import { nightIsoFromDate } from "./components/placementPadHelpers";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 // LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
 // their (and their transitive deps like useCommandActions) out of the initial static
@@ -139,7 +142,8 @@ import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 import { 
   useShiftBuilderStore, 
   useAssignments, 
-  useDraftAssignments 
+  useDraftAssignments,
+  useAuxDefs,
 } from "./store/useShiftBuilderStore";
 import { createRoot, Root } from "react-dom/client";
 
@@ -3855,6 +3859,24 @@ function AuthedShiftBuilder() {
       .filter(Boolean) as { tmId: string; tmName: string }[];
   }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds]);
 
+  const storeAssignmentsForFit = useAssignments() ?? {};
+  const auxDefsForFit = useAuxDefs() ?? [];
+
+  const deploymentRotationFitEnabled =
+    viewMode === "canvas" && currentView === "deployment";
+
+  const { fitBySlot: deploymentFitBySlot } = usePlacementFitMap({
+    enabled: deploymentRotationFitEnabled,
+    assignments: storeAssignmentsForFit,
+    isDraftMode,
+    draftAssignments,
+    members: effectiveRealRoster as Array<Record<string, unknown>>,
+    auxDefs: auxDefsForFit,
+    currentIso: nightIsoFromDate(selectedDay.date),
+    scheduledUnassigned: markerScheduledUnassigned,
+    allEligibleTms: markerAllEligibleTms,
+  });
+
   // getEligibleForCurrentSlot: used for the *default* list only (grave / PM / AM bands).
   const roleSetHasTm = React.useCallback(
     (roleSet: Set<string>, entryTmId: string) => {
@@ -5570,7 +5592,11 @@ function AuthedShiftBuilder() {
           */}
           <div
             className="relative flex-shrink-0"
-            style={{ width: NATURAL_WIDTH * scale, height: NATURAL_HEIGHT * scale }}
+            style={{
+              width: NATURAL_WIDTH * scale,
+              height: NATURAL_HEIGHT * scale,
+              overflow: "visible",
+            }}
           >
             {/* The actual scaled artboard (original print-stage-inner) */}
             <div
@@ -5634,6 +5660,7 @@ function AuthedShiftBuilder() {
               onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
               nextDayColor={nextDayColor}
               members={effectiveRealRoster}
+              fitBySlot={deploymentFitBySlot}
             />
             {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
                 has been carved out. This is the primary re-render boundary win for iPad day switches.
@@ -5641,6 +5668,18 @@ function AuthedShiftBuilder() {
 
             {/* Quick Action Fan removed... */}
           </div> {/* /print-stage-inner (the scaled content) */}
+
+          {deploymentRotationFitEnabled && (
+            <RotationHealthFloater
+              visible
+              placement="below-page"
+              auxDefs={auxDefsForFit}
+              assignments={storeAssignmentsForFit}
+              fitBySlot={deploymentFitBySlot}
+              isDraftMode={isDraftMode}
+              draftAssignments={draftAssignments}
+            />
+          )}
 
           {/* Unscaled artboard overlay — centered inside the visual (scaled-size) frame.
               This + the relative wrapper above restore proper containment while giving

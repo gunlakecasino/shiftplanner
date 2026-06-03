@@ -11,6 +11,8 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
 
+export type RotationHealthPlacement = "below-page" | "page-corner";
+
 export type RotationHealthFloaterProps = {
   visible: boolean;
   auxDefs: AuxDef[];
@@ -18,6 +20,8 @@ export type RotationHealthFloaterProps = {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   isDraftMode?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
+  /** below-page: under the artboard, right-aligned; page-corner: bottom-right on the sheet */
+  placement?: RotationHealthPlacement;
 };
 
 function breakdownTitle(health: ShiftRotationHealth): string {
@@ -42,6 +46,7 @@ export function RotationHealthFloater({
   fitBySlot,
   isDraftMode,
   draftAssignments,
+  placement = "below-page",
 }: RotationHealthFloaterProps) {
   const health = React.useMemo(
     () =>
@@ -58,14 +63,27 @@ export function RotationHealthFloater({
   const display =
     health.percent !== null ? `${health.percent}%` : "—%";
 
+  const anchorStyle: React.CSSProperties =
+    placement === "page-corner"
+      ? {
+          position: "absolute",
+          bottom: 10,
+          right: 10,
+          zIndex: 30,
+        }
+      : {
+          position: "absolute",
+          top: "100%",
+          right: 0,
+          marginTop: 8,
+          zIndex: 30,
+        };
+
   return (
     <div
       className="no-print"
       style={{
-        position: "fixed",
-        bottom: 36,
-        right: 10,
-        zIndex: 2147483646,
+        ...anchorStyle,
         pointerEvents: "auto",
       }}
       title={breakdownTitle(health)}

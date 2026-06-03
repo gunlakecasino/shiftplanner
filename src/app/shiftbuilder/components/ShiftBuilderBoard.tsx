@@ -20,7 +20,7 @@ import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
-import { RotationHealthFloater } from "./RotationHealthFloater";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -88,6 +88,8 @@ export interface ShiftBuilderBoardProps {
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
+  /** When set by ShiftBuilderClient, avoids duplicate history fetch + powers rotation health floater. */
+  fitBySlot?: Record<string, PrerenderedPlacementFit>;
 }
 
 /**
@@ -153,6 +155,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onAssignSweeper,
   onAddTask,
   members = [],
+  fitBySlot: fitBySlotProp,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -213,8 +216,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const currentIso = nightIsoFromDate(selectedDay.date);
 
-  const { fitBySlot, historiesLoading: fitHistoriesLoading } = usePlacementFitMap({
-    enabled: currentView === "deployment",
+  const internalFitMap = usePlacementFitMap({
+    enabled: !fitBySlotProp && currentView === "deployment",
     assignments: displayAssignments,
     isDraftMode,
     draftAssignments,
@@ -224,6 +227,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     scheduledUnassigned,
     allEligibleTms,
   });
+  const fitBySlot = fitBySlotProp ?? internalFitMap.fitBySlot;
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -1058,14 +1062,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
       </div>
 
-      <RotationHealthFloater
-        visible={currentView === "deployment"}
-        auxDefs={auxDefs}
-        assignments={displayAssignments}
-        fitBySlot={fitBySlot}
-        isDraftMode={isDraftMode}
-        draftAssignments={draftAssignments}
-      />
     </div>
   );
 });
