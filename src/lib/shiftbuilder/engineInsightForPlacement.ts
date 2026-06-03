@@ -141,21 +141,67 @@ export async function runEngineInsightForPlacement(
     });
 
     const trimmed = text?.trim();
-    return {
-      text:
-        trimmed ||
-        "No additional insight returned. The placement follows tonight's fairness model and coverage order.",
-      usage: {
-        inputTokens: usage?.promptTokens,
-        outputTokens: usage?.completionTokens,
-        model: "grok-4.3",
-        reasoningEffort: effort,
-      },
-    };
+    if (trimmed) {
+      return {
+        text: trimmed,
+        usage: {
+          inputTokens: usage?.promptTokens,
+          outputTokens: usage?.completionTokens,
+          model: "grok-4.3",
+          reasoningEffort: effort,
+        },
+      };
+    }
   } catch (err) {
-    console.error("[engineInsight] Grok call failed:", err);
+    console.warn("[engineInsight] AI SDK generateText failed, trying callGrok fallback:", err);
+    try {
+      const { callGrok } = await import("@/lib/xai");
+      const raw = await callGrok(
+        [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        { model: "grok-4.3", reasoningEffort: effort, temperature: 0.35, maxTokens: 420 },
+      );
+      if (raw?.trim()) {
+        return { text: raw.trim(), usage: { model: "grok-4.3", reasoningEffort: effort } };
+      }
+    } catch (fallbackErr) {
+      console.error("[engineInsight] callGrok fallback failed:", fallbackErr);
+    }
+  }
+
+  return {
+    text: "No additional insight returned. Use the rotation highlights and engine rationale above.",
+  };
+}
+
+/** Compact on-pad-open narrative — polishes deterministic rotation basics (low cost). */
+export async function runPlacementBasicsNarrative(
+  ctx: EngineInsightContext & { rotationBasicsText: string },
+): Promise<EngineInsightResult> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    return { text: ctx.rotationBasicsText };
+  }
+
+  const systemPrompt = `You are a GRAVE floor analyst. Rewrite the operator's rotation facts into 2 short sentences. No lists, no JSON, no eligibility lecture. Keep every name and slot key exactly as given.`;
+  const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}\n\nRewrite as 2 crisp sentences for the placement pad.`;
+
+  try {
+    const { callGrok } = await import("@/lib/xai");
+    const raw = await callGrok(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      { model: "grok-4.3", reasoningEffort: "none", temperature: 0.2, maxTokens: 120 },
+    );
     return {
-      text: "Deeper insight unavailable right now. Use the engine rationale and matrix above.",
+      text: raw?.trim() || ctx.rotationBasicsText,
+      usage: { model: "grok-4.3", reasoningEffort: "none" },
     };
+  } catch {
+    return { text: ctx.rotationBasicsText };
   }
 }

@@ -5164,28 +5164,34 @@ function AuthedShiftBuilder() {
     const prov = a.provenance || {};
     const tmName = a.tmName || extra.tmName || "the assigned TM";
 
+    const insightContext = {
+      slotKey: effectiveKey,
+      tmName,
+      rationale: extra.rationale ?? prov.rationale,
+      fairnessSignals: extra.fairnessSignals ?? prov.fairnessSignals,
+      recentPlacements: extra.recentPlacements,
+      isRR: effectiveKey.startsWith('MRR') || effectiveKey.startsWith('WRR'),
+      rrSide: extra.rrSide || (effectiveKey.startsWith('M') ? 'mens' : effectiveKey.startsWith('W') ? 'womens' : null),
+      tmAttributes: extra.tmAttributes,
+      priorGoodExamples: extra.priorGoodExamples,
+      slotSpecificHistory: extra.slotSpecificHistory,
+      currentContext: extra.currentContext,
+      suggestedCandidates: extra.suggestedCandidates,
+    };
+
     try {
-      const { getEngineInsightForPlacement } = await import("@/app/shiftbuilder/actions");
-      const insightContext = {
-        slotKey: effectiveKey,
-        tmName,
-        rationale: extra.rationale ?? prov.rationale,
-        fairnessSignals: extra.fairnessSignals ?? prov.fairnessSignals,
-        recentPlacements: extra.recentPlacements,
-        isRR: effectiveKey.startsWith('MRR') || effectiveKey.startsWith('WRR'),
-        rrSide: extra.rrSide || (effectiveKey.startsWith('M') ? 'mens' : effectiveKey.startsWith('W') ? 'womens' : null),
-        tmAttributes: extra.tmAttributes,
-        priorGoodExamples: extra.priorGoodExamples,
-        slotSpecificHistory: extra.slotSpecificHistory,
-        currentContext: extra.currentContext,
-        suggestedCandidates: extra.suggestedCandidates,
-      };
-      const result = await getEngineInsightForPlacement(insightContext);
-      const text = typeof result === 'string' ? result : result.text;
-      const u = typeof result === 'string' ? null : result.usage;
+      const res = await fetch("/api/shiftbuilder/engine-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(insightContext),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result?.error || `HTTP ${res.status}`);
+      }
+      const text = result.text ?? "";
+      const u = result.usage;
       if (u) {
-        // Accumulate for the session tokens/cost pill (bottom corner).
-        // This covers the unilateral marker pad deeper insights.
         try {
           useShiftBuilderStore.getState().addAiUsage({
             inputTokens: u.inputTokens,
@@ -5197,8 +5203,12 @@ function AuthedShiftBuilder() {
       }
       return text;
     } catch (e) {
-      console.warn("[marker pad] engine insight call failed", e);
-      return "Deeper xAI engine insight unavailable right now. The placement follows the active fairness model (Rot/Aff/Load) plus GRAVE eligibility and coverage needs.";
+      console.warn("[placement pad] engine insight API failed", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("XAI_API_KEY") || msg.includes("not configured")) {
+        return "xAI is not configured on the server (XAI_API_KEY). Rotation highlights above are still live.";
+      }
+      return `Deeper xAI insight failed: ${msg}. Use the rotation highlights and engine rationale above.`;
     }
   }, []);
 

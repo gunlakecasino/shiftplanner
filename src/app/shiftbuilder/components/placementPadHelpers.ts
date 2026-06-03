@@ -99,6 +99,114 @@ export function getLastPlacementSequence(
   return events.slice(0, n).map((e) => e.ui);
 }
 
+export type PlacementCrossPattern = {
+  otherTmName: string;
+  theirSlotKey: string;
+  /** This TM has not worked the other's current slot in the spread window */
+  tmMissingFromTheirSlot: boolean;
+  /** The other TM has not worked this TM's current slot in the spread window */
+  otherMissingFromCurrentSlot: boolean;
+};
+
+export type PlacementRotationBasics = {
+  summary: string;
+  notRecentlyPlaced: string[];
+  crossPatterns: PlacementCrossPattern[];
+  /** Slot keys to emphasize on the matrix (gaps + cross targets) */
+  highlightGapKeys: Set<string>;
+  highlightCrossKeys: Set<string>;
+};
+
+/**
+ * Deterministic rotation / fairness gaps for the placement pad matrix.
+ * Highlights where the TM has NOT been recently, and cross-patterns where
+ * someone else sits on a slot this TM is due for while they are due for this TM's slot.
+ */
+export function computePlacementRotationBasics(
+  tmHistory: ZoneDetailEntry | null,
+  currentSlotKey: string,
+  currentTmId: string,
+  matrixSlotKeys: string[],
+  assignments: Record<string, { tmId?: string; tmName?: string }>,
+  otherHistories: Record<string, ZoneDetailEntry | null>,
+  beforeIso: string,
+  nightCount: number = PLACEMENT_SPREAD_NIGHTS,
+): PlacementRotationBasics {
+  const spreadKeys = new Set(
+    getSpreadPlacementKeys(tmHistory, nightCount, beforeIso),
+  );
+
+  const notRecentlyPlaced = matrixSlotKeys.filter((k) => !spreadKeys.has(k));
+
+  const crossPatterns: PlacementCrossPattern[] = [];
+
+  for (const [theirSlotKey, row] of Object.entries(assignments)) {
+    if (!row?.tmId || row.tmId === currentTmId || !row.tmName) continue;
+
+    const tmMissingFromTheirSlot = !spreadKeys.has(theirSlotKey);
+    const otherSpread = new Set(
+      getSpreadPlacementKeys(otherHistories[row.tmId] ?? null, nightCount, beforeIso),
+    );
+    const otherMissingFromCurrentSlot = !otherSpread.has(currentSlotKey);
+
+    if (tmMissingFromTheirSlot || otherMissingFromCurrentSlot) {
+      crossPatterns.push({
+        otherTmName: row.tmName,
+        theirSlotKey,
+        tmMissingFromTheirSlot,
+        otherMissingFromCurrentSlot,
+      });
+    }
+  }
+
+  const highlightGapKeys = new Set(notRecentlyPlaced);
+  const highlightCrossKeys = new Set<string>();
+  for (const c of crossPatterns) {
+    if (c.tmMissingFromTheirSlot) highlightCrossKeys.add(c.theirSlotKey);
+    if (c.otherMissingFromCurrentSlot) highlightGapKeys.add(currentSlotKey);
+  }
+
+  const gapPreview = notRecentlyPlaced
+    .slice(0, 4)
+    .map((k) => formatPlacementUiLabel(k))
+    .join(", ");
+  const crossPreview = crossPatterns
+    .filter((c) => c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot)
+    .slice(0, 2)
+    .map(
+      (c) =>
+        `${c.otherTmName} on ${formatPlacementUiLabel(c.theirSlotKey)} ↔ you on ${formatPlacementUiLabel(currentSlotKey)} (both due for swap lanes)`,
+    )
+    .join("; ");
+
+  let summary = "";
+  if (notRecentlyPlaced.length > 0) {
+    summary += `Not in last ${nightCount} nights: ${gapPreview}${notRecentlyPlaced.length > 4 ? "…" : ""}.`;
+  } else {
+    summary += `Worked all matrix slots in the last ${nightCount} nights.`;
+  }
+  if (crossPreview) {
+    summary += ` Cross-rotation: ${crossPreview}.`;
+  } else if (crossPatterns.length > 0) {
+    const partial = crossPatterns[0];
+    summary += ` ${partial.otherTmName} on ${formatPlacementUiLabel(partial.theirSlotKey)}: ${
+      partial.tmMissingFromTheirSlot ? "you haven't been there recently" : ""
+    }${partial.tmMissingFromTheirSlot && partial.otherMissingFromCurrentSlot ? "; " : ""}${
+      partial.otherMissingFromCurrentSlot
+        ? `they haven't been on ${formatPlacementUiLabel(currentSlotKey)} recently`
+        : ""
+    }.`;
+  }
+
+  return {
+    summary: summary.trim(),
+    notRecentlyPlaced,
+    crossPatterns,
+    highlightGapKeys,
+    highlightCrossKeys,
+  };
+}
+
 /** Compact label for matrix cells and last-5 pills (no spaces). */
 export function formatPlacementUiLabel(ui: string, fallback?: string): string {
   if (ui === "Z9SR") return "Z9SR";

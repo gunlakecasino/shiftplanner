@@ -16,6 +16,7 @@ import {
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
+import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import {
   PLACEMENT_SPREAD_NIGHTS,
   getSpreadPlacementKeys,
@@ -23,6 +24,8 @@ import {
   getDaysSinceForKey,
   formatPlacementUiLabel,
   nightIsoFromDate,
+  computePlacementRotationBasics,
+  type PlacementRotationBasics,
 } from "./placementPadHelpers";
 
 const Z9_STAT_RED = "#E53935";
@@ -164,16 +167,25 @@ function PlacementCell({
   placed,
   accent,
   title,
+  gapHighlight,
+  crossHighlight,
 }: {
   label: string;
   placed: boolean;
   accent: string;
   title?: string;
+  gapHighlight?: boolean;
+  crossHighlight?: boolean;
 }) {
+  const gap = gapHighlight && !placed;
+  const cross = crossHighlight;
+
   return (
     <span
       title={title ?? label}
-      className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums transition-colors"
+      className={`flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums transition-colors ${
+        gap ? "ring-1 ring-amber-400/70" : cross ? "ring-1 ring-sky-500/60" : ""
+      }`}
       style={
         placed
           ? {
@@ -181,11 +193,23 @@ function PlacementCell({
               border: `1px solid ${accent}55`,
               color: accent,
             }
-          : {
-              background: "rgba(0,0,0,0.02)",
-              border: "1px solid rgba(0,0,0,0.06)",
-              color: "rgba(0,0,0,0.28)",
-            }
+          : gap
+            ? {
+                background: "rgba(251,191,36,0.12)",
+                border: "1px dashed rgba(245,158,11,0.55)",
+                color: "rgba(180,83,9,0.95)",
+              }
+            : cross
+              ? {
+                  background: "rgba(14,165,233,0.08)",
+                  border: "1px solid rgba(14,165,233,0.35)",
+                  color: "rgba(3,105,161,0.9)",
+                }
+              : {
+                  background: "rgba(0,0,0,0.02)",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  color: "rgba(0,0,0,0.28)",
+                }
       }
     >
       {label}
@@ -314,6 +338,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
   >([]);
+  const [rotationBasics, setRotationBasics] = useState<PlacementRotationBasics | null>(null);
+  const [rotationLoading, setRotationLoading] = useState(false);
+  const [basicsNarrativeLoading, setBasicsNarrativeLoading] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
@@ -333,6 +360,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setPadInsight(null);
     setPadInsightLoading(false);
     setPadGoodExamples([]);
+    setRotationBasics(null);
+    setRotationLoading(false);
+    setBasicsNarrativeLoading(false);
     setTaskInput("");
     setSweeperOpen(false);
   }, [slotKey]);
@@ -459,6 +489,129 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     tmName: a.tmName,
   });
 
+  const matrixSlotKeys = React.useMemo(
+    () => [
+      ...ZONE_DEFS.map((z) => z.key),
+      ...rrLocs.map((l) => l.ui),
+      ...auxLocs.map((l) => l.ui),
+    ],
+    [rrLocs, auxLocs],
+  );
+
+  useEffect(() => {
+    if (!a.tmId || padHistoryLoading) {
+      if (!a.tmId) setRotationBasics(null);
+      return;
+    }
+
+    const otherIds = [
+      ...new Set(
+        Object.values(assignments)
+          .map((row: { tmId?: string }) => row?.tmId)
+          .filter((id): id is string => !!id && id !== a.tmId),
+      ),
+    ];
+
+    let cancelled = false;
+
+    const run = async () => {
+      setRotationLoading(true);
+      try {
+        let histories: Record<string, ZoneDetailEntry | null> = {};
+        if (otherIds.length > 0) {
+          const res = await fetch("/api/shiftbuilder/placement-histories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tmIds: otherIds, days: PLACEMENT_SPREAD_NIGHTS }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            histories = data.histories ?? {};
+          }
+        }
+        if (cancelled) return;
+
+        const basics = computePlacementRotationBasics(
+          padHistory,
+          slotKey,
+          a.tmId,
+          matrixSlotKeys,
+          assignments,
+          histories,
+          currentIso,
+        );
+        setRotationBasics(basics);
+        setPadInsight(basics.summary);
+
+        setBasicsNarrativeLoading(true);
+        try {
+          const polishRes = await fetch("/api/shiftbuilder/engine-insight", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "basics",
+              slotKey,
+              tmName: a.tmName,
+              rotationBasicsText: basics.summary,
+              currentContext: boardNeighborSummary || undefined,
+              slotSpecificHistory: slotHistorySummary,
+            }),
+          });
+          if (!cancelled && polishRes.ok) {
+            const polished = await polishRes.json();
+            if (polished?.text) setPadInsight(polished.text);
+          }
+        } catch {
+          /* keep deterministic basics */
+        } finally {
+          if (!cancelled) setBasicsNarrativeLoading(false);
+        }
+      } finally {
+        if (!cancelled) setRotationLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    a.tmId,
+    a.tmName,
+    padHistory,
+    padHistoryLoading,
+    assignments,
+    slotKey,
+    matrixSlotKeys,
+    currentIso,
+    boardNeighborSummary,
+    slotHistorySummary,
+  ]);
+
+  async function fetchEngineInsight(
+    context: Record<string, unknown>,
+    mode: "deep" | "basics" = "deep",
+  ): Promise<string> {
+    const res = await fetch("/api/shiftbuilder/engine-insight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...context, slotKey, tmName: a.tmName || context.tmName, mode }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error || `Insight failed (${res.status})`);
+    }
+    if (data.usage) {
+      try {
+        useShiftBuilderStore.getState().addAiUsage(data.usage);
+      } catch {}
+    }
+    return data.text || "";
+  }
+
+  const cellGap = (ui: string) => rotationBasics?.highlightGapKeys.has(ui) ?? false;
+  const cellCross = (ui: string) => rotationBasics?.highlightCrossKeys.has(ui) ?? false;
+
   const padEl = (
     <div
       className={`placement-pad ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex h-auto max-h-none flex-col rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
@@ -561,8 +714,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 >
                   Assign team member
                 </button>
-                {onRequestEngineInsight && (
-                  <div className="rounded-lg border border-black/[0.05] bg-neutral-50/80 px-2.5 py-2">
+                <div className="rounded-lg border border-black/[0.05] bg-neutral-50/80 px-2.5 py-2">
                     <SectionLabel>Who fits here</SectionLabel>
                     <p className="mt-1 text-[9px] leading-snug text-neutral-500">
                       Scheduled + eligible TMs only. Tap for xAI ranking.
@@ -575,13 +727,15 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         setPadInsight(null);
                         setPadInsightLoading(true);
                         try {
-                          const insight = await onRequestEngineInsight(
-                            slotKey,
+                          const insight = await fetchEngineInsight(
                             buildInsightContext(),
+                            "deep",
                           );
                           setPadInsight(insight || "No suggestions.");
-                        } catch {
-                          setPadInsight("Suggestions unavailable.");
+                        } catch (err) {
+                          setPadInsight(
+                            err instanceof Error ? err.message : "Suggestions unavailable.",
+                          );
                         } finally {
                           setPadInsightLoading(false);
                         }
@@ -594,7 +748,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       <p className="mt-1.5 text-[9px] leading-snug text-neutral-600">{padInsight}</p>
                     )}
                   </div>
-                )}
               </div>
             )}
 
@@ -700,6 +853,31 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   <p className="text-[10px] text-neutral-400">Loading placement history…</p>
                 ) : (
                   <>
+                    <SectionLabel>Insight — the basics</SectionLabel>
+                    <p className="mt-1 text-[10px] leading-snug text-neutral-600">
+                      {rotationLoading
+                        ? "Computing rotation gaps…"
+                        : padInsight ||
+                          (rotationBasics?.summary ?? "Placed for rotation balance and coverage.")}
+                    </p>
+                    {(rotationLoading || basicsNarrativeLoading) && (
+                      <p className="mt-0.5 text-[8px] text-neutral-400">
+                        {basicsNarrativeLoading ? "xAI polishing…" : "Loading board histories…"}
+                      </p>
+                    )}
+                    {rotationBasics && (
+                      <div className="mt-1.5 flex flex-wrap gap-2 text-[8px] text-neutral-500">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="h-2.5 w-4 rounded border border-dashed border-amber-500/60 bg-amber-100/80" />
+                          Not in 30 nights
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <span className="h-2.5 w-4 rounded border border-sky-500/50 bg-sky-50" />
+                          Cross-rotation lane
+                        </span>
+                      </div>
+                    )}
+
                     <SectionLabel>Placement matrix</SectionLabel>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px]">
                       <span>
@@ -740,6 +918,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                           placed={placedSet.has(z.key)}
                           accent={getZoneColor(z.key)}
                           title={z.key}
+                          gapHighlight={cellGap(z.key)}
+                          crossHighlight={cellCross(z.key)}
                         />
                       ))}
                     </div>
@@ -756,6 +936,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             placed={placedSet.has(loc.ui)}
                             accent={getPillAccent(loc.ui)}
                             title={loc.ui}
+                            gapHighlight={cellGap(loc.ui)}
+                            crossHighlight={cellCross(loc.ui)}
                           />
                         ))}
                       </div>
@@ -773,6 +955,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             placed={placedSet.has(loc.ui)}
                             accent={getPillAccent(loc.ui)}
                             title={loc.ui}
+                            gapHighlight={cellGap(loc.ui)}
+                            crossHighlight={cellCross(loc.ui)}
                           />
                         ))}
                       </div>
@@ -813,15 +997,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     </div>
 
                     <div className="mt-3 pt-2 border-t border-black/[0.05]">
-                      <SectionLabel>Insight</SectionLabel>
-                      <p className="mt-1 text-[10px] leading-snug text-neutral-600">
-                        {hasProv && prov.rationale
-                          ? prov.rationale
-                          : "Placed for rotation balance and coverage."}
-                      </p>
+                      {hasProv && prov.rationale && (
+                        <p className="text-[9px] leading-snug text-neutral-500 mb-1.5">
+                          Engine: {prov.rationale}
+                        </p>
+                      )}
                       {prov.fairnessSignals &&
                         typeof prov.fairnessSignals === "object" && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
+                          <div className="mb-1.5 flex flex-wrap gap-1">
                             {Object.entries(prov.fairnessSignals)
                               .slice(0, 6)
                               .map(([k, v]) => (
@@ -834,22 +1017,21 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               ))}
                           </div>
                         )}
-                      {onRequestEngineInsight && (
-                        <div className="mt-2">
+                      <div className="mt-2">
                           <button
                             type="button"
                             onClick={async (e) => {
                               e.stopPropagation();
-                              setPadInsight(null);
                               setPadInsightLoading(true);
                               try {
-                                const insight = await onRequestEngineInsight(
-                                  slotKey,
+                                const insight = await fetchEngineInsight(
                                   buildInsightContext(),
+                                  "deep",
                                 );
                                 setPadInsight(insight || "No additional insight.");
-                              } catch {
-                                setPadInsight("Insight unavailable.");
+                              } catch (err) {
+                                const msg = err instanceof Error ? err.message : "Insight unavailable.";
+                                setPadInsight(msg);
                               } finally {
                                 setPadInsightLoading(false);
                               }
@@ -900,8 +1082,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               </div>
                             </>
                           )}
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </>
                 )}
