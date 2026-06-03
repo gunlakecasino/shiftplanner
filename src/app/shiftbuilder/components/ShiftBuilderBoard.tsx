@@ -20,6 +20,7 @@ import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
+import { RotationHealthFloater } from "./RotationHealthFloater";
 
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
@@ -1056,6 +1057,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         <div className="text-[#9CA3AF] text-center">v0.7</div>
         <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
       </div>
+
+      <RotationHealthFloater
+        visible={currentView === "deployment"}
+        auxDefs={auxDefs}
+        assignments={displayAssignments}
+        fitBySlot={fitBySlot}
+        isDraftMode={isDraftMode}
+        draftAssignments={draftAssignments}
+      />
     </div>
   );
 });
