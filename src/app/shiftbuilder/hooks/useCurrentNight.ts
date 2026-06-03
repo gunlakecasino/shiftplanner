@@ -9,6 +9,11 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 // Scheduled roster now loaded via API route to keep admin client creation on the server
 // (prevents Multiple GoTrueClient warnings and auth issues in the browser).
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
+import {
+  buildSlotDefaultBreakMap,
+  enrichAssignmentsWithBreakGroups,
+  slotDefaultBreakMapToRecord,
+} from "@/lib/shiftbuilder/breakGroupResolve";
 
 // Server-cached roster (huge win for day switch speed)
 import {
@@ -41,6 +46,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         getGraveAvailableTeamMembers,
         getOnScheduleTmIdsForNight,
         getActiveTeamMembers,
+        getSlotDefaults,
       } = await import("@/lib/shiftbuilder/data");
 
       const id = await getNightIdForDate(selectedDay.date);
@@ -50,55 +56,21 @@ export function useCurrentNight(selectedDay: DayDef) {
         dbAssignments,
         graveMembers,
         weekOnScheduleSet,
+        slotDefaults,
       ] = await Promise.all([
         // Use server-cached roster — this is the big remaining win for day switches
         id ? getTeamMembersForNight(id) : getActiveTeamMembers().then(all => all.map(tm => ({ ...tm, isOnSchedule: false }))),
         id ? getNightAssignments(id) : Promise.resolve([]),
         getGraveAvailableTeamMembers(),
         id ? getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
+        getSlotDefaults(),
       ]);
 
-      const assignments: Record<string, any> = {};
-      (dbAssignments as any[]).forEach((row: any) => {
-        try {
-          const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-          if (uiKey.startsWith("UNK:")) {
-            console.warn("[useCurrentNight] unrecognized DB slot, skipping:", row);
-            return;
-          }
-          if (row.tmId) {
-            assignments[uiKey] = {
-              tmId: row.tmId,
-              tmName: row.tmName || row.tmId,
-              breakGroup: row.breakGroup ?? 0,
-            };
-          }
-        } catch {}
-      });
-
-      // Enrich with breakGroup from the separate break_assignments table so BreakBadge
-      // on ZoneCard / AuxCard / RRCard inside the isolated board actually shows 1/2/3 (or –).
-      // This was missing after the core loader was introduced; the legacy paths had it but
-      // the board now reads the narrow shape from currentNight.assignments → store.
-      if (id) {
-        try {
-          const { getNightBreakAssignments } = await import("@/lib/shiftbuilder/data");
-          const breaks = await getNightBreakAssignments(id);
-          const breakByTm: Record<string, number> = {};
-          (breaks || []).forEach((r: any) => {
-            if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
-          });
-          Object.keys(assignments).forEach((k) => {
-            const a = assignments[k];
-            if (a?.tmId && breakByTm[a.tmId] != null) {
-              a.breakGroup = breakByTm[a.tmId];
-            }
-          });
-        } catch (e) {
-          // Non-fatal — break pills will just show "–" until next refetch
-          console.warn("[useCurrentNight] could not load break groups for pills", e);
-        }
-      }
+      const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults);
+      const assignments = enrichAssignmentsWithBreakGroups(
+        dbAssignments as any[],
+        defaultBreakMap,
+      );
 
       // Enrich grave roster with week + overlap flags (authoritative source moved here for unification)
       const graveRoster = graveMembers.map((m: any) => ({
@@ -193,6 +165,7 @@ export function useCurrentNight(selectedDay: DayDef) {
         // (src/lib/shiftbuilder/schedules.ts) — the single source of truth.
         rawDbAssignments: dbAssignments,
         rawBreakRows: [], // will be populated from secondary when available
+        slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
       };
     },
     staleTime: 1000 * 60 * 5,

@@ -216,7 +216,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const computedBreakCounts = React.useMemo(() => {
     const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
     Object.values(assignments).forEach((a: any) => {
-      if (!a?.tmName) return;
+      if (!a?.tmId && !a?.tmName) return;
       const g = (a.breakGroup ?? 0) as 1 | 2 | 3;
       if (g === 1 || g === 2 || g === 3) counts[g]++;
     });

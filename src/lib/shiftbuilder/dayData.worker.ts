@@ -18,20 +18,33 @@ import {
 import type { AuxDef } from './placement';
 
 export interface ProcessNightPayload {
-  dbAssignments: any[];
+  dbAssignments?: any[];
   breakRows?: any[];
   auxDefs?: AuxDef[];
+  /** Pre-resolved UI assignments (preferred for break counts — includes sudo defaults). */
+  assignments?: Record<string, any>;
+  slotDefaultBreaks?: Record<string, number>;
 }
 
 self.onmessage = (event: MessageEvent) => {
   const { type, payload } = event.data;
 
   if (type === 'PROCESS_NIGHT') {
-    const { dbAssignments, breakRows = [], auxDefs = [] } = payload as ProcessNightPayload;
+    const {
+      dbAssignments = [],
+      breakRows = [],
+      auxDefs = [],
+      assignments: prebuiltAssignments,
+      slotDefaultBreaks,
+    } = payload as ProcessNightPayload;
 
     try {
-      if (!dbAssignments || !Array.isArray(dbAssignments) || dbAssignments.length === 0) {
-        // Nothing to process yet — send empty result instead of error
+      const hasPrebuilt =
+        prebuiltAssignments && Object.keys(prebuiltAssignments).length > 0;
+      const hasDb =
+        Array.isArray(dbAssignments) && dbAssignments.length > 0;
+
+      if (!hasPrebuilt && !hasDb) {
         self.postMessage({
           type: 'PROCESSED_NIGHT',
           payload: {
@@ -43,7 +56,9 @@ self.onmessage = (event: MessageEvent) => {
         return;
       }
 
-      const assignments = buildAssignmentsRecord(dbAssignments);
+      const assignments = hasPrebuilt
+        ? prebuiltAssignments!
+        : buildAssignmentsRecord(dbAssignments, slotDefaultBreaks);
       const breakCounts = computeBreakCounts(assignments);
       const waves = prepareBreaksWaveData(assignments, auxDefs);
 

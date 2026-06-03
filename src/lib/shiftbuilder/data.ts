@@ -1,5 +1,6 @@
 import { supabase, getSupabaseClient } from '../supabase';
 import { dbToUi, uiToDb } from './slot-keys';
+import type { BreakGroupValue } from './breakGroupResolve';
 import { startOfRosterWeek, daysBetween } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
 import { isWorkingShift } from './types/schedules';
@@ -627,26 +628,60 @@ export async function updateSlotBreakGroup(
     : slotKey.startsWith('rr_')  ? 'rr'
     : 'aux';
 
-  // Build the match — must respect the unique index (night_id, slot_type, slot_key, rr_side)
+  // Update existing assignment row only — upsert without tm_id was creating orphan
+  // rows or failing silently, so break pills never persisted.
   let q = client
     .from('zone_assignments')
-    .upsert(
-      {
-        night_id:    nightId,
-        slot_type:   slotType,
-        slot_key:    slotKey,
-        rr_side:     rrSide ?? null,
-        break_group: breakGroup,
-        updated_at:  new Date().toISOString(),
-      },
-      { onConflict: 'night_id,slot_type,slot_key,rr_side' }
-    );
+    .update({
+      break_group: breakGroup,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('night_id', nightId)
+    .eq('slot_type', slotType)
+    .eq('slot_key', slotKey);
 
-  const { error } = await q;
+  if (rrSide) {
+    q = q.eq('rr_side', rrSide);
+  } else {
+    q = q.is('rr_side', null);
+  }
+
+  const { data, error } = await q.select('id');
   if (error) {
     logSupabaseError('updateSlotBreakGroup failed', error);
     throw new Error(`Failed to save slot break group: ${error.message}`);
   }
+  if (!data?.length) {
+    throw new Error(
+      `No assignment row for ${slotKey}${rrSide ? ` (${rrSide})` : ''} — assign a TM before setting break group`,
+    );
+  }
+}
+
+/**
+ * Apply sudo card-default break group when a TM is placed (only if slot has no explicit break yet).
+ */
+export async function applySlotDefaultBreakForAssignment(params: {
+  nightId: string;
+  dbSlotKey: string;
+  rrSide: string | null;
+  tmId: string;
+  uiSlotRef: string;
+}): Promise<BreakGroupValue | null> {
+  const { nightId, dbSlotKey, rrSide, tmId, uiSlotRef } = params;
+  const { buildSlotDefaultBreakMap } = await import('./breakGroupResolve');
+  const map = buildSlotDefaultBreakMap(await getSlotDefaults());
+  const def = map.get(`${dbSlotKey}|${rrSide ?? ''}`);
+  if (def === undefined || def === 0) return null;
+
+  await updateSlotBreakGroup(nightId, dbSlotKey, rrSide, def);
+  await upsertBreakAssignment({
+    nightId,
+    tmId,
+    groupNum: def,
+    slotRef: uiSlotRef,
+  });
+  return def;
 }
 
 /**

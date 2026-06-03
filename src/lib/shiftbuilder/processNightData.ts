@@ -13,6 +13,11 @@
  */
 
 import type { AuxDef } from "./placement";
+import {
+  enrichAssignmentsWithBreakGroups,
+  slotDefaultBreakMapFromRecord,
+  type SlotDefaultBreakMap,
+} from "./breakGroupResolve";
 
 export interface RawAssignmentRow {
   slotKey: string;
@@ -39,24 +44,15 @@ export interface BreakCounts {
  * The mapping that used to live inside useCurrentNight coreQuery.
  * Pure and fast — ideal for worker.
  */
-export function buildAssignmentsRecord(dbAssignments: any[] | undefined | null): Record<string, any> {
-  const assignments: Record<string, any> = {};
-  if (!Array.isArray(dbAssignments)) {
-    return assignments; // defensive: nothing to process
-  }
-  dbAssignments.forEach((row: any) => {
-    try {
-      const uiKey = row.slotKey;
-      if (row.tmId) {
-        assignments[uiKey] = {
-          tmId: row.tmId,
-          tmName: row.tmName || row.tmId,
-          breakGroup: row.breakGroup ?? 0,
-        };
-      }
-    } catch {}
-  });
-  return assignments;
+export function buildAssignmentsRecord(
+  dbAssignments: any[] | undefined | null,
+  slotDefaults?: SlotDefaultBreakMap | Record<string, number>,
+): Record<string, any> {
+  const defaults =
+    slotDefaults instanceof Map
+      ? slotDefaults
+      : slotDefaultBreakMapFromRecord(slotDefaults);
+  return enrichAssignmentsWithBreakGroups(dbAssignments, defaults);
 }
 
 /**
@@ -68,7 +64,7 @@ export function computeBreakCounts(assignments: Record<string, any> | undefined 
   const counts: BreakCounts = { 1: 0, 2: 0, 3: 0 };
   if (!assignments) return counts;
   Object.values(assignments).forEach((a: any) => {
-    if (!a?.tmName) return;
+    if (!a?.tmId && !a?.tmName) return;
     const g = (a.breakGroup ?? 0) as 1 | 2 | 3;
     if (g === 1 || g === 2 || g === 3) counts[g]++;
   });

@@ -1233,7 +1233,7 @@ function AuthedShiftBuilder() {
   const breakCounts = React.useMemo(() => {
     const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
     Object.values(assignments).forEach((a: any) => {
-      if (!a?.tmName) return;
+      if (!a?.tmId && !a?.tmName) return;
       const g = (a.breakGroup ?? 0) as BreakGroup;
       // Off-the-sheet (0) intentionally excluded from rotation counts.
       if (g === 1 || g === 2 || g === 3) counts[g]++;
@@ -1970,38 +1970,6 @@ function AuthedShiftBuilder() {
     }
   }, [effectiveAssignments]);
 
-  // === Ensure breakGroup from Supabase (break_assignments) makes it into the store ===
-  // The board and BreakBadge read from the narrow Zustand hook. After the core
-  // query enriches currentNight.assignments with breakGroup, we must explicitly
-  // patch the store so the pills show live data + defaults instead of blank/0.
-  React.useEffect(() => {
-    const breakRows = currentNight?.rawBreakRows || currentNight?.breakAssignments;
-    if (!breakRows || !Array.isArray(breakRows) || breakRows.length === 0) return;
-
-    const breakByTm: Record<string, number> = {};
-    breakRows.forEach((r: any) => {
-      if (r?.tmId && r.groupNum != null) {
-        breakByTm[r.tmId] = r.groupNum;
-      }
-    });
-    if (Object.keys(breakByTm).length === 0) return;
-
-    try {
-      useShiftBuilderStore.getState().setAssignments((prev: any) => {
-        const next = { ...prev };
-        Object.keys(next).forEach((k) => {
-          const a = next[k];
-          if (a?.tmId && breakByTm[a.tmId] != null) {
-            next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
-          }
-        });
-        return next;
-      });
-    } catch (e) {
-      console.warn('[ShiftBuilder] Failed to enrich store with breakGroups from Supabase', e);
-    }
-  }, [currentNight?.rawBreakRows, currentNight?.breakAssignments]);
-
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
   // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
   // the optimistic live layer or realtime bridge mutates placements for this night.
@@ -2086,9 +2054,11 @@ function AuthedShiftBuilder() {
     if (currentNight?.rawBreakRows) {
       payload.breakRows = currentNight.rawBreakRows;
     }
+    if (currentNight?.slotDefaultBreaks) {
+      payload.slotDefaultBreaks = currentNight.slotDefaultBreaks;
+    }
 
-    // Always send current assignments as fallback so the worker can compute
-    // waves/breakCounts from the mapped data if raw isn't present yet.
+    // Prefer enriched UI assignments (sudo defaults + explicit overrides) for break counts.
     if (effectiveAssignments && Object.keys(effectiveAssignments).length > 0) {
       payload.assignments = effectiveAssignments;
     }
@@ -2100,7 +2070,13 @@ function AuthedShiftBuilder() {
         payload,
       });
     }
-  }, [currentNight?.rawDbAssignments, currentNight?.rawBreakRows, effectiveAssignments, auxDefs]);
+  }, [
+    currentNight?.rawDbAssignments,
+    currentNight?.rawBreakRows,
+    currentNight?.slotDefaultBreaks,
+    effectiveAssignments,
+    auxDefs,
+  ]);
 
   // 3.5 Measurement: when the visual surface has fresh data
   // Made more defensive so the dev pill always gets a value (even on initial load
@@ -2477,6 +2453,24 @@ function AuthedShiftBuilder() {
             });
           }
         }
+
+        const dateKey = captureDate.toISOString().slice(0, 10);
+        const patchNightCache = (old: any) => {
+          if (!old?.assignments) return old;
+          return {
+            ...old,
+            assignments: {
+              ...old.assignments,
+              [slotKey]: {
+                ...(old.assignments[slotKey] || {}),
+                breakGroup: group,
+                breakGroupExplicit: true,
+              },
+            },
+          };
+        };
+        currentNight.queryClient?.setQueryData(["nightCore", dateKey], patchNightCache);
+        currentNight.queryClient?.setQueryData(["night", dateKey], patchNightCache);
       } catch (e: any) {
         showToast(`Couldn't save break group: ${e?.message ?? "unknown error"}`);
       }

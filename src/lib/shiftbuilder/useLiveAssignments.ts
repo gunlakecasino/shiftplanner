@@ -50,6 +50,10 @@ import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderSt
 import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
+import {
+  resolveEffectiveBreakGroup,
+  slotDefaultBreakMapFromRecord,
+} from "@/lib/shiftbuilder/breakGroupResolve";
 
 // ============================================================================
 // Types
@@ -141,8 +145,17 @@ export function useLiveAssignments(selectedDay: DayDef) {
           isLocked: (rest as any).isLocked,
         };
 
-        const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
-        return upsertZoneAssignment(upsertParams);
+        const { upsertZoneAssignment, applySlotDefaultBreakForAssignment } =
+          await import("@/lib/shiftbuilder/data");
+        const result = await upsertZoneAssignment(upsertParams);
+        const appliedBreak = await applySlotDefaultBreakForAssignment({
+          nightId: resolvedNightId,
+          dbSlotKey: slot_key,
+          rrSide: rr_side,
+          tmId: (rest as any).tmId,
+          uiSlotRef: uiKey,
+        });
+        return { ...result, appliedBreak };
       },
 
       onMutate: async (params: TParams & LiveAssignOptions) => {
@@ -263,7 +276,28 @@ export function useLiveAssignments(selectedDay: DayDef) {
   // Public API – the mutationFn is provided by the factory (which now reliably calls upsertZoneAssignment)
   const assignMutation = createOptimisticMutation(
     async () => ({} as any), // ignored by factory
-    (p: any) => ({ tmId: p.tmId, tmName: p.tmName })
+    (p: any) => {
+      const core = queryClient.getQueryData<any>(["nightCore", dateKey]);
+      const defaults = slotDefaultBreakMapFromRecord(core?.slotDefaultBreaks);
+      let breakGroup = 0;
+      try {
+        const { slot_key, rr_side } = uiToDb(p.uiKey);
+        breakGroup = resolveEffectiveBreakGroup(
+          null,
+          slot_key,
+          rr_side,
+          defaults,
+        );
+      } catch {
+        breakGroup = 0;
+      }
+      return {
+        tmId: p.tmId,
+        tmName: p.tmName,
+        breakGroup,
+        breakGroupExplicit: false,
+      };
+    },
   );
 
   const unassignMutation = createOptimisticMutation(
