@@ -19,7 +19,6 @@ import {
   Printer,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, addDays, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Note: "cmdk" package import removed — the search capsule now exclusively triggers the global CommandPalette
@@ -27,7 +26,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ==================== CVA VARIANTS ====================
 const navVariants = cva(
-  "fixed top-2 left-4 right-4 z-40 flex items-center mx-auto max-w-[1280px] h-14 px-6 rounded-3xl transition-all duration-200",
+  "fixed top-2 left-4 right-4 z-40 flex items-center mx-auto max-w-[1440px] h-14 px-6 rounded-3xl transition-all duration-200",
   {
     variants: {
       glass: {
@@ -68,6 +67,10 @@ export interface DayItem {
   id: number;
   label: string;
   shortLabel?: string;
+  /** F/S/S/M/T/W/T — shown on inactive pills in the 9-day strip. */
+  dayLetter?: string;
+  /** True for Thu-before / Fri-after bridge pills (adjacent week boundaries). */
+  isBridge?: boolean;
   dateNum?: number;
   isToday?: boolean;
   date?: Date;
@@ -82,7 +85,6 @@ export interface FloatingNavProps {
   currentView: "deployment" | "breaks";
   onViewChange: (view: "deployment" | "breaks") => void;
   placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
-  savedText?: string;
   onToday: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
@@ -121,7 +123,6 @@ export default function FloatingNav({
   currentView,
   onViewChange,
   placedCount,
-  savedText = "Saved",
   onToday,
   onPrevWeek,
   onNextWeek,
@@ -145,10 +146,6 @@ export default function FloatingNav({
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Mobile "more" actions sheet (undo/redo/zoom cluster hidden on small screens)
-  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const mobileActionsRef = useRef<HTMLDivElement>(null);
-
   // Close profile dropdown on outside click or Escape (matches existing patterns)
   useEffect(() => {
     if (!profileOpen) return;
@@ -169,27 +166,6 @@ export default function FloatingNav({
       window.removeEventListener("keydown", onKey);
     };
   }, [profileOpen]);
-
-  // Close mobile actions popover on outside click / Escape
-  useEffect(() => {
-    if (!mobileActionsOpen) return;
-
-    const onDown = (e: MouseEvent) => {
-      if (mobileActionsRef.current && !mobileActionsRef.current.contains(e.target as Node)) {
-        setMobileActionsOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileActionsOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [mobileActionsOpen]);
 
   // TanStack Query for day switching with optimistic updates + instant feel
   const { data: currentDayData } = useQuery({
@@ -229,11 +205,11 @@ export default function FloatingNav({
   return (
     <>
       <nav
-        className={cn(navVariants(), "px-3 sm:px-4 md:px-6 lg:px-8 h-12 sm:h-14")}
+        className={cn(navVariants())}
         style={{ ...glassStyle, zIndex: 40 }}
       >
-        {/* LEFT: Today only (B logo removed) */}
-        <div className="flex items-center gap-2 md:gap-3 shrink-0 pr-2 md:pr-4">
+        {/* LEFT: Today */}
+        <div className="flex items-center gap-2 shrink-0 pr-3">
           <button
             onClick={onToday}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985]"
@@ -244,10 +220,9 @@ export default function FloatingNav({
           </button>
         </div>
 
-        {/* CENTER: Date Selector + View Switcher (mobile-friendly scrollable dates) */}
-        <div className="flex-1 flex items-center justify-center gap-1.5 md:gap-3 min-w-0 px-1 sm:px-2">
-          {/* Date Pills with seamless half-circle week navigation caps */}
-          <div className="relative flex items-center min-w-0">
+        {/* CENTER: 9-day strip + Deploy/Breaks */}
+        <div className="flex-1 flex items-center justify-center gap-3 min-w-0 px-2">
+          <div className="relative flex items-center min-w-0 flex-1 justify-center max-w-[720px]">
             {/* Left seamless half-circle cap — previous GRAVE week */}
             {onPrevWeek && (
               <motion.button
@@ -259,8 +234,8 @@ export default function FloatingNav({
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}
-                title="Previous week"
-                aria-label="Previous GRAVE week"
+                title="Previous GRAVE week (Friday)"
+                aria-label="Previous GRAVE week — jump to Friday"
               >
                 <motion.span
                   whileHover={{ x: -1.5 }}
@@ -271,17 +246,17 @@ export default function FloatingNav({
               </motion.button>
             )}
 
-            {/* Scrollable pill strip on mobile (snap + touch friendly). Desktop keeps the classic fixed look. */}
             <div
-              className="flex items-center gap-1 px-6 md:px-7 py-1 rounded-2xl relative overflow-x-auto snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex items-center gap-0.5 px-7 py-1 rounded-2xl relative"
               style={{
                 background: "rgba(0,0,0,0.025)",
                 border: "1px solid var(--sb-glass-border)",
-                maxWidth: "min(420px, 58vw)",
+                width: "100%",
               }}
             >
               {days.map((day) => {
                 const isActive = day.id === selectedDayId;
+                const isBridge = !!day.isBridge;
 
                 return (
                   <button
@@ -291,17 +266,28 @@ export default function FloatingNav({
                     onTouchStart={() => onDayHover?.(day.id, day.date || new Date())}
                     className={cn(
                       datePillVariants({ active: isActive }),
-                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all flex-shrink-0 snap-center touch-manipulation",
-                      isActive ? "px-2.5 sm:px-3 text-sm" : "px-1.5 sm:px-2 text-[11px] sm:text-[12px]"
+                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums h-7 transition-all flex-1 min-w-0 touch-manipulation",
+                      isActive ? "px-2 text-[12.5px]" : "px-1 text-[11px]",
                     )}
                     style={{
-                      minWidth: isActive ? 46 : 30,
+                      maxWidth: isBridge ? 36 : 52,
                       background: isActive ? ACCENT : "transparent",
                       color: isActive ? "#fff" : isDark ? "#A1A1AA" : "#52525B",
-                      border: isActive ? `1px solid ${ACCENT}` : "1px solid transparent",
+                      border: isActive
+                        ? `1px solid ${ACCENT}`
+                        : isBridge
+                          ? `1px dashed ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"}`
+                          : "1px solid transparent",
                       fontWeight: isActive ? 700 : 600,
-                      fontSize: isActive ? "12.5px" : "11px",
+                      opacity: isBridge && !isActive ? 0.85 : 1,
                     }}
+                    title={
+                      isBridge
+                        ? day.id === 0
+                          ? "Last day of previous GRAVE week (Thursday)"
+                          : "First day of next GRAVE week (Friday)"
+                        : undefined
+                    }
                   >
                     {/* The sliding active highlight - pure layout animation */}
                     {isActive && (
@@ -313,16 +299,16 @@ export default function FloatingNav({
                       />
                     )}
 
-                    {isActive && day.shortLabel && (
-                      <span className="mr-0.5 sm:mr-1 text-[8px] sm:text-[9px] font-bold tracking-[0.5px] opacity-90" style={{ color: "#fff" }}>
+                    {isActive && day.shortLabel ? (
+                      <span
+                        className="mr-0.5 text-[8px] font-bold tracking-[0.5px] opacity-90"
+                        style={{ color: "#fff" }}
+                      >
                         {day.shortLabel}
                       </span>
-                    )}
-                    <span 
-                      className="leading-none tabular-nums inline-block text-center" 
-                      style={{ minWidth: 16 }}
-                    >
-                      {day.label}
+                    ) : null}
+                    <span className="leading-none tabular-nums inline-block text-center">
+                      {isActive ? day.label : day.dayLetter ?? day.label}
                     </span>
                   </button>
                 );
@@ -340,8 +326,8 @@ export default function FloatingNav({
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}
-                title="Next week"
-                aria-label="Next GRAVE week"
+                title="Next GRAVE week (Friday)"
+                aria-label="Next GRAVE week — jump to Friday"
               >
                 <motion.span
                   whileHover={{ x: 1.5 }}
@@ -353,8 +339,7 @@ export default function FloatingNav({
             )}
           </div>
 
-          {/* Deployment / Breaks Segmented — slightly more compact on mobile */}
-          <div className={cn(segmentVariants(), "shrink-0")}>
+          <div className={cn(segmentVariants(), "shrink-0 ml-2")}>
             {(["deployment", "breaks"] as const).map((view) => {
               const isActive = currentView === view;
               return (
@@ -363,7 +348,7 @@ export default function FloatingNav({
                   onClick={() => onViewChange(view)}
                   className={cn(
                     segmentVariants({ active: isActive }),
-                    "px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-[10px] transition-all active:scale-[0.985]"
+                    "px-3 py-1 text-xs font-semibold rounded-[10px] transition-all active:scale-[0.985]"
                   )}
                 >
                   {view === "deployment" ? "Deploy" : "Breaks"}
@@ -373,108 +358,55 @@ export default function FloatingNav({
           </div>
         </div>
 
-        {/* RIGHT: Command + Clusters (responsive) */}
-        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 shrink-0 pl-2 sm:pl-3 md:pl-4 border-l border-white/20 dark:border-white/10">
-          {/* Command — full pill on md+, compact round icon on mobile */}
-          {/* Desktop / tablet rich trigger */}
+        {/* RIGHT: Command icon, undo/redo, zoom, print, theme, profile */}
+        <div className="flex items-center gap-2 shrink-0 pl-3 border-l border-white/20 dark:border-white/10">
           <button
-            onClick={() => {
-              onCommandOpen?.();
-            }}
-            className="hidden md:flex items-center gap-2 md:gap-2.5 px-4 md:px-5 h-9 rounded-2xl text-[12.5px] font-semibold border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985] group"
-            style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)", minWidth: 200 }}
-          >
-            <Search className="h-4 w-4 opacity-70" />
-            <span>Search · Assign · Command</span>
-            <kbd className="ml-auto px-2 py-px text-[9px] font-bold rounded bg-black/10 dark:bg-white/10">⌘K</kbd>
-          </button>
-          {/* Mobile compact command (round, 40px touch target) */}
-          <button
-            onClick={() => {
-              onCommandOpen?.();
-            }}
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-2xl border transition-all active:scale-[0.94]"
+            onClick={() => onCommandOpen?.()}
+            className="flex items-center justify-center w-9 h-9 rounded-2xl border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985]"
             style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}
-            aria-label="Open command palette"
+            aria-label="Command palette"
             title="Command (⌘K)"
           >
-            <Search className="h-4 w-4 opacity-80" />
+            <Search className="h-4 w-4 opacity-75" />
           </button>
 
-          {/* Desktop action cluster (undo/redo/zoom/saved) — hidden on mobile */}
-          <div className="hidden md:flex items-center gap-2 md:gap-2.5">
-            {/* Undo/Redo */}
-            <div className="flex items-center gap-1">
-              <button onClick={onUndo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Undo">
-                <Undo2 className="h-4 w-4" />
-              </button>
-              <button onClick={onRedo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Redo">
-                <Redo2 className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Zoom Cluster */}
-            <div className="flex items-center gap-px text-xs font-medium">
-              <button onClick={onZoomFit} className="px-2 py-1 rounded-l-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all">Fit</button>
-              <button onClick={onZoomOut} className="px-1.5 py-1 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all">−</button>
-              <button onClick={onZoomIn} className="px-1.5 py-1 rounded-r-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all">+</button>
-            </div>
-
-            <div className="text-xs text-[#6B7280] px-2">{savedText}</div>
+          <div className="flex items-center gap-1">
+            <button onClick={onUndo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Undo">
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button onClick={onRedo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Redo">
+              <Redo2 className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* Mobile "More" actions trigger (three dots) — opens compact glass sheet */}
-          <div className="md:hidden relative" ref={mobileActionsRef}>
+          <div
+            className="flex items-center rounded-full border overflow-hidden"
+            style={{ borderColor: "var(--sb-glass-border)" }}
+          >
             <button
-              onClick={() => setMobileActionsOpen((v) => !v)}
-              className="w-9 h-9 rounded-2xl border flex items-center justify-center active:scale-[0.94] transition-all"
-              style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}
-              aria-label="More actions"
-              aria-expanded={mobileActionsOpen}
+              onClick={onZoomFit}
+              className="p-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
+              title="Fit artboard to viewport"
+              aria-label="Fit to viewport"
             >
-              <span className="text-lg leading-none tracking-[2px] opacity-80">⋯</span>
+              <Maximize2 className="h-4 w-4" />
             </button>
-
-            {/* Compact mobile actions popover (Velvet glass) */}
-            {mobileActionsOpen && (
-              <div
-                className="absolute right-0 mt-2 w-44 rounded-2xl border overflow-hidden z-[9999] shadow-xl"
-                style={{
-                  background: isDark ? "rgba(9,9,11,0.96)" : "rgba(255,255,255,0.96)",
-                  borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-                  backdropFilter: "blur(24px)",
-                }}
-              >
-                <div className="py-1 text-sm">
-                  <button
-                    onClick={() => { setMobileActionsOpen(false); onUndo?.(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
-                  >
-                    <Undo2 className="h-4 w-4" /> <span>Undo</span>
-                  </button>
-                  <button
-                    onClick={() => { setMobileActionsOpen(false); onRedo?.(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
-                  >
-                    <Redo2 className="h-4 w-4" /> <span>Redo</span>
-                  </button>
-                  <button
-                    onClick={() => { setMobileActionsOpen(false); onPrint?.(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
-                  >
-                    <Printer className="h-4 w-4" /> <span>Print</span>
-                  </button>
-                  <div className="h-px bg-white/10 dark:bg-white/10 my-1 mx-3" />
-                  <div className="px-4 py-1.5 text-[11px] text-[#6B7280] font-medium">Zoom</div>
-                  <div className="flex items-center gap-1 px-3 pb-2">
-                    <button onClick={() => { setMobileActionsOpen(false); onZoomFit?.(); }} className="flex-1 px-3 py-1 rounded-xl text-xs border active:scale-[0.985]" style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}>Fit</button>
-                    <button onClick={() => { setMobileActionsOpen(false); onZoomOut?.(); }} className="flex-1 px-3 py-1 rounded-xl text-xs border active:scale-[0.985]" style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}>−</button>
-                    <button onClick={() => { setMobileActionsOpen(false); onZoomIn?.(); }} className="flex-1 px-3 py-1 rounded-xl text-xs border active:scale-[0.985]" style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}>+</button>
-                  </div>
-                  <div className="px-4 py-1 text-[11px] text-[#6B7280] font-mono">{savedText}</div>
-                </div>
-              </div>
-            )}
+            <button
+              onClick={onZoomOut}
+              className="px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all text-sm font-medium"
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              onClick={onZoomIn}
+              className="px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all text-sm font-medium"
+              title="Zoom in (100% max)"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
           </div>
 
           {/* Print — always visible direct access to Print Command Center */}
@@ -496,7 +428,7 @@ export default function FloatingNav({
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((v) => !v)}
-              className="w-8 h-8 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer active:scale-95 transition-all ring-1 ring-white/20 hover:ring-white/40"
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer active:scale-95 transition-all ring-1 ring-white/20 hover:ring-white/40"
               title={currentUser ? `${currentUser.full_name} — ${currentUser.role}` : "Account"}
               aria-expanded={profileOpen}
             >
@@ -551,12 +483,7 @@ export default function FloatingNav({
         </div>
       </nav>
 
-      {/* 
-        Command Palette is now rendered exclusively by the parent (ShiftBuilderClient).
-        The search capsule above only calls onCommandOpen, which wires to the single global
-        react-cmdk + Velvet-backed palette (full roster, actions, Sudo, Grok, etc.).
-        Duplicate local palette removed to eliminate z-index wars, focus traps, and iPad typing breakage.
-      */}
+      {/* Command palette is rendered by ShiftBuilderClient; ⌘K icon above opens it. */}
     </>
   );
 }

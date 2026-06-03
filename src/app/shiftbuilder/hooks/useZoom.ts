@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-export type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.25;
+/** Never upscale past 1 — keeps zone cards at designed density (no blown-up text). */
+export type ZoomMode = "fit" | 0.5 | 0.75 | 1;
 
 // The artboard is locked at 1056×816 (the print contract).
 export const NATURAL_WIDTH = 1056;
@@ -81,7 +82,8 @@ export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
     };
   }, [rosterOpen, recomputeScale]);
 
-  const scale = zoomMode === "fit" ? fitScale : zoomMode;
+  const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
+  const scale = Math.min(rawScale, 1);
 
   return { zoomMode, setZoomMode, fitScale, stageHostRef, scale, recomputeScale };
 }

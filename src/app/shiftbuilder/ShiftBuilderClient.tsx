@@ -73,7 +73,11 @@ import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 import {
   startOfShiftWeek, startOfRosterWeek, currentShiftDate, daysBetween, addDays, sameDay,
   formatWeekLabel, SHIFT_DAY_COLORS, MONTH_SHORT, MONTH_LONG, DAY_LONG,
-  buildDayDefs, type DayDef,
+  buildDayDefs,
+  buildNavDayStrip,
+  navIdForWeekDay,
+  type DayDef,
+
   formatLocalDateISO, rosterWeekStartISO, isDayInRosterWeek, parseLocalDateISO,
 } from "@/lib/shiftbuilder/dateUtils";
 import {
@@ -991,6 +995,10 @@ function AuthedShiftBuilder() {
     return startOfShiftWeek(currentShiftDate());
   });
   const DAY_DEFS = React.useMemo(() => buildDayDefs(weekStart, todayDate), [weekStart, todayDate]);
+  const NAV_DAY_STRIP = React.useMemo(
+    () => buildNavDayStrip(weekStart, todayDate),
+    [weekStart, todayDate],
+  );
 
   // === Live data: nightId resolves from the selected date ==================
   // Null means "no row exists in Supabase for this date yet" — the UI renders
@@ -1818,19 +1826,19 @@ function AuthedShiftBuilder() {
   // === Zoom & centering (extracted to useZoom) ===
   const { zoomMode, setZoomMode, fitScale, stageHostRef, scale, recomputeScale } = useZoom({ rosterOpen });
 
-  const numericSteps: (0.5 | 0.75 | 1 | 1.25)[] = [0.5, 0.75, 1, 1.25];
+  const numericSteps: (0.5 | 0.75 | 1)[] = [0.5, 0.75, 1];
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
-      setZoomMode(dir > 0 ? 1.25 : 0.75);
+      setZoomMode(dir > 0 ? 1 : 0.75);
       return;
     }
-    const idx = numericSteps.indexOf(zoomMode as any);
+    const idx = numericSteps.indexOf(zoomMode as (typeof numericSteps)[number]);
     if (idx !== -1) {
       const next = numericSteps[Math.max(0, Math.min(numericSteps.length - 1, idx + dir))];
       setZoomMode(next);
     } else {
-      setZoomMode(dir > 0 ? 1.25 : 0.75);
+      setZoomMode(dir > 0 ? 1 : 0.75);
     }
   };
 
@@ -2309,14 +2317,12 @@ function AuthedShiftBuilder() {
   // Week navigation — used by the seamless half-circle caps on the date strip in FloatingNav
   const goPrevWeek = React.useCallback(() => {
     const prevWeek = addDays(weekStart, -7);
-    // Optimistic: start prefetching the target week *before* the state flip
-    // so the new week feels warm when the operator lands on it.
     const targetDays = buildDayDefs(prevWeek, todayDate);
     targetDays.forEach((d, i) => {
       setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
     });
-
     setWeekStart(prevWeek);
+    setSelectedDayIndex(0);
   }, [weekStart, currentNight, todayDate]);
 
   const goNextWeek = React.useCallback(() => {
@@ -2325,9 +2331,31 @@ function AuthedShiftBuilder() {
     targetDays.forEach((d, i) => {
       setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
     });
-
     setWeekStart(nextWeek);
+    setSelectedDayIndex(0);
   }, [weekStart, currentNight, todayDate]);
+
+  const handleNavDaySelect = React.useCallback(
+    (navId: number, date: Date) => {
+      const item = NAV_DAY_STRIP.find((d) => d.navId === navId);
+      if (!item) return;
+
+      if (item.bridge === "prev-week-last") {
+        setWeekStart(addDays(weekStart, -7));
+        setSelectedDayIndex(6);
+        return;
+      }
+      if (item.bridge === "next-week-first") {
+        setWeekStart(addDays(weekStart, 7));
+        setSelectedDayIndex(0);
+        return;
+      }
+      if (item.weekIndex != null && item.weekIndex !== selectedDayIndex) {
+        setSelectedDayIndex(item.weekIndex);
+      }
+    },
+    [NAV_DAY_STRIP, weekStart, selectedDayIndex],
+  );
 
   // === Notes debounce handler ============================================
   // Defined here (rather than alongside notesRef/notesSaveTimerRef earlier)
@@ -5472,36 +5500,45 @@ function AuthedShiftBuilder() {
           All other controls preserved visually.
           ═══════════════════════════════════════════════════════════ */}
       <FloatingNav
-        days={DAY_DEFS.map((d, idx) => ({
-          id: idx,
+        days={NAV_DAY_STRIP.map((d) => ({
+          id: d.navId,
           label: String(d.dateNum),
-          shortLabel: d.date.toLocaleString("default", { month: "short" }).toUpperCase(),
+          shortLabel: d.shortLabel,
+          dayLetter: d.dayLetter,
+          isBridge: !!d.bridge,
           dateNum: d.dateNum,
           isToday: d.isToday,
           date: d.date,
         }))}
-        selectedDayId={selectedDayIndex}  // immediate for snappy nav feedback
+        selectedDayId={navIdForWeekDay(selectedDayIndex)}
         onDaySelect={(id, date) => {
-          if (id === selectedDayIndex) return;
-
-          // === 3.5 Measurement ===
-          if (typeof performance !== 'undefined' && performance.mark) {
-            performance.mark('day-switch-start', { detail: { dayIndex: id, date: date.toISOString().slice(0, 10) } });
-          }
-
-          // Full TanStack Query commitment: prefetch the target day for instant feel
-          currentNight.prefetchNight(date);
-
-          const prefersReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          if (prefersReduced) {
-            setSelectedDayIndex(id);
+          const item = NAV_DAY_STRIP.find((d) => d.navId === id);
+          if (!item) return;
+          if (
+            item.weekIndex != null &&
+            item.weekIndex === selectedDayIndex &&
+            !item.bridge
+          ) {
             return;
           }
 
-          // New: Wrap in startTransition so the UI stays responsive during the (much smaller) render cost
-          startDayTransition(() => {
-            setSelectedDayIndex(id);
-          });
+          if (typeof performance !== "undefined" && performance.mark) {
+            performance.mark("day-switch-start", {
+              detail: { navId: id, date: date.toISOString().slice(0, 10) },
+            });
+          }
+
+          currentNight.prefetchNight(date);
+
+          const apply = () => handleNavDaySelect(id, date);
+          const prefersReduced =
+            typeof window !== "undefined" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (prefersReduced) {
+            apply();
+            return;
+          }
+          startDayTransition(apply);
         }}
         onDayHover={(id, date) => {
           // Aggressive hover prefetch — this is the key to making day switches feel instant
@@ -5557,7 +5594,7 @@ function AuthedShiftBuilder() {
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
-          className="fixed left-3 top-[52px] sm:top-[64px] bottom-3 w-[280px] sm:w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col"
+          className="fixed left-3 top-[64px] bottom-3 w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col"
           style={{
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
             backdropFilter: "blur(48px) saturate(200%)",

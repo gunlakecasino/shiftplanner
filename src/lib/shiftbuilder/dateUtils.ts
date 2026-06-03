@@ -149,3 +149,68 @@ export function buildDayDefs(weekStart: Date, today: Date): DayDef[] {
     };
   });
 }
+
+/** Bridge pill: jump to adjacent GRAVE week boundary day. */
+export type NavDayBridge = "prev-week-last" | "next-week-first";
+
+/** One pill in the 9-day FloatingNav strip (Thu before + Fri–Thu + Fri after). */
+export interface NavDayStripItem {
+  navId: number;
+  /** 0–6 when pill is in the current weekStart week; null for bridge pills. */
+  weekIndex: number | null;
+  bridge?: NavDayBridge;
+  date: Date;
+  dateNum: number;
+  shortLabel: string;
+  dayLetter: string;
+  isToday: boolean;
+}
+
+export function buildNavDayStrip(weekStart: Date, today: Date): NavDayStripItem[] {
+  const items: NavDayStripItem[] = [];
+
+  const prevThu = addDays(weekStart, -1);
+  items.push({
+    navId: 0,
+    weekIndex: null,
+    bridge: "prev-week-last",
+    date: prevThu,
+    dateNum: prevThu.getDate(),
+    shortLabel: MONTH_SHORT[prevThu.getMonth()].toUpperCase(),
+    dayLetter: DAY_LONG[prevThu.getDay()].charAt(0),
+    isToday: sameDay(prevThu, today),
+  });
+
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(weekStart, i);
+    const name = DAY_LONG[date.getDay()];
+    items.push({
+      navId: 1 + i,
+      weekIndex: i,
+      date,
+      dateNum: date.getDate(),
+      shortLabel: MONTH_SHORT[date.getMonth()].toUpperCase(),
+      dayLetter: name.charAt(0),
+      isToday: sameDay(date, today),
+    });
+  }
+
+  const nextFri = addDays(weekStart, 7);
+  items.push({
+    navId: 8,
+    weekIndex: null,
+    bridge: "next-week-first",
+    date: nextFri,
+    dateNum: nextFri.getDate(),
+    shortLabel: MONTH_SHORT[nextFri.getMonth()].toUpperCase(),
+    dayLetter: DAY_LONG[nextFri.getDay()].charAt(0),
+    isToday: sameDay(nextFri, today),
+  });
+
+  return items;
+}
+
+/** Map current week + day index to the 9-pill nav id (1–7). */
+export function navIdForWeekDay(selectedDayIndex: number): number {
+  return selectedDayIndex + 1;
+}
