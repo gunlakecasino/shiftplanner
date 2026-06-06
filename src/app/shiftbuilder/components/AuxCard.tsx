@@ -134,7 +134,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           <div className="flex flex-col min-w-0">
             <span
               className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 17, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+              style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {draftInfo.proposedTmName}
             </span>
@@ -155,7 +155,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               )}
               <span
                 className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-                style={{ fontSize: 19, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                style={{ fontSize: 20, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
               >
                 {a.tmName}
               </span>

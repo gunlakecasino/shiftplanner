@@ -106,7 +106,7 @@ export function BookRestroomCard(props: BookRestroomCardProps) {
             <span className="font-semibold tracking-[0.2px]">MEN'S</span>
             <span className="inline-block bg-[#1C1C1E] text-white text-[7.5px] font-semibold tabular-nums px-1 py-[0px] rounded-[1px] leading-none">{formatGenderCount(mensCount)}</span>
           </div>
-          <div className="text-[11px] font-semibold text-[#1C1C1E] leading-tight truncate mt-0.5">
+          <div className="text-[12px] font-semibold text-[#1C1C1E] leading-tight truncate mt-0.5">
             {mensName || "—"}
           </div>
           {mensLocs.length > 0 && (
@@ -134,7 +134,7 @@ export function BookRestroomCard(props: BookRestroomCardProps) {
             <span className="font-semibold tracking-[0.2px]">WOMEN'S</span>
             <span className="inline-block bg-[#1C1C1E] text-white text-[7.5px] font-semibold tabular-nums px-1 py-[0px] rounded-[1px] leading-none">{formatGenderCount(womensCount)}</span>
           </div>
-          <div className="text-[11px] font-semibold text-[#1C1C1E] leading-tight truncate mt-0.5">
+          <div className="text-[12px] font-semibold text-[#1C1C1E] leading-tight truncate mt-0.5">
             {womensName || "—"}
           </div>
           {womensLocs.length > 0 && (

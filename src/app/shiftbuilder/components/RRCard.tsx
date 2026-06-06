@@ -121,7 +121,7 @@ const RRSide: React.FC<{
           <div className="flex flex-col min-w-0">
             <span
               className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 17, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+              style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {draftInfo.proposedTmName}
             </span>
@@ -141,7 +141,7 @@ const RRSide: React.FC<{
             )}
             <span
               className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 17, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+              style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {a.tmName}
             </span>
@@ -155,7 +155,7 @@ const RRSide: React.FC<{
       {/* Per-side selected tasks */}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-0.5 text-[9.5px] leading-[1.25] ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`mt-0.5 text-[10px] leading-[1.25] ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -166,8 +166,8 @@ const RRSide: React.FC<{
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
-              textSize="text-[9.5px]"
-              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              textSize="text-[10px]"
+              textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
             />
           ))}
         </div>

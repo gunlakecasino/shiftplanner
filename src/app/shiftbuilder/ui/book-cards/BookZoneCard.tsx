@@ -86,7 +86,7 @@ export function BookZoneCard(props: BookZoneCardProps) {
       {/* Body - tighter to match artboard card height and typography */}
       <div className="px-2 pt-1 pb-1.5 flex flex-col flex-1 text-[11px]">
         {hasName ? (
-          <div className="text-[12px] font-semibold leading-tight tracking-[-0.1px] text-[#1C1C1E] truncate">
+          <div className="text-[13px] font-semibold leading-tight tracking-[-0.1px] text-[#1C1C1E] truncate">
             {name}
           </div>
         ) : (

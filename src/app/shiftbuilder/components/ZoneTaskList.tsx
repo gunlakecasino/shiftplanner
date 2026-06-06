@@ -16,10 +16,10 @@ const ZoneTaskList: React.FC<{
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
 }> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask }) => {
   if (!tasks || tasks.length === 0) return null;
-  const textColor = hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
+  const textColor = hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
   return (
     <div
-      className={`mt-auto pt-1 text-[11px] leading-tight ${textColor}`}
+      className={`mt-auto pt-1 text-[11.5px] leading-tight ${textColor}`}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
       {tasks.map((t) => (
@@ -30,7 +30,7 @@ const ZoneTaskList: React.FC<{
           onRemoveTask={onRemoveTask}
           onSetTaskColor={onSetTaskColor}
           onEditTask={onEditTask}
-          textSize="text-[11px]"
+          textSize="text-[11.5px]"
           textColorClass={textColor}
         />
       ))}

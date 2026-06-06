@@ -86,7 +86,7 @@ export function BookAuxCard(props: BookAuxCardProps) {
     >
       <div className="px-2 pt-1.5 pb-1.5">
         <div className="flex items-center justify-between">
-          <div className="text-[11px] font-semibold text-[#1C1C1E]">{name}</div>
+          <div className="text-[12px] font-semibold text-[#1C1C1E]">{name}</div>
           <button
             onClick={(e) => { e.stopPropagation(); onUnassign?.(); }}
             className="text-[10px] text-[#6B6B68] hover:text-red-600"

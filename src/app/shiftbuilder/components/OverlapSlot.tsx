@@ -95,7 +95,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           )}
           <span
             className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
-            style={{ fontSize: 12, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
+            style={{ fontSize: 13, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
           >
             {a.tmName}
           </span>
@@ -116,7 +116,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       )}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-0.5 text-[9px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`mt-0.5 text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -127,8 +127,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
-              textSize="text-[9px]"
-              textColorClass={hasTM ? "text-[#374151] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              textSize="text-[9.5px]"
+              textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
             />
           ))}
         </div>

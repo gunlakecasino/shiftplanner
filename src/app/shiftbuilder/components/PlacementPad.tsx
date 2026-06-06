@@ -1511,7 +1511,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             >
               {label}
             </div>
-            <div className={`truncate font-bold tracking-tight text-neutral-900 ${padLarge ? "text-[23px]" : "text-[15px]"}`}>
+            <div className={`truncate font-bold tracking-tight text-neutral-900 ${padLarge ? "text-[24px]" : "text-[16px]"}`}>
               {a.tmName || "Unassigned"}
             </div>
             {a.tmName && onMarkUnavailable && (
@@ -1653,7 +1653,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         className="h-1.5 w-1.5 shrink-0 rounded-sm"
                         style={{ background: t.color ?? accent }}
                       />
-                      <span className={`flex-1 truncate font-medium text-neutral-800 ${padLarge ? "text-[17px]" : "text-[11px]"}`}>
+                      <span className={`flex-1 truncate font-medium text-neutral-900 ${padLarge ? "text-[17px]" : "text-[11.5px]"}`}>
                         {t.taskLabel}
                       </span>
                       {onRemoveTask && (

@@ -40,8 +40,8 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
-  textSize = "text-[11px]",
-  textColorClass = "text-[#374151] dark:text-[#C7C7CC]",
+  textSize = "text-[11.5px]",
+  textColorClass = "text-[#1f2937] dark:text-[#C7C7CC]",
   draggable = true,
 }) => {
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
@@ -145,7 +145,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           />
         ) : (
           <span
-            className="block rounded-sm transition-colors"
+            className="block rounded-sm transition-colors font-medium"
             style={hasColor ? {
               backgroundColor: `${task.color}15`,
               borderLeft: `3px solid ${task.color}`,

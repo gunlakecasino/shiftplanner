@@ -1467,7 +1467,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                     boxShadow: `0 0 6px ${t.color ?? accent}88`,
                   }} />
                   <span style={{
-                    fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.15px", flex: 1,
+                    fontSize: 13, fontWeight: 600, letterSpacing: "-0.15px", flex: 1,
                     color: "var(--sb-text-1, #F2F2F4)",
                     fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

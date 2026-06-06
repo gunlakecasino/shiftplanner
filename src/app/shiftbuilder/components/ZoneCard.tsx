@@ -148,7 +148,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           <div className="flex flex-col min-w-0">
             <span
               className="font-bold tracking-[-0.4px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 19, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+              style={{ fontSize: 20, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
             >
               {draftInfo.proposedTmName}
             </span>
@@ -169,7 +169,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               )}
               <span
                 className="font-bold tracking-[-0.4px] text-[#111] dark:text-[#F2F2F4] truncate"
-                style={{ fontSize: 21, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                style={{ fontSize: 22, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
               >
                 {a.tmName}
               </span>
