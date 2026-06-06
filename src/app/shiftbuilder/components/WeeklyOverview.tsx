@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { X, Search, Users, Table2 } from "lucide-react";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
+import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 /**
  * WeeklyOverview
@@ -20,8 +21,10 @@ import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 export interface WeeklyOverviewProps {
   open: boolean;
   onClose: () => void;
-  /** The planned this-week history (Map<tmId, placements this week>). Primary data source. */
+  /** The planned this-week history (Map<tmId, placements this week>). Primary data source for in-session built days. */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+  /** Optional historical recent zone history from server (for the current night). Merged for days that match the week (useful for real past weeks or committed prior days). */
+  historicalRecentZoneHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
   /** Current day's assignments (for "this day" context + current placement of focused TM). */
   currentAssignments?: Record<string, any>;
   /** The 7 day defs for the current grave week (for labels, order, colors). */
@@ -50,6 +53,7 @@ export default function WeeklyOverview({
   open,
   onClose,
   weeklyRecentHistory,
+  historicalRecentZoneHistory,
   currentAssignments = {},
   dayDefs = [],
   selectedDayIndex = 0,
@@ -62,6 +66,18 @@ export default function WeeklyOverview({
   const [search, setSearch] = useState("");
   const [showOnlyRepeats, setShowOnlyRepeats] = useState(false);
 
+  // Reliable display name lookup from members (prioritize display_name over any tm_name / slug).
+  const tmDisplayName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of (members || [])) {
+      const id = m?.id || m?.tmId || m?.tm_id || m?.tmID;
+      if (!id) continue;
+      const name = m?.display_name || m?.displayName || m?.full_name || m?.fullName || m?.name || String(id);
+      map.set(String(id), String(name));
+    }
+    return map;
+  }, [members]);
+
   // Build TM-centric week data from the planned history (live + current week prior days).
   const tmRows: TmWeekRow[] = useMemo(() => {
     if (!weeklyRecentHistory || weeklyRecentHistory.size === 0) return [];
@@ -71,27 +87,56 @@ export default function WeeklyOverview({
     // Seed from the week history (covers planned prior + current for the viewed week).
     for (const [tmId, recs] of weeklyRecentHistory.entries()) {
       if (!byTm.has(tmId)) {
-        // Try to enrich name from members or fall back to the id (the live history map for the week carries tmName on the assignment objects, not the recent list).
-        const mem = members.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId));
-        byTm.set(tmId, { name: mem?.display_name || mem?.full_name || tmId, slotsByDay: {} });
+        const name = tmDisplayName.get(tmId) || tmId;
+        byTm.set(tmId, { name, slotsByDay: {} });
       }
       const entry = byTm.get(tmId)!;
-      recs.forEach((r) => {
-        // Map the placement date back to a day index in the provided dayDefs (best effort by date string match).
-        const idx = dayDefs.findIndex((d: any) => d && formatDateKey(d.date) === r.nightDate);
+      recs.forEach((r: any) => {
+        // Map the placement date back to a day index in the provided dayDefs using consistent local date formatting (matches how nightDate was stored in plannedThisWeekRecentHistory via formatLocalDateISO).
+        const idx = dayDefs.findIndex((d: any) => {
+          if (!d) return false;
+          const dayDate = d.date instanceof Date ? d.date : new Date(d.date);
+          return formatLocalDateISO(dayDate) === r.nightDate;
+        });
         if (idx >= 0) {
           entry.slotsByDay[idx] = r.slotKey; // raw key is fine; UI can pretty-print if wanted
         }
       });
     }
 
+    // Merge historical recent (from server for the loaded night) if it has entries for days in this week.
+    // This helps show committed DB placements from "this week" even if not (yet) in the current live/planned in-memory for the session.
+    // Planned (in-session) takes precedence for overlapping day/slot.
+    if (historicalRecentZoneHistory) {
+      for (const [tmId, recs] of historicalRecentZoneHistory.entries()) {
+        if (!byTm.has(tmId)) {
+          const name = tmDisplayName.get(tmId) || tmId;
+          byTm.set(tmId, { name, slotsByDay: {} });
+        }
+        const entry = byTm.get(tmId)!;
+        recs.forEach((r: any) => {
+          const idx = dayDefs.findIndex((d: any) => {
+            if (!d) return false;
+            const dayDate = d.date instanceof Date ? d.date : new Date(d.date);
+            return formatLocalDateISO(dayDate) === r.nightDate;
+          });
+          if (idx >= 0) {
+            if (!entry.slotsByDay[idx]) {
+              entry.slotsByDay[idx] = r.slotKey;
+            }
+          }
+        });
+      }
+    }
+
     // Also ensure current day's placed TMs are represented (even if history lag).
+    // Always resolve name from the display name map; never fall back to internal tmName / tm_xxx.
     Object.entries(currentAssignments).forEach(([slotKey, a]: [string, any]) => {
       const tmId = a?.tmId;
       if (!tmId) return;
       if (!byTm.has(tmId)) {
-        const mem = members.find((m: any) => (m.id === tmId || m.tmId === tmId || m.tm_id === tmId));
-        byTm.set(tmId, { name: mem?.display_name || mem?.full_name || a?.tmName || tmId, slotsByDay: {} });
+        const name = tmDisplayName.get(tmId) || tmId;
+        byTm.set(tmId, { name, slotsByDay: {} });
       }
       const idx = selectedDayIndex;
       byTm.get(tmId)!.slotsByDay[idx] = slotKey;
@@ -138,7 +183,7 @@ export default function WeeklyOverview({
 
   const panelClass = isTablet
     ? "fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl border-t shadow-2xl overflow-hidden"
-    : "fixed right-3 top-16 z-[60] w-[min(420px,calc(100vw-24px))] max-h-[calc(100vh-80px)] rounded-2xl border shadow-2xl overflow-hidden flex flex-col";
+    : "fixed right-3 top-16 z-[60] w-[min(420px,calc(100vw-24px))] h-auto rounded-2xl border shadow-2xl overflow-visible flex flex-col";
 
   const glassStyle: React.CSSProperties = isDark
     ? { background: "rgba(20,19,22,0.92)", borderColor: "rgba(255,255,255,0.08)", backdropFilter: "blur(32px) saturate(180%)" }
@@ -193,8 +238,8 @@ export default function WeeklyOverview({
         <button onClick={() => { setSearch(""); setShowOnlyRepeats(false); onFocusTm?.(null); }} className="text-[11px] text-[#6B7280] hover:text-current">Clear</button>
       </div>
 
-      {/* Live Table (TM rows × days) */}
-      <div className="flex-1 overflow-auto p-2 text-[12px] tabular-nums" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
+      {/* Live Table (TM rows × days) - expands vertically with content, no internal scroll */}
+      <div className="p-2 text-[12px] tabular-nums overflow-visible" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
         {tmRows.length === 0 ? (
           <div className="p-6 text-center text-[#6B7280] text-[12px]">No placements in the current week yet. Build the schedule and this view will light up live.</div>
         ) : (
@@ -208,7 +253,7 @@ export default function WeeklyOverview({
               <div className="text-right pr-1">Wk</div>
             </div>
 
-            {/* Rows */}
+            {/* Rows - no internal scroll; panel expands vertically to fit content */}
             {tmRows.map((row) => {
               const isSel = focusedTmId === row.tmId;
               return (
@@ -300,21 +345,13 @@ export default function WeeklyOverview({
 }
 
 // Small helpers (local to keep the component self-contained; reuse real formatters in a follow-up if desired).
-function formatDateKey(d: Date | string | undefined): string {
-  if (!d) return "";
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return dt.toISOString().slice(0, 10);
-}
-
 function dayLabelShort(i: number): string {
-  // Fri=4 in JS getDay for grave week start, but we just use short labels.
   const shorts = ["F", "S", "S", "M", "T", "W", "T"];
   return shorts[i % 7] || "D";
 }
 
 function prettySlot(sk: string): string {
   if (!sk || sk === "—") return "—";
-  // Keep short for cells (Z4, R3W, A1, etc). Expand only in titles.
   if (sk.startsWith("Z")) return sk;
   if (sk.startsWith("MRR")) return "R" + sk.replace("MRR", "") + "M";
   if (sk.startsWith("WRR")) return "R" + sk.replace("WRR", "") + "W";

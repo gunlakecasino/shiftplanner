@@ -8,6 +8,12 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ## 2026-06-09 — Grok 4.3 — Weekly Overview live table in navbar (user: "I want to now add in a 'Weekly Overview' next to the launchpad and today in the navbar, that is a live table of weekly overview and where we can tap a TM name and it fades the others down and shows them and where they are, etc.")
 
+- Follow-up fixes per "it only shows the current day" + "display the display name instead of tm_name" + "no scroll, it should expand vertically":
+  - Name resolution: Added `tmDisplayName` Map (built once from `members`) that strictly prefers `display_name` / `displayName` / `full_name` etc. All TM name seeding (from weeklyRecentHistory, historicalRecentZoneHistory, and currentAssignments) now uses the map and **never** falls back to `a?.tmName`, `tmId`, or internal "tm_xxx" slugs.
+  - Vertical expand / no scroll: Desktop panel changed to `h-auto overflow-visible` (removed constraining `max-h-[calc(100vh-80px)]`). Table content wrapper changed from `flex-1 overflow-auto` to `overflow-visible`. Table rows now drive the panel height; content expands vertically instead of scrolling internally. Detail strip and footer naturally follow the (potentially tall) table. (Tablet bottom-sheet behavior left as-is for usability.)
+  - Also wired `historicalRecentZoneHistory` merge (in addition to planned) so more week days can populate when DB recent data is available.
+- tsc clean. The table now correctly shows display names and prior days' placements (when the data exists in the week history), and the panel grows vertically to fit all rows without an inner scrollbar.
+
 - Added "Weekly Overview" (Table2 icon) NavToolButton in FloatingNav LEFT cluster immediately after the Roster toggle (exact location "next to the launchpad and today").
 - New state via useRosterPanels (weeklyOverviewOpen with tablet/desktop persistence) + focusedWeeklyTmId in Client. Clear focus on day/week change or close.
 - Reuses the existing `plannedThisWeekRecentHistory` (liveAssignmentsStore + current for the week days 0..selectedIndex) as the source for the live table data.

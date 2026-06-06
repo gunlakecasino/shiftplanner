@@ -5504,6 +5504,7 @@ function AuthedShiftBuilder() {
             setFocusedWeeklyTmId(null);
           }}
           weeklyRecentHistory={plannedThisWeekRecentHistory}
+          historicalRecentZoneHistory={effectiveRecentZoneHistory}
           currentAssignments={assignments}
           dayDefs={DAY_DEFS}
           selectedDayIndex={selectedDayIndex}
