@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
@@ -195,13 +196,18 @@ export default function FloatingNav({
   // Profile avatar dropdown state
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
 
   // Close profile dropdown on outside click or Escape (matches existing patterns)
   useEffect(() => {
     if (!profileOpen) return;
 
     const onDown = (e: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const clickedTrigger = profileRef.current && profileRef.current.contains(target);
+      const clickedMenu = profileMenuRef.current && profileMenuRef.current.contains(target);
+      if (!clickedTrigger && !clickedMenu) {
         setProfileOpen(false);
       }
     };
@@ -214,6 +220,41 @@ export default function FloatingNav({
     return () => {
       document.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
+    };
+  }, [profileOpen]);
+
+  // Compute fixed position for the profile dropdown so it is never clipped by
+  // ancestors (stage overflow-hidden, nav insets, transforms, or high-z overlays).
+  // Using fixed + getBoundingClientRect guarantees it's always fully visible
+  // and correctly right-aligned to the avatar, regardless of the floating nav's
+  // complex calc'd width/positioning.
+  useEffect(() => {
+    if (!profileOpen) {
+      setDropdownPos(null);
+      return;
+    }
+
+    const computePos = () => {
+      const container = profileRef.current;
+      if (!container) return;
+      const btn = container.querySelector("button") as HTMLElement | null;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 8, // matches mt-2 visually
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+
+    // Run after paint so rects are accurate
+    const raf = requestAnimationFrame(computePos);
+
+    // Recompute on resize (nav can reflow)
+    window.addEventListener("resize", computePos);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", computePos);
     };
   }, [profileOpen]);
 
@@ -523,7 +564,24 @@ export default function FloatingNav({
 
           <div ref={profileRef} className="relative">
             <button
-              onClick={() => setProfileOpen((v) => !v)}
+              onClick={() => {
+                const willOpen = !profileOpen;
+                if (willOpen) {
+                  // Compute synchronously so the menu renders in the correct place immediately
+                  const container = profileRef.current;
+                  if (container) {
+                    const btn = container.querySelector("button") as HTMLElement | null;
+                    if (btn) {
+                      const rect = btn.getBoundingClientRect();
+                      setDropdownPos({
+                        top: rect.bottom + 8,
+                        right: Math.max(8, window.innerWidth - rect.right),
+                      });
+                    }
+                  }
+                }
+                setProfileOpen(willOpen);
+              }}
               className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] text-[10px] font-bold text-white ring-1 ring-white/20 transition-all hover:ring-white/40 active:scale-95"
               title={currentUser ? `${currentUser.full_name} — ${currentUser.role}` : "Account"}
               aria-expanded={profileOpen}
@@ -531,12 +589,25 @@ export default function FloatingNav({
               {userInitials}
             </button>
 
-            {/* Profile Dropdown */}
-            {profileOpen && currentUser && (
-              <div
-                className="absolute right-0 mt-2 w-56 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/60 overflow-hidden z-[9999]"
-                style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-              >
+            {/* Profile Dropdown
+                - Uses React Portal to document.body so it completely escapes
+                  the nav's stacking context, any ancestor transforms (canvas zoom/pan),
+                  overflow-hidden on the stage, and inset calculations.
+                - Positioned with fixed + rect from the avatar so it is always
+                  fully on-screen and right-aligned under the button.
+                - High z ensures it appears above the nav, roster, cards, etc.
+            */}
+            {profileOpen && currentUser && dropdownPos &&
+              createPortal(
+                <div
+                  ref={profileMenuRef}
+                  className="fixed w-56 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/60 overflow-hidden z-[10000]"
+                  style={{
+                    top: `${dropdownPos.top}px`,
+                    right: `${dropdownPos.right}px`,
+                    fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
+                  }}
+                >
                 {/* User header */}
                 <div className="px-4 py-3 border-b border-zinc-800">
                   <div className="font-semibold text-zinc-100 tracking-tight">
@@ -573,7 +644,8 @@ export default function FloatingNav({
                     Sign out
                   </button>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>
