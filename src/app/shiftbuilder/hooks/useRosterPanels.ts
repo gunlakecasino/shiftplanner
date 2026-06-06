@@ -82,6 +82,24 @@ export function useRosterPanels() {
     value: string;
   } | null>(null);
 
+  // Weekly Overview panel (live table). Persisted like roster (tablet/desktop split).
+  const [weeklyOverviewOpen, setWeeklyOverviewOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    if (isTabletTouchDevice()) {
+      const tabletSaved = localStorage.getItem("oms_weekly_overview_open_tablet");
+      return tabletSaved === "true";
+    }
+    const saved = localStorage.getItem("oms_weekly_overview_open");
+    return saved === null ? false : saved === "true";
+  });
+  useEffect(() => {
+    if (isTabletTouchDevice()) {
+      localStorage.setItem("oms_weekly_overview_open_tablet", String(weeklyOverviewOpen));
+    } else {
+      localStorage.setItem("oms_weekly_overview_open", String(weeklyOverviewOpen));
+    }
+  }, [weeklyOverviewOpen]);
+
   return {
     otherTmsExpanded, setOtherTmsExpanded,
     rosterOpen, setRosterOpen,
@@ -99,5 +117,6 @@ export function useRosterPanels() {
     graveOnly, setGraveOnly,
     cmdkOpen, setCmdkOpen,
     cmdkInitialContext, setCmdkInitialContext,
+    weeklyOverviewOpen, setWeeklyOverviewOpen,
   };
 }

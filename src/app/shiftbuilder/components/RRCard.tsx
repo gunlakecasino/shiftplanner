@@ -47,6 +47,9 @@ export interface RRCardProps {
   fitChipM?: PrerenderedPlacementFit | null;
   /** Builder mode flag for subtle digital-only UI sugar. */
   showDigitalAssists?: boolean;
+
+  /** Weekly Overview focus: dims non-matching sides/cards, highlights matching TM side(s). */
+  focusedTmId?: string | null;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -75,7 +78,10 @@ const RRSide: React.FC<{
   showBreakBadge?: boolean;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo }) => {
+
+  /** Weekly focus for this side. */
+  focusedTmId?: string | null;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo, focusedTmId }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -83,6 +89,9 @@ const RRSide: React.FC<{
 
   // Phase 1 Live layer ready (onLiveAssign / onLiveUnassign when wired by parent).
   const dim = !hasTM && !loading;
+  const currentTmId = assignment?.tmId;
+  const isFocused = !!focusedTmId && currentTmId === focusedTmId;
+  const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => onClick(slotKey, el),
   );
@@ -95,7 +104,7 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
+      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       {/* Label + badge row (skip label if empty, for stacked side cards where header already includes the side info). Badge row only if showBreakBadge (for stacked, badge lives in side-card header to pin name upper like Zone/Aux cards) */}
       {showBreakBadge && label && (
@@ -191,6 +200,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
+  focusedTmId,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -279,6 +289,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             showBreakBadge={false}
             isDraftMode={isDraftMode}
             draftInfo={draftInfoW}
+            focusedTmId={focusedTmId}
           />
           {/* Women's coverage banners (independent per side now) */}
           {wCoverageTasks.map(t => (
@@ -333,6 +344,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             showBreakBadge={false}
             isDraftMode={isDraftMode}
             draftInfo={draftInfoM}
+            focusedTmId={focusedTmId}
           />
           {/* Men's coverage banners (independent per side now) */}
           {mCoverageTasks.map(t => (

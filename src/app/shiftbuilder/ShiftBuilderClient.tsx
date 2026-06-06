@@ -149,6 +149,7 @@ import ZoneCard from "./components/ZoneCard";
 import RRCard from "./components/RRCard";
 import AuxCard from "./components/AuxCard";
 import OverlapSlot from "./components/OverlapSlot";
+import WeeklyOverview from "./components/WeeklyOverview";
 
 import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
@@ -970,12 +971,22 @@ function AuthedShiftBuilder() {
     graveOnly, setGraveOnly,
     cmdkOpen, setCmdkOpen,
     cmdkInitialContext, setCmdkInitialContext,
+    weeklyOverviewOpen, setWeeklyOverviewOpen,
   } = useRosterPanels();
 
   // Loader components for heavy surfaces, dynamically imported at runtime (see effects below).
   // Declared here (after useRosterPanels) so hook call order is stable.
   const [CommandPaletteLoader, setCommandPaletteLoader] = useState<React.ComponentType<any> | null>(null);
   const [SudoWindowLoader, setSudoWindowLoader] = useState<React.ComponentType<any> | null>(null);
+
+  // Weekly Overview focus state (TM tap in the live table fades other rows + dims non-matching cards on current day's canvas;
+  // detail shows the TM's full week placements + "where they are"). Cleared on close/day change.
+  const [focusedWeeklyTmId, setFocusedWeeklyTmId] = useState<string | null>(null);
+
+  // Auto-clear focus when the day (or week) changes so the highlight always matches the visible board.
+  React.useEffect(() => {
+    setFocusedWeeklyTmId(null);
+  }, [selectedDayIndex, weekStart]);
 
   // Ops auth (PIN gate) — available only inside the authenticated tree.
   const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
@@ -5480,7 +5491,32 @@ function AuthedShiftBuilder() {
         onRosterToggle={() => setRosterOpen((v) => !v)}
         canvasMode={canvasMode}
         onCanvasModeChange={setCanvasMode}
+        onWeeklyOverview={() => setWeeklyOverviewOpen((v) => !v)}
+        weeklyOverviewOpen={weeklyOverviewOpen}
       />
+
+      {/* Weekly Overview live table (glass panel, TM focus that dims canvas cards + shows week placements). */}
+      {weeklyOverviewOpen && (
+        <WeeklyOverview
+          open={weeklyOverviewOpen}
+          onClose={() => {
+            setWeeklyOverviewOpen(false);
+            setFocusedWeeklyTmId(null);
+          }}
+          weeklyRecentHistory={plannedThisWeekRecentHistory}
+          currentAssignments={assignments}
+          dayDefs={DAY_DEFS}
+          selectedDayIndex={selectedDayIndex}
+          onJumpToDayIndex={(idx) => {
+            setSelectedDayIndex(idx);
+            // focus is intentionally preserved so the new day's cards highlight the TM immediately
+          }}
+          focusedTmId={focusedWeeklyTmId}
+          onFocusTm={setFocusedWeeklyTmId}
+          isDark={isDark}
+          members={effectiveRealRoster as any[]}
+        />
+      )}
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
           Only the actual droppable artboard + roster participate in the drag context.
@@ -5798,6 +5834,7 @@ function AuthedShiftBuilder() {
               nightId={queryNightId || nightId}
               selectedTasks={selectedTasks}  // still legacy during 3.1 transition
               cardBorders={effectiveCardBorders}
+              focusedTmId={focusedWeeklyTmId}
               processedWaves={processedDayData?.waves}
               processedBreakCounts={processedDayData?.breakCounts}
               selectedDay={selectedDay}

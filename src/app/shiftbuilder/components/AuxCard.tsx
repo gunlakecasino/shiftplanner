@@ -40,6 +40,9 @@ export interface AuxCardProps {
   fitChip?: PrerenderedPlacementFit | null;
   /** Builder mode flag for subtle digital-only UI sugar (e.g. empty card hints). */
   showDigitalAssists?: boolean;
+
+  /** Weekly Overview focus: when provided, this card dims if its TM does not match, or highlights if it does. */
+  focusedTmId?: string | null;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -60,6 +63,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   isLocked = false,
   fitChip,
   showDigitalAssists = false,
+  focusedTmId,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -70,6 +74,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   // Phase 1 Live layer ready (onLive* props when wired).
   const icon = getAuxIcon(def.key);
   const isEmpty = !hasTM && !loading;
+  const currentTmId = a?.tmId;
+  const isFocused = !!focusedTmId && currentTmId === focusedTmId;
+  const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => { if (!isLocked) onCardClick(def.key, el); },
   );
@@ -83,7 +90,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={def.key}
-      className={`assignment-card sb-assignment-card relative cursor-pointer flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
+      className={`assignment-card sb-assignment-card relative cursor-pointer flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),

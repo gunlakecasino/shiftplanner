@@ -114,6 +114,9 @@ export interface ShiftBuilderBoardProps {
   artboardScale?: number;
   /** When true (print-preview mode), suppress digital-only assists (xAI chips/lines, fit chips, HUDs) so the live canvas matches the exact Golden that will be cloned for PDF/print. Core content (names, badges that print, tasks, etc.) unchanged. */
   isPrintPreview?: boolean;
+
+  /** Weekly Overview focus (from navbar table): dims non-matching cards, highlights the focused TM's slot on this day. */
+  focusedTmId?: string | null;
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -189,6 +192,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   fitBySlot: fitBySlotProp,
   artboardScale,
   isPrintPreview = false,
+  focusedTmId,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -771,6 +775,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveUnassign={onLiveUnassign}
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
                         showDigitalAssists={showDigitalAssists}
+                        focusedTmId={focusedTmId}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -829,6 +834,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         fitChipW={showDigitalAssists ? fitBySlot[wKey] : undefined}
                         fitChipM={showDigitalAssists ? fitBySlot[mKey] : undefined}
                         showDigitalAssists={showDigitalAssists}
+                        focusedTmId={focusedTmId}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -884,6 +890,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveUnassign={onLiveUnassign}
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
                         showDigitalAssists={showDigitalAssists}
+                        focusedTmId={focusedTmId}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1065,6 +1072,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 onLiveUnassign={onLiveUnassign}
                                 fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
                                 showDigitalAssists={showDigitalAssists}
+                                focusedTmId={focusedTmId}
                               />
                               {activePlacementPad?.hostId === slotKey &&
                                 renderPlacementPad(

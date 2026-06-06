@@ -1348,6 +1348,19 @@ body {
   opacity: 0.6;
   transition: opacity var(--sb-dur-fast) ease;
 }
+
+/* Weekly Overview focus: dims non-matching cards (fade others), highlights the selected TM's slot on the current day. */
+.sb-weekly-dim {
+  opacity: 0.25;
+  transition: opacity 120ms ease;
+  filter: saturate(0.6);
+}
+.sb-weekly-highlight {
+  box-shadow: 0 0 0 2px var(--card-accent, #2F5C7C), 0 0 0 1px rgba(0,0,0,0.06) inset;
+  border-color: var(--card-accent, #2F5C7C);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
 .sb-pen-ring {
   animation: sb-pulse 1.8s ease-in-out infinite;
 }

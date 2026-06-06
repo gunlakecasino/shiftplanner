@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — plannedThisWeekRecentHistory (from live store for week days <= selected) now drives matrix/week-repeat/xAI context/health/fit so Thu sees Mon-Wed planned in same week; version 0.821; tsc clean
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — Weekly Overview live table added to navbar (next to Launchpad/Today); TM tap fades table rows + dims canvas cards while highlighting the TM + detail week strip with clickable days; reuses plannedThisWeekRecentHistory + focus prop drilling; version 0.822; tsc clean
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 

@@ -6,6 +6,19 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Weekly Overview live table in navbar (user: "I want to now add in a 'Weekly Overview' next to the launchpad and today in the navbar, that is a live table of weekly overview and where we can tap a TM name and it fades the others down and shows them and where they are, etc.")
+
+- Added "Weekly Overview" (Table2 icon) NavToolButton in FloatingNav LEFT cluster immediately after the Roster toggle (exact location "next to the launchpad and today").
+- New state via useRosterPanels (weeklyOverviewOpen with tablet/desktop persistence) + focusedWeeklyTmId in Client. Clear focus on day/week change or close.
+- Reuses the existing `plannedThisWeekRecentHistory` (liveAssignmentsStore + current for the week days 0..selectedIndex) as the source for the live table data.
+- New component WeeklyOverview.tsx: glass panel (right on desktop, bottom-sheet friendly on tablet), header with week range + live search + "repeats only" filter + close. TM-centric table (rows = TMs from the week history + roster enrichment, columns = 7 days with colored short labels + placement cells tinted by area). Virtual-friendly mapped list for now. Clicking a TM name in the table fades (opacity) other rows, selects the row, and opens a detail "where they are" week strip (7 mini day cells, current day ringed, clickable to jump the canvas day while preserving focus).
+- Focus propagation: focusedTmId passed Client → Board → all cards (Zone/RR/Aux/Overlap, including internal RR sides). Cards compute isFocused / isDimmed and apply `sb-weekly-dim` (opacity 0.25 + saturate) or `sb-weekly-highlight` (strong ring + border using --card-accent).
+- CSS added in globals.css for the dim/highlight (non-destructive, coexists with existing empty/dnd/spotlight).
+- Canvas "shows where they are": on the current selected day the TM's card(s) are highlighted while others fade. The detail strip + day clicks give the full-week picture and navigation.
+- Live: table and focus react instantly to assignments (via the planned week memo + liveAssignVersion + store).
+- Wired in Client render (near RosterRail), with onJumpToDayIndex that changes day while keeping focus. Data passed includes current assignments, DAY_DEFS, members for name enrichment.
+- tsc clean. Version +0.001 → 0.822. Full round-trip tested mentally against the request (build prior days in week → open from nav on later day → tap TM → fades + shows week locations + canvas focus on current day placement).
+
 ## 2026-06-09 — Grok 4.3 — Matrix / week history now includes planned prior days in the current grave week (user: "We need to ensure the matrix is updating for the current weeks past days as well as we progress into building future days. For example, thursday of next week should have history of all days in that week prior")
 
 - When the user navigates the day strip within a grave week (or into future weeks) and builds assignments day-by-day, the "this week" history used for repeat detection, fit penalties, health %, pad alerts, xAI board+week context, and the "× this week" exposure in the matrix/xAI fast must reflect the *planned* assignments for the prior days in that same week (Mon/Tue/Wed when viewing Thu of the planned week), not only the server-provided historical recentZoneHistory (which is anchored to DB history for the night and doesn't see in-session planned future-week days).

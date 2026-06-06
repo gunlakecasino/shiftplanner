@@ -23,6 +23,7 @@ import {
   Users,
   PenLine,
   ScanEye,
+  Table2,
 } from "lucide-react";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -152,6 +153,9 @@ export interface FloatingNavProps {
   /** Builder vs print-preview — lives in nav so it never covers zone cards. */
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
+  /** Weekly Overview live table (next to Launchpad + Today). */
+  onWeeklyOverview?: () => void;
+  weeklyOverviewOpen?: boolean;
 }
 
 // ==================== SPRING ====================
@@ -190,6 +194,8 @@ export default function FloatingNav({
   onRosterToggle,
   canvasMode = "builder",
   onCanvasModeChange,
+  onWeeklyOverview,
+  weeklyOverviewOpen,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -331,6 +337,16 @@ export default function FloatingNav({
               active={rosterOpen}
             >
               <Users className={NAV_ICON} />
+            </NavToolButton>
+          ) : null}
+          {onWeeklyOverview ? (
+            <NavToolButton
+              onClick={onWeeklyOverview}
+              title="Weekly Overview"
+              ariaLabel="Open live weekly overview table"
+              active={weeklyOverviewOpen}
+            >
+              <Table2 className={NAV_ICON} />
             </NavToolButton>
           ) : null}
         </div>

@@ -34,6 +34,9 @@ export interface OverlapSlotProps {
   fitChip?: PrerenderedPlacementFit | null;
   /** Builder mode flag for subtle digital-only UI sugar. */
   showDigitalAssists?: boolean;
+
+  /** Weekly Overview focus for this small overlap cell. */
+  focusedTmId?: string | null;
 }
 
 // One overlap cell (Break Sheet view) — a small assignable card. Backed by
@@ -58,6 +61,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   isLocked = false,
   fitChip,
   showDigitalAssists = false,
+  focusedTmId,
 }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
@@ -65,6 +69,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
 
   // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
+  const currentTmId = a?.tmId;
+  const isFocused = !!focusedTmId && currentTmId === focusedTmId;
+  const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
   const { isPenHovering, penHoverHandlers } = usePencilHover(
     (el) => { if (!isLocked && onCardClick) onCardClick(slotKey, el); },
   );
@@ -81,7 +88,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       data-slot-key={slotKey}
       className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
+      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
