@@ -60,6 +60,7 @@ export function CanvasEngineCluster({
   canEditAssignments,
   isCurrentNightLocked,
   engineRunPhase,
+  weeklyRecentHistory,
   onRunXaiEngine,
   onClearBoard,
   onApplyDraft,

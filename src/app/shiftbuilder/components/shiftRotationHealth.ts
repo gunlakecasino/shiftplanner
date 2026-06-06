@@ -58,6 +58,10 @@ export function computeShiftRotationHealth(
   options?: {
     isDraftMode?: boolean;
     draftAssignments?: Record<string, DraftAssignmentRow>;
+    /** Recent 7-night history for computing real weekly balance (TM x area repeats). */
+    weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+    /** Optional full ZoneDetailEntry per-TM for this-week (preferred for exact grave week). */
+    weeklyHistories?: Record<string, any>;
   },
 ): ShiftRotationHealth {
   const isDraftMode = options?.isDraftMode ?? false;
