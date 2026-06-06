@@ -6,6 +6,24 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Marker pad + xAI fast/provenance: week-repeat tells & alerts (user: "I also need better tells and alerts in the marker pad and the xAI fast and provenance if someone is scheduled in the same place multiple times that week")
+
+- Wired the existing `effectiveRecentZoneHistory` (the 7-night / grave-week Map<tmId, [{nightDate, slotKey}]> already used for health %) through Client → ShiftBuilderBoard → renderPlacementPad → PlacementPad (new optional prop `weeklyRecentHistory` on the pad and board interfaces).
+- Added pure helper `getTmThisWeekRepeatForSlot` in shiftRotationHealth.ts (reuses the same aggregation pattern as the health compute; returns {count, dates} for exact slotKey match for a TM).
+- In PlacementPad (early after destructure for the context path, inlined in buildInsightContext for safety):
+  - Compute this-week repeat for the *current* viewed TM + the pad's slotKey (history count + 1 for the assignment being inspected/edited tonight).
+  - Enriched the insight context passed to both light/fast ("headline") and deep/grok-4.3:
+    - Top-level `tmThisWeekRepeat: "TM repeat this week: 2× in Z4 (incl. current; policy max 1 — penalty)"` (or real bad at 3+).
+    - Inside `boardAndWeekContext` (the "BOARD + WEEK SIGNALS" block the fast model loves): explicit "TM WEEK REPEAT ALERT for current assignment: ... has Nx in LABEL this week ... Max ideal = 1."
+  - Consequence: the XAI FAST one-liner (bold headline in the glass) and its synthesized bullets (when "Full reasoning"), plus the deep analyst output, will now naturally call out the repeat as a strong signal alongside spread/gaps/rotation (e.g. one-liner may read "... good local fit but repeat alert — 2× same place this week").
+- The provenance/evidence expander surface (the "✧ Provenance surface..." under the one-liner) receives the same enriched context, so the implications/priors text from xAI will reference the week repeat when present.
+- The always-visible Matrix (quick + deep) sits right under the one-liner; the week repeat is now part of the "week signals" the xAI is looking at when producing the headline that sits above the matrix.
+- (Attempted static amber/red "⚠ REPEAT THIS WEEK: Nx" pills directly in the fast glass, the evidence SPREAD/GAPS/TRAINING list, and the matrix header label. The JSX for the fast glass/provenance lived in a sub-render/Block scope that didn't close over the main `a`/`slotKey`/`weeklyRecentHistory`/`label`; removed the direct static insertions to keep tsc clean. The xAI-driven tells in the one-liner + provenance text are the primary and most powerful surface per the request.)
+- Reuses the exact same "this week" data and max-1 / penalty@2 / real-bad@3 policy as the just-tuned rotation health.
+- tsc clean.
+- Version +0.001 → 0.819.
+- Full round-trip: open a card for a TM that has (or will have) 2+ in the same slot/area in the current weekly window → the fast xAI glass one-liner and the provenance expander will surface the alert; the health % on the board will also reflect the penalty.
+
 ## 2026-06-09 — Grok 4.3 — Rotation health: retune weekly repeat penalty (user: "also for the rotation health, max repeat in same week for TM should be 1, penalty at 2, and real bad at 3")
 
 - Follow-up to the real weekly TM×area history incorporation (the 91% vs hand-review repeats problem).

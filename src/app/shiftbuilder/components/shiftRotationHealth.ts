@@ -193,6 +193,24 @@ export function computeShiftRotationHealth(
   };
 }
 
+/** Pure helper: given the recent 7-night history map and a TM + target slot, return how many times
+ * that exact slotKey appears for the TM in the window (this-week / recent repeats).
+ * Does not include "tonight" — caller adds +1 when the current assignment is for this TM+slot.
+ */
+export function getTmThisWeekRepeatForSlot(
+  weeklyRecentHistory: Map<string, Array<{ nightDate: string; slotKey: string }>> | undefined,
+  tmId: string | null | undefined,
+  targetSlotKey: string
+): { count: number; dates: string[] } {
+  if (!weeklyRecentHistory || !tmId) return { count: 0, dates: [] };
+  const records = weeklyRecentHistory.get(tmId) || [];
+  const matches = records.filter((r) => r.slotKey === targetSlotKey);
+  return {
+    count: matches.length,
+    dates: matches.map((r) => r.nightDate).slice(-4), // recent few for display
+  };
+}
+
 export function rotationHealthFloaterColors(
   percent: number | null,
 ): { bg: string; border: string; text: string } {

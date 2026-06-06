@@ -12,6 +12,7 @@ import {
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { computeSlotPlacementFit } from "./placementFitForSlot";
+import { getTmThisWeekRepeatForSlot } from "./shiftRotationHealth";
 import type { PlacementInsightMode } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import {
   ZONE_DEFS,
@@ -88,6 +89,8 @@ export interface PlacementPadProps {
       proposedClear?: boolean;
     }
   >;
+  /** Recent 7-night (this-week) history map for detecting same-area repeats for the viewed TM. */
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
 }
 
 const PAD_W = 340;
@@ -362,6 +365,8 @@ function PlacementAnalystBlock({
               {structured.headline}
             </p>
 
+            {/* Week repeat signal is carried in the xAI context (see tmThisWeekRepeat + boardAndWeekContext below) so the fast one-liner and provenance text will call it out when relevant. Static visual badge can be added once scope is threaded to all sub renders. */}
+
             {/* Expander under the one-liner for the provenance surface (spread/gaps/training signals + priors) */}
             {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
               <div className="mt-0.5">
@@ -398,6 +403,7 @@ function PlacementAnalystBlock({
                         <span className="font-medium">{padGoodExamples!.length} Gold examples (your history)</span>
                       </div>
                     )}
+                    {/* WEEK REPEAT line is included via xAI-synthesized provenance when the context carries the tmThisWeekRepeat signal. */}
                   </div>
                 )}
 
@@ -781,6 +787,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   boardPrerenderedFit,
   isDraftMode = false,
   draftAssignments = {},
+  weeklyRecentHistory,
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -1185,6 +1192,16 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       currentBreakGroup: (assignments[slotKey] as any)?.breakGroup ?? undefined,
       hasCoverageTasks: (selectedTasks[slotKey] || []).some((t: any) => t.isCoverage) ? "yes" : undefined,
 
+      // Explicit this-week same-area repeat signal for the current TM + slot (for fast light xAI + deep).
+      // Lets the one-liner / bullets call out rotation problems directly ("... but repeat alert: 2x here this week").
+      tmThisWeekRepeat: (() => {
+        const base = getTmThisWeekRepeatForSlot(weeklyRecentHistory, a.tmId, slotKey);
+        const tot = base.count + (a.tmId ? 1 : 0);
+        if (tot <= 1) return undefined;
+        const isBad = tot >= 3;
+        return `${a.tmName || 'TM'} repeat this week: ${tot}× in ${label} (incl. current; policy max 1 — ${isBad ? 'real bad' : 'penalty'})`;
+      })(),
+
       // BOARD AND WEEK CONTEXT — the big one for "board and week context" the operator wants.
       // Compact dense snapshot of the entire current artboard + this week's rotation health.
       // Lets the fast light model produce bullets that consider global balance, not just local slot.
@@ -1222,6 +1239,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         const filledCount = Object.values(assignments).filter((v: any) => !!v?.tmName).length;
         const totalSlots = Object.keys(assignments).length;
         parts.push(`BOARD FILL THIS NIGHT: ${filledCount}/${totalSlots} slots have a TM right now`);
+
+        (() => {
+          const base = getTmThisWeekRepeatForSlot(weeklyRecentHistory, a.tmId, slotKey);
+          const tot = base.count + (a.tmId ? 1 : 0);
+          if (tot > 1) {
+            parts.push(`TM WEEK REPEAT ALERT for current assignment: ${a.tmName || 'TM'} has ${tot}× in ${label} this week (dates: ${base.dates.join(' ')}). Max ideal = 1.`);
+          }
+        })();
 
         return parts.join('\n');
       })(),
@@ -1265,6 +1290,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       prerenderedFit.fitVerdict,
       prerenderedFit.fitSummary,
       prerenderedFit.fitFactLine,
+      weeklyRecentHistory,
+      a.tmId,
+      slotKey,
     ],
   );
 
@@ -1805,8 +1833,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 {(analystDetailsOpen || matrixExpanded || (!analystDetailsOpen && !!insightStructured?.headline)) && (
                   <div className={!analystDetailsOpen ? "mt-0" : ""}>
                     {!analystDetailsOpen ? (
-                      <div className="text-[8.5px] font-medium tracking-[0.25px] text-[#2F5C7C]/80 mb-0.5" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
+                      <div className="text-[8.5px] font-medium tracking-[0.25px] text-[#2F5C7C]/80 mb-0.5 flex items-center gap-1" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
                         ✧ Matrix surface · last 30 nights (spread) + last 5 placements
+                        {/* (Week repeat tell for current TM+slot is synthesized into the XAI FAST one-liner and provenance when >=2; the health pill on the board also reflects it.) */}
                       </div>
                     ) : (
                       <SectionLabel>Matrix</SectionLabel>

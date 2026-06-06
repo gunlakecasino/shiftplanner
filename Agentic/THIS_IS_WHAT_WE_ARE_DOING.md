@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — rotation health weekly repeat retune (max=1 ideal, penalty@2, real bad@3) + prior cards xAI removal; version 0.818; tsc clean
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — marker pad + xAI fast/provenance now surface week-repeat tells (same 7-night data + max1/penalty2/realbad3 policy); xAI context enriched so one-liner & provenance call it out; wiring + helper; version 0.819; tsc clean
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 

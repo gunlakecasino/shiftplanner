@@ -5798,6 +5798,7 @@ function AuthedShiftBuilder() {
               allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
               onAddOnCall={handlePadAddOnCall}
               onMarkUnavailable={handlePadMarkUnavailable}
+              weeklyRecentHistory={effectiveRecentZoneHistory}
               onClearSlot={handlePadClearSlot}
               onToggleLock={handlePadToggleLock}
               onAssign={handlePadAssign}

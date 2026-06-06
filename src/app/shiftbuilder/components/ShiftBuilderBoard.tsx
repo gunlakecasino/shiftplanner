@@ -56,6 +56,8 @@ export interface ShiftBuilderBoardProps {
   cardBorders?: Record<string, string>;
   notes?: string;
   recentZoneHistory?: any;
+  /** 7-night / this-week history map (tmId -> [{nightDate, slotKey}]) for week-repeat tells in pads + health. */
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
 
   // Board view + interaction state (controlled by orchestrator)
   selectedDay: DayDef;
@@ -177,6 +179,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   allEligibleTms,
   onAddOnCall,
   onMarkUnavailable,
+  weeklyRecentHistory,
   onClearSlot,
   onToggleLock,
   onAssign,
@@ -484,6 +487,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         boardPrerenderedFit={fitBySlot[slotKey]}
         isDraftMode={isDraftMode}
         draftAssignments={draftAssignments}
+        weeklyRecentHistory={weeklyRecentHistory}
       />
     );
   };
