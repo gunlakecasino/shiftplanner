@@ -3756,7 +3756,7 @@ function AuthedShiftBuilder() {
             auxDefsForFit,
             storeAssignmentsForFit,
             deploymentFitBySlot,
-            { isDraftMode, draftAssignments },
+            { isDraftMode, draftAssignments, weeklyRecentHistory: effectiveRecentZoneHistory },
           );
           const fitVerdictBySlot = Object.fromEntries(
             Object.entries(deploymentFitBySlot).map(([k, v]) => [
@@ -6204,6 +6204,7 @@ function AuthedShiftBuilder() {
           isDraftMode={isDraftMode}
           draftAssignments={draftAssignments}
           draftGrokExplanation={draftGrokExplanation}
+          weeklyRecentHistory={effectiveRecentZoneHistory}
         />
       )}
 

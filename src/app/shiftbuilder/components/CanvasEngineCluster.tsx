@@ -37,6 +37,8 @@ export type CanvasEngineClusterProps = {
   canEditAssignments: boolean;
   isCurrentNightLocked: boolean;
   engineRunPhase: EngineRunPhase;
+  /** Optional recent 7-night history (from currentNight / effectiveRecentZoneHistory) to power real weekly balance in health %. */
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
   onRunXaiEngine: () => void;
   onClearBoard: () => void;
   onApplyDraft?: () => void;
@@ -79,15 +81,19 @@ export function CanvasEngineCluster({
       computeShiftRotationHealth(auxDefs, assignments, fitBySlot, {
         isDraftMode,
         draftAssignments,
+        weeklyRecentHistory,
       }),
-    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
+    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weeklyRecentHistory],
   );
 
-  // Weekly % (placeholder derived from current + gaps for demo; replace with real
-  // average from 30-night spread / placement histories for true week-over-week rotation health).
-  const weeklyPercent = health.percent !== null 
-    ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) 
-    : null;
+  // Weekly % now uses real balance from weeklyRecentHistory (or weeklyHistories) when available
+  // in the health compute (TM×area repeats this week, max repeat, violations → penalty).
+  // Falls back to the old synthetic only if no weekly data (for transition). The compute
+  // already blends with tonight fit avg for the headline percent.
+  const realWeekly = (health as any).weeklyBalance;
+  const weeklyPercent = realWeekly !== undefined
+    ? Math.round(realWeekly)
+    : (health.percent !== null ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) : null);
   const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
 
   const running = engineRunPhase !== "idle";
@@ -123,10 +129,11 @@ export function CanvasEngineCluster({
   const display = health.percent !== null ? `${health.percent}%` : "—%";
 
   const breakdownTitle = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded).",
+    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and now incorporates real weekly balance from recent/this-week histories (TM×area repeat counts).",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
-    health.percent !== null ? `Tonight: ${health.percent}%` : "Tonight: —",
-    weeklyPercent !== null ? `Weekly: ${weeklyPercent}% (demo; real from spread/histories)` : "Weekly: —",
+    health.percent !== null ? `Tonight (fit quality): ${health.percent}%` : "Tonight: —",
+    weeklyPercent !== null ? `Weekly (balance): ${weeklyPercent}%` : "Weekly: —",
+    (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,
     "",

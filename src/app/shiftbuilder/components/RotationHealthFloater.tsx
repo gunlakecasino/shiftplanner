@@ -35,10 +35,11 @@ export type RotationHealthFloaterProps = {
 function breakdownTitle(health: ShiftRotationHealth): string {
   const { counts, openGaps, scoredCount, percent } = health;
   const lines = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded).",
+    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (repeats this grave week).",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
     "",
-    percent !== null ? `Score: ${percent}%` : "Score: — (no assigned slots yet)",
+    percent !== null ? `Tonight (fit): ${percent}%` : "Tonight: —",
+    (health as any).weeklyBalance !== undefined ? `Weekly (balance): ${(health as any).weeklyBalance}% (max repeat: ${(health as any).maxWeeklyRepeat ?? 0}, violations: ${(health as any).repeatViolations ?? 0})` : "Weekly: —",
     `${scoredCount} assigned · ${openGaps} open gap${openGaps === 1 ? "" : "s"}`,
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
@@ -65,10 +66,12 @@ export function RotationHealthFloater({
     [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
   );
 
-  // Weekly % (placeholder; real impl can average from spread/histories or board week context)
-  const weeklyPercent = health.percent !== null 
-    ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) 
-    : null;
+  // Weekly % now driven by real balance from weekly history (see compute in shiftRotationHealth).
+  // Fallback to old synthetic only if no data.
+  const realWeekly = (health as any).weeklyBalance;
+  const weeklyPercent = realWeekly !== undefined
+    ? Math.round(realWeekly)
+    : (health.percent !== null ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) : null);
   const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
 
   if (!visible) return null;
