@@ -6,14 +6,19 @@
 
 ---
 
-## Active Plans (as of 2026-05-22)
+## Active Plans (as of 2026-06-09)
 
-- `active/COMMAND_PALETTE_UPGRADE_PLAN.md` — Massive Command Palette upgrade (iPad Pro + Pencil Pro + Mac keyboard power). Phases 1–2 complete; Phase 3 (hot actions + keyboard) next.
-- `active/2026-05-22-Sudo-Tasks-Tab.md` — New Sudo "Tasks" hub tab (catalog management + Command Palette integration). Phase 1 plan ready for approval.
+- `active/ATTACK_PLAN_2026-05-22.md` — Primary web work (Wave 2/3 polish, architecture, AI co-pilot, engine, Sudo surfaces). Status tables inside are historical snapshots (May); many items addressed incrementally. Cross-check top of `AGENT_ACTIVITY_LOG.md` + `THIS_IS_WHAT_WE_ARE_DOING.md` for current shipped reality.
+- `active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` — Incremental extraction of ShiftBuilderClient orchestrator + hygiene (components/, hooks/, lib/ constants). Client remains large (~6k LOC as of June 2026); progress via Lazy boundaries + effect-driven loading for Turbopack safety. See recent log for actual state.
+- `active/OPSAPP_NATIVE_FIRST_2026-05-25.md` — Retained in active/ for future resumption. Native (SwiftUI + PencilKit) work is **paused** per user direction (2026-06-09); WebApp is the active development surface.
 
 ## Archive
 
 - `archive/2026-05-22-Agentic-Command-Post-Setup.md` — AI Agentic Command Post bootstrap (complete; verified by first magic-sentence activation)
+- `archive/2026-05-22-Sudo-Tasks-Tab.md`
+- `archive/2026-05-23-Reports-Tab.md`
+- `archive/CODEBASE_CRITIQUE_2026-05-22.md`
+- `archive/COMMAND_PALETTE_UPGRADE_PLAN.md`
 
 ---
 

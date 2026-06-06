@@ -28,7 +28,7 @@ export function PlacementFitChip({ fit, xaiFit }: PlacementFitChipProps) {
   const styles = fitVerdictStyles(effectiveVerdict);
   const label = fitVerdictLabel(effectiveVerdict);
   const title = isXai
-    ? (xaiFit?.headline ? `${xaiFit.headline}\n${effectiveSummary}` : effectiveSummary)
+    ? (xaiFit?.headline ? `${xaiFit.headline}\n${effectiveSummary}\n(xAI reasoned from board/week context + your Gold examples where relevant)` : effectiveSummary)
     : (effectiveFact ? `${effectiveSummary}\n${effectiveFact}` : effectiveSummary);
 
   const displayText = isXai 

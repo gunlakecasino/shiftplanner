@@ -6,6 +6,109 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Created focused plan + selected first vertical for xAI reasoning deep dive (Reasoning Evidence + Training Visibility)
+
+- Context: User responded "Proceed as you see fit" after the full architecture audit and slice proposals. Highest-leverage starting point is making the *reasoning* inspectable and the training loop visible, without losing the delightful instant light surfaces or violating any invariants.
+- Action: Wrote new active plan `Plans/active/XAI_REASONING_DEEP_DIVE_2026-06-09.md` (high-signal, follows the project plan template + coding-engineer shape). 
+  - Primary goal for first slice: Add optional, elegant "Key signals / Evidence" section to the light/fast pad view (using already-computed context) + visible training indicators ("shaped by your Gold examples").
+  - Secondary: Tiny lift to card chips if it stays micro.
+  - Strict scope: Digital builder veil only, no new heavy model calls in slice 1, graves root untouched, print gates respected, surgical changes primarily in PlacementPad + minimal helpers.
+- Why this slice first: Directly attacks the opacity gap identified in the audit. Builds immediately on the June light headline + priorGoodExamples + Expand Matrix work. Low risk, fast feedback loop, creates the pattern for richer provenance later.
+- Protocol: Plan written after deep reads of PlacementPad, engineInsightForPlacement, schemas, helpers, board wiring, xaiFillOrderContract, etc. All per Agentic rules (newest-first append, THIS_IS Key Caveats internalized, power/quality stance).
+- Next immediate: Update todo, do targeted re-reads of the exact light-view + thumbs sections in PlacementPad.tsx + board lift, then begin surgical Phase 1 implementation (evidence panel + training badge). tsc gates + live browser validation required. Log at every real milestone.
+- Status: Plan live in active/. First vertical selected and ready to code. No code changes yet in this entry.
+
+## 2026-06-09 — Grok 4.3 — First implementation slice for xAI reasoning evidence + training visibility (light view only)
+
+- Changes (surgical,  PlacementPad.tsx only):
+  - Added `evidenceOpen` local state + reset on slot change (mirrors matrixExpanded pattern).
+  - Threaded `evidenceOpen`, `setEvidenceOpen`, `padGoodExamples` as optional props through `PlacementAnalystBlock` sub-component (the quick XAI renderer).
+  - Inserted a minimal, elegant collapsible "✧ Key signals" section inside the existing light/fast xAI determination glass box (after bullets, before Expand Matrix bar).
+    - Shows training influence count + "shaped by your Gold".
+    - When expanded: 2-3 high-signal lines about what context (board + week, prior examples, rotation health, trail, tasks, fill order) was sent to the fast model for the headline + bullets.
+    - Toggle uses the same sb-interactive + Atkinson + ink language as the rest of the veil.
+  - All behind the existing quick light block (`!detailsOpen && structured?.headline`).
+- Verification: tsc --noEmit --skipLibCheck clean (exit 0).
+- Invariants: No new model calls. No changes to deep path, engine, print paths, Draft, history, or graves filtering. Purely additive optional UI in the digital authoring veil (consistent with showDigitalAssists / no-print contract used for chips/lines/matrix).
+- Rationale: Gives the operator immediate "I can see why" for the magic one-liner without leaving the fast path or paying for a deep call. Makes the training thumbs feel real. Matches the "powerful but lightweight" spirit of the recent light headline work.
+- Artifacts: Only `src/app/shiftbuilder/components/PlacementPad.tsx` (state + prop threading + one small JSX block).
+- Next: User can test the builder. If good, we can iterate the copy/layout or move to richer deep CoT exposure or chip micro-hint in next micro-iteration. Then log completion of slice and decide next vertical.
+- Protocol followed exactly. Appended this entry. Ready for live browser inspection.
+
+## 2026-06-09 — Grok 4.3 — Iterate + go further on xAI evidence panel (richer specific signals, more props, chip title polish)
+
+- Iteration goals: Make the new "Key signals" evidence much more concrete and operator-useful (specific numbers like spread count, actual gaps line, precise training impact) instead of generic. Thread richer data. Small polish on chip for consistency. Keep fully surgical.
+- Changes:
+  - Extended PlacementAnalystBlock props with `rotationGapsLine`, `slotSpreadCount`, `slotKey` (as analystSlotKey).
+  - Updated call site in PlacementPad to pass `rotationDisplay?.gapsLine`, `spreadCountFor(slotKey)`, and `slotKey`.
+  - Rewrote the expanded evidence content to be high-signal and specific:
+    - "This TM on Zx: Nx in last 30 nights (spread freshness)"
+    - "Week gaps affecting this: [actual gapsLine]"
+    - Training count with clear "injected as few-shots"
+    - Strong closing line on what the model actually received (board, health, trail, tasks, rules, graves).
+  - Small fix: used analystSlotKey to avoid scope issues.
+  - Chip side (PlacementFitChip): Minor title enhancement for xAI case to include more of the effectiveSummary when headline present (better hover info without UI bloat).
+  - All still behind quick light block + digital gates.
+- tsc clean.
+- Rationale for going further here: The first slice proved the affordance works; making the content *actually revealing* of the model's context is what "deep into reasoning" means. Specific freshness + gaps + training makes the "why this headline" feel inspectable immediately in the fast path.
+- Next possible: Once validated, richer deep-view evidence (pull from structured rich fields), a "Clear Gold examples" control, or micro evidence on chip itself. Or move to xAI-native provenance surface.
+- Artifacts: PlacementPad.tsx (props + richer JSX), small title tweak in PlacementFitChip.tsx.
+- Status: Iterated the core evidence + training visibility. Ready for user to test the builder and direct the next push (deeper CoT? provenance unification? training persistence? engine summaries?). Log appended. All per Agentic contract, THIS_IS caveats (graves root, power usage, veil discipline), and plan.
+
+## 2026-06-09 — Grok 4.3 — Further iteration: specific data in evidence, Clear training control, chip title polish
+
+- Went further on the signals panel:
+  - Threaded `rotationGapsLine`, `slotSpreadCount` (via spreadCountFor), and `slotKey` into PlacementAnalystBlock.
+  - Evidence now shows concrete, useful lines: exact "This TM on Z4: 0× in last 30 (spread freshness)", real week gaps line, precise training injection count + "few-shots", and a strong summary of the full context the model got (board fill, health, exposure, tasks, fill-order constitution, graves schedule).
+  - Added "Clear this session’s Gold examples" button when training data present — gives operator direct control over the flywheel (resets padGoodExamples).
+- Chip iteration: Enhanced xAI tooltip title with explicit note that reasoning drew from board/week context + Gold examples (better discoverability on hover without changing visual size).
+- All changes tiny, additive, in existing digital veil paths. tsc clean.
+- Rationale: "Iterate and go further" = turn the evidence from "here is some context" into "here are the exact numbers and signals that produced *this* headline right now", plus make training a first-class controllable thing. This is real depth in the fast path without cost.
+- Artifacts: PlacementPad.tsx (prop threading + richer dynamic evidence + clear button), PlacementFitChip.tsx (title enhancement).
+- Next: User direction on whether to validate live now, push a micro on deep view evidence, start xAI provenance glass, or expand training to persist/session memory. Log updated. Plan status bumped. Ready.
+
+---
+
+## 2026-06-09 — Grok 4.3 — Start deep dive into xAI reasoning layer (PlacementPad analyst, magic one-liners, training, provenance, explainability)
+
+- Context: User: "let's go deep into the xAI reasoning". After Agentic maintenance pass, shifting to primary focus on making the AI co-pilot / reasoning surfaces the standout, trusted, explainable part of the digital builder (aligns with W3-3 in THIS_IS, recent veil + headline + matrix + engine health work, and the new Memories on deliberate powerful Grok usage + graves root).
+- Protocol: Full Agentic re-orient (README + THIS_IS Key Caveats + AI power section + newest log; re-read prior xAI entries). todo_write for the exploration. Deep static + structural audit using reads + greps across app/shiftbuilder/components (PlacementPad, PlacementFitChip, ShiftBuilderBoard, cards, ProvenanceGlass), lib/shiftbuilder (engineInsightForPlacement, placementPadInsightSchema, xaiFillOrderContract, grokClient, engineInsightCache, grokEngine, aiUsageTracker, placementPadHelpers), API route, store wiring, and thumbs/priorGoodExamples paths. No code changes yet — pure discovery + synthesis first.
+- Current architecture mapped:
+  - Two-tier deliberate design: Light/fast (grok-build-0.1 + MagicOneLinerSchema: headline + 4-6 actionable bullets) for immediate card corners + quick pad view; Deep (grok-4.3 high + PlacementPadInsightSchema: rich fitSummary/verdict/whyTonight/swaps/watchouts/rankedAssignees) for explicit "Full 4.3 analysis".
+  - Heavy grounding: xaiFillOrderContract (hard fill-order + swap family rules) + placement order/eligibility text + graves schedule filtering (enforced in context) injected into every prompt. Prerender deterministic baseline (placementFit*) shown first; xAI can override with verdictOverrideReason.
+  - Context richness (engineInsightForPlacement + helpers): rotationBrief, spread 30 + gaps, last5, boardAndWeekContext (global artboard + weekly for light bullets), tmExposure/neighbor notes, slotTasks, priorGoodExamples (training), prerender comparison, fillOrder board context.
+  - Surfacing: PlacementPad (quick light + Expand Matrix for spread/last5 + deep button), PlacementFitChip on all cards (✧ + truncated headline for xAI, "editor's ink" styling, gated by showDigitalAssists/no-print), ShiftBuilderBoard xaiFitsByHost lift via onXaiFit, draft summaries for engine.
+  - Training: Session-scoped padGoodExamples (👍 Gold buttons in pad) injected as few-shots ("OPERATOR-RATED GOLD EXAMPLES") — sliced to last 3. Visible in deep prompt.
+  - Supporting: engineInsightCache (contextSig), aiUsageTracker (30d + session, OpsStatusBar), grokClient (variable effort, build vs 4.3 models), ProvenanceGlass (currently stronger for deterministic engine fairness signals).
+  - Engine side (grokEngine): Separate full-board Grok-hybrid with its own snapshot + rules summary.
+- Strengths observed: Excellent safety/grounding contract, smart cost/quality split (light always-feel + powerful on demand), recent cohesion work (glass, matrix expand, health focus, usage), graves sanctity, visual discipline.
+- Initial gaps for "deep": Reasoning transparency (syntheses great, but model "why these signals" / CoT / specific matrix influence / example impact not inspectable); xAI-specific provenance (ProvenanceGlass is engine-heavy); training flywheel mostly invisible (session-only, no "your thumbs shaped this"); cross-surface consistency (pad vs corners vs engine runs); limited steerability and full structured exposure.
+- Status: Deep audit phase complete. Ready to propose vertical slices and a focused plan. No invariants violated (all discovery respected graves root, Draft, print gates, power stance). Will log decisions and append at each gate.
+- Next: Synthesize full audit + prioritized slices for user. If approved, create dated plan in Plans/active/, drive first vertical with coding-engineer process (todo, surgical changes, live validation, log).
+
+---
+
+## 2026-06-09 — Grok 4.3 — Agentic Command Post post-review maintenance pass (Plans surface sync, Zone prototype documented, durable decisions captured)
+
+- Context: User reviewed the full `Agentic/` tree and responded "Do as you see fit." Performed a targeted, high-signal maintenance pass based on the review findings to reduce future agent confusion and better preserve hard-won invariants.
+- Protocol followed: Re-read `Agentic/README.md`, `THIS_IS_WHAT_WE_ARE_DOING.md` (Key Caveats), top of log, `Plans/README.md`, `Memories/README.md`, `Key-Information/README.md`, the Zone prototype folder contents, `.grok/AGENTS.md` Agentic section, and relevant active plan files. Used todo_write to track the multi-step work. All changes are documentation-only (no app code, no browser validation required).
+- Changes made (surgical):
+  - `Plans/README.md`: Completely refreshed "Active Plans" section with current reality (ATTACK_PLAN + MONOLITH_SPLIT as primary web focus; OPSAPP retained but paused). Added explicit note that status tables inside the dated plans are historical snapshots (May) and that the live truth lives in the top of `AGENT_ACTIVITY_LOG.md` + `THIS_IS_WHAT_WE_ARE_DOING.md`. Archived the old May plans that were still listed. Updated date to 2026-06-09.
+  - `Zone Deployment Builder Web App UIUX/README.md` (new file): Created a clear, self-contained historical reference README explaining that this is a pre-production Velvet/Golden interactive prototype (useReducer + stable callbacks + early liquid glass explorations). Documented its relationship to the real `src/app/shiftbuilder/` implementation, why the files are worth keeping, and how a future agent should treat them. Matches the style and contract of other Agentic subdirectories.
+  - `Memories/README.md`: Appended two new high-confidence durable entries (dated 2026-06-09) under the designated marker:
+    1. "Graves Default Schedule as Sole Source of Truth" — captures the canonical scheduled roster rule, affected surfaces, cache/notify requirement, and the hard enforcement work done in the engine in June. Explicitly cross-references THIS_IS.
+    2. "Deliberate Powerful AI Usage (Power & Quality Over Cost)" — records the policy to favor high/medium reasoning effort and richer context for quality, fairness, and explainability rather than defaulting to cheapest/fastest paths. Cross-references the Key Caveats and recent xAI engine / PlacementPad work.
+- Rationale: These were the highest-leverage, lowest-risk items from the review (stale plan surface was actively misleading; the Zone folder was an undocumented orphan; the two June policy decisions are now treated as sacred and deserved to survive chat resets as Memories). Kept changes minimal, dated, and in the voice of the existing Command Post.
+- Invariants respected: No history rewritten. Append-only to log (this entry). No bloat to top-level files. THIS_IS content left as the single source of the operating caveats (Memories just amplify discoverability). No app code touched.
+- Artifacts modified:
+  - Agentic/Plans/README.md
+  - Agentic/Zone Deployment Builder Web App UIUX/README.md (created)
+  - Agentic/Memories/README.md
+  - Agentic/AGENT_ACTIVITY_LOG.md (this entry prepended)
+- Status: Complete. Agentic Command Post is now slightly easier for the next fresh agent (or the user) to navigate without stale pointers or undocumented artifacts. The "single permanent human- and LLM-readable home" contract is strengthened.
+
+---
+
 ## 2026-06-09 — Grok 4.3 — Builder veil polish iteration 2 from user screenshot "[Image #1] here is where we are at" (Grok Imagine image_edit + gens + surgical glass/matrix/pill cohesion)
 - User signal: "[Image #1] here is where we are at" — live builder render showing 86% health pill (with wk), cards with STRONG FIT / CONSIDER SWAP xAI badges + chips, unassigned drop hints, glassy top navbar (date '12 Friday', Deploy/Breaks, toggle), open picker with sole XAI determination hero box (✧ headline + ◆ 4-6 bullets + Expand Matrix button), ops bar (ai30/sess/cost/calls + LIVE), overall post-prior-polish state ready for "subliminal pristine" refinement toward "one cohesive piece of art".
 - Protocol: todo_write (5 phases), deep read/grep of PlacementPad (XAI box + matrixExpanded + button + quick hero logic), RotationHealthFloater, OpsStatusBar (imperative glass), FloatingNav, ShiftBuilderClient (canvasMode toggle), ZoneCard (✧ under-name + has-xai), globals.css (builder-card rules), PlacementFitChip + schema (STRONG FIT etc verdicts), plan.md + AGENT_ACTIVITY_LOG top for append format. No dev tools/browser per prior directive. Graves/print/Draft invariants untouched (all digital assists gated by showDigitalAssists / no-print / outside .print-artboard).

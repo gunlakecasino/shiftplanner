@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus; opsApp paused per user direction)
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus; opsApp paused per user direction) + Agentic Command Post maintenance pass (Plans surface, Zone prototype docs, durable Graves + AI-usage Memories)
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 

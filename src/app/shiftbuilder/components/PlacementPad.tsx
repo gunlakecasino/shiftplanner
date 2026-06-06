@@ -206,6 +206,13 @@ function PlacementAnalystBlock({
   onClearDetails,
   matrixExpanded,
   onToggleMatrix,
+  evidenceOpen,
+  setEvidenceOpen,
+  padGoodExamples,
+  rotationGapsLine,
+  slotSpreadCount,
+  slotKey: analystSlotKey,
+  onClearTraining,
 }: {
   prerendered: PrerenderedPlacementFit;
   loading: boolean;
@@ -219,6 +226,13 @@ function PlacementAnalystBlock({
   onClearDetails: () => void;
   matrixExpanded?: boolean;
   onToggleMatrix?: () => void;
+  evidenceOpen?: boolean;
+  setEvidenceOpen?: (v: boolean) => void;
+  padGoodExamples?: Array<{ slotKey: string; insightText: string }>;
+  rotationGapsLine?: string | null;
+  slotSpreadCount?: number;
+  slotKey?: string;
+  onClearTraining?: () => void;
 }) {
   const headerStyles = fitVerdictStyles(prerendered.fitVerdict);
   const showXaiBody = detailsOpen && (loading || text || structured);
@@ -314,6 +328,57 @@ function PlacementAnalystBlock({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* Evidence / signals for the light xAI determination (first slice of reasoning deep dive).
+                Uses context the fast model already received (rotation, spread, training examples).
+                Optional, collapsed by default to protect the headline + bullets as the hero.
+                All digital authoring veil only (no-print / showDigitalAssists). */}
+            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+              <div className="mt-2 -mx-1 border-t border-[#2F5C7C]/10 pt-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEvidenceOpen?.(!evidenceOpen);
+                  }}
+                  className="sb-interactive w-full flex items-center justify-between text-[7px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
+                  style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                >
+                  <span>
+                    ✧ Key signals
+                    {(padGoodExamples?.length ?? 0) > 0 ? ` · ${padGoodExamples!.length} shaped by your Gold` : ''}
+                  </span>
+                  <span>{evidenceOpen ? '−' : '+'}</span>
+                </button>
+
+                {evidenceOpen && (
+                  <div className="mt-1 pl-0.5 text-[7px] leading-[1.2] text-neutral-600 space-y-px">
+                    {slotSpreadCount !== undefined && analystSlotKey && (
+                      <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
+                    )}
+                    {rotationGapsLine && (
+                      <div>Week gaps affecting this: {rotationGapsLine.slice(0, 65)}{rotationGapsLine.length > 65 ? '…' : ''}</div>
+                    )}
+                    {(padGoodExamples?.length ?? 0) > 0 && (
+                      <div>{padGoodExamples!.length} of your Gold examples injected as few-shots (training signal)</div>
+                    )}
+                    <div>Model also received: current board fill, weekly rotation health, neighbor exposure, slot tasks, strict fill-order + graves schedule rules.</div>
+                    {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClearTraining();
+                        }}
+                        className="mt-0.5 text-[6.5px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                      >
+                        Clear this session’s Gold examples
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Integrated Expand Matrix affordance — now a seamless editorial bottom bar inside the XAI determination box (not tacked-on). Matches the liquid glass family, ink blue, active scale. Exact phrasing for the last 30 spread + last 5 placements view. When toggled the matrix below feels like refined data poetry. */}
@@ -699,6 +764,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [deepInsightLoading, setDeepInsightLoading] = useState(false);
   const [analystDetailsOpen, setAnalystDetailsOpen] = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
@@ -734,6 +800,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setTaskInput("");
     setSweeperOpen(false);
     setMatrixExpanded(false);
+    setEvidenceOpen(false);
   }, [slotKey]);
 
   useEffect(() => {
@@ -1554,6 +1621,13 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               }
               matrixExpanded={matrixExpanded}
               onToggleMatrix={() => setMatrixExpanded(!matrixExpanded)}
+              evidenceOpen={evidenceOpen}
+              setEvidenceOpen={setEvidenceOpen}
+              padGoodExamples={padGoodExamples}
+              rotationGapsLine={rotationDisplay?.gapsLine}
+              slotSpreadCount={spreadCountFor ? spreadCountFor(slotKey) : undefined}
+              slotKey={slotKey}
+              onClearTraining={() => setPadGoodExamples([])}
               onClearDetails={() => {
                 setAnalystDetailsOpen(false);
                 setDeepInsight(null);

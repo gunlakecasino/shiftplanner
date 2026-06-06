@@ -32,3 +32,34 @@
 ---
 
 **Add new memories below this line when you discover something truly durable.**
+
+---
+
+## 2026-06-09 — Graves Default Schedule as Sole Source of Truth
+
+**Context**: During June 2026 engine hardening and UI work, it became clear that multiple surfaces (roster classification, TM Picker "scheduled" lists, on-schedule pools for eligibility, engine context for both deterministic planner and Grok-hybrid, Weekly Roster, Sudo tools, and `getScheduledTmsForNight`) were still at risk of drifting toward legacy `tm_default_schedules` / ADP paths or full active roster.
+
+**Memory**:
+- The **Graves Default Schedule page** (`/shiftbuilder/graves-schedule`) + `graves_default_schedule` table + `night_on_call` overrides is the **canonical and sole root** for all scheduled data.
+- All "on-schedule" filtering, candidate pools for the engine, "scheduledUnassigned" prioritization, `getScheduledTmsFromGravesDefault`, and the `/api/shiftbuilder/scheduled-roster` path must derive exclusively from this source.
+- Legacy ADP / `tm_default_schedules` paths are secondary or deprecated for roster scheduling purposes in this system.
+- Any edit to the Graves schedule must trigger appropriate cache invalidation / refetch so that Draft Mode, picker, engine runs, and status surfaces see the change immediately.
+- This rule is now treated as a sacred invariant (see also `THIS_IS_WHAT_WE_ARE_DOING.md` Key Caveats and the hard enforcement work landed in `runCoverageEngine` / planningRoster filtering in June 2026).
+
+Future agents must not relax this or introduce parallel schedule sources without an explicit, logged architectural decision.
+
+---
+
+## 2026-06-09 — Deliberate Powerful AI Usage (Power & Quality Over Cost)
+
+**Context**: As the sole primary user and operator of the system, a conscious policy decision was made regarding xAI / Grok usage inside the builder, PlacementPad analyst, engine, insights, and co-pilot surfaces.
+
+**Memory**:
+- Prioritize **deliberate, intentional, powerful** Grok usage.
+- Use variable reasoning effort: `basic` / `low` only for fast interactive corner cases; `high` or `medium` for deep analysis, rotation health optimization, complex judgment, training data quality, and explainability.
+- Richer prompts, fuller relevant context (always filtered to graves-scheduled TMs per the above rule), and higher-effort calls are encouraged when they produce meaningfully better fairness signals, operator trust, or "why did it do that?" answerability.
+- Do **not** default to aggressive low-token optimizations or cheapest models across the board. The operator experience and the quality of the scheduling decisions matter more than marginal cost savings.
+- Usage tracking (30d + session) and the OpsStatusBar pill exist to give visibility, not to drive stinginess.
+- This stance is recorded in `THIS_IS_WHAT_WE_ARE_DOING.md` Key Caveats and was actively applied during the June 2026 xAI engine improvements, PlacementPad "magic one-liner" + matrix work, and usage telemetry hardening.
+
+This is a durable operating philosophy for the project while the user remains the primary (and for now, sole) operator.
