@@ -93,8 +93,8 @@ export interface PlacementPadProps {
 const PAD_W = 272;
 /** Max pad height — fits iPad landscape with internal scroll for overflow */
 const PAD_MAX_HEIGHT = 600;
-const TABLET_SHEET_HEIGHT_RATIO = 0.45;
-const TABLET_SHEET_MAX_HEIGHT = 520;
+const TABLET_SHEET_HEIGHT_RATIO = 0.38;
+const TABLET_SHEET_MAX_HEIGHT = 420;
 
 function computeTabletBottomSheetStyle(): React.CSSProperties {
   const vv = window.visualViewport;
@@ -106,7 +106,7 @@ function computeTabletBottomSheetStyle(): React.CSSProperties {
     right: 0,
     bottom: 0,
     width: "100%",
-    zIndex: 200,
+    zIndex: 2147483635,
     maxHeight: maxH,
     display: "flex",
     flexDirection: "column",
@@ -224,6 +224,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function PlacementAnalystBlock({
+  compactTablet = false,
   prerendered,
   loading,
   detailsOpen,
@@ -263,6 +264,7 @@ function PlacementAnalystBlock({
   slotSpreadCount?: number;
   slotKey?: string;
   onClearTraining?: () => void;
+  compactTablet?: boolean;
 }) {
   const headerStyles = fitVerdictStyles(prerendered.fitVerdict);
   const showXaiBody = detailsOpen && (loading || text || structured);
@@ -319,7 +321,7 @@ function PlacementAnalystBlock({
             "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className="mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[9px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]"
+            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[9px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
             style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
           >
             <div className="flex items-baseline gap-1.5 mb-1.5">
@@ -351,7 +353,7 @@ function PlacementAnalystBlock({
             {/* The 4-6 xAI powered bullets — synthesized from the full vast context including the new boardAndWeekContext (full current artboard placements + this week's rotation health, gaps, swaps across the board). This is now the *only* insight surface shown in the quick pad view. */}
             {(structured as any).bullets && (structured as any).bullets.length > 0 && (
               <ul className="space-y-[2px] pl-0.5 text-[8.5px] leading-[1.25] text-neutral-800">
-                {(structured as any).bullets.slice(0, 6).map((b: string, i: number) => (
+                {(structured as any).bullets.slice(0, compactTablet ? 2 : 6).map((b: string, i: number) => (
                   <li key={i} className="flex gap-1.5">
                     <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "7.5px" }}>◆</span>
                     <span style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>{b}</span>
@@ -364,7 +366,7 @@ function PlacementAnalystBlock({
                 Uses context the fast model already received (rotation, spread, training examples).
                 Optional, collapsed by default to protect the headline + bullets as the hero.
                 All digital authoring veil only (no-print / showDigitalAssists). */}
-            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+            {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
               <div className="mt-2 -mx-1 border-t border-[#2F5C7C]/10 pt-1.5">
                 <button
                   type="button"
@@ -412,7 +414,7 @@ function PlacementAnalystBlock({
             )}
 
             {/* Integrated Expand Matrix affordance — now a seamless editorial bottom bar inside the XAI determination box (not tacked-on). Matches the liquid glass family, ink blue, active scale. Exact phrasing for the last 30 spread + last 5 placements view. When toggled the matrix below feels like refined data poetry. */}
-            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+            {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
               <div className="mt-3 -mx-1 border-t border-[#2F5C7C]/10 pt-2 flex justify-end">
                 <button
                   type="button"
@@ -525,7 +527,14 @@ function PlacementAnalystBlock({
                   <div>Week gaps: {rotationGapsLine.slice(0, 70)}{rotationGapsLine.length > 70 ? '…' : ''}</div>
                 )}
                 {(padGoodExamples?.length ?? 0) > 0 && (
-                  <div>{padGoodExamples!.length} Gold examples from this session injected as few-shots</div>
+                  <>
+                    <div>{padGoodExamples!.length} Gold examples from this session injected as few-shots</div>
+                    <div className="mt-0.5 pl-1 text-[6.5px] text-neutral-500">
+                      {padGoodExamples!.slice(-2).map((ex, i) => (
+                        <div key={i}>• “{ex.insightText.slice(0, 60)}{ex.insightText.length > 60 ? '…”' : '”'}</div>
+                      ))}
+                    </div>
+                  </>
                 )}
                 <div>Full context: board + week health, TM trail, tasks, fill-order contract, graves schedule filter.</div>
                 {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
@@ -845,6 +854,15 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const portalStyle = usePortalPlacementStyle(hostId, anchor);
   const tabletBottomSheet = isTabletTouchDevice() && !!hostId && !!portalStyle;
   const usePortal = !!hostId && !!portalStyle;
+
+  useEffect(() => {
+    if (!tabletBottomSheet || typeof document === "undefined") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [tabletBottomSheet]);
 
   useEffect(() => {
     setCoverageMode(false);
@@ -1462,6 +1480,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       }
       onClick={(e) => e.stopPropagation()}
     >
+      {tabletBottomSheet ? (
+        <div className="sb-pad-handle" aria-hidden />
+      ) : null}
       {/* Accent rail */}
       <div
         className="absolute top-3 h-10 w-[3px] rounded-full"
@@ -1479,7 +1500,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           onClose();
         }}
         className="sb-pad-close absolute top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100/80 text-neutral-400 text-sm hover:bg-neutral-200/80 hover:text-neutral-600"
-        style={{ [closeSide]: 8 }}
+        style={tabletBottomSheet ? { right: 8, left: "auto" } : { [closeSide]: 8 }}
         aria-label="Close"
       >
         ×
@@ -1665,6 +1686,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             </div>
 
             <PlacementAnalystBlock
+              compactTablet={tabletBottomSheet}
               prerendered={prerenderedFit}
               loading={deepInsightLoading}
               detailsOpen={analystDetailsOpen}
@@ -1742,7 +1764,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   )
                 )}
 
-                {(analystDetailsOpen || matrixExpanded) && (
+                {(analystDetailsOpen || (!tabletBottomSheet && matrixExpanded)) && (
                   <>
                     {/* In quick XAI view the matrix header is editorial/poetic to match the determination box language; full details keeps the compact SectionLabel. */}
                     {!analystDetailsOpen ? (
@@ -1922,7 +1944,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       </div>
 
       {!showTmPicker && !coverageMode && (
-        <div className="grid grid-cols-4 gap-1 border-t border-black/[0.06] bg-neutral-50/50 p-1.5 shrink-0">
+        <div className="sb-pad-actions grid grid-cols-4 gap-1 border-t border-black/[0.06] bg-neutral-50/50 p-1.5 shrink-0">
           {(
             [
               { label: a.isLocked ? "Locked" : "Lock", onClick: () => onToggleLock?.(slotKey), variant: "default" as const },
@@ -1951,7 +1973,22 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   );
 
   if (usePortal && typeof document !== "undefined") {
-    return createPortal(padEl, document.body);
+    const portalContent = tabletBottomSheet ? (
+      <>
+        <div
+          className="sb-pad-backdrop no-print"
+          role="presentation"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        />
+        {padEl}
+      </>
+    ) : (
+      padEl
+    );
+    return createPortal(portalContent, document.body);
   }
   return padEl;
 };

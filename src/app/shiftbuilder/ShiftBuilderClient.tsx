@@ -1707,6 +1707,16 @@ function AuthedShiftBuilder() {
     }
   }, [cmdkOpen, selectedSlotKey]);
 
+  // iPad: hide bottom chrome while PlacementPad sheet is open (avoids LIVE + rotation overlap).
+  React.useEffect(() => {
+    if (viewMode !== "canvas") return;
+    if (isTabletTouchDevice() && selectedSlotKey) {
+      hideOpsStatusBar();
+      return;
+    }
+    ensureOpsStatusBar();
+  }, [viewMode, selectedSlotKey]);
+
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
 
   // Each pill group collapses to its active value by default and expands
@@ -6157,7 +6167,7 @@ function AuthedShiftBuilder() {
 
       {viewMode === 'canvas' && deploymentRotationFitEnabled && (
         <CanvasEngineCluster
-          visible
+          visible={!(isTabletTouchDevice() && selectedSlotKey)}
           canRunEngine={canRunEngine}
           canEditAssignments={canEditAssignments}
           isCurrentNightLocked={isCurrentNightLocked}

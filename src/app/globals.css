@@ -1454,14 +1454,35 @@ body {
     padding: 6px 10px !important;
   }
 
+  .sb-pad-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483630;
+    background: rgba(15, 14, 16, 0.42);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    touch-action: none;
+  }
+
   .placement-pad.sb-tablet-bottom-sheet {
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    z-index: 2147483635 !important;
     border-radius: 20px 20px 0 0 !important;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22) !important;
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet .sb-pad-handle {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.14);
+    margin: 8px auto 4px;
+    flex-shrink: 0;
   }
 
   .placement-pad.sb-tablet-bottom-sheet .sb-pad-close {
@@ -1470,6 +1491,19 @@ body {
     height: var(--touch-min);
     width: var(--touch-min);
     font-size: 18px;
+    top: 6px !important;
+    right: 8px !important;
+    left: auto !important;
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet .sb-pad-actions button {
+    min-height: var(--touch-min);
+    font-size: 11px !important;
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet .sb-pad-xai-compact ul {
+    max-height: 3.2rem;
+    overflow: hidden;
   }
 }
 
