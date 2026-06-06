@@ -264,12 +264,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
         });
       },
 
-      onSettled: (_data, _error, _vars, context) => {
-        if (context?.dateKey) {
-          void queryClient.invalidateQueries({ queryKey: ["nightCore", context.dateKey] });
-          void queryClient.invalidateQueries({ queryKey: ["nightSecondary", context.dateKey] });
-        }
-      },
+      // Do not invalidateQueries here — refetch can return stale server-cached bundles
+      // and overwrite the optimistic nightCore patch from onMutate (board reverts until refresh).
+      onSettled: () => {},
     });
   };
 

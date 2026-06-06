@@ -122,6 +122,7 @@ import {
 import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
+  patchNightCoreAssignmentsCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
   hydrateNightForPrint,
@@ -1408,7 +1409,6 @@ function AuthedShiftBuilder() {
       const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
       await batchApplyDraftAssignments(nid, slots);
       setLastSavedAt(new Date());
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
       showToast(`Saved ${draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length} placements`, "success");
     } catch (e: unknown) {
       console.error("[shiftbuilder] batchApplyDraft failed", e);
@@ -1896,10 +1896,25 @@ function AuthedShiftBuilder() {
   const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
   const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
 
-  // Sync into Zustand store (3.4) — fine-grained subscribers + reduced re-renders
+  // Hydrate Zustand from server query once per day (cold load / day switch).
+  // Same-day edits are owned by live.assign, drag paths, and optimistic patches —
+  // re-syncing on every query tick was reverting the board after mutations.
+  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    useShiftBuilderStore.getState().setAssignments(effectiveAssignments);
-  }, [effectiveAssignments]);
+    const dayKey = formatLocalDateISO(selectedDay.date);
+    if (hydratedAssignmentsDayRef.current === dayKey) return;
+    if (boardColdLoading || currentNight.isCoreFetching) return;
+    const fromQuery = currentNight.assignments;
+    if (fromQuery === undefined) return;
+    hydratedAssignmentsDayRef.current = dayKey;
+    useShiftBuilderStore.getState().setAssignments(fromQuery);
+    setAssignments(fromQuery);
+  }, [
+    selectedDay.date,
+    boardColdLoading,
+    currentNight.isCoreFetching,
+    currentNight.assignments,
+  ]);
 
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
   // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
@@ -4372,6 +4387,16 @@ function AuthedShiftBuilder() {
               const { deleteZoneAssignment } = await import("@/lib/shiftbuilder/data");
               await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
             }
+
+            const dateKey = formatLocalDateISO(captureDate);
+            const qc = currentNight.queryClient;
+            if (qc) {
+              patchNightCoreAssignmentsCache(
+                qc,
+                dateKey,
+                useShiftBuilderStore.getState().assignments ?? {},
+              );
+            }
           } catch (e) {
             console.error("[drag] background persist failed", e);
           }
@@ -4520,9 +4545,15 @@ function AuthedShiftBuilder() {
     }
   }, [currentNight.notes, selectedDay.date]);
 
+  const hydratedTasksDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    const dayKey = formatLocalDateISO(selectedDay.date);
     if (currentNight.isSecondaryLoading) return;
+    if (hydratedTasksDayRef.current === dayKey) return;
+
     const nightTaskRows = currentNight.tasks as NightSlotTask[] | undefined;
+    hydratedTasksDayRef.current = dayKey;
+
     if (!nightTaskRows?.length) {
       setSelectedTasks({});
       return;

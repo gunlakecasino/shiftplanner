@@ -35,21 +35,39 @@ export async function invalidateNightBoardQueries(
 }
 
 /**
- * Call after placement, task, break, border, or notes mutations.
- * Busts server unstable_cache and optional in-tab TanStack queries.
+ * Bust server bundle caches only — does NOT refetch TanStack queries.
+ * Use after board mutations so optimistic UI is not overwritten by stale API data.
  */
-export async function notifyNightBoardChanged(
-  queryClient?: QueryClient | null,
-  isoDate?: string,
-): Promise<void> {
-  if (queryClient) {
-    await invalidateNightBoardQueries(queryClient, isoDate);
-  }
+export async function bustNightBoardServerCaches(isoDate?: string): Promise<void> {
   try {
     await revalidateNightBoardCaches(isoDate);
   } catch (e) {
     console.warn("[scheduleCacheSync] night board revalidate failed (non-fatal)", e);
   }
+}
+
+/** Keep TanStack nightCore in sync with the live board store after drag/swap paths. */
+export function patchNightCoreAssignmentsCache(
+  queryClient: QueryClient,
+  isoDate: string,
+  assignments: Record<string, unknown>,
+): void {
+  const patch = (old: { assignments?: Record<string, unknown> } | undefined) =>
+    old ? { ...old, assignments } : old;
+  queryClient.setQueryData(["nightCore", isoDate], patch);
+  queryClient.setQueryData(["night", isoDate], patch);
+}
+
+/** Keep TanStack nightSecondary tasks in sync after local task edits. */
+export function patchNightSecondaryTasksCache(
+  queryClient: QueryClient,
+  isoDate: string,
+  tasks: unknown[],
+): void {
+  queryClient.setQueryData(
+    ["nightSecondary", isoDate],
+    (old: { tasks?: unknown[] } | undefined) => (old ? { ...old, tasks } : old),
+  );
 }
 
 /**
