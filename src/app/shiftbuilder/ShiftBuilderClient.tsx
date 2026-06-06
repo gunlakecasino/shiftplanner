@@ -2482,7 +2482,10 @@ function AuthedShiftBuilder() {
       try {
         const { updateSlotBreakGroup, deleteBreakAssignment, upsertBreakAssignment } = await import("@/lib/shiftbuilder/data");
         // Write using the canonical db keys so it hits the actual zone_assignments row.
-        await updateSlotBreakGroup(nid, dbSlotKey, dbRrSide, group);
+        // Pass the captured tmId so the callee can recover if the assignment row
+        // is still being created by an in-flight optimistic assign (common when
+        // user immediately taps a break pill on a just-dropped TM).
+        await updateSlotBreakGroup(nid, dbSlotKey, dbRrSide, group, tmId);
 
         // Also keep break_assignments in sync for the break-sheet / print path.
         if (tmId) {

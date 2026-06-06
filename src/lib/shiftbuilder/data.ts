@@ -658,6 +658,7 @@ export async function updateSlotBreakGroup(
   slotKey: string,
   rrSide: string | null,
   breakGroup: number,
+  tmId: string | null = null, // when provided by caller (from optimistic UI state), allows recovery if the zone row is not yet committed
 ): Promise<void> {
   if (!nightId || !slotKey) return;
   const client = getSupabaseClient();
@@ -689,7 +690,54 @@ export async function updateSlotBreakGroup(
     logSupabaseError('updateSlotBreakGroup failed', error);
     throw new Error(`Failed to save slot break group: ${error.message}`);
   }
+
   if (!data?.length) {
+    if (tmId) {
+      // Recovery for race between optimistic assign (UI shows name + break pill)
+      // and the async zone_assignments row creation (or legacy key still in DB).
+      // Since the caller saw a tmId in the assignments state, we can safely
+      // ensure the row exists and then set the desired break_group.
+      try {
+        await upsertZoneAssignment({
+          nightId,
+          slotKey, // already normalized DB form from caller (e.g. "zone_4")
+          tmId,
+          slotType: slotType as any,
+          rrSide: rrSide as any,
+        });
+
+        // Retry the break update now that the row is guaranteed to exist
+        let q2 = client
+          .from('zone_assignments')
+          .update({
+            break_group: breakGroup,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('night_id', nightId)
+          .eq('slot_type', slotType)
+          .eq('slot_key', slotKey);
+
+        if (rrSide) {
+          q2 = q2.eq('rr_side', rrSide);
+        } else {
+          q2 = q2.is('rr_side', null);
+        }
+
+        const { data: data2 } = await q2.select('id');
+        if (data2?.length) {
+          await bustNightBoardServerCache();
+          return;
+        }
+      } catch (recoverErr) {
+        logSupabaseError('updateSlotBreakGroup recovery (with tmId) failed', recoverErr as any);
+        // fall through to the user-facing error
+      }
+
+      throw new Error(
+        `Could not save break group for ${slotKey}${rrSide ? ` (${rrSide})` : ''} (TM was assigned in UI but the slot row was not ready in DB yet).`,
+      );
+    }
+
     throw new Error(
       `No assignment row for ${slotKey}${rrSide ? ` (${rrSide})` : ''} — assign a TM before setting break group`,
     );
@@ -714,7 +762,7 @@ export async function applySlotDefaultBreakForAssignment(params: {
   const def = map.get(`${dbSlotKey}|${rrSide ?? ''}`);
   if (def === undefined || def === 0) return null;
 
-  await updateSlotBreakGroup(nightId, dbSlotKey, rrSide, def);
+  await updateSlotBreakGroup(nightId, dbSlotKey, rrSide, def, tmId);
   await upsertBreakAssignment({
     nightId,
     tmId,
@@ -3505,7 +3553,7 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
     // source from the assignment row in some paths) and the "canonical display column"
     // get the default immediately. Matches what manual cycle does.
     upserts.push(
-      updateSlotBreakGroup(nightId, def.slotKey, def.rrSide || null, def.defaultBreakGroup)
+      updateSlotBreakGroup(nightId, def.slotKey, def.rrSide || null, def.defaultBreakGroup, tmId)
     );
     applied++;
   }
