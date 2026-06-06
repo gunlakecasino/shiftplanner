@@ -26,6 +26,7 @@ import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
+import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
 import {
   PLACEMENT_SPREAD_NIGHTS,
   getSpreadPlacementKeys,
@@ -75,6 +76,7 @@ export interface PlacementPadProps {
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
+  onMarkUnavailable?: (tmId: string, tmName: string, status: string) => void | Promise<void>;
   /** Board-computed instant fit (same object as card chip). */
   boardPrerenderedFit?: PrerenderedPlacementFit;
   isDraftMode?: boolean;
@@ -93,8 +95,8 @@ export interface PlacementPadProps {
 const PAD_W = 340;
 /** Max pad height — fits iPad landscape with internal scroll for overflow */
 const PAD_MAX_HEIGHT = 600;
-const TABLET_SHEET_HEIGHT_RATIO = 0.38;
-const TABLET_SHEET_MAX_HEIGHT = 420;
+const TABLET_SHEET_HEIGHT_RATIO = 0.42;
+const TABLET_SHEET_MAX_HEIGHT = 460;
 
 function computeTabletBottomSheetStyle(pickerOpen = false): React.CSSProperties {
   const vv = window.visualViewport;
@@ -222,7 +224,7 @@ function SectionLabel({ children, large = false }: { children: React.ReactNode; 
   return (
     <span
       className={`font-semibold uppercase tracking-[0.12em] text-neutral-400 ${
-        large ? "text-[13px]" : "text-[9px]"
+        large ? "text-[15px]" : "text-[9px]"
       }`}
     >
       {children}
@@ -330,14 +332,14 @@ function PlacementAnalystBlock({
             "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-5 py-4 text-[11px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
+            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-5 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact text-[13px]" : " text-[11px]"}`}
             style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
           >
             <div className="flex items-baseline gap-1.5 mb-1.5">
               <span style={{ fontSize: "11px", color: '#2F5C7C' }}>✧</span>
               <span
                 className="font-semibold tracking-[0.3px] uppercase text-[#2F5C7C]"
-                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: "9px" }}
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: compactTablet ? "11px" : "9px" }}
               >
                 xAI determination (fast • board + week)
               </span>
@@ -354,7 +356,7 @@ function PlacementAnalystBlock({
             {/* The magic one-liner headline — now the clear hero of the entire quick pad view */}
             <p
               className={`font-semibold text-neutral-950 tracking-[-0.2px] leading-snug ${
-                compactTablet ? "mb-2 text-[16px]" : "mb-3 text-[14px]"
+                compactTablet ? "mb-2 text-[18px]" : "mb-3 text-[14px]"
               }`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
@@ -364,13 +366,13 @@ function PlacementAnalystBlock({
             {/* The 4-6 xAI powered bullets — synthesized from the full vast context including the new boardAndWeekContext (full current artboard placements + this week's rotation health, gaps, swaps across the board). This is now the *only* insight surface shown in the quick pad view. */}
             {(structured as any).bullets && (structured as any).bullets.length > 0 && (
               <ul
-                className={`space-y-[2px] pl-0.5 leading-[1.3] text-neutral-800 ${
-                  compactTablet ? "text-[14px]" : "text-[11px]"
+                className={`space-y-[3px] pl-0.5 leading-[1.35] text-neutral-800 ${
+                  compactTablet ? "text-[16px]" : "text-[13px]"
                 }`}
               >
                 {(structured as any).bullets.slice(0, compactTablet ? 2 : 6).map((b: string, i: number) => (
                   <li key={i} className="flex gap-1.5">
-                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "8.5px" }}>◆</span>
+                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "9.5px" }}>◆</span>
                     <span style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>{b}</span>
                   </li>
                 ))}
@@ -383,47 +385,66 @@ function PlacementAnalystBlock({
                 All digital authoring veil only (no-print / showDigitalAssists). */}
             {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
               <div className="mt-2 -mx-1 border-t border-[#2F5C7C]/10 pt-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEvidenceOpen?.(!evidenceOpen);
-                  }}
-                  className="sb-interactive w-full flex items-center justify-between text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
-                  style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                >
-                  <span>
-                    ✧ Key signals
-                    {(padGoodExamples?.length ?? 0) > 0 ? ` · ${padGoodExamples!.length} shaped by your Gold` : ''}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C]/75" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
+                    ✧ Provenance surface (basis for this determination)
                   </span>
-                  <span>{evidenceOpen ? '−' : '+'}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEvidenceOpen?.(!evidenceOpen);
+                    }}
+                    className="sb-interactive text-[8px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:underline"
+                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                  >
+                    {evidenceOpen ? 'Collapse' : 'Expand details'}
+                  </button>
+                </div>
 
-                {evidenceOpen && (
-                  <div className="mt-1.5 pl-0.5 text-[9px] leading-[1.3] text-neutral-700 space-y-px">
-                    {slotSpreadCount !== undefined && analystSlotKey && (
-                      <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
-                    )}
-                    {rotationGapsLine && (
-                      <div>Week gaps affecting this: {rotationGapsLine.slice(0, 65)}{rotationGapsLine.length > 65 ? '…' : ''}</div>
-                    )}
-                    {(padGoodExamples?.length ?? 0) > 0 && (
-                      <div>{padGoodExamples!.length} of your Gold examples injected as few-shots (training signal)</div>
-                    )}
-                    <div>Model also received: current board fill, weekly rotation health, neighbor exposure, slot tasks, strict fill-order + graves schedule rules.</div>
-                    {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onClearTraining();
-                        }}
-                        className="mt-0.5 text-[6.5px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
-                      >
-                        Clear this session’s Gold examples
-                      </button>
-                    )}
+                <div className="text-[9px] leading-[1.3] text-neutral-700 space-y-px">
+                  {slotSpreadCount !== undefined && analystSlotKey && (
+                    <div className="flex justify-between">
+                      <span className="text-[#2F5C7C]/60">Spread freshness</span>
+                      <span>{analystSlotKey}: {slotSpreadCount}× in last 30</span>
+                    </div>
+                  )}
+                  {rotationGapsLine && (
+                    <div className="flex justify-between">
+                      <span className="text-[#2F5C7C]/60">Rotation gaps</span>
+                      <span className="truncate max-w-[180px]">{rotationGapsLine.slice(0, 50)}{rotationGapsLine.length > 50 ? '…' : ''}</span>
+                    </div>
+                  )}
+                  {(padGoodExamples?.length ?? 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-[#2F5C7C]/60">Training signal</span>
+                      <span>{padGoodExamples!.length} Gold examples injected</span>
+                    </div>
+                  )}
+                  <div className="text-[8px] text-neutral-600 pt-0.5">Full context: board fill • weekly health • neighbor exposure • slot tasks • fill-order + graves rules</div>
+                </div>
+
+                {evidenceOpen && (padGoodExamples?.length ?? 0) > 0 && (
+                  <div className="mt-1.5 pt-1 border-t border-[#2F5C7C]/10 text-[8px] text-neutral-600">
+                    Prior Gold examples used:
+                    {padGoodExamples!.slice(-2).map((ex, i) => (
+                      <div key={i} className="pl-1 truncate">• “{ex.insightText.slice(0, 55)}{ex.insightText.length > 55 ? '…”' : '”'}</div>
+                    ))}
                   </div>
+                )}
+
+                {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearTraining();
+                    }}
+                    className="mt-1 text-[7px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                  >
+                    Clear this session’s Gold examples
+                  </button>
                 )}
               </div>
             )}
@@ -440,7 +461,7 @@ function PlacementAnalystBlock({
                   className="sb-interactive inline-flex items-center gap-1 rounded-lg border border-[#2F5C7C]/15 bg-white/60 px-3 py-1 text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:bg-white/90 hover:border-[#2F5C7C]/30"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
-                  <span>⤢</span> {(matrixExpanded ?? false) ? 'Collapse' : 'Expand'} Matrix (last 30 spread + last 5 placements)
+                  <span>⤢</span> {(matrixExpanded ?? false) ? 'Collapse' : 'Expand'} Matrix surface (last 30 spread + last 5 placements)
                 </button>
               </div>
             )}
@@ -456,7 +477,7 @@ function PlacementAnalystBlock({
                 onMoreDetails();
               }}
               disabled={loading}
-              className="sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-3 py-1 text-[10px] font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60"
+              className={`sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-3 py-1 font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60${compactTablet ? " py-1.5 text-[13px]" : " py-1 text-[10px]"}`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               {loading ? (
@@ -534,24 +555,22 @@ function PlacementAnalystBlock({
                 Consistent with the light "Key signals" panel. Digital veil only. */}
             {(padGoodExamples?.length ?? 0) > 0 || rotationGapsLine || slotSpreadCount !== undefined ? (
               <div className="mb-2 p-2 rounded-lg border border-[#2F5C7C]/15 bg-white/70 text-[9.5px] leading-snug">
-                <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Key signals (basis for this analysis)</div>
+                <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Provenance surface (basis for this analysis)</div>
                 {slotSpreadCount !== undefined && analystSlotKey && (
-                  <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
+                  <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Spread freshness</span><span>{analystSlotKey}: {slotSpreadCount}× in last 30</span></div>
                 )}
                 {rotationGapsLine && (
-                  <div>Week gaps: {rotationGapsLine.slice(0, 70)}{rotationGapsLine.length > 70 ? '…' : ''}</div>
+                  <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Rotation gaps</span><span className="truncate max-w-[180px]">{rotationGapsLine.slice(0, 50)}{rotationGapsLine.length > 50 ? '…' : ''}</span></div>
                 )}
                 {(padGoodExamples?.length ?? 0) > 0 && (
                   <>
-                    <div>{padGoodExamples!.length} Gold examples from this session injected as few-shots</div>
-                    <div className="mt-0.5 pl-1 text-[6.5px] text-neutral-500">
-                      {padGoodExamples!.slice(-2).map((ex, i) => (
-                        <div key={i}>• “{ex.insightText.slice(0, 60)}{ex.insightText.length > 60 ? '…”' : '”'}</div>
-                      ))}
+                    <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Training signal</span><span>{padGoodExamples!.length} Gold examples injected</span></div>
+                    <div className="mt-0.5 pl-1 text-[7px] text-neutral-600">
+                      Prior Golds: {padGoodExamples!.slice(-2).map((ex, i) => `“${ex.insightText.slice(0, 40)}…”`).join(' • ')}
                     </div>
                   </>
                 )}
-                <div>Full context: board + week health, TM trail, tasks, fill-order contract, graves schedule filter.</div>
+                <div className="text-[8px] text-neutral-600 pt-0.5">Context: board fill • weekly health • neighbor exposure • slot tasks • fill-order + graves rules</div>
                 {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
                   <button
                     type="button"
@@ -559,7 +578,8 @@ function PlacementAnalystBlock({
                       e.stopPropagation();
                       onClearTraining();
                     }}
-                    className="mt-0.5 text-[6.5px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                    className="mt-0.5 text-[7px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                   >
                     Clear session Gold examples
                   </button>
@@ -704,7 +724,7 @@ function PlacementCell({
   return (
     <span
       title={title ?? label}
-      className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums transition-colors"
+      className="flex h-[26px] items-center justify-center rounded-md text-[10px] font-bold tabular-nums transition-colors"
       style={
         placed && pillAccent
           ? {
@@ -831,6 +851,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   scheduledUnassigned = [],
   allEligibleTms,
   onAddOnCall,
+  onMarkUnavailable,
   boardPrerenderedFit,
   isDraftMode = false,
   draftAssignments = {},
@@ -928,6 +949,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     (tm: TmEntry) => {
       if (!onAssign) return;
       onAssign(slotKey, tm.tmId, tm.tmName);
+      tabletHaptic(16);
       setAssignConfirmed(true);
       setTimeout(() => {
         setAssignMode(false);
@@ -1529,7 +1551,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2 pr-10">
           <div
             className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${
-              padLarge ? "h-11 w-11 text-[15px]" : "h-8 w-8 text-[11px]"
+              padLarge ? "h-12 w-12 text-[17px]" : "h-8 w-8 text-[11px]"
             }`}
             style={{ background: a.tmName ? accent : "rgba(0,0,0,0.08)", color: a.tmName ? "#fff" : "#999" }}
           >
@@ -1537,18 +1559,32 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <div
-              className={`truncate font-bold uppercase tracking-[0.14em] ${padLarge ? "text-[13px]" : "text-[10px]"}`}
+              className={`truncate font-bold uppercase tracking-[0.14em] ${padLarge ? "text-[15px]" : "text-[10px]"}`}
               style={{ color: accent }}
             >
               {label}
             </div>
-            <div className={`truncate font-bold tracking-tight text-neutral-900 ${padLarge ? "text-[20px]" : "text-[15px]"}`}>
+            <div className={`truncate font-bold tracking-tight text-neutral-900 ${padLarge ? "text-[23px]" : "text-[15px]"}`}>
               {a.tmName || "Unassigned"}
             </div>
+            {a.tmName && onMarkUnavailable && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onMarkUnavailable(a.tmId, a.tmName, 'called_off');
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="ml-2 text-[8px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+              >
+                Mark unavailable
+              </button>
+            )}
           </div>
           {a.breakGroup != null && a.breakGroup > 0 && (
             <div className="shrink-0 text-center">
-              <div className="text-[7px] font-bold uppercase tracking-widest text-neutral-400">Brk</div>
+              <div className={`font-bold uppercase tracking-widest text-neutral-400 ${padLarge ? "text-[9px]" : "text-[7px]"}`}>Brk</div>
               <div
                 className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-white"
                 style={{ background: accent, border: `1px solid ${accent}` }}
@@ -1580,6 +1616,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   ? (tm) => { void onAddOnCall(tm.tmId, tm.tmName); }
                   : undefined
               }
+              onMarkUnavailable={
+                onMarkUnavailable
+                  ? (tm, status) => { void onMarkUnavailable(tm.tmId, tm.tmName, status); }
+                  : undefined
+              }
               onCancel={a.tmId ? () => setAssignMode(false) : undefined}
               confirmed={assignConfirmed}
               accent={accent}
@@ -1606,7 +1647,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   disabled={isCurrentNightLocked}
                   onClick={() => setAssignMode(true)}
                   className={`w-full rounded-lg font-semibold text-white disabled:opacity-50 ${
-                    padLarge ? "py-3.5 text-[16px]" : "py-2 text-[11px]"
+                    padLarge ? "py-3.5 text-[18px]" : "py-2 text-[11px]"
                   }`}
                   style={{ background: accent }}
                 >
@@ -1625,7 +1666,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   <button
                     type="button"
                     onClick={() => setSweeperOpen((v) => !v)}
-                    className="rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 text-[9px] font-semibold text-neutral-500 hover:bg-neutral-100"
+                    className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
                   >
                     Sweeper
                   </button>
@@ -1661,7 +1702,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         className="h-1.5 w-1.5 shrink-0 rounded-sm"
                         style={{ background: t.color ?? accent }}
                       />
-                      <span className={`flex-1 truncate font-medium text-neutral-800 ${padLarge ? "text-[15px]" : "text-[11px]"}`}>
+                      <span className={`flex-1 truncate font-medium text-neutral-800 ${padLarge ? "text-[17px]" : "text-[11px]"}`}>
                         {t.taskLabel}
                       </span>
                       {onRemoveTask && (
@@ -1696,14 +1737,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     placeholder="Add a task…"
                     disabled={isCurrentNightLocked}
                     className={`min-w-0 flex-1 rounded-lg border border-black/[0.08] bg-white text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-black/[0.06] ${
-                      padLarge ? "px-3.5 py-3 text-[16px]" : "px-2.5 py-1.5 text-[11px]"
+                      padLarge ? "px-3.5 py-3 text-[18px]" : "px-2.5 py-1.5 text-[11px]"
                     }`}
                   />
                   {taskInput.trim() && (
                     <button
                       type="button"
                       onClick={handleAddTask}
-                      className="shrink-0 rounded-lg px-2.5 text-[10px] font-bold text-white"
+                      className={`shrink-0 rounded-lg px-2.5 font-bold text-white ${padLarge ? "text-[14px] py-2" : "text-[10px]"}`}
                       style={{ background: accent }}
                     >
                       Add
@@ -1797,7 +1838,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     {/* In quick XAI view the matrix header is editorial/poetic to match the determination box language; full details keeps the compact SectionLabel. */}
                     {!analystDetailsOpen ? (
                       <div className="text-[10px] font-medium tracking-[0.3px] text-[#2F5C7C]/80 mb-1" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
-                        Matrix · last 30 nights (spread) + last 5 placements
+                        ✧ Matrix surface · last 30 nights (spread) + last 5 placements
                       </div>
                     ) : (
                       <SectionLabel>Matrix</SectionLabel>
@@ -1987,7 +2028,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               disabled={isCurrentNightLocked}
               onClick={btn.onClick}
               className={`rounded-lg font-semibold tracking-tight disabled:opacity-40 ${
-                padLarge ? "h-11 text-[13px]" : "h-7 text-[9px]"
+                padLarge ? "h-11 text-[15px]" : "h-7 text-[9px]"
               } ${
                 btn.variant === "danger"
                   ? "border border-red-200/80 bg-red-50 text-red-600 hover:bg-red-100/80"

@@ -1431,8 +1431,32 @@ body {
   }
 
   .sb-roster-shell {
+    width: 200px !important;
     -webkit-backdrop-filter: blur(24px) saturate(160%);
     backdrop-filter: blur(24px) saturate(160%);
+  }
+
+  .sb-roster-shell input[type="text"] {
+    font-size: 14px !important;
+    min-height: var(--touch-min);
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .sb-roster-shell .sb-interactive {
+    min-height: var(--touch-min);
+  }
+
+  .sb-roster-shell .sb-roster-row {
+    min-height: var(--touch-min);
+    font-size: 14px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .sb-roster-shell button[aria-expanded] {
+    min-height: 36px;
+    font-size: 11px;
   }
 
   .sb-floating-nav-pill.sb-tablet-nav {
@@ -1499,12 +1523,41 @@ body {
 
   .placement-pad.sb-tablet-bottom-sheet .sb-pad-actions button {
     min-height: var(--touch-min);
-    font-size: 11px !important;
+    font-size: 14px !important;
   }
 
   .placement-pad.sb-tablet-bottom-sheet .sb-pad-xai-compact ul {
-    max-height: 3.2rem;
+    max-height: 4.4rem;
     overflow: hidden;
+  }
+
+  .sb-builder-card-grid > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
+  }
+
+  .sb-stage-host {
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .sb-nav-canvas-mode-toggle.sb-nav-canvas-compact .sb-nav-canvas-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .sb-nav-canvas-mode-toggle.sb-nav-canvas-compact button {
+    min-width: var(--touch-min);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 }
 

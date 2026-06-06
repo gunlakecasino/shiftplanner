@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
+import { isTabletTouchDevice, rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 
-export type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.15 | 1.25;
+export type ZoomMode = "fit" | number;
 
 // The artboard is locked at 1056×816 (the print contract).
 export const NATURAL_WIDTH = 1056;
@@ -15,10 +15,11 @@ export function maxArtboardScale(): number {
   return isTabletTouchDevice() ? 1.25 : 1;
 }
 
-export function zoomStepsForDevice(): Exclude<ZoomMode, "fit">[] {
-  return isTabletTouchDevice()
-    ? [0.5, 0.75, 1, 1.15, 1.25]
-    : [0.5, 0.75, 1];
+export const TABLET_ZOOM_STEPS = [0.5, 0.75, 1, 1.15, 1.25] as const;
+export const DESKTOP_ZOOM_STEPS = [0.5, 0.75, 1] as const;
+
+export function zoomStepsForDevice(): readonly number[] {
+  return isTabletTouchDevice() ? TABLET_ZOOM_STEPS : DESKTOP_ZOOM_STEPS;
 }
 
 export type StageInsets = { top: number; right: number; bottom: number; left: number };
@@ -39,7 +40,7 @@ export function useZoom({
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(() => {
     if (typeof window === "undefined") return 0.85;
-    const w = window.innerWidth - 268 - 80;
+    const w = window.innerWidth - rosterPanelWidth() - 80;
     const h = window.innerHeight - 90;
     const max = maxArtboardScale();
     const byW = w / NATURAL_WIDTH;

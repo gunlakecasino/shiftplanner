@@ -28,6 +28,7 @@ import {
   isEligibleForSlot,
   type AuxDef,
 } from "@/lib/shiftbuilder/placement";
+import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
 import {
   setTMGravePool,
   setTMDisplayName,
@@ -109,6 +110,7 @@ import {
   teardownAllLiveCache,
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
+  buildPadAssignmentsFromStore,
   nightDateKey,
 } from "@/lib/shiftbuilder/liveCache";
 import {
@@ -232,6 +234,7 @@ import {
   isTabletTouchDevice,
   type StageInsets,
 } from "./hooks/useZoom";
+import { useStagePinchPan } from "./hooks/useStagePinchPan";
 
 
 // =============================================================================
@@ -1733,7 +1736,7 @@ function AuthedShiftBuilder() {
       top: 68,
       right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
-      left: rosterOpen ? (tablet ? 276 : 280) : tablet ? 32 : 40,
+      left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
   }, [rosterOpen]);
 
@@ -1746,6 +1749,7 @@ function AuthedShiftBuilder() {
     recomputeScale,
     zoomSteps,
     isTabletTouch,
+    maxScale,
   } = useZoom({ rosterOpen, stageInsets });
 
   const stepZoom = (dir: -1 | 1) => {
@@ -1753,13 +1757,16 @@ function AuthedShiftBuilder() {
       setZoomMode(dir > 0 ? zoomSteps[zoomSteps.length - 1] : zoomSteps[Math.max(0, zoomSteps.length - 2)]);
       return;
     }
-    const idx = zoomSteps.indexOf(zoomMode as (typeof zoomSteps)[number]);
-    if (idx !== -1) {
-      const next = zoomSteps[Math.max(0, Math.min(zoomSteps.length - 1, idx + dir))];
-      setZoomMode(next);
-    } else {
-      setZoomMode(dir > 0 ? zoomSteps[zoomSteps.length - 1] : 0.75);
-    }
+    const current =
+      typeof zoomMode === "number"
+        ? zoomSteps.reduce((best, step) =>
+            Math.abs(step - zoomMode) < Math.abs(best - zoomMode) ? step : best,
+          zoomSteps[0])
+        : zoomSteps[Math.floor(zoomSteps.length / 2)];
+    const idx = zoomSteps.indexOf(current);
+    const baseIdx = idx === -1 ? Math.floor(zoomSteps.length / 2) : idx;
+    const next = zoomSteps[Math.max(0, Math.min(zoomSteps.length - 1, baseIdx + dir))];
+    setZoomMode(next);
   };
 
   // Handlers for the FloatingNav zoom cluster (Fit / − / +)
@@ -1769,6 +1776,20 @@ function AuthedShiftBuilder() {
   };
   const handleZoomOut = () => stepZoom(-1);
   const handleZoomIn = () => stepZoom(1);
+
+  const isStageZoomed =
+    zoomMode !== "fit" || Math.abs(scale - fitScale) > 0.02;
+  const stageZoomLabel = `${Math.round(scale * 100)}%`;
+
+  useStagePinchPan({
+    enabled: isTabletTouch && !selectedSlotKey,
+    stageHostRef,
+    scale,
+    fitScale,
+    maxScale,
+    setZoomMode,
+    onFit: handleZoomFit,
+  });
 
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
@@ -3531,24 +3552,13 @@ function AuthedShiftBuilder() {
     return set;
   }, [assignments, draftAssignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
 
-  // Fresh assignments view specifically for MarkerPad.
-  // The cards (inside Board) and live layer now use Zustand + liveAssignmentsStore,
-  // but MarkerPad was still receiving the stale local `assignments` useState.
-  // This caused filled cards to appear "unassigned" inside the pad → it would
-  // immediately show the big TM picker list instead of the normal occupant UI + Swap.
-  const padAssignments = React.useMemo(() => {
-    const dateKey = nightDateKey(selectedDay.date);
-    const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    const merged: Record<string, any> = {
-      ...assignments,
-      ...(currentNight?.assignments ?? {}),
-      ...liveForNight,
-    };
-    // Main board store + draft overlay win — never let stale live cache override drag/swap.
-    Object.assign(merged, storeAssignments);
-    Object.assign(merged, storeDraftAssignments);
-    return merged;
-  }, [assignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
+  // Fresh assignments view for PlacementPad / CMD-K / clear-board.
+  // Must mirror the board store exactly — layering legacy/query/live with Object.assign
+  // leaves ghost assignments on cleared slots after drag moves (deleted keys never removed).
+  const padAssignments = React.useMemo(
+    () => buildPadAssignmentsFromStore(storeAssignments, storeDraftAssignments, isDraftMode),
+    [storeAssignments, storeDraftAssignments, isDraftMode],
+  );
 
   // === TM Picker lists — Graves Default Schedule (graves_default_schedule + night_on_call) ===
   // 1. Default = scheduled tonight (correct band) + eligible + unassigned
@@ -4070,6 +4080,31 @@ function AuthedShiftBuilder() {
     [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
   );
 
+  const handlePadMarkUnavailable = React.useCallback(
+    async (tmId: string, tmName: string, status: string = "called_off") => {
+      const reliableNightId = queryNightId || nightId;
+      const dateStr = formatLocalDateISO(selectedDay.date);
+      try {
+        if (!reliableNightId) throw new Error("No night id");
+      await updateNightTmStatus({
+          nightId: reliableNightId,
+          tmId,
+          status,
+          note: `Marked from placement picker (${status})`,
+          tmName,
+        });
+        setPickerScheduleEpoch((e) => e + 1);
+        const dateKey = selectedDay.date.toISOString().slice(0, 10);
+        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        showToast(`${tmName} marked ${status} for tonight`, "success");
+      } catch (e) {
+        console.error("[shiftbuilder] mark unavailable failed", e);
+        showToast("Failed to mark unavailable", "error");
+      }
+    },
+    [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
+  );
+
   const cmdkCompletionUnplaced = React.useMemo(() => {
     return Array.from(effectiveScheduledTmIdsTonight)
       .filter((id) => !alreadyAssignedThisNight.has(id))
@@ -4322,9 +4357,6 @@ function AuthedShiftBuilder() {
         const movingSnap = movingFromMain;
         const displacedSnap = displacedFromMain;
 
-        // Minimal local state for history only (not for rendering the cards)
-        setAssignments((prev: any) => ({ ...prev })); // no-op visual, just trigger history capture if needed
-
         // Primary visual update: directly mutate the store the board/cards actually read.
         // This makes the move feel instant even if live layer has any internal delay.
         try {
@@ -4353,6 +4385,9 @@ function AuthedShiftBuilder() {
         } catch (e) {
           console.warn("[drag] direct store patch failed", e);
         }
+
+        // Keep legacy assignments state aligned with the store (picker/pad/clear-board reads).
+        setAssignments({ ...useShiftBuilderStore.getState().assignments });
 
         mirrorMainAssignmentsToLiveStore(captureDate);
         setLiveAssignVersion((v) => v + 1);
@@ -5394,6 +5429,8 @@ function AuthedShiftBuilder() {
         onZoomFit={handleZoomFit}
         onZoomOut={handleZoomOut}
         onZoomIn={handleZoomIn}
+        zoomLabel={stageZoomLabel}
+        isZoomed={isStageZoomed}
         onPrint={() => setIsPrintCenterOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
@@ -5749,6 +5786,7 @@ function AuthedShiftBuilder() {
               scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
               allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
               onAddOnCall={handlePadAddOnCall}
+              onMarkUnavailable={handlePadMarkUnavailable}
               onClearSlot={handlePadClearSlot}
               onToggleLock={handlePadToggleLock}
               onAssign={handlePadAssign}

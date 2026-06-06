@@ -102,6 +102,7 @@ export interface ShiftBuilderBoardProps {
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
+  onMarkUnavailable?: (tmId: string, tmName: string, status: string) => void | Promise<void>;
   onToggleLock?: (slotKey: string) => void;
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
@@ -176,6 +177,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   scheduledUnassigned = [],
   allEligibleTms,
   onAddOnCall,
+  onMarkUnavailable,
   onClearSlot,
   onToggleLock,
   onAssign,
@@ -259,6 +261,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const fitBySlot = fitBySlotProp ?? internalFitMap.fitBySlot;
   // In print-preview mode the live canvas must match the exact Golden that print capture will clone (no digital chips/lines at all).
   const showDigitalAssists = !isPrintPreview;
+  const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
 
   // xAI fits per host for corner magic one line + override surface (powerful but from pad on-demand)
   const [xaiFitsByHost, setXaiFitsByHost] = React.useState<Record<string, XaiFit>>({});
@@ -486,6 +489,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         scheduledUnassigned={scheduledUnassigned}
         allEligibleTms={allEligibleTms}
         onAddOnCall={onAddOnCall}
+        onMarkUnavailable={onMarkUnavailable}
         boardPrerenderedFit={fitBySlot[slotKey]}
         isDraftMode={isDraftMode}
         draftAssignments={draftAssignments}
@@ -745,7 +749,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ).length} / 10 FILLED
                 </span>
               </div>
-              <div ref={zonesGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={zonesGridRef} className={`grid grid-cols-5 gap-1.5 flex-1${builderCardGridClass}`} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_DEFS.map((def) => {
                   const key = def.key;
                   const accent = getZoneColor(key);
@@ -796,7 +800,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   }, 0)} / 10 FILLED
                 </span>
               </div>
-              <div ref={restroomsGridRef} className="grid grid-cols-5 gap-1.5 flex-1" style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={restroomsGridRef} className={`grid grid-cols-5 gap-1.5 flex-1${builderCardGridClass}`} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {RR_DEFS.map((def) => {
                   const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
                   const accent = getRRAccent(def.num);
@@ -856,7 +860,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
               <div
                 ref={auxGridRef}
-                className="grid gap-1.5 flex-1"
+                className={`grid gap-1.5 flex-1${builderCardGridClass}`}
                 style={{
                   gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
                   gridAutoRows: "minmax(0, 1fr)",
@@ -1045,7 +1049,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
                         {row.time}
                       </div>
-                      <div className="flex-1 grid grid-cols-6 gap-1.5">
+                      <div className={`flex-1 grid grid-cols-6 gap-1.5${builderCardGridClass}`}>
                         {Array.from({ length: 6 }).map((_, i) => {
                           const slotKey = `OL-${row.key}-${i}`;
                           return (

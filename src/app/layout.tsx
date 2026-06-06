@@ -54,6 +54,7 @@ export const metadata: Metadata = {
   description: "ZDS Forge • Shift Builder — Operational planning for ZDS.",
   icons: {
     icon: "/favicon.ico",
+    apple: "/icons/apple-touch-icon.png",
   },
   // PWA foundation (Phase 0 — will become critical in Phase 3)
   manifest: "/manifest.json",

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ShiftForge">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="50%" stop-color="#B89708"/>
+      <stop offset="100%" stop-color="#8A7206"/>
+    </linearGradient>
+  </defs>
+  <!-- Full-bleed background for maskable safe zone -->
+  <rect width="512" height="512" fill="#111113"/>
+  <rect x="72" y="72" width="368" height="368" rx="64" fill="url(#gold)" opacity="0.14"/>
+  <path fill="url(#gold)" d="M168 176h176v36H168zm0 64h136v36H168zm0 64h176v36H168z"/>
+  <circle cx="360" cy="304" r="28" fill="#0A84FF"/>
+</svg>

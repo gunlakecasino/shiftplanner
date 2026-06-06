@@ -20,6 +20,8 @@ import {
   LayoutGrid,
   Coffee,
   Users,
+  PenLine,
+  ScanEye,
 } from "lucide-react";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -123,6 +125,9 @@ export interface FloatingNavProps {
   onZoomFit?: () => void;
   onZoomOut?: () => void;
   onZoomIn?: () => void;
+  /** e.g. "108%" when zoomed; omit or "Fit" when at fit scale */
+  zoomLabel?: string;
+  isZoomed?: boolean;
   onCommandOpen?: () => void;
   onThemeToggle?: () => void;
   onPrint?: () => void;
@@ -169,6 +174,8 @@ export default function FloatingNav({
   onZoomFit,
   onZoomOut,
   onZoomIn,
+  zoomLabel,
+  isZoomed = false,
   onCommandOpen,
   onThemeToggle,
   onPrint,
@@ -234,6 +241,15 @@ export default function FloatingNav({
   // Note: placedCount prop is kept for API compatibility but no longer used in the nav UI.
 
   const ACCENT = "#C13A14";
+
+  const [compactCanvasToggle, setCompactCanvasToggle] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px) and (max-width: 1180px)");
+    const onMq = () => setCompactCanvasToggle(mq.matches);
+    onMq();
+    mq.addEventListener("change", onMq);
+    return () => mq.removeEventListener("change", onMq);
+  }, []);
 
   const glassStyle = {
     background: isDark ? "rgba(9,9,11,0.85)" : "rgba(255,255,255,0.85)",
@@ -424,7 +440,10 @@ export default function FloatingNav({
 
           {onCanvasModeChange ? (
             <div
-              className="sb-nav-canvas-mode-toggle flex shrink-0 items-center rounded-lg p-0.5"
+              className={cn(
+                "sb-nav-canvas-mode-toggle flex shrink-0 items-center rounded-lg p-0.5",
+                compactCanvasToggle && "sb-nav-canvas-compact",
+              )}
               style={{
                 background: "rgba(0,0,0,0.04)",
                 fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
@@ -433,22 +452,26 @@ export default function FloatingNav({
               <button
                 type="button"
                 onClick={() => onCanvasModeChange("builder")}
-                className={`sb-interactive rounded-md px-2.5 font-semibold tracking-[0.2px] ${
-                  isTabletTouchDevice() ? "min-h-11 text-[12px]" : "min-h-8 text-[10px]"
+                className={`sb-interactive inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 font-semibold tracking-[0.2px] ${
+                  isTabletTouchDevice() ? "min-h-11 text-[14px]" : "min-h-8 text-[10px]"
                 } ${canvasMode === "builder" ? "bg-[#0A84FF] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
                 title="Builder — digital authoring veil with xAI assists"
+                aria-label="Builder mode"
               >
-                Builder
+                {compactCanvasToggle ? <PenLine className="h-4 w-4 shrink-0" /> : null}
+                <span className="sb-nav-canvas-label">Builder</span>
               </button>
               <button
                 type="button"
                 onClick={() => onCanvasModeChange("print-preview")}
-                className={`sb-interactive rounded-md px-2.5 font-semibold tracking-[0.2px] ${
-                  isTabletTouchDevice() ? "min-h-11 text-[12px]" : "min-h-8 text-[10px]"
+                className={`sb-interactive inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 font-semibold tracking-[0.2px] ${
+                  isTabletTouchDevice() ? "min-h-11 text-[14px]" : "min-h-8 text-[10px]"
                 } ${canvasMode === "print-preview" ? "bg-[#C13A14] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
                 title="Preview — exact Golden sheet for PDF/print"
+                aria-label="Print preview mode"
               >
-                Preview
+                {compactCanvasToggle ? <ScanEye className="h-4 w-4 shrink-0" /> : null}
+                <span className="sb-nav-canvas-label">Preview</span>
               </button>
             </div>
           ) : null}
@@ -476,6 +499,15 @@ export default function FloatingNav({
             <NavToolButton onClick={onZoomOut} title="Zoom out" className="rounded-none">
               <ZoomOut className={NAV_ICON} />
             </NavToolButton>
+            {isZoomed && zoomLabel ? (
+              <span
+                className="min-w-[2.75rem] px-1 text-center text-[10px] font-bold tabular-nums text-zinc-500 dark:text-zinc-400"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                aria-live="polite"
+              >
+                {zoomLabel}
+              </span>
+            ) : null}
             <NavToolButton onClick={onZoomIn} title="Zoom in" className="rounded-none">
               <ZoomIn className={NAV_ICON} />
             </NavToolButton>

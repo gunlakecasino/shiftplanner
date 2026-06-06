@@ -6,6 +6,120 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Added direct "Mark unavailable" action in PlacementPad header for current assigned TM (in addition to TmPicker)
+
+- In the popup PlacementPad (the card inspector / popup marker pad), when a TM is assigned to the slot, added a small "Mark unavailable" button next to the TM name in the header.
+- Clicking it directly marks as 'called_off' via the onMarkUnavailable handler (same as from the TmPicker reasons).
+- This completes the "in the placement picker" part for the occupied case, in addition to the TM picker list.
+- Fits the current UI style (small amber button).
+- tsc clean.
+- The popup (image provided) now has the feature in the header for the current TM (Jack in the example), and in the TM picker when replacing.
+
+## 2026-06-09 — Grok 4.3 — Full implementation: mark TM called off / unavailable directly in PlacementPad + TmPicker
+
+- Feature: Operator can now mark a TM "called off", PTO, LOA, or Other/Off for the night directly from the placement picker (PlacementPad) and its TM picker (TmPicker), without leaving the flow.
+- Changes:
+  - MarkerPad.tsx (TmPicker): Added `onMarkUnavailable` prop. In each TM row, added "Mark unavailable tonight" button (styled subtly amber like on-call precedent). When activated, shows inline reason pills (Called off, PTO, LOA, Other/Off) + Cancel. Calls the handler and clears. Works for both default scheduled list and search allEligible. Touch-friendly for tablet variant. State per-row for the reasons UI.
+  - PlacementPad.tsx: Added `onMarkUnavailable` prop and interface. Passed through to TmPicker (mapping to id/name/status). Also wired the prop from parent.
+  - ShiftBuilderClient.tsx: Added `handlePadMarkUnavailable` (modeled exactly on handlePadAddOnCall): imports updateNightTmStatus from sudoActions, calls with nightId, status (default called_off), note, tmName. Bumps picker epoch + invalidates nightCore query for live refresh. Toast on success/error. Passed to PlacementPad (and thus to board in renders).
+  - ShiftBuilderBoard.tsx: Added `onMarkUnavailable` to interface, destructuring, and pass-through to internal PlacementPad render (so all call sites work).
+- Behavior: 
+  - Action uses the canonical updateNightTmStatus (upserts night_tm_status).
+  - Realtime (already wired for night_tm_status + call_offs) will update calledOffIds, recompute scheduledUnassigned/allEligible lists, filter the picker, etc. immediately.
+  - TM disappears from default "scheduled + eligible" list in the picker (or gets handled by upstream filters).
+  - Works for both narrow and broad search pools.
+  - Full reasons supported; status values match the table (called_off, pto, loa, off).
+  - Note auto-added for audit ("Marked from placement picker").
+  - Occupied slot case covered indirectly via opening the picker to replace and mark; direct action in pad body can be added in follow-up but core flow is in the TM picker as requested.
+- tsc clean.
+- All per rules: surgical, reuses existing realtime + data + onCall precedent, respects Graves scheduled source (this is availability override only), Draft for assignments, digital veil, iPad touch targets.
+- Logged here and plan status conceptually updated.
+- This completes the "in the placement picker and tm picker" request fully.
+
+## 2026-06-09 — Grok 4.3 — Hone in on strategic recreation of xAI provenance surface + matrix using Grok Imagine
+
+- User direction: "let's hone in and strategically recreate the xAI provenance surface, matrix and all using grok imagine".
+- Action: Used Grok Imagine (image_edit on current popup screenshot + image_gen for clean component mock) to generate strategic visual concepts for the ideal xAI determination/provenance area.
+  - Focused on expanding "Key signals" into a rich, scannable provenance surface (spread/freshness, rotation/gaps, training/prior Gold examples with quotes, board context).
+  - Refined the matrix visualization (last 30 spread grid with colored cells + last 5 pills) as a beautiful, high-signal "Expand Matrix" experience.
+  - Maintained Golden artboard, liquid glass, Atkinson, calm ink blue (#2F5C7C), digital veil, high readability, operator-grade calm density.
+  - Generated output used as visual spec to guide code improvements to the xAI box, evidence panel, matrix button, and overall provenance display in the popup.
+- Rationale: The current "Key signals" (collapsed) and matrix button are the heart of the xAI reasoning transparency we've been building. Using Imagine strategically to "recreate" the surface allows us to visualize and then implement a more polished, provenance-rich version that makes the fast determination and deep analysis feel truly explainable and trustworthy.
+- Code recreation (strategic implementation of the Imagine vision):
+  - Quick view xAI box: "Key signals" → "Provenance surface (basis for this determination)" with structured flex rows for Spread freshness, Rotation gaps, Training signal, context summary. Expanded details show prior Gold quotes. No longer collapsed by default for main info; toggle for full priors.
+  - Deep view: Matched with same "Provenance surface" structured layout, flex rows, priors list.
+  - Matrix: Updated button and editorial header to "✧ Matrix surface · last 30 nights..." for thematic consistency with provenance surface. PlacementCell enlarged (h-26, text-10px) for better grid visibility per beautiful matrix in mock.
+  - Overall: The xAI determination now reads as a cohesive "provenance surface + matrix" with the signals and history visualization as first-class, scannable elements (aligning with the generated Imagine mock's rich signals + grid).
+- All changes surgical in PlacementPad.tsx, preserve liquid glass/Atkinson/veil, larger text from prior (13px bullets), tsc clean.
+- This hones the popup marker pad's xAI area into the strategic provenance experience.
+- Next steps in surface if needed (deeper matrix viz, more visual cells, etc.). Logged per rules.
+
+## 2026-06-09 — Grok 4.3 — Pushed deeper still: explicit short prior Gold headlines now listed in deep evidence for true training inspectability
+
+## 2026-06-09 — Grok 4.3 — Set xAI bullets to 13px per user request (with supporting icon + spacing tweaks)
+
+- Direct follow-up to "[Image #1] better but still hard to read the xAI information and all below" and "lets make the bullets 13pt".
+- Change: In the light/fast XAI determination bullets (the 4-6 ◆ lines under the headline):
+  - Normal (non-compactTablet) view: text-[11px] → text-[13px]
+  - Increased space-y to [3px] and leading to [1.35] for better readability at the new size.
+  - ◆ icon: fontSize 8.5px → 9.5px to match scale.
+- CompactTablet mode left at its already-large text-[14px] (headlines are 16px there).
+- This targets the exact "bullets" the user called out in the current quick xAI view (the ones visible in the provided screenshot).
+- tsc clean.
+- Still fully within the digital authoring veil, liquid glass treatment, Atkinson, and recent ink/glass cohesion work. No other text (evidence, deep sections, buttons) changed in this micro-step unless it directly supports the 13px bullets.
+- The wider 340px picker + previous bumps + this 13px bullet size should make the core xAI reasoning (headline + these specific bullets + the signals/matrix below) significantly more comfortable.
+
+## 2026-06-09 — Grok 4.3 — Further widen + typography pass on PlacementPad (340px) after user screenshot feedback: still hard to read xAI info
+
+- User feedback on [Image #1]: "better but still hard to read the xAI information and all below".
+- Response (keep going as you see fit):
+  - Widened further: PAD_W 300 → 340 (another modest step; gives real breathing room on the digital veil without breaking card adjacency on the 1056 canvas).
+  - More aggressive, targeted typography + spacing for the xAI reasoning content (the part the user is struggling with):
+    - Quick xAI box: base text-[10px] → text-[11px], px-4 py-3.5 → px-5 py-4
+    - Headline: 12px → 14px (non-compact), tracking tightened, mb bumped
+    - Bullets: 9.5px → 11px + better spacing/leading
+    - Diamond icons bumped for scale
+    - Evidence "Key signals" toggle + content: 8px → 9px (quick) / 8.5px → 9.5px + more padding (deep)
+    - Deep structured container + subheaders + content: further bumps for consistency
+    - Expand Matrix button: text-[7.5px] → 9px + px-3 py-1
+    - "Deep 4.3 analysis" button: text-[9px] → 10px + more padding
+  - The xAI determination glass box and the controls below it (matrix, deep analysis, evidence) now have noticeably larger, airier type while staying within the liquid glass / Atkinson / ink language.
+- tsc clean.
+- Still 100% digital authoring veil (no-print, showDigitalAssists, outside sacred print artboard). No change to tasks section or bottom action row (those are secondary to the xAI reasoning focus).
+- This should make the headline, the 4-6 bullets, the Key signals (with prior Gold examples), the matrix affordance, and the deep button much more comfortable to read.
+
+## 2026-06-09 — Grok 4.3 — Widen PlacementPad picker (272→300) + bump xAI reasoning text sizes for legibility
+
+- User request: widen the placement picker a bit so we can make the (xAI reasoning) text bigger.
+- Surgical change:
+  - PAD_W: 272 → 300 (modest +28px, still fits comfortably beside cards on the 1056 canvas in builder mode).
+  - Key text bumps (targeted to the xAI determination / evidence / deep analysis areas that matter most for the reasoning work):
+    - Quick xAI box base: text-[9px] → text-[10px]
+    - Header label: 8px → 9px
+    - Headline (hero): text-[10.5px] → text-[12px]
+    - Bullets: text-[8.5px] → text-[9.5px] + slight leading bump
+    - Evidence/signals (both light quick and deep): 7px/7.5px → 8px/8.5px, better leading
+    - Deep structured container: text-[9px] → text-[10px]
+    - Deep sub-headers: text-[8px] → text-[9px]
+    - Deep whyTonight / fitSummary: modest bumps (10px→10.5-11px)
+  - Kept px-4 py-3.5 and overall liquid glass / Atkinson / ink aesthetic from recent veil work. No padding or layout overhaul.
+- Rationale: Directly supports the current deep dive into xAI reasoning — the evidence, headlines, bullets, whyTonight, prior examples, etc. are now more readable without feeling cramped. Still 100% digital authoring veil (no-print, showDigitalAssists, outside print-artboard).
+- tsc clean.
+- No other files touched. Anchor gaps (mr-1.5/ml-1.5) and max-height unchanged.
+- This is a small but high-value enabler for the "full powerful explainability" goal.
+
+## 2026-06-09 — Grok 4.3 — Pushed deeper still: explicit short prior Gold headlines now listed in deep evidence for true training inspectability
+
+- Iteration: In the deep 4.3 evidence basis block, when Gold examples are present, render the actual previous insight texts (last up to 2, truncated to ~60 chars) as bullet examples.
+  - Operator can now literally read "the model was shown these judgments you marked Gold and applied analogous reasoning here".
+  - Complements the count, spread/gaps, and "Clear" button.
+  - Light quick view left as lean summary (count + high-level note) to preserve speed.
+- This is meaningful "going further" into the xAI reasoning: the training loop is no longer opaque; the deep analysis is visibly shaped by operator history + deterministic context. Advances "full powerful explainability" and "continue training loop, provenance" from THIS_IS.
+- tsc clean.
+- No other files touched. All prior constraints (veil, graves root, no extra calls, surgical) held.
+- Plan status conceptually advanced (deep evidence + training transparency significantly strengthened).
+- Log entry for this push.
+
 ## 2026-06-09 — Grok 4.3 — Created focused plan + selected first vertical for xAI reasoning deep dive (Reasoning Evidence + Training Visibility)
 
 - Context: User responded "Proceed as you see fit" after the full architecture audit and slice proposals. Highest-leverage starting point is making the *reasoning* inspectable and the training loop visible, without losing the delightful instant light surfaces or violating any invariants.
@@ -56,6 +170,19 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 - Status: Iterated the core evidence + training visibility. Ready for user to test the builder and direct the next push (deeper CoT? provenance unification? training persistence? engine summaries?). Log appended. All per Agentic contract, THIS_IS caveats (graves root, power usage, veil discipline), and plan.
 
 ## 2026-06-09 — Grok 4.3 — Further iteration: specific data in evidence, Clear training control, chip title polish
+
+## 2026-06-09 — Grok 4.3 — Go further: evidence basis now also in deep 4.3 structured analysis + unified training clear
+
+- Extended the "Key signals / basis" evidence display (with concrete spread counts, gaps, Gold injection, full context summary + Clear button) into the rich deep view (`showXaiBody && structured` section, right before the "Tonight" headline + whyTonight).
+  - Now when you tap for full 4.3 analysis, you see the grounding signals *first*, then the detailed whyTonight, rotation, neighbors, swaps, watchouts, ranked picks.
+  - Reuses the same passed props (rotationGapsLine, slotSpreadCount, padGoodExamples, onClearTraining, analystSlotKey).
+  - Cohesive styling (small text, border, ✧ header) matching the light panel and overall veil (Atkinson, ink blue, glass hints).
+- This unifies light and deep around the same "what the model saw" transparency.
+- tsc clean.
+- Rationale: "Keep going as you see fit" + "iterate and go further" — the light path is now inspectable; bringing the same to the deliberate high-effort deep path makes the full analyst output feel explainable end-to-end. Directly advances W3-3 (surface Grok reasoning/CoT + full structured) and the plan's richer deep evidence goal.
+- Artifacts: PlacementPad.tsx (added evidence block in deep structured div; reuses existing data and onClearTraining).
+- All digital-only, no new calls, graves/filter/fill-order invariants untouched, Draft/print gates intact.
+- Next: Could polish visuals, add to chip more, start dedicated xAI provenance component, or tackle engine-run summaries. Plan updated. Log complete. Ready for validation or next micro.
 
 - Went further on the signals panel:
   - Threaded `rotationGapsLine`, `slotSpreadCount` (via spreadCountFor), and `slotKey` into PlacementAnalystBlock.

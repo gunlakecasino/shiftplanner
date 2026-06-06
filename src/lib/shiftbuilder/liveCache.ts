@@ -78,6 +78,44 @@ export function mirrorMainAssignmentsToLiveStore(date: Date): void {
   liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
 }
 
+type DraftOverlayRow = {
+  proposedTmId?: string;
+  proposedTmName?: string;
+  proposedClear?: boolean;
+};
+
+/**
+ * Authoritative assignments for PlacementPad / picker surfaces.
+ * Store is the source of truth; draft overlays apply only in draft mode.
+ * Never layer stale legacy/query/live keys on top — deleted slots must disappear.
+ */
+export function buildPadAssignmentsFromStore(
+  storeAssignments: Record<string, any> | null | undefined,
+  storeDraftAssignments: Record<string, DraftOverlayRow> | null | undefined,
+  isDraftMode: boolean,
+): Record<string, any> {
+  const merged: Record<string, any> = { ...(storeAssignments ?? {}) };
+
+  if (isDraftMode && storeDraftAssignments) {
+    for (const [slotKey, draft] of Object.entries(storeDraftAssignments)) {
+      if (draft?.proposedClear) {
+        delete merged[slotKey];
+      } else if (draft?.proposedTmId || draft?.proposedTmName) {
+        merged[slotKey] = {
+          ...(typeof merged[slotKey] === "object" && merged[slotKey] !== null
+            ? (merged[slotKey] as Record<string, unknown>)
+            : {}),
+          tmId: draft.proposedTmId,
+          tmName: draft.proposedTmName,
+          slotKey,
+        };
+      }
+    }
+  }
+
+  return merged;
+}
+
 // ============================================================================
 // ZUSTAND LIVE STORE (lightweight mirror of committed server state)
 // ============================================================================

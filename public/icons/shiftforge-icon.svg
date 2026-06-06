@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ShiftForge">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="50%" stop-color="#B89708"/>
+      <stop offset="100%" stop-color="#8A7206"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="#111113"/>
+  <rect x="48" y="48" width="416" height="416" rx="88" fill="url(#gold)" opacity="0.12"/>
+  <path fill="url(#gold)" d="M148 156h216v44H148zm0 78h168v44H148zm0 78h216v44H148z"/>
+  <circle cx="392" cy="312" r="36" fill="#0A84FF" opacity="0.9"/>
+</svg>
