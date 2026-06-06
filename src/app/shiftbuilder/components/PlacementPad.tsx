@@ -90,7 +90,7 @@ export interface PlacementPadProps {
   onXaiFit?: (hostId: string, xai: XaiFit) => void;
 }
 
-const PAD_W = 300;
+const PAD_W = 340;
 /** Max pad height — fits iPad landscape with internal scroll for overflow */
 const PAD_MAX_HEIGHT = 600;
 const TABLET_SHEET_HEIGHT_RATIO = 0.38;
@@ -277,9 +277,11 @@ function PlacementAnalystBlock({
   const showXaiBody = detailsOpen && (loading || text || structured);
   const xaiOverridesInstant =
     !!structured &&
+    structured.fitVerdict != null &&
+    structured.fitSummary != null &&
     (structured.fitVerdict !== prerendered.fitVerdict ||
       structured.fitSummary.trim() !== prerendered.fitSummary.trim());
-  const xaiHeaderStyles = structured
+  const xaiHeaderStyles = structured?.fitVerdict
     ? fitVerdictStyles(structured.fitVerdict)
     : headerStyles;
 
@@ -328,7 +330,7 @@ function PlacementAnalystBlock({
             "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[10px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
+            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-5 py-4 text-[11px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
             style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
           >
             <div className="flex items-baseline gap-1.5 mb-1.5">
@@ -351,8 +353,8 @@ function PlacementAnalystBlock({
 
             {/* The magic one-liner headline — now the clear hero of the entire quick pad view */}
             <p
-              className={`font-semibold text-neutral-950 tracking-[-0.25px] leading-snug ${
-                compactTablet ? "mb-2 text-[16px]" : "mb-2.5 text-[12px]"
+              className={`font-semibold text-neutral-950 tracking-[-0.2px] leading-snug ${
+                compactTablet ? "mb-2 text-[16px]" : "mb-3 text-[14px]"
               }`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
@@ -363,12 +365,12 @@ function PlacementAnalystBlock({
             {(structured as any).bullets && (structured as any).bullets.length > 0 && (
               <ul
                 className={`space-y-[2px] pl-0.5 leading-[1.3] text-neutral-800 ${
-                  compactTablet ? "text-[14px]" : "text-[9.5px]"
+                  compactTablet ? "text-[14px]" : "text-[11px]"
                 }`}
               >
                 {(structured as any).bullets.slice(0, compactTablet ? 2 : 6).map((b: string, i: number) => (
                   <li key={i} className="flex gap-1.5">
-                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "7.5px" }}>◆</span>
+                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "8.5px" }}>◆</span>
                     <span style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>{b}</span>
                   </li>
                 ))}
@@ -387,7 +389,7 @@ function PlacementAnalystBlock({
                     e.stopPropagation();
                     setEvidenceOpen?.(!evidenceOpen);
                   }}
-                  className="sb-interactive w-full flex items-center justify-between text-[8px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
+                  className="sb-interactive w-full flex items-center justify-between text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
                   <span>
@@ -398,7 +400,7 @@ function PlacementAnalystBlock({
                 </button>
 
                 {evidenceOpen && (
-                  <div className="mt-1 pl-0.5 text-[8px] leading-[1.25] text-neutral-600 space-y-px">
+                  <div className="mt-1.5 pl-0.5 text-[9px] leading-[1.3] text-neutral-700 space-y-px">
                     {slotSpreadCount !== undefined && analystSlotKey && (
                       <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
                     )}
@@ -435,7 +437,7 @@ function PlacementAnalystBlock({
                     e.stopPropagation();
                     onToggleMatrix?.();
                   }}
-                  className="sb-interactive inline-flex items-center gap-1 rounded-lg border border-[#2F5C7C]/15 bg-white/60 px-2.5 py-0.5 text-[7.5px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:bg-white/90 hover:border-[#2F5C7C]/30"
+                  className="sb-interactive inline-flex items-center gap-1 rounded-lg border border-[#2F5C7C]/15 bg-white/60 px-3 py-1 text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:bg-white/90 hover:border-[#2F5C7C]/30"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
                   <span>⤢</span> {(matrixExpanded ?? false) ? 'Collapse' : 'Expand'} Matrix (last 30 spread + last 5 placements)
@@ -454,7 +456,7 @@ function PlacementAnalystBlock({
                 onMoreDetails();
               }}
               disabled={loading}
-              className="sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-2.5 py-0.5 text-[9px] font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60"
+              className="sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-3 py-1 text-[10px] font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60"
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               {loading ? (
@@ -505,7 +507,7 @@ function PlacementAnalystBlock({
               <span
                 className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${xaiHeaderStyles.badge}`}
               >
-                {fitVerdictLabel(structured.fitVerdict)}
+                {fitVerdictLabel(structured.fitVerdict ?? prerendered.fitVerdict)}
               </span>
               <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
                 xAI updated
@@ -531,7 +533,7 @@ function PlacementAnalystBlock({
                 Grounds the rich whyTonight, swaps, etc. in the same concrete rotation/spread/training context the model received.
                 Consistent with the light "Key signals" panel. Digital veil only. */}
             {(padGoodExamples?.length ?? 0) > 0 || rotationGapsLine || slotSpreadCount !== undefined ? (
-              <div className="mb-1.5 p-1.5 rounded-lg border border-[#2F5C7C]/10 bg-white/60 text-[8.5px] leading-snug">
+              <div className="mb-2 p-2 rounded-lg border border-[#2F5C7C]/15 bg-white/70 text-[9.5px] leading-snug">
                 <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Key signals (basis for this analysis)</div>
                 {slotSpreadCount !== undefined && analystSlotKey && (
                   <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
@@ -577,7 +579,9 @@ function PlacementAnalystBlock({
                 <span className="opacity-50 mr-1" style={{ fontSize: "8px" }}>✧</span>
                 {structured.headline}
               </p>
-              <p className="mt-0.5 text-[10.5px] text-neutral-700">{structured.whyTonight}</p>
+              {structured.whyTonight ? (
+                <p className="mt-0.5 text-[10.5px] text-neutral-700">{structured.whyTonight}</p>
+              ) : null}
             </div>
             {structured.rotationNote && (
               <div>
@@ -595,13 +599,13 @@ function PlacementAnalystBlock({
                 <p className="mt-0.5 text-neutral-600">{structured.neighborDynamics}</p>
               </div>
             )}
-            {structured.swapRecommendations.length > 0 && (
+            {(structured.swapRecommendations?.length ?? 0) > 0 && (
               <div>
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                   Swap lanes
                 </p>
                 <ul className="mt-0.5 space-y-0.5">
-                  {structured.swapRecommendations.map((s, i) => (
+                  {(structured.swapRecommendations ?? []).map((s, i) => (
                     <li key={i} className="text-neutral-600">
                       {s.priority === "high" ? "★ " : s.priority === "medium" ? "· " : "○ "}
                       {s.summary}
@@ -610,13 +614,13 @@ function PlacementAnalystBlock({
                 </ul>
               </div>
             )}
-            {structured.watchouts.length > 0 && (
+            {(structured.watchouts?.length ?? 0) > 0 && (
               <div>
                 <p className="text-[8px] font-semibold uppercase tracking-wide text-amber-700/90">
                   Watchouts
                 </p>
                 <ul className="mt-0.5 list-disc pl-3 text-neutral-600">
-                  {structured.watchouts.map((w, i) => (
+                  {(structured.watchouts ?? []).map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
                 </ul>
