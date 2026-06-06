@@ -3666,6 +3666,7 @@ function AuthedShiftBuilder() {
     currentIso: nightIsoFromDate(selectedDay.date),
     scheduledUnassigned: markerScheduledUnassigned,
     allEligibleTms: markerAllEligibleTms,
+    weeklyRecentHistory: effectiveRecentZoneHistory,
   });
 
   const runCoverageEngine = React.useCallback(

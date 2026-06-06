@@ -12,6 +12,7 @@ import {
   type PlacementRotationBasics,
   type PlacementTmProfile,
 } from "./placementPadHelpers";
+import { getTmThisWeekRepeatForSlot } from "./shiftRotationHealth";
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
   rotationGapSlots,
@@ -229,6 +230,8 @@ export type ComputeSlotPlacementFitArgs = {
   preferredCandidateIds?: string[];
   /** Internal: avoid recursive occupant filtering when scoring trade partners. */
   skipOccupantGapFilter?: boolean;
+  /** Weekly recent history for this-week same-slot repeat penalty in fit scoring. */
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
 };
 
 /** Single source of truth for pad instant fit + card chip. */
@@ -249,6 +252,7 @@ export function computeSlotPlacementFit(
     candidateProfiles,
     preferredCandidateIds,
     skipOccupantGapFilter = false,
+    weeklyRecentHistory,
   } = args;
 
   const row = resolveSlotAssignmentRow(
@@ -337,6 +341,10 @@ export function computeSlotPlacementFit(
         })
       : rotationBasics;
 
+  const weekRepeatThisSlot = tmId
+    ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, tmId, slotKey).count + 1
+    : 0;
+
   const input: PlacementFitScoreInput = {
     slotKey,
     assignments,
@@ -347,6 +355,7 @@ export function computeSlotPlacementFit(
     inLast5: last5.includes(slotKey),
     padHistoryLoading: historiesLoading && !!tmId && !history,
     rotationBasics: basicsForScore,
+    weekRepeatThisSlot,
     actionableGapSlots,
     rationale: row?.provenance?.rationale,
     fairnessSignals: row?.provenance?.fairnessSignals,

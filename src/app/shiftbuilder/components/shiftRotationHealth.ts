@@ -141,9 +141,49 @@ export function computeShiftRotationHealth(
     hasWeeklyData = true;
   }
 
+  // Merge current board (tonight's assignments, or draft) into this week's repeat counts.
+  // This is critical so that the *current placement* counts toward "times this week".
+  // E.g. 1 prior in history + current assignment to same slot = effective 2 this week → penalty.
+  if (hasWeeklyData && weeklyRecent && weeklyRecent.size > 0) {
+    // Recompute using effective counts (history + current) for accurate max/viol this week.
+    const effectiveTmSlotCounts: Record<string, Record<string, number>> = {};
+    for (const [tmId, records] of weeklyRecent.entries()) {
+      effectiveTmSlotCounts[tmId] = {};
+      for (const rec of records) {
+        const sk = rec.slotKey;
+        effectiveTmSlotCounts[tmId][sk] = (effectiveTmSlotCounts[tmId][sk] || 0) + 1;
+      }
+    }
+    // Add +1 for each current (or draft) placement. Init the tm entry if this is its first in the window.
+    const currentToMerge = isDraftMode && draftAssignments && Object.keys(draftAssignments).length > 0
+      ? draftAssignments
+      : assignments;
+    for (const [sk, row] of Object.entries(currentToMerge)) {
+      const r = row as any;
+      let tmId = r?.tmId;
+      if (!tmId && isDraftMode) {
+        // draft may have proposed
+        tmId = r?.proposedTmId;
+      }
+      if (tmId) {
+        if (!effectiveTmSlotCounts[tmId]) effectiveTmSlotCounts[tmId] = {};
+        effectiveTmSlotCounts[tmId][sk] = (effectiveTmSlotCounts[tmId][sk] || 0) + 1;
+      }
+    }
+    // Recompute max and violations from the *effective* (history + current) counts
+    maxWeeklyRepeat = 0;
+    repeatViolations = 0;
+    for (const areas of Object.values(effectiveTmSlotCounts)) {
+      for (const c of Object.values(areas)) {
+        if (c > maxWeeklyRepeat) maxWeeklyRepeat = c;
+        if (c > 1) repeatViolations++;
+      }
+    }
+  }
+
   if (hasWeeklyData) {
     // Penalty model: 1 = perfect (100). Penalty at 2. Real bad (big drop) at 3+.
-    // We penalize based on the worst single (TM, area) repeat count.
+    // We penalize based on the worst single (TM, area) repeat count *this week including tonight*.
     let repeatPenalty = 0;
     if (maxWeeklyRepeat >= 3) {
       repeatPenalty = Math.min(60, 45 + (maxWeeklyRepeat - 3) * 10); // 3→45 (bal~55), 4→55 (bal~45), ...

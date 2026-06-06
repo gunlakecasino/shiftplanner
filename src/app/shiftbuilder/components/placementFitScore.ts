@@ -37,6 +37,8 @@ export type PlacementFitScoreInput = {
    * When omitted, derived from rotationBasics via rotationGapSlots().
    */
   actionableGapSlots?: string[];
+  /** This-week (recent 7-night + current) repeat count for *this specific TM* in *this slotKey*. */
+  weekRepeatThisSlot?: number;
 };
 
 function signalNumber(
@@ -146,6 +148,7 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
   }
 
   const name = input.tmName || "TM";
+  const weekRepeat = input.weekRepeatThisSlot ?? 0;
 
   if (input.padHistoryLoading) {
     return {
@@ -208,8 +211,17 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     };
   }
 
-  // Strong fit: light spread load (0–1× in 30), not in last-5 trail, no better gap elsewhere.
-  if (times <= 1 && !inLast5) {
+  if (weekRepeat >= 3) {
+    return {
+      fitVerdict: "questionable",
+      fitSummary: `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
+      fitFactLine: buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
+    };
+  }
+
+  // Strong fit: light spread load (0–1× in 30), not in last-5 trail, no better gap elsewhere,
+  // *and* no problematic this-week repeat concentration in the same place.
+  if (times <= 1 && !inLast5 && weekRepeat <= 1) {
     const engineOk = !!input.rationale;
     return {
       fitVerdict: "strong_fit",
@@ -224,13 +236,15 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     };
   }
 
-  // Acceptable: repeat exposure (2×+) or back-to-back in last-5 — still fine unless a better gap exists.
-  if (times >= 2 || inLast5) {
+  // Acceptable: repeat exposure (2×+ in 30 or this week) or back-to-back in last-5 — still fine unless a better gap exists.
+  if (times >= 2 || inLast5 || weekRepeat >= 2) {
+    const weekNote = weekRepeat >= 2 ? `week repeat ${weekRepeat}×` : null;
     return {
       fitVerdict: "acceptable",
       fitSummary: `${name} on ${slotLabel} — repeat exposure is within reason for tonight.`,
       fitFactLine: buildFactLine([
         spreadFact,
+        weekNote,
         inLast5 ? "in last-5 trail" : null,
         eightFact,
         gapFact,

@@ -6,6 +6,20 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Fix: week repeat not penalizing health % or per-slot "strong fit" for current placements (e.g. Cookie in same Restroom 2-3× this week)
+
+- Root cause: 1) health weeklyBalance only aggregated from the `recentZoneHistory` map (prior nights), without folding in the *current* board assignments; so a TM with 1 prior + current assignment to same slot showed effective max=1 (no penalty), blended % stayed high. 2) The deterministic per-slot fit scorer (`scorePlacementFit` / `computeSlotPlacementFit`, used for card chips and pad baseline) only looked at 30-night spread/times/last5/rotationBasics; a low 30-night count for the slot could still yield "strong_fit" even if this specific week had 2-3× concentration in that exact place.
+- Health fix (shiftRotationHealth.ts): after seeding max/violations from history (weeklyHist or weeklyRecent path), build effectiveTmSlotCounts (history + current/draft placements), re-compute maxWeeklyRepeat and repeatViolations from the *combined* this-week totals (including the placement being viewed/committed tonight). Penalty (and thus blended health.percent) now triggers correctly when the current assignment pushes a TM to 2× or 3×+ in one slot/area this week.
+- Fit scorer fix: threaded `weeklyRecentHistory` through UsePlacementFitMapArgs → computeSlotPlacementFitArgs → PlacementFitScoreInput (weekRepeatThisSlot = history.count for slot + 1 for current).
+  - In scorePlacementFit: extract weekRepeat early.
+  - Hard early exit for weekRepeat >=3 → "questionable" with "real bad this-week repeat" summary/fact.
+  - Strong fit now requires `... && weekRepeat <= 1` (prevents strong on current week concentration).
+  - The >=2 repeat block (times/inLast5 or week) now includes weekNote in fact line.
+- Propagation: updated calls in usePlacementFitMap, the main deployment fit in Client (passes effectiveRecentZoneHistory), placementFitForSlot (the trade/occupant scoring passes undefined for weekly — acceptable, as those are "what-if" checks).
+- Result: card fit chip for a repeated restroom slot will no longer claim "strong"; will be acceptable or questionable with week repeat in the fact line. Overall rotation health % (the pill) will be dragged by the weeklyBalance when any TM (including via the current placement) hits the 2/3 thresholds. The pad xAI context (already added) continues to give the model the signal for one-liner/provenance.
+- Same per-slotKey semantics as before (for RR sides treated separately; "same Restroom" across M/W would require extra normalization if desired).
+- tsc clean. Version +0.001 to 0.820.
+
 ## 2026-06-09 — Grok 4.3 — Marker pad + xAI fast/provenance: week-repeat tells & alerts (user: "I also need better tells and alerts in the marker pad and the xAI fast and provenance if someone is scheduled in the same place multiple times that week")
 
 - Wired the existing `effectiveRecentZoneHistory` (the 7-night / grave-week Map<tmId, [{nightDate, slotKey}]> already used for health %) through Client → ShiftBuilderBoard → renderPlacementPad → PlacementPad (new optional prop `weeklyRecentHistory` on the pad and board interfaces).

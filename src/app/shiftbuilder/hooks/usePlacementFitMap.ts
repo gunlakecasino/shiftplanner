@@ -32,6 +32,8 @@ export type UsePlacementFitMapArgs = {
   currentIso: string;
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
+  /** For this-week repeat penalty in per-slot fit chips (prevents "strong" on 2×+ same place this week). */
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
 };
 
 export function usePlacementFitMap({
@@ -44,6 +46,7 @@ export function usePlacementFitMap({
   currentIso,
   scheduledUnassigned = [],
   allEligibleTms = [],
+  weeklyRecentHistory,
 }: UsePlacementFitMapArgs): {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   historiesLoading: boolean;
@@ -197,6 +200,7 @@ export function usePlacementFitMap({
         histories,
         historiesLoading,
         otherTmProfiles,
+        weeklyRecentHistory,
         candidateProfiles: assigned ? undefined : buildCandidates(slotKey),
         preferredCandidateIds: assigned ? undefined : preferredCandidateIds,
       });
@@ -216,6 +220,7 @@ export function usePlacementFitMap({
     otherTmProfiles,
     buildCandidates,
     preferredCandidateIds,
+    weeklyRecentHistory,
   ]);
 
   return { fitBySlot, historiesLoading };
