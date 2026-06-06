@@ -5398,6 +5398,8 @@ function AuthedShiftBuilder() {
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
         onRosterToggle={() => setRosterOpen((v) => !v)}
+        canvasMode={canvasMode}
+        onCanvasModeChange={setCanvasMode}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
@@ -5780,36 +5782,7 @@ function AuthedShiftBuilder() {
               zIndex: 10050,
             }}
           >
-            {/* Canvas mode toggle — subliminal, artistic segmented control.
-                Lives in the unscaled overlay (always crisp, scale-independent, never captured by print clone).
-                Harmonizes exactly with FloatingNav's Deploy/Breaks segment language (rounded-2xl p-0.5 container,
-                rounded-[10px] inners, px-2 py-px, active:scale-[0.985], Atkinson, tracking, glass backdrop).
-                Builder (left): calm creative blue — the living digital authoring veil with xAI ink prominent.
-                Preview (right): GRAVE red (#C13A14) — signals fidelity, "this is the sheet that will print".
-                Micro liquid transitions, purposeful active states, inactive whisper. Part of the cohesive art,
-                not chrome tacked on. When Builder active the xAI surfaces feel like deliberate editor's annotations
-                on the Golden; Preview is the pure untouched proof. */}
-            <div
-              className="sb-canvas-mode-toggle absolute top-1.5 right-1.5 z-[75] no-print inline-flex items-center rounded-2xl p-0.5 text-[8px] font-semibold tracking-[0.3px] overflow-hidden border border-white/40 dark:border-white/10 bg-white/88 dark:bg-zinc-950/85 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl"
-              style={{ pointerEvents: 'auto', fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}
-            >
-              <button
-                type="button"
-                onClick={() => setCanvasMode('builder')}
-                className={`sb-interactive px-2 py-px rounded-[10px] ${!isPrintPreview ? 'bg-[#0A84FF] text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/60 dark:hover:bg-white/5'}`}
-                title="Builder — rich digital authoring veil: prominent xAI magic lines, refined chips, subtle power-user layers. The living sheet. Click cards to open PlacementPad for deeper insight."
-              >
-                Builder
-              </button>
-              <button
-                type="button"
-                onClick={() => setCanvasMode('print-preview')}
-                className={`sb-interactive px-2 py-px rounded-[10px] ${isPrintPreview ? 'bg-[#C13A14] text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/60 dark:hover:bg-white/5'}`}
-                title="Preview — live on-canvas is the exact Golden that will be captured for PDF/print. Zero digital assists. Pristine fidelity. The sacred sheet."
-              >
-                Preview
-              </button>
-            </div>
+            {/* Builder/Preview toggle moved to FloatingNav — avoids covering top-right zone cards. */}
           </div>
 
         </div> {/* /relative visual frame (the thing flex actually centers) */}

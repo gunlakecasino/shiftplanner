@@ -90,16 +90,18 @@ export interface PlacementPadProps {
   onXaiFit?: (hostId: string, xai: XaiFit) => void;
 }
 
-const PAD_W = 272;
+const PAD_W = 300;
 /** Max pad height — fits iPad landscape with internal scroll for overflow */
 const PAD_MAX_HEIGHT = 600;
 const TABLET_SHEET_HEIGHT_RATIO = 0.38;
 const TABLET_SHEET_MAX_HEIGHT = 420;
 
-function computeTabletBottomSheetStyle(): React.CSSProperties {
+function computeTabletBottomSheetStyle(pickerOpen = false): React.CSSProperties {
   const vv = window.visualViewport;
   const h = vv?.height ?? window.innerHeight;
-  const maxH = Math.min(Math.round(h * TABLET_SHEET_HEIGHT_RATIO), TABLET_SHEET_MAX_HEIGHT);
+  const maxH = pickerOpen
+    ? Math.min(Math.round(h * 0.58), 560)
+    : Math.min(Math.round(h * TABLET_SHEET_HEIGHT_RATIO), TABLET_SHEET_MAX_HEIGHT);
   return {
     position: "fixed",
     left: 0,
@@ -176,6 +178,7 @@ function computePortalStyle(
 function usePortalPlacementStyle(
   hostId: string | undefined,
   anchor: PlacementPadAnchor,
+  tabletPickerOpen = false,
 ): React.CSSProperties | null {
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -192,11 +195,11 @@ function usePortalPlacementStyle(
       rafRef.current = null;
       setStyle(
         tabletSheet
-          ? computeTabletBottomSheetStyle()
+          ? computeTabletBottomSheetStyle(tabletPickerOpen)
           : computePortalStyle(hostId, anchor),
       );
     });
-  }, [hostId, anchor, tabletSheet]);
+  }, [hostId, anchor, tabletSheet, tabletPickerOpen]);
 
   useLayoutEffect(() => {
     update();
@@ -215,9 +218,13 @@ function usePortalPlacementStyle(
   return style;
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, large = false }: { children: React.ReactNode; large?: boolean }) {
   return (
-    <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+    <span
+      className={`font-semibold uppercase tracking-[0.12em] text-neutral-400 ${
+        large ? "text-[13px]" : "text-[9px]"
+      }`}
+    >
       {children}
     </span>
   );
@@ -321,14 +328,14 @@ function PlacementAnalystBlock({
             "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[9px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
+            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[10px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact" : ""}`}
             style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
           >
             <div className="flex items-baseline gap-1.5 mb-1.5">
               <span style={{ fontSize: "11px", color: '#2F5C7C' }}>✧</span>
               <span
                 className="font-semibold tracking-[0.3px] uppercase text-[#2F5C7C]"
-                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: "8px" }}
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: "9px" }}
               >
                 xAI determination (fast • board + week)
               </span>
@@ -344,7 +351,9 @@ function PlacementAnalystBlock({
 
             {/* The magic one-liner headline — now the clear hero of the entire quick pad view */}
             <p
-              className="font-semibold text-neutral-950 tracking-[-0.25px] leading-snug mb-2.5 text-[10.5px]"
+              className={`font-semibold text-neutral-950 tracking-[-0.25px] leading-snug ${
+                compactTablet ? "mb-2 text-[16px]" : "mb-2.5 text-[12px]"
+              }`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               {structured.headline}
@@ -352,7 +361,11 @@ function PlacementAnalystBlock({
 
             {/* The 4-6 xAI powered bullets — synthesized from the full vast context including the new boardAndWeekContext (full current artboard placements + this week's rotation health, gaps, swaps across the board). This is now the *only* insight surface shown in the quick pad view. */}
             {(structured as any).bullets && (structured as any).bullets.length > 0 && (
-              <ul className="space-y-[2px] pl-0.5 text-[8.5px] leading-[1.25] text-neutral-800">
+              <ul
+                className={`space-y-[2px] pl-0.5 leading-[1.3] text-neutral-800 ${
+                  compactTablet ? "text-[14px]" : "text-[9.5px]"
+                }`}
+              >
                 {(structured as any).bullets.slice(0, compactTablet ? 2 : 6).map((b: string, i: number) => (
                   <li key={i} className="flex gap-1.5">
                     <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "7.5px" }}>◆</span>
@@ -374,7 +387,7 @@ function PlacementAnalystBlock({
                     e.stopPropagation();
                     setEvidenceOpen?.(!evidenceOpen);
                   }}
-                  className="sb-interactive w-full flex items-center justify-between text-[7px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
+                  className="sb-interactive w-full flex items-center justify-between text-[8px] font-medium tracking-[0.15px] text-[#2F5C7C]/75 hover:text-[#2F5C7C] px-0.5"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
                   <span>
@@ -385,7 +398,7 @@ function PlacementAnalystBlock({
                 </button>
 
                 {evidenceOpen && (
-                  <div className="mt-1 pl-0.5 text-[7px] leading-[1.2] text-neutral-600 space-y-px">
+                  <div className="mt-1 pl-0.5 text-[8px] leading-[1.25] text-neutral-600 space-y-px">
                     {slotSpreadCount !== undefined && analystSlotKey && (
                       <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
                     )}
@@ -499,7 +512,7 @@ function PlacementAnalystBlock({
               </span>
             </div>
             <p
-              className="text-[10px] font-semibold leading-snug"
+              className="text-[11px] font-semibold leading-snug"
               style={{ color: xaiHeaderStyles.text }}
             >
               {structured.fitSummary}
@@ -513,12 +526,12 @@ function PlacementAnalystBlock({
         ) : null}
 
         {showXaiBody && structured ? (
-          <div className="mt-1.5 space-y-2 text-[9px] leading-snug text-neutral-700">
+          <div className="mt-1.5 space-y-2 text-[10px] leading-snug text-neutral-700">
             {/* Deep view also surfaces the key signals / evidence basis (iterated from light path).
                 Grounds the rich whyTonight, swaps, etc. in the same concrete rotation/spread/training context the model received.
                 Consistent with the light "Key signals" panel. Digital veil only. */}
             {(padGoodExamples?.length ?? 0) > 0 || rotationGapsLine || slotSpreadCount !== undefined ? (
-              <div className="mb-1.5 p-1.5 rounded-lg border border-[#2F5C7C]/10 bg-white/60 text-[7.5px] leading-snug">
+              <div className="mb-1.5 p-1.5 rounded-lg border border-[#2F5C7C]/10 bg-white/60 text-[8.5px] leading-snug">
                 <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Key signals (basis for this analysis)</div>
                 {slotSpreadCount !== undefined && analystSlotKey && (
                   <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
@@ -553,7 +566,7 @@ function PlacementAnalystBlock({
             ) : null}
 
             <div>
-              <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                 Tonight
               </p>
               {/* The "magic one line" — presented here with editorial weight and the same Atkinson family + ✧ language used on the cards in builder veil. Feels like the same artistic annotation, just expanded. */}
@@ -564,11 +577,11 @@ function PlacementAnalystBlock({
                 <span className="opacity-50 mr-1" style={{ fontSize: "8px" }}>✧</span>
                 {structured.headline}
               </p>
-              <p className="mt-0.5 text-neutral-600">{structured.whyTonight}</p>
+              <p className="mt-0.5 text-[10.5px] text-neutral-700">{structured.whyTonight}</p>
             </div>
             {structured.rotationNote && (
               <div>
-                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                   Rotation
                 </p>
                 <p className="mt-0.5 text-neutral-600">{structured.rotationNote}</p>
@@ -576,7 +589,7 @@ function PlacementAnalystBlock({
             )}
             {structured.neighborDynamics && (
               <div>
-                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                   Neighbors
                 </p>
                 <p className="mt-0.5 text-neutral-600">{structured.neighborDynamics}</p>
@@ -584,7 +597,7 @@ function PlacementAnalystBlock({
             )}
             {structured.swapRecommendations.length > 0 && (
               <div>
-                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                   Swap lanes
                 </p>
                 <ul className="mt-0.5 space-y-0.5">
@@ -611,7 +624,7 @@ function PlacementAnalystBlock({
             )}
             {structured.rankedAssignees && structured.rankedAssignees.length > 0 && (
               <div>
-                <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                   Best picks
                 </p>
                 <ol className="mt-0.5 space-y-0.5 pl-3 list-decimal text-neutral-600">
@@ -851,9 +864,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const closeSide = anchor === "left" ? "left" : "right";
   const railSide = anchor === "left" ? "right" : "left";
-  const portalStyle = usePortalPlacementStyle(hostId, anchor);
+  const showTmPicker = onAssign && (!a.tmId || assignMode);
+  const portalStyle = usePortalPlacementStyle(hostId, anchor, showTmPicker);
   const tabletBottomSheet = isTabletTouchDevice() && !!hostId && !!portalStyle;
   const usePortal = !!hostId && !!portalStyle;
+  const padLarge = tabletBottomSheet;
 
   useEffect(() => {
     if (!tabletBottomSheet || typeof document === "undefined") return;
@@ -926,7 +941,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setTimeout(() => taskInputRef.current?.focus(), 0);
   };
 
-  const showTmPicker = onAssign && (!a.tmId || assignMode);
   const currentIso = nightIsoFromDate(selectedDay.date);
   const spreadKeys = getSpreadPlacementKeys(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
   const spreadCounts = getSpreadPlacementCounts(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
@@ -1510,16 +1524,21 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       <div className="shrink-0">
         <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2 pr-10">
           <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+            className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${
+              padLarge ? "h-11 w-11 text-[15px]" : "h-8 w-8 text-[11px]"
+            }`}
             style={{ background: a.tmName ? accent : "rgba(0,0,0,0.08)", color: a.tmName ? "#fff" : "#999" }}
           >
             {a.tmName ? a.tmName[0].toUpperCase() : "–"}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accent }}>
+            <div
+              className={`truncate font-bold uppercase tracking-[0.14em] ${padLarge ? "text-[13px]" : "text-[10px]"}`}
+              style={{ color: accent }}
+            >
               {label}
             </div>
-            <div className="truncate text-[15px] font-bold tracking-tight text-neutral-900">
+            <div className={`truncate font-bold tracking-tight text-neutral-900 ${padLarge ? "text-[20px]" : "text-[15px]"}`}>
               {a.tmName || "Unassigned"}
             </div>
           </div>
@@ -1541,12 +1560,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       {/* Body — only this region scrolls when content is tall */}
       <div
         className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
-          showTmPicker ? "min-h-[300px]" : ""
+          showTmPicker ? (padLarge ? "min-h-[360px]" : "min-h-[300px]") : ""
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         {showTmPicker ? (
-          <div className="flex h-full min-h-[280px] flex-col px-2.5 py-2">
+          <div className={`flex h-full flex-col ${padLarge ? "min-h-[340px] px-4 py-3" : "min-h-[280px] px-2.5 py-2"}`}>
             <TmPicker
               tms={scheduledUnassigned}
               allTms={allEligibleTms}
@@ -1561,6 +1580,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               confirmed={assignConfirmed}
               accent={accent}
               isDark={false}
+              variant={padLarge ? "tablet" : "default"}
             />
           </div>
         ) : coverageMode ? (
@@ -1581,7 +1601,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   type="button"
                   disabled={isCurrentNightLocked}
                   onClick={() => setAssignMode(true)}
-                  className="w-full rounded-lg py-2 text-[11px] font-semibold text-white disabled:opacity-50"
+                  className={`w-full rounded-lg font-semibold text-white disabled:opacity-50 ${
+                    padLarge ? "py-3.5 text-[16px]" : "py-2 text-[11px]"
+                  }`}
                   style={{ background: accent }}
                 >
                   Assign team member
@@ -1592,7 +1614,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             {/* Tasks */}
             <div className="px-3 pt-2.5 pb-1">
               <div className="flex items-center justify-between mb-1.5">
-                <SectionLabel>
+                <SectionLabel large={padLarge}>
                   Tasks{tasks.length > 0 ? ` · ${tasks.length}` : ""}
                 </SectionLabel>
                 {onAssignSweeper && (
@@ -1635,7 +1657,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         className="h-1.5 w-1.5 shrink-0 rounded-sm"
                         style={{ background: t.color ?? accent }}
                       />
-                      <span className="flex-1 truncate text-[11px] font-medium text-neutral-800">
+                      <span className={`flex-1 truncate font-medium text-neutral-800 ${padLarge ? "text-[15px]" : "text-[11px]"}`}>
                         {t.taskLabel}
                       </span>
                       {onRemoveTask && (
@@ -1669,7 +1691,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     }}
                     placeholder="Add a task…"
                     disabled={isCurrentNightLocked}
-                    className="min-w-0 flex-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-[11px] text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-black/[0.06]"
+                    className={`min-w-0 flex-1 rounded-lg border border-black/[0.08] bg-white text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-black/[0.06] ${
+                      padLarge ? "px-3.5 py-3 text-[16px]" : "px-2.5 py-1.5 text-[11px]"
+                    }`}
                   />
                   {taskInput.trim() && (
                     <button
@@ -1737,7 +1761,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         {rotationDisplay.gapsLine && <p>{rotationDisplay.gapsLine}</p>}
                         {rotationDisplay.swapLines.length > 0 && (
                           <div>
-                            <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
+                            <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
                               Swap lanes
                             </p>
                             {rotationDisplay.swapLines.map((line) => (
@@ -1958,7 +1982,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               type="button"
               disabled={isCurrentNightLocked}
               onClick={btn.onClick}
-              className={`h-7 rounded-lg text-[9px] font-semibold tracking-tight disabled:opacity-40 ${
+              className={`rounded-lg font-semibold tracking-tight disabled:opacity-40 ${
+                padLarge ? "h-11 text-[13px]" : "h-7 text-[9px]"
+              } ${
                 btn.variant === "danger"
                   ? "border border-red-200/80 bg-red-50 text-red-600 hover:bg-red-100/80"
                   : "border border-black/[0.08] bg-white text-neutral-600 hover:bg-neutral-100"

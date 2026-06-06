@@ -143,6 +143,9 @@ export interface FloatingNavProps {
   /** Floating roster panel — critical on iPad where roster defaults collapsed. */
   rosterOpen?: boolean;
   onRosterToggle?: () => void;
+  /** Builder vs print-preview — lives in nav so it never covers zone cards. */
+  canvasMode?: "builder" | "print-preview";
+  onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
 }
 
 // ==================== SPRING ====================
@@ -177,6 +180,8 @@ export default function FloatingNav({
   isSyncing = false,
   rosterOpen = false,
   onRosterToggle,
+  canvasMode = "builder",
+  onCanvasModeChange,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -416,6 +421,37 @@ export default function FloatingNav({
               <Coffee className={NAV_ICON} />
             </NavToolButton>
           </div>
+
+          {onCanvasModeChange ? (
+            <div
+              className="sb-nav-canvas-mode-toggle flex shrink-0 items-center rounded-lg p-0.5"
+              style={{
+                background: "rgba(0,0,0,0.04)",
+                fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onCanvasModeChange("builder")}
+                className={`sb-interactive rounded-md px-2.5 font-semibold tracking-[0.2px] ${
+                  isTabletTouchDevice() ? "min-h-11 text-[12px]" : "min-h-8 text-[10px]"
+                } ${canvasMode === "builder" ? "bg-[#0A84FF] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
+                title="Builder — digital authoring veil with xAI assists"
+              >
+                Builder
+              </button>
+              <button
+                type="button"
+                onClick={() => onCanvasModeChange("print-preview")}
+                className={`sb-interactive rounded-md px-2.5 font-semibold tracking-[0.2px] ${
+                  isTabletTouchDevice() ? "min-h-11 text-[12px]" : "min-h-8 text-[10px]"
+                } ${canvasMode === "print-preview" ? "bg-[#C13A14] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
+                title="Preview — exact Golden sheet for PDF/print"
+              >
+                Preview
+              </button>
+            </div>
+          ) : null}
 
           <NavToolButton onClick={() => onCommandOpen?.()} title="Command (⌘K)" ariaLabel="Command palette">
             <Search className={NAV_ICON} />

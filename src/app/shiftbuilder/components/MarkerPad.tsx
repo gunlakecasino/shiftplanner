@@ -765,7 +765,10 @@ export const TmPicker: React.FC<{
   confirmed: boolean;
   accent: string;
   isDark: boolean;
-}> = ({ tms, allTms, currentTmName, onPick, onAddOnCall, onCancel, confirmed, accent, isDark }) => {
+  /** iPad bottom sheet — larger type and touch rows */
+  variant?: "default" | "tablet";
+}> = ({ tms, allTms, currentTmName, onPick, onAddOnCall, onCancel, confirmed, accent, isDark, variant = "default" }) => {
+  const isTablet = variant === "tablet";
   const [filter, setFilter] = useState("");
   // Rule:
   // 1. Default list (no text in box) = scheduled + eligible + unassigned only (tms prop)
@@ -791,7 +794,7 @@ export const TmPicker: React.FC<{
         alignItems: "center", justifyContent: "center", gap: 6,
       }}>
         <span className="ms" style={{ fontSize: 28, color: accent, fontVariationSettings: '"FILL" 1' }}>check_circle</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: textPrimary }}>Assigned</span>
+        <span style={{ fontSize: isTablet ? 16 : 11, fontWeight: 700, color: textPrimary }}>Assigned</span>
       </div>
     );
   }
@@ -800,9 +803,9 @@ export const TmPicker: React.FC<{
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
+        <span style={{ fontSize: isTablet ? 16 : 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
           {currentTmName ? `Replace ${currentTmName}…` : "Assign TM"}
-          <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.55 }}>
+          <span style={{ fontSize: isTablet ? 13 : 9, marginLeft: 6, opacity: 0.55 }}>
             {filter.trim() ? "all eligible" : "scheduled + eligible"}
           </span>
         </span>
@@ -811,7 +814,7 @@ export const TmPicker: React.FC<{
             type="button"
             onClick={(e) => { e.stopPropagation(); onCancel(); }}
             onPointerDown={(e) => e.stopPropagation()}
-            style={{ fontSize: 11, color: textMuted, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}
+            style={{ fontSize: isTablet ? 18 : 11, color: textMuted, background: "none", border: "none", cursor: "pointer", padding: isTablet ? "6px 8px" : "2px 4px", lineHeight: 1, minWidth: isTablet ? 44 : undefined, minHeight: isTablet ? 44 : undefined }}
           >✕</button>
         )}
       </div>
@@ -828,8 +831,12 @@ export const TmPicker: React.FC<{
         style={{
           flexShrink: 0,
           background: inputBg, border: `1px solid ${inputBorder}`,
-          borderRadius: 9, padding: "6px 10px",
-          fontSize: 12, fontWeight: 500, color: textPrimary,
+          borderRadius: isTablet ? 12 : 9,
+          padding: isTablet ? "12px 14px" : "6px 10px",
+          fontSize: isTablet ? 17 : 12,
+          fontWeight: 500,
+          color: textPrimary,
+          minHeight: isTablet ? 48 : undefined,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
           outline: "none", caretColor: accent,
         }}
@@ -837,12 +844,13 @@ export const TmPicker: React.FC<{
 
       {/* Mode indicator — makes the three rules visible on screen */}
       <div style={{
-        fontSize: 9,
+        fontSize: isTablet ? 13 : 9,
         fontWeight: 600,
         letterSpacing: "0.3px",
-        color: filter.trim() ? "rgba(255,255,255,0.4)" : accent,
-        padding: "0 4px",
+        color: filter.trim() ? textMuted : accent,
+        padding: isTablet ? "2px 4px" : "0 4px",
         flexShrink: 0,
+        lineHeight: 1.35,
       }}>
         {filter.trim()
           ? "Search: all eligible TMs (broad pool)"
@@ -852,7 +860,7 @@ export const TmPicker: React.FC<{
       {/* TM list */}
       <div className="no-scrollbar" style={{ overflowY: "auto", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 3 }}>
         {filtered.length === 0 ? (
-          <div style={{ fontSize: 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
+          <div style={{ fontSize: isTablet ? 15 : 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
             {filter.trim() ? "No match" : tms.length === 0 ? "All TMs placed" : "No match"}
           </div>
         ) : filtered.map(tm => {
@@ -873,8 +881,10 @@ export const TmPicker: React.FC<{
                 onPointerDown={(e) => e.stopPropagation()}
                 className="sb-list-row sb-interactive"
                 style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "7px 10px", borderRadius: 10,
+                  display: "flex", alignItems: "center", gap: isTablet ? 12 : 8,
+                  padding: isTablet ? "12px 14px" : "7px 10px",
+                  borderRadius: isTablet ? 12 : 10,
+                  minHeight: isTablet ? 52 : undefined,
                   background: rowBg, border: `1px solid ${rowBorder}`,
                   cursor: "pointer", textAlign: "left",
                   width: "100%",
@@ -889,14 +899,16 @@ export const TmPicker: React.FC<{
                 }}
               >
                 <span style={{
-                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  width: isTablet ? 36 : 22,
+                  height: isTablet ? 36 : 22,
+                  borderRadius: "50%", flexShrink: 0,
                   background: `${accent}22`, border: `1px solid ${accent}66`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 800, color: accent,
+                  fontSize: isTablet ? 15 : 10, fontWeight: 800, color: accent,
                   fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                 }}>{initial}</span>
                 <span style={{
-                  fontSize: 12.5, fontWeight: 600, color: textPrimary,
+                  fontSize: isTablet ? 17 : 12.5, fontWeight: 600, color: textPrimary,
                   fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                   letterSpacing: "-0.15px",
                 }}>{tm.tmName}</span>
@@ -910,9 +922,12 @@ export const TmPicker: React.FC<{
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   style={{
-                    fontSize: 10, fontWeight: 600, color: accent,
+                    fontSize: isTablet ? 14 : 10, fontWeight: 600, color: accent,
                     background: `${accent}14`, border: `1px dashed ${accent}55`,
-                    borderRadius: 8, padding: "4px 8px", cursor: "pointer",
+                    borderRadius: isTablet ? 10 : 8,
+                    padding: isTablet ? "8px 12px" : "4px 8px",
+                    cursor: "pointer",
+                    minHeight: isTablet ? 44 : undefined,
                     textAlign: "left",
                   }}
                 >

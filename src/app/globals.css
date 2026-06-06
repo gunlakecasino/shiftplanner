@@ -1447,11 +1447,12 @@ body {
     padding-left: max(var(--sb-stage-inset-left, 32px), env(safe-area-inset-left, 0px)) !important;
   }
 
-  .sb-canvas-mode-toggle button {
-    min-height: var(--touch-min);
+  .sb-nav-canvas-mode-toggle button {
     min-width: 72px;
-    font-size: 10px !important;
-    padding: 6px 10px !important;
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet .sb-tm-picker-list {
+    gap: 6px;
   }
 
   .sb-pad-backdrop {
