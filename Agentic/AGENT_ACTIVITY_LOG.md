@@ -6,6 +6,113 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Make xAI section (glass + always Matrix) less giant per screenshot (user: "can we make the xai section less giant")
+
+- Feedback on the live popup (Jack on Z2): the xAI glass + the always-visible Matrix panel underneath felt too tall / took too much real estate in the marker card, making the whole inspector feel "giant".
+- Changes (targeted density increases while preserving the required structure: bold one-liner always visible, small provenance expander, full Matrix panel always showing):
+  - xAI glass box: reduced outer padding (px-5 py-4 → px-3 py-2), smaller headline (14px → 13px, less mb), tighter header row, smaller synthesized badge.
+  - Provenance expander button: smaller text (8px→7.5px), tighter margins.
+  - "Full reasoning" button row: pulled up, smaller text/padding.
+  - Always Matrix (quick view branch): 
+    - Header: "✧ Matrix surface · last 30 nights..." → shorter "✧ Matrix · last 30 + last 5", smaller + less mb.
+    - Counts row: text-[8px]→text-[7px], tighter gaps.
+    - Legend: much smaller swatches (h-1 w-1.5), text-[6px], minimal margins.
+    - All colored pill grids (zones, rrLocs, auxLocs, last5): h-4 / text-[7px] / gap-0.5 → h-3 / text-[6px] / gap-px (biggest vertical saving).
+    - "Last 5" label: mt-1.5 mb-0.5 → mt-0.5 mb-0, text-[6px].
+    - Container: py-2.5 px-3 → py-1 px-2.5 in quick mode.
+  - Overall: the block from one-liner through the full matrix now occupies significantly less vertical space. The matrix remains fully visible and "always on" as previously requested, just much denser.
+- Kept the liquid glass treatment, colors, and information density the user liked ("wonderful" matrix).
+- tsc clean.
+- This directly responds to the visual in the provided screenshot.
+
+## 2026-06-09 — Grok 4.3 — Fix React duplicate key warning for repeated placements in Last 5 pills (console error: "two children with the same key `WRR8`")
+
+- Error: React key warning "Encountered two children with the same key, `WRR8`" during render of the compact quick-view Matrix "Last 5" grid in PlacementPad.
+- Location: the `.map` over `last5Pills` in the `!analystDetailsOpen` (always-visible matrix) branch, using `key={ui}` on the pill `<span>`.
+- Root cause: `last5Pills` is the actual recent placement sequence for the TM (from `getLastPlacementSequence`). The same location (e.g. WRR8 relief, a popular zone, etc.) legitimately appears multiple times in the last 5 nights. Using the raw `ui` value as the React key produces duplicates when repeats occur. (The deep-view last-5 rendering already used the safe `key={\`${ui}-${i}\`}` pattern.)
+- This was exposed by the recent work to keep the Matrix panel always visible under the one-liner (the compact inline grids for the quick xAI surface).
+- Fix: Changed the non-empty last-5 pill key in the compact quick matrix path from `key={ui}` to `key={\`${ui}-${i}\`}` (matching the deep version and the empty placeholders which already used index). This gives each position in the 5-slot history strip a stable identity even when the placement label repeats.
+- Other grids in the same compact matrix (ZONE_DEFS, rrLocs, auxLocs) use distinct identifiers by construction, so they were not affected.
+- tsc clean. The duplicate-key console error should be gone.
+- Logged as a follow-up to the "always Matrix + one-liner" + loading-skeleton changes.
+
+## 2026-06-09 — Grok 4.3 — Fix: ensure no engine baseline / "dry run" flashes before xAI one-liner (user: "It is still showing an initial dry run state before the xAI")
+
+- Follow-up to the brief loading skeleton: the 135ms veil + history-based early exit was still allowing the engine baseline ("dry run" prerender fit summary) to paint momentarily after the skeleton dropped but before the light xAI headline populated.
+- Root cause: light determination has an intentional small delay (to wait for padHistory for good spread/rotation context), and the resolve effect was clearing the veil on history arrival (or short timer) rather than on the actual xAI headline. When analyst block mounted with no `structured?.headline` yet, the `!hasQuickXai` path inside PlacementAnalystBlock rendered the baseline box + "engine baseline" label.
+- Changes:
+  - Updated briefLoading resolve logic: the safety timeout is now 700ms; the early-resolve effect now keys *only* on `insightStructured?.headline` (history alone no longer drops the veil early).
+  - Strengthened the mount guard for `<PlacementAnalystBlock>`: it only mounts in quick view when `analystDetailsOpen || !!insightStructured?.headline`. (Deep view and explicit "Full reasoning" still work.)
+  - Removed the previous large skeleton that was hiding tasks. Tasks (current state) now render immediately.
+  - Added a targeted, correctly-positioned xAI skeleton (glass with left border treatment, one-liner bar, matrix grid placeholder, "Gathering board + week signals…") *after* the tasks section and *before* the analyst block. It occupies the exact visual slot the final one-liner + expander + always-Matrix will land in.
+  - Bottom actions no longer wait on the xAI veil (they are always useful).
+  - The xAI skeleton is driven by the inverse of the same headline condition, so it disappears at the exact moment the real glass (with bold one-liner, provenance expander, and matrix) mounts.
+- Result: On open you immediately see the slot header + tasks. Below tasks there is a clean, matching "Gathering board + week signals…" skeleton in the xAI glass style until the light determination is ready. Then the real bold one-liner + expander + always-visible matrix appears with no intermediate engine baseline / dry run state ever visible.
+- tsc clean.
+- This completes the intent of "when it opens it is not showing the default state initially" + "no dry run before the xAI".
+- Logged.
+
+## 2026-06-09 — Grok 4.3 — Brief loading state on marker card open (user: "now lets add a brief loading state to the marker card so that when it opens it is not showing the default state initially")
+
+- Problem: On PlacementPad popup open, the card could flash its "default" un-enriched state (raw tasks list, xAI glass with only the engine baseline or empty, no one-liner/expander/matrix yet, before the 50-60ms delayed light determination + history load finished). Even with the recent one-liner + always-matrix restructure, the first paint felt like a raw default.
+- Solution (surgical, brief by design):
+  - Added `briefLoading` state (default true) + reset in the existing slotKey cleanup effect.
+  - Dedicated 135ms timeout effect on `[slotKey]` (the "when it opens").
+  - Early-resolve effect: once `insightStructured?.headline` lands or history is ready, drop the veil immediately (so fast loads feel snappy; slow path never exceeds ~135ms).
+  - In the normal inspector path (inside the `!showTmPicker && !coverageMode` flex-col): render a compact skeleton block when `briefLoading`. The skeleton is styled to echo the premium xAI glass (rounded-2xl, left editorial border in #2F5C7C22, Atkinson labels, "✧ Matrix surface" line, 5-col mini grid for the always-matrix area, one-liner placeholder bar, "Loading placement details…" footer). Tasks section, PlacementAnalystBlock, and the post-analyst matrix/rotation block are hidden (via `hidden` class or `!briefLoading && (...)` wrapper) during the window.
+  - Bottom actions row also gated on `!briefLoading` for a completely clean initial frame.
+  - Header (avatar + name + "Mark unavailable" button) + close/rail chrome remain instant — operator always knows *which* slot they opened.
+  - Picker mode (assign flow) and coverage mode bypass the brief loading entirely (they are intentional action states).
+- Result: Card opens to a polished, intentional 135ms loading state that matches the liquid glass + editorial language of the restructured xAI area (bold one-liner + provenance expander + matrix), then the real enriched content (one-liner, expander, always-visible compact matrix, tasks) swaps in cleanly. No more default-state flash.
+- Preserved: every prior invariant (TM mark-unavailable in header + picker, height adaptation, one-liner/expander/always-matrix, deep path, veil gates, Atkinson/ink/glass, Graves sole source, realtime, etc.).
+- tsc --noEmit --skipLibCheck: clean.
+- Fits the xAI deep dive / power usage goals: the brief veil protects the high-signal surfaces we just built (the "just the bold one liner" + matrix) so the first thing the operator sees is intentional, not a half-loaded default.
+- Logged. User can open slots in the builder to feel the difference (instant header, clean skeleton for ~135ms, then the polished one-liner + matrix appears).
+
+## 2026-06-09 — Grok 4.3 — Restructure popup marker pad xAI area to "just bold one-liner + expander + Matrix always" + adaptive card height (user: "Let's have just the bold one liner show with an expander under it. Then, under that have the Matrix panel always showing as well. Ensure the marker card adapts in height so there is no scroll if not neccessary [Image #1]")
+
+- Exact request: in the PlacementPad popup (marker card / inspector), collapse to only the bold xAI headline (one-liner) visible by default; small +/- expander under it for the provenance surface (spread/gaps/training signals + Gold priors); the Matrix panel (✧ Matrix surface grid + counts + legend + last-5) always rendered underneath (no more toggle button); outer card/pad must size its height to content so the combination rarely forces an internal scrollbar.
+- Changes in src/app/shiftbuilder/components/PlacementPad.tsx:
+  - Quick view inside PlacementAnalystBlock (the liquid glass xAI box): header "XAI FAST (BOARD + WEEK SIGNALS)" + synthesized badge kept; bold one-liner <p> (mb-2, 14px desktop); small full-width expander button "✧ Provenance surface (spread • gaps • training)" using existing evidenceOpen state (when open: sub-panel with SPREAD/GAPS/TRAINING + implications + priors list + clear link). Removed all bullets from quick view (they belong in deep), removed the old "Expand Matrix" bottom button.
+  - Matrix now always visible in quick: loosened outer/inner guards around the post-analyst rotation+matrix block; for !analystDetailsOpen (quick) we render a compact inline version (h-4 cells, text-[7-8-9px], tight gap-0.5, editorial header, counts, legend, zone/rr/aux grids, Last 5 pills) directly under the glass — deep keeps the original richer PlacementCell version. This puts the wonderful matrix "under that" the one-liner/expander as requested.
+  - Height adaptation for marker card: bumped PAD_MAX_HEIGHT 600→640; non-portal style uses softer max when !deep && !picker; body div now only applies flex-1 + overflow-y-auto when showTmPicker || analystDetailsOpen, otherwise "overflow-visible" so quick content (glass + always matrix + tasks + actions) drives natural height up to the portal/compute maxH cap (no scroll UI if it fits).
+  - Preserved 100%: TM "Mark unavailable" header button + TmPicker rows + onMarkUnavailable wiring + all realtime/update paths; tasks, assign/clear/lock/coverage/swap actions, deep "Full reasoning" button + detailsOpen view, all glass/Atkinson/#2F5C7C styling, synthesized badge, high-signal provenance phrasing, showDigitalAssists / no-print veil, Graves sole source.
+- Scope notes: matrix data (spreadCountFor, rrLocs, last5Pills, etc.) lives in parent scope so we render the compact always-matrix as sibling under the analyst block (visually "under the xAI glass"); no new prop drilling. Removed only the now-redundant expand affordance from quick.
+- Ties to prior: directly continues the xAI deep dive (evidence visibility → integrate deeper → words cut → this ultra-minimal one-liner + always-matrix + height); matrix treatment untouched in spirit (just scaled compact for always); provenance expander re-uses the signals/priors work + evidenceOpen from earlier phases; Imagine provenance + "matrix wonderful" feedback drove keeping the matrix quality while putting only the one-liner on top.
+- tsc --noEmit --skipLibCheck: clean (exit 0).
+- Protocol: todo_write used throughout; this log entry newest-first; no other files changed; ready for user to open a slot popup in the builder (1056 canvas) and confirm the visual (bold line, small + to expand provenance, matrix grid always right under, card grows to fit without scroll bar in normal cases, mark-unavailable still works, deep still available via Full reasoning).
+- Logged. Next per user direction only.
+
+## 2026-06-09 — Grok 4.3 — Polish xAI determination area to match wonderful matrix surface (user: "matrix wonderful, xAI rough")
+
+- Feedback on current popup (ZONE 3 Jack image): matrix surface (grid, cells, "✧ Matrix surface" header, seamless bar) is great; the xAI determination glass box, header, headline, bullets integration, and provenance surface still felt rough/not cohesive.
+- Polish (surgical, high-signal, matching liquid glass from veil work and Imagine provenance mock):
+  - Main xAI glass box: stronger premium glass (blur 16px saturate 160%, richer multi-shadow + inset highlights, slightly stronger left border, bg-white/97).
+  - Header label: elevated to 10px (11px tablet), better tracking/weight, subtle opacity for editorial calm.
+  - Provenance surface (quick view): wrapped in subtle rounded sub-panel (border-[#2F5C7C]/10 bg-white/60) for integration as a true "surface" not loose text; cleaner SPREAD/GAPS/TRAINING labels, compact context line.
+  - Deep structured (Tonight/Rotation/Neighbors/Swap/Watchouts/Best picks): consistent small uppercase ink-blue headers (text-[8px] tracking), tighter space-y, provenance surface matched to quick view style.
+  - Overall cohesion: xAI box now feels premium and editorial like the matrix surface; provenance reads as the "why" foundation; seamless flow to matrix button and deep button.
+- No changes to matrix (kept wonderful), no bloat, digital veil only, Atkinson, Golden density.
+- tsc clean.
+- Logged. User can test in builder; ready for more polish or next surface work.
+
+## 2026-06-09 — Grok 4.3 — Tighten xAI area text (user: "a lot of words that do not mean much")
+
+- Feedback on [Image #1] (full browser with popup for Sheri O): the xAI determination box and provenance surface have too many low-signal / filler / truncated words that don't convey clear meaning or implication for the decision.
+- Specific cuts and meaning-adds (in quick view and matched in deep):
+  - Header: "xAI determination (fast • board + week)" → "xAI fast (board + week signals)" (shorter, tells what it is and the inputs).
+  - Provenance surface values: removed the generic "board • health • neighbors • tasks • fill-order • graves" filler line entirely.
+  - SPREAD value: added "(very fresh)" implication.
+  - GAPS value: truncated more aggressively + added "(balance oppty)" so it means something for the fit.
+  - TRAINING value: "Gold examples" → "Golds (your history)" — makes the training signal personal and relevant.
+  - Badge: "4–6 insights" → "synthesized" (explains what the bullets are — the model's synthesis of the signals above).
+  - Deep button: long "(narrative • neighbors • swaps • ranked)" → "Full reasoning" (direct, means what the user gets when they tap it).
+- The bullets from the model are kept as the conclusion; the provenance now surfaces the *actual signals with their meaning* so the user doesn't need meta instructions like "use the matrix".
+- The words now *mean* something: fact + why it supports the "strong fit" headline.
+- All other previous polish (glass, header elevation, sub-panel, matrix) preserved.
+- tsc clean.
+- This directly addresses the "words that do not mean much" in the xAI area while keeping the matrix wonderful.
+
 ## 2026-06-09 — Grok 4.3 — Added direct "Mark unavailable" action in PlacementPad header for current assigned TM (in addition to TmPicker)
 
 - In the popup PlacementPad (the card inspector / popup marker pad), when a TM is assigned to the slot, added a small "Mark unavailable" button next to the TM name in the header.

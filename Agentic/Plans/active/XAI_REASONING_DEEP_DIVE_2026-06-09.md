@@ -1,6 +1,6 @@
 # xAI Reasoning Deep Dive — Placement Analyst, Evidence, Training Flywheel & Explainability
 **Date**: 2026-06-09  
-**Status**: Active — First vertical implemented + iterated (richer specific signals: per-TM spread counts, real gapsLine, precise few-shot training notes + "Clear this session’s Gold" control; chip tooltip enhanced). tsc clean on every pass. Logs updated. Ready for live browser test + next deeper push (deep view evidence, xAI provenance surface, training persistence, or engine summaries).  
+**Status**: Active — One-liner + expander + always-Matrix + adaptive height phase complete (2026-06-09). Quick view now minimal per user: bold headline visible, small "Provenance surface" expander (+/-) under it for spread/gaps/training + priors, Matrix panel (compact) always rendered directly under (no toggle). Marker card height now content-adaptive (relaxed body overflow + softer maxH) so normal case needs no scroll. Prior phases (evidence visibility, integrate deeper, text tightening, matrix wonderful preservation) carried forward. TM mark-unavailable coexists. tsc clean every gate. Logs updated. Ready for visual check in builder or next slice.  
 **Owner**: Grok 4.3 (with coding-engineer process)  
 **User Direction**: "let's go deep into the xAI reasoning" (chosen after review of current builder + AI surfaces)
 

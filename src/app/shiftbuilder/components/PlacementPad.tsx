@@ -93,8 +93,10 @@ export interface PlacementPadProps {
 }
 
 const PAD_W = 340;
-/** Max pad height — fits iPad landscape with internal scroll for overflow */
-const PAD_MAX_HEIGHT = 600;
+/** Max pad height — fits iPad landscape with internal scroll for overflow.
+    Quick view (one-liner + expander + always matrix) is intentionally compact so the marker card
+    can size to content (no internal scroll) unless truly necessary (TmPicker/deep/long tasks). */
+const PAD_MAX_HEIGHT = 640;
 const TABLET_SHEET_HEIGHT_RATIO = 0.42;
 const TABLET_SHEET_MAX_HEIGHT = 460;
 
@@ -326,149 +328,109 @@ function PlacementAnalystBlock({
       )}
 
       <div className="px-2.5 py-2">
-        {/* ONLY the XAI Determination shows in the quick view (per request).
-            Headline + 4-6 bullet synthesis from the fast light model (vast context).
-            Engine baseline and raw rotation lists are suppressed here.
-            "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
+        {/* Quick view: just the bold one-liner + small expander under it for provenance/signals/priors,
+            then the Matrix panel always visible underneath (compact, embedded). No bullets here — they live in deep "Full reasoning".
+            The marker card height will adapt (see outer body/pad style changes) so this + tasks + actions rarely forces scroll. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className={`mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-5 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]${compactTablet ? " sb-pad-xai-compact text-[13px]" : " text-[11px]"}`}
-            style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
+            className={`mb-0.5 rounded-2xl border border-[#2F5C7C]/15 bg-white/97 px-3 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.1),_inset_0_1px_0_rgba(255,255,255,0.9),_inset_0_-1px_0_rgba(0,0,0,0.02)]${compactTablet ? " sb-pad-xai-compact text-[13px]" : " text-[11px]"}`}
+            style={{ borderLeft: '5px solid #2F5C7C55', backdropFilter: 'blur(16px) saturate(160%)' }}
           >
-            <div className="flex items-baseline gap-1.5 mb-1.5">
-              <span style={{ fontSize: "11px", color: '#2F5C7C' }}>✧</span>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span style={{ fontSize: "10px", color: '#2F5C7C' }}>✧</span>
               <span
-                className="font-semibold tracking-[0.3px] uppercase text-[#2F5C7C]"
+                className="font-semibold tracking-[0.4px] uppercase text-[#2F5C7C]/90"
                 style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: compactTablet ? "11px" : "9px" }}
               >
-                xAI determination (fast • board + week)
+                XAI FAST (BOARD + WEEK SIGNALS)
               </span>
               {(structured as any).bullets && (structured as any).bullets.length > 0 && (
                 <span 
-                  className="ml-auto text-[6px] font-medium tracking-[0.4px] px-1.5 py-0.5 rounded-full bg-[#2F5C7C]/8 text-[#2F5C7C]/75"
+                  className="ml-auto text-[5.5px] font-medium tracking-[0.4px] px-1 py-px text-[#2F5C7C]/60"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
-                  4–6 insights
+                  synthesized
                 </span>
               )}
             </div>
 
-            {/* The magic one-liner headline — now the clear hero of the entire quick pad view */}
+            {/* The bold one-liner headline */}
             <p
               className={`font-semibold text-neutral-950 tracking-[-0.2px] leading-snug ${
-                compactTablet ? "mb-2 text-[18px]" : "mb-3 text-[14px]"
+                compactTablet ? "mb-1 text-[16px]" : "mb-1 text-[13px]"
               }`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               {structured.headline}
             </p>
 
-            {/* The 4-6 xAI powered bullets — synthesized from the full vast context including the new boardAndWeekContext (full current artboard placements + this week's rotation health, gaps, swaps across the board). This is now the *only* insight surface shown in the quick pad view. */}
-            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
-              <ul
-                className={`space-y-[3px] pl-0.5 leading-[1.35] text-neutral-800 ${
-                  compactTablet ? "text-[16px]" : "text-[13px]"
-                }`}
-              >
-                {(structured as any).bullets.slice(0, compactTablet ? 2 : 6).map((b: string, i: number) => (
-                  <li key={i} className="flex gap-1.5">
-                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "9.5px" }}>◆</span>
-                    <span style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>{b}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Evidence / signals for the light xAI determination (first slice of reasoning deep dive).
-                Uses context the fast model already received (rotation, spread, training examples).
-                Optional, collapsed by default to protect the headline + bullets as the hero.
-                All digital authoring veil only (no-print / showDigitalAssists). */}
+            {/* Expander under the one-liner for the provenance surface (spread/gaps/training signals + priors) */}
             {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
-              <div className="mt-2 -mx-1 border-t border-[#2F5C7C]/10 pt-1.5">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C]/75" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
-                    ✧ Provenance surface (basis for this determination)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEvidenceOpen?.(!evidenceOpen);
-                    }}
-                    className="sb-interactive text-[8px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:underline"
-                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                  >
-                    {evidenceOpen ? 'Collapse' : 'Expand details'}
-                  </button>
-                </div>
-
-                <div className="text-[9px] leading-[1.3] text-neutral-700 space-y-px">
-                  {slotSpreadCount !== undefined && analystSlotKey && (
-                    <div className="flex justify-between">
-                      <span className="text-[#2F5C7C]/60">Spread freshness</span>
-                      <span>{analystSlotKey}: {slotSpreadCount}× in last 30</span>
-                    </div>
-                  )}
-                  {rotationGapsLine && (
-                    <div className="flex justify-between">
-                      <span className="text-[#2F5C7C]/60">Rotation gaps</span>
-                      <span className="truncate max-w-[180px]">{rotationGapsLine.slice(0, 50)}{rotationGapsLine.length > 50 ? '…' : ''}</span>
-                    </div>
-                  )}
-                  {(padGoodExamples?.length ?? 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-[#2F5C7C]/60">Training signal</span>
-                      <span>{padGoodExamples!.length} Gold examples injected</span>
-                    </div>
-                  )}
-                  <div className="text-[8px] text-neutral-600 pt-0.5">Full context: board fill • weekly health • neighbor exposure • slot tasks • fill-order + graves rules</div>
-                </div>
-
-                {evidenceOpen && (padGoodExamples?.length ?? 0) > 0 && (
-                  <div className="mt-1.5 pt-1 border-t border-[#2F5C7C]/10 text-[8px] text-neutral-600">
-                    Prior Gold examples used:
-                    {padGoodExamples!.slice(-2).map((ex, i) => (
-                      <div key={i} className="pl-1 truncate">• “{ex.insightText.slice(0, 55)}{ex.insightText.length > 55 ? '…”' : '”'}</div>
-                    ))}
-                  </div>
-                )}
-
-                {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClearTraining();
-                    }}
-                    className="mt-1 text-[7px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
-                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                  >
-                    Clear this session’s Gold examples
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Integrated Expand Matrix affordance — now a seamless editorial bottom bar inside the XAI determination box (not tacked-on). Matches the liquid glass family, ink blue, active scale. Exact phrasing for the last 30 spread + last 5 placements view. When toggled the matrix below feels like refined data poetry. */}
-            {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
-              <div className="mt-3 -mx-1 border-t border-[#2F5C7C]/10 pt-2 flex justify-end">
+              <div className="mt-0.5">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleMatrix?.();
+                    setEvidenceOpen?.(!evidenceOpen);
                   }}
-                  className="sb-interactive inline-flex items-center gap-1 rounded-lg border border-[#2F5C7C]/15 bg-white/60 px-3 py-1 text-[9px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:bg-white/90 hover:border-[#2F5C7C]/30"
+                  className="sb-interactive w-full flex items-center justify-between text-[7.5px] font-medium tracking-[0.15px] text-[#2F5C7C]/80 hover:text-[#2F5C7C] px-0.5 mb-0.5"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 >
-                  <span>⤢</span> {(matrixExpanded ?? false) ? 'Collapse' : 'Expand'} Matrix surface (last 30 spread + last 5 placements)
+                  <span>✧ Provenance surface (spread • gaps • training)</span>
+                  <span>{evidenceOpen ? '−' : '+'}</span>
                 </button>
+
+                {evidenceOpen && (
+                  <div className="rounded-xl border border-[#2F5C7C]/10 bg-white/60 px-2 py-1 text-[9px] leading-[1.3] text-neutral-700 space-y-px mb-2">
+                    {slotSpreadCount !== undefined && analystSlotKey && (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[#2F5C7C]/55 text-[8px] tracking-[0.1px]">SPREAD</span>
+                        <span className="font-medium">{analystSlotKey}: {slotSpreadCount}× last 30 (very fresh)</span>
+                      </div>
+                    )}
+                    {rotationGapsLine && (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[#2F5C7C]/55 text-[8px] tracking-[0.1px]">GAPS</span>
+                        <span className="font-medium truncate max-w-[170px]">{rotationGapsLine.slice(0, 42)}{rotationGapsLine.length > 42 ? '…' : ''} (balance oppty)</span>
+                      </div>
+                    )}
+                    {(padGoodExamples?.length ?? 0) > 0 && (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[#2F5C7C]/55 text-[8px] tracking-[0.1px]">TRAINING</span>
+                        <span className="font-medium">{padGoodExamples!.length} Gold examples (your history)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {evidenceOpen && (padGoodExamples?.length ?? 0) > 0 && (
+                  <div className="text-[7.5px] text-neutral-600 mb-2">
+                    Prior Gold examples:
+                    {padGoodExamples!.slice(-2).map((ex, i) => (
+                      <div key={i} className="pl-1 truncate">• “{ex.insightText.slice(0, 55)}{ex.insightText.length > 55 ? '…”' : '”'}</div>
+                    ))}
+                    {onClearTraining && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClearTraining();
+                        }}
+                        className="ml-1 text-[7px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                        style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                      >
+                        clear
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
+
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1 -mt-0.5 mb-0.5">
           {!detailsOpen ? (
             <button
               type="button"
@@ -477,12 +439,12 @@ function PlacementAnalystBlock({
                 onMoreDetails();
               }}
               disabled={loading}
-              className={`sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-3 py-1 font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60${compactTablet ? " py-1.5 text-[13px]" : " py-1 text-[10px]"}`}
+              className={`sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-2 py-px font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60${compactTablet ? " text-[10px]" : " text-[8px]"}`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               {loading ? (
-                <BuilderBusyLabel className="text-[9px]">Loading insight</BuilderBusyLabel>
-              ) : (structured as any)?.bullets?.length ? "Deep 4.3 analysis (narrative • neighbors • swaps • ranked)" : structured?.headline ? "Deep 4.3 analysis (narrative • neighbors • swaps • ranked)" : "✧  xAI insight"}
+                <BuilderBusyLabel className="text-[7px]">Loading insight</BuilderBusyLabel>
+              ) : (structured as any)?.bullets?.length ? "Full reasoning" : structured?.headline ? "Full reasoning" : "✧  xAI insight"}
             </button>
           ) : (
             <>
@@ -549,49 +511,25 @@ function PlacementAnalystBlock({
         ) : null}
 
         {showXaiBody && structured ? (
-          <div className="mt-1.5 space-y-2 text-[10px] leading-snug text-neutral-700">
-            {/* Deep view also surfaces the key signals / evidence basis (iterated from light path).
-                Grounds the rich whyTonight, swaps, etc. in the same concrete rotation/spread/training context the model received.
-                Consistent with the light "Key signals" panel. Digital veil only. */}
+          <div className="mt-1.5 space-y-1.5 text-[10px] leading-snug text-neutral-700">
+            {/* Deep view provenance surface — consistent with quick view and wonderful matrix. */}
             {(padGoodExamples?.length ?? 0) > 0 || rotationGapsLine || slotSpreadCount !== undefined ? (
-              <div className="mb-2 p-2 rounded-lg border border-[#2F5C7C]/15 bg-white/70 text-[9.5px] leading-snug">
-                <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Provenance surface (basis for this analysis)</div>
+              <div className="mb-1 p-1.5 rounded-lg border border-[#2F5C7C]/10 bg-white/60 text-[9px] leading-snug">
+                <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/75 mb-0.5 text-[8px]">✧ Provenance surface</div>
                 {slotSpreadCount !== undefined && analystSlotKey && (
-                  <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Spread freshness</span><span>{analystSlotKey}: {slotSpreadCount}× in last 30</span></div>
+                  <div className="flex justify-between"><span className="text-[#2F5C7C]/50 text-[7.5px]">SPREAD</span><span className="font-medium">{analystSlotKey}: {slotSpreadCount}× (very fresh)</span></div>
                 )}
                 {rotationGapsLine && (
-                  <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Rotation gaps</span><span className="truncate max-w-[180px]">{rotationGapsLine.slice(0, 50)}{rotationGapsLine.length > 50 ? '…' : ''}</span></div>
+                  <div className="flex justify-between"><span className="text-[#2F5C7C]/50 text-[7.5px]">GAPS</span><span className="font-medium truncate max-w-[160px]">{rotationGapsLine.slice(0, 40)}{rotationGapsLine.length > 40 ? '…' : ''} (balance)</span></div>
                 )}
                 {(padGoodExamples?.length ?? 0) > 0 && (
-                  <>
-                    <div className="flex justify-between"><span className="text-[#2F5C7C]/60">Training signal</span><span>{padGoodExamples!.length} Gold examples injected</span></div>
-                    <div className="mt-0.5 pl-1 text-[7px] text-neutral-600">
-                      Prior Golds: {padGoodExamples!.slice(-2).map((ex, i) => `“${ex.insightText.slice(0, 40)}…”`).join(' • ')}
-                    </div>
-                  </>
-                )}
-                <div className="text-[8px] text-neutral-600 pt-0.5">Context: board fill • weekly health • neighbor exposure • slot tasks • fill-order + graves rules</div>
-                {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClearTraining();
-                    }}
-                    className="mt-0.5 text-[7px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
-                    style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                  >
-                    Clear session Gold examples
-                  </button>
+                  <div className="flex justify-between"><span className="text-[#2F5C7C]/50 text-[7.5px]">TRAINING</span><span className="font-medium">{padGoodExamples!.length} Golds (your history)</span></div>
                 )}
               </div>
             ) : null}
 
             <div>
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
-                Tonight
-              </p>
-              {/* The "magic one line" — presented here with editorial weight and the same Atkinson family + ✧ language used on the cards in builder veil. Feels like the same artistic annotation, just expanded. */}
+              <p className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[#2F5C7C]/70">Tonight</p>
               <p 
                 className="mt-0.5 font-medium text-neutral-900 tracking-[-0.1px]" 
                 style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
@@ -600,30 +538,24 @@ function PlacementAnalystBlock({
                 {structured.headline}
               </p>
               {structured.whyTonight ? (
-                <p className="mt-0.5 text-[10.5px] text-neutral-700">{structured.whyTonight}</p>
+                <p className="mt-0.5 text-[10px] text-neutral-700">{structured.whyTonight}</p>
               ) : null}
             </div>
             {structured.rotationNote && (
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
-                  Rotation
-                </p>
+                <p className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[#2F5C7C]/70">Rotation</p>
                 <p className="mt-0.5 text-neutral-600">{structured.rotationNote}</p>
               </div>
             )}
             {structured.neighborDynamics && (
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
-                  Neighbors
-                </p>
+                <p className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[#2F5C7C]/70">Neighbors</p>
                 <p className="mt-0.5 text-neutral-600">{structured.neighborDynamics}</p>
               </div>
             )}
             {(structured.swapRecommendations?.length ?? 0) > 0 && (
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
-                  Swap lanes
-                </p>
+                <p className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[#2F5C7C]/70">Swap lanes</p>
                 <ul className="mt-0.5 space-y-0.5">
                   {(structured.swapRecommendations ?? []).map((s, i) => (
                     <li key={i} className="text-neutral-600">
@@ -636,10 +568,8 @@ function PlacementAnalystBlock({
             )}
             {(structured.watchouts?.length ?? 0) > 0 && (
               <div>
-                <p className="text-[8px] font-semibold uppercase tracking-wide text-amber-700/90">
-                  Watchouts
-                </p>
-                <ul className="mt-0.5 list-disc pl-3 text-neutral-600">
+                <p className="text-[7.5px] font-semibold uppercase tracking-[0.2px] text-amber-700/80">Watchouts</p>
+                <ul className="mt-0.5 list-disc pl-2 text-neutral-600">
                   {(structured.watchouts ?? []).map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
@@ -648,10 +578,8 @@ function PlacementAnalystBlock({
             )}
             {structured.rankedAssignees && structured.rankedAssignees.length > 0 && (
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400">
-                  Best picks
-                </p>
-                <ol className="mt-0.5 space-y-0.5 pl-3 list-decimal text-neutral-600">
+                <p className="text-[8px] font-semibold uppercase tracking-[0.2px] text-[#2F5C7C]/70">Best picks</p>
+                <ol className="mt-0.5 space-y-0.5 pl-2 list-decimal text-neutral-600">
                   {[...structured.rankedAssignees]
                     .sort((a, b) => a.rank - b.rank)
                     .map((r) => (
@@ -873,6 +801,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [analystDetailsOpen, setAnalystDetailsOpen] = useState(false);
   const [matrixExpanded, setMatrixExpanded] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [briefLoading, setBriefLoading] = useState(true);
   const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
@@ -921,11 +850,29 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setSweeperOpen(false);
     setMatrixExpanded(false);
     setEvidenceOpen(false);
+    setBriefLoading(true);
   }, [slotKey]);
 
   useEffect(() => {
     if (analystDetailsOpen) setMatrixExpanded(false);
   }, [analystDetailsOpen]);
+
+  // Brief loading / skeleton on pad open until the light xAI determination (bold one-liner + provenance + matrix surface)
+  // is ready. This prevents any "dry run" / engine baseline state from ever flashing before the xAI content.
+  // Safety timeout is generous enough for the (history + 50ms delayed light call) but brief in human terms.
+  // The veil drops as soon as the headline populates (the primary signal the user wants to see first).
+  useEffect(() => {
+    const t = setTimeout(() => setBriefLoading(false), 700);
+    return () => clearTimeout(t);
+  }, [slotKey]);
+
+  // Resolve the veil only when the xAI light headline is actually present (or in deep view).
+  // History alone is not sufficient — the light call produces the headline we surface as the hero.
+  useEffect(() => {
+    if (insightStructured?.headline) {
+      setBriefLoading(false);
+    }
+  }, [insightStructured?.headline]);
 
   useEffect(() => {
     if (!a.tmId) {
@@ -1516,7 +1463,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       style={
         usePortal
           ? portalStyle!
-          : { width: PAD_W, maxHeight: PAD_MAX_HEIGHT, display: "flex", flexDirection: "column" }
+          : { width: PAD_W, maxHeight: (analystDetailsOpen || showTmPicker) ? PAD_MAX_HEIGHT : Math.min(520, PAD_MAX_HEIGHT), display: "flex", flexDirection: "column" }
       }
       onClick={(e) => e.stopPropagation()}
     >
@@ -1597,10 +1544,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         <div className="mx-3 border-t border-black/[0.06]" />
       </div>
 
-      {/* Body — only this region scrolls when content is tall */}
+      {/* Body — only this region scrolls when content is tall.
+          In quick view (bold one-liner + provenance expander + always Matrix) we let height adapt to content
+          so the marker card grows naturally with no scroll bar if the total fits under the screen-safe max. */}
       <div
-        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
-          showTmPicker ? (padLarge ? "min-h-[360px]" : "min-h-[300px]") : ""
+        className={`min-h-0 overscroll-contain ${
+          (showTmPicker || analystDetailsOpen)
+            ? `flex-1 overflow-y-auto ${showTmPicker ? (padLarge ? "min-h-[360px]" : "min-h-[300px]") : ""}`
+            : "overflow-visible"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
@@ -1656,7 +1607,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               </div>
             )}
 
-            {/* Tasks */}
+            {/* Tasks — visible immediately (they are current state, not dependent on xAI enrichment) */}
             <div className="px-3 pt-2.5 pb-1">
               <div className="flex items-center justify-between mb-1.5">
                 <SectionLabel large={padLarge}>
@@ -1754,6 +1705,39 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               )}
             </div>
 
+            {/* Targeted skeleton for the xAI area (bold one-liner + expander + always Matrix).
+                Placed exactly where the real xAI glass will appear (after tasks).
+                Shown while we are still awaiting the light determination headline.
+                This (combined with the strict mount guard on the analyst block below) eliminates
+                any flash of the engine baseline / "dry run" state before the xAI content. */}
+            {!(analystDetailsOpen || !!insightStructured?.headline) && (
+              <div className="px-3 pt-1 pb-2">
+                <div
+                  className="mb-2 rounded-2xl border border-[#2F5C7C]/15 bg-white/85 px-5 py-3.5"
+                  style={{ borderLeft: '5px solid #2F5C7C22' }}
+                >
+                  <div className="flex items-baseline gap-1.5 mb-1.5">
+                    <span style={{ fontSize: "10px", color: "#2F5C7C40" }}>✧</span>
+                    <div className="h-2 w-44 rounded bg-[#2F5C7C]/15" />
+                    <div className="ml-auto h-1.5 w-9 rounded bg-[#2F5C7C]/10" />
+                  </div>
+                  <div className="h-4 w-[94%] rounded bg-neutral-200/80 mb-2.5" />
+                  <div className="text-[8px] text-[#2F5C7C]/40 mb-1" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
+                    ✧ Matrix surface · last 30 nights (spread) + last 5 placements
+                  </div>
+                  <div className="grid grid-cols-5 gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-3.5 rounded bg-neutral-200/50" />
+                    ))}
+                  </div>
+                </div>
+                <div className="pl-0.5 text-[8px] text-neutral-400/60" style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>
+                  Gathering board + week signals…
+                </div>
+              </div>
+            )}
+
+            {(analystDetailsOpen || !!insightStructured?.headline) && (
             <PlacementAnalystBlock
               compactTablet={tabletBottomSheet}
               prerendered={prerenderedFit}
@@ -1791,11 +1775,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 lightRunRef.current = 0;
               }}
             />
+            )}
 
-            {a.tmName && (analystDetailsOpen || matrixExpanded || !( !analystDetailsOpen && insightStructured?.headline )) && (
-              <div className="border-t border-black/[0.05] px-3 py-2.5">
-                {/* The synthesized 4-6 bullet list lives in the xAI determination box above.
-                    Raw rotation list kept below for reference (the "combined" request is addressed by the bullets). */}
+            {!briefLoading && a.tmName && (analystDetailsOpen || matrixExpanded || (!analystDetailsOpen && !!insightStructured?.headline) || !( !analystDetailsOpen && insightStructured?.headline )) && (
+              <div className={`border-t border-black/[0.05] px-2.5 ${!analystDetailsOpen ? "py-0.5" : "py-1.5"}`}>
+                {/* Rotation history only in deep. */}
                 {analystDetailsOpen && (
                   padHistoryLoading && !rotationDisplay ? (
                     <BuilderLoadingLine className="text-[10px]">Loading placement history</BuilderLoadingLine>
@@ -1833,179 +1817,210 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   )
                 )}
 
-                {(analystDetailsOpen || (!tabletBottomSheet && matrixExpanded)) && (
-                  <>
-                    {/* In quick XAI view the matrix header is editorial/poetic to match the determination box language; full details keeps the compact SectionLabel. */}
+                {/* Matrix panel always showing under the bold one-liner + expander (quick view).
+                    Compact inline cells in quick mode so the marker card adapts in height with no unnecessary scroll.
+                    Deep keeps the richer PlacementCell + spacing. */}
+                {(analystDetailsOpen || matrixExpanded || (!analystDetailsOpen && !!insightStructured?.headline)) && (
+                  <div className={!analystDetailsOpen ? "mt-0" : ""}>
                     {!analystDetailsOpen ? (
-                      <div className="text-[10px] font-medium tracking-[0.3px] text-[#2F5C7C]/80 mb-1" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
+                      <div className="text-[8.5px] font-medium tracking-[0.25px] text-[#2F5C7C]/80 mb-0.5" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
                         ✧ Matrix surface · last 30 nights (spread) + last 5 placements
                       </div>
                     ) : (
                       <SectionLabel>Matrix</SectionLabel>
                     )}
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px]">
-                  <span>
-                    <span className="font-semibold" style={{ color: accent }}>
-                      RR
-                    </span>{" "}
-                    <span className="font-bold text-neutral-800">{rrCount}</span>
-                  </span>
-                  <span className="text-neutral-300">|</span>
-                  <span>
-                    <span className="font-semibold text-neutral-400">Zone</span>{" "}
-                    <span className="font-bold text-neutral-800">{zoneCount}</span>
-                  </span>
-                  <span className="text-neutral-300">|</span>
-                  <span>
-                    <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
-                      Z9
-                    </span>{" "}
-                    <span className="font-bold text-neutral-800 tabular-nums">{z9Days}</span>
-                  </span>
-                  <span>
-                    <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
-                      Z9SR
-                    </span>{" "}
-                    <span className="font-bold text-neutral-800 tabular-nums">{z9srDays}</span>
-                  </span>
-                </div>
 
-                <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
-                  Last 30 Spread
-                </p>
-                    <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] text-neutral-400">
-                      <span className="inline-flex items-center gap-0.5">
-                        <span
-                          className="h-2 w-3 rounded border"
-                          style={{
-                            background: "#16a34a22",
-                            borderColor: "#16a34a55",
-                          }}
-                        />
-                        1×
+                    {/* Counts row */}
+                    <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono ${!analystDetailsOpen ? "text-[7.5px]" : "text-[9px]"}`}>
+                      <span>
+                        <span className="font-semibold" style={{ color: accent }}>RR</span>{" "}
+                        <span className="font-bold text-neutral-800">{rrCount}</span>
                       </span>
-                      <span className="inline-flex items-center gap-0.5">
-                        <span
-                          className="h-2 w-3 rounded border"
-                          style={{
-                            background: "#ea580c22",
-                            borderColor: "#ea580c55",
-                          }}
-                        />
-                        2×
+                      <span className="text-neutral-300">|</span>
+                      <span>
+                        <span className="font-semibold text-neutral-400">Zone</span>{" "}
+                        <span className="font-bold text-neutral-800">{zoneCount}</span>
                       </span>
-                      <span className="inline-flex items-center gap-0.5">
-                        <span
-                          className="h-2 w-3 rounded border"
-                          style={{
-                            background: "#dc262622",
-                            borderColor: "#dc262655",
-                          }}
-                        />
-                        3×+
+                      <span className="text-neutral-300">|</span>
+                      <span>
+                        <span className="font-semibold" style={{ color: Z9_STAT_RED }}>Z9</span>{" "}
+                        <span className="font-bold text-neutral-800 tabular-nums">{z9Days}</span>
                       </span>
-                      <span className="inline-flex items-center gap-0.5">
-                        <span className="h-2 w-3 rounded border border-dashed border-neutral-400/50 bg-neutral-200/60" />
-                        not in spread
+                      <span>
+                        <span className="font-semibold" style={{ color: Z9_STAT_RED }}>Z9SR</span>{" "}
+                        <span className="font-bold text-neutral-800 tabular-nums">{z9srDays}</span>
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-1">
-                      {ZONE_DEFS.map((z) => {
-                        const n = spreadCountFor(z.key);
-                        return (
-                          <PlacementCell
-                            key={z.key}
-                            label={z.key}
-                            spreadCount={n}
-                            title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    {rrLocs.length > 0 && (
-                      <div
-                        className="mt-1 grid gap-1"
-                        style={{ gridTemplateColumns: `repeat(${Math.min(rrLocs.length, 5)}, 1fr)` }}
-                      >
-                        {rrLocs.map((loc) => {
-                          const n = spreadCountFor(loc.ui);
-                          return (
-                            <PlacementCell
-                              key={loc.ui}
-                              label={loc.label}
-                              spreadCount={n}
-                              title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
-                            />
-                          );
-                        })}
+                    {/* Compact legend only in quick; deep uses its own */}
+                    {!analystDetailsOpen && (
+                      <div className="mt-0.5 mb-0.5 flex flex-wrap gap-x-1.5 gap-y-0 text-[6.5px] text-neutral-400">
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="h-1.5 w-2 rounded border" style={{ background: "#16a34a22", borderColor: "#16a34a55" }} />
+                          1×
+                        </span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="h-1.5 w-2 rounded border" style={{ background: "#ea580c22", borderColor: "#ea580c55" }} />
+                          2×
+                        </span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="h-1.5 w-2 rounded border" style={{ background: "#dc262622", borderColor: "#dc262655" }} />
+                          3×+
+                        </span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="h-1.5 w-2 rounded border border-dashed border-neutral-400/50 bg-neutral-200/60" />
+                          not in spread
+                        </span>
                       </div>
                     )}
 
-                    {auxLocs.length > 0 && (
-                      <div
-                        className="mt-1 grid gap-1"
-                        style={{ gridTemplateColumns: `repeat(${Math.min(auxLocs.length, 5)}, 1fr)` }}
-                      >
-                        {auxLocs.map((loc) => {
-                          const n = spreadCountFor(loc.ui);
-                          return (
-                            <PlacementCell
-                              key={loc.ui}
-                              label={loc.label}
-                              spreadCount={n}
-                              title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
+                    {/* Grids: compact inline spans for quick (always visible, small height); PlacementCell for deep */}
+                    {!analystDetailsOpen ? (
+                      <>
+                        <div className="grid grid-cols-5 gap-0.5">
+                          {ZONE_DEFS.map((z) => {
+                            const n = spreadCountFor(z.key);
+                            const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
+                            return (
+                              <span
+                                key={z.key}
+                                className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
+                                style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
+                                title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key}
+                              >
+                                {z.key}
+                              </span>
+                            );
+                          })}
+                        </div>
 
-                    <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
-                      Last 5
-                    </p>
-                    <div className="grid grid-cols-5 gap-1">
-                      {last5Pills.map((ui, i) => {
-                        if (!ui) {
-                          return (
-                            <span
-                              key={`empty-${i}`}
-                              className="flex h-[22px] items-center justify-center rounded-md border border-dashed border-black/[0.08] bg-transparent text-[9px] text-neutral-300"
-                            >
-                              —
-                            </span>
-                          );
-                        }
-                        const pillAccent = getPillAccent(ui);
-                        const pillLabel = formatPlacementUiLabel(ui);
-                        return (
-                          <span
-                            key={`${ui}-${i}`}
-                            title={ui}
-                            className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums"
-                            style={{
-                              background: `${pillAccent}22`,
-                              border: `1px solid ${pillAccent}55`,
-                              color: pillAccent,
-                            }}
-                          >
-                            {pillLabel}
+                        {rrLocs.length > 0 && (
+                          <div className="mt-0.5 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${Math.min(rrLocs.length, 5)}, 1fr)` }}>
+                            {rrLocs.map((loc) => {
+                              const n = spreadCountFor(loc.ui);
+                              const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
+                              return (
+                                <span
+                                  key={loc.ui}
+                                  className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
+                                  style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
+                                  title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                                >
+                                  {loc.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {auxLocs.length > 0 && (
+                          <div className="mt-0.5 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${Math.min(auxLocs.length, 5)}, 1fr)` }}>
+                            {auxLocs.map((loc) => {
+                              const n = spreadCountFor(loc.ui);
+                              const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
+                              return (
+                                <span
+                                  key={loc.ui}
+                                  className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
+                                  style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
+                                  title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                                >
+                                  {loc.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <p className="mt-1 mb-0.5 text-[7px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
+                          Last 5
+                        </p>
+                        <div className="grid grid-cols-5 gap-0.5">
+                          {last5Pills.map((ui, i) => {
+                            if (!ui) {
+                              return (
+                                <span key={`empty-${i}`} className="flex h-4 items-center justify-center rounded border border-dashed border-black/[0.08] bg-transparent text-[7px] text-neutral-300">—</span>
+                              );
+                            }
+                            const pillAccent = getPillAccent(ui);
+                            const pillLabel = formatPlacementUiLabel(ui);
+                            return (
+                              <span
+                                key={`${ui}-${i}`}
+                                className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
+                                style={pillAccent ? { background: `${pillAccent}22`, border: `1px solid ${pillAccent}55`, color: pillAccent } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
+                                title={pillLabel}
+                              >
+                                {pillLabel}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">Last 30 Spread</p>
+                        <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] text-neutral-400">
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border" style={{ background: "#16a34a22", borderColor: "#16a34a55" }} />1×
                           </span>
-                        );
-                      })}
-                    </div>
-                  </>
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border" style={{ background: "#ea580c22", borderColor: "#ea580c55" }} />2×
+                          </span>
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border" style={{ background: "#dc262622", borderColor: "#dc262655" }} />3×+
+                          </span>
+                          <span className="inline-flex items-center gap-0.5">
+                            <span className="h-2 w-3 rounded border border-dashed border-neutral-400/50 bg-neutral-200/60" />not in spread
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-1">
+                          {ZONE_DEFS.map((z) => {
+                            const n = spreadCountFor(z.key);
+                            return <PlacementCell key={z.key} label={z.key} spreadCount={n} title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key} />;
+                          })}
+                        </div>
+
+                        {rrLocs.length > 0 && (
+                          <div className="mt-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(rrLocs.length, 5)}, 1fr)` }}>
+                            {rrLocs.map((loc) => {
+                              const n = spreadCountFor(loc.ui);
+                              return <PlacementCell key={loc.ui} label={loc.label} spreadCount={n} title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui} />;
+                            })}
+                          </div>
+                        )}
+
+                        {auxLocs.length > 0 && (
+                          <div className="mt-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(auxLocs.length, 5)}, 1fr)` }}>
+                            {auxLocs.map((loc) => {
+                              const n = spreadCountFor(loc.ui);
+                              return <PlacementCell key={loc.ui} label={loc.label} spreadCount={n} title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui} />;
+                            })}
+                          </div>
+                        )}
+
+                        <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">Last 5</p>
+                        <div className="grid grid-cols-5 gap-1">
+                          {last5Pills.map((ui, i) => {
+                            if (!ui) {
+                              return <span key={`empty-${i}`} className="flex h-[22px] items-center justify-center rounded-md border border-dashed border-black/[0.08] bg-transparent text-[9px] text-neutral-300">—</span>;
+                            }
+                            const pillAccent = getPillAccent(ui);
+                            const pillLabel = formatPlacementUiLabel(ui);
+                            return (
+                              <span key={`${ui}-${i}`} title={ui} className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums" style={{ background: `${pillAccent}22`, border: `1px solid ${pillAccent}55`, color: pillAccent }}>{pillLabel}</span>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
 
-                    {analystDetailsOpen && hasProv && prov.rationale && (
-                      <p
-                        className="mt-2 text-[8px] text-neutral-400 leading-snug"
-                        title={prov.rationale}
-                      >
-                        Engine: {prov.rationale}
-                      </p>
-                    )}
+                {analystDetailsOpen && hasProv && prov.rationale && (
+                  <p className="mt-2 text-[8px] text-neutral-400 leading-snug" title={prov.rationale}>Engine: {prov.rationale}</p>
+                )}
               </div>
             )}
           </div>
