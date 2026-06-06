@@ -15,7 +15,6 @@ import CoverageBar from "./CoverageBar";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /**
  * RRCard (Phase 1 Live Cache migration)
@@ -46,9 +45,6 @@ export interface RRCardProps {
   isLocked?: boolean;
   fitChipW?: PrerenderedPlacementFit | null;
   fitChipM?: PrerenderedPlacementFit | null;
-  /** Optional xAI for corner magic one line surface. */
-  xaiFitChipW?: XaiFit;
-  xaiFitChipM?: XaiFit;
   /** Builder mode flag for subtle digital-only UI sugar. */
   showDigitalAssists?: boolean;
 }
@@ -195,8 +191,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
-  xaiFitChipW,
-  xaiFitChipM,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -262,7 +256,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip fit={fitChipW} xaiFit={xaiFitChipW} />
+            <PlacementFitChip fit={fitChipW} />
             <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
           </div>
         </div>
@@ -316,7 +310,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip fit={fitChipM} xaiFit={xaiFitChipM} />
+            <PlacementFitChip fit={fitChipM} />
             <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
           </div>
         </div>

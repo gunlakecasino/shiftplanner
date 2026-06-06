@@ -14,7 +14,6 @@ import ZoneTaskList from "./ZoneTaskList";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /** AuxCard — Phase 1 Live layer prep (same pattern as ZoneCard / RRCard). */
 
@@ -39,8 +38,6 @@ export interface AuxCardProps {
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
-  /** Optional xAI for corner magic one line surface. */
-  xaiFitChip?: XaiFit;
   /** Builder mode flag for subtle digital-only UI sugar (e.g. empty card hints). */
   showDigitalAssists?: boolean;
 }
@@ -62,7 +59,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
-  xaiFitChip,
   showDigitalAssists = false,
 }) => {
   const a = assignments[def.key] || {};
@@ -108,7 +104,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <PlacementFitChip fit={fitChip} xaiFit={xaiFitChip} />
+          <PlacementFitChip fit={fitChip} />
           <BreakBadge value={currentBreak} onCycle={cycleBreak} />
         </div>
         {/* Explicit remove button for Aux slots (including Z9SR) so clearing is reliable and doesn't require drag or refresh */}
@@ -160,20 +156,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 {a.tmName}
               </span>
             </div>
-            {/* Digital builder only: subliminal xAI magic one-line (the "headline" from pad analyst).
-                Rendered as elegant digital ink annotation under the large Atkinson name — part of the cohesive authoring veil.
-                no-print + showDigitalAssists gate ensures 0 height/metric change in print-preview or PDF clone; Golden fidelity pristine.
-                Uses same refined ✧ mark as the corner chip for family language. Clicking anywhere on card (incl. this line) re-opens PlacementPad for fresh insight. */}
-            {xaiFitChip?.headline && (
-              <div
-                className="no-print mt-px pl-1 border-l border-[#2F5C7C]/25 dark:border-[#5B8AA8]/25 text-[6px] text-[#2F5C7C] dark:text-[#5B8AA8] truncate font-normal tracking-[0.15px] leading-[1.1] flex items-center gap-1 opacity-90 hover:opacity-100 transition-opacity"
-                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                title={`xAI insight: ${xaiFitChip.headline}${xaiFitChip.fitSummary ? ` — ${xaiFitChip.fitSummary}` : ""}\n(Builder only; hidden in Preview/PDF. Click card to refine via PlacementPad.)`}
-              >
-                <span className="text-[#2F5C7C]/50 dark:text-[#5B8AA8]/60" style={{ fontSize: "5.5px", letterSpacing: "-0.1px" }}>✧</span>
-                {xaiFitChip.headline}
-              </div>
-            )}
           </>
         ) : (
           <div className="unassigned-label mt-0.5 text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[10.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>

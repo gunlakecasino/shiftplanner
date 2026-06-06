@@ -6,6 +6,23 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Cards polish: remove xAI from colored labels on load (user: "[Image #1] let's talk about these cards now. I dont want the colord labels to have the xAI on load anymore")
+
+- User feedback after rotation health accuracy work + the cards screenshot: the "colored labels" (the main deployment cards — Zone/Aux/RR/Overlap with their zone-tinted top stripes, left editorial borders, and colored chrome) were auto-surfacing xAI content (the ✧ + magic one-liner headline under the large Atkinson TM name inside the card body, plus xAI-augmented corner fit chips showing truncated headline text instead of clean verdict labels).
+- This was the "subliminal digital ink" / "cohesive authoring veil" bleed that was wired via xaiFitsByHost state in Board + onXaiFit callback from PlacementPad (light + deep runs reported structured headline/verdict back to cards so the annotation would appear on the artboard immediately).
+- Changes:
+  - ZoneCard + AuxCard: removed the entire conditional xaiFitChip?.headline block (the 6px ✧ + headline div with left border + title tooltip) and its explanatory comment. Also removed xaiFitChip prop from interfaces, destructuring, and the pass-through to <PlacementFitChip fit=... xaiFit=... /> (now only baseline fit).
+  - RRCard: removed xai* props from interface/destructure; both women's and men's header chips now receive only the prerendered fit (no xaiFit).
+  - OverlapSlot: removed xaiFitChip prop + the || conditional; chip only renders when fit present.
+  - ShiftBuilderBoard: removed xaiFitsByHost React state, handleXaiFit callback, the onXaiFit={handleXaiFit} pass to renderPlacementPad, the XaiFit type import, and all four sites that conditionally forwarded xaiFitChip* (using showDigitalAssists ? xaiFitsByHost[...] : undefined) to Zone/RR/Aux/Overlap. Cards now only ever get fitChip (baseline scores/colors).
+  - PlacementPad: removed onXaiFit prop from interface + all call sites (deep analyst, light determination, clear-details handler) + destructure + the dep in the light run useCallback. (Pad continues to compute and display its own full insightStructured / headline / matrix / provenance entirely internally.)
+- Result: On load (or after any pad interactions), the colored card surfaces are clean — only the assignment (name, lock, tasks, coverage bars, break badge) + the baseline colored PlacementFitChip (STRONG / ACCEPTABLE / etc. from prerendered placementFitScore, still gated by showDigitalAssists / no-print). No xAI text, no ✧, no synthesized headlines inside or on the colored labels.
+- Full xAI experience (brief loading skeleton on open, bold one-liner glass, ✧ Provenance surface expander, always-visible Matrix panel with counts/last5, "Full reasoning", deep 4.3) is preserved exclusively inside the PlacementPad inspector when a card is clicked. The prior pad restructure (one-liner + expander + always matrix + adaptive height + loading) is untouched.
+- tsc --noEmit --skipLibCheck clean (exit 0).
+- Version bumped +0.001 → 0.817 (per established pattern).
+- Invariants respected: 1056×816 Golden, liquid glass + Atkinson + #2F5C7C editorial, no-print + showDigitalAssists veil for any remaining digital sugar, Graves sole source untouched, pad xAI surfaces fully intact, power/quality over cost.
+- This directly addresses the cards visual in the provided image and the explicit "dont want the colord labels to have the xAI on load anymore".
+
 ## 2026-06-09 — Grok 4.3 — Make xAI section (glass + always Matrix) less giant per screenshot (user: "can we make the xai section less giant")
 
 - Feedback on the live popup (Jack on Z2): the xAI glass + the always-visible Matrix panel underneath felt too tall / took too much real estate in the marker card, making the whole inspector feel "giant".

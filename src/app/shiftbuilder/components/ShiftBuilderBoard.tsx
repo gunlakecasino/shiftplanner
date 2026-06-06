@@ -22,7 +22,6 @@ import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
 
 
@@ -263,14 +262,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const showDigitalAssists = !isPrintPreview;
   const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
 
-  // xAI fits per host for corner magic one line + override surface (powerful but from pad on-demand)
-  const [xaiFitsByHost, setXaiFitsByHost] = React.useState<Record<string, XaiFit>>({});
-
-  const handleXaiFit = React.useCallback((hostId: string, xai: XaiFit) => {
-    console.log('[xAI corner] loaded for host', hostId, 'headline:', xai?.headline);
-    setXaiFitsByHost((prev) => ({ ...prev, [hostId]: xai }));
-  }, []);
-
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
     slotKey: string;
@@ -493,7 +484,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         boardPrerenderedFit={fitBySlot[slotKey]}
         isDraftMode={isDraftMode}
         draftAssignments={draftAssignments}
-        onXaiFit={handleXaiFit}
       />
     );
   };
@@ -776,7 +766,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
-                        xaiFitChip={showDigitalAssists ? (xaiFitsByHost[key] || undefined) : undefined}
                         showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === key &&
@@ -835,8 +824,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveUnassign={onLiveUnassign}
                         fitChipW={showDigitalAssists ? fitBySlot[wKey] : undefined}
                         fitChipM={showDigitalAssists ? fitBySlot[mKey] : undefined}
-                        xaiFitChipW={showDigitalAssists ? (xaiFitsByHost[rrHostId] || undefined) : undefined}
-                        xaiFitChipM={showDigitalAssists ? (xaiFitsByHost[rrHostId] || undefined) : undefined}
                         showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
@@ -892,7 +879,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
-                        xaiFitChip={showDigitalAssists ? (xaiFitsByHost[key] || undefined) : undefined}
                         showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === key &&
@@ -1074,7 +1060,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 onLiveAssign={onLiveAssign}
                                 onLiveUnassign={onLiveUnassign}
                                 fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
-                                xaiFitChip={showDigitalAssists ? (xaiFitsByHost[slotKey] || undefined) : undefined}
                                 showDigitalAssists={showDigitalAssists}
                               />
                               {activePlacementPad?.hostId === slotKey &&

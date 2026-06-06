@@ -8,7 +8,6 @@ import TaskRow from "./TaskRow";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
 
@@ -33,7 +32,6 @@ export interface OverlapSlotProps {
 
   /** Digital builder only (suppressed in print-preview mode for exact Golden fidelity). */
   fitChip?: PrerenderedPlacementFit | null;
-  xaiFitChip?: XaiFit;
   /** Builder mode flag for subtle digital-only UI sugar. */
   showDigitalAssists?: boolean;
 }
@@ -59,7 +57,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
-  xaiFitChip,
   showDigitalAssists = false,
 }) => {
   const a = assignments[slotKey] || {};
@@ -99,8 +96,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           >
             {a.tmName}
           </span>
-          {(fitChip || xaiFitChip) && (
-            <PlacementFitChip fit={fitChip} xaiFit={xaiFitChip} />
+          {fitChip && (
+            <PlacementFitChip fit={fitChip} />
           )}
         </div>
       ) : (

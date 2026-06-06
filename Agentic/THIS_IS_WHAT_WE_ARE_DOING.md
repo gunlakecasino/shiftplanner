@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus; opsApp paused per user direction) + Agentic Command Post maintenance pass (Plans surface, Zone prototype docs, durable Graves + AI-usage Memories)
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — cards xAI bleed removal (colored labels now clean on load; full xAI surfaces stay in pad only) + prior rotation health + pad polish; tsc clean, version 0.817
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 

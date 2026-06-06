@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender, isEligibleForSlot } from "@/lib/shiftbuilder/placement";
-import type { PlacementPadInsight, XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
   fitVerdictLabel,
   fitVerdictStyles,
@@ -88,8 +88,6 @@ export interface PlacementPadProps {
       proposedClear?: boolean;
     }
   >;
-  /** Callback to report xAI structured fit (headline, verdict) for surfacing magic one line + override in card corner chips. */
-  onXaiFit?: (hostId: string, xai: XaiFit) => void;
 }
 
 const PAD_W = 340;
@@ -783,7 +781,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   boardPrerenderedFit,
   isDraftMode = false,
   draftAssignments = {},
-  onXaiFit,
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -1281,13 +1278,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         setDeepInsight(data.text || null);
         setInsightStructured(data.structured ?? null);
         setInsightCached(!!data.cached);
-        if (onXaiFit && data.structured) {
-          onXaiFit(hostId || slotKey, {
-            fitVerdict: data.structured.fitVerdict,
-            fitSummary: data.structured.fitSummary,
-            headline: data.structured.headline,
-          });
-        }
         // Add usage to session + 30d monthly tracker ONLY for actual (non-cached) xAI calls
         // (cached hits don't spend tokens)
         if (data && !data.cached && data.usage) {
@@ -1335,22 +1325,15 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         setInsightStructured((prev) => (prev?.headline ? prev : data.structured ?? null));
         setInsightCached(!!data.cached);
       }
-      if (onXaiFit && data.structured) {
-        onXaiFit(hostId || slotKey, {
-          fitVerdict: data.structured.fitVerdict,
-          fitSummary: data.structured.fitSummary,
-          headline: data.structured.headline,
-        });
-      }
       if (data && !data.cached && data.usage) {
         try {
           useShiftBuilderStore.getState().addAiUsage(data.usage);
         } catch {}
       }
     } catch {
-      // Silent fail is fine — prerender + rotation are still authoritative; cards just won't get xAI line yet.
+      // Silent fail is fine — prerender + rotation are still authoritative.
     }
-  }, [a.tmName, buildInsightContext, hostId, slotKey, onXaiFit]);
+  }, [a.tmName, buildInsightContext, hostId, slotKey]);
 
   // Auto-run the light headline determination once per pad open for assigned TMs.
   // This is the key UX refinement: the magic one-liner now appears in the builder surfaces (cards)
@@ -1770,7 +1753,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 setDeepInsight(null);
                 setInsightStructured(null);
                 setInsightCached(false);
-                if (onXaiFit) onXaiFit(hostId || slotKey, null);
                 // Also reset light run so next pad open can re-determine fresh if needed.
                 lightRunRef.current = 0;
               }}
