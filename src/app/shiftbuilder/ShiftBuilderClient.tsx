@@ -736,6 +736,17 @@ function AuthedShiftBuilder() {
     return (saved === "print-preview" || saved === "builder") ? saved : "builder";
   });
   const isPrintPreview = canvasMode === "print-preview";
+  // Weekly Overview as the main sheet content (print preview style on the artboard itself).
+  // This replaces the old side panel. The sheet displays the week overview table exactly like print would,
+  // while keeping the TM focus UX (fade others, highlight the TM and its placements across the week).
+  // Future UX can be added directly on this sheet view (click day headers, cell interactions, overlays, etc.).
+  const [showWeeklyOverviewOnSheet, setShowWeeklyOverviewOnSheet] = useState(false);
+  // Auto-clear weekly sheet preview when leaving print-preview mode (user clicked "Builder" in the nav segmented control).
+  React.useEffect(() => {
+    if (!isPrintPreview) {
+      setShowWeeklyOverviewOnSheet(false);
+    }
+  }, [isPrintPreview]);
   // Persist
   React.useEffect(() => {
     try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
@@ -1952,6 +1963,20 @@ function AuthedShiftBuilder() {
 
     const prevDay = previousHydratedDayRef.current;
     const isDaySwitch = prevDay !== null && prevDay !== dayKey;
+
+    // Snapshot the *previous* day's main assignments into the live cross-day store before we
+    // overwrite the main store with the incoming day's data. This ensures that weekOverviewNights,
+    // plannedThisWeekRecentHistory, matrix, repeats, fit, and health all see prior days in the
+    // week once the user advances (e.g. Mon/Tue/Wed data visible when on Thu).
+    if (isDaySwitch && prevDay) {
+      try {
+        const prevDate = parseLocalDateISO(prevDay);
+        if (prevDate) {
+          mirrorMainAssignmentsToLiveStore(prevDate);
+        }
+      } catch {}
+    }
+
     previousHydratedDayRef.current = dayKey;
     hydratedAssignmentsDayRef.current = dayKey;
 
@@ -1970,6 +1995,12 @@ function AuthedShiftBuilder() {
     useShiftBuilderStore.getState().setAssignments(next);
     setAssignments(next);
 
+    // Also mirror the just-loaded (or merged) day so its data is immediately available under its
+    // dateKey in the live accumulator (for Weekly Overview sheet preview, history, etc.).
+    try {
+      mirrorMainAssignmentsToLiveStore(selectedDay.date);
+    } catch {}
+
     const qc = currentNight.queryClient;
     if (qc && !isDaySwitch && next !== fromQuery) {
       patchNightCoreAssignmentsCache(qc, dayKey, next);
@@ -1982,6 +2013,124 @@ function AuthedShiftBuilder() {
   // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
   const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
 
+  // Ensure the live cross-day accumulator always has a fresh snapshot of the *current* day's
+  // assignments (from the main zustand). Week overview sheet, history, repeats, etc. can then
+  // read it uniformly; the memos also defensively layer the live `assignments` for the exact
+  // selected day so optimistic board edits are visible immediately in the preview table.
+  // Snapshot the current day's main assignments into the live cross-day store when the selected
+  // day changes. This (plus the targeted mirrors inside the hydrate effect on switch/load, plus
+  // explicit mirrors on drag/live-assign persist paths) keeps weekOverviewNights, planned history,
+  // repeats, fit, and health able to see "prior days in this week" via the store.
+  //
+  // IMPORTANT: Do NOT depend on liveAssignVersion here. The live subscription effect bumps
+  // liveAssignVersion precisely when store writes happen (including our mirrors for the current
+  // dateKey). Depending on the version would create a direct feedback loop:
+  //   mirror -> setAssignmentsForNight -> subscription bump -> liveVersion++ -> this effect re-runs -> mirror...
+  // Current-day consumers (weekOverviewNights, plannedThisWeekRecentHistory) already defensively
+  // layer the live `assignments` state on top of the store entry for the exact selected day, so
+  // a slightly stale live entry for "today" is harmless. We only need the snapshot to survive day switches.
+  React.useEffect(() => {
+    if (selectedDay?.date) {
+      try {
+        mirrorMainAssignmentsToLiveStore(selectedDay.date);
+      } catch {}
+    }
+  }, [selectedDay?.date]);
+
+  // Bootstrap liveAssignmentsStore for the full current grave week (and at least the "reached" days 0..selected).
+  // This is what makes the Weekly Overview sheet, plannedThisWeekRecentHistory (used by fit chips, health,
+  // pads, xAI, matrix), and week-repeat logic see prior days after a refresh or without the user having
+  // manually visited/clicked every day in this browser session.
+  //
+  // Strategy:
+  // - Prefetch all days in DAY_DEFS in the background (the prefetchNight helper uses queryClient.prefetchQuery).
+  // - Seed synchronously from query cache if data is already present (fast cache hit or previous hover).
+  // - Subscribe to the query cache so that when background prefetches for week days complete (or any
+  //   other load of a week night happens), we normalize their assignments into the live store and bump
+  //   liveAssignVersion. This causes weekOverviewNights + plannedThisWeekRecentHistory memos to re-run
+  //   and the table / fit / health surfaces to update live.
+  // - We still layer the live `assignments` for the exact current selected day on top (optimistic safety).
+  // - Clicking day headers continues to work (normal hydrate + mirror for that day).
+  React.useEffect(() => {
+    if (!DAY_DEFS.length || !currentNight?.queryClient) return;
+
+    const qc = currentNight.queryClient;
+    const liveStore = liveAssignmentsStore.getState();
+
+    // Prefetch the entire grave week in the background. Small number of days (usually 7), cheap.
+    DAY_DEFS.forEach((def) => {
+      try {
+        currentNight.prefetchNight(def.date);
+      } catch {}
+    });
+
+    // Immediate seed for anything already in cache right now.
+    let seeded = false;
+    DAY_DEFS.forEach((def) => {
+      const dk = formatLocalDateISO(def.date);
+      if (liveStore.assignmentsByNight[dk]) return;
+      const cached: any = qc.getQueryData(["nightCore", dk]) || qc.getQueryData(["night", dk]);
+      if (cached?.assignments) {
+        const liveForNight: Record<string, any> = {};
+        Object.entries(cached.assignments as Record<string, any>).forEach(([slotKey, a]: [string, any]) => {
+          if (a?.tmId) {
+            liveForNight[slotKey] = {
+              tmId: a.tmId,
+              tmName: a.tmName || null,
+              isLocked: !!a.isLocked,
+            };
+          }
+        });
+        if (Object.keys(liveForNight).length > 0) {
+          liveAssignmentsStore.getState().setAssignmentsForNight(dk, liveForNight);
+          seeded = true;
+        }
+      }
+    });
+    if (seeded) setLiveAssignVersion((v) => v + 1);
+
+    // React to async query completions for any of our week days.
+    const queryCache = qc.getQueryCache();
+    const unsub = queryCache.subscribe((event: any) => {
+      const query = event?.query;
+      const qk = query?.queryKey;
+      if (!Array.isArray(qk) || qk[0] !== "nightCore") return;
+      const dk = qk[1];
+      if (typeof dk !== "string") return;
+
+      // Only care about days that belong to the current grave week.
+      const isWeekDay = DAY_DEFS.some((d) => formatLocalDateISO(d.date) === dk);
+      if (!isWeekDay) return;
+
+      // Already have it in live (from visit, previous seed, or mirror) — nothing to do.
+      if (liveAssignmentsStore.getState().assignmentsByNight[dk]) return;
+
+      const data = query?.state?.data;
+      if (data?.assignments) {
+        const liveForNight: Record<string, any> = {};
+        Object.entries(data.assignments as Record<string, any>).forEach(([slotKey, a]: [string, any]) => {
+          if (a?.tmId) {
+            liveForNight[slotKey] = {
+              tmId: a.tmId,
+              tmName: a.tmName || null,
+              isLocked: !!a.isLocked,
+            };
+          }
+        });
+        if (Object.keys(liveForNight).length > 0) {
+          liveAssignmentsStore.getState().setAssignmentsForNight(dk, liveForNight);
+          setLiveAssignVersion((v) => v + 1);
+        }
+      }
+    });
+
+    return () => {
+      try {
+        unsub();
+      } catch {}
+    };
+  }, [DAY_DEFS, currentNight?.queryClient]);
+
   // Planned "this week" recent history built from live/in-app assignments for the days in the current grave week
   // up to and including the selectedDay. This ensures that as the user builds/plans forward within a week
   // (e.g. assigns Mon, then views Thu), the matrix, week-repeat penalties, fit chips, health %, pad xAI context,
@@ -1993,11 +2142,19 @@ function AuthedShiftBuilder() {
     if (!DAY_DEFS || DAY_DEFS.length === 0) return result;
 
     const storeState = liveAssignmentsStore.getState();
+    const qc = currentNight?.queryClient;
     for (let i = 0; i <= selectedDayIndex && i < DAY_DEFS.length; i++) {
       const dayDef = DAY_DEFS[i];
       if (!dayDef) continue;
       const dateKey = formatLocalDateISO(dayDef.date);
-      const nightAss = storeState.assignmentsByNight[dateKey] || {};
+      let nightAss = storeState.assignmentsByNight[dateKey] || {};
+      // Fallback to TanStack query cache for this night (populated by our week bootstrap prefetch + listener,
+      // or any prior hover/visit). This ensures that after refresh, prior days in the week are visible to
+      // week-repeat logic, fit chips, health, pads, and xAI without requiring the user to click every day header.
+      if ((!nightAss || Object.keys(nightAss).length === 0) && i !== selectedDayIndex && qc) {
+        const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
+        if (cached?.assignments) nightAss = cached.assignments;
+      }
       // For the currently selected day, also include the main store assignments (may have optimistic updates)
       const mainAss = (i === selectedDayIndex ? assignments : {});
       const allAss = { ...nightAss, ...mainAss };
@@ -2010,7 +2167,54 @@ function AuthedShiftBuilder() {
       }
     }
     return result;
-  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion]);
+  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion, currentNight?.queryClient]);
+
+  // Data for the weekly overview on the sheet (built from live assignments across the week days).
+  // This feeds the print-preview style weekly table directly on the artboard (replacing the old side panel).
+  // Sources from liveAssignmentsStore (populated on assign + mirrors on day progress) + layers the
+  // live `assignments` for the exact current selected day (optimistic/main). Only days up to the
+  // selected get the "reached" treatment so that as you build forward (Mon->Thu), prior days populate
+  // their columns with real placements (same policy as plannedThisWeekRecentHistory / matrix / repeats).
+  // Full DAY_DEFS length keeps stable week table structure (matching print fidelity); unreached future
+  // days render as blank (—) until visited/assigned.
+  const weekOverviewNights: OverviewNight[] = React.useMemo(() => {
+    const result: OverviewNight[] = [];
+    if (!DAY_DEFS || DAY_DEFS.length === 0) return result;
+    const storeState = liveAssignmentsStore.getState();
+    const qc = currentNight?.queryClient;
+    DAY_DEFS.forEach((def, dayIndex) => {
+      const dateKey = formatLocalDateISO(def.date);
+      let nightAss: Record<string, any> = {};
+      if (dayIndex <= selectedDayIndex) {
+        const fromStore = storeState.assignmentsByNight[dateKey] || {};
+        // Fallback to query cache for prior days in the week (seeded by the week bootstrap effect + cache listener,
+        // or direct from prefetch). Lets the sheet table show multiple days immediately after refresh or on first open
+        // of Weekly Overview, instead of only after clicking day headers.
+        let effective = fromStore;
+        if ((!effective || Object.keys(effective).length === 0) && dayIndex !== selectedDayIndex && qc) {
+          const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
+          if (cached?.assignments) effective = cached.assignments;
+        }
+        const fromMain = (dayIndex === selectedDayIndex ? assignments : {});
+        nightAss = { ...effective, ...fromMain };
+      } else {
+        nightAss = storeState.assignmentsByNight[dateKey] || {};
+      }
+      const assignmentsForOverview: Record<string, { tmId: string; tmName: string; breakGroup?: number } | null> = {};
+      Object.entries(nightAss).forEach(([slotKey, a]: [string, any]) => {
+        if (a?.tmId) {
+          const tmName = a.tmName || a.displayName || a.fullName || a.name || '';
+          assignmentsForOverview[slotKey] = {
+            tmId: a.tmId,
+            tmName,
+            breakGroup: a.breakGroup ?? 0,
+          };
+        }
+      });
+      result.push({ dayIndex, assignments: assignmentsForOverview });
+    });
+    return result;
+  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion, currentNight?.queryClient]);
 
   React.useEffect(() => {
     const dateKey = nightDateKey(selectedDay.date);
@@ -5491,33 +5695,12 @@ function AuthedShiftBuilder() {
         onRosterToggle={() => setRosterOpen((v) => !v)}
         canvasMode={canvasMode}
         onCanvasModeChange={setCanvasMode}
-        onWeeklyOverview={() => setWeeklyOverviewOpen((v) => !v)}
-        weeklyOverviewOpen={weeklyOverviewOpen}
+        onWeeklyOverview={() => {
+          setCanvasMode("print-preview");
+          setShowWeeklyOverviewOnSheet(true);
+          setFocusedWeeklyTmId(null);
+        }}
       />
-
-      {/* Weekly Overview live table (glass panel, TM focus that dims canvas cards + shows week placements). */}
-      {weeklyOverviewOpen && (
-        <WeeklyOverview
-          open={weeklyOverviewOpen}
-          onClose={() => {
-            setWeeklyOverviewOpen(false);
-            setFocusedWeeklyTmId(null);
-          }}
-          weeklyRecentHistory={plannedThisWeekRecentHistory}
-          historicalRecentZoneHistory={effectiveRecentZoneHistory}
-          currentAssignments={assignments}
-          dayDefs={DAY_DEFS}
-          selectedDayIndex={selectedDayIndex}
-          onJumpToDayIndex={(idx) => {
-            setSelectedDayIndex(idx);
-            // focus is intentionally preserved so the new day's cards highlight the TM immediately
-          }}
-          focusedTmId={focusedWeeklyTmId}
-          onFocusTm={setFocusedWeeklyTmId}
-          isDark={isDark}
-          members={effectiveRealRoster as any[]}
-        />
-      )}
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
           Only the actual droppable artboard + roster participate in the drag context.
@@ -5829,60 +6012,98 @@ function AuthedShiftBuilder() {
             {/* Fixed 1056px artboard — now isolated into ShiftBuilderBoard for day-switch perf.
                 The scaling transform, refs, and stage chrome remain in the orchestrator.
                 Board receives only the narrow day-specific prop bag + stable callbacks. */}
-            <ShiftBuilderBoard
-              // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
-              // This prevents the giant objects from forcing re-renders of the entire 1056×816 artboard subtree.
-              nightId={queryNightId || nightId}
-              selectedTasks={selectedTasks}  // still legacy during 3.1 transition
-              cardBorders={effectiveCardBorders}
-              focusedTmId={focusedWeeklyTmId}
-              processedWaves={processedDayData?.waves}
-              processedBreakCounts={processedDayData?.breakCounts}
-              selectedDay={selectedDay}
-              selectedDayIndex={selectedDayIndex}
-              currentView={currentView}
-              breakGroup={breakGroup}
-              isDark={isDark}
-              isDraftMode={isDraftMode}
-              isCurrentNightLocked={isCurrentNightLocked}
-              loadingAssignments={boardColdLoading}
-              // auxDefs now from narrow Zustand selector in Board (3.4)
-              onDayPillClick={handleBoardDayPill}
-              onBreakGroupChange={handleBoardBreakGroupChange}
-              onRemoveTask={handleBoardRemoveTask}
-              onSetTaskColor={handleBoardSetTaskColor}
-              onEditTask={handleBoardEditTask}
-              setBreakGroupForSlot={setBreakGroupForSlot}
-              onLiveAssign={handleBoardLiveAssign}
-              onLiveUnassign={handleBoardLiveUnassign}
-              onAddCoverage={handlePadAddCoverage}
-              onRequestEngineInsight={handleBoardRequestEngineInsight}
-              live={live}
-              amOverlapDayName={amOverlapDayName}
-              amOverlapDateNum={amOverlapDateNum}
-              selectedSlotKey={selectedSlotKey}
-              onSlotToggle={handleSlotToggle}
-              onSlotClose={handleSlotClose}
-              padAssignments={padAssignments}
-              scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
-              allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
-              onAddOnCall={handlePadAddOnCall}
-              onMarkUnavailable={handlePadMarkUnavailable}
-              weeklyRecentHistory={plannedThisWeekRecentHistory}
-              onClearSlot={handlePadClearSlot}
-              onToggleLock={handlePadToggleLock}
-              onAssign={handlePadAssign}
-              onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
-              onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
-              nextDayColor={nextDayColor}
-              members={effectiveRealRoster}
-              fitBySlot={deploymentFitBySlot}
-              artboardScale={scale}
-              isPrintPreview={isPrintPreview}
-            />
-            {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
-                has been carved out. This is the primary re-render boundary win for iPad day switches.
-                All old duplicate content removed in follow-up cleanup. */}
+            {showWeeklyOverviewOnSheet && isPrintPreview ? (
+              /* The sheet itself now displays the print-preview of the Week Overview (slot grid, headcount, sections).
+                 This gives exact Golden fidelity for what would be printed, while the live React version
+                 supports the previous focus UX (click TM name → fade others, highlight the TM across the week).
+                 Day headers are clickable to change the selected day while focus is preserved.
+                 Future UX (tooltips, cell clicks, overlays, xAI integration on the sheet, etc.) can be added here
+                 without a separate panel. */
+              <div
+                className="print-artboard mx-auto"
+                style={{
+                  width: 1056,
+                  height: 816,
+                  background: "#fff",
+                  boxShadow: "0 0 0 1px #E5E5EA",
+                  overflow: "hidden",
+                }}
+              >
+                <WeeklyOverview
+                  overviewNights={weekOverviewNights}
+                  dayDefs={DAY_DEFS}
+                  focusedTmId={focusedWeeklyTmId}
+                  onFocusTm={setFocusedWeeklyTmId}
+                  onJumpToDayIndex={(idx) => {
+                    setSelectedDayIndex(idx);
+                    // focus stays so the new day's column is emphasized in context
+                  }}
+                  currentDayIndex={selectedDayIndex}
+                  weeklyRecentHistory={plannedThisWeekRecentHistory}
+                  onActivateTmContext={(tmId, slotKey, dayIndex) => {
+                    // Deeper integration: ensure day + focus, and the board/pad can react.
+                    // The name cell already did focus+jump; this gives explicit hook for pad pre-context (health/rotation).
+                    setSelectedDayIndex(dayIndex);
+                    setFocusedWeeklyTmId(tmId);
+                    // Future: could trigger activePlacementPad for slotKey on that day with week context.
+                    // For now the jump + focus + overview's enriched title provides the context.
+                  }}
+                />
+              </div>
+            ) : (
+              <ShiftBuilderBoard
+                // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
+                // This prevents the giant objects from forcing re-renders of the entire 1056×816 artboard subtree.
+                nightId={queryNightId || nightId}
+                selectedTasks={selectedTasks}  // still legacy during 3.1 transition
+                cardBorders={effectiveCardBorders}
+                focusedTmId={focusedWeeklyTmId}
+                processedWaves={processedDayData?.waves}
+                processedBreakCounts={processedDayData?.breakCounts}
+                selectedDay={selectedDay}
+                selectedDayIndex={selectedDayIndex}
+                currentView={currentView}
+                breakGroup={breakGroup}
+                isDark={isDark}
+                isDraftMode={isDraftMode}
+                isCurrentNightLocked={isCurrentNightLocked}
+                loadingAssignments={boardColdLoading}
+                // auxDefs now from narrow Zustand selector in Board (3.4)
+                onDayPillClick={handleBoardDayPill}
+                onBreakGroupChange={handleBoardBreakGroupChange}
+                onRemoveTask={handleBoardRemoveTask}
+                onSetTaskColor={handleBoardSetTaskColor}
+                onEditTask={handleBoardEditTask}
+                setBreakGroupForSlot={setBreakGroupForSlot}
+                onLiveAssign={handleBoardLiveAssign}
+                onLiveUnassign={handleBoardLiveUnassign}
+                onAddCoverage={handlePadAddCoverage}
+                onRequestEngineInsight={handleBoardRequestEngineInsight}
+                live={live}
+                amOverlapDayName={amOverlapDayName}
+                amOverlapDateNum={amOverlapDateNum}
+                selectedSlotKey={selectedSlotKey}
+                onSlotToggle={handleSlotToggle}
+                onSlotClose={handleSlotClose}
+                padAssignments={padAssignments}
+                scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                onAddOnCall={handlePadAddOnCall}
+                onMarkUnavailable={handlePadMarkUnavailable}
+                weeklyRecentHistory={plannedThisWeekRecentHistory}
+                onClearSlot={handlePadClearSlot}
+                onToggleLock={handlePadToggleLock}
+                onAssign={handlePadAssign}
+                onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
+                onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                nextDayColor={nextDayColor}
+                members={effectiveRealRoster}
+                fitBySlot={deploymentFitBySlot}
+                artboardScale={scale}
+                isPrintPreview={isPrintPreview}
+              />
+            )}
+            {/* End of isolated board / weekly sheet. */}
 
             {/* Quick Action Fan removed... */}
           </div> {/* /print-stage-inner (the scaled content) */}

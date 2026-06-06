@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
@@ -54,27 +54,6 @@ export function usePlacementFitMap({
   const [histories, setHistories] = useState<Record<string, ZoneDetailEntry | null>>({});
   const [historiesLoading, setHistoriesLoading] = useState(false);
 
-  const boardSig = useMemo(
-    () =>
-      Object.entries(assignments)
-        .filter(([, row]) => row?.tmId)
-        .map(([k, row]) => `${k}:${row!.tmId}`)
-        .sort()
-        .join("|"),
-    [assignments],
-  );
-
-  const draftSig = useMemo(
-    () =>
-      isDraftMode
-        ? Object.entries(draftAssignments)
-            .map(([k, d]) => `${k}:${d.proposedTmId ?? ""}:${d.proposedTmName ?? ""}`)
-            .sort()
-            .join("|")
-        : "",
-    [isDraftMode, draftAssignments],
-  );
-
   const tmIdsKey = useMemo(() => {
     const ids = new Set<string>();
     for (const row of Object.values(assignments)) {
@@ -88,12 +67,25 @@ export function usePlacementFitMap({
     return [...ids].sort().join(",");
   }, [assignments, isDraftMode, draftAssignments]);
 
+  // Ref guard: histories are per-TM (30-night spread) and relatively stable.
+  // We only need to (re)fetch when the *set of TMs* on the current board/draft actually changes.
+  // Using a ref prevents re-dispatching the same request even if parent re-renders cause the
+  // effect to re-evaluate (new assignments refs from zustand, live bumps, fit consumers re-rendering, etc.).
+  const lastFetchedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!enabled || !tmIdsKey) {
       setHistories({});
       setHistoriesLoading(false);
+      lastFetchedKeyRef.current = null;
       return;
     }
+
+    if (lastFetchedKeyRef.current === tmIdsKey) {
+      // Already fetched (or in-flight) for exactly this set of TMs. No need to hit the API again.
+      return;
+    }
+    lastFetchedKeyRef.current = tmIdsKey;
 
     const tmIds = tmIdsKey.split(",").filter(Boolean);
     let cancelled = false;
@@ -119,7 +111,7 @@ export function usePlacementFitMap({
     return () => {
       cancelled = true;
     };
-  }, [enabled, tmIdsKey, boardSig, draftSig]);
+  }, [enabled, tmIdsKey]);
 
   const otherTmProfiles = useMemo(() => {
     const out: Record<string, PlacementTmProfile | null> = {};

@@ -75,6 +75,22 @@ export function mirrorMainAssignmentsToLiveStore(date: Date): void {
       };
     }
   }
+
+  // Avoid redundant writes: if the live store already has an equivalent snapshot for this night,
+  // skip the set. This prevents unnecessary subscriber notifications (and potential bumps)
+  // when mirror is called with no material change.
+  const existing = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+  const existingKeys = Object.keys(existing);
+  const newKeys = Object.keys(liveForNight);
+  if (existingKeys.length === newKeys.length) {
+    const same = newKeys.every((k) => {
+      const e = existing[k];
+      const n = liveForNight[k];
+      return e && n && e.tmId === n.tmId && e.tmName === n.tmName && !!e.isLocked === !!n.isLocked;
+    });
+    if (same) return;
+  }
+
   liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
 }
 

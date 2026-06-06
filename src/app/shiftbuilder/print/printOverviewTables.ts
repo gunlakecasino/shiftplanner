@@ -120,7 +120,7 @@ function exactRowHeights(total: number, count: number, minH: number): number[] {
  */
 function layoutForWeekly(columnCount: number, slotRowCount: number): WeeklyLayout {
   const compact = columnCount >= 5;
-  const bannerH = compact ? 32 : 38;
+  const bannerH = 30; // Updated to match the minimal banner style on the live sheet (range + written + viol pill)
   const colHdrH = compact ? 19 : 22;
   const tableBodyH = ARTBOARD_H - STRIPE_H - bannerH - colHdrH;
 
@@ -203,11 +203,13 @@ function weeklyHeadCountCells(
       const ratio = layout.showHeadcountRatio
         ? `<span style="font-size:${layout.fontSize - 0.5}px;font-weight:600;color:#8E8E93;">/${total}</span>`
         : "";
+      // Colored bar under the number to match the live sheet's headcount styling (day color)
+      const bar = `<div style="height:2px;background:${def.color};width:70%;margin:1px auto 0;border-radius:1px;"></div>`;
       return (
-        `<div style="flex:1;height:${layout.headCountH}px;display:flex;align-items:center;justify-content:center;gap:2px;` +
+        `<div style="flex:1;height:${layout.headCountH}px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;` +
         `border-left:1px solid #D1D5DB;box-sizing:border-box;">` +
         `<span style="font-size:${layout.fontSize + 0.5}px;font-weight:800;color:${def.color};line-height:1;">${filled}</span>` +
-        `${ratio}</div>`
+        `${ratio}${bar}</div>`
       );
     })
     .join("");
@@ -300,6 +302,8 @@ function overviewShell(params: {
   headerCells: string;
   tableRowsHTML: string;
   weekly?: Pick<WeeklyLayout, "bannerH" | "colHdrH" | "tableBodyH" | "bannerPad" | "titleSize" | "subtitleSize">;
+  /** If provided, replaces the default dark banner entirely (for matching the live sheet's minimal banner style). */
+  customBannerHTML?: string;
 }): string {
   const stripeHTML = OVERVIEW_DAY_STRIPE_COLORS.map(
     (c) => `<div style="flex:1;height:4px;background:${c};"></div>`,
@@ -313,10 +317,6 @@ function overviewShell(params: {
   const colHdrH = weekly?.colHdrH ?? 24;
   const tableBodyH = weekly?.tableBodyH;
 
-  const bannerStyle = bannerH
-    ? `height:${bannerH}px;padding:${bannerPad};box-sizing:border-box;`
-    : `padding:${bannerPad};`;
-
   const colHdrStyle = weekly
     ? `height:${colHdrH}px;box-sizing:border-box;`
     : "";
@@ -325,15 +325,26 @@ function overviewShell(params: {
     ? `height:${tableBodyH}px;overflow:hidden;flex-shrink:0;`
     : `flex:1;overflow:hidden;`;
 
+  let bannerHTML: string;
+  if (params.customBannerHTML) {
+    const bannerHeightStyle = bannerH ? `height:${bannerH}px;` : "";
+    bannerHTML = `<div style="${bannerHeightStyle}flex-shrink:0;display:flex;align-items:center;">${params.customBannerHTML}</div>`;
+  } else {
+    const bannerStyle = bannerH
+      ? `height:${bannerH}px;padding:${bannerPad};box-sizing:border-box;`
+      : `padding:${bannerPad};`;
+    bannerHTML = `<div style="background:linear-gradient(135deg,#1C1C1E 0%,#2C2C2E 100%);${bannerStyle}` +
+      `flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">` +
+      `<div style="min-width:0;">` +
+      `<div style="font-size:${titleSize}px;font-weight:800;color:#FFFFFF;letter-spacing:0.05em;text-transform:uppercase;line-height:1.15;">${params.title}</div>` +
+      `<div style="font-size:${subtitleSize}px;font-weight:500;color:#8E8E93;margin-top:1px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${params.subtitle}</div></div>` +
+      `<div style="font-size:9px;font-weight:600;color:#636366;letter-spacing:0.02em;flex-shrink:0;margin-left:10px;">GLCR GRAVE SHIFT</div></div>`;
+  }
+
   return (
     `<div class="print-artboard" style="height:${ARTBOARD_H}px;width:${ARTBOARD_W}px;padding:0;display:flex;flex-direction:column;overflow:hidden;background:#FFFFFF;box-sizing:border-box;">` +
     `<div style="display:flex;flex-shrink:0;height:${STRIPE_H}px;">${stripeHTML}</div>` +
-    `<div style="background:linear-gradient(135deg,#1C1C1E 0%,#2C2C2E 100%);${bannerStyle}` +
-    `flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">` +
-    `<div style="min-width:0;">` +
-    `<div style="font-size:${titleSize}px;font-weight:800;color:#FFFFFF;letter-spacing:0.05em;text-transform:uppercase;line-height:1.15;">${params.title}</div>` +
-    `<div style="font-size:${subtitleSize}px;font-weight:500;color:#8E8E93;margin-top:1px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${params.subtitle}</div></div>` +
-    `<div style="font-size:9px;font-weight:600;color:#636366;letter-spacing:0.02em;flex-shrink:0;margin-left:10px;">GLCR GRAVE SHIFT</div></div>` +
+    bannerHTML +
     `<div style="display:flex;background:#F8F8FB;border-bottom:2px solid #C8C8CC;flex-shrink:0;${colHdrStyle}">` +
     `<div style="width:${params.slotColW}px;padding:3px 6px;font-size:8px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;box-sizing:border-box;">Slot</div>` +
     `${params.headerCells}</div>` +
@@ -397,7 +408,14 @@ export function buildDailyOverviewArtboardHTML(
   });
 }
 
-/** Multi-night overview: height-budget layout guaranteed to fit one landscape page. */
+/** Multi-night overview: height-budget layout guaranteed to fit one landscape page.
+ *  Updated to match the live sheet output when "week overview" is selected for print:
+ *  - Minimal light banner with date range numbers + written days + violations pill.
+ *  - Colored 2px top borders on day columns.
+ *  - Repeat ovals (hand-drawn red) for same-slot multiples this week.
+ *  - Headcount with day-colored bars.
+ *  - Same section structure, compact labels, etc.
+ */
 export function buildWeeklyOverviewArtboardHTML(
   overviewNights: OverviewNight[],
   dayDefs: DayDef[],
@@ -425,10 +443,26 @@ export function buildWeeklyOverviewArtboardHTML(
     .map(
       ({ def }) =>
         `<div style="flex:1;text-align:center;font-size:${layout.headerFont}px;font-weight:700;color:${def.color};` +
-        `padding:2px 1px;letter-spacing:0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
-        `border-left:1px solid #E5E5EA;display:flex;align-items:center;justify-content:center;box-sizing:border-box;">${dayLabel(def)}</div>`,
+        `padding:1px 0;letter-spacing:0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
+        `border-left:1px solid #E5E5EA;border-top:2px solid ${def.color};display:flex;align-items:center;justify-content:center;box-sizing:border-box;">${dayLabel(def)}</div>`,
     )
     .join("");
+
+  // Compute repeats for ovals (same as live sheet)
+  const repeatCounts = new Map<string, number>();
+  for (const n of nights) {
+    for (const [slotKey, asgn] of Object.entries(n.assignments || {})) {
+      const t = asgn?.tmId;
+      if (t) {
+        const k = `${t}:${slotKey}`;
+        repeatCounts.set(k, (repeatCounts.get(k) || 0) + 1);
+      }
+    }
+  }
+  let violations = 0;
+  repeatCounts.forEach((c) => {
+    if (c > 1) violations++;
+  });
 
   const headCountRow = renderHeadCountRow({
     slotColW: layout.slotColW,
@@ -449,11 +483,34 @@ export function buildWeeklyOverviewArtboardHTML(
             const name = asgn?.tmName ?? "—";
             const disp = displayTmName(name, layout);
             const filled = !!asgn?.tmId;
-            return (
-              `<div style="flex:1;height:${rowH}px;line-height:${rowH}px;padding:0 3px;` +
+
+            let cellHTML = `<div style="flex:1;height:${rowH}px;line-height:${rowH}px;padding:0 3px;` +
               `font-size:${layout.fontSize}px;font-weight:${filled ? "600" : "400"};color:${filled ? "#1C1C1E" : "#AEAEB2"};` +
-              `overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;text-align:center;box-sizing:border-box;">${disp}</div>`
-            );
+              `overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;text-align:center;box-sizing:border-box;">${disp}</div>`;
+
+            if (asgn?.tmId) {
+              const key = `${asgn.tmId}:${slot.key}`;
+              const count = repeatCounts.get(key) || 0;
+              if (count > 1) {
+                const isSevere = count >= 3;
+                const ovalStyle = `position:absolute;top:50%;left:50%;width:calc(100% + 6px);height:calc(100% + 4px);` +
+                  `transform:translate(-50%, -50%) rotate(-4deg);border:${isSevere ? "3px" : "2.5px"} solid #C13A14;` +
+                  `border-radius:9999px;pointer-events:none;z-index:0;` +
+                  `box-shadow:${isSevere ? "1.5px 2px 0 #C13A14, -1px -1px 0 #C13A14" : "1px 1.5px 0 #C13A14, -0.5px -1px 0 #C13A14"};`;
+                const badge = isSevere
+                  ? `<span style="position:absolute;top:-1px;right:-2px;min-width:9px;height:9px;padding:0 1.5px;font-size:6px;font-weight:800;` +
+                    `line-height:1;display:flex;align-items:center;justify-content:center;background:#C13A14;color:#fff;border-radius:999px;` +
+                    `pointer-events:none;z-index:2;font-family:var(--font-atkinson, system-ui);">${count}</span>`
+                  : "";
+                const bg = `background:rgba(239,68,68,0.03);`;
+                cellHTML = `<div style="flex:1;height:${rowH}px;line-height:${rowH}px;padding:0 3px;` +
+                  `font-size:${layout.fontSize}px;font-weight:600;color:#1C1C1E;` +
+                  `overflow:visible;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;text-align:center;box-sizing:border-box;${bg}">` +
+                  `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;z-index:1;">${disp}` +
+                  `<span style="${ovalStyle}"></span>${badge}</span></div>`;
+              }
+            }
+            return cellHTML;
           })
           .join(""),
       { fixedHeights: layout.rowHeights, compactSlots: layout.compactSlots },
@@ -461,14 +518,22 @@ export function buildWeeklyOverviewArtboardHTML(
 
   const firstDef = nightDefs[0]?.def;
   const lastDef = nightDefs[nightDefs.length - 1]?.def;
-  const rangeLabel =
-    firstDef && lastDef
-      ? `${firstDef.name.slice(0, 3)} ${firstDef.dateNum} – ${lastDef.name.slice(0, 3)} ${lastDef.dateNum}`
-      : "Week Overview";
+  const startNum = firstDef?.dateNum ?? 0;
+  const endNum = lastDef?.dateNum ?? 0;
+  const dateRange = `${startNum} – ${endNum}`;
+  const writtenRange = firstDef && lastDef ? `${firstDef.name} ${startNum} – ${lastDef.name} ${endNum}` : "";
+
+  const customBannerHTML = `
+    <div style="height:30px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;background:#fff;border-bottom:1px solid #E5E5EA;box-sizing:border-box;gap:10px;width:100%;">
+      <span style="font-size:16px;font-weight:800;letter-spacing:-0.4px;font-family:var(--font-atkinson, system-ui);color:#1C1C1E;">${dateRange}</span>
+      <span style="font-size:9px;font-weight:500;color:#6B7280;font-family:var(--font-atkinson, system-ui);white-space:nowrap;">${writtenRange}</span>
+      ${violations > 0 ? `<div style="margin-left:8px;font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;background:rgba(193,58,20,0.12);color:#C13A14;font-family:var(--font-atkinson, system-ui);letter-spacing:0.3px;">${violations} viol.</div>` : ""}
+    </div>
+  `;
 
   return overviewShell({
     title: "Week Overview",
-    subtitle: `${rangeLabel} · ${nights.length} nights · ${slotRows.length} slots`,
+    subtitle: `${dateRange} · ${nights.length} nights · ${slotRows.length} slots`,
     slotColW: layout.slotColW,
     headerCells: colHeaderCells,
     tableRowsHTML,
@@ -480,6 +545,7 @@ export function buildWeeklyOverviewArtboardHTML(
       titleSize: layout.titleSize,
       subtitleSize: layout.subtitleSize,
     },
+    customBannerHTML,
   });
 }
 
@@ -518,3 +584,6 @@ export function weeklyOverviewFitsOnePage(columnCount: number, slotRowCount = bu
     rowSum;
   return used <= ARTBOARD_H;
 }
+
+export { layoutForWeekly };
+export type { WeeklyLayout };
