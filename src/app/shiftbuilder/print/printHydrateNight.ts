@@ -92,7 +92,7 @@ export async function hydrateNightForPrint(
     useShiftBuilderStore.getState().setAssignments(assignments);
     apply.setNightId(core.nightId ?? null);
 
-    const tasksByUiKey = tasksByUiKeyFromRows(secondary.tasks ?? []);
+    const tasksByUiKey = tasksByUiKeyFromRows((secondary.tasks ?? []) as NightSlotTask[]);
     apply.setSelectedTasks(tasksByUiKey);
     apply.setCardBorders(secondary.cardBorders ?? {});
     apply.setNightBreakRows(
@@ -110,8 +110,10 @@ export async function waitForPrintArtboardSettled(timeoutMs = 20000): Promise<vo
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const tick = () => {
-      const pulses = document.querySelectorAll(".print-artboard .animate-pulse");
-      if (pulses.length === 0) {
+      const loadingCards = document.querySelectorAll(
+        ".print-artboard .sb-skeleton, .print-artboard .animate-pulse"
+      );
+      if (loadingCards.length === 0) {
         resolve();
         return;
       }

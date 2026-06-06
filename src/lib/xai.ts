@@ -30,6 +30,16 @@ const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
+export type GrokCallResult = {
+  content: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    model?: string;
+    reasoningEffort?: string;
+  };
+};
+
 export async function callGrok(
   messages: GrokMessage[],
   options?: {
@@ -42,15 +52,16 @@ export async function callGrok(
      */
     reasoningEffort?: ReasoningEffort;
   }
-): Promise<string> {
+): Promise<GrokCallResult> {
   const apiKey = process.env.XAI_API_KEY;
 
   if (!apiKey) {
     throw new Error("XAI_API_KEY is not set in environment variables");
   }
 
+  const modelId = options?.model ?? "grok-4.3";
   const body: Record<string, any> = {
-    model: options?.model ?? "grok-4.3",
+    model: modelId,
     messages,
     temperature: options?.temperature ?? 0.7,
     max_tokens: options?.maxTokens ?? 800,
@@ -75,7 +86,17 @@ export async function callGrok(
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() ?? "";
+  const content = data.choices?.[0]?.message?.content?.trim() ?? "";
+  const u = data.usage;
+  const usage = u
+    ? {
+        inputTokens: u.prompt_tokens ?? u.input_tokens,
+        outputTokens: u.completion_tokens ?? u.output_tokens,
+        model: modelId,
+        reasoningEffort: options?.reasoningEffort,
+      }
+    : undefined;
+  return { content, usage };
 }
 
 /**

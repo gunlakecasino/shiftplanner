@@ -76,14 +76,16 @@ Give me smart suggestions for what we should do with this person right now (best
   ];
 
   try {
-    const result = await callGrok(messages, {
+    console.log(`[xai] grok-4.3 medium (shift suggestions legacy path)`);
+    const grokRes = await callGrok(messages, {
       model: "grok-4.3",
-      reasoningEffort: "low", // fast interactive suggestions from Command Palette
+      reasoningEffort: "medium", // decently hard thinking even for interactive suggestions
       temperature: 0.6,
       maxTokens: 600,
     });
 
-    return result;
+    // Legacy path returns string only (archive caller). Real usage tracking is on active structured + engine + pad paths.
+    return grokRes.content;
   } catch (error) {
     console.error("Grok call failed:", error);
     return "Sorry, I couldn't reach Grok right now. Please try again in a moment.";
@@ -119,6 +121,12 @@ export async function askGrokForStructuredSuggestions(
   structured?: GrokStructuredResponse;
   warnings: string[];
   usedStructured: boolean;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    model?: string;
+    reasoningEffort?: string;
+  };
 }> {
   const { snapshot, userQuestion, rosterForGuard } = request;
 
@@ -155,7 +163,9 @@ Remember the output contract: first a single clean JSON block with "explanation"
 
     // Use the official Vercel AI SDK structured output.
     // This gives us a validated, typed object instead of fragile regex parsing.
-    const { object: parsed } = await generateObject({
+    // Bump to medium for decently hard thinking (still interactive); high reserved for explicit deep pad analyst.
+    console.log(`[xai] grok-4.3 medium (structured suggestions) for command/board grok`);
+    const { object: parsed, usage } = await generateObject({
       model,
       schema: GrokStructuredResponseSchema,
       messages,
@@ -163,7 +173,7 @@ Remember the output contract: first a single clean JSON block with "explanation"
       maxTokens: 900,
       providerOptions: {
         xai: {
-          reasoningEffort: "low", // fast & responsive for interactive palette use
+          reasoningEffort: "medium",
         },
       },
     });
@@ -195,6 +205,14 @@ Remember the output contract: first a single clean JSON block with "explanation"
       structured: finalStructured,
       warnings,
       usedStructured: !!finalStructured,
+      usage: usage
+        ? {
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            model: "grok-4.3",
+            reasoningEffort: "medium",
+          }
+        : undefined,
     };
   } catch (error) {
     console.error("Grok structured call failed:", error);
@@ -216,6 +234,12 @@ export type GrokEngineRunResult = {
   warnings: string[];
   usedGrok: boolean;
   rawText: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    model?: string;
+    reasoningEffort?: string;
+  };
 };
 
 /**
@@ -260,10 +284,13 @@ export async function askGrokEngineDraft(
   const systemPrompt = buildGrokEngineSystemPrompt(snapshot);
   const userPrompt = `Here is tonight's snapshot and per-slot ranking.
 
-Choose final picks per slot. Prefer the deterministic top candidate unless
-context (notes, call-offs, recent history, pair affinity with already-placed
-neighbors) suggests overriding. Output the JSON block exactly as specified
-in the system prompt.`;
+Produce a COMPLETE draft for every non-preserved slot: select one from its candidates (top or justified override). 
+
+HARD RULE (graves_default_schedule sole root): ONLY pick TMs where getTMScheduleStatus confirms "On Graves Default Schedule for tonight". Never pick NOT on schedule.
+
+PRIMARY GOAL: Maximize rotation health % (use snapshot's rotationHealthPercent, gaps, fit verdicts). For the complete draft, for each slot pick the on-schedule candidate that best improves overall weekly health and closes gaps (verify with tools). Override when it lifts health net; for best top, confirm with reason citing data.
+
+Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) to compare. Always include "reason". Output ONLY the final JSON block.`;
 
   const messages: GrokMessage[] = [
     { role: "system", content: systemPrompt },
@@ -272,7 +299,7 @@ in the system prompt.`;
 
   try {
     // Effort comes live from the SUDO > Engine Config tab via the DB
-    const effort = snapshot.grokReasoningEffort ?? "medium";
+    const effort = snapshot.grokReasoningEffort ?? "high"; // decently hard 4.3 thinking for the core grok-hybrid placement engine
 
     const model = createGrokEngineModel();
 
@@ -383,11 +410,12 @@ You have access to powerful live tools from the authoritative Rules Engine. USE 
 - checkEligibility(tmId, slotKey)
 - scoreCandidate(tmId, slotKey) — your most important tool for understanding trade-offs
 - getCurrentBoardState() — see who's already placed where (global view)
-- getTMScheduleStatus(tmId) — check Graves Default Schedule for tonight (very important when schedule data is loaded)
+- getTMScheduleStatus(tmId) — check Graves Default Schedule for tonight (HARD GATE: only on-schedule TMs per graves_default_schedule may be placed; very important)
 - getRulesSummary() — if you need to re-read the full rule system
 
-Explore with tools before committing to picks. When ready, output ONLY the final JSON block.`;
+Explore with tools (score several, check schedule + board state + current health impact) before deciding. ALWAYS produce a pick for every relevant slot (complete draft). PRIMARY GOAL: choose to maximize final rotation health % and minimize gaps (use snapshot rotationHealth + gaps data). HARD RULE: never pick NOT on graves schedule. For top, still pick with health-based reason. When ready, output ONLY the final JSON block.`;
 
+      console.log(`[xai-placement-engine] grok-4.3 ${effort} (tools) for board draft picks`);
       const result = await generateText({
         model,
         tools: executableTools,
@@ -405,6 +433,14 @@ Explore with tools before committing to picks. When ready, output ONLY the final
       });
 
       const rawResponse = result.text;
+      const toolUsage = result.usage
+        ? {
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            model: "grok-4.3",
+            reasoningEffort: effort,
+          }
+        : undefined;
 
       // Rich capture of tool usage for training/refinement data
       if (result.toolCalls && result.toolCalls.length > 0) {
@@ -429,11 +465,13 @@ Explore with tools before committing to picks. When ready, output ONLY the final
         warnings: guard.warnings,
         usedGrok: guard.validPicks.length > 0,
         rawText: rawResponse,
+        usage: toolUsage,
       };
     }
 
     // === Standard non-tool path (original behavior) ===
-    const { object: parsed } = await generateObject({
+    console.log(`[xai-placement-engine] grok-4.3 ${effort} (structured) for board draft picks`);
+    const { object: parsed, usage } = await generateObject({
       model,
       schema: GrokEngineResponseSchema,
       messages,
@@ -455,6 +493,14 @@ Explore with tools before committing to picks. When ready, output ONLY the final
       warnings: guard.warnings,
       usedGrok: guard.validPicks.length > 0,
       rawText: rawTextForDebug,
+      usage: usage
+        ? {
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            model: "grok-4.3",
+            reasoningEffort: effort,
+          }
+        : undefined,
     };
   } catch (err) {
     console.error("[actions] askGrokEngineDraft failed:", err);

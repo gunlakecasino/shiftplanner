@@ -3,6 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { BuilderBusyLabel } from "../components/builderPrimitives";
+import { SudoTabLoading } from "./SudoGlass";
 import {
   getActiveEngineConfig,
   type EngineConfig,
@@ -137,9 +139,8 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center text-zinc-400">
-        <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span>
-        Loading current engine config…
+      <div className="h-full flex items-center justify-center">
+        <SudoTabLoading>Loading engine config</SudoTabLoading>
       </div>
     );
   }
@@ -202,7 +203,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
                   key={opt.value}
                   onClick={() => setPlacementMethod(opt.value)}
                   className={cn(
-                    "text-left rounded-xl border px-4 py-3 transition-all",
+                    "sb-select-card sb-interactive text-left rounded-xl border px-4 py-3",
                     active
                       ? "border-red-500/50 bg-red-500/10 text-red-100"
                       : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900"
@@ -266,7 +267,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
                   onClick={() => isGrokHybrid && setGrokReasoningEffort(opt.value)}
                   disabled={!isGrokHybrid}
                   className={cn(
-                    "text-left rounded-xl border px-4 py-3 transition-all",
+                    "sb-select-card sb-interactive text-left rounded-xl border px-4 py-3",
                     active
                       ? "border-amber-500/60 bg-amber-500/10 text-amber-100"
                       : "border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-60"
@@ -295,21 +296,21 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-black transition active:scale-[0.985]",
+              "sb-interactive inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-black",
               saving && "opacity-70 cursor-wait"
             )}
           >
+            {!saving && <span className="ms" style={{ fontSize: 16 }}>save</span>}
             {saving ? (
-              <span className="ms animate-spin" style={{ fontSize: 16 }}>sync</span>
+              <BuilderBusyLabel>Saving</BuilderBusyLabel>
             ) : (
-              <span className="ms" style={{ fontSize: 16 }}>save</span>
+              "Update Active Engine Config"
             )}
-            {saving ? "Saving…" : "Update Active Engine Config"}
           </button>
 
           <button
             onClick={loadConfig}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-900"
+            className="sb-interactive inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-900"
           >
             <span className="ms" style={{ fontSize: 16 }}>refresh</span> Reload
           </button>

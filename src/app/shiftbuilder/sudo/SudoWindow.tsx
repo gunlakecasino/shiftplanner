@@ -126,7 +126,7 @@ export function SudoWindow({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6" aria-modal="true" role="dialog">
       {/* Elegant soft backdrop */}
       <div
-        className="absolute inset-0 bg-black/30 backdrop-blur-2xl"
+        className="sb-overlay-backdrop"
         onClick={onClose}
       />
 
@@ -134,7 +134,7 @@ export function SudoWindow({
       <GlassSurface
         isDark={isDark}
         elevated
-        className="relative w-full max-w-[min(1480px,96vw)] max-h-[94vh] flex flex-col overflow-hidden rounded-3xl shadow-2xl"
+        className="sb-modal-enter relative w-full max-w-[min(1480px,96vw)] max-h-[94vh] flex flex-col overflow-hidden rounded-3xl shadow-2xl"
       >
         {/* Subtle texture */}
         <div
@@ -176,7 +176,7 @@ export function SudoWindow({
                     onClose();
                   }
                 }}
-                className="px-3 py-1 rounded-full text-[10px] font-mono tracking-wider border border-black/10 dark:border-white/10 text-[#3C3C43] dark:text-zinc-400 hover:text-[#111] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors active:scale-[0.985]"
+                className="sb-interactive px-3 py-1 rounded-full text-[10px] font-mono tracking-wider border border-black/10 dark:border-white/10 text-[#3C3C43] dark:text-zinc-400 hover:text-[#111] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
               >
                 SIGN OUT
               </button>
@@ -184,7 +184,7 @@ export function SudoWindow({
 
             <button
               onClick={onClose}
-              className="text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 rounded-full p-2 transition-colors -mr-1"
+              className="sb-interactive text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 rounded-full p-2 -mr-1"
               aria-label="Close sudo"
             >
               <span className="ms" style={{ fontSize: 20 }}>close</span>
@@ -220,7 +220,7 @@ export function SudoWindow({
                   disabled={isDisabled}
                   title={insufficientPerm ? "Insufficient privileges for this tool" : undefined}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-[13px] font-medium tracking-[0.2px] transition-all text-left",
+                    "sb-list-row sb-interactive w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-[13px] font-medium tracking-[0.2px] text-left",
                     isActive
                       ? isDark
                         ? "bg-[#B89708]/18 text-[#F5D78A] shadow-sm font-semibold"

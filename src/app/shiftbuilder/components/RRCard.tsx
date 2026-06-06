@@ -13,7 +13,9 @@ import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import CoverageBar from "./CoverageBar";
 import { PlacementFitChip } from "./PlacementFitChip";
+import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /**
  * RRCard (Phase 1 Live Cache migration)
@@ -44,6 +46,11 @@ export interface RRCardProps {
   isLocked?: boolean;
   fitChipW?: PrerenderedPlacementFit | null;
   fitChipM?: PrerenderedPlacementFit | null;
+  /** Optional xAI for corner magic one line surface. */
+  xaiFitChipW?: XaiFit;
+  xaiFitChipM?: XaiFit;
+  /** Builder mode flag for subtle digital-only UI sugar. */
+  showDigitalAssists?: boolean;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -92,7 +99,7 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] transition-opacity touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
+      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
     >
       {/* Label + badge row (skip label if empty, for stacked side cards where header already includes the side info). Badge row only if showBreakBadge (for stacked, badge lives in side-card header to pin name upper like Zone/Aux cards) */}
       {showBreakBadge && label && (
@@ -109,7 +116,7 @@ const RRSide: React.FC<{
       {/* Name immediately under label */}
       <div className="min-w-0">
         {loading && !hasTM && !(isDraftMode && draftInfo?.proposedTmName) ? (
-          <div className="h-[14px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
+          <AssignmentSkeleton size="lg" />
         ) : isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear ? (
           <div className="flex flex-col min-w-0">
             <span
@@ -188,6 +195,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
+  xaiFitChipW,
+  xaiFitChipM,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -232,7 +241,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
     >
       {/* WOMEN'S RR card (stacked above men's per the experiment: cut the shared card in half and stack so each side is its own visual card) */}
       <div
-        className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all flex-1 ${wEmpty && !loading ? "empty" : ""}`}
+        className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 ${wEmpty && !loading ? "empty sb-card-empty" : ""}`}
         style={{
           ["--card-accent" as any]: color,
           ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -253,7 +262,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip fit={fitChipW} />
+            <PlacementFitChip fit={fitChipW} xaiFit={xaiFitChipW} />
             <BreakBadge value={wBreak} onCycle={cycleW} size="sm" />
           </div>
         </div>
@@ -286,7 +295,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
 
       {/* MEN'S RR card (below the women's) */}
       <div
-        className={`assignment-card relative overflow-hidden flex flex-col rounded-[3px] transition-all flex-1 ${mEmpty && !loading ? "empty" : ""}`}
+        className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 ${mEmpty && !loading ? "empty sb-card-empty" : ""}`}
         style={{
           ["--card-accent" as any]: color,
           ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -307,7 +316,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             </span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <PlacementFitChip fit={fitChipM} />
+            <PlacementFitChip fit={fitChipM} xaiFit={xaiFitChipM} />
             <BreakBadge value={mBreak} onCycle={cycleM} size="sm" />
           </div>
         </div>

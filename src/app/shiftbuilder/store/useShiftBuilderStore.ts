@@ -221,7 +221,7 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       set((state) => ({ trainingExamples: [ex, ...state.trainingExamples].slice(0, 200) })),
 
     // AI session usage (for bottom-right tokens/cost pill). Accumulates across all Grok calls in the session.
-    // Cost calc uses main grok-4.3 rates; actual spend lower with fast models, caching, low effort.
+    // Now model-aware costing (build/fast cheaper). Tracks both session and 30d (via record). Target ~100k tok/day.
     aiSessionUsage: {
       inputTokens: 0,
       outputTokens: 0,
@@ -238,7 +238,7 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         const newOutput = state.aiSessionUsage.outputTokens + outputTokens;
         const newTotal = newInput + newOutput;
         // Rates: $1.25/M input, $2.50/M output for grok-4.3 (see previous cost discussion). Fast models ~6x cheaper.
-        const costDelta = estimateAiCostUsd(inputTokens, outputTokens);
+        const costDelta = estimateAiCostUsd(inputTokens, outputTokens, model);
         const newCost = state.aiSessionUsage.estimatedCostUsd + costDelta;
         const newUsageState = {
           inputTokens: newInput,

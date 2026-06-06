@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
 import { cn } from "@/lib/utils";
+import { BuilderBusyLabel } from "./builderPrimitives";
 
 /**
  * PinGate — minimal 6-digit PIN entry for GRAVE Ops.
@@ -82,7 +83,8 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#111113]/95 backdrop-blur-md">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      <div className="sb-overlay-backdrop sb-overlay-backdrop--fixed bg-[#111113]/90" />
       {/* Subtle grid like SudoWindow for visual continuity */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
@@ -95,7 +97,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
 
       <div
         className={cn(
-          "relative w-full max-w-[380px] mx-4 rounded-2xl border border-zinc-800",
+          "sb-modal-enter relative w-full max-w-[380px] mx-4 rounded-2xl border border-zinc-800",
           "bg-zinc-950/90 shadow-2xl shadow-black/60",
           "overflow-hidden"
         )}
@@ -155,7 +157,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
                 <div
                   key={i}
                   className={cn(
-                    "h-1.5 w-1.5 rounded-full transition-all",
+                    "h-1.5 w-1.5 rounded-full transition-[background-color,transform] duration-200",
                     i < pin.length ? "bg-red-400" : "bg-zinc-800"
                   )}
                 />
@@ -177,17 +179,14 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               type="submit"
               disabled={!isComplete || submitting}
               className={cn(
-                "flex-1 inline-flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium tracking-wide transition-all active:scale-[0.985]",
+                "sb-interactive flex-1 inline-flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium tracking-wide",
                 isComplete && !submitting
                   ? "bg-white text-black hover:bg-zinc-200"
                   : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
               )}
             >
               {submitting ? (
-                <>
-                  <span className="ms animate-spin" style={{ fontSize: 16 }}>refresh</span>
-                  VERIFYING…
-                </>
+                <BuilderBusyLabel>VERIFYING</BuilderBusyLabel>
               ) : (
                 <>
                   <span className="ms" style={{ fontSize: 16 }}>login</span>
@@ -203,7 +202,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
                 setError(null);
                 inputRef.current?.focus();
               }}
-              className="px-4 py-3 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-800 hover:border-zinc-700 active:bg-zinc-900"
+              className="sb-interactive px-4 py-3 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-800 hover:border-zinc-700 active:bg-zinc-900"
             >
               Clear
             </button>

@@ -50,7 +50,7 @@ const CoverageBar = React.memo(function CoverageBar({
             e.stopPropagation();
             onRemoveTask(slotKey, task.taskLabel);
           }}
-          className="ml-1 leading-none font-bold flex-shrink-0 transition-opacity"
+          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-opacity"
           style={{
             color: 'rgba(255,255,255,0.45)',
             fontSize: 14,

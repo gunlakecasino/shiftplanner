@@ -50,7 +50,7 @@ export function AnalysisCard({ analysis, gold, onApply, onFeedbackSubmit }: Anal
               </div>
               <button
                 onClick={() => onApply(analysis.id, sug)}
-                className="shrink-0 rounded-xl px-5 py-2 text-xs font-semibold active:scale-[0.985] whitespace-nowrap"
+                className="sb-interactive shrink-0 rounded-xl px-5 py-2 text-xs font-semibold whitespace-nowrap"
                 style={{ background: gold, color: "#111" }}
               >
                 APPLY
@@ -78,7 +78,7 @@ export function AnalysisCard({ analysis, gold, onApply, onFeedbackSubmit }: Anal
               }
             }}
             disabled={!localFeedback.trim()}
-            className="mt-2 text-xs px-4 py-1.5 rounded-xl border disabled:opacity-40"
+            className="sb-interactive mt-2 text-xs px-4 py-1.5 rounded-xl border disabled:opacity-40"
             style={{ borderColor: gold + "40", color: gold }}
           >
             Record Correction for this Analysis

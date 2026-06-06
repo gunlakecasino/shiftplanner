@@ -2,6 +2,7 @@
 
 import React from "react";
 import VirtualRosterList from "./VirtualRosterList";
+import { BuilderLoadingLine } from "./builderPrimitives";
 import RosterItem from "./RosterItem";
 import { 
   useAssignments, 
@@ -40,6 +41,9 @@ export interface RosterRailProps {
 
   // Live / drag context if needed inside items
   live?: any;
+
+  /** True only on cold load — avoids "Loading roster" flash when keepPreviousData holds prior day. */
+  isRosterLoading?: boolean;
 }
 
 /**
@@ -74,6 +78,7 @@ const RosterRail = React.memo(function RosterRail({
   selectedDay,
   setGraveOnly: setGraveOnlyProp,
   setRosterSearch: setRosterSearchProp,
+  isRosterLoading = false,
 }: RosterRailProps) {
   // 3.4 — Narrow Zustand subscriptions (primary). Only re-renders when these exact slices change.
   const assignments = useAssignments() ?? assignmentsProp ?? {};
@@ -304,7 +309,7 @@ const RosterRail = React.memo(function RosterRail({
         <div className="flex border border-[#D1D1D6] dark:border-[#3A3A3C] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-white dark:bg-[#2C2C2E]">
           <button
             onClick={() => setGraveOnly(false)}
-            className={`flex-1 px-3 py-1.5 transition-all active:scale-[0.985] ${
+            className={`sb-interactive flex-1 px-3 py-1.5 ${
               !graveOnly ? "bg-[#1C1C1E] text-white shadow-inner" : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
             }`}
           >
@@ -312,7 +317,7 @@ const RosterRail = React.memo(function RosterRail({
           </button>
           <button
             onClick={() => setGraveOnly(true)}
-            className={`flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] transition-all active:scale-[0.985] ${
+            className={`sb-interactive flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] ${
               graveOnly ? "bg-[#1C1C1E] text-white shadow-inner" : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
             }`}
             title="Only TMs with grave_pool availability for 11pm–6:55am"
@@ -328,8 +333,8 @@ const RosterRail = React.memo(function RosterRail({
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto px-4 pb-8 space-y-1.5">
-        {realRoster.length === 0 && (
-          <div className="text-xs text-[#8E8E93] px-2 py-1">Loading roster…</div>
+        {isRosterLoading && realRoster.length === 0 && (
+          <BuilderLoadingLine className="!mt-0 text-xs px-2 py-1">Loading roster</BuilderLoadingLine>
         )}
 
         {/* 0. Called Off */}

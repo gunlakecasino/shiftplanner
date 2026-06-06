@@ -17,6 +17,7 @@
 
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { SudoTabLoading } from "./SudoGlass";
 import {
   startOfRosterWeek,
   formatLocalDateISO,
@@ -337,7 +338,11 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
   };
 
   if (loading) {
-    return <div className="p-8 text-center opacity-60">Loading current week roster…</div>;
+    return (
+      <div className="p-8 flex justify-center">
+        <SudoTabLoading>Loading current week roster</SudoTabLoading>
+      </div>
+    );
   }
 
   return (

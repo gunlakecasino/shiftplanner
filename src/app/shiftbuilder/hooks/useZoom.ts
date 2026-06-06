@@ -24,12 +24,20 @@ export function zoomStepsForDevice(): Exclude<ZoomMode, "fit">[] {
     : [0.5, 0.75, 1];
 }
 
+export type StageInsets = { top: number; right: number; bottom: number; left: number };
+
 /**
  * Manages artboard zoom state and the stageHostRef used by the DndContext
  * wrapper. Accepts `rosterOpen` so it can re-fit the scale whenever the
  * floating roster panel opens/closes (the roster shift changes available width).
  */
-export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
+export function useZoom({
+  rosterOpen,
+  stageInsets,
+}: {
+  rosterOpen: boolean;
+  stageInsets: StageInsets;
+}) {
   const [isTabletTouch, setIsTabletTouch] = useState(isTabletTouchDevice);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(() => {
@@ -48,31 +56,28 @@ export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
 
   const recomputeScale = useCallback(() => {
     const el = stageHostRef.current;
+    const insets = stageInsets;
     let availW = 0;
     let availH = 0;
 
     if (el && el.clientWidth > 50 && el.clientHeight > 50) {
-      availW = el.clientWidth - 24;
-      availH = el.clientHeight - 24;
+      // clientWidth/Height include padding; subtract stage chrome insets + breathing room.
+      availW = el.clientWidth - insets.left - insets.right - 12;
+      availH = el.clientHeight - insets.top - insets.bottom - 12;
     } else {
-      availW = window.innerWidth - 268 - 80;
-      availH = window.innerHeight - 90;
+      availW = window.innerWidth - insets.left - insets.right - 24;
+      availH = window.innerHeight - insets.top - insets.bottom - 24;
     }
 
     const max = maxArtboardScale();
     const byWidth = availW / NATURAL_WIDTH;
     const byHeight = availH / NATURAL_HEIGHT;
-    const tablet = isTabletTouchDevice();
 
-    // Tablet may upscale to max (1.25) when the viewport allows; always fit both axes
-    // so the scaled artboard does not paint outside the stage (CSS transform overflow).
-    // Desktop: never upscale past 100% — keeps card typography crisp.
-    const next = tablet
-      ? Math.min(max, byWidth, byHeight)
-      : Math.min(1, byWidth, byHeight);
+    // Fit both axes so the full Golden artboard stays visible without scroll or upscale past max.
+    const next = Math.min(max, byWidth, byHeight);
 
     setFitScale(Math.max(0.25, next));
-  }, []);
+  }, [stageInsets]);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px)");
@@ -109,7 +114,7 @@ export function useZoom({ rosterOpen }: { rosterOpen: boolean }) {
       cancelAnimationFrame(t1);
       clearTimeout(t2);
     };
-  }, [rosterOpen, recomputeScale]);
+  }, [rosterOpen, stageInsets, recomputeScale]);
 
   const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
   const scale = Math.min(rawScale, maxArtboardScale());

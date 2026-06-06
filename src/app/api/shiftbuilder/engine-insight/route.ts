@@ -19,6 +19,7 @@ export async function POST(req: Request) {
             rotationBasicsText: ctx.rotationBasicsText,
           })
         : await runPlacementPadAnalyst(ctx);
+    // Note: "light" / "headline" mode is handled inside runPlacementPadAnalyst (dispatches to runMagicOneLinerDetermination using grok fast).
     return NextResponse.json(result);
   } catch (err) {
     console.error("[api/engine-insight]", err);

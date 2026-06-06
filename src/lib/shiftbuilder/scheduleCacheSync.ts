@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { revalidateScheduledRosterCache } from "./revalidateOpsCache";
 
 /** Fired after graves_default_schedule edits so open ShiftBuilder tabs refresh. */
 export const GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT =
@@ -25,6 +26,11 @@ export async function notifyGravesDefaultScheduleChanged(
 ): Promise<void> {
   if (queryClient) {
     await invalidateNightCoreQueries(queryClient);
+  }
+  try {
+    await revalidateScheduledRosterCache();
+  } catch (e) {
+    console.warn("[scheduleCacheSync] server cache revalidate failed (non-fatal)", e);
   }
   broadcastGravesDefaultScheduleChanged();
 }

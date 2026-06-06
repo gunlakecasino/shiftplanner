@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { BuilderStatusDot } from "../components/builderPrimitives";
 
 /**
  * XAISphere — The Master Ops AI Agent surface ("xAI Sphere")
@@ -104,7 +105,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
             ? "Close the Master Operational AI"
             : "Open the Master Ops AI Agent — persistent operational co-pilot (Supabase-backed)"
         }
-        className="fixed bottom-16 right-3 z-[55] flex items-center gap-2 h-9 pl-2.5 pr-3 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[12px] font-medium text-[#1C1C1E] hover:scale-[1.02] active:scale-[0.985] transition-all select-none"
+        className="sb-interactive sb-glass-pill fixed bottom-16 right-3 z-[55] flex items-center gap-2 h-9 pl-2.5 pr-3 rounded-full border border-white/60 shadow-lg shadow-black/10 text-[12px] font-medium text-[#1C1C1E] select-none"
         style={{
           background: "rgba(255,255,255,0.92)",
           backdropFilter: "blur(20px) saturate(160%)",
@@ -130,10 +131,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
         <span className="tracking-[-0.1px]">xAI</span>
 
         {/* Tiny live indicator dot (will become meaningful in later phases) */}
-        <span
-          className="w-1.5 h-1.5 rounded-full bg-[#34C759]"
-          aria-hidden="true"
-        />
+        <BuilderStatusDot state={isPersisting ? "connecting" : threadId ? "live" : persistError ? "offline" : "syncing"} />
       </button>
 
       {/* ============================================================
@@ -143,7 +141,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
           ============================================================ */}
       {open && (
         <div
-          className="fixed bottom-[72px] right-3 z-[65] w-[320px] rounded-2xl border border-white/60 bg-white/95 shadow-2xl shadow-black/15 overflow-hidden flex flex-col"
+          className="sb-pad-enter sb-glass-pill fixed bottom-[72px] right-3 z-[65] w-[320px] rounded-2xl border border-white/60 bg-white/95 shadow-2xl shadow-black/15 overflow-hidden flex flex-col"
           style={{
             backdropFilter: "blur(24px) saturate(180%)",
             WebkitBackdropFilter: "blur(24px) saturate(180%)",
@@ -176,7 +174,9 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
                   Persistent • Supabase-native
                   {/* Live persistence indicator */}
                   {isPersisting && (
-                    <span className="inline-block text-[#007AFF] animate-pulse">connecting…</span>
+                    <span className="sb-loading-line !mt-0 inline-flex items-center text-[10px] text-[#007AFF]" aria-busy="true">
+                      Connecting<span className="sb-loading-dots" aria-hidden="true" />
+                    </span>
                   )}
                   {!isPersisting && threadId && (
                     <span className="inline-flex items-center gap-1 text-[#34C759] font-medium">
@@ -192,7 +192,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
 
             <button
               onClick={onToggle}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#6B7280] hover:text-[#1C1C1E] hover:bg-black/5 active:bg-black/10 transition-colors"
+              className="sb-interactive w-7 h-7 rounded-full flex items-center justify-center text-[#6B7280] hover:text-[#1C1C1E] hover:bg-black/5 active:bg-black/10"
               aria-label="Close"
             >
               <svg

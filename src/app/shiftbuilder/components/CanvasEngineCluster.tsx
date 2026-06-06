@@ -32,6 +32,7 @@ export type CanvasEngineClusterProps = {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   isDraftMode?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
+  draftGrokExplanation?: string;
   canRunEngine: boolean;
   canEditAssignments: boolean;
   isCurrentNightLocked: boolean;
@@ -52,6 +53,7 @@ export function CanvasEngineCluster({
   fitBySlot,
   isDraftMode,
   draftAssignments,
+  draftGrokExplanation,
   canRunEngine,
   canEditAssignments,
   isCurrentNightLocked,
@@ -80,6 +82,13 @@ export function CanvasEngineCluster({
       }),
     [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
   );
+
+  // Weekly % (placeholder derived from current + gaps for demo; replace with real
+  // average from 30-night spread / placement histories for true week-over-week rotation health).
+  const weeklyPercent = health.percent !== null 
+    ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) 
+    : null;
+  const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
 
   const running = engineRunPhase !== "idle";
   const engineDisabled = !canRunEngine || isCurrentNightLocked || running;
@@ -116,7 +125,8 @@ export function CanvasEngineCluster({
   const breakdownTitle = [
     "Rotation health averages assigned zone / RR / aux placements (open gaps excluded).",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
-    health.percent !== null ? `Score: ${health.percent}%` : "Score: —",
+    health.percent !== null ? `Tonight: ${health.percent}%` : "Tonight: —",
+    weeklyPercent !== null ? `Weekly: ${weeklyPercent}% (demo; real from spread/histories)` : "Weekly: —",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,
     "",
@@ -205,6 +215,23 @@ export function CanvasEngineCluster({
                 : ""}
             </span>
           </div>
+          {isDraftMode && draftGrokExplanation && (
+            <div
+              style={{
+                fontSize: 9,
+                opacity: 0.85,
+                marginTop: 4,
+                fontFamily: CANVAS_PILL_MONO,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+              }}
+              title={draftGrokExplanation}
+            >
+              xAI summary: {draftGrokExplanation.slice(0, 140)}{draftGrokExplanation.length > 140 ? '…' : ''}
+            </div>
+          )}
         </div>
       )}
 
@@ -213,13 +240,15 @@ export function CanvasEngineCluster({
         style={{
           background: colors.bg,
           border: `1px solid ${colors.border}`,
-          boxShadow: "0 2px 10px rgba(0,0,0,0.45)",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+          backdropFilter: "blur(6px) saturate(120%)",
+          WebkitBackdropFilter: "blur(6px) saturate(120%)",
         }}
       >
         {/* Side drawer — actions slide out to the left */}
         <div
           aria-hidden={!drawerOpen}
-          className="flex items-center overflow-hidden transition-[max-width,opacity,padding] duration-300 ease-out"
+          className="sb-drawer-shell flex items-center"
           style={{
             maxWidth: drawerOpen ? (isDraftMode ? 320 : 280) : 0,
             opacity: drawerOpen ? 1 : 0,
@@ -241,7 +270,7 @@ export function CanvasEngineCluster({
                     : "Discard engine draft"
                 }
                 aria-label="Discard draft"
-                className="rounded p-1.5 transition-opacity disabled:opacity-40 shrink-0"
+                className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
                 style={{
                   ...actionBtnBase,
                   padding: 6,
@@ -263,7 +292,7 @@ export function CanvasEngineCluster({
                     : "Save all draft placements to the board"
                 }
                 aria-label="Save all draft placements"
-                className="rounded p-1.5 transition-opacity disabled:opacity-40 shrink-0"
+                className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
                 style={{
                   ...actionBtnBase,
                   padding: 6,
@@ -283,7 +312,7 @@ export function CanvasEngineCluster({
             disabled={clearDisabled}
             title={clearTitle}
             aria-label="Clear board"
-            className="rounded p-1.5 transition-opacity disabled:opacity-40 shrink-0"
+            className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
             style={{
               ...actionBtnBase,
               padding: 6,
@@ -298,7 +327,7 @@ export function CanvasEngineCluster({
               onClick={onRunXaiEngine}
               disabled={engineDisabled}
               title={engineTitle}
-              className="rounded px-2 py-1.5 transition-opacity disabled:opacity-40 shrink-0"
+              className={`sb-interactive rounded px-2 py-1.5 disabled:opacity-40 shrink-0 ${running ? "sb-engine-running" : ""}`}
               style={{
                 ...actionBtnBase,
                 textTransform: "uppercase",
@@ -338,7 +367,7 @@ export function CanvasEngineCluster({
               : "Open engine tools drawer"
           }
           title={breakdownTitle}
-          className="flex items-center gap-1 px-2 py-1 text-left transition-opacity hover:opacity-95"
+          className="flex items-center gap-2 px-4 py-2 text-left transition-opacity hover:opacity-95"
           style={{
             fontFamily: CANVAS_PILL_MONO,
             color: colors.text,
@@ -352,29 +381,38 @@ export function CanvasEngineCluster({
             aria-hidden
           >
             {drawerOpen ? (
-              <ChevronRight size={14} strokeWidth={2.5} />
+              <ChevronRight size={16} strokeWidth={2.75} />
             ) : (
-              <ChevronLeft size={14} strokeWidth={2.5} />
+              <ChevronLeft size={16} strokeWidth={2.75} />
             )}
           </span>
-          <span className="flex flex-col items-end gap-0.5 min-w-[72px]">
+          <span className="flex flex-col items-end gap-0.5 min-w-[140px]">
             <span
-              className="text-[7px] font-semibold uppercase tracking-[0.14em] opacity-90"
-              style={{ lineHeight: 1 }}
+              className="text-[7.5px] font-semibold uppercase tracking-[0.5px] opacity-90"
+              style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               Rotation health
             </span>
-            <span className="text-[13px] font-bold tabular-nums leading-none">
-              {display}
+            <span className="flex items-baseline gap-1.5">
+              <span
+                className="text-[20px] font-bold tabular-nums leading-none"
+                style={{ fontFamily: CANVAS_PILL_MONO }}
+              >
+                {display}
+              </span>
+              <span
+                className="text-[11px] font-semibold tabular-nums opacity-85"
+                style={{ fontFamily: CANVAS_PILL_MONO, lineHeight: 1 }}
+              >
+                {weeklyDisplay} wk
+              </span>
             </span>
             <span
-              className="text-[7px] opacity-80 tabular-nums"
-              style={{ lineHeight: 1 }}
+              className="text-[7.5px] opacity-80 tabular-nums"
+              style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
               target {ROTATION_HEALTH_TARGET}%
-              {health.openGaps > 0
-                ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}`
-                : ""}
+              {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
             </span>
           </span>
         </button>

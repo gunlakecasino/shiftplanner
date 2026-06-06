@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { hydrateAiUsageGlobals } from "@/lib/shiftbuilder/aiUsageTracker";
+import { SB_DRAWER_TRANSITION } from "./builderPrimitives";
 
 /**
  * OpsStatusBar — collapsed: LIVE dot + label only; tap opens left drawer with
@@ -68,15 +69,17 @@ function getPillShellStyles(): string {
     bottom: 10px !important;
     right: 10px !important;
     z-index: 2147483647 !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 10px !important;
-    line-height: 1.3 !important;
-    background: rgba(0,0,0,0.92) !important;
+    font-family: var(--font-atkinson, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
+    font-size: 9.5px !important;
+    line-height: 1.25 !important;
+    background: rgba(28,28,30,0.82) !important;
     color: #fff !important;
-    border: 1px solid #3a3a3c !important;
-    border-radius: 4px !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 10px !important;
     pointer-events: auto !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.65) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.75) !important;
+    backdrop-filter: blur(12px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(145%) !important;
     user-select: none !important;
     display: flex !important;
     flex-direction: row !important;
@@ -102,7 +105,7 @@ function buildOpsStatusBarShell(pill: HTMLDivElement): void {
       style="
         display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;
         max-width:0;opacity:0;padding-left:0;padding-right:0;border-right:none;
-        transition:max-width 0.3s ease, opacity 0.25s ease, padding 0.3s ease;
+        transition:${SB_DRAWER_TRANSITION};
       "
     >
       <span style="color:#a1a1aa;margin-right:1px">day</span>
@@ -113,8 +116,12 @@ function buildOpsStatusBarShell(pill: HTMLDivElement): void {
       <span style="color:#3a3a3c;margin:0 1px">·</span>
       <span style="color:#a1a1aa;margin-right:1px">ai30</span>
       <span data-ops-ai-tok style="font-weight:600;color:#fff">0.0k</span>
+      <span style="color:#a1a1aa;margin:0 1px">+</span>
+      <span data-ops-ai-sess-tok style="font-weight:600;color:#fff">0.0k</span>
       <span style="color:#a1a1aa;margin:0 2px">~</span>
       <span data-ops-ai-cost style="font-weight:600;color:#fff">$0.00</span>
+      <span style="color:#a1a1aa;margin:0 1px">·</span>
+      <span data-ops-ai-calls style="font-weight:600;color:#fff">0</span>
     </div>
     <button
       type="button"
@@ -260,14 +267,22 @@ export function updateOpsStatusBarContent(): void {
   const dayEl = pill.querySelector("[data-ops-day]");
   const sbEl = pill.querySelector("[data-ops-sb]");
   const aiTokEl = pill.querySelector("[data-ops-ai-tok]");
+  const aiSessTokEl = pill.querySelector("[data-ops-ai-sess-tok]");
   const aiCostEl = pill.querySelector("[data-ops-ai-cost]");
+  const aiCallsEl = pill.querySelector("[data-ops-ai-calls]");
   const dotEl = pill.querySelector("[data-ops-rt-dot]") as HTMLElement | null;
   const rtLabelEl = pill.querySelector("[data-ops-rt-label]");
 
   if (dayEl) dayEl.textContent = t.perfText;
   if (sbEl) sbEl.textContent = t.latencyText;
   if (aiTokEl) aiTokEl.textContent = `${(t.ai30Tokens / 1000).toFixed(1)}k`;
-  if (aiCostEl) aiCostEl.textContent = `$${t.ai30Cost.toFixed(2)}`;
+  if (aiSessTokEl) aiSessTokEl.textContent = `${(t.sessionTokens / 1000).toFixed(1)}k`;
+  if (aiCallsEl) aiCallsEl.textContent = String(t.ai30Calls || 0);
+  // Show cost with more precision when small (common for mixed 4.3 + build calls); session cost if higher recent activity
+  let costToShow = t.ai30Cost;
+  if (t.sessionCost > t.ai30Cost * 0.1) costToShow = t.sessionCost; // bias to visible recent
+  const costStr = costToShow < 0.01 ? costToShow.toFixed(4) : costToShow.toFixed(2);
+  if (aiCostEl) aiCostEl.textContent = `$${costStr}`;
   if (rtLabelEl) rtLabelEl.textContent = t.rt;
   if (dotEl) {
     dotEl.style.background = t.rtColor;
@@ -275,7 +290,7 @@ export function updateOpsStatusBarContent(): void {
   }
 
   pill.title = open
-    ? `Ops telemetry — day: ${t.perfText} | sb: ${t.latencyText} | xAI 30d: ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(2)}, ${t.ai30Calls} calls) | session: ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(2)}, ${t.sessionCalls} calls)`
+    ? `Ops telemetry — day: ${t.perfText} | sb: ${t.latencyText} | xAI 30d: ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) | session: ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`
     : `Realtime: ${t.rt} — tap to open ops telemetry (day switch, server latency, xAI usage)`;
 }
 

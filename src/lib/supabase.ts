@@ -11,6 +11,18 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  */
 
 let _supabaseClient: SupabaseClient | null = null;
+let _warmPromise: Promise<void> | null = null;
+
+/** Supabase REST host for preconnect hints (no secrets). */
+export function getSupabaseRestOrigin(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
 
 // Safe access — prevents "Can't find variable: process" on iPad simulator / certain Turbopack chunks
 const IS_PRODUCTION =
@@ -102,3 +114,28 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 export type SupabaseClientType = SupabaseClient;
+
+/**
+ * Fire a lightweight read so TLS + HTTP/2 to Supabase are warm before the board asks.
+ * Idempotent — safe to call from loading shells, providers, and route entry.
+ */
+export function warmSupabaseConnection(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (_warmPromise) return _warmPromise;
+
+  _warmPromise = (async () => {
+    try {
+      const client = getSupabaseClient();
+      const t0 = performance.now();
+      await client.from('nights').select('id').limit(1).maybeSingle();
+      const ms = Math.round(performance.now() - t0);
+      if (ms > 0) {
+        (window as any).__supabaseWarmMs = ms;
+      }
+    } catch (e) {
+      console.warn('[supabase] warm connection failed (non-fatal):', e);
+    }
+  })();
+
+  return _warmPromise;
+}

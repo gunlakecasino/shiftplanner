@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender, isEligibleForSlot } from "@/lib/shiftbuilder/placement";
-import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import type { PlacementPadInsight, XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
   fitVerdictLabel,
   fitVerdictStyles,
@@ -42,6 +42,7 @@ import {
   type PlacementTmProfile,
 } from "./placementPadHelpers";
 import { postEngineInsight } from "../lib/engineInsightClient";
+import { BuilderBusyLabel, BuilderLoadingLine } from "./builderPrimitives";
 
 const Z9_STAT_RED = "#E53935";
 const LAST5_COUNT = 5;
@@ -84,6 +85,8 @@ export interface PlacementPadProps {
       proposedClear?: boolean;
     }
   >;
+  /** Callback to report xAI structured fit (headline, verdict) for surfacing magic one line + override in card corner chips. */
+  onXaiFit?: (hostId: string, xai: XaiFit) => void;
 }
 
 const PAD_W = 272;
@@ -201,6 +204,8 @@ function PlacementAnalystBlock({
   onMoreDetails,
   onTrain,
   onClearDetails,
+  matrixExpanded,
+  onToggleMatrix,
 }: {
   prerendered: PrerenderedPlacementFit;
   loading: boolean;
@@ -212,6 +217,8 @@ function PlacementAnalystBlock({
   onMoreDetails: () => void;
   onTrain?: () => void;
   onClearDetails: () => void;
+  matrixExpanded?: boolean;
+  onToggleMatrix?: () => void;
 }) {
   const headerStyles = fitVerdictStyles(prerendered.fitVerdict);
   const showXaiBody = detailsOpen && (loading || text || structured);
@@ -223,8 +230,13 @@ function PlacementAnalystBlock({
     ? fitVerdictStyles(structured.fitVerdict)
     : headerStyles;
 
+  // When a light xAI determination (headline + bullets) has populated in the quick view,
+  // we show *only* the XAI Determination section. Hide the engine baseline header and the old "tap for..." text.
+  const hasQuickXai = !detailsOpen && !!structured?.headline;
+
   return (
     <div className="mx-3 mb-2 rounded-xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
+      {!hasQuickXai && (
       <div
         className="px-2.5 py-2 border-b"
         style={{
@@ -239,7 +251,7 @@ function PlacementAnalystBlock({
             {fitVerdictLabel(prerendered.fitVerdict)}
           </span>
           <span className="text-[7px] font-medium uppercase tracking-wide text-neutral-400">
-            instant
+            engine baseline
           </span>
         </div>
         <p
@@ -254,8 +266,75 @@ function PlacementAnalystBlock({
           </p>
         ) : null}
       </div>
+      )}
 
       <div className="px-2.5 py-2">
+        {/* ONLY the XAI Determination shows in the quick view (per request).
+            Headline + 4-6 bullet synthesis from the fast light model (vast context).
+            Engine baseline and raw rotation lists are suppressed here.
+            "Full 4.3 analysis" button reveals the complete deep 4.3 content. */}
+        {!detailsOpen && structured?.headline && (
+          <div 
+            className="mb-2 rounded-2xl border border-[#2F5C7C]/20 bg-white/95 px-4 py-3.5 text-[9px] shadow-[0_6px_18px_rgba(0,0,0,0.09),_inset_0_1px_0_rgba(255,255,255,0.85)]"
+            style={{ borderLeft: '4px solid #2F5C7C44', backdropFilter: 'blur(12px) saturate(145%)' }} // richer liquid glass + stronger editorial ink bar — part of the cohesive authoring veil on the living sheet
+          >
+            <div className="flex items-baseline gap-1.5 mb-1.5">
+              <span style={{ fontSize: "11px", color: '#2F5C7C' }}>✧</span>
+              <span
+                className="font-semibold tracking-[0.3px] uppercase text-[#2F5C7C]"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", fontSize: "8px" }}
+              >
+                xAI determination (fast • board + week)
+              </span>
+              {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+                <span 
+                  className="ml-auto text-[6px] font-medium tracking-[0.4px] px-1.5 py-0.5 rounded-full bg-[#2F5C7C]/8 text-[#2F5C7C]/75"
+                  style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                >
+                  4–6 insights
+                </span>
+              )}
+            </div>
+
+            {/* The magic one-liner headline — now the clear hero of the entire quick pad view */}
+            <p
+              className="font-semibold text-neutral-950 tracking-[-0.25px] leading-snug mb-2.5 text-[10.5px]"
+              style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+            >
+              {structured.headline}
+            </p>
+
+            {/* The 4-6 xAI powered bullets — synthesized from the full vast context including the new boardAndWeekContext (full current artboard placements + this week's rotation health, gaps, swaps across the board). This is now the *only* insight surface shown in the quick pad view. */}
+            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+              <ul className="space-y-[2px] pl-0.5 text-[8.5px] leading-[1.25] text-neutral-800">
+                {(structured as any).bullets.slice(0, 6).map((b: string, i: number) => (
+                  <li key={i} className="flex gap-1.5">
+                    <span className="text-[#2F5C7C]/50 mt-[1.5px] flex-shrink-0 select-none" style={{ fontSize: "7.5px" }}>◆</span>
+                    <span style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Integrated Expand Matrix affordance — now a seamless editorial bottom bar inside the XAI determination box (not tacked-on). Matches the liquid glass family, ink blue, active scale. Exact phrasing for the last 30 spread + last 5 placements view. When toggled the matrix below feels like refined data poetry. */}
+            {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+              <div className="mt-3 -mx-1 border-t border-[#2F5C7C]/10 pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleMatrix?.();
+                  }}
+                  className="sb-interactive inline-flex items-center gap-1 rounded-lg border border-[#2F5C7C]/15 bg-white/60 px-2.5 py-0.5 text-[7.5px] font-medium tracking-[0.15px] text-[#2F5C7C] hover:bg-white/90 hover:border-[#2F5C7C]/30"
+                  style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                >
+                  <span>⤢</span> {(matrixExpanded ?? false) ? 'Collapse' : 'Expand'} Matrix (last 30 spread + last 5 placements)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           {!detailsOpen ? (
             <button
@@ -265,9 +344,12 @@ function PlacementAnalystBlock({
                 onMoreDetails();
               }}
               disabled={loading}
-              className="rounded-full border border-blue-200/80 bg-blue-50/80 px-2.5 py-0.5 text-[9px] font-semibold text-blue-600 hover:bg-blue-100/80 disabled:opacity-60"
+              className="sb-interactive rounded-full border border-[#2F5C7C]/25 bg-[#F8FAFC] px-2.5 py-0.5 text-[9px] font-medium tracking-[0.1px] text-[#2F5C7C] hover:bg-white hover:border-[#2F5C7C]/40 disabled:opacity-60"
+              style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
-              {loading ? "Loading…" : "More details (xAI)"}
+              {loading ? (
+                <BuilderBusyLabel className="text-[9px]">Loading insight</BuilderBusyLabel>
+              ) : (structured as any)?.bullets?.length ? "Deep 4.3 analysis (narrative • neighbors • swaps • ranked)" : structured?.headline ? "Deep 4.3 analysis (narrative • neighbors • swaps • ranked)" : "✧  xAI insight"}
             </button>
           ) : (
             <>
@@ -284,15 +366,16 @@ function PlacementAnalystBlock({
                   onMoreDetails();
                 }}
                 disabled={loading}
-                className="rounded-full border border-black/[0.08] bg-white px-2 py-0.5 text-[9px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-60"
+                className="sb-interactive rounded-full border border-[#2F5C7C]/20 bg-white px-2 py-0.5 text-[9px] font-medium tracking-[0.1px] text-[#2F5C7C]/90 hover:bg-[#F8FAFC] hover:border-[#2F5C7C]/35 disabled:opacity-60"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
               >
-                {loading ? "Analyzing…" : "Refresh"}
+                {loading ? "Analyzing…" : "Refresh insight"}
               </button>
             </>
           )}
         </div>
 
-        {!detailsOpen && (
+        {!detailsOpen && !hasQuickXai && (
           <p className="mt-1 text-[9px] text-neutral-400 leading-snug">
             {assigned
               ? "Rotation-based verdict above. Tap for narrative, neighbors, and swap analysis."
@@ -338,7 +421,14 @@ function PlacementAnalystBlock({
               <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
                 Tonight
               </p>
-              <p className="mt-0.5 font-medium text-neutral-900">{structured.headline}</p>
+              {/* The "magic one line" — presented here with editorial weight and the same Atkinson family + ✧ language used on the cards in builder veil. Feels like the same artistic annotation, just expanded. */}
+              <p 
+                className="mt-0.5 font-medium text-neutral-900 tracking-[-0.1px]" 
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+              >
+                <span className="opacity-50 mr-1" style={{ fontSize: "8px" }}>✧</span>
+                {structured.headline}
+              </p>
               <p className="mt-0.5 text-neutral-600">{structured.whyTonight}</p>
             </div>
             {structured.rotationNote && (
@@ -407,9 +497,7 @@ function PlacementAnalystBlock({
             )}
           </div>
         ) : showXaiBody && loading ? (
-          <p className="mt-1.5 text-[9px] text-neutral-400 animate-pulse">
-            Building detailed analyst notes…
-          </p>
+          <BuilderLoadingLine>Building detailed analyst notes</BuilderLoadingLine>
         ) : showXaiBody && text ? (
           <p className="mt-1.5 text-[9px] leading-snug text-neutral-600 whitespace-pre-wrap">
             {text}
@@ -594,6 +682,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   boardPrerenderedFit,
   isDraftMode = false,
   draftAssignments = {},
+  onXaiFit,
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -609,6 +698,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const [insightCached, setInsightCached] = useState(false);
   const [deepInsightLoading, setDeepInsightLoading] = useState(false);
   const [analystDetailsOpen, setAnalystDetailsOpen] = useState(false);
+  const [matrixExpanded, setMatrixExpanded] = useState(false);
   const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<
     Array<{ slotKey: string; insightText: string }>
@@ -643,7 +733,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     rotationSigRef.current = null;
     setTaskInput("");
     setSweeperOpen(false);
+    setMatrixExpanded(false);
   }, [slotKey]);
+
+  useEffect(() => {
+    if (analystDetailsOpen) setMatrixExpanded(false);
+  }, [analystDetailsOpen]);
 
   useEffect(() => {
     if (!a.tmId) {
@@ -944,8 +1039,61 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         : undefined,
       priorGoodExamples: padGoodExamples.slice(-3),
       rotationBrief: formatRotationBriefForAnalyst(rotationDisplay),
+      rotationGapsLine: rotationDisplay?.gapsLine,
+      rotationSwapLines: rotationDisplay?.swapLines,
       spreadPlaced: spreadKeys.slice(0, 24).join(", ") || undefined,
       spreadGaps: spreadGapsList.slice(0, 24).join(", ") || undefined,
+      // Vast context for light/fast xAI determination (meaningful additional signal for 4-6 bullet synthesis)
+      tmExposureDetail: last5Sequence.filter(Boolean).length
+        ? `${last5Sequence.filter(Boolean).length}× in recent trail (see full trail in facts)`
+        : undefined,
+      neighborExposureNotes: boardNeighborSummary || undefined,
+      slotTasksSummary: (selectedTasks[slotKey] || []).map((t: any) => t.label || t.name || t.id).slice(0, 3).join(" + ") || undefined,
+      boardCoreSnapshot: boardNeighborSummary || undefined,
+      // One more layer of vast context for the light determination
+      currentBreakGroup: (assignments[slotKey] as any)?.breakGroup ?? undefined,
+      hasCoverageTasks: (selectedTasks[slotKey] || []).some((t: any) => t.isCoverage) ? "yes" : undefined,
+
+      // BOARD AND WEEK CONTEXT — the big one for "board and week context" the operator wants.
+      // Compact dense snapshot of the entire current artboard + this week's rotation health.
+      // Lets the fast light model produce bullets that consider global balance, not just local slot.
+      boardAndWeekContext: (() => {
+        const parts: string[] = [];
+
+        // 1. Current full board state — who is on what right now, with their week exposure.
+        const boardLines = Object.entries(assignments)
+          .filter(([k, v]) => v?.tmName)
+          .slice(0, 20)
+          .map(([k, v]) => {
+            const exp = spreadCountFor ? spreadCountFor(k) : 0;
+            return `${k}:${v.tmName}${exp ? `(${exp}× this week)` : ''}`;
+          })
+          .join(' ');
+        parts.push(`CURRENT BOARD STATE (full artboard right now + week exposure): ${boardLines || 'mostly empty'}`);
+
+        // 2. This week's rotation health (the core "week context").
+        if (rotationDisplay) {
+          const w: string[] = [];
+          if (rotationDisplay.gapsLine) w.push(`GAPS THIS WEEK: ${rotationDisplay.gapsLine}`);
+          if (rotationDisplay.swapLines?.length) w.push(`KEY SWAP LANES THIS WEEK: ${rotationDisplay.swapLines.slice(0, 4).join(' | ')}`);
+          if (w.length) parts.push(w.join(' • '));
+        }
+
+        // 3. Which slots have the biggest gaps this week (under-used in the 30-night spread).
+        if (spreadGapsList?.length) {
+          parts.push(`SLOTS WITH THE BIGGEST GAPS THIS WEEK (least placed in spread): ${spreadGapsList.slice(0, 10).join(', ')}`);
+        }
+
+        // 4. Night position + overall board fill this night (global balance).
+        if (selectedDay) {
+          parts.push(`POSITION IN WEEK: day ${selectedDay.dateNum || ''}`);
+        }
+        const filledCount = Object.values(assignments).filter((v: any) => !!v?.tmName).length;
+        const totalSlots = Object.keys(assignments).length;
+        parts.push(`BOARD FILL THIS NIGHT: ${filledCount}/${totalSlots} slots have a TM right now`);
+
+        return parts.join('\n');
+      })(),
       candidateProfiles: !a.tmName ? buildCandidateProfiles() : undefined,
       suggestedCandidates: !a.tmName
         ? buildCandidateProfiles()
@@ -978,6 +1126,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       buildCandidateProfiles,
       insightContextSig,
       assignments,
+      selectedTasks,
+      boardNeighborSummary,
+      selectedDay,
+      padHistory,
+      currentIso,
       prerenderedFit.fitVerdict,
       prerenderedFit.fitSummary,
       prerenderedFit.fitFactLine,
@@ -991,14 +1144,23 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       try {
         const data = await postEngineInsight(buildInsightContext(mode));
         if (analystRequestRef.current !== reqId) return;
-        if (data.usage) {
+        setDeepInsight(data.text || null);
+        setInsightStructured(data.structured ?? null);
+        setInsightCached(!!data.cached);
+        if (onXaiFit && data.structured) {
+          onXaiFit(hostId || slotKey, {
+            fitVerdict: data.structured.fitVerdict,
+            fitSummary: data.structured.fitSummary,
+            headline: data.structured.headline,
+          });
+        }
+        // Add usage to session + 30d monthly tracker ONLY for actual (non-cached) xAI calls
+        // (cached hits don't spend tokens)
+        if (data && !data.cached && data.usage) {
           try {
             useShiftBuilderStore.getState().addAiUsage(data.usage);
           } catch {}
         }
-        setDeepInsight(data.text || null);
-        setInsightStructured(data.structured ?? null);
-        setInsightCached(!!data.cached);
       } catch (err) {
         if (analystRequestRef.current !== reqId) return;
         setDeepInsight(
@@ -1020,6 +1182,53 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     const mode: PlacementInsightMode = a.tmName ? "deep" : "assignee";
     void runPlacementAnalyst(mode);
   }, [a.tmName, runPlacementAnalyst]);
+
+  // Light/fast magic one-liner determination (grok-build-0.1 "fast").
+  // Runs automatically (cheap) when the pad mounts for a placed TM so the builder digital veil
+  // (corner ✧ chip + under-name annotation line) gets a crisp headline *immediately*.
+  // This refines the "magic one liner" availability without burning full 4.3 tokens on every pad open.
+  // Explicit "More details" still does the rich grok-4.3 high call (can override the headline).
+  const lightRunRef = React.useRef(0);
+  const runLightDetermination = React.useCallback(async () => {
+    if (!a.tmName) return;
+    const reqId = ++lightRunRef.current;
+    try {
+      const data = await postEngineInsight(buildInsightContext("headline"));
+      if (lightRunRef.current !== reqId) return;
+      // We intentionally do *not* set deepInsight / detailsOpen here — this is the silent quick determination
+      // for the card surfaces. If user wants elaboration they tap the button.
+      if (data.structured?.headline) {
+        setInsightStructured((prev) => (prev?.headline ? prev : data.structured ?? null));
+        setInsightCached(!!data.cached);
+      }
+      if (onXaiFit && data.structured) {
+        onXaiFit(hostId || slotKey, {
+          fitVerdict: data.structured.fitVerdict,
+          fitSummary: data.structured.fitSummary,
+          headline: data.structured.headline,
+        });
+      }
+      if (data && !data.cached && data.usage) {
+        try {
+          useShiftBuilderStore.getState().addAiUsage(data.usage);
+        } catch {}
+      }
+    } catch {
+      // Silent fail is fine — prerender + rotation are still authoritative; cards just won't get xAI line yet.
+    }
+  }, [a.tmName, buildInsightContext, hostId, slotKey, onXaiFit]);
+
+  // Auto-run the light headline determination once per pad open for assigned TMs.
+  // This is the key UX refinement: the magic one-liner now appears in the builder surfaces (cards)
+  // as soon as you click a card to open its pad, using a cheap fast-model call.
+  React.useEffect(() => {
+    if (!a.tmName || analystDetailsOpen || insightStructured?.headline || padHistoryLoading) return;
+    // Smaller delay; wait for history so context (spread/last5/rotation) is ready for better bullets + less choppy re-renders before grok appears.
+    const t = setTimeout(() => {
+      void runLightDetermination();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [a.tmName, analystDetailsOpen, insightStructured?.headline, padHistoryLoading, runLightDetermination]);
 
   useEffect(() => {
     if (!a.tmId) {
@@ -1116,7 +1325,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const padEl = (
     <div
-      className={`placement-pad no-print ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-black/[0.07] bg-white/98 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] backdrop-blur-sm`}
+      className={`placement-pad sb-pad-enter no-print ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]`}
       style={
         usePortal
           ? portalStyle!
@@ -1343,26 +1552,31 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       )
                   : undefined
               }
+              matrixExpanded={matrixExpanded}
+              onToggleMatrix={() => setMatrixExpanded(!matrixExpanded)}
               onClearDetails={() => {
                 setAnalystDetailsOpen(false);
                 setDeepInsight(null);
                 setInsightStructured(null);
                 setInsightCached(false);
+                if (onXaiFit) onXaiFit(hostId || slotKey, null);
+                // Also reset light run so next pad open can re-determine fresh if needed.
+                lightRunRef.current = 0;
               }}
             />
 
-            {a.tmName && (
+            {a.tmName && (analystDetailsOpen || matrixExpanded || !( !analystDetailsOpen && insightStructured?.headline )) && (
               <div className="border-t border-black/[0.05] px-3 py-2.5">
-                {padHistoryLoading && !rotationDisplay ? (
-                  <p className="text-[10px] text-neutral-400">Loading placement history…</p>
-                ) : (
-                  <>
-                    <SectionLabel>Rotation · 30 nights</SectionLabel>
-                    {rotationDisplay ? (
+                {/* The synthesized 4-6 bullet list lives in the xAI determination box above.
+                    Raw rotation list kept below for reference (the "combined" request is addressed by the bullets). */}
+                {analystDetailsOpen && (
+                  padHistoryLoading && !rotationDisplay ? (
+                    <BuilderLoadingLine className="text-[10px]">Loading placement history</BuilderLoadingLine>
+                  ) : rotationDisplay ? (
+                    <>
+                      <SectionLabel>Rotation · 30 nights</SectionLabel>
                       <div className="mt-1 space-y-1 text-[10px] leading-snug text-neutral-700">
-                        {rotationDisplay.gapsLine && (
-                          <p>{rotationDisplay.gapsLine}</p>
-                        )}
+                        {rotationDisplay.gapsLine && <p>{rotationDisplay.gapsLine}</p>}
                         {rotationDisplay.swapLines.length > 0 && (
                           <div>
                             <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
@@ -1386,41 +1600,52 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                           </span>
                         </div>
                       </div>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-[10px] text-neutral-500">No history yet.</p>
+                  )
+                )}
+
+                {(analystDetailsOpen || matrixExpanded) && (
+                  <>
+                    {/* In quick XAI view the matrix header is editorial/poetic to match the determination box language; full details keeps the compact SectionLabel. */}
+                    {!analystDetailsOpen ? (
+                      <div className="text-[10px] font-medium tracking-[0.3px] text-[#2F5C7C]/80 mb-1" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
+                        Matrix · last 30 nights (spread) + last 5 placements
+                      </div>
                     ) : (
-                      <p className="mt-1 text-[10px] text-neutral-500">No history yet.</p>
+                      <SectionLabel>Matrix</SectionLabel>
                     )}
-
-                    <SectionLabel>Matrix</SectionLabel>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px]">
-                      <span>
-                        <span className="font-semibold" style={{ color: accent }}>
-                          RR
-                        </span>{" "}
-                        <span className="font-bold text-neutral-800">{rrCount}</span>
-                      </span>
-                      <span className="text-neutral-300">|</span>
-                      <span>
-                        <span className="font-semibold text-neutral-400">Zone</span>{" "}
-                        <span className="font-bold text-neutral-800">{zoneCount}</span>
-                      </span>
-                      <span className="text-neutral-300">|</span>
-                      <span>
-                        <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
-                          Z9
-                        </span>{" "}
-                        <span className="font-bold text-neutral-800 tabular-nums">{z9Days}</span>
-                      </span>
-                      <span>
-                        <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
-                          Z9SR
-                        </span>{" "}
-                        <span className="font-bold text-neutral-800 tabular-nums">{z9srDays}</span>
-                      </span>
-                    </div>
+                  <span>
+                    <span className="font-semibold" style={{ color: accent }}>
+                      RR
+                    </span>{" "}
+                    <span className="font-bold text-neutral-800">{rrCount}</span>
+                  </span>
+                  <span className="text-neutral-300">|</span>
+                  <span>
+                    <span className="font-semibold text-neutral-400">Zone</span>{" "}
+                    <span className="font-bold text-neutral-800">{zoneCount}</span>
+                  </span>
+                  <span className="text-neutral-300">|</span>
+                  <span>
+                    <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
+                      Z9
+                    </span>{" "}
+                    <span className="font-bold text-neutral-800 tabular-nums">{z9Days}</span>
+                  </span>
+                  <span>
+                    <span className="font-semibold" style={{ color: Z9_STAT_RED }}>
+                      Z9SR
+                    </span>{" "}
+                    <span className="font-bold text-neutral-800 tabular-nums">{z9srDays}</span>
+                  </span>
+                </div>
 
-                    <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
-                      Last 30 Spread
-                    </p>
+                <p className="mt-2.5 mb-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-neutral-400">
+                  Last 30 Spread
+                </p>
                     <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] text-neutral-400">
                       <span className="inline-flex items-center gap-0.5">
                         <span
@@ -1543,8 +1768,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         );
                       })}
                     </div>
+                  </>
+                )}
 
-                    {hasProv && prov.rationale && (
+                    {analystDetailsOpen && hasProv && prov.rationale && (
                       <p
                         className="mt-2 text-[8px] text-neutral-400 leading-snug"
                         title={prov.rationale}
@@ -1552,8 +1779,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         Engine: {prov.rationale}
                       </p>
                     )}
-                  </>
-                )}
               </div>
             )}
           </div>

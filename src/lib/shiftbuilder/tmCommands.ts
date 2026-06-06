@@ -12,6 +12,7 @@
  */
 
 import { supabase } from "../supabase";
+
 import { uiToDb } from "./slot-keys";
 
 // ---------------------------------------------------------------
@@ -51,6 +52,13 @@ export async function setTMGravePool(
     throw new Error(
       `setTMGravePool failed for ${tmId} → ${value ?? "NULL"}: ${error.message}`
     );
+  }
+
+  try {
+    const { revalidateRosterCache } = await import("./revalidateOpsCache");
+    await revalidateRosterCache();
+  } catch {
+    /* server revalidate optional from browser */
   }
 }
 

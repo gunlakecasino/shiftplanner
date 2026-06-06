@@ -1,15 +1,19 @@
 /**
  * Rolling 30-day xAI usage ledger (localStorage).
  * Powers the OpsStatusBar "ai" pill — survives refresh and browser restarts on this device.
+ * Target: keep daily engine usage relatively token-friendly (~100k tokens/day max for active single-operator use)
+ * via light/fast (build-0.1) for auto determinations, high-effort 4.3 only on-demand/explicit, aggressive caching, and context pruning.
  */
 
 export const AI_USAGE_STORAGE_KEY = "glcr_shiftbuilder_xai_usage_v1";
 export const AI_USAGE_WINDOW_DAYS = 30;
 const RETENTION_MS = AI_USAGE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-/** grok-4.3 list rates (fast variants cheaper in practice). */
+/** grok-4.3 list rates (fast variants cheaper in practice). Build/fast models use significantly lower rates. */
 export const XAI_INPUT_RATE_USD = 1.25 / 1_000_000;
 export const XAI_OUTPUT_RATE_USD = 2.5 / 1_000_000;
+export const XAI_BUILD_INPUT_RATE_USD = 0.20 / 1_000_000; // approximate for grok-build-0.1 / fast paths
+export const XAI_BUILD_OUTPUT_RATE_USD = 0.60 / 1_000_000;
 
 export type AiUsageEvent = {
   at: string;
@@ -44,9 +48,15 @@ export type AiSessionUsageSnapshot = {
   lastReasoningEffort?: string;
 };
 
-export function estimateAiCostUsd(inputTokens: number, outputTokens: number): number {
-  const cost =
-    inputTokens * XAI_INPUT_RATE_USD + outputTokens * XAI_OUTPUT_RATE_USD;
+export function estimateAiCostUsd(inputTokens: number, outputTokens: number, model?: string): number {
+  const isBuildFast =
+    !!model &&
+    (model.toLowerCase().includes("build") ||
+      model.toLowerCase().includes("fast") ||
+      model === "grok-build-0.1");
+  const inRate = isBuildFast ? XAI_BUILD_INPUT_RATE_USD : XAI_INPUT_RATE_USD;
+  const outRate = isBuildFast ? XAI_BUILD_OUTPUT_RATE_USD : XAI_OUTPUT_RATE_USD;
+  const cost = inputTokens * inRate + outputTokens * outRate;
   return Math.round(cost * 10000) / 10000;
 }
 
@@ -102,10 +112,14 @@ export function rollupEvents(events: AiUsageEvent[]): AiUsageRollup {
   let inputTokens = 0;
   let outputTokens = 0;
   let oldestMs = Infinity;
+  let totalCost = 0;
 
   for (const e of events) {
-    inputTokens += e.inputTokens || 0;
-    outputTokens += e.outputTokens || 0;
+    const i = e.inputTokens || 0;
+    const o = e.outputTokens || 0;
+    inputTokens += i;
+    outputTokens += o;
+    totalCost += estimateAiCostUsd(i, o, e.model);
     const t = Date.parse(e.at);
     if (Number.isFinite(t) && t < oldestMs) oldestMs = t;
   }
@@ -115,7 +129,7 @@ export function rollupEvents(events: AiUsageEvent[]): AiUsageRollup {
     inputTokens,
     outputTokens,
     totalTokens,
-    estimatedCostUsd: estimateAiCostUsd(inputTokens, outputTokens),
+    estimatedCostUsd: Math.round(totalCost * 10000) / 10000,
     callCount: events.length,
     windowDays: AI_USAGE_WINDOW_DAYS,
     oldestEventAt:

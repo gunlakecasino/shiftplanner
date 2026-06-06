@@ -65,6 +65,12 @@ export function RotationHealthFloater({
     [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
   );
 
+  // Weekly % (placeholder; real impl can average from spread/histories or board week context)
+  const weeklyPercent = health.percent !== null 
+    ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) 
+    : null;
+  const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
+
   if (!visible) return null;
 
   const colors = rotationHealthFloaterColors(health.percent);
@@ -98,7 +104,7 @@ export function RotationHealthFloater({
 
   return (
     <div
-      className="no-print"
+      className="no-print sb-floater-enter"
       style={{
         ...anchorStyle,
         pointerEvents: "auto",
@@ -106,26 +112,36 @@ export function RotationHealthFloater({
       title={breakdownTitle(health)}
     >
       <div
-        className="flex flex-col items-end gap-0.5 rounded px-2 py-1 shadow-lg"
+        className="sb-glass-pill flex flex-col items-end gap-0.5 rounded-xl px-4 py-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)]"
         style={{
           background: colors.bg,
           border: `1px solid ${colors.border}`,
           color: colors.text,
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.45)",
+          fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.25), 0 8px 25px rgba(0,0,0,0.12)",
         }}
       >
         <span
-          className="text-[7px] font-semibold uppercase tracking-[0.14em] opacity-90"
+          className="text-[7.5px] font-semibold uppercase tracking-[0.5px] opacity-90"
           style={{ lineHeight: 1 }}
         >
           Rotation health
         </span>
-        <span className="text-[13px] font-bold tabular-nums leading-none">
-          {display}
+        <span className="flex items-baseline gap-1.5">
+          <span
+            className="text-[24px] font-bold tabular-nums leading-none"
+            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+          >
+            {display}
+          </span>
+          <span
+            className="text-[13px] font-semibold tabular-nums opacity-85"
+            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", lineHeight: 1 }}
+          >
+            {weeklyDisplay} wk
+          </span>
         </span>
-        <span className="text-[7px] opacity-80 tabular-nums" style={{ lineHeight: 1 }}>
+        <span className="text-[7.5px] opacity-80 tabular-nums" style={{ lineHeight: 1 }}>
           target {ROTATION_HEALTH_TARGET}%
           {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
         </span>

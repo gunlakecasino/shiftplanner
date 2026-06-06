@@ -245,7 +245,7 @@ export class EngineRules {
    */
   getRulesSummaryForLLM(): string {
     const schedulePolicy = this.ctx.scheduledTmIds && this.ctx.scheduledTmIds.size > 0
-      ? "Schedule policy: Prefer TMs on the Graves Default Schedule for tonight (graves_default_schedule + night on-call overrides) when other factors are equal. Scheduled-but-unassigned TMs are high-priority to place."
+      ? "HARD CONSTRAINT (graves_default_schedule is the sole root source of truth for who is working this night): ONLY select TMs where isOnSchedule(tmId) === true (present in graves_default_schedule for the night + any night_on_call overrides). Scheduled-but-unassigned TMs from the graves draft are the eligible pool. Use getTMScheduleStatus tool on every candidate. NEVER pick a TM that is NOT on the Graves Default Schedule for tonight."
       : "No Graves Default Schedule loaded for this night — engine uses full active roster.";
 
     return `

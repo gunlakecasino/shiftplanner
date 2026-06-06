@@ -81,11 +81,11 @@ export function ProvenanceGlass({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/10 backdrop-blur-[2px]"
+      className="sb-overlay-backdrop sb-overlay-backdrop--fixed z-[70] flex items-center justify-center !bg-black/20"
       onClick={onClose}
     >
       <div
-        className="bg-white/95 backdrop-blur-md border border-white/30 rounded-3xl p-6 w-full max-w-md shadow-2xl mx-4"
+        className="sb-modal-enter sb-glass-pill bg-white/95 dark:bg-[#1C1C1E]/95 border border-white/30 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-start mb-4">
@@ -97,7 +97,7 @@ export function ProvenanceGlass({
           </div>
           <button
             onClick={onClose}
-            className="text-sm text-[#8B6F2E] hover:text-[#5C4A2E]"
+            className="sb-interactive text-sm text-[#8B6F2E] hover:text-[#5C4A2E] rounded-lg px-2 py-1"
           >
             Close
           </button>

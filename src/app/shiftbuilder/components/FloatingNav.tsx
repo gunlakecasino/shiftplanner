@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
+  Rocket,
   Undo2,
   Redo2,
   Maximize2,
@@ -14,19 +15,55 @@ import {
   ZoomOut,
   Sun,
   Moon,
-  User,
   Search,
   Printer,
+  LayoutGrid,
+  Coffee,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BuilderSyncStrip } from "./builderPrimitives";
 
 // Note: "cmdk" package import removed — the search capsule now exclusively triggers the global CommandPalette
 // (react-cmdk based) via onCommandOpen. Duplicate local palette caused z-index + focus conflicts.
 
 // ==================== CVA VARIANTS ====================
+const NAV_ICON = "h-3.5 w-3.5 shrink-0 opacity-80";
+
+function NavToolButton({
+  onClick,
+  title,
+  ariaLabel,
+  active = false,
+  children,
+  className,
+}: {
+  onClick?: () => void;
+  title: string;
+  ariaLabel?: string;
+  active?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel ?? title}
+      className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/5",
+        active && "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 const navVariants = cva(
-  "fixed top-2 left-4 right-4 z-40 flex items-center mx-auto max-w-[1440px] h-14 px-6 rounded-3xl transition-all duration-200",
+  "sb-floating-nav-pill fixed top-2 z-40 grid h-14 grid-cols-[auto_minmax(0,1fr)_max-content] items-center gap-1.5 rounded-3xl px-3 sm:px-4 transition-all duration-200",
   {
     variants: {
       glass: {
@@ -47,18 +84,6 @@ const datePillVariants = cva(
       },
     },
     defaultVariants: { active: false },
-  }
-);
-
-const segmentVariants = cva(
-  "inline-flex items-center rounded-2xl p-0.5 text-xs font-semibold",
-  {
-    variants: {
-      active: {
-        true: "bg-white dark:bg-zinc-800 shadow-sm",
-        false: "hover:bg-black/5 dark:hover:bg-white/5",
-      },
-    },
   }
 );
 
@@ -86,6 +111,8 @@ export interface FloatingNavProps {
   onViewChange: (view: "deployment" | "breaks") => void;
   placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
   onToday: () => void;
+  /** Return to ShiftBuilder launchpad (canvas mode only). */
+  onLaunchpad?: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
   onUndo?: () => void;
@@ -109,6 +136,7 @@ export interface FloatingNavProps {
   onLogout?: () => void;
   /** Open Sudo (only shown for privileged roles). Fulfills the post-PIN auth UX request. */
   onOpenSudo?: () => void;
+  isSyncing?: boolean;
 }
 
 // ==================== SPRING ====================
@@ -124,6 +152,7 @@ export default function FloatingNav({
   onViewChange,
   placedCount,
   onToday,
+  onLaunchpad,
   onPrevWeek,
   onNextWeek,
   onUndo,
@@ -139,6 +168,7 @@ export default function FloatingNav({
   currentUser,
   onLogout,
   onOpenSudo,
+  isSyncing = false,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -205,24 +235,25 @@ export default function FloatingNav({
   return (
     <>
       <nav
-        className={cn(navVariants())}
+        className={cn(navVariants(), "relative overflow-hidden")}
         style={{ ...glassStyle, zIndex: 40 }}
       >
-        {/* LEFT: Today */}
-        <div className="flex items-center gap-2 shrink-0 pr-3">
-          <button
-            onClick={onToday}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985]"
-            style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}
-          >
-            <Calendar className="h-4 w-4" />
-            Today
-          </button>
+        <BuilderSyncStrip active={isSyncing} />
+        {/* LEFT: Launchpad + Today */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {onLaunchpad ? (
+            <NavToolButton onClick={onLaunchpad} title="Return to Launchpad">
+              <Rocket className={NAV_ICON} />
+            </NavToolButton>
+          ) : null}
+          <NavToolButton onClick={onToday} title="Jump to today">
+            <Calendar className={NAV_ICON} />
+          </NavToolButton>
         </div>
 
-        {/* CENTER: 9-day strip + Deploy/Breaks */}
-        <div className="flex-1 flex items-center justify-center gap-3 min-w-0 px-2">
-          <div className="relative flex items-stretch min-w-0 flex-1 justify-center w-full">
+        {/* CENTER: 9-day strip */}
+        <div className="min-w-0 px-0.5">
+          <div className="relative flex min-w-0 items-stretch justify-center">
             {/* Left seamless half-circle cap — previous GRAVE week */}
             {onPrevWeek && (
               <motion.button
@@ -247,7 +278,7 @@ export default function FloatingNav({
             )}
 
             <div
-              className="grid grid-cols-9 gap-1 px-8 py-1.5 rounded-2xl relative w-full min-h-[40px] items-stretch"
+              className="relative grid min-h-[40px] w-full min-w-0 grid-cols-9 gap-1 rounded-2xl px-7 py-1.5 sm:px-8"
               style={{
                 background: "rgba(0,0,0,0.025)",
                 border: "1px solid var(--sb-glass-border)",
@@ -338,97 +369,72 @@ export default function FloatingNav({
               </motion.button>
             )}
           </div>
-
-          <div className={cn(segmentVariants(), "shrink-0 ml-2")}>
-            {(["deployment", "breaks"] as const).map((view) => {
-              const isActive = currentView === view;
-              return (
-                <button
-                  key={view}
-                  onClick={() => onViewChange(view)}
-                  className={cn(
-                    segmentVariants({ active: isActive }),
-                    "px-3 py-1 text-xs font-semibold rounded-[10px] transition-all active:scale-[0.985]"
-                  )}
-                >
-                  {view === "deployment" ? "Deploy" : "Breaks"}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        {/* RIGHT: Command icon, undo/redo, zoom, print, theme, profile */}
-        <div className="flex items-center gap-2 shrink-0 pl-3 border-l border-white/20 dark:border-white/10">
-          <button
-            onClick={() => onCommandOpen?.()}
-            className="flex items-center justify-center w-9 h-9 rounded-2xl border transition-all hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.985]"
-            style={{ background: "var(--sb-glass)", borderColor: "var(--sb-glass-border)" }}
-            aria-label="Command palette"
-            title="Command (⌘K)"
+        {/* RIGHT: compact icon toolbar */}
+        <div className="flex shrink-0 items-center gap-0.5 border-l border-white/20 pl-1.5 dark:border-white/10">
+          <div
+            className="flex shrink-0 items-center rounded-lg p-0.5"
+            style={{ background: "rgba(0,0,0,0.04)" }}
           >
-            <Search className="h-4 w-4 opacity-75" />
-          </button>
+            <NavToolButton
+              onClick={() => onViewChange("deployment")}
+              title="Deployment board"
+              ariaLabel="Deployment board"
+              active={currentView === "deployment"}
+            >
+              <LayoutGrid className={NAV_ICON} />
+            </NavToolButton>
+            <NavToolButton
+              onClick={() => onViewChange("breaks")}
+              title="Break sheet"
+              ariaLabel="Break sheet"
+              active={currentView === "breaks"}
+            >
+              <Coffee className={NAV_ICON} />
+            </NavToolButton>
+          </div>
 
-          <div className="flex items-center gap-1">
-            <button onClick={onUndo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Undo">
-              <Undo2 className="h-4 w-4" />
-            </button>
-            <button onClick={onRedo} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Redo">
-              <Redo2 className="h-4 w-4" />
-            </button>
+          <NavToolButton onClick={() => onCommandOpen?.()} title="Command (⌘K)" ariaLabel="Command palette">
+            <Search className={NAV_ICON} />
+          </NavToolButton>
+
+          <div className="flex shrink-0 items-center">
+            <NavToolButton onClick={onUndo} title="Undo">
+              <Undo2 className={NAV_ICON} />
+            </NavToolButton>
+            <NavToolButton onClick={onRedo} title="Redo">
+              <Redo2 className={NAV_ICON} />
+            </NavToolButton>
           </div>
 
           <div
-            className="flex items-center rounded-full border overflow-hidden"
+            className="flex shrink-0 items-center overflow-hidden rounded-lg border"
             style={{ borderColor: "var(--sb-glass-border)" }}
           >
-            <button
-              onClick={onZoomFit}
-              className="p-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all"
-              title="Fit artboard to viewport"
-              aria-label="Fit to viewport"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={onZoomOut}
-              className="px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all text-sm font-medium"
-              title="Zoom out"
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <button
-              onClick={onZoomIn}
-              className="px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all text-sm font-medium"
-              title="Zoom in"
-              aria-label="Zoom in"
-            >
-              +
-            </button>
+            <NavToolButton onClick={onZoomFit} title="Fit artboard" className="rounded-none">
+              <Maximize2 className={NAV_ICON} />
+            </NavToolButton>
+            <NavToolButton onClick={onZoomOut} title="Zoom out" className="rounded-none">
+              <ZoomOut className={NAV_ICON} />
+            </NavToolButton>
+            <NavToolButton onClick={onZoomIn} title="Zoom in" className="rounded-none">
+              <ZoomIn className={NAV_ICON} />
+            </NavToolButton>
           </div>
 
-          {/* Print — always visible direct access to Print Command Center */}
-          <button 
-            onClick={onPrint} 
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" 
-            title="Print (⌘P)"
-            aria-label="Open print command center"
-          >
-            <Printer className="h-4 w-4" />
-          </button>
+          <NavToolButton onClick={onPrint} title="Print Command Center (⌘P)" ariaLabel="Open print command center">
+            <Printer className={NAV_ICON} />
+          </NavToolButton>
 
-          {/* Theme toggle — always visible (tiny, high value) */}
-          <button onClick={onThemeToggle} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all" title="Toggle theme">
-            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <NavToolButton onClick={onThemeToggle} title="Toggle theme">
+            {isDark ? <Sun className={NAV_ICON} /> : <Moon className={NAV_ICON} />}
+          </NavToolButton>
 
-          {/* Profile Avatar + Dropdown (always visible) */}
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((v) => !v)}
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] flex items-center justify-center text-[11px] font-bold text-white cursor-pointer active:scale-95 transition-all ring-1 ring-white/20 hover:ring-white/40"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] text-[10px] font-bold text-white ring-1 ring-white/20 transition-all hover:ring-white/40 active:scale-95"
               title={currentUser ? `${currentUser.full_name} — ${currentUser.role}` : "Account"}
               aria-expanded={profileOpen}
             >

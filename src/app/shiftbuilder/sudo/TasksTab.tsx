@@ -19,6 +19,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { SudoTabLoading } from "./SudoGlass";
 // All catalog/task functions dynamically imported inside handlers (full aggressive sweep for Turbopack HMR stability)
 import type { CatalogTask } from "@/lib/shiftbuilder/data";
 
@@ -256,9 +257,8 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center text-zinc-400">
-        <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span>
-        Loading task catalog…
+      <div className="h-full flex items-center justify-center">
+        <SudoTabLoading>Loading task catalog</SudoTabLoading>
       </div>
     );
   }

@@ -11,6 +11,7 @@ import {
   useShiftBuilderStore,
 } from "../store/useShiftBuilderStore";
 import { AnalysisCard } from "./AnalysisCard";
+import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
 
 /**
@@ -335,14 +336,18 @@ export default function EngineAILab() {
             <button
               onClick={handleAnalyzeCurrentNight}
               disabled={isAnalyzing}
-              className="mt-6 inline-flex items-center justify-center rounded-2xl px-8 py-3.5 text-[14px] font-semibold active:scale-[0.985] transition disabled:opacity-60"
+              className="sb-interactive mt-6 inline-flex items-center justify-center rounded-2xl px-8 py-3.5 text-[14px] font-semibold disabled:opacity-60"
               style={{
                 background: "#1F1F24",
                 color: "#fff",
                 border: "1px solid rgba(255,255,255,0.1)",
               }}
             >
-              {isAnalyzing ? "Grok is thinking…" : "Analyze Tonight’s Placement"}
+              {isAnalyzing ? (
+                <BuilderBusyLabel>Grok is thinking</BuilderBusyLabel>
+              ) : (
+                "Analyze Tonight’s Placement"
+              )}
             </button>
           </div>
 
@@ -359,14 +364,18 @@ export default function EngineAILab() {
             <button
               onClick={handleRunSimulation}
               disabled={isRunningSim}
-              className="mt-6 inline-flex items-center justify-center rounded-2xl px-8 py-3.5 text-[14px] font-semibold active:scale-[0.985] transition disabled:opacity-60"
+              className="sb-interactive mt-6 inline-flex items-center justify-center rounded-2xl px-8 py-3.5 text-[14px] font-semibold disabled:opacity-60"
               style={{
                 background: gold,
                 color: "#111",
                 fontWeight: 700,
               }}
             >
-              {isRunningSim ? "Generating & analyzing…" : "Run 8-Night Simulation + Auto-Analyze"}
+              {isRunningSim ? (
+                <BuilderBusyLabel>Generating and analyzing</BuilderBusyLabel>
+              ) : (
+                "Run 8-Night Simulation + Auto-Analyze"
+              )}
             </button>
           </div>
         </div>

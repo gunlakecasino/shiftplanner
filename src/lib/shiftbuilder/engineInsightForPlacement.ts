@@ -14,8 +14,10 @@ import {
 } from "@/lib/shiftbuilder/xaiFillOrderContract";
 import {
   PlacementPadInsightSchema,
+  MagicOneLinerSchema,
   formatPlacementPadInsightText,
   type PlacementPadInsight,
+  type MagicOneLiner,
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
   getInsightCache,
@@ -23,7 +25,7 @@ import {
   stableInsightKey,
 } from "@/lib/shiftbuilder/engineInsightCache";
 
-export type PlacementInsightMode = "auto" | "deep" | "assignee" | "basics" | "legacy";
+export type PlacementInsightMode = "auto" | "deep" | "assignee" | "basics" | "legacy" | "light" | "headline";
 
 export type PlacementCandidateProfile = {
   tmName: string;
@@ -73,6 +75,34 @@ export type EngineInsightContext = {
   prerenderVerdict?: string;
   prerenderSummary?: string;
   prerenderFactLine?: string;
+
+  /** Additional vast context for high-quality light/fast determination (grok-build-0.1 path).
+   * These allow the 4-6 bullet synthesis to be meaningfully deeper without requiring the full 4.3 deep call.
+   * Carefully selected for signal density and token efficiency.
+   */
+  /** Raw rotation gaps line (e.g. "Jason — not in 30 nights: Z1, Z2, Z3..."). */
+  rotationGapsLine?: string;
+  /** Specific bilateral swap opportunities surfaced by rotation computation. */
+  rotationSwapLines?: string[];
+  /** Granular exposure for the TM on this slot / tier (last7/last14/last30 etc.). */
+  tmExposureDetail?: string;
+  /** Notes on relevant neighbors' current exposure (to detect affinity or debt). */
+  neighborExposureNotes?: string;
+  /** Summary of tasks/coverage currently on the slot (affects "fit for continuity"). */
+  slotTasksSummary?: string;
+  /** Compact snapshot of nearby core slots' staffing status for priority/rotation context. */
+  boardCoreSnapshot?: string;
+  /** Current break group for the slot (affects continuity and task fit in the determination). */
+  currentBreakGroup?: number | string;
+  /** Whether the slot currently has coverage tasks (relevant for swap/continuity reasoning). */
+  hasCoverageTasks?: string;
+
+  /** Board and week context for richer light/fast determination.
+   * Compact but dense view of the entire current artboard placements + this week's rotation health/patterns.
+   * Allows the fast model to synthesize bullets that consider global board balance and weekly spread,
+   * not just the local slot (as requested for "board and week context").
+   */
+  boardAndWeekContext?: string;
 };
 
 export type EngineInsightResult = {
@@ -161,6 +191,82 @@ ${priorGood}
 ${STATIC_FEW_SHOTS}`;
 }
 
+/** Ultra-focused system prompt for the *light/fast* magic one-liner determination (grok-build-0.1).
+ * Job: produce (1) one crisp magic headline + (2) a tight 4-6 bullet list that synthesizes the key
+ * actionable points for the operator right now.
+ *
+ * The bullets REPLACE the old separate "instant", "quick determination", and raw rotation list.
+ * They must feel like a smart, fresh xAI synthesis — not a copy of the prerender text.
+ * Use the full facts (especially rotationBrief, spread, history, neighbors, exposure counts) to create
+ * specific, named, useful bullets the operator can act on.
+ *
+ * Designed for grok fast / build-0.1 with effort=none. Very low token budget.
+ */
+function buildLightHeadlineSystemPrompt(ctx: EngineInsightContext): string {
+  const kind = slotKind(ctx.slotKey);
+  const orderText = getPlacementOrderText();
+  const eligText = getEligibilityRulesText();
+  const hardRules = getXaiFillOrderHardRules();
+
+  const kindFocus =
+    kind === "rr"
+      ? "Restroom chain order, gender rules, paired coverage with adjacent RR."
+      : kind === "zone"
+        ? "Zone continuity, neighbor affinity on the board, rotation health vs recent exposure."
+        : kind === "aux"
+          ? "Aux/sweep/load coverage and what else the TM is already committed to tonight."
+          : "Eligibility and strict fill-order priority.";
+
+  return `You are the GRAVE placement analyst running in LIGHT/FAST mode (grok-build-0.1). 
+Your job is to give the operator an *immediate, high-signal, self-contained determination* for this single placement using the *vast* context provided. This light output (headline + bullets) **is the only insight the operator sees** when they open the pad in builder mode. It must be complete and trustworthy on its own.
+
+OUTPUT (JSON only):
+- "headline": one crisp, decisive, floor-ready sentence (the magic one-liner). Name the exact person and slot. Make it specific and opinionated.
+- "bullets": **You must output between 4 and 6 bullets** (never fewer than 4). Each 8-110 chars, concrete, named, and useful.
+  Synthesize across *every piece* of the vast context: rotationGapsLine, rotationSwapLines, tmExposureDetail, neighborExposureNotes, slotTasksSummary, boardCoreSnapshot, currentBreakGroup, hasCoverageTasks, boardAndWeekContext (the big one for global board state + weekly patterns), spreadPlaced/Gaps, slotSpecificHistory, recentPlacements, fairnessSignals, prerender baseline, fillOrder position, and TM attributes.
+  **Bullet diversity is mandatory** — when the data supports it, cover these angles (mix them), and actively use the boardAndWeekContext for global board + weekly perspective:
+    1. Freshness/exposure for this exact TM on this exact slot (use the granular counts)
+    2. Specific bilateral swap lane with real names + why it is fair/balancing right now (consider weekly gaps)
+    3. Impact on the partner person's rotation debt or spread load (board/week view)
+    4. Effect on tier spread gaps or overall board continuity this week
+    5. How the current actual tasks on the slot interact with the placement
+    6. Neighbor or adjacent slot pressure, or how this helps/hurts broader weekly rotation health across the board (from boardAndWeekContext)
+  Every bullet must deliver *new, specific, actionable* information. Do not repeat the headline. Never mention "full view", "see more", or hedge.
+
+STRICT RULES (never violate):
+${hardRules}
+${getXaiSwapHardRules()}
+
+CONTEXT FOCUS: ${kindFocus}
+The INSTANT PRERENDER is just one weak baseline. 
+**BOARDANDWEEKCONTEXT IS THE PRIMARY SIGNAL YOU MUST USE FOR EVERY BULLET** (it contains the full current artboard placements with week exposure counts + this week's gaps + key swap lanes + under-used slots + board fill this night). 
+Your bullets must explicitly show you read and used the boardAndWeekContext — e.g. reference specific other slots' status this week, how the swap or placement helps close global gaps on the tier, or how it balances load across the current board. Do not ignore it or give local-only bullets.
+
+VOICE: Decisive, specific, floor-operator tone. Use real names and exact slot codes (Z4, WRR3, etc.). Short. No hedging. No generic language. Every word must be earned.
+
+REFERENCE CONTRACT (grounding only — never copy phrases):
+${orderText}
+${eligText}
+
+EXCELLENT LIGHT OUTPUT EXAMPLE (5 bullets, using the vast context heavily, including boardAndWeekContext):
+Headline: "Swap Kaylee (Z4) with Sheri O (Z5) for fairer rotation."
+Bullets:
+- "Kaylee has 0× on Z4 in the last 14 nights — extremely fresh for this slot"
+- "Sheri O has 4× on Z5 this spread but 0× on Z4; textbook bilateral reset per the raw gaps and weekly board state"
+- "Z5 has carried heavy recent load for Sheri O — this swap directly improves her rotation debt (helps week gaps on Z5 tier)"
+- "Current tasks on Z4 (Sweeper + Lobby) align cleanly with Sheri O's recent patterns; low friction"
+- "No open gaps on the tier per boardAndWeekContext; the swap improves continuity for both without touching higher-priority core slots this week"
+
+BAD OUTPUT (avoid at all costs):
+- Fewer than 4 bullets.
+- Any bullet that defers to "full view" or "see more" (use Expand Matrix in the UI for the spread/last-5 details instead).
+- Copying the prerender text as a bullet.
+- Vague bullets ("helps rotation", "good fit").
+- Ignoring the actual current tasks or the specific numbers in neighborExposureNotes / tmExposureDetail.`;
+
+
+}
+
 function assignmentsFromFilledKeys(
   filledSlotKeys?: string[],
 ): Record<string, { tmId: string }> {
@@ -232,6 +338,56 @@ function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
   return lines.join("\n");
 }
 
+/** Slimmer user prompt for the light/fast determination.
+ * Still delivers the high-value graves + rotation + spread + neighbor facts,
+ * but presents the prerender as "baseline reference" rather than the thing to echo.
+ * Keeps token count reasonable for grok-build-0.1.
+ */
+function buildLightUserPrompt(ctx: EngineInsightContext): string {
+  const boardAssignments = assignmentsFromFilledKeys(ctx.filledSlotKeys);
+  const fillOrderCtx = formatFillOrderBoardContext(ctx.slotKey, boardAssignments);
+
+  const lines: string[] = [
+    `Slot: ${ctx.slotKey}  |  TM: ${ctx.tmName || "(unassigned)"}`,
+    ctx.isRR ? `RR side: ${ctx.rrSide ?? "n/a"}` : null,
+    fillOrderCtx,
+    ctx.emptySlotKeys?.length
+      ? `Empty slots tonight (never swap into these): ${ctx.emptySlotKeys.slice(0, 20).join(", ")}`
+      : null,
+    "",
+    "DETERMINISTIC FACTS (vast context — synthesize your own determination from *all* of this):",
+    ctx.rotationBrief ? `Rotation brief:\n${ctx.rotationBrief}` : null,
+    ctx.rotationGapsLine ? `Rotation gaps: ${ctx.rotationGapsLine}` : null,
+    ctx.rotationSwapLines?.length ? `Specific swap lanes: ${ctx.rotationSwapLines.join(" | ")}` : null,
+    ctx.spreadPlaced ? `Placed last-30: ${ctx.spreadPlaced}` : null,
+    ctx.spreadGaps ? `Gaps last-30: ${ctx.spreadGaps}` : null,
+    ctx.slotSpecificHistory ? `Slot history: ${ctx.slotSpecificHistory}` : null,
+    ctx.recentPlacements ? `Last-5 trail: ${ctx.recentPlacements}` : null,
+    ctx.tmExposureDetail ? `TM exposure on this: ${ctx.tmExposureDetail}` : null,
+    ctx.neighborExposureNotes ? `Neighbor exposures: ${ctx.neighborExposureNotes}` : null,
+    ctx.currentContext ? `Board neighbors: ${ctx.currentContext}` : null,
+    ctx.slotTasksSummary ? `Tasks on slot now: ${ctx.slotTasksSummary}` : null,
+    ctx.boardCoreSnapshot ? `Core board snapshot: ${ctx.boardCoreSnapshot}` : null,
+    ctx.currentBreakGroup != null ? `Current break group for slot: ${ctx.currentBreakGroup}` : null,
+    ctx.hasCoverageTasks ? `Slot currently has coverage tasks: ${ctx.hasCoverageTasks}` : null,
+    ctx.boardAndWeekContext ? `BOARD AND WEEK CONTEXT (full artboard + this week's rotation health):\n${ctx.boardAndWeekContext}` : null,
+    ctx.tmAttributes
+      ? `TM attrs: gender=${ctx.tmAttributes.gender ?? "?"} grave=${ctx.tmAttributes.gravePool ?? "?"} AM=${!!ctx.tmAttributes.isAMOverlap} PM=${!!ctx.tmAttributes.isPMOverlap}`
+      : null,
+    ctx.rationale ? `Engine rationale: ${ctx.rationale}` : null,
+    `Fairness: ${formatSignals(ctx.fairnessSignals)}`,
+    "",
+    "INSTANT PRERENDER (one baseline data point only — reframe or add emphasis using the vast facts above):",
+    ctx.prerenderVerdict ? `verdict: ${ctx.prerenderVerdict}` : null,
+    ctx.prerenderSummary ? `summary: ${ctx.prerenderSummary}` : null,
+    ctx.prerenderFactLine ? `fact: ${ctx.prerenderFactLine}` : null,
+    "",
+    "CRITICAL INSTRUCTION FOR THIS LIGHT CALL: Produce exactly 1 headline + between 4 and 6 bullets. You are *required* to deliver at least 4 (expand using the vast facts if needed: granular exposure, neighbor loads, specific swap impact from the raw lines, task synergy on the slot, rotation debt on related slots, **and especially the boardAndWeekContext for how this placement fits the full current board state and this week's overall rotation health and gaps across the artboard**). Never output fewer than 4. Never hedge or defer to 'full view'. Make every bullet concrete, named, and from the data provided.",
+  ].filter(Boolean) as string[];
+
+  return lines.join("\n");
+}
+
 function formatSignals(signals?: Record<string, number | string>): string {
   if (!signals || Object.keys(signals).length === 0) return "(none)";
   return Object.entries(signals)
@@ -240,9 +396,10 @@ function formatSignals(signals?: Record<string, number | string>): string {
     .join(", ");
 }
 
-function reasoningForMode(mode: PlacementInsightMode): "none" | "low" | "medium" {
-  if (mode === "basics") return "none";
+function reasoningForMode(mode: PlacementInsightMode): "none" | "low" | "medium" | "high" {
+  if (mode === "basics" || mode === "light" || mode === "headline") return "none";
   if (mode === "assignee") return "low";
+  if (mode === "deep") return "high"; // powerful deliberate per single-user caveat; high effort for deep analysis/insights (Grok 4.3 thinks hard on vast board+week+graves context + fill-order constitution)
   return "medium";
 }
 
@@ -271,7 +428,7 @@ function guardInsightResult(
   }).insight;
 }
 
-/** Primary analyst — structured output, medium reasoning for quality. */
+/** Primary analyst — structured output (deep/assignee use grok-4.3 high; light/headline use grok-build-0.1 fast for the magic one-liner determination). */
 export async function runPlacementPadAnalyst(
   ctx: EngineInsightContext,
 ): Promise<EngineInsightResult> {
@@ -292,6 +449,10 @@ export async function runPlacementPadAnalyst(
     });
   }
 
+  if (mode === "light" || mode === "headline") {
+    return runMagicOneLinerDetermination(ctx);
+  }
+
   const key = cacheKeyFor(ctx, mode);
   const cached = getInsightCache<EngineInsightResult>(key);
   if (cached?.structured) {
@@ -310,6 +471,8 @@ export async function runPlacementPadAnalyst(
   const systemPrompt = buildAnalystSystemPrompt(ctx);
   const userPrompt = buildAnalystUserPrompt(ctx);
   const effort = reasoningForMode(mode);
+
+  console.log(`[xai-engine] deep grok-4.3 ${effort} for ${ctx.slotKey} (mode=${mode}) contextSig=${ctx.contextSig?.slice(0,16)}`);
 
   try {
     const model = createGrokSuggestionModel();
@@ -368,7 +531,7 @@ export async function runPlacementPadAnalyst(
 /** Legacy prose fallback if structured generation fails. */
 async function runEngineInsightLegacy(
   ctx: EngineInsightContext,
-  effort: "none" | "low" | "medium",
+  effort: "none" | "low" | "medium" | "high",
 ): Promise<EngineInsightResult> {
   const systemPrompt = buildAnalystSystemPrompt(ctx);
   const userPrompt = buildAnalystUserPrompt(ctx);
@@ -435,21 +598,147 @@ export async function runPlacementBasicsNarrative(
   const userPrompt = `Slot ${ctx.slotKey}, TM ${ctx.tmName}.\nFacts:\n${ctx.rotationBasicsText}`;
 
   try {
-    const { callGrok } = await import("@/lib/xai");
-    const raw = await callGrok(
-      [
+    // Utilize grok-build-0.1 for cheap basics (relatively cheap per user), grok-4.3 for powerful deep analyst
+    const { createGrokBuildModel } = await import("@/lib/shiftbuilder/grokClient");
+    const model = createGrokBuildModel();
+    const { text: raw, usage } = await generateText({
+      model,
+      messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      { model: "grok-4.3", reasoningEffort: "none", temperature: 0.2, maxTokens: 140 },
-    );
+      temperature: 0.2,
+      maxTokens: 140,
+      providerOptions: { xai: { reasoningEffort: "none" } },
+    });
     const result: EngineInsightResult = {
       text: raw?.trim() || ctx.rotationBasicsText,
-      usage: { model: "grok-4.3", reasoningEffort: "none" },
+      usage: { model: "grok-build-0.1", reasoningEffort: "none", inputTokens: usage?.promptTokens, outputTokens: usage?.completionTokens },
     };
     setInsightCache(key, result);
     return result;
   } catch {
     return { text: ctx.rotationBasicsText };
   }
+}
+
+/** Light / fast magic one-liner determination (the "headline").
+ * Uses grok-build-0.1 ("grok fast", cheap, none effort) for quick crisp verdict.
+ * Goal: surface a high-quality magic one-liner *immediately* in the digital builder
+ * (corner ✧ chip + under-name ink annotation) as soon as the unilateral pad is opened,
+ * without consuming a full grok-4.3 high deep call (reserved for explicit "More details").
+ * Still fully graves-aware, respects xaiFillOrderContract + prerender + hard rules.
+ * The resulting headline can be overridden later by a deep 4.3 call.
+ * Returns a partial structured (headline + optional verdict/summary) that lifts via onXaiFit.
+ */
+export async function runMagicOneLinerDetermination(
+  ctx: EngineInsightContext,
+): Promise<EngineInsightResult> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    // Graceful: fall back to prerender summary if no key (keeps builder surfaces alive)
+    const fallback = ctx.prerenderSummary || "Use rotation + engine rationale.";
+    return {
+      text: fallback,
+      structured: { headline: ctx.prerenderSummary || fallback, fitVerdict: (ctx.prerenderVerdict as any) || "acceptable" } as any,
+    };
+  }
+
+  const mode: PlacementInsightMode = "headline";
+  const key = cacheKeyFor({ ...ctx, mode }, mode); // reuses stable key with mode=headline
+  const cached = getInsightCache<EngineInsightResult>(key);
+  if (cached) {
+    // For light path we return the cached headline directly (guard was applied at write time).
+    return { ...cached, cached: true };
+  }
+
+  const systemPrompt = buildLightHeadlineSystemPrompt(ctx);
+  // Use a focused light user prompt: give the rich facts but do not lead with the prerender sentence as the "answer".
+  const userPrompt = buildLightUserPrompt(ctx);
+
+  console.log(`[xai-engine] light grok-build-0.1 (none) for ${ctx.slotKey} (auto magic one-liner) contextSig=${ctx.contextSig?.slice(0,16)}`);
+
+  try {
+    // Dynamic import to keep the "grok fast" path lazy (mirrors the basics narrative pattern)
+    const { createGrokBuildModel } = await import("@/lib/shiftbuilder/grokClient");
+    const model = createGrokBuildModel();
+
+    const { object, usage } = await generateObject({
+      model,
+      schema: MagicOneLinerSchema,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.2,
+      maxTokens: 256, // more room — the fast model needs headroom to output a good headline + 4-6 varied bullets that actually use the full boardAndWeekContext instead of falling back to 2 weak lines
+      providerOptions: {
+        xai: { reasoningEffort: "none" },
+      },
+    });
+
+    if (object?.headline) {
+      const boardAssignments = assignmentsFromFilledKeys(ctx.filledSlotKeys);
+
+      // Map light result (now with bullets) into the shape the UI and lift expect.
+      const lightStructured: any = {
+        headline: object.headline.trim(),
+        fitVerdict: (object.fitVerdict as any) || (ctx.prerenderVerdict as any) || "acceptable",
+        fitSummary: object.fitSummary || ctx.prerenderSummary || object.headline.trim(),
+        bullets: Array.isArray(object.bullets) ? object.bullets.slice(0, 6) : undefined,
+        whyTonight: "",
+        swapRecommendations: [],
+        watchouts: [],
+      };
+
+      // Apply the same hard guards.
+      const { insight: sanitized } = sanitizePlacementPadInsight(
+        lightStructured,
+        ctx.slotKey,
+        boardAssignments,
+        {
+          emptySlotKeys: ctx.emptySlotKeys,
+          slotUnassigned: !ctx.tmName || ctx.tmName === "Unassigned" || !boardAssignments[ctx.slotKey],
+        },
+      );
+
+      const result: EngineInsightResult = {
+        text: sanitized.headline || object.headline,
+        structured: {
+          headline: sanitized.headline,
+          fitVerdict: sanitized.fitVerdict,
+          fitSummary: sanitized.fitSummary,
+          bullets: (sanitized as any).bullets || object.bullets,
+        } as any,
+        usage: {
+          inputTokens: usage?.promptTokens,
+          outputTokens: usage?.completionTokens,
+          model: "grok-build-0.1",
+          reasoningEffort: "none",
+        },
+      };
+      setInsightCache(key, result);
+      return result;
+    }
+  } catch (err) {
+    console.warn("[magicOneLiner] light determination failed, falling back to prerender:", err);
+  }
+
+  // Fallback: synthesize from prerender (instant, free, graves-based) so the builder always has *something* good.
+  const fbHeadline = ctx.prerenderSummary || `${ctx.tmName || "TM"} on ${ctx.slotKey} per rotation.`;
+  const fbBullets = [
+    ctx.prerenderFactLine || ctx.prerenderSummary || "Baseline from rotation engine.",
+    "Use Expand Matrix below for last 30 spread + last 5.",
+  ].filter(Boolean).slice(0, 4);
+
+  return {
+    text: fbHeadline,
+    structured: {
+      headline: fbHeadline,
+      fitVerdict: (ctx.prerenderVerdict as any) || "acceptable",
+      fitSummary: ctx.prerenderSummary,
+      bullets: fbBullets,
+    } as any,
+    usage: { model: "fallback-prerender", reasoningEffort: "none" },
+  };
 }

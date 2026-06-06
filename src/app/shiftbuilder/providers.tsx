@@ -3,18 +3,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { reportWebVitals } from "@/lib/perf";
+import { getSupabaseRestOrigin, warmSupabaseConnection } from "@/lib/supabase";
+import { BuilderDataPrefetch } from "./components/BuilderDataPrefetch";
 
 /**
  * QueryProvider
  *
- * This sets up TanStack Query (React Query) for the Shift Builder section.
- *
- * Why this pattern?
- * - We create the QueryClient inside a client component using useState.
- * - This guarantees a single QueryClient instance per browser session.
- * - It avoids the common mistake of creating a new QueryClient on every render.
- *
- * This is the recommended way in Next.js App Router + React 19.
+ * Single QueryClient per browser session + early Supabase connection warm.
  */
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -22,24 +17,35 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Good defaults for an internal tool
-            staleTime: 1000 * 60 * 5, // 5 minutes
+            staleTime: 1000 * 60 * 5,
             refetchOnWindowFocus: false,
             retry: 1,
           },
         },
-      })
+      }),
   );
+
+  useEffect(() => {
+    const origin = getSupabaseRestOrigin();
+    if (origin && !document.querySelector(`link[data-supabase-preconnect]`)) {
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = origin;
+      link.crossOrigin = "anonymous";
+      link.setAttribute("data-supabase-preconnect", "1");
+      document.head.appendChild(link);
+    }
+    void warmSupabaseConnection();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
+      <BuilderDataPrefetch />
       {children}
     </QueryClientProvider>
   );
 }
 
-// Fire once when the heavy ShiftBuilder surface mounts (Phase 0)
 if (typeof window !== "undefined") {
   reportWebVitals();
 }
-

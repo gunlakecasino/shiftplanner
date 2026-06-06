@@ -16,6 +16,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { SudoTabLoading } from "./SudoGlass";
 import type {
   WeeklyPattern,
   WeeklyShift,
@@ -336,7 +337,11 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, 
   const tmName = (id: string) => roster.find((r) => r.id === id)?.name || id;
 
   if (loading) {
-    return <div className="p-8 text-center opacity-60">Loading TM schedule system…</div>;
+    return (
+      <div className="p-8 flex justify-center">
+        <SudoTabLoading>Loading TM schedule system</SudoTabLoading>
+      </div>
+    );
   }
 
   return (

@@ -5,6 +5,10 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import TaskRow from "./TaskRow";
+import { PlacementFitChip } from "./PlacementFitChip";
+import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
+import type { PrerenderedPlacementFit } from "./placementFitScore";
+import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
 
@@ -26,6 +30,12 @@ export interface OverlapSlotProps {
 
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
+
+  /** Digital builder only (suppressed in print-preview mode for exact Golden fidelity). */
+  fitChip?: PrerenderedPlacementFit | null;
+  xaiFitChip?: XaiFit;
+  /** Builder mode flag for subtle digital-only UI sugar. */
+  showDigitalAssists?: boolean;
 }
 
 // One overlap cell (Break Sheet view) — a small assignable card. Backed by
@@ -48,6 +58,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onLiveAssign,
   onLiveUnassign,
   isLocked = false,
+  fitChip,
+  xaiFitChip,
+  showDigitalAssists = false,
 }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
@@ -69,12 +82,12 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer transition-all touch-none ${
+      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "opacity-30" : ""} ${dim ? "opacity-60" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
+      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
     >
       {loading && !hasTM ? (
-        <div className="h-[12px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
+        <AssignmentSkeleton size="md" />
       ) : hasTM ? (
         <div className="flex items-center gap-1 min-w-0">
           {a.isLocked && (
@@ -86,6 +99,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           >
             {a.tmName}
           </span>
+          {(fitChip || xaiFitChip) && (
+            <PlacementFitChip fit={fitChip} xaiFit={xaiFitChip} />
+          )}
         </div>
       ) : (
         <div
@@ -93,6 +109,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           — Unassigned —
+          {showDigitalAssists && (
+            <span className="no-print ml-1 text-[7.5px] text-[#2F5C7C]/35 tracking-normal">drop</span>
+          )}
         </div>
       )}
       {tasks && tasks.length > 0 && (

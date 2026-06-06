@@ -1,4 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+let _adminClient: SupabaseClient | null = null;
 
 /**
  * Creates a Supabase client using the service role key.
@@ -62,10 +64,14 @@ export function createAdminClientSafe() {
     return null;
   }
 
-  return createClient(url, serviceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  if (!_adminClient) {
+    _adminClient = createClient(url, serviceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+  }
+
+  return _adminClient;
 }

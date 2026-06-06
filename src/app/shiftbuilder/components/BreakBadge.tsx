@@ -16,7 +16,7 @@ const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" 
       type="button"
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
       onPointerDown={(e) => e.stopPropagation()}
-      className="-m-1.5 p-1.5 inline-flex items-center justify-center shrink-0"
+      className="sb-interactive -m-1.5 p-1.5 inline-flex items-center justify-center shrink-0"
       title={label}
       aria-label={label}
     >

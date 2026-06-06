@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { getActiveEngineConfig, type EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 import { listSchedules, setWeekPublished, type ScheduleRecord } from "@/lib/shiftbuilder/sudoActions";
 
+
 export interface DashboardTabProps {
   onDataChanged?: () => void;
   isDark?: boolean;
@@ -104,8 +105,9 @@ export function DashboardTab({
           isDark={isDark}
           icon="tune"
           label="Engine Mode"
-          value={loading ? "Loading…" : (engineConfig?.placementMethod || "weighted").replace(/-/g, " ")}
-          sub={loading ? "" : (engineConfig?.grokReasoningEffort ? `${engineConfig.grokReasoningEffort} reasoning` : "Deterministic")}
+          loading={loading}
+          value={(engineConfig?.placementMethod || "weighted").replace(/-/g, " ")}
+          sub={engineConfig?.grokReasoningEffort ? `${engineConfig.grokReasoningEffort} reasoning` : "Deterministic"}
         />
         <StatusCard
           isDark={isDark}
@@ -199,7 +201,7 @@ export function DashboardTab({
                 </div>
                 <button
                   onClick={() => handleQuickPublish(sch)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium active:scale-[0.985] transition-all"
+                  className="sb-interactive px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium"
                 >
                   Publish
                 </button>
@@ -241,16 +243,18 @@ function StatusCard({
   label,
   value,
   sub,
+  loading = false,
 }: {
   isDark: boolean;
   icon: string;
   label: string;
   value: string;
   sub: string;
+  loading?: boolean;
 }) {
   return (
     <div className={cn(
-      "rounded-2xl border p-4 transition-all",
+      "rounded-2xl border p-4",
       isDark 
         ? "border-white/10 bg-white/4" 
         : "border-black/8 bg-white"
@@ -259,8 +263,17 @@ function StatusCard({
         <span className="ms" style={{ fontSize: 15, color: isDark ? "#B89708" : "#8B6910" }}>{icon}</span>
         {label}
       </div>
-      <div className="text-[15px] font-semibold tracking-[-0.2px] leading-tight">{value}</div>
-      {sub && <div className={cn("text-[11px] mt-0.5", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>{sub}</div>}
+      {loading ? (
+        <div className="space-y-1.5" aria-busy="true">
+          <div className="sb-skeleton sb-skeleton--lg w-28" />
+          <div className="sb-skeleton sb-skeleton--sm w-36 opacity-70" />
+        </div>
+      ) : (
+        <>
+          <div className="text-[15px] font-semibold tracking-[-0.2px] leading-tight">{value}</div>
+          {sub && <div className={cn("text-[11px] mt-0.5", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>{sub}</div>}
+        </>
+      )}
     </div>
   );
 }
@@ -280,7 +293,7 @@ function QuickAction({
     <button
       onClick={onClick}
       className={cn(
-        "group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.985]",
+        "sb-list-row sb-interactive group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left",
         isDark
           ? "border-white/10 bg-white/4 hover:bg-white/8 hover:border-white/20"
           : "border-black/10 bg-white hover:bg-[#F8F8F6] hover:border-black/15"

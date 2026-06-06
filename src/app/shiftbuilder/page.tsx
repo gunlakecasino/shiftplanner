@@ -17,26 +17,14 @@
 
 import dynamic from "next/dynamic";
 import { QueryProvider } from "./providers";
+import { BuilderLoadingShell } from "./components/builderPrimitives";
 
 const ShiftBuilderClient = dynamic(
   () => import("./ShiftBuilderClient"),
   {
     ssr: false,
     loading: () => (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#F8F8F9",
-          color: "#8E8E93",
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          fontSize: 14,
-        }}
-      >
-        Loading Shift Builder…
-      </div>
+      <BuilderLoadingShell />
     ),
   }
 );

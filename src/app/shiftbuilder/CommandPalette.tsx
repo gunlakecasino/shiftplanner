@@ -193,8 +193,8 @@ export function CommandPalette({
       {/* Backdrop — when using artboard overlay we render a lighter one limited to the overlay area */}
       <div
         className={useArtboardOverlay 
-          ? "absolute inset-0 z-[10049] bg-black/30 overscroll-none touch-none" 
-          : "fixed inset-0 z-[10050] bg-black/40 overscroll-none touch-none"}
+          ? "sb-overlay-backdrop absolute inset-0 z-[10049] overscroll-none touch-none" 
+          : "sb-overlay-backdrop sb-overlay-backdrop--fixed inset-0 z-[10050] overscroll-none touch-none"}
         onClick={handleClose}
         onWheel={(e) => e.preventDefault()}
       />
@@ -205,9 +205,9 @@ export function CommandPalette({
           initial={{ opacity: 0, scale: 0.985, x: '-50%', y: '-50%' }}
           animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
           exit={{ opacity: 0, scale: 0.985, x: '-50%', y: '-50%' }}
-          transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.85 }}
+          transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.9 }}
           ref={cardRef}
-          className={`command-palette ${useArtboardOverlay ? 'absolute' : 'fixed'} z-[10051] w-full max-w-[620px] max-h-[min(70vh,560px)] rounded-3xl border shadow-2xl backdrop-blur-xl overflow-hidden pointer-events-auto flex flex-col`}
+          className={`command-palette sb-modal-enter ${useArtboardOverlay ? 'absolute' : 'fixed'} z-[10051] w-full max-w-[620px] max-h-[min(70vh,560px)] rounded-3xl border shadow-2xl backdrop-blur-xl overflow-hidden pointer-events-auto flex flex-col`}
           style={{
             left: '50%',
             top: '50%',
@@ -247,7 +247,7 @@ export function CommandPalette({
               />
               <button
                 onClick={() => onOpenChange(false)}
-                className="text-xs px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 active:scale-[0.985] transition-transform"
+                className="sb-interactive text-xs px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20"
               >
                 Esc
               </button>
@@ -266,7 +266,7 @@ export function CommandPalette({
 
               <button
                 onClick={() => { (rest as any).onOpenSudo?.(); onOpenChange(false); }}
-                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+                className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10"
               >
                 <Settings className="h-4 w-4 opacity-70" />
                 <span className="font-medium">Open Sudo / Command Center</span>
@@ -274,7 +274,7 @@ export function CommandPalette({
 
               <button
                 onClick={() => onOpenChange(false)}
-                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+                className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10"
               >
                 <span className="inline-block w-4 h-4 opacity-70">📅</span>
                 <span>Go to Today</span>
@@ -282,7 +282,7 @@ export function CommandPalette({
 
               <button
                 onClick={() => { (rest as any).onUndo?.(); }}
-                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors"
+                className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10"
               >
                 <Undo2 className="h-4 w-4 opacity-70" />
                 <span>Undo last change</span>
@@ -315,7 +315,7 @@ export function CommandPalette({
                         onRemoveFromSlot(initialContext.value);
                         onOpenChange(false);
                       }}
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                      className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 text-sm"
                     >
                       <span className="text-red-500">×</span>
                       <span>Clear this slot</span>
@@ -330,7 +330,7 @@ export function CommandPalette({
                         if (label) onAddTask(initialContext.value, label);
                         onOpenChange(false);
                       }}
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                      className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 text-sm"
                     >
                       <span>✓</span>
                       <span>Add task to this slot</span>
@@ -343,7 +343,7 @@ export function CommandPalette({
                         onCycleBreak(initialContext.value);
                         onOpenChange(false);
                       }}
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                      className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 text-sm"
                     >
                       <span>↻</span>
                       <span>Cycle break group</span>
@@ -357,7 +357,7 @@ export function CommandPalette({
                         alert('Coverage flow from ' + initialContext.value + ' – full picker coming in next layer');
                         onOpenChange(false);
                       }}
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors text-sm"
+                      className="sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 text-sm"
                     >
                       <span>⇄</span>
                       <span>Add coverage from this slot</span>
@@ -396,7 +396,7 @@ export function CommandPalette({
                               onOpenChange(false);
                             }
                           }}
-                          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-sm ${
+                          className={`sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl text-sm ${
                             isSelected
                               ? 'bg-[#007AFF15] dark:bg-[#0A84FF30] ring-1 ring-[#007AFF40] dark:ring-[#0A84FF50]'
                               : 'hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10'

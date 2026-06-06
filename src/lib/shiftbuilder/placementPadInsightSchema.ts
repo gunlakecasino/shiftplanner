@@ -54,6 +54,39 @@ export const PlacementPadInsightSchema = z.object({
 
 export type PlacementPadInsight = z.infer<typeof PlacementPadInsightSchema>;
 
+/** Minimal schema for a *light / fast* headline determination call (grok-build-0.1).
+ * Produces the magic one-liner + a tight, actionable 4-6 bullet synthesis that combines what used to be
+ * "instant prerender", "quick determination", and the rotation/swap highlights into one xAI-powered list.
+ * This is the default view when you open a card's pad in builder mode.
+ * Full rich narrative + advanced swap analysis still comes from explicit "Full 4.3 analysis" (grok-4.3 high).
+ */
+export const MagicOneLinerSchema = z.object({
+  /** The single crisp magic one-liner (e.g. "Melissa belongs on Z3 tonight after RR cleared."). */
+  headline: z.string().min(1).max(180),
+  /** Optional: the verdict so the corner chip can use its color language immediately. */
+  fitVerdict: PlacementFitVerdictSchema.optional(),
+  /** Optional short fitSummary for the lift / tooltip. */
+  fitSummary: z.string().min(1).max(160).optional(),
+  /** 4–6 short, high-signal, operator-actionable bullets.
+   * Synthesize across prerender + rotation + spread + neighbors + exposure.
+   * Each bullet ≤ 110 chars. No generic advice; name specific people/slots when relevant.
+   * Examples of good bullets: "0× on Z3 in last 30 — fresh", "Sheri O on Z5 has been there 4× recently (swap candidate)", "No open spread gaps; strong continuity".
+   */
+  bullets: z.array(z.string().min(3).max(110)).min(3).max(6).optional(),
+});
+
+export type MagicOneLiner = z.infer<typeof MagicOneLinerSchema>;
+
+/** Lifted xAI fit/insight for corner chip + digital builder surfaces (magic one-line headline etc.).
+ * Used for onXaiFit callbacks, xaiFitsByHost state, card props. Null clears.
+ * (Centralized here with the rest of the insight schema/types for reuse.)
+ */
+export type XaiFit = {
+  headline?: string;
+  fitVerdict?: PlacementFitVerdict | string;
+  fitSummary?: string;
+} | null;
+
 export function fitVerdictLabel(verdict: PlacementFitVerdict): string {
   switch (verdict) {
     case "strong_fit":

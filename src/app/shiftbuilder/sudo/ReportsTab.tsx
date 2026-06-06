@@ -14,6 +14,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { SudoTabLoading } from "./SudoGlass";
 import {
   ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS,
@@ -192,7 +193,7 @@ function SlotHistoryRow({
         </div>
         <div className="flex-1 h-[10px] rounded-full bg-zinc-800 relative overflow-hidden">
           <div
-            className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+            className="sb-progress-bar absolute left-0 top-0 h-full rounded-full"
             style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
           />
         </div>
@@ -253,7 +254,7 @@ function SlotTmRow({
         </span>
         <div className="flex-1 h-[10px] rounded-full bg-zinc-800 relative overflow-hidden">
           <div
-            className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+            className="sb-progress-bar absolute left-0 top-0 h-full rounded-full"
             style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
           />
         </div>
@@ -749,10 +750,12 @@ export function ReportsTab() {
           type="button"
           onClick={() => void load(reportWin)}
           disabled={loading}
-          className="w-7 h-7 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 transition-colors"
+          className="sb-interactive w-7 h-7 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
           title="Refresh"
+          aria-busy={loading}
         >
-          <span className={cn("ms", loading && "animate-spin")} style={{ fontSize: 14 }}>refresh</span>
+          <span className="ms" style={{ fontSize: 14 }}>refresh</span>
+
         </button>
       </div>
 
@@ -760,7 +763,9 @@ export function ReportsTab() {
       {error ? (
         <div className="flex-1 flex items-center justify-center text-red-400 text-sm">{error}</div>
       ) : loading && !report ? (
-        <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">Loading…</div>
+        <div className="flex-1 flex items-center justify-center">
+          <SudoTabLoading>Loading report</SudoTabLoading>
+        </div>
       ) : !report || report.entries.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-zinc-600 text-sm">
           No assignments found in this window.

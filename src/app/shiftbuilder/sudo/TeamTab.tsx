@@ -39,6 +39,8 @@ import {
   SudoBanner,
   CenteredGlassModal,
   SudoTabButton,
+  SudoTabLoading,
+  BuilderBusyLabel,
 } from "./SudoGlass";
 
 export interface TeamTabProps {
@@ -414,7 +416,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
                 flash("err", err instanceof Error ? err.message : String(err));
               }
             }}
-            className="px-3 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[11px] font-medium inline-flex items-center gap-1.5 active:scale-[0.985] transition-all"
+            className="sb-interactive px-3 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[11px] font-medium inline-flex items-center gap-1.5"
           >
             <span className="ms" style={{ fontSize: 12 }}>person_add</span> new TM
           </button>
@@ -427,11 +429,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
             {error}
           </div>
         )}
-        {tms === null && (
-          <div className="text-zinc-500 text-[12px] flex items-center gap-2">
-            <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span> Loading TMs…
-          </div>
-        )}
+        {tms === null && <SudoTabLoading>Loading TMs</SudoTabLoading>}
         {tms && (
           <div className={cn("rounded-2xl border overflow-hidden", isDark ? "border-white/10" : "border-black/10")}>
             <table className="w-full text-[12px]">
@@ -452,7 +450,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
                     key={tm.tmId}
                     onClick={() => setDrawerTmId(tm.tmId)}
                     className={cn(
-                      "border-t cursor-pointer transition-colors",
+                      "sb-list-row border-t cursor-pointer",
                       isDark ? "border-white/5 hover:bg-white/5" : "border-black/5 hover:bg-black/5",
                       !tm.active && "opacity-60"
                     )}
@@ -759,13 +757,10 @@ function TMEditDrawer({
             <button
               onClick={save}
               disabled={saving}
-              className="px-5 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[12px] font-medium inline-flex items-center gap-2 shadow-sm active:scale-[0.985] transition-all"
+              className="sb-interactive px-5 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[12px] font-medium inline-flex items-center gap-2 shadow-sm"
             >
               {saving ? (
-                <>
-                  <span className="ms animate-spin" style={{ fontSize: 14 }}>refresh</span>
-                  Saving…
-                </>
+                <BuilderBusyLabel>Saving</BuilderBusyLabel>
               ) : (
                 <>
                   <span className="ms" style={{ fontSize: 14 }}>check_circle</span>
@@ -791,7 +786,7 @@ function TMEditDrawer({
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "px-4 py-1.5 text-[11px] uppercase tracking-[1px] font-mono rounded-lg transition-all",
+              "sb-interactive px-4 py-1.5 text-[11px] uppercase tracking-[1px] font-mono rounded-lg",
               tab === t
                 ? isDark
                   ? "bg-[#B89708]/15 text-[#E9B948] border border-[#B89708]/30"
@@ -1541,7 +1536,7 @@ function SpecialGroupsForm({
     }
   };
 
-  if (loading) return <div className="text-xs opacity-60 p-4">Loading special groups…</div>;
+  if (loading) return <SudoTabLoading className="!py-2 text-xs">Loading special groups</SudoTabLoading>;
 
   return (
     <div className="space-y-4">

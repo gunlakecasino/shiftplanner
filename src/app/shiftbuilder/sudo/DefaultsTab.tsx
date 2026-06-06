@@ -14,6 +14,8 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import BreakBadge from "../components/BreakBadge";
+import { BuilderBusyLabel } from "../components/builderPrimitives";
+import { SudoTabLoading } from "./SudoGlass";
 // Slot defaults / task / break default helpers are dynamically imported inside the handlers that use them.
 // This prevents the heavy data.ts module from being part of the top-level static import graph of Sudo tabs (Turbopack HMR fix).
 import type { SlotDefault, SlotDefaultTask } from "@/lib/shiftbuilder/data";
@@ -429,10 +431,16 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
           <button
             onClick={load}
             disabled={loading}
-            className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+            className="sb-interactive ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
           >
-            <span className={cn("ms", loading && "animate-spin")} style={{ fontSize: 14 }}>refresh</span>
-            Refresh
+            {loading ? (
+              <BuilderBusyLabel className="text-[11px]">Reloading</BuilderBusyLabel>
+            ) : (
+              <>
+                <span className="ms" style={{ fontSize: 14 }}>refresh</span>
+                Reload
+              </>
+            )}
           </button>
         </div>
 
@@ -449,8 +457,8 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       {/* ── Slot list ─────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
         {loading ? (
-          <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
-            <span className="ms animate-spin mr-2" style={{ fontSize: 16 }}>sync</span> Loading defaults…
+          <div className="flex items-center justify-center h-32">
+            <SudoTabLoading>Loading defaults</SudoTabLoading>
           </div>
         ) : (
           sections.map((sec) => {
@@ -650,7 +658,7 @@ function PushButton({
   variant?: "breaks" | "tasks";
 }) {
   const base =
-    "flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium transition-colors border";
+    "sb-interactive flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium border";
   const colors =
     variant === "tasks"
       ? "border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-40"
@@ -662,12 +670,12 @@ function PushButton({
       disabled={disabled || loading}
       className={cn(base, colors)}
     >
-      {loading ? (
-        <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span>
-      ) : (
-        icon
+      {loading ? <BuilderBusyLabel className="text-[11px]">{label}</BuilderBusyLabel> : (
+        <>
+          {icon}
+          {label}
+        </>
       )}
-      {label}
     </button>
   );
 }

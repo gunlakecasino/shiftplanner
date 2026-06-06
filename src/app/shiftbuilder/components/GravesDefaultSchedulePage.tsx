@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { BuilderBusyLabel, BuilderLoadingLine } from "./builderPrimitives";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifyGravesDefaultScheduleChanged } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
@@ -143,7 +144,7 @@ function AddTmPicker({
                 <button
                   type="button"
                   disabled={mutating}
-                  className="w-full px-3 py-2 text-left text-[12px] hover:bg-neutral-100 disabled:opacity-50"
+                  className="sb-list-row w-full px-3 py-2 text-left text-[12px] hover:bg-neutral-100 disabled:opacity-50"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => void pick(t)}
                 >
@@ -248,7 +249,7 @@ function ScheduleSection({
                         type="button"
                         disabled={saving || mutating}
                         onClick={() => onToggle(row.tmId, band, day)}
-                        className={`w-full min-h-[28px] rounded-md text-[10px] font-bold transition-colors ${
+                        className={`sb-interactive w-full min-h-[28px] rounded-md text-[10px] font-bold ${
                           on
                             ? "bg-emerald-600 text-white hover:bg-emerald-700"
                             : "bg-neutral-100 text-neutral-400 hover:bg-neutral-200"
@@ -269,7 +270,7 @@ function ScheduleSection({
                     type="button"
                     disabled={saving || mutating}
                     onClick={() => onRemove(row.tmId, band)}
-                    className="rounded-md border border-neutral-200 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
+                    className="sb-interactive rounded-md border border-neutral-200 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40"
                     title="Remove from default schedule"
                   >
                     Remove
@@ -461,12 +462,17 @@ export function GravesDefaultSchedulePage() {
           </p>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-neutral-500">
-          {saving && <span className="text-amber-600 font-medium">Saving…</span>}
-          {mutating && <span className="text-amber-600 font-medium">Updating roster…</span>}
+          {saving && (
+            <BuilderBusyLabel className="text-amber-600 font-medium text-[11px]">Saving</BuilderBusyLabel>
+          )}
+          {mutating && (
+            <BuilderBusyLabel className="text-amber-600 font-medium text-[11px]">Updating roster</BuilderBusyLabel>
+          )}
           <button
             type="button"
             onClick={() => load()}
-            className="rounded-lg border border-neutral-200 px-3 py-1.5 hover:bg-neutral-50"
+            disabled={loading || saving || mutating}
+            className="sb-interactive rounded-lg border border-neutral-200 px-3 py-1.5 hover:bg-neutral-50 disabled:opacity-50"
           >
             Refresh
           </button>
@@ -485,7 +491,19 @@ export function GravesDefaultSchedulePage() {
           </div>
         )}
         {loading && !grid && (
-          <p className="text-neutral-500 text-[13px]">Loading schedule…</p>
+          <div className="sb-content-enter space-y-4" aria-busy="true">
+            <BuilderLoadingLine className="!mt-0 text-[13px]">Loading schedule</BuilderLoadingLine>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="sb-skeleton h-8 rounded-lg" aria-hidden="true" />
+              ))}
+            </div>
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="sb-skeleton sb-skeleton--lg w-full rounded-lg" aria-hidden="true" />
+              ))}
+            </div>
+          </div>
         )}
         {grid && (
           <>

@@ -66,7 +66,7 @@ export default function VirtualRosterList({
     <div
       ref={parentRef}
       className={containerClass}
-      style={{ contain: "strict" }}
+      style={{ contain: "layout style" }}
     >
       {/* The big spacer that creates the scroll height */}
       <div
@@ -90,7 +90,8 @@ export default function VirtualRosterList({
                 left: 0,
                 width: "100%",
                 height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
+                transform: `translate3d(0, ${virtualRow.start}px, 0)`,
+                willChange: "transform",
               }}
             >
               <RosterItem {...props} />

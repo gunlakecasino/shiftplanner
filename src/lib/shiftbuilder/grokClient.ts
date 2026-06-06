@@ -42,6 +42,11 @@ export function createGrokSuggestionModel() {
   return createGrokModel("grok-4.3");
 }
 
+export function createGrokBuildModel() {
+  // grok-build-0.1 for fast/cheap coding or basics tasks (per user: utilize grok build + grok 4.3; 4.3 crazy good, build relatively cheap)
+  return createGrokModel("grok-build-0.1");
+}
+
 /**
  * Type helper for call sites that want strong typing on providerOptions.
  * Usage example in actions.ts:

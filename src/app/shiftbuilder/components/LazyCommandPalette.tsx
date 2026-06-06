@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { BuilderLoadingLine } from "./builderPrimitives";
 
 interface LazyCommandPaletteProps {
   open: boolean;
@@ -41,7 +42,12 @@ export function LazyCommandPalette(props: LazyCommandPaletteProps) {
   }, [props.open, CommandPaletteComp]);
 
   if (!CommandPaletteComp) {
-    return null;
+    if (!props.open) return null;
+    return (
+      <div className="sb-overlay-backdrop sb-overlay-backdrop--fixed z-[10050] flex items-center justify-center">
+        <BuilderLoadingLine className="!mt-0 text-sm">Opening command palette</BuilderLoadingLine>
+      </div>
+    );
   }
 
   return <CommandPaletteComp {...props} />;

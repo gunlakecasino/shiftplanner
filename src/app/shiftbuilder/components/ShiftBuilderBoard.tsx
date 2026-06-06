@@ -22,7 +22,9 @@ import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
+
 
 function slotShowsFilled(
   slotKey: string,
@@ -108,6 +110,8 @@ export interface ShiftBuilderBoardProps {
   fitBySlot?: Record<string, PrerenderedPlacementFit>;
   /** Stage zoom — re-equalize card rows when fit changes (see layoutHeight below). */
   artboardScale?: number;
+  /** When true (print-preview mode), suppress digital-only assists (xAI chips/lines, fit chips, HUDs) so the live canvas matches the exact Golden that will be cloned for PDF/print. Core content (names, badges that print, tasks, etc.) unchanged. */
+  isPrintPreview?: boolean;
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -180,6 +184,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   members = [],
   fitBySlot: fitBySlotProp,
   artboardScale,
+  isPrintPreview = false,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -252,6 +257,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     allEligibleTms,
   });
   const fitBySlot = fitBySlotProp ?? internalFitMap.fitBySlot;
+  // In print-preview mode the live canvas must match the exact Golden that print capture will clone (no digital chips/lines at all).
+  const showDigitalAssists = !isPrintPreview;
+
+  // xAI fits per host for corner magic one line + override surface (powerful but from pad on-demand)
+  const [xaiFitsByHost, setXaiFitsByHost] = React.useState<Record<string, XaiFit>>({});
+
+  const handleXaiFit = React.useCallback((hostId: string, xai: XaiFit) => {
+    console.log('[xAI corner] loaded for host', hostId, 'headline:', xai?.headline);
+    setXaiFitsByHost((prev) => ({ ...prev, [hostId]: xai }));
+  }, []);
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -474,6 +489,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         boardPrerenderedFit={fitBySlot[slotKey]}
         isDraftMode={isDraftMode}
         draftAssignments={draftAssignments}
+        onXaiFit={handleXaiFit}
       />
     );
   };
@@ -555,7 +571,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [nightId]);
 
   return (
-    <div className="print-artboard">
+    <div className={`print-artboard${showDigitalAssists ? " builder-luxe" : ""}`}>
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
       <div className="sheet-header flex items-end justify-between flex-shrink-0 pb-1.5 mb-2">
@@ -755,7 +771,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
-                        fitChip={fitBySlot[key]}
+                        fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                        xaiFitChip={showDigitalAssists ? (xaiFitsByHost[key] || undefined) : undefined}
+                        showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -811,8 +829,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
-                        fitChipW={fitBySlot[wKey]}
-                        fitChipM={fitBySlot[mKey]}
+                        fitChipW={showDigitalAssists ? fitBySlot[wKey] : undefined}
+                        fitChipM={showDigitalAssists ? fitBySlot[mKey] : undefined}
+                        xaiFitChipW={showDigitalAssists ? (xaiFitsByHost[rrHostId] || undefined) : undefined}
+                        xaiFitChipM={showDigitalAssists ? (xaiFitsByHost[rrHostId] || undefined) : undefined}
+                        showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -866,7 +887,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
-                        fitChip={fitBySlot[key]}
+                        fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                        xaiFitChip={showDigitalAssists ? (xaiFitsByHost[key] || undefined) : undefined}
+                        showDigitalAssists={showDigitalAssists}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1046,6 +1069,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 isLocked={isCurrentNightLocked}
                                 onLiveAssign={onLiveAssign}
                                 onLiveUnassign={onLiveUnassign}
+                                fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
+                                xaiFitChip={showDigitalAssists ? (xaiFitsByHost[slotKey] || undefined) : undefined}
+                                showDigitalAssists={showDigitalAssists}
                               />
                               {activePlacementPad?.hostId === slotKey &&
                                 renderPlacementPad(

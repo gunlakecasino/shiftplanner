@@ -114,28 +114,28 @@ export function rotationHealthFloaterColors(
 ): { bg: string; border: string; text: string } {
   if (percent === null) {
     return {
-      bg: "rgba(0,0,0,0.88)",
+      bg: "rgba(0,0,0,0.75)",
       border: "#3a3a3c",
       text: "#a1a1aa",
     };
   }
   if (percent >= ROTATION_HEALTH_TARGET) {
     return {
-      bg: "rgba(22,163,74,0.92)",
-      border: "rgba(34,197,94,0.5)",
+      bg: "rgba(22,163,74,0.75)",
+      border: "rgba(34,197,94,0.35)",
       text: "#ecfdf5",
     };
   }
   if (percent >= 70) {
     return {
-      bg: "rgba(180,83,9,0.92)",
-      border: "rgba(251,191,36,0.45)",
+      bg: "rgba(180,83,9,0.75)",
+      border: "rgba(251,191,36,0.35)",
       text: "#fffbeb",
     };
   }
   return {
-    bg: "rgba(185,28,28,0.92)",
-    border: "rgba(248,113,113,0.45)",
+    bg: "rgba(185,28,28,0.75)",
+    border: "rgba(248,113,113,0.35)",
     text: "#fef2f2",
   };
 }

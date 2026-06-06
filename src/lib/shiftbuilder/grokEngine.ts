@@ -307,15 +307,15 @@ CRITICAL CONSTRAINTS:
   NEVER invent a TM.
 - Skip slots marked \`preserved: true\` — those have an existing TM the
   operator already placed; do not propose a different pick.
-- If you have no opinion for a slot, omit it from \`picks\` and the system
-  will use the deterministic top-scorer.
+- ALWAYS output a pick for EVERY non-preserved, non-optional slot in the placementOrder (complete draft). For each, choose the best candidate from its list (top scorer or justified override using context/graves schedule/rotation). Never omit — the engine will use your choice (and attach your reason).
 - The \`reason\` field is mandatory for every pick.
 
 GUIDANCE:
 - The deterministic engine has already walked PLACEMENT_ORDER sequentially. Your picks must
   align with that sequence — only choose among each slot's ranked candidates; do not skip
   ahead to staff a zone while restrooms or earlier core slots are still empty.
-- Respect the **Graves Default Schedule** (Rules Engine §3 — graves_default_schedule + tonight's on-call overrides). Prefer on-schedule TMs when scores are close; use getTMScheduleStatus when unsure.
+- **HARD CONSTRAINT**: Only pick TMs that are on the Graves Default Schedule for tonight (the sole source of truth via graves_default_schedule + night_on_call). Use the getTMScheduleStatus tool (or isOnSchedule) to confirm for candidates. Never propose a TM that getTMScheduleStatus reports as NOT on schedule for this night. If the schedule set is empty, fall back to full active roster.
+- **MAXIMIZE ROTATION HEALTH**: The snapshot includes rotationHealthPercent, gapsLine, swap opportunities, and per-slot fit verdicts. For every slot in the complete draft, choose the on-schedule candidate from the list that best improves the overall weekly rotation health, reduces gaps, and balances load (use tools to verify current scores and status). Use justified overrides to lift health where the top scorer alone would leave health low. The goal is the highest achievable health % while strictly inside fill order, candidate lists, and graves schedule.
 - Override the top candidate (WHO) when higher-order context justifies it:
     - Tonight's specific conditions (notes, call-offs, weather, events, morale)
     - Rotation health and long-term fairness not fully captured in the matrix
@@ -348,15 +348,33 @@ function round2(n: number): number {
 }
 
 /**
- * Parse a raw Grok response. Lenient: accepts the strict JSON block or, as
- * a fallback, returns no picks (caller will use deterministic top-scorers).
+ * Parse a raw Grok response. More robust: tries fenced ```json, then bare object with "picks", then first {} .
+ * Falls back to 0 picks (caller uses deterministic) on failure. This helps tool-calling paths where final text may lack exact fences.
  */
 export function parseGrokEngineResponse(raw: string): GrokEngineResponse {
-  const block = raw.match(/```json\s*([\s\S]*?)```/i);
-  if (!block) return { picks: [], explanation: raw.trim() };
+  // 1. Preferred: fenced ```json block (as instructed)
+  let block = raw.match(/```json\s*([\s\S]*?)```/i);
+  let jsonText = block ? block[1].trim() : null;
+
+  // 2. Fallback: bare top-level JSON object containing "picks" (common after tool calls or slight format drift)
+  if (!jsonText) {
+    const bare = raw.match(/(\{[\s\S]*"picks"[\s\S]*\})/i);
+    if (bare) jsonText = bare[1].trim();
+  }
+
+  // 3. Last resort: first { ... } blob
+  if (!jsonText) {
+    const anyJson = raw.match(/\{[\s\S]*\}/);
+    if (anyJson) jsonText = anyJson[0].trim();
+  }
+
+  if (!jsonText) {
+    return { picks: [], explanation: raw.trim() };
+  }
+
   try {
-    const parsed = JSON.parse(block[1].trim());
-    const explanation = typeof parsed.explanation === "string" ? parsed.explanation : "";
+    const parsed = JSON.parse(jsonText);
+    const explanation = typeof parsed.explanation === "string" ? parsed.explanation : (raw.trim().slice(0, 200));
     const picksRaw = Array.isArray(parsed.picks) ? parsed.picks : [];
     const picks: GrokEnginePick[] = picksRaw
       .filter((p: any) => p && typeof p === "object")
@@ -368,7 +386,7 @@ export function parseGrokEngineResponse(raw: string): GrokEngineResponse {
       .filter((p: GrokEnginePick) => p.slotKey && p.tmId);
     return { picks, explanation };
   } catch (err) {
-    console.warn("[grokEngine] parse failed:", err);
+    console.warn("[grokEngine] parse failed:", err, "raw snippet:", jsonText.slice(0, 300));
     return { picks: [], explanation: raw.trim() };
   }
 }

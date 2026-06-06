@@ -17,6 +17,8 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { BuilderBusyLabel } from "../components/builderPrimitives";
+import { SudoTabLoading } from "./SudoGlass";
 import {
   listWeeksWithNights,
   listNightsForWeek,
@@ -233,9 +235,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
         <div className="space-y-1.5">
           <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Week</label>
           {weeksLoading ? (
-            <div className="flex items-center gap-2 text-zinc-500 text-[12px]">
-              <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> Loading weeks…
-            </div>
+            <SudoTabLoading>Loading weeks</SudoTabLoading>
           ) : weeksError ? (
             <div className="text-red-400 text-[12px]">{weeksError}</div>
           ) : (
@@ -314,12 +314,12 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
               "disabled:opacity-40 disabled:cursor-not-allowed"
             )}
           >
+            {!batchRunning && <span className="ms" style={{ fontSize: 16 }}>play_arrow</span>}
             {batchRunning ? (
-              <span className="ms animate-spin" style={{ fontSize: 16 }}>sync</span>
+              <BuilderBusyLabel>Running all nights</BuilderBusyLabel>
             ) : (
-              <span className="ms" style={{ fontSize: 16 }}>play_arrow</span>
+              "Run All Nights"
             )}
-            {batchRunning ? "Running…" : "Run All Nights"}
           </button>
           <button
             onClick={() => {
@@ -354,9 +354,7 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
 
         {/* Night list */}
         {nightsLoading ? (
-          <div className="flex items-center gap-2 text-zinc-500 text-[12px]">
-            <span className="ms animate-spin" style={{ fontSize: 14 }}>sync</span> Loading nights…
-          </div>
+          <SudoTabLoading>Loading nights</SudoTabLoading>
         ) : nights.length === 0 ? (
           <div className="text-zinc-500 text-[12px]">No nights found for this week.</div>
         ) : (
@@ -416,7 +414,7 @@ function NightRowItem({
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Status icon */}
         <div className="shrink-0 w-5 flex justify-center">
-          {runState.phase === "running" && <span className="ms animate-spin text-amber-400" style={{ fontSize: 16 }}>sync</span>}
+          {runState.phase === "running" && <span className="sb-status-dot sb-status-dot--syncing !w-3 !h-3" aria-hidden="true" />}
           {runState.phase === "done" && runState.result.status === "ok" && <span className="ms text-emerald-400" style={{ fontSize: 16 }}>check_circle</span>}
           {runState.phase === "done" && runState.result.status === "skip" && <span className="ms text-zinc-500" style={{ fontSize: 16 }}>skip_next</span>}
           {runState.phase === "done" && runState.result.status === "error" && <span className="ms text-red-400" style={{ fontSize: 16 }}>cancel</span>}
@@ -474,17 +472,19 @@ function NightRowItem({
           onClick={onRun}
           disabled={anyRunning || runState.phase === "running"}
           className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors",
+            "sb-interactive flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium",
             "border border-zinc-700 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300",
             "disabled:opacity-30 disabled:cursor-not-allowed"
           )}
         >
           {runState.phase === "running" ? (
-            <span className="ms animate-spin" style={{ fontSize: 12 }}>sync</span>
+            <BuilderBusyLabel className="text-[11px]">Run</BuilderBusyLabel>
           ) : (
-            <span className="ms" style={{ fontSize: 12 }}>play_arrow</span>
+            <>
+              <span className="ms" style={{ fontSize: 12 }}>play_arrow</span>
+              Run
+            </>
           )}
-          Run
         </button>
       </div>
 

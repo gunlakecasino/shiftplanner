@@ -6,6 +6,10 @@ import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsight
 export type EngineInsightRequest = {
   slotKey: string;
   tmName: string;
+  /** "deep" | "assignee" use full grok-4.3 high (whyTonight + swaps + rich).
+   *  "light" | "headline" use grok-build-0.1 fast for quick magic one-liner determination only (cheap, populates builder chip/line fast).
+   *  "basics" is the rotation narrative rewrite.
+   */
   mode?: PlacementInsightMode;
   rotationBasicsText?: string;
   rationale?: string;

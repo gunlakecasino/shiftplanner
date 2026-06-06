@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { BuilderStatusDot } from "./builderPrimitives";
 import { useTheme } from "../hooks/useTheme";
 import { 
   startOfShiftWeek, 
@@ -86,7 +87,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
 
   return (
     <div 
-      className="min-h-screen w-full flex flex-col"
+      className="sb-content-enter min-h-screen w-full flex flex-col"
       style={{
         background: isDark ? '#0F0F12' : '#F8F8F9',
         color: isDark ? '#F2F2F4' : '#1C1C1E',
@@ -161,7 +162,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
           {/* Primary Action — the star of the launchpad */}
           <button
             onClick={() => onEnterCanvas(tonightIndex)}
-            className="mt-10 group flex items-center gap-4 rounded-2xl px-9 py-5 text-[15px] font-semibold tracking-[-0.1px] transition-all active:scale-[0.985]"
+            className="sb-interactive mt-10 group flex items-center gap-4 rounded-2xl px-9 py-5 text-[15px] font-semibold tracking-[-0.1px]"
             style={{
               background: isDark ? '#1F1F24' : '#111',
               color: '#fff',
@@ -194,7 +195,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
 
           <a
             href="/shiftbuilder/graves-schedule"
-            className="mt-5 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold transition-colors hover:bg-neutral-100"
+            className="sb-interactive mt-5 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold hover:bg-neutral-100 dark:hover:bg-white/5"
             style={{
               borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
               color: isDark ? '#E5E5E7' : '#1C1C1E',
@@ -227,7 +228,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
             <button
               key={i}
               onClick={() => onEnterCanvas(i)}
-              className="group flex flex-col items-center rounded-2xl py-4 transition-all border"
+              className="sb-interactive group flex flex-col items-center rounded-2xl py-4 border"
               style={{
                 background: isDark ? '#16161A' : '#fff',
                 borderColor: d.isToday 
@@ -291,7 +292,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
               <div className="flex justify-between items-baseline">
                 <div style={{ color: isDark ? '#A1A1AA' : '#6B7280' }}>Realtime</div>
                 <div className="flex items-center gap-2 font-medium">
-                  <span style={{ color: '#22c55e' }}>●</span> LIVE
+                  <BuilderStatusDot state="live" /> LIVE
                 </div>
               </div>
               <div className="flex justify-between items-baseline">

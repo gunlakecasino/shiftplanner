@@ -30,6 +30,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 import { useAssignments } from "../store/useShiftBuilderStore";
+import { BuilderLoadingLine } from "./builderPrimitives";
 
 export interface TmEntry {
   tmId: string;
@@ -447,9 +448,7 @@ const MiniHistorySection: React.FC<{
   if (loading) {
     return (
       <div style={wrapStyle}>
-        <span style={{ fontSize: 9.5, color: textMuted, fontFamily: "var(--font-jetbrains, monospace)" }}>
-          Loading history…
-        </span>
+        <BuilderLoadingLine className="!mt-0 text-[9.5px] font-mono">Loading history</BuilderLoadingLine>
       </div>
     );
   }
@@ -605,6 +604,7 @@ const HistoryOverlay: React.FC<{
 
   return (
     <div
+      className="sb-marker-enter"
       style={{
         position: "absolute", inset: 0, borderRadius: 20, zIndex: 20,
         background: panelBg,
@@ -612,7 +612,6 @@ const HistoryOverlay: React.FC<{
         WebkitBackdropFilter: "var(--sb-glass-blur)",
         display: "flex", flexDirection: "column",
         padding: "14px 14px 10px",
-        animation: "sb-slide-right-in var(--sb-dur-fast, 0.18s) var(--sb-spring-snappy, cubic-bezier(0.16,1,0.3,1)) both",
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -872,11 +871,12 @@ export const TmPicker: React.FC<{
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onPick(tm); }}
                 onPointerDown={(e) => e.stopPropagation()}
+                className="sb-list-row sb-interactive"
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "7px 10px", borderRadius: 10,
                   background: rowBg, border: `1px solid ${rowBorder}`,
-                  cursor: "pointer", transition: "all 0.12s", textAlign: "left",
+                  cursor: "pointer", textAlign: "left",
                   width: "100%",
                 }}
                 onMouseEnter={e => {
@@ -1106,11 +1106,10 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
     padding: "14px 14px 10px",
     zIndex: 35,
     overflow: "hidden",
-    animation: "sb-slide-right-in 0.32s var(--sb-spring-premium-snappy) both",
   };
 
   return (
-    <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
+    <div ref={panelRef} className="sb-marker-enter" style={panelStyle} onClick={(e) => e.stopPropagation()}>
 
       {/* Accent rail */}
       <div style={{
@@ -1298,6 +1297,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                 {/* Mini drop-up — Velvet glass treatment */}
                 {sweeperMenuOpen && !hasSweeper && (
                   <div
+                    className="sb-popover-up"
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       position: 'absolute',
@@ -1305,7 +1305,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                       left: 0,
                       right: 0,
                       marginBottom: 6,
-                      background: isDarkPanel ? 'var(--sb-glass)' : 'var(--sb-glass)',
+                      background: 'var(--sb-glass)',
                       border: '1px solid var(--sb-glass-border)',
                       borderRadius: 14,
                       boxShadow: isDarkPanel
@@ -1318,8 +1318,6 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 2,
-                      animation: 'sb-slide-up-in 0.2s var(--sb-spring-premium-snappy) both',
-                      transformOrigin: 'bottom',
                     }}
                   >
                     {[

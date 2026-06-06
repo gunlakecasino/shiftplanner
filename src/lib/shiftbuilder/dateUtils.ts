@@ -162,6 +162,8 @@ export interface NavDayStripItem {
   date: Date;
   dateNum: number;
   shortLabel: string;
+  /** Three-letter weekday — FRI, SAT (hero nav active pill). */
+  weekdayShort: string;
   dayLetter: string;
   isToday: boolean;
 }
@@ -177,6 +179,7 @@ export function buildNavDayStrip(weekStart: Date, today: Date): NavDayStripItem[
     date: prevThu,
     dateNum: prevThu.getDate(),
     shortLabel: MONTH_SHORT[prevThu.getMonth()].toUpperCase(),
+    weekdayShort: DAY_LONG[prevThu.getDay()].slice(0, 3).toUpperCase(),
     dayLetter: DAY_LONG[prevThu.getDay()].charAt(0),
     isToday: sameDay(prevThu, today),
   });
@@ -190,6 +193,7 @@ export function buildNavDayStrip(weekStart: Date, today: Date): NavDayStripItem[
       date,
       dateNum: date.getDate(),
       shortLabel: MONTH_SHORT[date.getMonth()].toUpperCase(),
+      weekdayShort: name.slice(0, 3).toUpperCase(),
       dayLetter: name.charAt(0),
       isToday: sameDay(date, today),
     });
@@ -203,6 +207,7 @@ export function buildNavDayStrip(weekStart: Date, today: Date): NavDayStripItem[
     date: nextFri,
     dateNum: nextFri.getDate(),
     shortLabel: MONTH_SHORT[nextFri.getMonth()].toUpperCase(),
+    weekdayShort: DAY_LONG[nextFri.getDay()].slice(0, 3).toUpperCase(),
     dayLetter: DAY_LONG[nextFri.getDay()].charAt(0),
     isToday: sameDay(nextFri, today),
   });

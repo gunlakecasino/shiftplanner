@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { AssignmentSkeleton } from "./builderPrimitives";
 
 // Dashed assignment line — TM name rides on top, or empty when unfilled.
 const AssignmentLine = React.memo(function AssignmentLine({
@@ -20,7 +21,7 @@ const AssignmentLine = React.memo(function AssignmentLine({
   if (loading) {
     return (
       <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight`}>
-        <span className="inline-block h-[10px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
+        <AssignmentSkeleton size="sm" />
       </div>
     );
   }

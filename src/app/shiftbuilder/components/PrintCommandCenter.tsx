@@ -2,6 +2,32 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import {
+  Moon,
+  CalendarDays,
+  LayoutGrid,
+  Coffee,
+  Pencil,
+  Save,
+  Printer,
+  X,
+  Info,
+  Table2,
+  FileText,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import {
+  defaultPrintDays,
+  countPrintPages,
+  estimatePrintSeconds,
+  buildPrintQueue,
+  applyCustomQueueOrder,
+  loadLastPrintConfig,
+  syncOverviewMaster,
+  syncOverviewFromDayChange,
+} from "../print/printConfigUtils";
+
 
 // ─── Exported Types & Constants ───────────────────────────────────────────────
 
@@ -23,6 +49,7 @@ export interface PrintConfig {
   overviewPosition: "first" | "last";
   includeCoverPage: boolean;
   coverPagePosition: "first" | "last";
+  customQueueOrder?: string[] | null;
 }
 
 export const MARGIN_VALUES: Record<MarginSize, string> = {
@@ -59,18 +86,6 @@ function persistPresets(presets: SavedPreset[]): void {
   try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch {}
 }
 
-// ─── Component Types ──────────────────────────────────────────────────────────
-
-interface DayDef {
-  index: number;
-  name: string;
-  short: string;
-  color: string;
-  dateNum: number;
-  monthYear: string;
-  isToday: boolean;
-}
-
 export interface PrintProgress {
   current: number;
   total: number;
@@ -88,100 +103,6 @@ interface PrintCommandCenterProps {
   isDark?: boolean;
 }
 
-// ─── Queue item type ──────────────────────────────────────────────────────────
-
-type QueueItemType = "deploy" | "breaks" | "overview" | "cover";
-interface QueueItem {
-  id: string;
-  label: string;
-  type: QueueItemType;
-  color: string;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function defaultDays(todayIndex: number): PrintDayConfig[] {
-  return Array.from({ length: 7 }, (_, i) => ({
-    dayIndex: i,
-    printDeploy: i === todayIndex,
-    printBreaks: i === todayIndex,
-    inOverview: i === todayIndex,
-  }));
-}
-
-function countTotalPages(
-  days: PrintDayConfig[],
-  includeOverview: boolean,
-  includeCoverPage: boolean,
-): number {
-  let n = days.reduce((s, d) => s + (d.printDeploy ? 1 : 0) + (d.printBreaks ? 1 : 0), 0);
-  if (includeOverview && days.some(d => d.inOverview)) n++;
-  if (includeCoverPage) n++;
-  return n;
-}
-
-function estimateRenderSeconds(days: PrintDayConfig[], includeOverview: boolean): number {
-  const deployBreaks = new Set(days.filter(d => d.printDeploy || d.printBreaks).map(d => d.dayIndex));
-  const overviewOnly = includeOverview
-    ? days.filter(d => d.inOverview && !deployBreaks.has(d.dayIndex)).length
-    : 0;
-  return (deployBreaks.size + overviewOnly) * 4 + (includeOverview ? 2 : 0);
-}
-
-function buildQueue(
-  days: PrintDayConfig[],
-  pageOrder: PageOrder,
-  dayDefs: DayDef[],
-  includeOverview: boolean,
-  overviewPosition: "first" | "last",
-  includeCoverPage: boolean,
-  coverPagePosition: "first" | "last",
-): QueueItem[] {
-  const items: QueueItem[] = [];
-  const active = days.filter(d => d.printDeploy || d.printBreaks);
-
-  const coverItem: QueueItem = { id: "__cover", label: "Cover Page", type: "cover", color: "#1C1C1E" };
-  const overviewItem: QueueItem = { id: "__overview", label: "Week Overview", type: "overview", color: "#5856D6" };
-
-  const dayItems: QueueItem[] = [];
-  if (pageOrder === "paired") {
-    for (const d of active) {
-      const def = dayDefs[d.dayIndex];
-      if (!def) continue;
-      if (d.printDeploy) dayItems.push({ id: `${d.dayIndex}-d`, label: `${def.short} Deploy`, type: "deploy", color: def.color });
-      if (d.printBreaks) dayItems.push({ id: `${d.dayIndex}-b`, label: `${def.short} Breaks`, type: "breaks", color: def.color });
-    }
-  } else if (pageOrder === "deploy-first") {
-    for (const d of active) {
-      const def = dayDefs[d.dayIndex];
-      if (def && d.printDeploy) dayItems.push({ id: `${d.dayIndex}-d`, label: `${def.short} Deploy`, type: "deploy", color: def.color });
-    }
-    for (const d of active) {
-      const def = dayDefs[d.dayIndex];
-      if (def && d.printBreaks) dayItems.push({ id: `${d.dayIndex}-b`, label: `${def.short} Breaks`, type: "breaks", color: def.color });
-    }
-  } else {
-    for (const d of active) {
-      const def = dayDefs[d.dayIndex];
-      if (def && d.printBreaks) dayItems.push({ id: `${d.dayIndex}-b`, label: `${def.short} Breaks`, type: "breaks", color: def.color });
-    }
-    for (const d of active) {
-      const def = dayDefs[d.dayIndex];
-      if (def && d.printDeploy) dayItems.push({ id: `${d.dayIndex}-d`, label: `${def.short} Deploy`, type: "deploy", color: def.color });
-    }
-  }
-
-  const hasOverview = includeOverview && days.some(d => d.inOverview);
-
-  if (includeCoverPage && coverPagePosition === "first") items.push(coverItem);
-  if (hasOverview && overviewPosition === "first") items.push(overviewItem);
-  items.push(...dayItems);
-  if (hasOverview && overviewPosition === "last") items.push(overviewItem);
-  if (includeCoverPage && coverPagePosition === "last") items.push(coverItem);
-
-  return items;
-}
-
 function detectActivePreset(
   days: PrintDayConfig[],
   todayIndex: number,
@@ -197,8 +118,13 @@ function detectActivePreset(
     tonight?.printDeploy && tonight?.printBreaks
   ) return "tonight";
 
-  if (days.every(d => d.printDeploy && d.printBreaks) && !includeOverview && !includeCoverPage)
+  if (
+    days.every((d) => d.printDeploy && d.printBreaks && d.inOverview) &&
+    includeOverview &&
+    !includeCoverPage
+  ) {
     return "full-week";
+  }
   if (days.every(d => d.printDeploy && !d.printBreaks) && !includeOverview && !includeCoverPage)
     return "deploy-book";
   if (days.every(d => !d.printDeploy && d.printBreaks) && !includeOverview && !includeCoverPage)
@@ -245,6 +171,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
       <div style={{ padding: "5px 5px", display: "flex", flexDirection: "column", gap: 3 }}>
         <Chip
           label="DEP"
+          title="Deployment sheet"
           active={config.printDeploy}
           activeColor="rgba(52,199,89,0.9)"
           activeBg={isDark ? "rgba(52,199,89,0.15)" : "rgba(52,199,89,0.1)"}
@@ -254,6 +181,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
         />
         <Chip
           label="BRK"
+          title="Break sheet"
           active={config.printBreaks}
           activeColor="rgba(255,159,10,0.9)"
           activeBg={isDark ? "rgba(255,159,10,0.15)" : "rgba(255,159,10,0.1)"}
@@ -263,6 +191,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
         />
         <Chip
           label="OVW"
+          title="Include in overview table column"
           active={config.inOverview}
           activeColor="rgba(88,86,214,0.9)"
           activeBg={isDark ? "rgba(88,86,214,0.15)" : "rgba(88,86,214,0.1)"}
@@ -277,6 +206,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
 
 interface ChipProps {
   label: string;
+  title: string;
   active: boolean;
   activeColor: string;
   activeBg: string;
@@ -285,11 +215,12 @@ interface ChipProps {
   onClick: () => void;
 }
 
-function Chip({ label, active, activeColor, activeBg, activeBorder, isDark, onClick }: ChipProps) {
+function Chip({ label, title, active, activeColor, activeBg, activeBorder, isDark, onClick }: ChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      className="sb-interactive"
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 3, padding: "3px 5px", borderRadius: 5, cursor: "pointer",
@@ -297,7 +228,7 @@ function Chip({ label, active, activeColor, activeBg, activeBorder, isDark, onCl
         border: `1px solid ${active ? activeBorder : "transparent"}`,
         transition: "background 0.12s, border-color 0.12s",
       }}
-      title={label}
+      title={title}
     >
       <span style={{
         fontSize: 8.5, fontWeight: 700, letterSpacing: "0.04em",
@@ -339,6 +270,7 @@ function MarginCard({ value, label, sub, selected, onClick, isDark }: MarginCard
     <button
       type="button"
       onClick={onClick}
+      className="sb-select-card sb-interactive"
       style={{
         flex: "1 1 0%", display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
         padding: "8px 6px", borderRadius: 9, cursor: "pointer",
@@ -392,8 +324,19 @@ export function PrintCommandCenter({
   isDark = false,
 }: PrintCommandCenterProps) {
 
+  const applyConfig = useCallback((config: PrintConfig) => {
+    setDays(config.days);
+    setPageOrder(config.pageOrder);
+    setMargins(config.margins);
+    setIncludeOverview(config.includeOverview ?? false);
+    setOverviewPosition(config.overviewPosition ?? "last");
+    setIncludeCoverPage(config.includeCoverPage ?? false);
+    setCoverPagePosition(config.coverPagePosition ?? "first");
+    setCustomOrder(config.customQueueOrder ?? null);
+  }, []);
+
   // ── Core config state ──────────────────────────────────────────────────────
-  const [days, setDays] = useState<PrintDayConfig[]>(() => defaultDays(selectedDayIndex));
+  const [days, setDays] = useState<PrintDayConfig[]>(() => defaultPrintDays(selectedDayIndex));
   const [pageOrder, setPageOrder] = useState<PageOrder>("paired");
   const [margins, setMargins] = useState<MarginSize>("narrow");
   const [includeOverview, setIncludeOverview] = useState(false);
@@ -427,20 +370,30 @@ export function PrintCommandCenter({
     }
   }, [open]);
 
-  // Reset config when opened; load saved presets
+  // Restore last-used config when opened; fall back to tonight-only defaults
   useEffect(() => {
-    if (open) {
-      setDays(defaultDays(selectedDayIndex));
-      setPageOrder("paired");
-      setMargins("narrow");
-      setIncludeOverview(false);
-      setOverviewPosition("last");
-      setIncludeCoverPage(false);
-      setCoverPagePosition("first");
-      setCustomOrder(null);
-      setSavedPresets(loadPresets());
+    if (!open) return;
+    const last = loadLastPrintConfig(selectedDayIndex);
+    if (last) {
+      applyConfig(last);
+    } else {
+      applyConfig({
+        days: defaultPrintDays(selectedDayIndex).map((d) =>
+          d.dayIndex === selectedDayIndex
+            ? { ...d, printDeploy: true, printBreaks: true }
+            : d,
+        ),
+        pageOrder: "paired",
+        margins: "narrow",
+        includeOverview: false,
+        overviewPosition: "last",
+        includeCoverPage: false,
+        coverPagePosition: "first",
+        customQueueOrder: null,
+      });
     }
-  }, [open, selectedDayIndex]);
+    setSavedPresets(loadPresets());
+  }, [open, selectedDayIndex, applyConfig]);
 
   // Focus save input when shown
   useEffect(() => {
@@ -448,29 +401,39 @@ export function PrintCommandCenter({
   }, [showSaveInput]);
 
   // ── Derived values ────────────────────────────────────────────────────────
+  const overviewNightCount = useMemo(() => days.filter((d) => d.inOverview).length, [days]);
+
   const pageCount = useMemo(
-    () => countTotalPages(days, includeOverview, includeCoverPage),
-    [days, includeOverview, includeCoverPage]
+    () => countPrintPages(days, includeOverview, includeCoverPage),
+    [days, includeOverview, includeCoverPage],
   );
   const estSecs = useMemo(
-    () => estimateRenderSeconds(days, includeOverview),
-    [days, includeOverview]
+    () => estimatePrintSeconds(days, includeOverview),
+    [days, includeOverview],
   );
   const autoQueue = useMemo(
-    () => buildQueue(days, pageOrder, DAY_DEFS, includeOverview, overviewPosition, includeCoverPage, coverPagePosition),
-    [days, pageOrder, DAY_DEFS, includeOverview, overviewPosition, includeCoverPage, coverPagePosition]
+    () =>
+      buildPrintQueue(
+        days,
+        pageOrder,
+        DAY_DEFS,
+        includeOverview,
+        overviewPosition,
+        includeCoverPage,
+        coverPagePosition,
+      ),
+    [days, pageOrder, DAY_DEFS, includeOverview, overviewPosition, includeCoverPage, coverPagePosition],
   );
-  // Apply customOrder if item IDs still match
-  const queueItems = useMemo(() => {
-    if (!customOrder) return autoQueue;
-    const autoIds = new Set(autoQueue.map(i => i.id));
-    const customIds = new Set(customOrder);
-    if ([...autoIds].every(id => customIds.has(id)) && [...customIds].every(id => autoIds.has(id))) {
-      const map = new Map(autoQueue.map(i => [i.id, i]));
-      return customOrder.map(id => map.get(id)!).filter(Boolean);
-    }
-    setCustomOrder(null);
-    return autoQueue;
+  const queueItems = useMemo(
+    () => applyCustomQueueOrder(autoQueue, customOrder),
+    [autoQueue, customOrder],
+  );
+
+  useEffect(() => {
+    if (!customOrder?.length) return;
+    const autoIds = autoQueue.map((i) => i.id).join(",");
+    const customIds = customOrder.join(",");
+    if (autoIds !== customIds) setCustomOrder(null);
   }, [autoQueue, customOrder]);
 
   const activePreset = useMemo(
@@ -479,71 +442,159 @@ export function PrintCommandCenter({
   );
 
   // ── Config snapshot (for save/apply) ──────────────────────────────────────
-  const currentConfig = useCallback((): PrintConfig => ({
-    days, pageOrder, margins,
-    includeOverview, overviewPosition,
-    includeCoverPage, coverPagePosition,
-  }), [days, pageOrder, margins, includeOverview, overviewPosition, includeCoverPage, coverPagePosition]);
+  const currentConfig = useCallback(
+    (): PrintConfig => ({
+      days,
+      pageOrder,
+      margins,
+      includeOverview,
+      overviewPosition,
+      includeCoverPage,
+      coverPagePosition,
+      customQueueOrder: customOrder,
+    }),
+    [
+      days,
+      pageOrder,
+      margins,
+      includeOverview,
+      overviewPosition,
+      includeCoverPage,
+      coverPagePosition,
+      customOrder,
+    ],
+  );
 
   // ── Day change handler ────────────────────────────────────────────────────
   const handleDayChange = useCallback((updated: PrintDayConfig) => {
-    setDays(prev => prev.map(d => d.dayIndex === updated.dayIndex ? updated : d));
+    setDays((prev) => {
+      const synced = syncOverviewFromDayChange(prev, updated);
+      setIncludeOverview(synced.includeOverview);
+      return synced.days;
+    });
     setCustomOrder(null);
   }, []);
+
+  const handleOverviewMasterToggle = useCallback(() => {
+    const next = !includeOverview;
+    const synced = syncOverviewMaster(days, next, selectedDayIndex);
+    setIncludeOverview(synced.includeOverview);
+    setDays(synced.days);
+    setCustomOrder(null);
+  }, [includeOverview, days, selectedDayIndex]);
 
   // ── Bulk toggles ──────────────────────────────────────────────────────────
   const allDeploy = days.every(d => d.printDeploy);
   const allBreaks = days.every(d => d.printBreaks);
   const allOverview = days.every(d => d.inOverview);
 
-  const bulkToggle = useCallback((field: "printDeploy" | "printBreaks" | "inOverview") => {
-    const currentAll = days.every(d => d[field]);
-    setDays(prev => prev.map(d => ({ ...d, [field]: !currentAll })));
-    setCustomOrder(null);
-  }, [days]);
+  const bulkToggle = useCallback(
+    (field: "printDeploy" | "printBreaks" | "inOverview") => {
+      const currentAll = days.every((d) => d[field]);
+      const nextVal = !currentAll;
+      setDays((prev) => {
+        const nextDays = prev.map((d) => ({ ...d, [field]: nextVal }));
+        if (field === "inOverview") {
+          setIncludeOverview(nextVal);
+        }
+        return nextDays;
+      });
+      setCustomOrder(null);
+    },
+    [days],
+  );
 
   const bulkSetAll = useCallback(() => {
-    setDays(prev => prev.map(d => ({ ...d, printDeploy: true, printBreaks: true, inOverview: true })));
+    setDays((prev) => prev.map((d) => ({ ...d, printDeploy: true, printBreaks: true, inOverview: true })));
+    setIncludeOverview(true);
     setCustomOrder(null);
   }, []);
 
   const bulkClear = useCallback(() => {
-    setDays(prev => prev.map(d => ({ ...d, printDeploy: false, printBreaks: false, inOverview: false })));
+    setDays((prev) => prev.map((d) => ({ ...d, printDeploy: false, printBreaks: false, inOverview: false })));
+    setIncludeOverview(false);
     setCustomOrder(null);
   }, []);
 
   // ── Presets ───────────────────────────────────────────────────────────────
-  const applyBuiltinPreset = useCallback((preset: "tonight" | "full-week" | "deploy-book" | "break-book") => {
-    setIncludeOverview(false);
-    setIncludeCoverPage(false);
-    setCustomOrder(null);
-    if (preset === "tonight") {
-      setDays(Array.from({ length: 7 }, (_, i) => ({
-        dayIndex: i,
-        printDeploy: i === selectedDayIndex,
-        printBreaks: i === selectedDayIndex,
-        inOverview: i === selectedDayIndex,
-      })));
-    } else if (preset === "full-week") {
-      setDays(Array.from({ length: 7 }, (_, i) => ({ dayIndex: i, printDeploy: true, printBreaks: true, inOverview: true })));
-    } else if (preset === "deploy-book") {
-      setDays(Array.from({ length: 7 }, (_, i) => ({ dayIndex: i, printDeploy: true, printBreaks: false, inOverview: false })));
-    } else {
-      setDays(Array.from({ length: 7 }, (_, i) => ({ dayIndex: i, printDeploy: false, printBreaks: true, inOverview: false })));
-    }
-  }, [selectedDayIndex]);
+  const applyBuiltinPreset = useCallback(
+    (preset: "tonight" | "full-week" | "deploy-book" | "break-book") => {
+      setIncludeCoverPage(false);
+      setCustomOrder(null);
+      if (preset === "tonight") {
+        applyConfig({
+          days: defaultPrintDays(selectedDayIndex).map((d) =>
+            d.dayIndex === selectedDayIndex
+              ? { ...d, printDeploy: true, printBreaks: true }
+              : { ...d, printDeploy: false, printBreaks: false },
+          ),
+          pageOrder: "paired",
+          margins: "narrow",
+          includeOverview: false,
+          overviewPosition: "last",
+          includeCoverPage: false,
+          coverPagePosition: "first",
+          customQueueOrder: null,
+        });
+      } else if (preset === "full-week") {
+        applyConfig({
+          days: Array.from({ length: 7 }, (_, i) => ({
+            dayIndex: i,
+            printDeploy: true,
+            printBreaks: true,
+            inOverview: true,
+          })),
+          pageOrder: "paired",
+          margins: "narrow",
+          includeOverview: true,
+          overviewPosition: "last",
+          includeCoverPage: false,
+          coverPagePosition: "first",
+          customQueueOrder: null,
+        });
+      } else if (preset === "deploy-book") {
+        applyConfig({
+          days: Array.from({ length: 7 }, (_, i) => ({
+            dayIndex: i,
+            printDeploy: true,
+            printBreaks: false,
+            inOverview: false,
+          })),
+          pageOrder: "deploy-first",
+          margins: "narrow",
+          includeOverview: false,
+          overviewPosition: "last",
+          includeCoverPage: false,
+          coverPagePosition: "first",
+          customQueueOrder: null,
+        });
+      } else {
+        applyConfig({
+          days: Array.from({ length: 7 }, (_, i) => ({
+            dayIndex: i,
+            printDeploy: false,
+            printBreaks: true,
+            inOverview: false,
+          })),
+          pageOrder: "breaks-first",
+          margins: "narrow",
+          includeOverview: false,
+          overviewPosition: "last",
+          includeCoverPage: false,
+          coverPagePosition: "first",
+          customQueueOrder: null,
+        });
+      }
+    },
+    [selectedDayIndex, applyConfig],
+  );
 
-  const applySavedPreset = useCallback((preset: SavedPreset) => {
-    const c = preset.config;
-    setDays(c.days);
-    setPageOrder(c.pageOrder);
-    setMargins(c.margins);
-    setIncludeOverview(c.includeOverview ?? false);
-    setOverviewPosition(c.overviewPosition ?? "last");
-    setIncludeCoverPage(c.includeCoverPage ?? false);
-    setCoverPagePosition(c.coverPagePosition ?? "first");
-    setCustomOrder(null);
-  }, []);
+  const applySavedPreset = useCallback(
+    (preset: SavedPreset) => {
+      applyConfig({ ...preset.config, customQueueOrder: null });
+    },
+    [applyConfig],
+  );
 
   const handleSavePreset = useCallback(() => {
     const name = saveInputValue.trim();
@@ -587,9 +638,8 @@ export function PrintCommandCenter({
   // ── Print ─────────────────────────────────────────────────────────────────
   const handlePrint = useCallback(() => {
     if (pageCount === 0) return;
-    // Apply custom queue order to the config if set
-    onPrint({ ...currentConfig(), _customQueueOrder: customOrder } as any);
-  }, [pageCount, currentConfig, customOrder, onPrint]);
+    onPrint(currentConfig());
+  }, [pageCount, currentConfig, onPrint]);
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -620,39 +670,36 @@ export function PrintCommandCenter({
 
   return createPortal(
     <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 9000,
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-        background: `rgba(0,0,0,${visible ? 0.55 : 0})`,
-        backdropFilter: visible ? "blur(8px)" : "none",
-        WebkitBackdropFilter: visible ? "blur(8px)" : "none",
-        transition: "background 0.2s",
-        pointerEvents: visible ? "auto" : "none",
-      }}
+      className={cn(
+        "sb-overlay-backdrop sb-overlay-backdrop--fixed sb-overlay-fade z-[9000]",
+        "flex items-center justify-center p-5",
+        visible && "sb-overlay-fade--visible"
+      )}
+      style={{ background: visible ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0)" }}
       onClick={e => { if (e.target === e.currentTarget && !isPrinting && !showSaveInput) onClose(); }}
     >
-      <div style={{
-        width: "min(740px, 100%)",
-        maxHeight: "min(92vh, 760px)",
-        background: panelBg,
-        borderRadius: 20,
-        border: `1px solid ${border}`,
-        boxShadow: isDark
-          ? "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)"
-          : "0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04)",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        transform: visible ? "scale(1) translateY(0)" : "scale(0.95) translateY(10px)",
-        opacity: visible ? 1 : 0,
-        transition: "transform 0.22s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease",
-        position: "relative",
-      }}>
+      <div
+        className={cn(
+          "sb-modal-shell flex flex-col overflow-hidden relative",
+          visible && "sb-modal-shell--visible"
+        )}
+        style={{
+          width: "min(740px, 100%)",
+          maxHeight: "min(92vh, 760px)",
+          background: panelBg,
+          borderRadius: 20,
+          border: `1px solid ${border}`,
+          boxShadow: isDark
+            ? "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)"
+            : "0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04)",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* ── HEADER ────────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px 13px", borderBottom: `1px solid ${divider}`, flexShrink: 0 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, background: isDark ? "rgba(10,132,255,0.2)" : "rgba(10,132,255,0.1)", border: "1px solid rgba(10,132,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span className="ms" style={{ fontSize: 17, color: '#0A84FF', fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
+            <Printer size={16} color="#0A84FF" strokeWidth={2} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: tx, letterSpacing: "-0.01em" }}>Print Command Center</div>
@@ -662,8 +709,8 @@ export function PrintCommandCenter({
               </div>
             )}
           </div>
-          <button type="button" onClick={onClose} disabled={isPrinting} style={{ width: 26, height: 26, borderRadius: 13, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", border: "none", cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: ts, opacity: isPrinting ? 0.4 : 1 }} title="Close (Esc)">
-            <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>close</span>
+          <button type="button" onClick={onClose} disabled={isPrinting} className="sb-interactive" style={{ width: 26, height: 26, borderRadius: 13, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", border: "none", cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: ts, opacity: isPrinting ? 0.4 : 1 }} title="Close (Esc)">
+            <X size={14} strokeWidth={2} />
           </button>
         </div>
 
@@ -675,15 +722,15 @@ export function PrintCommandCenter({
             <SectionLabel text="PRESETS" isDark={isDark} />
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
               {([
-                { id: "tonight", label: "Tonight", icon: "🌙" },
-                { id: "full-week", label: "Full Week", icon: "📅" },
-                { id: "deploy-book", label: "Deploy Book", icon: "📋" },
-                { id: "break-book", label: "Break Book", icon: "☕" },
+                { id: "tonight", label: "Tonight", icon: <Moon size={12} strokeWidth={2.2} /> },
+                { id: "full-week", label: "Full Week", icon: <CalendarDays size={12} strokeWidth={2.2} /> },
+                { id: "deploy-book", label: "Deploy Book", icon: <LayoutGrid size={12} strokeWidth={2.2} /> },
+                { id: "break-book", label: "Break Book", icon: <Coffee size={12} strokeWidth={2.2} /> },
               ] as const).map(({ id, label, icon }) => (
-                <PresetPill key={id} label={`${icon} ${label}`} active={activePreset === id} onClick={() => applyBuiltinPreset(id)} isDark={isDark} />
+                <PresetPill key={id} label={label} icon={icon} active={activePreset === id} onClick={() => applyBuiltinPreset(id)} isDark={isDark} />
               ))}
               {activePreset === "custom" && (
-                <PresetPill label="✏️ Custom" active onClick={() => {}} isDark={isDark} accent="#FF9F0A" />
+                <PresetPill label="Custom" icon={<Pencil size={12} strokeWidth={2.2} />} active onClick={() => {}} isDark={isDark} accent="#FF9F0A" />
               )}
             </div>
 
@@ -692,8 +739,9 @@ export function PrintCommandCenter({
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
                 {savedPresets.map(p => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 20, border: `1.5px solid ${isDark ? "rgba(72,72,74,0.45)" : "rgba(209,209,214,0.55)"}`, overflow: "hidden" }}>
-                    <button type="button" onClick={() => applySavedPreset(p)} style={{ padding: "5px 10px 5px 10px", background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: ts, fontWeight: 500 }}>
-                      💾 {p.name}
+                    <button type="button" onClick={() => applySavedPreset(p)} style={{ padding: "5px 10px 5px 10px", background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: ts, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
+                      <Save size={11} strokeWidth={2} />
+                      {p.name}
                     </button>
                     <button type="button" onClick={() => handleDeletePreset(p.id)} style={{ padding: "5px 8px 5px 4px", background: "transparent", border: "none", cursor: "pointer", color: ts, fontSize: 10, opacity: 0.5, lineHeight: 1 }} title="Delete preset">×</button>
                   </div>
@@ -709,7 +757,7 @@ export function PrintCommandCenter({
               <BulkBtn label="All Nights" active={allDeploy && allBreaks} color="#0A84FF" onClick={() => { setDays(p => p.map(d => ({ ...d, printDeploy: true, printBreaks: true }))); setCustomOrder(null); }} isDark={isDark} />
               <BulkBtn label="All Deploy" active={allDeploy} color="rgba(52,199,89,0.85)" onClick={() => bulkToggle("printDeploy")} isDark={isDark} />
               <BulkBtn label="All Breaks" active={allBreaks} color="rgba(255,159,10,0.85)" onClick={() => bulkToggle("printBreaks")} isDark={isDark} />
-              <BulkBtn label="All OVW" active={allOverview} color="rgba(88,86,214,0.85)" onClick={() => bulkToggle("inOverview")} isDark={isDark} />
+              <BulkBtn label="All Overview" active={allOverview} color="rgba(88,86,214,0.85)" onClick={() => bulkToggle("inOverview")} isDark={isDark} />
               <div style={{ flex: 1 }} />
               <BulkBtn label="Select All" active={false} color="#0A84FF" onClick={bulkSetAll} isDark={isDark} />
               <BulkBtn label="Clear All" active={false} color="#FF3B30" onClick={bulkClear} isDark={isDark} />
@@ -772,11 +820,20 @@ export function PrintCommandCenter({
               <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
                 {/* Overview */}
                 <div style={{ borderRadius: 8, border: `1.5px solid ${includeOverview ? "rgba(88,86,214,0.5)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`, background: includeOverview ? (isDark ? "rgba(88,86,214,0.1)" : "rgba(88,86,214,0.06)") : "transparent", overflow: "hidden" }}>
-                  <button type="button" onClick={() => setIncludeOverview(v => !v)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
+                  <button type="button" onClick={handleOverviewMasterToggle} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
                     <CheckDot active={includeOverview} color="rgba(88,86,214,0.9)" />
-                    <div style={{ textAlign: "left" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: includeOverview ? "#5856D6" : tx }}>Week Overview</div>
-                      <div style={{ fontSize: 9, color: ts }}>All-nights slot grid</div>
+                    <div style={{ textAlign: "left", flex: 1 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: includeOverview ? "#5856D6" : tx, display: "flex", alignItems: "center", gap: 5 }}>
+                        <Table2 size={12} strokeWidth={2} />
+                        Overview Table
+                      </div>
+                      <div style={{ fontSize: 9, color: ts }}>
+                        {includeOverview
+                          ? overviewNightCount === 1
+                            ? "Daily layout · 1 night column"
+                            : `Weekly layout · ${overviewNightCount} night columns`
+                          : "Slot grid — pick nights with OVW chips"}
+                      </div>
                     </div>
                   </button>
                   {includeOverview && (
@@ -792,7 +849,10 @@ export function PrintCommandCenter({
                   <button type="button" onClick={() => setIncludeCoverPage(v => !v)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
                     <CheckDot active={includeCoverPage} color="rgba(10,132,255,0.9)" />
                     <div style={{ textAlign: "left" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: includeCoverPage ? "#0A84FF" : tx }}>Cover Page</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: includeCoverPage ? "#0A84FF" : tx, display: "flex", alignItems: "center", gap: 5 }}>
+                        <FileText size={12} strokeWidth={2} />
+                        Cover Page
+                      </div>
                       <div style={{ fontSize: 9, color: ts }}>Dark title + contents</div>
                     </div>
                   </button>
@@ -823,7 +883,7 @@ export function PrintCommandCenter({
                 ))}
               </div>
               <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 5 }}>
-                <span className="ms" style={{ fontSize: 13, color: ts, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>info</span>
+                <Info size={13} color={ts} strokeWidth={2} />
                 <span style={{ fontSize: 10, color: ts }}>
                   Auto-scale: <strong style={{ color: tx }}>{Math.round(MARGIN_ZOOM[margins] * 100)}%</strong>
                   <span style={{ opacity: 0.55 }}> · 11×8.5in landscape</span>
@@ -930,14 +990,15 @@ export function PrintCommandCenter({
                   <>
                     <span style={{ color: tx, fontWeight: 600 }}>{pageCount} page{pageCount !== 1 ? "s" : ""}</span>
                     {" · ~"}{estSecs}s {" · "}
-                    <span style={{ opacity: 0.6 }}>⌘↩ print</span>
+                    <span style={{ opacity: 0.6 }}>⌘↩ print · ⌘⇧P quick tonight</span>
                   </>
                 ) : <span style={{ opacity: 0.45 }}>Select days above</span>}
               </div>
 
               {/* Save preset */}
-              <button type="button" onClick={() => setShowSaveInput(true)} style={{ padding: "7px 12px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }} title="Save current config as a preset">
-                💾 Save
+              <button type="button" onClick={() => setShowSaveInput(true)} style={{ padding: "7px 12px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 11.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }} title="Save current config as a preset">
+                <Save size={13} strokeWidth={2} />
+                Save
               </button>
 
               {/* Cancel */}
@@ -956,7 +1017,7 @@ export function PrintCommandCenter({
                 opacity: isPrinting ? 0.6 : 1,
                 boxShadow: pageCount > 0 ? "0 2px 8px rgba(10,132,255,0.3)" : "none",
               }}>
-                <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
+                <Printer size={15} strokeWidth={2.2} />
                 {pageCount > 0 ? `Print ${pageCount} Page${pageCount !== 1 ? "s" : ""}` : "Print"}
               </button>
             </>
@@ -965,24 +1026,27 @@ export function PrintCommandCenter({
 
         {/* ── PROGRESS OVERLAY ──────────────────────────────────────────────── */}
         {isPrinting && (
-          <div style={{ position: "absolute", inset: 0, background: isDark ? "rgba(28,28,30,0.93)" : "rgba(250,250,252,0.93)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, borderRadius: 20, zIndex: 10 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,#0A84FF 0%,#0060D0 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(10,132,255,0.4)", animation: "pcc-pulse 1.6s ease-in-out infinite" }}>
-              <span className="ms" style={{ fontSize: 28, color: '#fff', fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 24' }}>print</span>
+          <div className="sb-content-enter absolute inset-0 z-10 flex flex-col items-center justify-center gap-[18px] rounded-[20px]" style={{ background: isDark ? "rgba(28,28,30,0.93)" : "rgba(250,250,252,0.93)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
+            <div className="sb-progress-pulse flex items-center justify-center" style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,#0A84FF 0%,#0060D0 100%)", boxShadow: "0 8px 24px rgba(10,132,255,0.4)" }}>
+              <Printer size={26} color="#fff" strokeWidth={2} />
             </div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: tx, marginBottom: 3 }}>{printProgress?.label ?? "Preparing…"}</div>
+              <p className="text-[14px] font-bold" style={{ color: tx, marginBottom: 3 }} aria-busy="true" aria-live="polite">
+                {printProgress?.label ?? "Preparing"}
+                <span className="sb-loading-dots" aria-hidden="true" />
+              </p>
               {printProgress && printProgress.total > 0 && (
-                <div style={{ fontSize: 11, color: ts }}>Day {printProgress.current} of {printProgress.total}</div>
+                <div style={{ fontSize: 11, color: ts }}>
+                  Page {printProgress.current} of {printProgress.total}
+                </div>
               )}
             </div>
             <div style={{ width: 260, height: 4, borderRadius: 2, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg,#0A84FF,#30D158)", borderRadius: 2, transition: "width 0.4s ease" }} />
+              <div className="sb-progress-bar" style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg,#0A84FF,#30D158)", borderRadius: 2 }} />
             </div>
             <div style={{ fontSize: 10, color: ts, opacity: 0.55 }}>Please wait — do not close this window</div>
           </div>
         )}
-
-        <style>{`@keyframes pcc-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }`}</style>
       </div>
     </div>,
     document.body
@@ -995,23 +1059,26 @@ function SectionLabel({ text, isDark }: { text: string; isDark: boolean }) {
   return <div style={{ fontSize: 9.5, fontWeight: 700, color: isDark ? "#8E8E93" : "#6B7280", letterSpacing: "0.08em" }}>{text}</div>;
 }
 
-function PresetPill({ label, active, onClick, isDark, accent }: { label: string; active: boolean; onClick: () => void; isDark: boolean; accent?: string }) {
+function PresetPill({ label, icon, active, onClick, isDark, accent }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; isDark: boolean; accent?: string }) {
   const a = accent ?? "#0A84FF";
   return (
-    <button type="button" onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 20,
+    <button type="button" onClick={onClick} className="sb-interactive" style={{
+      display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 20,
       border: `1.5px solid ${active ? a : (isDark ? "rgba(72,72,74,0.45)" : "rgba(209,209,214,0.55)")}`,
       background: active ? (isDark ? `${a}22` : `${a}14`) : (isDark ? "rgba(44,44,46,0.45)" : "rgba(255,255,255,0.55)"),
       color: active ? a : (isDark ? "#8E8E93" : "#6B7280"),
       fontSize: 11, fontWeight: active ? 700 : 500, cursor: "pointer", whiteSpace: "nowrap",
       transition: "all 0.12s",
-    }}>{label}</button>
+    }}>
+      {icon}
+      {label}
+    </button>
   );
 }
 
 function BulkBtn({ label, active, color, onClick, isDark }: { label: string; active: boolean; color: string; onClick: () => void; isDark: boolean }) {
   return (
-    <button type="button" onClick={onClick} style={{
+    <button type="button" onClick={onClick} className="sb-interactive" style={{
       padding: "4px 9px", borderRadius: 6, fontSize: 10, fontWeight: active ? 700 : 500, cursor: "pointer",
       border: `1px solid ${active ? color : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
       background: active ? `${color}18` : "transparent", color: active ? color : (isDark ? "#8E8E93" : "#6B7280"),
@@ -1022,7 +1089,7 @@ function BulkBtn({ label, active, color, onClick, isDark }: { label: string; act
 
 function PosBtn({ label, active, onClick, color, isDark }: { label: string; active: boolean; onClick: () => void; color: string; isDark: boolean }) {
   return (
-    <button type="button" onClick={onClick} style={{
+    <button type="button" onClick={onClick} className="sb-interactive" style={{
       flex: 1, padding: "3px 6px", borderRadius: 5, fontSize: 9.5, fontWeight: active ? 700 : 500,
       cursor: "pointer", border: `1px solid ${active ? color : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
       background: active ? `${color}18` : "transparent", color: active ? color : (isDark ? "#8E8E93" : "#6B7280"),

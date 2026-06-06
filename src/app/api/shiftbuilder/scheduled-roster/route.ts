@@ -1,12 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { getScheduledTmsFromGravesDefault } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
+async function resolveNightId(
+  nightDate: Date,
+  nightIdParam: string | null,
+): Promise<string | null> {
+  if (nightIdParam) return nightIdParam;
+
+  const supabase = createAdminClientSafe();
+  if (!supabase) return null;
+
+  const iso = formatLocalDateISO(nightDate);
+  const { data } = await supabase
+    .from("nights")
+    .select("id")
+    .eq("night_date", iso)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+async function loadScheduledRoster(dateParam: string, nightId: string | null) {
+  const nightDate = parseLocalDateISO(dateParam);
+  return getScheduledTmsFromGravesDefault(nightDate, nightId);
+}
+
 /**
  * GET /api/shiftbuilder/scheduled-roster?date=YYYY-MM-DD&night_id=optional
  *
- * Canonical scheduled roster — reads graves_default_schedule + night_on_call only.
+ * Canonical scheduled roster — graves_default_schedule + night_on_call.
+ * Short edge cache so week prefetch does not hammer Postgres.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -22,30 +47,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  let nightId = nightIdParam;
-  if (!nightId) {
-    const supabase = createAdminClientSafe();
-    if (supabase) {
-      const iso = formatLocalDateISO(nightDate);
-      const { data } = await supabase
-        .from("nights")
-        .select("id")
-        .eq("night_date", iso)
-        .maybeSingle();
-      nightId = data?.id ?? null;
-    }
-  }
+  const nightId = await resolveNightId(nightDate, nightIdParam);
+  const cacheKey = nightId ?? "auto";
 
   try {
-    const result = await getScheduledTmsFromGravesDefault(nightDate, nightId);
+    const cachedLoad = unstable_cache(
+      () => loadScheduledRoster(dateParam, nightId),
+      ["scheduled-roster", dateParam, cacheKey],
+      { revalidate: 60, tags: ["scheduled-roster", "graves-default", `night-${dateParam}`] },
+    );
+
+    const result = await cachedLoad();
 
     if (!result.allScheduled?.length) {
-      console.warn("[scheduled-roster] Empty — run seed-graves-default-schedule or edit Graves Default Schedule page", {
-        date: dateParam,
-      });
+      console.warn(
+        "[scheduled-roster] Empty — run seed-graves-default-schedule or edit Graves Default Schedule page",
+        { date: dateParam },
+      );
     }
 
-    return NextResponse.json({
+    const body = {
       date: dateParam,
       nightId,
       allScheduled: result.allScheduled,
@@ -53,6 +74,12 @@ export async function GET(request: NextRequest) {
       pmOverlapScheduled: result.pmOverlapScheduled,
       amOverlapScheduled: result.amOverlapScheduled,
       scheduledWithRoles: result.scheduledWithRoles,
+    };
+
+    return NextResponse.json(body, {
+      headers: {
+        "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=120",
+      },
     });
   } catch (error) {
     console.error("[scheduled-roster] Error:", error);

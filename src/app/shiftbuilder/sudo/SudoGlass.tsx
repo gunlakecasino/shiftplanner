@@ -115,7 +115,7 @@ export function SudoTabButton({
       onClick={onClick}
       disabled={comingSoon}
       className={cn(
-        "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium tracking-[0.2px] transition-all",
+        "sb-interactive w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium tracking-[0.2px]",
         active
           ? isDark
             ? "bg-[#B89708]/15 text-[#E9B948] border border-[#B89708]/30"
@@ -190,7 +190,7 @@ export function SudoBanner({ kind, isDark = false, children, className }: SudoBa
   return (
     <div
       className={cn(
-        "rounded-xl px-3.5 py-2.5 text-[12px] border font-medium",
+        "sb-toast-enter rounded-xl px-3.5 py-2.5 text-[12px] border font-medium",
         styles,
         className
       )}
@@ -266,14 +266,14 @@ export function CenteredGlassModal({
     <div className="fixed inset-0 z-[10020] flex items-center justify-center p-4" aria-modal="true" role="dialog">
       {/* Softer backdrop for centered premium feel */}
       <div
-        className="absolute inset-0 bg-black/30 backdrop-blur-xl"
+        className="sb-overlay-backdrop sb-overlay-backdrop--fixed"
         onClick={onClose}
       />
 
       <GlassSurface
         isDark={isDark}
         elevated
-        className="relative flex flex-col overflow-hidden"
+        className="sb-modal-enter relative flex flex-col overflow-hidden"
         style={{ width: typeof width === "number" ? `${width}px` : width, maxWidth: "96vw" }}
       >
         <GoldHairline isDark={isDark} />
@@ -288,7 +288,7 @@ export function CenteredGlassModal({
             {headerActions}
             <button
               onClick={onClose}
-              className="text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 rounded p-1.5 transition-colors"
+              className="sb-interactive text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 rounded p-1.5"
               aria-label="Close"
             >
               <span className="ms" style={{ fontSize: 18 }}>close</span>
@@ -312,3 +312,5 @@ export function CenteredGlassModal({
 
 // Convenience re-export of the gold constant for any tab that needs it
 export const SUDO_GOLD = "#B89708";
+
+export { SudoTabLoading, BuilderBusyLabel } from "../components/builderPrimitives";

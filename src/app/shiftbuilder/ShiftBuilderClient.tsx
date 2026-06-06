@@ -68,6 +68,15 @@ import {
   MARGIN_VALUES,
   MARGIN_ZOOM,
 } from "./components/PrintCommandCenter";
+import {
+  buildPrintQueue,
+  applyCustomQueueOrder,
+  saveLastPrintConfig,
+  tonightPrintConfig,
+  fullWeekPrintConfig,
+} from "./print/printConfigUtils";
+import { buildOverviewArtboardHTML, type OverviewNight } from "./print/printOverviewTables";
+import { buildCoverPageArtboardHTML } from "./print/printCoverPage";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 // ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
 import {
@@ -149,9 +158,10 @@ import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
+import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
-import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar } from "./components/OpsStatusBar";
+import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
 import {
   CanvasEngineCluster,
   type CoverageEngineRunOptions,
@@ -180,14 +190,24 @@ import { createRoot, Root } from "react-dom/client";
 const LAUNCHPAD_ROOT_ID = "shiftbuilder-launchpad-root";
 
 function setLaunchpadRootVisible(container: HTMLDivElement, visible: boolean) {
+  container.style.transition =
+    "opacity var(--sb-dur-fast, 0.22s) var(--sb-spring-gentle, ease)";
   if (visible) {
     container.style.display = "block";
     container.style.visibility = "visible";
     container.style.pointerEvents = "auto";
+    requestAnimationFrame(() => {
+      container.style.opacity = "1";
+    });
   } else {
-    container.style.display = "none";
-    container.style.visibility = "hidden";
+    container.style.opacity = "0";
     container.style.pointerEvents = "none";
+    window.setTimeout(() => {
+      if (container.style.opacity === "0") {
+        container.style.display = "none";
+        container.style.visibility = "hidden";
+      }
+    }, 240);
   }
 }
 
@@ -211,7 +231,13 @@ function teardownShiftBuilderBodyChrome() {
 import { useTheme } from "./hooks/useTheme";
 import { useRosterPanels } from "./hooks/useRosterPanels";
 import { useToast } from "./hooks/useToast";
-import { useZoom, NATURAL_WIDTH, NATURAL_HEIGHT } from "./hooks/useZoom";
+import {
+  useZoom,
+  NATURAL_WIDTH,
+  NATURAL_HEIGHT,
+  isTabletTouchDevice,
+  type StageInsets,
+} from "./hooks/useZoom";
 
 
 // =============================================================================
@@ -469,7 +495,7 @@ const RosterDropZone: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      className={`${className ?? ""} ${highlight ? "roster-drop-active" : ""} transition-all duration-150 relative`}
+      className={`sb-drop-target ${className ?? ""} ${highlight ? "roster-drop-active" : ""} relative`}
     >
       {children}
 
@@ -487,174 +513,6 @@ const RosterDropZone: React.FC<{
     </div>
   );
 };
-
-// ── Print Command Center — Overview & Cover Page HTML Generators ──────────────
-// Module-level so they don't get recreated on every render and can be called
-// directly from handlePrintWithConfig's async pipeline.
-
-/** Matches SHIFT_DAY_COLORS order (Fri → Thu). */
-const _OVW_DAY_COLORS = ["#C13A14","#0065bf","#4d1a8a","#1f7a3d","#b8860b","#8b4513","#2f4f4f"];
-
-interface OverviewNight {
-  dayIndex: number;
-  assignments: Record<string, { tmId: string; tmName: string } | null>;
-}
-
-/**
- * Generates a landscape .print-artboard HTML string for the Weekly Overview.
- * Shows all selected nights as columns and all slots (Zones, RRs, Aux) as rows.
- */
-function buildOverviewArtboardHTML(
-  overviewNights: OverviewNight[],
-  dayDefs: DayDef[],
-): string {
-  const nights = [...overviewNights].sort((a, b) => a.dayIndex - b.dayIndex);
-  const N = nights.length;
-
-  // All slot rows with section grouping
-  const slotRows: { key: string; label: string; section: string; accent: string }[] = [];
-  ZONE_DEFS.forEach(z => slotRows.push({ key: z.key, label: z.label, section: "ZONES", accent: ZONE_COLORS[z.key] ?? "#6B7280" }));
-  RR_DEFS.forEach(rr => {
-    slotRows.push({ key: `MRR${rr.num}`, label: `${rr.label} M`, section: "RESTROOMS", accent: RR_COLORS[rr.num] ?? "#6B7280" });
-    slotRows.push({ key: `WRR${rr.num}`, label: `${rr.label} W`, section: "RESTROOMS", accent: RR_COLORS[rr.num] ?? "#6B7280" });
-  });
-  DEFAULT_AUX_DEFS.forEach(a => slotRows.push({ key: a.key, label: a.label, section: "SUPPORT", accent: AUX_COLORS[a.key] ?? "#6B7280" }));
-
-  const ROW_H = 24;
-  const SEC_H = 20;
-  const SLOT_W = 96;
-
-  const nightDefs = nights.map(n => ({
-    night: n,
-    def: dayDefs[n.dayIndex] ?? { name: `Day ${n.dayIndex}`, short: "?", color: "#6B7280", dateNum: 0, monthYear: "" } as DayDef,
-  }));
-
-  // Column header cells
-  const colHeaderCells = nightDefs.map(({ def }) =>
-    `<div style="flex:1;text-align:center;font-size:10px;font-weight:700;color:${def.color};` +
-    `padding:4px 2px;letter-spacing:0.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
-    `border-left:1px solid #E5E5EA;">${def.name.slice(0,3).toUpperCase()} ${def.dateNum}</div>`
-  ).join("");
-
-  // Table rows grouped by section
-  let tableRowsHTML = "";
-  (["ZONES", "RESTROOMS", "SUPPORT"] as const).forEach(sec => {
-    const rows = slotRows.filter(r => r.section === sec);
-    if (!rows.length) return;
-    tableRowsHTML +=
-      `<div style="display:flex;align-items:center;height:${SEC_H}px;background:#F2F2F7;` +
-      `border-top:1px solid #C8C8CC;flex-shrink:0;">` +
-      `<div style="width:${SLOT_W}px;padding:0 8px;font-size:8.5px;font-weight:800;color:#6B7280;` +
-      `letter-spacing:0.09em;text-transform:uppercase;">${sec}</div>` +
-      `<div style="flex:1;"></div></div>`;
-
-    rows.forEach((slot, ri) => {
-      const bg = ri % 2 === 0 ? "#FFFFFF" : "#F9F9FB";
-      const cells = nightDefs.map(({ night }) => {
-        const asgn = night.assignments[slot.key];
-        const name = asgn?.tmName ?? "—";
-        const disp = name.length > 15 ? name.slice(0, 14) + "…" : name;
-        const filled = !!asgn?.tmId;
-        return `<div style="flex:1;height:${ROW_H}px;line-height:${ROW_H}px;padding:0 5px;` +
-          `font-size:9.5px;font-weight:${filled ? "600" : "400"};color:${filled ? "#1C1C1E" : "#AEAEB2"};` +
-          `overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;">${disp}</div>`;
-      }).join("");
-      tableRowsHTML +=
-        `<div style="display:flex;align-items:center;height:${ROW_H}px;background:${bg};` +
-        `border-top:1px solid #F2F2F7;flex-shrink:0;">` +
-        `<div style="width:${SLOT_W}px;height:${ROW_H}px;line-height:${ROW_H}px;padding:0 8px;` +
-        `font-size:9.5px;font-weight:700;color:${slot.accent};overflow:hidden;text-overflow:ellipsis;` +
-        `white-space:nowrap;border-right:1px solid #E5E5EA;">${slot.label}</div>${cells}</div>`;
-    });
-  });
-
-  const stripeHTML = _OVW_DAY_COLORS.map(c => `<div style="flex:1;height:4px;background:${c};"></div>`).join("");
-  const firstDef = nightDefs[0]?.def;
-  const lastDef  = nightDefs[nightDefs.length - 1]?.def;
-  const rangeLabel = firstDef && lastDef
-    ? `${firstDef.name.slice(0,3)} ${firstDef.dateNum} – ${lastDef.name.slice(0,3)} ${lastDef.dateNum}`
-    : "Week Overview";
-
-  return (
-    `<div class="print-artboard" style="padding:0;display:flex;flex-direction:column;overflow:hidden;background:#FFFFFF;">` +
-    `<div style="display:flex;flex-shrink:0;">${stripeHTML}</div>` +
-    `<div style="background:linear-gradient(135deg,#1C1C1E 0%,#2C2C2E 100%);padding:9px 20px 7px;` +
-    `flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">` +
-    `<div><div style="font-size:13px;font-weight:800;color:#FFFFFF;letter-spacing:0.05em;text-transform:uppercase;">Week Overview</div>` +
-    `<div style="font-size:9px;font-weight:500;color:#8E8E93;margin-top:1px;">${rangeLabel} · ${N} night${N !== 1 ? "s" : ""} · ${slotRows.length} slots</div></div>` +
-    `<div style="font-size:10px;font-weight:600;color:#636366;letter-spacing:0.02em;">GLCR GRAVE SHIFT</div></div>` +
-    `<div style="display:flex;background:#F8F8FB;border-bottom:2px solid #C8C8CC;flex-shrink:0;">` +
-    `<div style="width:${SLOT_W}px;padding:4px 8px;font-size:9px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:0.06em;">Slot</div>` +
-    `${colHeaderCells}</div>` +
-    `<div style="flex:1;overflow:hidden;display:flex;flex-direction:column;">${tableRowsHTML}</div>` +
-    `</div>`
-  );
-}
-
-/**
- * Generates a dark-themed cover page artboard HTML string.
- * Shows week label, contents breakdown, total pages, and GLCR branding.
- */
-function buildCoverPageArtboardHTML(
-  dayDefs: DayDef[],
-  config: PrintConfig,
-  totalPages: number,
-): string {
-  const deployCount = config.days.filter(d => d.printDeploy).length;
-  const breaksCount = config.days.filter(d => d.printBreaks).length;
-  const ovwCount    = config.includeOverview ? 1 : 0;
-
-  const contents: { label: string; pages: number; color: string }[] = [];
-  if (deployCount) contents.push({ label: "Deployment Sheets", pages: deployCount, color: "#34C759" });
-  if (breaksCount) contents.push({ label: "Break Sheets",       pages: breaksCount, color: "#FF9F0A" });
-  if (ovwCount)    contents.push({ label: "Week Overview",       pages: 1,           color: "#5856D6" });
-
-  const activeDefs = config.days
-    .filter(d => d.printDeploy || d.printBreaks)
-    .map(d => dayDefs[d.dayIndex])
-    .filter((d): d is DayDef => !!d);
-  const firstDef = activeDefs[0];
-  const lastDef  = activeDefs[activeDefs.length - 1];
-  const weekRange = firstDef && lastDef
-    ? `${firstDef.name} ${firstDef.dateNum} – ${lastDef.name} ${lastDef.dateNum}, ${firstDef.monthYear.split(" ")[1] ?? firstDef.monthYear}`
-    : "Shift Week";
-
-  const stripeHTML = _OVW_DAY_COLORS.map(c => `<div style="flex:1;background:${c};"></div>`).join("");
-
-  const contentsHTML = contents.map(c =>
-    `<div style="display:flex;align-items:center;gap:14px;padding:6px 0;border-bottom:1px solid #2C2C2E;">` +
-    `<div style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>` +
-    `<div style="flex:1;font-size:13px;font-weight:500;color:#EBEBF5;">${c.label}</div>` +
-    `<div style="font-size:13px;font-weight:600;color:#8E8E93;">${c.pages} page${c.pages !== 1 ? "s" : ""}</div></div>`
-  ).join("");
-
-  const nightChips = activeDefs.map(def =>
-    `<div style="padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;color:#FFFFFF;background:${def.color};letter-spacing:0.03em;">${def.name.slice(0,3).toUpperCase()} ${def.dateNum}</div>`
-  ).join("");
-
-  const printedDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-  return (
-    `<div class="print-artboard" style="padding:0;display:flex;flex-direction:column;overflow:hidden;background:#1C1C1E;">` +
-    `<div style="display:flex;height:6px;flex-shrink:0;">${stripeHTML}</div>` +
-    `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 80px;">` +
-    `<div style="font-size:11px;font-weight:700;color:#636366;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Gun Lake Casino Resort</div>` +
-    `<div style="font-size:46px;font-weight:900;color:#FFFFFF;text-align:center;line-height:1.05;letter-spacing:-0.01em;margin-bottom:4px;">GRAVE SHIFT</div>` +
-    `<div style="font-size:46px;font-weight:900;color:#FFFFFF;text-align:center;line-height:1.05;letter-spacing:-0.01em;margin-bottom:20px;">PRINT BOOK</div>` +
-    `<div style="font-size:16px;font-weight:600;color:#8E8E93;margin-bottom:24px;letter-spacing:0.01em;">${weekRange}</div>` +
-    `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:36px;">${nightChips}</div>` +
-    `<div style="width:380px;background:#2C2C2E;border-radius:10px;padding:16px 20px;">` +
-    `<div style="font-size:10px;font-weight:700;color:#636366;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Contents</div>` +
-    `${contentsHTML}` +
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;margin-top:4px;">` +
-    `<div style="font-size:12px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:0.06em;">Total Pages</div>` +
-    `<div style="font-size:22px;font-weight:800;color:#FFFFFF;">${totalPages}</div></div></div></div>` +
-    `<div style="padding:10px 28px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #2C2C2E;flex-shrink:0;">` +
-    `<div style="font-size:9px;color:#48484A;letter-spacing:0.06em;text-transform:uppercase;">Confidential · Internal Use Only</div>` +
-    `<div style="font-size:9px;color:#48484A;letter-spacing:0.06em;">Printed ${printedDate}</div></div>` +
-    `</div>`
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Inner component — the real ShiftBuilder experience (only rendered after PIN auth)
@@ -807,6 +665,7 @@ function AuthedShiftBuilder() {
         inset: 0 !important;
         z-index: 2147483640 !important;
         background: transparent !important;
+        opacity: 0 !important;
       `;
       setLaunchpadRootVisible(container, false);
       document.body.appendChild(container);
@@ -865,6 +724,24 @@ function AuthedShiftBuilder() {
     const saved = localStorage.getItem("oms_current_view");
     return (saved === "breaks" || saved === "deployment") ? saved : "deployment";
   });
+
+  // Canvas authoring mode — the veil between living digital builder and pristine Golden fidelity.
+  // "builder": the full artistic authoring surface. xAI magic lines, enhanced corner reads, micro digital ink,
+  //            hover states, and power affordances appear as an integrated "whisper" on the sheet.
+  //            Feels like one cohesive piece — liquid glass + Atkinson + calm zincs + zone accents + GRAVE red notes.
+  // "print-preview": live on-canvas is bit-for-bit what the PDF clone will capture. Zero digital assists leak.
+  //            The sacred 1056×816 Golden (Atkinson, exact spacing, liquid glass cards) is untouched.
+  // Toggle itself is pure digital chrome (unscaled overlay, no-print, outside .print-artboard subtree).
+  // Persisted like currentView. Real print/PDF path is always the clean clone regardless.
+  const [canvasMode, setCanvasMode] = useState<"builder" | "print-preview">(() => {
+    const saved = localStorage.getItem("oms_canvas_mode");
+    return (saved === "print-preview" || saved === "builder") ? saved : "builder";
+  });
+  const isPrintPreview = canvasMode === "print-preview";
+  // Persist
+  React.useEffect(() => {
+    try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
+  }, [canvasMode]);
 
   // Provenance glass (engine heart) — on-demand overlay. Board is the entire surface.
   // Populated from card clicks when engine provenance data (rationale + fairnessSignals) is present.
@@ -968,8 +845,6 @@ function AuthedShiftBuilder() {
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
   const [realRoster, setRealRoster] = useState<any[]>([]);
   const [graveRoster, setGraveRoster] = useState<any[]>([]); // GRAVE-shift filtered roster (Option B)
-  const [isLoadingData, setIsLoadingData] = useState(false);
-
   // Session undo/redo (in-memory, one tab)
   const shiftHistory = useShiftHistory();
 
@@ -993,7 +868,15 @@ function AuthedShiftBuilder() {
   const launchpadContainerRef = useRef<HTMLDivElement | null>(null);
   const launchpadRootRef = useRef<Root | null>(null);
 
-
+  const handleBackToLaunchpad = React.useCallback(() => {
+    persistViewMode('launchpad');
+    const root = launchpadRootRef.current;
+    const launchContainer = launchpadContainerRef.current;
+    if (root && launchContainer) {
+      setLaunchpadRootVisible(launchContainer, true);
+      root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
+    }
+  }, [persistViewMode, enterCanvas]);
 
   // === Date / week selection ===
   // todayDate holds the active SHIFT date (not the calendar date) — see
@@ -1706,6 +1589,7 @@ function AuthedShiftBuilder() {
     if ((result as any).usage) {
       try {
         useShiftBuilderStore.getState().addAiUsage((result as any).usage);
+        updateOpsStatusBarContent?.();
       } catch {}
     }
     return result;
@@ -1763,7 +1647,6 @@ function AuthedShiftBuilder() {
       const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
       const isRedo = (e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y");
       const isCommandPalette = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
-
       if (isUndo) {
         e.preventDefault();
         const prev = shiftHistory.undo();
@@ -1841,6 +1724,16 @@ function AuthedShiftBuilder() {
   // are retired with the bottom UI.
 
   // === Zoom & centering (extracted to useZoom) ===
+  const stageInsets = React.useMemo<StageInsets>(() => {
+    const tablet = isTabletTouchDevice();
+    return {
+      top: 68,
+      right: tablet ? 32 : 40,
+      bottom: tablet ? 56 : 68,
+      left: rosterOpen ? (tablet ? 276 : 280) : tablet ? 32 : 40,
+    };
+  }, [rosterOpen]);
+
   const {
     zoomMode,
     setZoomMode,
@@ -1850,7 +1743,7 @@ function AuthedShiftBuilder() {
     recomputeScale,
     zoomSteps,
     isTabletTouch,
-  } = useZoom({ rosterOpen });
+  } = useZoom({ rosterOpen, stageInsets });
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
@@ -1994,6 +1887,14 @@ function AuthedShiftBuilder() {
   // Assignments unification bridge (next major slice in 3.1)
   // assignments is the hottest mutable state on the board.
   const effectiveAssignments = currentNight.assignments ?? assignments;
+
+  const hasBoardPayload = React.useMemo(
+    () => Object.keys(effectiveAssignments).length > 0 || currentNight.nightId != null,
+    [effectiveAssignments, currentNight.nightId],
+  );
+  const boardColdLoading = currentNight.isCoreLoading && !hasBoardPayload;
+  const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
+  const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
 
   // Sync into Zustand store (3.4) — fine-grained subscribers + reduced re-renders
   React.useEffect(() => {
@@ -2170,27 +2071,21 @@ function AuthedShiftBuilder() {
     }
   }, [currentNight?.assignments, currentNight?.nightId, processedDayData]);
 
-  // === Pre-load the entire active week (user request for fast day switching) ===
-  // Once the current week's data is in the cache, switching between days in that
-  // week becomes near-instant (React Query cache hits + keepPreviousData).
-  // We prioritize the selected day, then background the rest with light staggering.
+  // Week prefetch: BuilderDataPrefetch seeds cache during PIN gate; this effect
+  // tops up when weekStart changes (calendar navigation) or selected day shifts.
   React.useEffect(() => {
     if (!currentNight?.prefetchNight || DAY_DEFS.length === 0) return;
 
-    // Prioritize the day the operator is currently looking at
     const selectedDef = DAY_DEFS[selectedDayIndex];
     if (selectedDef?.date) {
       currentNight.prefetchNight(selectedDef.date);
     }
 
-    // Background prefetch the rest of the week (non-blocking, staggered)
     DAY_DEFS.forEach((def, idx) => {
       if (idx === selectedDayIndex) return;
-      setTimeout(() => {
-        currentNight.prefetchNight(def.date);
-      }, 60 * idx); // light stagger so we don't slam the network
+      setTimeout(() => currentNight.prefetchNight(def.date), 40 * idx);
     });
-  }, [DAY_DEFS, selectedDayIndex, currentNight]);
+  }, [DAY_DEFS, selectedDayIndex, currentNight, weekStart]);
 
   // Use query data as source of truth (full TanStack Query commitment)
   const queryAssignments = currentNight.assignments || {};
@@ -2983,134 +2878,6 @@ function AuthedShiftBuilder() {
     [DAY_DEFS, currentNight.queryClient, printHydrateApply],
   );
 
-  const handlePrintWeek = React.useCallback(async () => {
-    handleSlotClose();
-    const originalDayIndex = selectedDayIndex;
-    const originalView = currentView;
-
-    const waitForLoad = (timeoutMs = 15000) =>
-      new Promise<void>((resolve, reject) => {
-        if (!loadingAssignmentsRef.current) { resolve(); return; }
-        const start = Date.now();
-        const check = () => {
-          if (!loadingAssignmentsRef.current) { resolve(); return; }
-          if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
-          setTimeout(check, 60);
-        };
-        setTimeout(check, 60);
-      });
-
-    // Shared post-processing for breaks artboards: pin overlaps above footer.
-    const postProcessBreaksArtboard = (artboard: Element) => {
-      const el = artboard as HTMLElement;
-      const contentArea = el.querySelector(".flex-1.min-h-0.overflow-hidden.flex.flex-col") as HTMLElement | null;
-      if (contentArea) {
-        contentArea.style.display = "flex";
-        contentArea.style.flexDirection = "column";
-        contentArea.style.flex = "1 1 0%";
-        contentArea.style.minHeight = "0";
-        contentArea.style.overflow = "hidden";
-      }
-      const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
-      if (waveGrid && !waveGrid.classList.contains("overlaps-section")) {
-        waveGrid.style.flex = "1 1 0%";
-        waveGrid.style.minHeight = "0";
-        waveGrid.style.overflow = "hidden";
-        waveGrid.style.alignContent = "start";
-      }
-      const overlaps = el.querySelector(".overlaps-section") as HTMLElement | null;
-      if (overlaps) { overlaps.style.flexShrink = "0"; overlaps.style.marginTop = "0"; }
-    };
-
-    showToast(`Preparing week print… 0 / ${DAY_DEFS.length}`, "info");
-
-    const allPages: string[] = [];
-
-    try {
-      for (let dayIdx = 0; dayIdx < DAY_DEFS.length; dayIdx++) {
-        await preparePrintDay(dayIdx);
-
-        const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
-        if (!liveArtboard) continue;
-
-        // ── Deployment capture ────────────────────────────────────────
-        flushSync(() => setCurrentView("deployment"));
-        await printNextFrames(2);
-        liveArtboard.style.visibility = "";
-        const deploymentHTML = liveArtboard.outerHTML;
-        liveArtboard.style.visibility = "hidden";
-
-        // ── Breaks capture ────────────────────────────────────────────
-        flushSync(() => setCurrentView("breaks"));
-        await printNextFrames(2);
-
-        const prevH   = liveArtboard.style.height;
-        const prevMH  = liveArtboard.style.minHeight;
-        const prevD   = liveArtboard.style.display;
-        const prevFD  = liveArtboard.style.flexDirection;
-        liveArtboard.style.height        = "816px";
-        liveArtboard.style.minHeight     = "816px";
-        liveArtboard.style.display       = "flex";
-        liveArtboard.style.flexDirection = "column";
-        liveArtboard.getBoundingClientRect();
-        await printNextFrames(1);
-        liveArtboard.style.visibility = "";
-        const breaksHTML = liveArtboard.outerHTML;
-        // Restore inline overrides
-        liveArtboard.style.height        = prevH  || "";
-        liveArtboard.style.minHeight     = prevMH || "";
-        liveArtboard.style.display       = prevD  || "";
-        liveArtboard.style.flexDirection = prevFD || "";
-        liveArtboard.style.visibility    = "";
-
-        if (deploymentHTML && breaksHTML) allPages.push(deploymentHTML, breaksHTML);
-
-        showToast(`Preparing week print… ${dayIdx + 1} / ${DAY_DEFS.length}`, "info");
-      }
-
-      if (allPages.length === 0) { showToast("Nothing to print.", "error"); return; }
-
-      // ── Build print container ─────────────────────────────────────
-      const container = document.createElement("div");
-      container.className = "print-dual-container";
-      container.innerHTML = allPages.join("");
-      document.body.appendChild(container);
-
-      // Post-process every even-indexed artboard (index 1, 3, 5… = breaks pages).
-      container.querySelectorAll(".print-artboard").forEach((ab, i) => {
-        if (i % 2 === 1) postProcessBreaksArtboard(ab);
-      });
-
-      document.body.classList.add("printing-dual-mode");
-      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
-      Array.from(document.body.children).forEach((child) => {
-        const el = child as HTMLElement;
-        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
-          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
-          el.style.display = "none";
-        }
-      });
-
-      try {
-        window.print();
-      } finally {
-        hiddenBodyChildren.forEach(({ el, prevDisplay }) => { el.style.display = prevDisplay; });
-        document.body.classList.remove("printing-dual-mode");
-        container.remove();
-      }
-    } catch (e) {
-      console.error("[shiftbuilder] week print error", e);
-      showToast("Week print failed — try again.", "error");
-      document.body.classList.remove("printing-dual-mode");
-      document.querySelector(".print-dual-container")?.remove();
-    } finally {
-      // Always restore the operator's original day and view.
-      flushSync(() => setSelectedDayIndex(originalDayIndex));
-      await waitForLoad().catch(() => {});
-      flushSync(() => setCurrentView(originalView));
-    }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, preparePrintDay]);
-
   // === Print Command Center — generalized multi-day, multi-config print handler ===
   //
   // Generalizes handlePrintWeek: iterates only the days/pages requested in config,
@@ -3171,16 +2938,32 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    // Custom queue order injected by PrintCommandCenter via a loose property
-    const customQueueOrder = ((config as unknown as Record<string, unknown>)._customQueueOrder ?? null) as string[] | null;
+    const customQueueOrder = config.customQueueOrder ?? null;
+    const plannedQueue = applyCustomQueueOrder(
+      buildPrintQueue(
+        config.days,
+        config.pageOrder,
+        DAY_DEFS,
+        config.includeOverview,
+        config.overviewPosition,
+        config.includeCoverPage,
+        config.coverPagePosition,
+      ),
+      customQueueOrder,
+    );
+    const totalPages = plannedQueue.length;
 
     // Unique sorted day indices we need to load/capture
     const dayIndices = [...new Set(activeDays.map(d => d.dayIndex))].sort((a, b) => a - b);
-    // Total steps: capture days + (1 if overview) + (1 for assembly)
-    const totalSteps = dayIndices.length + (hasOverview ? 1 : 0);
 
     setIsPrinting(true);
-    setPrintProgress({ current: 0, total: totalSteps, label: "Preparing…" });
+    setPrintProgress({ current: 0, total: totalPages, label: "Preparing…" });
+
+    let pageProgress = 0;
+    const bumpProgress = (label: string) => {
+      pageProgress = Math.min(pageProgress + 1, totalPages);
+      setPrintProgress({ current: pageProgress, total: totalPages, label });
+    };
 
     // captured[dayIndex] = { deployHTML?, breaksHTML? }
     const capturedPages = new Map<number, { deployHTML?: string; breaksHTML?: string }>();
@@ -3191,7 +2974,7 @@ function AuthedShiftBuilder() {
         const dayConf = activeDays.find(d => d.dayIndex === dayIdx)!;
         const dayName = DAY_DEFS[dayIdx]?.name ?? `Day ${dayIdx}`;
 
-        setPrintProgress({ current: i, total: totalSteps, label: `Loading ${dayName}…` });
+        setPrintProgress({ current: pageProgress, total: totalPages, label: `Loading ${dayName}…` });
 
         await preparePrintDay(dayIdx);
 
@@ -3206,6 +2989,7 @@ function AuthedShiftBuilder() {
           liveArtboard.style.visibility = "";
           captured.deployHTML = liveArtboard.outerHTML;
           liveArtboard.style.visibility = "hidden";
+          bumpProgress(`${dayName} deploy`);
         }
 
         if (dayConf.printBreaks) {
@@ -3228,10 +3012,10 @@ function AuthedShiftBuilder() {
           liveArtboard.style.display = prevD || "";
           liveArtboard.style.flexDirection = prevFD || "";
           liveArtboard.style.visibility = "";
+          bumpProgress(`${dayName} breaks`);
         }
 
         capturedPages.set(dayIdx, captured);
-        setPrintProgress({ current: i + 1, total: totalSteps, label: `Captured ${dayName}` });
       }
 
       // ── Phase 2: fetch overview data directly from Supabase ──────────────────
@@ -3239,8 +3023,7 @@ function AuthedShiftBuilder() {
       let coverHTML: string | null = null;
 
       if (hasOverview) {
-        const ovwStep = dayIndices.length;
-        setPrintProgress({ current: ovwStep, total: totalSteps, label: "Building overview…" });
+        setPrintProgress({ current: pageProgress, total: totalPages, label: "Building overview table…" });
         try {
           const { getActiveTeamMembers, getNightIdForDate, getNightAssignments } = await import("@/lib/shiftbuilder/data");
           const allTms = await getActiveTeamMembers();
@@ -3273,15 +3056,13 @@ function AuthedShiftBuilder() {
           console.warn("[shiftbuilder] overview fetch error — skipping overview page", ovwErr);
           overviewHTML = null;
         }
-        setPrintProgress({ current: ovwStep + 1, total: totalSteps, label: "Overview ready" });
+        if (overviewHTML) bumpProgress("Overview table");
       }
 
       // ── Build cover page HTML (no async needed) ───────────────────────────────
       if (hasCover) {
-        const deployCount = activeDays.filter(d => d.printDeploy).length;
-        const breaksCount = activeDays.filter(d => d.printBreaks).length;
-        const pageCountForCover = deployCount + breaksCount + (overviewHTML ? 1 : 0);
-        coverHTML = buildCoverPageArtboardHTML(DAY_DEFS, config, pageCountForCover + 1 /* +1 for the cover itself */);
+        coverHTML = buildCoverPageArtboardHTML(DAY_DEFS, config, totalPages);
+        bumpProgress("Cover page");
       }
 
       // ── Assemble pages ────────────────────────────────────────────────────────
@@ -3349,7 +3130,8 @@ function AuthedShiftBuilder() {
 
       if (allPageHTML.length === 0) { showToast("Nothing to print.", "error"); return; }
 
-      setPrintProgress({ current: totalSteps, total: totalSteps, label: "Sending to printer…" });
+      setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
+      saveLastPrintConfig(config);
 
       // Build container
       const container = document.createElement("div");
@@ -3386,6 +3168,9 @@ function AuthedShiftBuilder() {
         }
       });
 
+      const closePrintCenterAfterDialog = () => setIsPrintCenterOpen(false);
+      window.addEventListener("afterprint", closePrintCenterAfterDialog, { once: true });
+
       try {
         window.print();
       } finally {
@@ -3406,9 +3191,34 @@ function AuthedShiftBuilder() {
       flushSync(() => setCurrentView(originalView));
       setIsPrinting(false);
       setPrintProgress(null);
-      setIsPrintCenterOpen(false);
     }
   }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, preparePrintDay]);
+
+  const handlePrintWeek = React.useCallback(async () => {
+    showToast("Preparing full week print…", "info");
+    await handlePrintWithConfig(fullWeekPrintConfig());
+  }, [handlePrintWithConfig, showToast]);
+
+  const handleQuickPrintTonight = React.useCallback(async () => {
+    await handlePrintWithConfig(tonightPrintConfig(selectedDayIndex));
+  }, [handlePrintWithConfig, selectedDayIndex]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isPrintCenter = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p" && !e.shiftKey;
+      const isQuickPrintTonight = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p" && e.shiftKey;
+      if (isPrintCenter) {
+        e.preventDefault();
+        setIsPrintCenterOpen(true);
+      }
+      if (isQuickPrintTonight) {
+        e.preventDefault();
+        void handleQuickPrintTonight();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleQuickPrintTonight]);
 
   // === Master Command Palette (Phase 2 core) ===
   // Stable callbacks for useCommandActions — keeping these out of the call-site
@@ -3426,7 +3236,7 @@ function AuthedShiftBuilder() {
   }, [canRunEngine, isDraftMode, applyDraft, enterDraftMode, isCurrentNightLocked]);
 
   // Print button opens Command Center; direct "print tonight" shortcut still available via palette
-  const cmdActionPrint = React.useCallback(() => setIsPrintCenterOpen(true), []);
+  const cmdActionPrint = React.useCallback(() => { void handleQuickPrintTonight(); }, [handleQuickPrintTonight]);
   const cmdActionPrintWeek = React.useCallback(() => handlePrintWeek(), [handlePrintWeek]);
   const cmdActionOpenPrintCenter = React.useCallback(() => setIsPrintCenterOpen(true), []);
 
@@ -3823,12 +3633,23 @@ function AuthedShiftBuilder() {
         const orderedSlots = getSlotsInPlacementOrder(auxDefs);
         const rosterForEngine = graveOnly ? availableGraveRoster : availableRealRoster;
 
+        // Enforce graves_default_schedule as the sole source of truth for who is working/scheduled this night.
+        // Only pass scheduled TMs to the placement engine (planner + Grok) when schedule data is loaded.
+        // This prevents the engine from placing "people not working from the draft schedule".
+        const scheduledSet = effectiveScheduledTmIdsTonight || new Set<string>();
+        const planningRoster = scheduledSet.size > 0
+          ? rosterForEngine.filter((t: any) => {
+              const id = boardTmId(t) || t?.id || t?.tmId || "";
+              return scheduledSet.has(String(id));
+            })
+          : rosterForEngine;
+
         const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
         const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
         const plannerResult = runWeightedPlanner({
           orderedSlots,
           assignments,
-          roster: rosterForEngine,
+          roster: planningRoster,
           graveOnly,
           preserveOnlyLocked: !!options?.forceXai,
           scoringCtx: {
@@ -3857,7 +3678,12 @@ function AuthedShiftBuilder() {
           warnings: string[];
           usedGrok: boolean;
           rawText: string;
-          usage?: { inputTokens?: number; outputTokens?: number };
+          usage?: {
+            inputTokens?: number;
+            outputTokens?: number;
+            model?: string;
+            reasoningEffort?: string;
+          };
         } = {
           picks: [],
           explanation: "",
@@ -3866,6 +3692,7 @@ function AuthedShiftBuilder() {
           rawText: "",
         };
 
+        let recordedRealEngineUsage = false;
         if (isGrokHybrid) {
           setEngineRunPhase("xai");
           const operatorNotes = notesRef.current?.innerText || "";
@@ -3905,7 +3732,7 @@ function AuthedShiftBuilder() {
               dayName: selectedDay.name,
               shiftDate: selectedDay.date,
               plannerResult,
-              roster: rosterForEngine,
+              roster: planningRoster,
               operatorNotes,
               calledOffTmIds: calledOffIds,
               recentHistory: effectiveRecentZoneHistory,
@@ -3918,7 +3745,7 @@ function AuthedShiftBuilder() {
           } catch (err) {
             console.error("[engine] snapshot build failed:", err);
             showToast("Engine snapshot build failed — falling back to scoring only");
-            applyPlannerResultAsDraft(plannerResult, rosterForEngine, {});
+            applyPlannerResultAsDraft(plannerResult, planningRoster, {});
             return;
           }
 
@@ -3927,7 +3754,7 @@ function AuthedShiftBuilder() {
             grokResult = await askGrokEngineDraft(snapshot, {
               useTools,
               toolContext: {
-                roster: rosterForEngine,
+                roster: planningRoster,
                 auxDefs,
                 engineConfig,
                 currentDraft: plannerDraft,
@@ -3945,6 +3772,9 @@ function AuthedShiftBuilder() {
             if (grokResult?.usage) {
               try {
                 useShiftBuilderStore.getState().addAiUsage(grokResult.usage);
+                updateOpsStatusBarContent?.();
+                console.log(`[ai-usage-engine] recorded ${grokResult.usage.inputTokens || 0}+${grokResult.usage.outputTokens || 0} tok for ${grokResult.usage.model || 'grok'} effort=${grokResult.usage.reasoningEffort || ''} (usedGrok=${grokResult.usedGrok})`);
+                recordedRealEngineUsage = true;
               } catch {
                 /* ignore */
               }
@@ -3957,16 +3787,40 @@ function AuthedShiftBuilder() {
               warnings: ["Grok call failed"],
               usedGrok: false,
               rawText: "",
+              usage: undefined,
             };
           }
 
+          const proposedCount = grokResult.picks.length; // after guard
           console.groupCollapsed(
-            `[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"}`,
+            `[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"} (valid overrides: ${proposedCount})`,
           );
           console.log("Placement Method:", options?.forceXai ? "xai-button-forced" : engineConfig.placementMethod);
           console.log("Tools:", useTools ? "enabled" : "off");
           console.log("Grok warnings:", grokResult.warnings);
+          console.log("Grok explanation:", grokResult.explanation || "(none provided)");
+          if (!grokResult.usedGrok && grokResult.warnings.length === 0) {
+            console.log("Note: Grok returned 0 picks (or all filtered) — no overrides applied; using full planner result.");
+          }
           console.groupEnd();
+        }
+
+        // Ensure the xAI engine run is always tracked in the usage bar / 30d ledger (even if Grok call failed or produced 0 valid picks/overrides).
+        // This makes the call count increase and the bar reflect the engine invocation.
+        if (isGrokHybrid && !recordedRealEngineUsage) {
+          const zeroOrFallbackUsage = grokResult?.usage || {
+            inputTokens: 0,
+            outputTokens: 0,
+            model: "grok-4.3",
+            reasoningEffort: "high",
+          };
+          try {
+            useShiftBuilderStore.getState().addAiUsage(zeroOrFallbackUsage);
+            updateOpsStatusBarContent?.();
+            console.log(`[ai-usage-engine] ensured tracking (0 or fallback tokens) for xAI engine run (usedGrok=${grokResult?.usedGrok})`);
+          } catch {
+            /* ignore */
+          }
         }
 
         const { mergeGrokOverridesIntoDraft } = await import("@/lib/shiftbuilder/grokEngine");
@@ -4014,10 +3868,18 @@ function AuthedShiftBuilder() {
         if (options?.forceXai) {
           const draftSlotCount = Object.keys(proposedAssignments).filter(Boolean).length;
           const openSlots = orderedSlots.length - draftSlotCount;
+          const hadGrokCall = isGrokHybrid;
+          const xaiNote = grokResult.usedGrok
+            ? ""
+            : hadGrokCall
+              ? " (xAI consulted; 0 net overrides — planner + Grok reasons used)"
+              : " (xAI skipped)";
+          const baseMsg = hadGrokCall && grokResult.usedGrok
+            ? `xAI draft: ${draftSlotCount} placements${openSlots > 0 ? ` (${openSlots} open — check schedule/gender pool)` : ""}`
+            : `Planner draft: ${draftSlotCount} placements${xaiNote}`;
+          const summary = grokResult.explanation ? ` — ${grokResult.explanation}` : "";
           showToast(
-            grokResult.usedGrok
-              ? `xAI draft: ${draftSlotCount} placements${openSlots > 0 ? ` (${openSlots} open — check schedule/gender pool)` : ""}`
-              : `Planner draft: ${draftSlotCount} placements (xAI skipped)`,
+            baseMsg + summary,
             draftSlotCount > 0 ? "success" : "info",
           );
         }
@@ -4549,24 +4411,10 @@ function AuthedShiftBuilder() {
 
   // === Live data effects ====================================================
   //
-  // Single source of truth: the SELECTED DAY drives a load. Previously we had
-  // two effects (one resolving nightId from the date, another loading data
-  // from the resolved nightId), which left a window where Day A's nightId
-  // could leak into a render that was already displaying Day B — every write
-  // issued in that window persisted to the wrong night.
-  //
-  // The new shape:
-  //   1. Day changes → bump `loadEpochRef`, clear every per-day surface
-  //      (assignments, nightId, notes pad, pending notes-save timer).
-  //   2. Resolve the nightId for the new date.
-  //   3. Load roster + assignments + notes in parallel.
-  //   4. Every async result is gated on `loadEpochRef.current === epoch`;
-  //      late resolves are dropped silently.
-  //
-  // Combined with persistAssign capturing nightId at action time, this kills
-  // the entire family of "wrong day got written" races.
-  const loadEpochRef = useRef<number>(0);
-
+  // Visual day data flows through useCurrentNight (TanStack Query + keepPreviousData).
+  // Side-effect sync below mirrors query slices into legacy mutation state (nightId,
+  // notes pad, tasks, borders, call-offs). persistAssign still captures nightId at
+  // action time to prevent wrong-day writes.
   // === Session-stable data loader ===========================================
   //
   // These 6 queries return data that does NOT vary by selected day — they
@@ -4636,231 +4484,102 @@ function AuthedShiftBuilder() {
     })();
   }, [tmCommandEpoch]); // re-run only when operator refreshes roster/config
 
-  // ========================================================================
-  // 3.1 DATA UNIFICATION CHECKPOINT — COMPLETE (2026-05-30)
-  //
-  // The legacy day-switch loader is no longer the primary source of
-  // day-specific data for the visual surface.
-  //
-  // Retired in this phase:
-  // - Rosters (real + enriched grave)
-  // - Assignments (hard reset + main DB→UI building)
-  // - selectedTasks + cardBorders
-  // - auxDefs DB+session merge
-  // - nightBreakRows derivation
-  //
-  // What remains (mostly coordination/side effects):
-  // - Notes contentEditable imperative reset
-  // - recomputeScale in finally block
-  // - setLoadingAssignments + epoch guarding (safety)
-  //
-  // Board + Rail now prefer data via useCurrentNight + effective* bridges.
-  // This effect can be further slimmed or removed in future phases.
-  //
-  // Performance mark (day-switch-start) already in place.
-  // ========================================================================
-  //
-  // useCurrentNight + effective* bridges are the preferred source.
-  // Performance mark already added (day-switch-start).
-  // ========================================================================
-  useEffect(() => {
-    const epoch = ++loadEpochRef.current;
+  // Query-sync side effects — useCurrentNight is the visual source of truth.
+  React.useEffect(() => {
+    setNightId(currentNight.nightId ?? null);
+  }, [currentNight.nightId]);
 
-    // Hard reset every per-day surface synchronously, BEFORE the new data
-    // arrives. The operator must never see Day A's content under the Day B
-    // label, and writes issued in that window must not land on Day A by
-    // mistake.
-    setNightId(null);
-    setIsCurrentNightLocked(false);
+  React.useEffect(() => {
+    if (!currentNight.nightId) {
+      setIsCurrentNightLocked(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNightLocked } = await import("@/lib/shiftbuilder/data");
+        const locked = await getNightLocked(currentNight.nightId!);
+        if (!cancelled) setIsCurrentNightLocked(!!locked);
+      } catch {
+        if (!cancelled) setIsCurrentNightLocked(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNight.nightId]);
 
-    // === Phase 3.1: Assignments now come from useCurrentNight for the Board ===
-    // We no longer hard-reset or rebuild assignments here for the main visual path.
-    // The hook provides fresh data with keepPreviousData. Local mutations still
-    // use the legacy state for now.
-    // setAssignments({});
-
-    // === Phase 3.1: selectedTasks and cardBorders now come from useCurrentNight ===
-    // setSelectedTasks({});
-    // setCardBorders({});
-
-    setCalledOffIds(new Set());
-    setScheduledTmIdsTonight(new Set());
-    if (notesRef.current) notesRef.current.innerText = "";
+  React.useEffect(() => {
     if (notesSaveTimerRef.current) {
       clearTimeout(notesSaveTimerRef.current);
       notesSaveTimerRef.current = null;
     }
+    const notesText = currentNight.notes ?? "";
+    if (notesRef.current && notesRef.current.innerText !== notesText) {
+      notesRef.current.innerText = notesText;
+    }
+  }, [currentNight.notes, selectedDay.date]);
 
-    setLoadingAssignments(true);
-    loadingAssignmentsRef.current = true;
-    (async () => {
-      try {
-        const { getNightIdForDate } = await import("@/lib/shiftbuilder/data");
-        const id = await getNightIdForDate(selectedDay.date);
-        if (loadEpochRef.current !== epoch) return;
-
-        // Day-varying queries only — session-stable data (engineConfig, skills,
-        // prefs, pairings, accommodations, difficulty) is loaded separately in the
-        // `[tmCommandEpoch]` effect above and never re-fires on day switches.
-        // Dynamically import all data.ts accessors for this load (final step to kill the HMR factory error)
-        const data = await import("@/lib/shiftbuilder/data");
-
-        const [
-          members,
-          graveMembers,
-          dbAssignments,
-          notesText,
-          weekOnScheduleSet,
-          pmOverlapMembers,
-          amOverlapMembers,
-          nightTaskRows,
-          breakRows,
-          nightBorderMap,
-          callOffSet,
-          recentHistory,
-          scheduledTonightSet,
-          canonicalScheduledResult,
-          isNightLocked,
-        ] = await Promise.all([
-          id ? data.getTeamMembersForNight(id) : data.getActiveTeamMembers().then((all: any[]) => all.map((tm: any) => ({ ...tm, isOnSchedule: false }))),
-          data.getGraveAvailableTeamMembers(),
-          id ? data.getNightAssignments(id) : Promise.resolve([]),
-          id ? data.getNightNotes(id) : Promise.resolve(""),
-          id ? data.getOnScheduleTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10)) : Promise.resolve(new Set<string>()),
-          data.getGravePMOverlapMembers(),
-          data.getGraveAMOverlapMembers(),
-          id ? data.getNightSlotTasks(id) : Promise.resolve([] as NightSlotTask[]),
-          id ? data.getNightBreakAssignments(id) : Promise.resolve([]),
-          id ? data.getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
-          getCallOffsForDate(selectedDay.date),
-          data.getRecentZoneHistory(selectedDay.date, 7),
-          // Legacy scheduled IDs — already dynamic
-          id
-            ? import("@/lib/shiftbuilder/data").then((m) =>
-                m.getScheduledTmIdsForNight(id, selectedDay.date.toISOString().slice(0, 10))
-              )
-            : Promise.resolve(new Set<string>()),
-          // Canonical scheduled set — now via API to keep heavy logic + admin client on server
-          (async () => {
-            try {
-              const dateStr = selectedDay.date.toISOString().slice(0, 10);
-              const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
-              return res.ok ? await res.json() : { allScheduled: [], fullGraveScheduled: [], pmOverlapScheduled: [], amOverlapScheduled: [] };
-            } catch {
-              return { allScheduled: [], fullGraveScheduled: [], pmOverlapScheduled: [], amOverlapScheduled: [] };
-            }
-          })(),
-          id ? data.getNightLocked(id) : Promise.resolve(false),
-        ] as const);
-
-        // Final epoch gate — if the user switched days while loading, drop
-        // everything on the floor. The next effect run will load Day B
-        // fresh.
-        if (loadEpochRef.current !== epoch) return;
-
-        // Commit nightId only after we're sure we're still the active load.
-        setNightId(id);
-        setIsCurrentNightLocked(!!isNightLocked);
-        setCalledOffIds(callOffSet);
-
-        // Use canonical data for scheduled TMs (via API, consistent with useCurrentNight)
-        try {
-          const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
-          if (res.ok) {
-            const data = await res.json();
-            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
+  React.useEffect(() => {
+    if (currentNight.isSecondaryLoading) return;
+    const nightTaskRows = currentNight.tasks as NightSlotTask[] | undefined;
+    if (!nightTaskRows?.length) {
+      setSelectedTasks({});
+      return;
+    }
+    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
+    nightTaskRows.forEach((row) => {
+      const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
+      if (uiKey.startsWith("UNK:")) {
+        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
+          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
+          for (let i = 0; i < 6; i++) {
+            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
           }
-        } catch {}
-
-        // === Phase 3.1: Roster + Assignments data now comes from useCurrentNight ===
-        // Rosters retired in previous step.
-        // Assignments bridge added (effectiveAssignments). Loader still sets the legacy
-        // `assignments` for now to keep all mutation paths stable during transition.
-        // Future step: retire the big assignment building block below.
-
-        // Session-stable data (engineConfig, skills, prefs, pairings,
-        // accommodations, difficulty) is handled by the stable effect above —
-        // no need to process it here. Only update day-varying derived state.
-        setRecentZoneHistory(recentHistory);
-
-        // Populate the contentEditable notes pad. We assign innerText
-        // imperatively because contentEditable doesn't respond to React's
-        // re-rendering pattern without wiping caret position. Only update
-        // when the loaded value actually differs from what's already shown.
-        if (notesRef.current && notesRef.current.innerText !== notesText) {
-          notesRef.current.innerText = notesText ?? "";
+          return;
         }
-
-        // Build a tm_id → group_num lookup from break_assignments so we can
-        // attach the persisted break group onto each assignment row as we
-        // translate. (break_assignments is keyed by tm_id, not slot_key, so
-        // a single TM has one break group regardless of where they're
-        // working.) group_num 0 means "off the break sheet" — preserve it
-        // explicitly so the UI shows "–" instead of defaulting to 1.
-        const breakByTm: Record<string, BreakGroup> = {};
-        breakRows.forEach((r: any) => {
-          if (r.tmId && r.groupNum !== null && r.groupNum !== undefined) {
-            breakByTm[r.tmId] = r.groupNum as BreakGroup;
-          }
-        });
-
-        // === Phase 3.1: nightBreakRows derivation retired ===
-        // The break sheet now derives from the assignments the Board receives.
-        // (Original placed-only filtering logic removed from day loader)
-
-        // === Phase 3.1: Assignment building retired for the main render path ===
-        // The Board now receives assignments from useCurrentNight (effectiveAssignments).
-        // This big block is no longer needed for day-switch visual updates.
-        // Kept temporarily for any code still reading the local `assignments` state.
-        // (Original ~40 lines of DB→UI translation + setAssignments removed here)
-
-        // Translate loaded night_slot_tasks rows into UI-keyed buckets so the
-        // card renderers can read them by Golden slot key (Z1, MRR1, etc.).
-        const tasksByUiKey: Record<string, NightSlotTask[]> = {};
-        nightTaskRows.forEach((row) => {
-          const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-          if (uiKey.startsWith("UNK:")) {
-            // Defensive fallback: handle legacy group-level overlap keys written
-            // by early migrations (slot_key='overlap_pm' or 'overlap_am', no card
-            // index). Distribute the task to all 6 per-card slots in that window
-            // so it appears on every overlap card rather than being silently lost.
-            if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
-              const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
-              for (let i = 0; i < 6; i++) {
-                (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
-              }
-              return;
-            }
-            console.warn("[shiftbuilder] unrecognized DB slot for task, skipping:", row);
-            return;
-          }
-          (tasksByUiKey[uiKey] ??= []).push(row);
-        });
-        // === Phase 3.1: selectedTasks + cardBorders sourced from useCurrentNight ===
-        setSelectedTasks(tasksByUiKey);
-        setCardBorders(nightBorderMap || {});
-
-        // === Phase 3.1: auxDefs DB discovery retired ===
-        // Operator-added AUX slots are now preserved purely through local state
-        // and history snapshots. The loader no longer merges DB extras on day load.
-        // (Original ~25 lines of extraAux detection + merge removed)
-      } catch (e) {
-        if (loadEpochRef.current === epoch) console.error("[shiftbuilder] load failed", e);
-      } finally {
-        if (loadEpochRef.current === epoch) {
-          setLoadingAssignments(false);
-          loadingAssignmentsRef.current = false;
-          // Belt-and-suspenders: after the Supabase pull mutates roster/assignments
-          // (which can cause sibling DOM to affect the measured size of the
-          // artboard stage host), force an immediate re-measure so the
-          // "pdf render canvas" never ends up at the wrong scale or visually
-          // collapsed after hydration.
-          requestAnimationFrame(recomputeScale);
-        }
+        return;
       }
+      (tasksByUiKey[uiKey] ??= []).push(row);
+    });
+    setSelectedTasks(tasksByUiKey);
+  }, [currentNight.tasks, currentNight.isSecondaryLoading, selectedDay.date]);
+
+  React.useEffect(() => {
+    setCardBorders(effectiveCardBorders ?? {});
+  }, [effectiveCardBorders]);
+
+  React.useEffect(() => {
+    if (currentNight.scheduledTmIdsTonight) {
+      setScheduledTmIdsTonight(currentNight.scheduledTmIdsTonight);
+    }
+  }, [currentNight.scheduledTmIdsTonight]);
+
+  React.useEffect(() => {
+    if (currentNight.recentZoneHistory) {
+      setRecentZoneHistory(currentNight.recentZoneHistory);
+    }
+  }, [currentNight.recentZoneHistory]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const callOffSet = await getCallOffsForDate(selectedDay.date);
+      if (!cancelled) setCalledOffIds(callOffSet);
     })();
-  }, [selectedDay.date, tmCommandEpoch, sudoDataEpoch]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDay.date, sudoDataEpoch]);
+
+  React.useEffect(() => {
+    setLoadingAssignments(boardColdLoading);
+    loadingAssignmentsRef.current = boardColdLoading;
+  }, [boardColdLoading]);
+
+  React.useEffect(() => {
+    requestAnimationFrame(recomputeScale);
+  }, [effectiveAssignments, selectedDay.date, boardColdLoading]);
 
   // === Persistence helpers ==================================================
   //
@@ -5500,7 +5219,8 @@ function AuthedShiftBuilder() {
     try {
       const { postEngineInsight } = await import("@/app/shiftbuilder/lib/engineInsightClient");
       const result = await postEngineInsight(insightContext);
-      if (result.usage) {
+      // Only track usage for non-cached calls (actual token spend) to session + monthly 30d tracker
+      if (result && !result.cached && result.usage) {
         try {
           useShiftBuilderStore.getState().addAiUsage({
             inputTokens: result.usage.inputTokens,
@@ -5508,6 +5228,7 @@ function AuthedShiftBuilder() {
             model: result.usage.model,
             reasoningEffort: result.usage.reasoningEffort,
           });
+          updateOpsStatusBarContent?.();
         } catch {}
       }
       return result.text ?? "";
@@ -5522,7 +5243,10 @@ function AuthedShiftBuilder() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative" style={{ background: "var(--sb-substrate, #FAFAF8)" }}>
+    <div
+      className="sb-builder-stage h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
+      style={{ "--stage-accent": selectedDay?.color ?? "var(--sb-gold)" } as React.CSSProperties}
+    >
       {/* ═══════════════════════════════════════════════════════════
           Floating Nav (Framer Motion + CVA)
           Glassmorphic bar with premium date selector transition.
@@ -5533,11 +5257,16 @@ function AuthedShiftBuilder() {
           id: d.navId,
           label: String(d.dateNum),
           shortLabel: d.shortLabel,
+          weekdayShort: d.weekdayShort,
           dayLetter: d.dayLetter,
           isBridge: !!d.bridge,
           dateNum: d.dateNum,
           isToday: d.isToday,
           date: d.date,
+          color:
+            d.weekIndex != null && DAY_DEFS[d.weekIndex]
+              ? DAY_DEFS[d.weekIndex].color
+              : undefined,
         }))}
         selectedDayId={navIdForWeekDay(selectedDayIndex)}
         onDaySelect={(id, date) => {
@@ -5582,6 +5311,7 @@ function AuthedShiftBuilder() {
           setWeekStart(newWeek);
           setSelectedDayIndex(idx);
         }}
+        onLaunchpad={viewMode === "canvas" ? handleBackToLaunchpad : undefined}
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
         onCommandOpen={() => setCmdkOpen(true)}
@@ -5600,6 +5330,7 @@ function AuthedShiftBuilder() {
         onZoomOut={handleZoomOut}
         onZoomIn={handleZoomIn}
         onPrint={() => setIsPrintCenterOpen(true)}
+        isSyncing={boardBackgroundSync}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
@@ -5623,7 +5354,7 @@ function AuthedShiftBuilder() {
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
-          className="fixed left-3 top-[64px] bottom-3 w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col"
+          className={`sb-roster-shell fixed left-3 top-[64px] bottom-3 w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col ${rosterOpen ? "" : "pointer-events-none"}`}
           style={{
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
             backdropFilter: "blur(48px) saturate(200%)",
@@ -5633,7 +5364,7 @@ function AuthedShiftBuilder() {
               ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 60px rgba(0,0,0,0.55)"
               : "inset 0 1px 0 rgba(255,255,255,0.90), 0 20px 60px rgba(0,0,0,0.10)",
             transformOrigin: "0% 50%",
-            transform: rosterOpen ? "scale(1)" : "scale(0.15)",
+            transform: rosterOpen ? "scale(1)" : "scale(0.92) translateX(-8px)",
             opacity: rosterOpen ? 1 : 0,
             pointerEvents: rosterOpen ? "auto" : "none",
           }}
@@ -5653,8 +5384,7 @@ function AuthedShiftBuilder() {
             amOverlapDayName={amOverlapDayName}
             amOverlapDateNum={amOverlapDateNum}
             selectedDay={selectedDay}
-            // Expanded state, graveOnly, and rosterSearch now come from narrow Zustand selectors inside RosterRail (3.4).
-            // Only the stable data + callbacks that the rail actually needs for the current day are passed as props.
+            isRosterLoading={boardColdLoading}
           />
         </div>
         {/* Duplicate old roster glass + inline filter UI fully excised (replaced by isolated <RosterRail /> in the thin chrome wrapper above). Day picker / calendar popovers and stage remain as siblings inside the main flex row. */}
@@ -5684,7 +5414,7 @@ function AuthedShiftBuilder() {
                     setSelectedDayIndex(idx);
                     setDayPickerOpen(false);
                   }}
-                  className={`relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] transition-all flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
+                  className={`sb-interactive relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
                   style={{
                     backgroundColor: useOutline ? "#fff" : (isSelected ? day.color : "transparent"),
                     borderColor: useOutline ? day.color : "transparent",
@@ -5880,10 +5610,10 @@ function AuthedShiftBuilder() {
             //   • Left:   when roster panel is open, 296px (280px panel +
             //              16px gap); when collapsed, 64px so the sphere
             //              (left-3, 48px wide) has air around it.
-            paddingTop: isTabletTouch ? 56 : 72,
-            paddingRight: isTabletTouch ? 40 : 64,
-            paddingBottom: isTabletTouch ? 64 : 80,
-            paddingLeft: rosterOpen ? (isTabletTouch ? 276 : 296) : isTabletTouch ? 40 : 64,
+            paddingTop: stageInsets.top,
+            paddingRight: stageInsets.right,
+            paddingBottom: stageInsets.bottom,
+            paddingLeft: stageInsets.left,
           }}
         >
           {/* Visual frame sized to the *scaled* artboard.
@@ -5911,6 +5641,7 @@ function AuthedShiftBuilder() {
                 transformOrigin: "top left",
               }}
             >
+            <BuilderCanvasVeil active={showCanvasVeil} />
             {/* Pill cluster moved out of this scaled wrapper — rendered as a
                sibling of .print-stage-inner below so it floats at the
                bottom-center of the canvas at a constant, tap-friendly size
@@ -5934,7 +5665,7 @@ function AuthedShiftBuilder() {
               isDark={isDark}
               isDraftMode={isDraftMode}
               isCurrentNightLocked={isCurrentNightLocked}
-              loadingAssignments={loadingAssignments}
+              loadingAssignments={boardColdLoading}
               // auxDefs now from narrow Zustand selector in Board (3.4)
               onDayPillClick={handleBoardDayPill}
               onBreakGroupChange={handleBoardBreakGroupChange}
@@ -5965,6 +5696,7 @@ function AuthedShiftBuilder() {
               members={effectiveRealRoster}
               fitBySlot={deploymentFitBySlot}
               artboardScale={scale}
+              isPrintPreview={isPrintPreview}
             />
             {/* End of isolated board. The old 600+ line artboard subtree (grids, IIFE wave logic, header)
                 has been carved out. This is the primary re-render boundary win for iPad day switches.
@@ -5987,7 +5719,38 @@ function AuthedShiftBuilder() {
               transform: 'translate(-50%, -50%)',
               zIndex: 10050,
             }}
-          />
+          >
+            {/* Canvas mode toggle — subliminal, artistic segmented control.
+                Lives in the unscaled overlay (always crisp, scale-independent, never captured by print clone).
+                Harmonizes exactly with FloatingNav's Deploy/Breaks segment language (rounded-2xl p-0.5 container,
+                rounded-[10px] inners, px-2 py-px, active:scale-[0.985], Atkinson, tracking, glass backdrop).
+                Builder (left): calm creative blue — the living digital authoring veil with xAI ink prominent.
+                Preview (right): GRAVE red (#C13A14) — signals fidelity, "this is the sheet that will print".
+                Micro liquid transitions, purposeful active states, inactive whisper. Part of the cohesive art,
+                not chrome tacked on. When Builder active the xAI surfaces feel like deliberate editor's annotations
+                on the Golden; Preview is the pure untouched proof. */}
+            <div
+              className="absolute top-1.5 right-1.5 z-[75] no-print inline-flex items-center rounded-2xl p-0.5 text-[8px] font-semibold tracking-[0.3px] overflow-hidden border border-white/40 dark:border-white/10 bg-white/88 dark:bg-zinc-950/85 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl"
+              style={{ pointerEvents: 'auto', fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}
+            >
+              <button
+                type="button"
+                onClick={() => setCanvasMode('builder')}
+                className={`sb-interactive px-2 py-px rounded-[10px] ${!isPrintPreview ? 'bg-[#0A84FF] text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/60 dark:hover:bg-white/5'}`}
+                title="Builder — rich digital authoring veil: prominent xAI magic lines, refined chips, subtle power-user layers. The living sheet. Click cards to open PlacementPad for deeper insight."
+              >
+                Builder
+              </button>
+              <button
+                type="button"
+                onClick={() => setCanvasMode('print-preview')}
+                className={`sb-interactive px-2 py-px rounded-[10px] ${isPrintPreview ? 'bg-[#C13A14] text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/60 dark:hover:bg-white/5'}`}
+                title="Preview — live on-canvas is the exact Golden that will be captured for PDF/print. Zero digital assists. Pristine fidelity. The sacred sheet."
+              >
+                Preview
+              </button>
+            </div>
+          </div>
 
         </div> {/* /relative visual frame (the thing flex actually centers) */}
       </div> {/* /stageHostRef content area */}
@@ -6164,7 +5927,7 @@ function AuthedShiftBuilder() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto rounded-md shadow-lg border px-3 py-2 text-[13px] flex items-start gap-2 backdrop-blur-sm ${
+            className={`sb-toast-enter pointer-events-auto rounded-md shadow-lg border px-3 py-2 text-[13px] flex items-start gap-2 backdrop-blur-sm ${
               t.kind === "error"
                 ? "bg-[#FFF5F5] border-[#FCA5A5] text-[#7F1D1D]"
                 : t.kind === "success"
@@ -6358,41 +6121,8 @@ function AuthedShiftBuilder() {
           fitBySlot={deploymentFitBySlot}
           isDraftMode={isDraftMode}
           draftAssignments={draftAssignments}
+          draftGrokExplanation={draftGrokExplanation}
         />
-      )}
-
-      {/* Back to Launchpad — positioned below the custom top nav bar so it doesn't cover it.
-          Higher z-index to sit above all header elements. Moved down to ~76px to clear the
-          app's glassmorphic header (consistent with the artboard paddingTop:72 used elsewhere). */}
-      {viewMode === 'canvas' && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            persistViewMode('launchpad');
-
-            // Extra reliability on iPad: directly render into the body root if it exists.
-            // This helps in case the effect hasn't flushed yet due to device-specific timing.
-            const root = launchpadRootRef.current;
-            const launchContainer = launchpadContainerRef.current;
-            if (root && launchContainer) {
-              setLaunchpadRootVisible(launchContainer, true);
-              root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
-            }
-          }}
-          className="fixed left-4 z-[300] flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.3px] transition-all active:scale-[0.985]"
-          style={{
-            top: '76px',
-            background: isDark ? 'rgba(30,30,34,0.92)' : 'rgba(255,255,255,0.92)',
-            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-            color: isDark ? '#A1A1AA' : '#4B5563',
-            backdropFilter: 'blur(12px)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          }}
-          title="Return to ShiftBuilder Launchpad"
-        >
-          <span style={{ fontSize: '13px', lineHeight: 1, marginRight: '1px' }}>←</span>
-          Launchpad
-        </button>
       )}
 
     </div>
@@ -6419,9 +6149,10 @@ function ShiftBuilderGate() {
   // While hydrating from localStorage, show nothing (prevents flash).
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#111113] flex items-center justify-center text-zinc-600 text-sm font-mono tracking-wider">
-        LOADING OPS SESSION…
-      </div>
+      <BuilderLoadingShell
+        label="LOADING OPS SESSION"
+        sublabel="Preparing computer context"
+      />
     );
   }
 

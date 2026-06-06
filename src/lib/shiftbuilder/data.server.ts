@@ -1,33 +1,44 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { unstable_cache } from 'next/cache';
 
 import type { TeamMember } from './data';
 
 /**
- * Server-only cached roster data.
- * These are the heavy, stable parts that were killing day switch perf.
+ * Server-only cached roster + stable config reads.
+ * Edge-cached via unstable_cache so the first touch of a week feels instant.
  *
- * Using 'use cache' + long cacheLife so the first touch of a week (or any day)
- * gets the roster nearly instantly from edge cache instead of hitting Supabase
- * from the browser every time.
- *
- * Invalidation: call revalidateTag('roster') from any admin mutation that
- * changes tm_profiles (grave_pool, active, etc.).
+ * Invalidation: revalidateTag('roster' | 'slot-defaults' | 'night-lookup')
+ * from admin mutations (see revalidateOpsCache.ts).
  */
 
-// Create a server supabase client (anon key is fine for reads here)
-function getServerSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+let _serverClient: SupabaseClient | null = null;
+
+function getServerSupabase(): SupabaseClient {
+  if (!_serverClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    _serverClient = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return _serverClient;
 }
 
-async function fetchTeamMembersBase(filter: Record<string, any> = {}): Promise<TeamMember[]> {
-  // Server action — runs closer to the DB than the browser.
-  // For real edge caching we would add 'use cache' + cacheLife once the flag is stable in this Next version.
+function mapProfileRow(p: any): TeamMember {
+  return {
+    id: p.tm_id,
+    name: p.display_name || p.full_name || p.tm_id,
+    fullName: p.full_name,
+    status: p.status,
+    primarySection: p.primary_section,
+    gravePool: p.grave_pool ?? null,
+    gender: p.gender ?? null,
+  };
+}
+
+async function fetchTeamMembersBase(filter: Record<string, unknown> = {}): Promise<TeamMember[]> {
   const supabase = getServerSupabase();
 
   let query = supabase
@@ -48,94 +59,134 @@ async function fetchTeamMembersBase(filter: Record<string, any> = {}): Promise<T
     return [];
   }
 
-  return (data || []).map((p: any) => ({
-    id: p.tm_id,
-    name: p.display_name || p.full_name || p.tm_id,
-    fullName: p.full_name,
-    status: p.status,
-    primarySection: p.primary_section,
-    gravePool: p.grave_pool ?? null,
-    gender: p.gender ?? null,
-  }));
+  return (data || []).map(mapProfileRow);
 }
 
+const cachedActiveRoster = unstable_cache(
+  () => fetchTeamMembersBase(),
+  ['shiftbuilder-active-roster'],
+  { revalidate: 300, tags: ['roster'] },
+);
+
+const cachedGraveRoster = unstable_cache(
+  async () => {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('tm_profiles')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+      .eq('active', true)
+      .not('grave_pool', 'is', null)
+      .order('display_name', { ascending: true });
+
+    if (error) {
+      console.error('[data.server] grave roster error:', error);
+      return [];
+    }
+    return (data || []).map(mapProfileRow);
+  },
+  ['shiftbuilder-grave-roster'],
+  { revalidate: 300, tags: ['roster'] },
+);
+
+const cachedPMOverlapRoster = unstable_cache(
+  async () => {
+    const rows = await fetchTeamMembersBase({ grave_pool: 'PM' });
+    return rows.map((p) => ({
+      ...p,
+      gravePool: 'PM' as const,
+      isPMOverlap: true,
+      isAMOverlap: false,
+    }));
+  },
+  ['shiftbuilder-pm-overlap-roster'],
+  { revalidate: 300, tags: ['roster'] },
+);
+
+const cachedAMOverlapRoster = unstable_cache(
+  async () => {
+    const rows = await fetchTeamMembersBase({ grave_pool: 'AM' });
+    return rows.map((p) => ({
+      ...p,
+      gravePool: 'AM' as const,
+      isPMOverlap: false,
+      isAMOverlap: true,
+    }));
+  },
+  ['shiftbuilder-am-overlap-roster'],
+  { revalidate: 300, tags: ['roster'] },
+);
+
 export async function getCachedActiveTeamMembers(): Promise<TeamMember[]> {
-  return fetchTeamMembersBase();
+  return cachedActiveRoster();
 }
 
 export async function getCachedGraveAvailableTeamMembers(): Promise<TeamMember[]> {
-  // Server action (caching can be added later with stable 'use cache')
-  const supabase = getServerSupabase();
-
-  const { data, error } = await supabase
-    .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
-    .eq('active', true)
-    .not('grave_pool', 'is', null)
-    .order('display_name', { ascending: true });
-
-  if (error) {
-    console.error('[data.server] grave roster error:', error);
-    return [];
-  }
-
-  return (data || []).map((p: any) => ({
-    id: p.tm_id,
-    name: p.display_name || p.full_name || p.tm_id,
-    fullName: p.full_name,
-    status: p.status,
-    primarySection: p.primary_section,
-    gravePool: p.grave_pool ?? null,
-    gender: p.gender ?? null,
-  }));
+  return cachedGraveRoster();
 }
 
 export async function getCachedGravePMOverlapMembers(): Promise<TeamMember[]> {
-  const supabase = getServerSupabase();
-
-  const { data, error } = await supabase
-    .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
-    .eq('active', true)
-    .eq('grave_pool', 'PM')
-    .order('display_name', { ascending: true });
-
-  if (error) return [];
-
-  return (data || []).map((p: any) => ({
-    id: p.tm_id,
-    name: p.display_name || p.full_name || p.tm_id,
-    fullName: p.full_name,
-    status: p.status,
-    primarySection: p.primary_section,
-    gravePool: 'PM',
-    gender: p.gender ?? null,
-    isPMOverlap: true,
-    isAMOverlap: false,
-  }));
+  return cachedPMOverlapRoster();
 }
 
 export async function getCachedGraveAMOverlapMembers(): Promise<TeamMember[]> {
-  const supabase = getServerSupabase();
+  return cachedAMOverlapRoster();
+}
 
-  const { data, error } = await supabase
-    .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
-    .eq('active', true)
-    .eq('grave_pool', 'AM')
-    .order('display_name', { ascending: true });
+export interface CachedSlotDefault {
+  slotKey: string;
+  slotType: string;
+  rrSide: string;
+  defaultBreakGroup: number;
+}
 
-  if (error) return [];
+const cachedSlotDefaults = unstable_cache(
+  async (): Promise<CachedSlotDefault[]> => {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('slot_defaults')
+      .select('slot_key, slot_type, rr_side, default_break_group')
+      .order('slot_key', { ascending: true });
 
-  return (data || []).map((p: any) => ({
-    id: p.tm_id,
-    name: p.display_name || p.full_name || p.tm_id,
-    fullName: p.full_name,
-    status: p.status,
-    primarySection: p.primary_section,
-    gravePool: 'AM',
-    gender: p.gender ?? null,
-    isPMOverlap: false,
-    isAMOverlap: true,
-  }));
+    if (error) {
+      console.error('[data.server] getCachedSlotDefaults error:', error);
+      return [];
+    }
+
+    return (data || []).map((r: any) => ({
+      slotKey: r.slot_key,
+      slotType: r.slot_type,
+      rrSide: r.rr_side ?? '',
+      defaultBreakGroup: r.default_break_group ?? 0,
+    }));
+  },
+  ['shiftbuilder-slot-defaults'],
+  { revalidate: 600, tags: ['slot-defaults'] },
+);
+
+export async function getCachedSlotDefaults(): Promise<CachedSlotDefault[]> {
+  return cachedSlotDefaults();
+}
+
+/** Server-cached night id lookup — avoids repeated nights roundtrips during week prefetch. */
+export async function getCachedNightIdForDate(isoDate: string): Promise<string | null> {
+  const lookup = unstable_cache(
+    async () => {
+      const supabase = getServerSupabase();
+      const { data, error } = await supabase
+        .from('nights')
+        .select('id')
+        .eq('night_date', isoDate)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[data.server] getCachedNightIdForDate error', error);
+        return null;
+      }
+      return data?.id ?? null;
+    },
+    ['shiftbuilder-night-id', isoDate],
+    { revalidate: 120, tags: ['night-lookup', `night-${isoDate}`] },
+  );
+
+  return lookup();
 }

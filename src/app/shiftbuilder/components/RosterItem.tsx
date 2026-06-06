@@ -53,17 +53,17 @@ const RosterItem = React.memo(function RosterItem({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`group flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-sm touch-none transition-all border border-transparent ${
+      className={`sb-roster-row group flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-sm touch-none border border-transparent ${
         isAssigned
           ? "opacity-45 cursor-not-allowed"
-          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm ${
+          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm dark:hover:bg-white/5 dark:hover:border-white/10 ${
               emphasis === "on"
-                ? "border-l-2 border-[#007AFF] bg-white/70"
+                ? "border-l-2 border-[#007AFF] bg-white/70 dark:bg-white/5"
                 : emphasis === "scheduled"
-                ? "border-l-2 border-amber-400 bg-amber-50/60"
+                ? "border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/10"
                 : ""
             } cursor-grab active:cursor-grabbing`
-      } ${isDragging ? "opacity-25 scale-[0.985]" : ""}`}
+      } ${isDragging ? "sb-roster-row--dragging" : ""}`}
     >
       {/* Drag grip */}
       {isDraggable && (

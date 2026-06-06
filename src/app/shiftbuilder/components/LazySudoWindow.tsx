@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { SudoTabLoading } from "../sudo/SudoGlass";
 
 interface LazySudoWindowProps {
   open: boolean;
@@ -36,7 +37,12 @@ export function LazySudoWindow(props: LazySudoWindowProps) {
   }, [props.open, SudoWindowComp]);
 
   if (!SudoWindowComp) {
-    return null;
+    if (!props.open) return null;
+    return (
+      <div className="sb-overlay-backdrop sb-overlay-backdrop--fixed z-[10000] flex items-center justify-center">
+        <SudoTabLoading>Loading Sudo</SudoTabLoading>
+      </div>
+    );
   }
 
   return <SudoWindowComp {...props} />;

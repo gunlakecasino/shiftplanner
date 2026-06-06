@@ -22,6 +22,7 @@ import {
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuth";
 import { getPermissionsForRole, mergePermissions } from "@/lib/auth/opsAuth";
 import { useToast } from "@/app/shiftbuilder/hooks/useToast";
+import { SudoTabLoading } from "./SudoGlass";
 
 interface UsersTabProps {
   onDataChanged?: () => void;
@@ -256,7 +257,9 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
       {/* List */}
       <div className="flex-1 overflow-auto p-4">
         {loading ? (
-          <div className="p-8 text-center text-sm text-[#6C6C72]">Loading users…</div>
+          <div className="p-8 flex justify-center">
+            <SudoTabLoading>Loading users</SudoTabLoading>
+          </div>
         ) : (
           <div className="space-y-1">
             {filtered.map((u) => (
@@ -272,7 +275,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                   }
                 }}
                 className={cn(
-                  "w-full text-left flex items-center justify-between px-4 py-3 rounded-2xl border transition-colors cursor-pointer",
+                  "sb-list-row w-full text-left flex items-center justify-between px-4 py-3 rounded-2xl border cursor-pointer",
                   isDark
                     ? "border-white/10 hover:bg-white/5"
                     : "border-black/10 hover:bg-black/5"

@@ -1,4 +1,10 @@
 import { supabase, getSupabaseClient } from '../supabase';
+import {
+  readNightIdCache,
+  writeNightIdCache,
+  readSlotDefaultsCache,
+  writeSlotDefaultsCache,
+} from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
 import type { BreakGroupValue } from './breakGroupResolve';
 import { startOfRosterWeek, daysBetween } from './dateUtils';
@@ -374,11 +380,24 @@ function startOfShiftWeekLocal(date: Date): Date {
 }
 
 /**
+ * day_num / page_num (1=Fri … 7=Thu) for the shift week.
+ * Uses local DOW to stay consistent with local week-start math and localDateIso
+ * (avoids UTC drift for the operator's TZ).
+ */
+function shiftDayNumLocal(d: Date): number {
+  const dow = d.getDay(); // local: 0=Sun … 5=Fri … 6=Sat
+  return ((dow + 2) % 7) + 1;
+}
+
+/**
  * Find a night by its date. Returns null if no row exists. Use this to check
  * before reading assignments — if null, the night hasn't been touched yet.
  */
 export async function getNightIdForDate(date: Date): Promise<string | null> {
   const iso = localDateIso(date);
+  const cached = readNightIdCache(iso);
+  if (cached !== undefined) return cached;
+
   const { data, error } = await supabase
     .from("nights")
     .select("id")
@@ -389,7 +408,9 @@ export async function getNightIdForDate(date: Date): Promise<string | null> {
     console.warn("[shiftbuilder/data] getNightIdForDate error", error);
     return null;
   }
-  return data?.id ?? null;
+  const id = data?.id ?? null;
+  writeNightIdCache(iso, id);
+  return id;
 }
 
 /**
@@ -399,6 +420,9 @@ export async function getNightIdForDate(date: Date): Promise<string | null> {
  *
  * Returns the night id on success, throws if the inserts fail (which should
  * be rare — schema mismatches or RLS issues).
+ *
+ * NOTE: weeks table is keyed by `week_ending` (Thu), not week_start. This
+ * matches live schema and all other call sites (sudoActions, listSchedules, etc).
  */
 export async function getOrCreateNightForDate(
   date: Date,
@@ -422,7 +446,7 @@ export async function getOrCreateNightForDate(
     const { data } = await supabase
       .from("weeks")
       .select("id")
-      .eq("week_start", weekStartIso)
+      .eq("week_ending", weekEndingIso)
       .maybeSingle();
     weekId = data?.id ?? null;
   }
@@ -431,27 +455,31 @@ export async function getOrCreateNightForDate(
     const { data: newWeek, error: wErr } = await supabase
       .from("weeks")
       .insert({
-        week_start: weekStartIso,
         week_ending: weekEndingIso,
-        // Leave other columns to defaults; if the schema requires more,
-        // we'll surface the error and add fields here.
+        // Leave other columns (label, status, schedule_path, etc.) to defaults or triggers.
+        // The table 'weeks' is keyed by week_ending (per the rest of the app and schema).
       })
       .select("id")
       .single();
 
     if (wErr || !newWeek) {
-      throw new Error(`Failed to create week for ${weekStartIso}: ${wErr?.message ?? "unknown"}`);
+      throw new Error(`Failed to create week for ${weekEndingIso}: ${wErr?.message ?? "unknown"}`);
     }
     weekId = newWeek.id;
   }
 
   // 3. Create the night under that week.
+  // Supply all NOT NULL columns that have no defaults (per schema + sudoActions ensure path).
+  // day_num/page_num are 1-based within the Fri-Thu week.
+  const dayNum = shiftDayNumLocal(date);
   const { data: newNight, error: nErr } = await supabase
     .from("nights")
     .insert({
       week_id: weekId,
       night_date: localDateIso(date),
       day_name: dayName,
+      day_num: dayNum,
+      page_num: dayNum,
       status: "draft",
       is_locked: false,
     })
@@ -463,6 +491,7 @@ export async function getOrCreateNightForDate(
   }
 
   const newNightId = newNight.id;
+  writeNightIdCache(localDateIso(date), newNightId);
 
   // Auto-seed default tasks and break template in parallel — fire-and-forget
   // so a seeding failure never blocks night creation. Errors are logged but
@@ -565,15 +594,14 @@ export async function getNightAssignments(nightId: string): Promise<ZoneAssignme
     return !(sk === 'admin' || sk === 'z9_sr' || sk.startsWith('z9_sr'));
   });
 
+  // Legacy slot-key normalization is fire-and-forget — never blocks the read path.
   if (safeLegacyRows.length > 0) {
-    await Promise.all(safeLegacyRows.map(async (r: any) => {
+    void Promise.all(safeLegacyRows.map(async (r: any) => {
       try {
         let canonical: any;
         try {
           canonical = uiToDb(r.slot_key);
         } catch {
-          // Last-ditch safety: never throw during normalization.
-          // This prevents 400s and keeps drag-and-drop from breaking on weird legacy rows.
           const sk = String(r.slot_key || '');
           canonical = {
             slot_key: sk,
@@ -981,6 +1009,13 @@ export async function batchApplyDraftAssignments(
   }
 
   if (errors.length > 0) throw new Error(`batchApplyDraftAssignments: ${errors.join('; ')}`);
+
+  try {
+    const { revalidateNightCoreCache } = await import('./revalidateOpsCache');
+    await revalidateNightCoreCache();
+  } catch {
+    /* server revalidate optional from browser */
+  }
 }
 
 /**
@@ -2789,10 +2824,11 @@ export async function getRecentZoneHistory(
   beforeDate: Date,
   nights: number
 ): Promise<Map<string, Array<{ nightDate: string; slotKey: string }>>> {
+  const { formatLocalDateISO } = await import('./dateUtils');
   const cutoff = new Date(beforeDate);
   cutoff.setDate(cutoff.getDate() - nights);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
-  const beforeIso = beforeDate.toISOString().slice(0, 10);
+  const cutoffIso = formatLocalDateISO(cutoff);
+  const beforeIso = formatLocalDateISO(beforeDate);
 
   const { data: nightRows, error: nightErr } = await supabase
     .from("nights")
@@ -3229,6 +3265,9 @@ export interface SlotDefaultTask {
 // ── Readers ─────────────────────────────────────────────────────────────────
 
 export async function getSlotDefaults(): Promise<SlotDefault[]> {
+  const cached = readSlotDefaultsCache<SlotDefault>();
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from('slot_defaults')
     .select('slot_key, slot_type, rr_side, default_break_group')
@@ -3239,12 +3278,14 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
     return [];
   }
 
-  return (data || []).map((r: any) => ({
+  const rows = (data || []).map((r: any) => ({
     slotKey: r.slot_key,
     slotType: r.slot_type,
     rrSide: r.rr_side ?? '',
     defaultBreakGroup: r.default_break_group ?? 0,
   }));
+  writeSlotDefaultsCache(rows);
+  return rows;
 }
 
 export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {

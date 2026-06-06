@@ -12,7 +12,9 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
 import { PlacementFitChip } from "./PlacementFitChip";
+import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 /** AuxCard — Phase 1 Live layer prep (same pattern as ZoneCard / RRCard). */
 
@@ -37,6 +39,10 @@ export interface AuxCardProps {
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
+  /** Optional xAI for corner magic one line surface. */
+  xaiFitChip?: XaiFit;
+  /** Builder mode flag for subtle digital-only UI sugar (e.g. empty card hints). */
+  showDigitalAssists?: boolean;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -56,6 +62,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
+  xaiFitChip,
+  showDigitalAssists = false,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -79,7 +87,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={def.key}
-      className={`assignment-card relative cursor-pointer flex flex-col h-full rounded-[3px] transition-all touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "opacity-30" : ""} ${isEmpty ? "empty" : ""} ${isPenHovering ? "ring-2 ring-[#FFD60A] ring-offset-1 animate-pulse" : ""}`}
+      className={`assignment-card sb-assignment-card relative cursor-pointer flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -100,7 +108,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <PlacementFitChip fit={fitChip} />
+          <PlacementFitChip fit={fitChip} xaiFit={xaiFitChip} />
           <BreakBadge value={currentBreak} onCycle={cycleBreak} />
         </div>
         {/* Explicit remove button for Aux slots (including Z9SR) so clearing is reliable and doesn't require drag or refresh */}
@@ -121,7 +129,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
       <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">
         {loading && !hasTM ? (
-          <div className="h-[16px] w-3/4 rounded-sm bg-[#E5E5E7] animate-pulse" />
+          <AssignmentSkeleton size="lg" />
         ) : isDraftMode && draftInfo ? (
           <div className="flex flex-col min-w-0">
             <span
@@ -140,20 +148,39 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             )}
           </div>
         ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+          <>
+            <div className="flex items-center gap-1 min-w-0">
+              {a.isLocked && (
+                <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+              )}
+              <span
+                className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+                style={{ fontSize: 19, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+              >
+                {a.tmName}
+              </span>
+            </div>
+            {/* Digital builder only: subliminal xAI magic one-line (the "headline" from pad analyst).
+                Rendered as elegant digital ink annotation under the large Atkinson name — part of the cohesive authoring veil.
+                no-print + showDigitalAssists gate ensures 0 height/metric change in print-preview or PDF clone; Golden fidelity pristine.
+                Uses same refined ✧ mark as the corner chip for family language. Clicking anywhere on card (incl. this line) re-opens PlacementPad for fresh insight. */}
+            {xaiFitChip?.headline && (
+              <div
+                className="no-print mt-px pl-1 border-l border-[#2F5C7C]/25 dark:border-[#5B8AA8]/25 text-[6px] text-[#2F5C7C] dark:text-[#5B8AA8] truncate font-normal tracking-[0.15px] leading-[1.1] flex items-center gap-1 opacity-90 hover:opacity-100 transition-opacity"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                title={`xAI insight: ${xaiFitChip.headline}${xaiFitChip.fitSummary ? ` — ${xaiFitChip.fitSummary}` : ""}\n(Builder only; hidden in Preview/PDF. Click card to refine via PlacementPad.)`}
+              >
+                <span className="text-[#2F5C7C]/50 dark:text-[#5B8AA8]/60" style={{ fontSize: "5.5px", letterSpacing: "-0.1px" }}>✧</span>
+                {xaiFitChip.headline}
+              </div>
             )}
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 19, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
-            >
-              {a.tmName}
-            </span>
-          </div>
+          </>
         ) : (
           <div className="unassigned-label mt-0.5 text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[10.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
             — Unassigned —
+            {showDigitalAssists && (
+              <span className="no-print ml-1 text-[8px] text-[#2F5C7C]/35 tracking-normal">drop to assign</span>
+            )}
           </div>
         )}
 

@@ -104,7 +104,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
   return (
     <div
-      className={`group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px transition-colors hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
       onPointerUp={(e) => {
         // Touch tap outside the label: pin/unpin toolbar (label uses drag delay).
         if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-task-label]')) {
@@ -171,7 +171,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
                     e.stopPropagation();
                     setIsColorExpanded(true);
                   }}
-                  className="flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-black/20 hover:ring-black/40"
+                  className="sb-interactive flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-black/20 hover:ring-black/40"
                   style={{ backgroundColor: hasColor ? task.color! : '#E5E5E7' }}
                   title="Change task color"
                 >

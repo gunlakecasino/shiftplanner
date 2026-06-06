@@ -17,6 +17,7 @@
  */
 
 import { supabase } from "../supabase";
+import { readEngineConfigCache, writeEngineConfigCache } from "./clientQueryCache";
 
 // ---------------------------------------------------------------
 // Types — match the JSON shape we expect in `engine_config` columns.
@@ -72,7 +73,7 @@ export interface EngineConfig {
   thresholds: EngineThresholds;
   slotPriority: Record<string, number>; // slot → priority override
   placementMethod: PlacementMethod;
-  /** Grok 4.3 reasoning depth used only when placementMethod === "grok-hybrid" */
+  /** Grok 4.3 reasoning depth used only when placementMethod === "grok-hybrid" (default high for decently hard thinking; token cost managed by on-demand calls + server cache in pad paths) */
   grokReasoningEffort: GrokReasoningEffort;
 
   notes: string | null;
@@ -112,7 +113,7 @@ export const DEFAULT_THRESHOLDS: Required<EngineThresholds> = {
   override_difficulty_threshold: 6.0,
 };
 
-export const DEFAULT_GROK_REASONING_EFFORT: GrokReasoningEffort = "medium";
+export const DEFAULT_GROK_REASONING_EFFORT: GrokReasoningEffort = "high"; // deeper Grok 4.3 thinking for placement engine (token-friendly via on-demand + cache in related paths)
 
 export const FALLBACK_CONFIG: EngineConfig = {
   id: "fallback",
@@ -158,6 +159,9 @@ export function resolvedThresholds(cfg: EngineConfig): Required<EngineThresholds
  * should never block on this.
  */
 export async function getActiveEngineConfig(): Promise<EngineConfig> {
+  const cached = readEngineConfigCache<EngineConfig>();
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("engine_config")
     .select(
@@ -171,11 +175,13 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
 
   if (error) {
     console.warn("[engineConfig] fetch failed, using fallback:", error.message);
+    writeEngineConfigCache(FALLBACK_CONFIG);
     return FALLBACK_CONFIG;
   }
 
   if (!data || data.length === 0) {
     console.warn("[engineConfig] no active row found, using fallback");
+    writeEngineConfigCache(FALLBACK_CONFIG);
     return FALLBACK_CONFIG;
   }
 
@@ -186,7 +192,7 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
     ? reasoning
     : DEFAULT_GROK_REASONING_EFFORT) as GrokReasoningEffort;
 
-  return {
+  const config: EngineConfig = {
     id: row.id,
     isActive: !!row.is_active,
 
@@ -209,6 +215,9 @@ export async function getActiveEngineConfig(): Promise<EngineConfig> {
     updatedAt: row.updated_at ?? null,
     createdBy: row.created_by ?? null,
   };
+
+  writeEngineConfigCache(config);
+  return config;
 }
 
 // =============================================================================
