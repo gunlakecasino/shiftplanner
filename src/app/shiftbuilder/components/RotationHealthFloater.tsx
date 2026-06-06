@@ -35,7 +35,7 @@ export type RotationHealthFloaterProps = {
 function breakdownTitle(health: ShiftRotationHealth): string {
   const { counts, openGaps, scoredCount, percent } = health;
   const lines = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (repeats this grave week).",
+    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (repeats this grave week). Policy: max 1 per TM/area/week; penalty at 2, real bad at 3+.",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
     "",
     percent !== null ? `Tonight (fit): ${percent}%` : "Tonight: —",
@@ -66,8 +66,9 @@ export function RotationHealthFloater({
     [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
   );
 
-  // Weekly % now driven by real balance from weekly history (see compute in shiftRotationHealth).
-  // Fallback to old synthetic only if no data.
+  // Weekly % driven by real balance when the compute receives weeklyRecentHistory (policy max 1 / penalty 2 / real bad 3+).
+  // In this floater the compute is called without history (pure tonight fit); wk label falls back to synthetic.
+  // The main board pill (CanvasEngineCluster) receives the history and shows the blended health.
   const realWeekly = (health as any).weeklyBalance;
   const weeklyPercent = realWeekly !== undefined
     ? Math.round(realWeekly)

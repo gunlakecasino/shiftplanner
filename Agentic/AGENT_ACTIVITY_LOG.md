@@ -6,6 +6,24 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Rotation health: retune weekly repeat penalty (user: "also for the rotation health, max repeat in same week for TM should be 1, penalty at 2, and real bad at 3")
+
+- Follow-up to the real weekly TM×area history incorporation (the 91% vs hand-review repeats problem).
+- Updated policy in computeShiftRotationHealth (both weeklyHist and weeklyRecent paths, plus shared penalty block):
+  - Ideal / healthy: max repeat = 1 (a TM in the same area at most once per grave week).
+  - Penalty kicks in at 2 (20pt hit → weeklyBalance 80).
+  - 3+ is "real bad": 45pt base + escalation (e.g. 3 → ~55 balance, 4+ down toward 40 floor).
+  - repeatViolations still counts every (tm,area) with count>1 (now explicitly "violations of the max-1 policy").
+  - weeklyBalance (raw) still blended 0.7 tonight fit + 0.3 weekly into the returned .percent (so the main pill number and color react to bad repeats).
+  - maxWeeklyRepeat / repeatViolations continue to be exposed for the breakdown tooltips.
+- Updated JSDoc on the weekly fields.
+- Updated breakdownTitle strings (CanvasEngineCluster + RotationHealthFloater) to document the 1/2/3 policy and clarified some "Tonight" labels to "Health (blend)" / "Weekly (raw)" where the value is the blended or component.
+- Minor comment cleanups in the three files.
+- tsc clean.
+- Version bump +0.001 → 0.818.
+- The primary visible rotation health pill (the one with drawer that receives weeklyRecentHistory) will now correctly penalize and surface when max repeat hits 2 or especially 3+.
+- (Note: the auxiliary RotationHealthFloater component calls compute without the history prop, so it continues using its synthetic fallback for its wk label; main board path is the one that matters.)
+
 ## 2026-06-09 — Grok 4.3 — Cards polish: remove xAI from colored labels on load (user: "[Image #1] let's talk about these cards now. I dont want the colord labels to have the xAI on load anymore")
 
 - User feedback after rotation health accuracy work + the cards screenshot: the "colored labels" (the main deployment cards — Zone/Aux/RR/Overlap with their zone-tinted top stripes, left editorial borders, and colored chrome) were auto-surfacing xAI content (the ✧ + magic one-liner headline under the large Atkinson TM name inside the card body, plus xAI-augmented corner fit chips showing truncated headline text instead of clean verdict labels).

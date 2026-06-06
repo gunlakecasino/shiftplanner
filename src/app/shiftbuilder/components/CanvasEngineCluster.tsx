@@ -88,9 +88,9 @@ export function CanvasEngineCluster({
   );
 
   // Weekly % now uses real balance from weeklyRecentHistory (or weeklyHistories) when available
-  // in the health compute (TM×area repeats this week, max repeat, violations → penalty).
-  // Falls back to the old synthetic only if no weekly data (for transition). The compute
-  // already blends with tonight fit avg for the headline percent.
+  // in the health compute (TM×area repeats this week, max=1 ideal, penalty at 2, real bad at 3+).
+  // The returned health.percent is a 0.7 tonight + 0.3 weekly blend so repeats visibly affect the main number.
+  // weeklyDisplay / breakdown show the raw weekly component + the max repeat stats.
   const realWeekly = (health as any).weeklyBalance;
   const weeklyPercent = realWeekly !== undefined
     ? Math.round(realWeekly)
@@ -130,10 +130,10 @@ export function CanvasEngineCluster({
   const display = health.percent !== null ? `${health.percent}%` : "—%";
 
   const breakdownTitle = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and now incorporates real weekly balance from recent/this-week histories (TM×area repeat counts).",
+    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (TM×area repeats). Policy: max repeat 1 per TM per area per week; penalty at 2, real bad at 3+.",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
-    health.percent !== null ? `Tonight (fit quality): ${health.percent}%` : "Tonight: —",
-    weeklyPercent !== null ? `Weekly (balance): ${weeklyPercent}%` : "Weekly: —",
+    health.percent !== null ? `Health (tonight fit + weekly blend): ${health.percent}%` : "Health: —",
+    weeklyPercent !== null ? `Weekly (raw balance): ${weeklyPercent}%` : "Weekly: —",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,

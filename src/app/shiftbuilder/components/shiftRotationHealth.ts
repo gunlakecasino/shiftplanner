@@ -41,13 +41,14 @@ export type ShiftRotationHealth = {
   };
   /**
    * Real weekly balance (0-100) derived from this-week (grave Fri-Thu) or recent history for current TMs.
-   * Lower when TMs repeat areas multiple times/week (max repeat, violations).
-   * Undefined if no weeklyHistories provided (for backward compat during rollout).
+   * Policy: a TM should be placed in the same area at most 1× per week (max repeat = 1 is ideal).
+   * Penalty starts at 2; 3+ is "real bad". Lower balance pulls the overall health % down via blend.
+   * Undefined if no weekly data provided.
    */
   weeklyBalance?: number;
   /** Highest number of times any single TM was placed in one area this week (from zoneDates counts). */
   maxWeeklyRepeat?: number;
-  /** Number of (tm, area) pairs with count > 1 this week (repeat violations). */
+  /** Number of (tm, area) pairs with count > 1 this week (repeat violations of the max-1 policy). */
   repeatViolations?: number;
 };
 
@@ -101,21 +102,22 @@ export function computeShiftRotationHealth(
     counts[fit.fitVerdict] += 1;
   }
 
-  // === NEW: Weekly rotation balance from real per-TM history (if provided) ===
-  // Loads/builds a TM × area matrix for the current grave week (or recent window) and
-  // computes repeat-based balance. This is what makes the % drop when the same TM
-  // is in the same area multiple times a week (the user's reported mismatch).
-  // Reuses existing ZoneDetailEntry (from getZoneDetailReport("this-week") or getTmPlacementHistory
-  // + date filter, or getRecentZoneHistory) and the same beforeIso / spread patterns used for fits.
-  // Board-driven (only TMs on current assignments) to match usePlacementFitMap perf model.
+  // === Weekly rotation balance from real per-TM history (if provided) ===
+  // Builds TM × area counts for the current grave week (or recent 7-night window).
+  // Policy (operator): max repeat of 1 per TM per area per week is ideal/healthy.
+  // Penalty starts at 2; 3+ counts as "real bad" (steeper balance drop).
+  // This makes the overall health % drop when hand-review shows the same TM in one area
+  // multiple times in a week (previously 91% could mask the problem).
+  // Reuses ZoneDetailEntry / recentZoneHistory data already loaded for the board.
+  // Board-driven (current assignments) to match the fit map model.
   let weeklyBalance: number | undefined;
   let maxWeeklyRepeat = 0;
   let repeatViolations = 0;
   const weeklyHist = (options as any)?.weeklyHistories as Record<string, ZoneDetailEntry> | undefined;
   const weeklyRecent = (options as any)?.weeklyRecentHistory as Map<string, Array<{nightDate: string; slotKey: string}>> | undefined;
+  let hasWeeklyData = false;
   if (weeklyHist && Object.keys(weeklyHist).length > 0) {
-    // Build lightweight matrix: tmId -> uiKey (area) -> count this week
-    // (zoneDates lists are pre-bounded to the week by the caller using graveWeekRange / this-week report)
+    // zoneDates already week-bounded by caller (graveWeekRange / this-week report)
     for (const entry of Object.values(weeklyHist)) {
       for (const [zKey, dates] of Object.entries(entry.zoneDates || {})) {
         const count = dates.length;
@@ -123,15 +125,9 @@ export function computeShiftRotationHealth(
         if (count > 1) repeatViolations++;
       }
     }
-    // Simple, interpretable balance: start at 100, penalize by max repeat.
-    // 1x everywhere = 100 (healthy); 2x = ~80; 3x+ = lower (down to 50 floor).
-    // This directly surfaces the "several TM ... multiple times a week" problem.
-    // Can be blended with tonight percent below; future: variance/entropy of loads.
-    const repeatPenalty = Math.min(50, Math.max(0, (maxWeeklyRepeat - 1) * 20));
-    weeklyBalance = Math.max(50, 100 - repeatPenalty);
+    hasWeeklyData = true;
   } else if (weeklyRecent && weeklyRecent.size > 0) {
-    // Fallback / lighter path: use recent 7-night history (already loaded in secondary data)
-    // to approximate "this week" repeats. Aggregate counts per (tm, slot) from the lists.
+    // Fallback: aggregate per-TM slot counts from the lighter recent history map.
     for (const [tmId, records] of weeklyRecent.entries()) {
       const counts: Record<string, number> = {};
       for (const rec of records) {
@@ -142,8 +138,19 @@ export function computeShiftRotationHealth(
         if (count > 1) repeatViolations++;
       }
     }
-    const repeatPenalty = Math.min(50, Math.max(0, (maxWeeklyRepeat - 1) * 20));
-    weeklyBalance = Math.max(50, 100 - repeatPenalty);
+    hasWeeklyData = true;
+  }
+
+  if (hasWeeklyData) {
+    // Penalty model: 1 = perfect (100). Penalty at 2. Real bad (big drop) at 3+.
+    // We penalize based on the worst single (TM, area) repeat count.
+    let repeatPenalty = 0;
+    if (maxWeeklyRepeat >= 3) {
+      repeatPenalty = Math.min(60, 45 + (maxWeeklyRepeat - 3) * 10); // 3→45 (bal~55), 4→55 (bal~45), ...
+    } else if (maxWeeklyRepeat === 2) {
+      repeatPenalty = 20; // starts here → weekly balance 80
+    }
+    weeklyBalance = Math.max(40, 100 - repeatPenalty);
   }
 
   if (scores.length === 0) {

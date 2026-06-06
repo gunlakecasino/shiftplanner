@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — cards xAI bleed removal (colored labels now clean on load; full xAI surfaces stay in pad only) + prior rotation health + pad polish; tsc clean, version 0.817
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — rotation health weekly repeat retune (max=1 ideal, penalty@2, real bad@3) + prior cards xAI removal; version 0.818; tsc clean
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 
