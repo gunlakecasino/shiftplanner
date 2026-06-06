@@ -541,13 +541,16 @@ export default function FloatingNav({
               <ZoomOut className={NAV_ICON} />
             </NavToolButton>
             {isZoomed && zoomLabel ? (
-              <span
-                className="min-w-[2.75rem] px-1 text-center text-[10px] font-bold tabular-nums text-zinc-500 dark:text-zinc-400"
+              <button
+                type="button"
+                onClick={onZoomFit}  // quick way back to adaptable fit; could also jump to 1.0
+                className="min-w-[2.75rem] px-1 text-center text-[10px] font-bold tabular-nums text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                 style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
                 aria-live="polite"
+                title="Click to fit (or use Fit button)"
               >
                 {zoomLabel}
-              </span>
+              </button>
             ) : null}
             <NavToolButton onClick={onZoomIn} title="Zoom in" className="rounded-none">
               <ZoomIn className={NAV_ICON} />

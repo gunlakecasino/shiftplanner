@@ -1754,7 +1754,15 @@ function AuthedShiftBuilder() {
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
-      setZoomMode(dir > 0 ? zoomSteps[zoomSteps.length - 1] : zoomSteps[Math.max(0, zoomSteps.length - 2)]);
+      // With richer step lists, pick a sensible discrete level out of "fit"
+      // rather than blindly jumping to the extreme ends of the array.
+      let target: number;
+      if (dir > 0) {
+        target = zoomSteps.find((s) => s >= 1) || zoomSteps[zoomSteps.length - 1];
+      } else {
+        target = zoomSteps.slice().reverse().find((s) => s <= 0.85) || zoomSteps[0];
+      }
+      setZoomMode(target);
       return;
     }
     const current =

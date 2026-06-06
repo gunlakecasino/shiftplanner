@@ -12,11 +12,17 @@ export const NATURAL_HEIGHT = 816;
 export { isTabletTouchDevice };
 
 export function maxArtboardScale(): number {
-  return isTabletTouchDevice() ? 1.25 : 1;
+  if (isTabletTouchDevice()) return 1.5;
+  if (typeof window === "undefined") return 1.5;
+  // Adaptability: on larger desktop displays, permit higher zoom for detailed
+  // inspection while still respecting the Golden artboard contract.
+  const w = window.innerWidth;
+  const factor = Math.min(2.0, Math.max(1.0, w / 900));
+  return factor;
 }
 
-export const TABLET_ZOOM_STEPS = [0.5, 0.75, 1, 1.15, 1.25] as const;
-export const DESKTOP_ZOOM_STEPS = [0.5, 0.75, 1] as const;
+export const TABLET_ZOOM_STEPS = [0.25, 0.4, 0.5, 0.6, 0.75, 0.85, 1, 1.1, 1.15, 1.25, 1.35, 1.5] as const;
+export const DESKTOP_ZOOM_STEPS = [0.25, 0.4, 0.5, 0.6, 0.75, 0.85, 1, 1.1, 1.25, 1.5] as const;
 
 export function zoomStepsForDevice(): readonly number[] {
   return isTabletTouchDevice() ? TABLET_ZOOM_STEPS : DESKTOP_ZOOM_STEPS;
@@ -123,6 +129,54 @@ export function useZoom({
   const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
   const scale = Math.min(rawScale, maxArtboardScale());
 
+  // Refs for wheel handler to always see latest values without stale closures
+  const zoomModeRef = useRef(zoomMode);
+  const fitScaleRef = useRef(fitScale);
+  const stepsRef = useRef(zoomStepsForDevice());
+
+  useEffect(() => {
+    zoomModeRef.current = zoomMode;
+  }, [zoomMode]);
+  useEffect(() => {
+    fitScaleRef.current = fitScale;
+  }, [fitScale]);
+  useEffect(() => {
+    stepsRef.current = zoomStepsForDevice();
+  }, [isTabletTouch]);
+
+  // Desktop mouse wheel zoom (ctrl/meta + wheel) for extra adaptability.
+  // Gives fine-grained control in addition to the +/- buttons and discrete steps.
+  // Tablet uses pinch via useStagePinchPan instead.
+  useEffect(() => {
+    if (isTabletTouch) return;
+    const el = stageHostRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+
+      const currentScale = zoomModeRef.current === "fit" ? fitScaleRef.current : (zoomModeRef.current as number);
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const delta = dir * 0.08; // ~8% per wheel tick for responsive feel
+      let next = clamp(currentScale + delta, 0.25, maxArtboardScale());
+
+      // Prefer snapping to a nearby discrete step for "variations" consistency
+      const steps = stepsRef.current;
+      const snapped = steps.reduce((best, s) =>
+        Math.abs(s - next) < Math.abs(best - next) ? s : best, steps[0]
+      );
+      if (Math.abs(snapped - next) < 0.06) {
+        next = snapped;
+      }
+
+      setZoomMode(next);
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [isTabletTouch, setZoomMode]);
+
   return {
     zoomMode,
     setZoomMode,
@@ -134,4 +188,8 @@ export function useZoom({
     zoomSteps: zoomStepsForDevice(),
     isTabletTouch,
   };
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
 }
