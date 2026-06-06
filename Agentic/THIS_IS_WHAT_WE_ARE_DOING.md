@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — fixed week-repeat not affecting health % or "strong fit" chips (include current assignments in health weekly counts; per-slot fit scorer now receives weeklyRecentHistory and penalizes weekRepeat >=2 / forces questionable at 3+ so chips no longer say strong); version 0.820; tsc clean
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — plannedThisWeekRecentHistory (from live store for week days <= selected) now drives matrix/week-repeat/xAI context/health/fit so Thu sees Mon-Wed planned in same week; version 0.821; tsc clean
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 

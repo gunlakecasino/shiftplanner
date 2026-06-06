@@ -1970,6 +1970,37 @@ function AuthedShiftBuilder() {
   // the optimistic live layer or realtime bridge mutates placements for this night.
   // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
   const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
+
+  // Planned "this week" recent history built from live/in-app assignments for the days in the current grave week
+  // up to and including the selectedDay. This ensures that as the user builds/plans forward within a week
+  // (e.g. assigns Mon, then views Thu), the matrix, week-repeat penalties, fit chips, health %, pad xAI context,
+  // and "this week" signals all see the prior days' planned placements in the same week.
+  // Uses the liveAssignmentsStore (which holds per-night assignments by dateKey, updated on assign/live/realtime)
+  // plus the current night's assignments.
+  const plannedThisWeekRecentHistory = React.useMemo(() => {
+    const result = new Map<string, Array<{ nightDate: string; slotKey: string }>>();
+    if (!DAY_DEFS || DAY_DEFS.length === 0) return result;
+
+    const storeState = liveAssignmentsStore.getState();
+    for (let i = 0; i <= selectedDayIndex && i < DAY_DEFS.length; i++) {
+      const dayDef = DAY_DEFS[i];
+      if (!dayDef) continue;
+      const dateKey = formatLocalDateISO(dayDef.date);
+      const nightAss = storeState.assignmentsByNight[dateKey] || {};
+      // For the currently selected day, also include the main store assignments (may have optimistic updates)
+      const mainAss = (i === selectedDayIndex ? assignments : {});
+      const allAss = { ...nightAss, ...mainAss };
+      for (const [slotKey, ass] of Object.entries(allAss)) {
+        const tmId = (ass as any)?.tmId;
+        if (tmId) {
+          if (!result.has(tmId)) result.set(tmId, []);
+          result.get(tmId)!.push({ nightDate: formatLocalDateISO(dayDef.date), slotKey });
+        }
+      }
+    }
+    return result;
+  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion]);
+
   React.useEffect(() => {
     const dateKey = nightDateKey(selectedDay.date);
     const bump = () => setLiveAssignVersion((v) => v + 1);
@@ -3666,7 +3697,7 @@ function AuthedShiftBuilder() {
     currentIso: nightIsoFromDate(selectedDay.date),
     scheduledUnassigned: markerScheduledUnassigned,
     allEligibleTms: markerAllEligibleTms,
-    weeklyRecentHistory: effectiveRecentZoneHistory,
+    weeklyRecentHistory: plannedThisWeekRecentHistory,
   });
 
   const runCoverageEngine = React.useCallback(
@@ -3757,7 +3788,7 @@ function AuthedShiftBuilder() {
             auxDefsForFit,
             storeAssignmentsForFit,
             deploymentFitBySlot,
-            { isDraftMode, draftAssignments, weeklyRecentHistory: effectiveRecentZoneHistory },
+            { isDraftMode, draftAssignments, weeklyRecentHistory: plannedThisWeekRecentHistory },
           );
           const fitVerdictBySlot = Object.fromEntries(
             Object.entries(deploymentFitBySlot).map(([k, v]) => [
@@ -3792,7 +3823,7 @@ function AuthedShiftBuilder() {
               roster: planningRoster,
               operatorNotes,
               calledOffTmIds: calledOffIds,
-              recentHistory: effectiveRecentZoneHistory,
+              recentHistory: plannedThisWeekRecentHistory,
               config: engineConfig,
               placementOrder: orderedSlots,
               rulesContext,
@@ -5799,7 +5830,7 @@ function AuthedShiftBuilder() {
               allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
               onAddOnCall={handlePadAddOnCall}
               onMarkUnavailable={handlePadMarkUnavailable}
-              weeklyRecentHistory={effectiveRecentZoneHistory}
+              weeklyRecentHistory={plannedThisWeekRecentHistory}
               onClearSlot={handlePadClearSlot}
               onToggleLock={handlePadToggleLock}
               onAssign={handlePadAssign}
@@ -6206,7 +6237,7 @@ function AuthedShiftBuilder() {
           isDraftMode={isDraftMode}
           draftAssignments={draftAssignments}
           draftGrokExplanation={draftGrokExplanation}
-          weeklyRecentHistory={effectiveRecentZoneHistory}
+          weeklyRecentHistory={plannedThisWeekRecentHistory}
         />
       )}
 

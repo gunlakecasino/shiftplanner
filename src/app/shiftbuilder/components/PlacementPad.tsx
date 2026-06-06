@@ -795,6 +795,23 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const hasProv = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
   const tasks = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
 
+  // This-week (planned prior days in the current grave week + current) count per slot for the viewed TM.
+  // Fed from the week-planned weeklyRecentHistory (built in Client from live assignments for week days <= selected).
+  // Makes boardAndWeekContext "week exposure" and xAI fast/provenance see the built history as we progress days in the week.
+  const thisWeekCountFor = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!a.tmId || !weeklyRecentHistory) return counts;
+    const recs = weeklyRecentHistory.get(a.tmId) || [];
+    for (const r of recs) {
+      counts.set(r.slotKey, (counts.get(r.slotKey) || 0) + 1);
+    }
+    // include current
+    if (a.tmId) {
+      counts.set(slotKey, (counts.get(slotKey) || 0) + 1);
+    }
+    return counts;
+  }, [weeklyRecentHistory, a.tmId, slotKey]);
+
   const [padHistory, setPadHistory] = useState<ZoneDetailEntry | null>(null);
   const [padHistoryLoading, setPadHistoryLoading] = useState(false);
   const [rotationDisplay, setRotationDisplay] = useState<PlacementRotationDisplay | null>(null);
@@ -1213,7 +1230,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           .filter(([k, v]) => v?.tmName)
           .slice(0, 20)
           .map(([k, v]) => {
-            const exp = spreadCountFor ? spreadCountFor(k) : 0;
+            const exp = thisWeekCountFor.get(k) ?? (spreadCountFor ? spreadCountFor(k) : 0);
             return `${k}:${v.tmName}${exp ? `(${exp}× this week)` : ''}`;
           })
           .join(' ');

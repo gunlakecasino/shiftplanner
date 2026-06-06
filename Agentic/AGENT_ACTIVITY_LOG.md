@@ -6,6 +6,22 @@ Use the exact template below. Keep entries concise but high-signal (what, why, d
 
 ---
 
+## 2026-06-09 — Grok 4.3 — Matrix / week history now includes planned prior days in the current grave week (user: "We need to ensure the matrix is updating for the current weeks past days as well as we progress into building future days. For example, thursday of next week should have history of all days in that week prior")
+
+- When the user navigates the day strip within a grave week (or into future weeks) and builds assignments day-by-day, the "this week" history used for repeat detection, fit penalties, health %, pad alerts, xAI board+week context, and the "× this week" exposure in the matrix/xAI fast must reflect the *planned* assignments for the prior days in that same week (Mon/Tue/Wed when viewing Thu of the planned week), not only the server-provided historical recentZoneHistory (which is anchored to DB history for the night and doesn't see in-session planned future-week days).
+- Added in Client: `plannedThisWeekRecentHistory` memo (after liveAssignVersion) that iterates the current week's DAY_DEFS (0 to selectedDayIndex), pulls assignments for each from `liveAssignmentsStore.assignmentsByNight[dateKey]` (plus main store for the active day), and builds the Map<tmId, [{nightDate, slotKey}]> exactly like the weeklyRecent format.
+- This is now passed as `weeklyRecentHistory` (instead of the historical effectiveRecent) to:
+  - usePlacementFitMap (so weekRepeatThisSlot in fit scoring uses planned week prior + current)
+  - ShiftBuilderBoard (for pads)
+  - CanvasEngineCluster (health %)
+  - the direct health compute in engine run
+  - the recentHistory in engine insight context
+- In PlacementPad: added `thisWeekCountFor` (from the now-planned weeklyRecentHistory) for the viewed TM; used in boardAndWeekContext to make the " (exp × this week)" for the board snapshot use the planned week counts instead of (or falling back to) the 30-night spreadCountFor. The existing thisWeekRepeat logic (inlined get + alerts in glass/provenance/matrix header) and the xAI tmThisWeekRepeat / boardAndWeekContext alert line now see the prior planned days.
+- Result: switch to Thu of a week you've been building (having assigned Mon-Wed), the matrix context, week-repeat tells/alerts (⚠ in glass, WEEK REPEAT in provenance/evidence, badge in matrix header), the "strong fit" prevention in chips, the health % penalty, and the signals fed to xAI fast one-liner + provenance will all incorporate the history of the prior days in that week.
+- The long-term 30-night padHistory / spreadCounts / matrix grids remain the historical DB data (correct for spread/rotation pattern over 30 nights). The "this week" layer (repeat, exposure in context, health blend) is the one that now lives in the planned week.
+- Prefetch already happens on week nav, and live store captures in-session builds + realtime. liveAssignVersion ensures reactivity.
+- tsc clean. Version +0.001 to 0.821.
+
 ## 2026-06-09 — Grok 4.3 — Fix: week repeat not penalizing health % or per-slot "strong fit" for current placements (e.g. Cookie in same Restroom 2-3× this week)
 
 - Root cause: 1) health weeklyBalance only aggregated from the `recentZoneHistory` map (prior nights), without folding in the *current* board assignments; so a TM with 1 prior + current assignment to same slot showed effective max=1 (no penalty), blended % stayed high. 2) The deterministic per-slot fit scorer (`scorePlacementFit` / `computeSlotPlacementFit`, used for card chips and pad baseline) only looked at 30-night spread/times/last5/rotationBasics; a low 30-night count for the slot could still yield "strong_fit" even if this specific week had 2-3× concentration in that exact place.
