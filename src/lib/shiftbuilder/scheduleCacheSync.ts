@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { revalidateScheduledRosterCache } from "./revalidateOpsCache";
+import {
+  revalidateNightBoardCaches,
+  revalidateScheduledRosterCache,
+} from "./revalidateOpsCache";
 
 /** Fired after graves_default_schedule edits so open ShiftBuilder tabs refresh. */
 export const GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT =
@@ -15,6 +18,38 @@ export async function invalidateNightCoreQueries(
   queryClient: QueryClient,
 ): Promise<void> {
   await queryClient.invalidateQueries({ queryKey: ["nightCore"] });
+}
+
+/** Invalidate core + secondary TanStack caches for one day or the whole week. */
+export async function invalidateNightBoardQueries(
+  queryClient: QueryClient,
+  isoDate?: string,
+): Promise<void> {
+  if (isoDate) {
+    await queryClient.invalidateQueries({ queryKey: ["nightCore", isoDate] });
+    await queryClient.invalidateQueries({ queryKey: ["nightSecondary", isoDate] });
+    return;
+  }
+  await queryClient.invalidateQueries({ queryKey: ["nightCore"] });
+  await queryClient.invalidateQueries({ queryKey: ["nightSecondary"] });
+}
+
+/**
+ * Call after placement, task, break, border, or notes mutations.
+ * Busts server unstable_cache and optional in-tab TanStack queries.
+ */
+export async function notifyNightBoardChanged(
+  queryClient?: QueryClient | null,
+  isoDate?: string,
+): Promise<void> {
+  if (queryClient) {
+    await invalidateNightBoardQueries(queryClient, isoDate);
+  }
+  try {
+    await revalidateNightBoardCaches(isoDate);
+  } catch (e) {
+    console.warn("[scheduleCacheSync] night board revalidate failed (non-fatal)", e);
+  }
 }
 
 /**

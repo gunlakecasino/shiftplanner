@@ -61,6 +61,7 @@ export async function fetchNightSecondaryData(selectedDay: DayDef) {
   try {
     const res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}`, {
       credentials: "same-origin",
+      cache: "no-store",
     });
     if (res.ok) {
       const data = (await res.json()) as NightSecondaryApiPayload;

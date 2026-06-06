@@ -52,6 +52,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
 async function fetchNightCoreViaApi(dateStr: string) {
   const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}`, {
     credentials: "same-origin",
+    cache: "no-store",
   });
   if (!res.ok) return null;
   const raw = (await res.json()) as NightCoreApiPayload;

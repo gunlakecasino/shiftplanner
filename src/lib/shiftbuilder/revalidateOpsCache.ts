@@ -24,3 +24,21 @@ export async function revalidateNightCoreCache(): Promise<void> {
   revalidateTag('night-core', 'max');
   revalidateTag('night-lookup', 'max');
 }
+
+/** Bust deferred night-secondary bundles (tasks, breaks, borders, notes). */
+export async function revalidateNightSecondaryCache(): Promise<void> {
+  revalidateTag('night-secondary', 'max');
+}
+
+/**
+ * Bust all ShiftBuilder per-night read caches after placement or task edits.
+ * Pass isoDate (YYYY-MM-DD) when known so date-scoped tags are cleared too.
+ */
+export async function revalidateNightBoardCaches(isoDate?: string): Promise<void> {
+  revalidateTag('night-core', 'max');
+  revalidateTag('night-secondary', 'max');
+  revalidateTag('night-lookup', 'max');
+  if (isoDate) {
+    revalidateTag(`night-${isoDate}`, 'max');
+  }
+}

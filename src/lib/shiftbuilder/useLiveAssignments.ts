@@ -265,10 +265,10 @@ export function useLiveAssignments(selectedDay: DayDef) {
       },
 
       onSettled: (_data, _error, _vars, context) => {
-        // After success or failure, we can choose to refetch for absolute consistency.
-        // For high-frequency GRAVE ops we often prefer to trust the realtime bridge instead.
-        // Uncomment the line below only during heavy conflict debugging:
-        // if (context?.dateKey) queryClient.invalidateQueries({ queryKey: ["night", context.dateKey] });
+        if (context?.dateKey) {
+          void queryClient.invalidateQueries({ queryKey: ["nightCore", context.dateKey] });
+          void queryClient.invalidateQueries({ queryKey: ["nightSecondary", context.dateKey] });
+        }
       },
     });
   };

@@ -29,6 +29,16 @@ import { isWorkingShift } from './types/schedules';
  * The UI layer maps these to pretty labels (Z1, MRR1/WRR1, AUX...).
  */
 
+/** Bust server bundle caches so refresh/reload sees fresh placement + task data. */
+async function bustNightBoardServerCache(isoDate?: string): Promise<void> {
+  try {
+    const { revalidateNightBoardCaches } = await import('./revalidateOpsCache');
+    await revalidateNightBoardCaches(isoDate);
+  } catch {
+    /* server revalidate optional from browser */
+  }
+}
+
 /**
  * Logs Supabase errors in a structured way that survives serialization
  * across React Server Components, edge runtimes, and production logging pipelines.
@@ -684,6 +694,8 @@ export async function updateSlotBreakGroup(
       `No assignment row for ${slotKey}${rrSide ? ` (${rrSide})` : ''} — assign a TM before setting break group`,
     );
   }
+
+  await bustNightBoardServerCache();
 }
 
 /**
@@ -853,6 +865,7 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
     throw new Error(`Failed to save assignment: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 
+  await bustNightBoardServerCache();
   return { success: true, action: 'upserted' as const };
 }
 
@@ -940,6 +953,7 @@ export async function deleteZoneAssignment(params: {
     if (count) totalDeleted += count;
   }
 
+  await bustNightBoardServerCache();
   return { success: true, rowsDeleted: totalDeleted };
 }
 
@@ -1010,12 +1024,7 @@ export async function batchApplyDraftAssignments(
 
   if (errors.length > 0) throw new Error(`batchApplyDraftAssignments: ${errors.join('; ')}`);
 
-  try {
-    const { revalidateNightCoreCache } = await import('./revalidateOpsCache');
-    await revalidateNightCoreCache();
-  } catch {
-    /* server revalidate optional from browser */
-  }
+  await bustNightBoardServerCache();
 }
 
 /**
@@ -1053,6 +1062,7 @@ export async function toggleAssignmentLock(params: {
     throw new Error(`Failed to toggle lock: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
 
+  await bustNightBoardServerCache();
   return { success: true, newLocked: !currentLocked };
 }
 
@@ -1134,6 +1144,8 @@ export async function saveNightNotes(nightId: string, notes: string): Promise<vo
   if (error) {
     throw new Error(`Failed to save notes: ${error.message}`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 // ============================================================================
@@ -1300,6 +1312,8 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     logSupabaseError('addNightSlotTask failed', error);
     throw new Error(`Failed to add task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 /**
@@ -1410,6 +1424,8 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
     logSupabaseError('removeNightSlotTask failed', error);
     throw new Error(`Failed to remove task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 /**
@@ -1443,6 +1459,8 @@ export async function updateNightSlotTaskColor(
     logSupabaseError('updateNightSlotTaskColor failed', error);
     throw new Error(`Failed to set task color: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 /**
@@ -1481,6 +1499,8 @@ export async function updateNightSlotTaskLabel(
     logSupabaseError('updateNightSlotTaskLabel failed', error);
     throw new Error(`Failed to update task label: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 // ============================================================================
@@ -1625,6 +1645,8 @@ export async function moveNightSlotTask(params: MoveTaskParams): Promise<void> {
       `Failed to move task: ${updErr.message || 'unknown error'} (code: ${updErr.code || 'unknown'})`
     );
   }
+
+  await bustNightBoardServerCache();
 }
 
 /** Batch update sort_order for several catalog rows (used by drag-reorder in the hub). */
@@ -1814,6 +1836,8 @@ export async function setNightCardBorder(
     });
     throw new Error(`Failed to save card border: ${error.message}`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 export async function removeNightCardBorder(nightId: string, slotKey: string): Promise<void> {
@@ -1834,6 +1858,8 @@ export async function removeNightCardBorder(nightId: string, slotKey: string): P
     });
     throw new Error(`Failed to remove card border: ${error.message}`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 // ============================================================================
@@ -1923,6 +1949,8 @@ export async function upsertBreakAssignment(params: UpsertBreakParams): Promise<
     });
     throw new Error(`Failed to save break group: ${(error as any).message ?? 'unknown'}`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 export async function deleteBreakAssignment(nightId: string, tmId: string): Promise<void> {
@@ -1936,6 +1964,8 @@ export async function deleteBreakAssignment(nightId: string, tmId: string): Prom
     console.error('[shiftbuilder/data] deleteBreakAssignment failed:', error);
     throw new Error(`Failed to clear break assignment: ${(error as any).message ?? 'unknown'}`);
   }
+
+  await bustNightBoardServerCache();
 }
 
 // ============================================================================
