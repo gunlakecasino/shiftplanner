@@ -47,6 +47,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
+import { patchNightCoreAssignmentsCache } from "./scheduleCacheSync";
 import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
 import { formatLocalDateISO, type DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
@@ -160,6 +161,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
       onMutate: async (params: TParams & LiveAssignOptions) => {
         // 1. Cancel any outgoing refetches so they don't overwrite our optimistic update
+        await queryClient.cancelQueries({ queryKey: ["nightCore", dateKey] });
         await queryClient.cancelQueries({ queryKey: ["night", dateKey] });
 
         // 2. Snapshot the current Query cache (for perfect rollback)
@@ -262,6 +264,14 @@ export function useLiveAssignments(selectedDay: DayDef) {
           description: "Your optimistic update was reverted. The board now reflects the latest server state.",
           duration: 6000,
         });
+      },
+
+      onSuccess: (_data, _vars, context: any) => {
+        // Re-assert store → query after DB write so day switches use patched cache, not stale bundles.
+        if (context?.dateKey) {
+          const store = useShiftBuilderStore.getState().assignments ?? {};
+          patchNightCoreAssignmentsCache(queryClient, context.dateKey, store);
+        }
       },
 
       // Do not invalidateQueries here — refetch can return stale server-cached bundles

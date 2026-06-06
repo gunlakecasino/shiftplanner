@@ -20,14 +20,22 @@ export function useCurrentNight(selectedDay: DayDef) {
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
     queryFn: () => fetchNightCoreData(selectedDay),
-    staleTime: 1000 * 30,
+    // Long stale window — optimistic patches + realtime own same-session freshness.
+    // Short stale + refetch was overwriting edits with cached bundle API responses.
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
 
   const secondaryQuery = useQuery({
     queryKey: ["nightSecondary", dateKey],
     queryFn: () => fetchNightSecondaryData(selectedDay),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     enabled: !!coreQuery.data || !coreQuery.isLoading,
   });
 

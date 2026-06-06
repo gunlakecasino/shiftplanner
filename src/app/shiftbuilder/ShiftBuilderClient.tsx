@@ -123,6 +123,7 @@ import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
   patchNightCoreAssignmentsCache,
+  patchNightSecondaryTasksCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
   hydrateNightForPrint,
@@ -1897,24 +1898,41 @@ function AuthedShiftBuilder() {
   const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
 
   // Hydrate Zustand from server query once per day (cold load / day switch).
-  // Same-day edits are owned by live.assign, drag paths, and optimistic patches —
-  // re-syncing on every query tick was reverting the board after mutations.
+  // Same-day edits are owned by live.assign, drag paths, and optimistic patches.
   const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
+  const previousHydratedDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (hydratedAssignmentsDayRef.current === dayKey) return;
     if (boardColdLoading || currentNight.isCoreFetching) return;
     const fromQuery = currentNight.assignments;
     if (fromQuery === undefined) return;
+
+    const prevDay = previousHydratedDayRef.current;
+    const isDaySwitch = prevDay !== null && prevDay !== dayKey;
+    previousHydratedDayRef.current = dayKey;
     hydratedAssignmentsDayRef.current = dayKey;
-    useShiftBuilderStore.getState().setAssignments(fromQuery);
-    setAssignments(fromQuery);
-  }, [
-    selectedDay.date,
-    boardColdLoading,
-    currentNight.isCoreFetching,
-    currentNight.assignments,
-  ]);
+
+    let next: Record<string, any> = { ...fromQuery };
+    // Only merge store→query on first hydrate for a day (in-flight edit race).
+    // On day switch the store still holds the *other* day — never merge then.
+    if (!isDaySwitch) {
+      const store = useShiftBuilderStore.getState().assignments ?? {};
+      for (const [k, v] of Object.entries(store)) {
+        if (v?.tmId && (!next[k]?.tmId || next[k].tmId !== v.tmId)) {
+          next[k] = { ...next[k], ...v };
+        }
+      }
+    }
+
+    useShiftBuilderStore.getState().setAssignments(next);
+    setAssignments(next);
+
+    const qc = currentNight.queryClient;
+    if (qc && !isDaySwitch && next !== fromQuery) {
+      patchNightCoreAssignmentsCache(qc, dayKey, next);
+    }
+  }, [selectedDay.date, boardColdLoading, currentNight.isCoreFetching, currentNight.queryClient]);
 
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
   // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
@@ -4546,12 +4564,14 @@ function AuthedShiftBuilder() {
   }, [currentNight.notes, selectedDay.date]);
 
   const hydratedTasksDayRef = React.useRef<string | null>(null);
+  const previousHydratedTasksDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (currentNight.isSecondaryLoading) return;
     if (hydratedTasksDayRef.current === dayKey) return;
 
     const nightTaskRows = currentNight.tasks as NightSlotTask[] | undefined;
+    previousHydratedTasksDayRef.current = dayKey;
     hydratedTasksDayRef.current = dayKey;
 
     if (!nightTaskRows?.length) {
@@ -4574,7 +4594,7 @@ function AuthedShiftBuilder() {
       (tasksByUiKey[uiKey] ??= []).push(row);
     });
     setSelectedTasks(tasksByUiKey);
-  }, [currentNight.tasks, currentNight.isSecondaryLoading, selectedDay.date]);
+  }, [currentNight.isSecondaryLoading, currentNight.tasks, selectedDay.date]);
 
   React.useEffect(() => {
     setCardBorders(effectiveCardBorders ?? {});
@@ -4674,12 +4694,21 @@ function AuthedShiftBuilder() {
           isLocked,
         });
         setLastSavedAt(new Date());
+        const dateKey = formatLocalDateISO(captureDate);
+        const qc = currentNight.queryClient;
+        if (qc) {
+          patchNightCoreAssignmentsCache(
+            qc,
+            dateKey,
+            useShiftBuilderStore.getState().assignments ?? {},
+          );
+        }
       } catch (e: any) {
         console.error("[shiftbuilder] persist failed for", uiKey, e);
         showToast(`Couldn't save ${uiKey}: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast, setLastSavedAt]
+    [resolveNightIdForDate, showToast, setLastSavedAt, currentNight.queryClient]
   );
 
   const persistLock = React.useCallback(
@@ -4801,12 +4830,19 @@ function AuthedShiftBuilder() {
           catalogTaskId: catalogTask.id,
           sortOrder: catalogTask.sortOrder,
         });
+        const dateKey = formatLocalDateISO(captureDate);
+        const qc = currentNight.queryClient;
+        if (qc) {
+          const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+          const fresh = await getNightSlotTasks(nid);
+          patchNightSecondaryTasksCache(qc, dateKey, fresh);
+        }
       } catch (e: any) {
         console.error("[shiftbuilder] add task failed for", uiKey, e);
         showToast(`Couldn't add task: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast]
+    [resolveNightIdForDate, showToast, currentNight.queryClient]
   );
 
   const persistRemoveTask = React.useCallback(
@@ -4833,12 +4869,19 @@ function AuthedShiftBuilder() {
           rrSide: rr_side,
           taskLabel,
         });
+        const dateKey = formatLocalDateISO(captureDate);
+        const qc = currentNight.queryClient;
+        if (qc) {
+          const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+          const fresh = await getNightSlotTasks(nid);
+          patchNightSecondaryTasksCache(qc, dateKey, fresh);
+        }
       } catch (e: any) {
         console.error("[shiftbuilder] remove task failed for", uiKey, e);
         showToast(`Couldn't remove task: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast]
+    [resolveNightIdForDate, showToast, currentNight.queryClient]
   );
 
   // Optimistic toggle. Local state updates immediately; persist is fire-and-
