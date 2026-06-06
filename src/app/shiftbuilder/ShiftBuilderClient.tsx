@@ -4,15 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useTransition, useDefe
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  KeyboardSensor,
-  TouchSensor,
-  useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -4156,17 +4148,6 @@ function AuthedShiftBuilder() {
       return map[key] || key;
     }
   };
-  // iPad + Apple Pencil Pro 2 sensor tuning:
-  // • PointerSensor distance reduced to 4px so Pencil drags activate sooner.
-  // • TouchSensor delay raised to 250ms / tolerance 8px — gives finger a brief
-  //   moment to distinguish tap from drag without feeling sluggish.
-  // • KeyboardSensor for a11y parity.
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-    useSensor(KeyboardSensor),
-  );
-
   const [activeDrag, setActiveDrag] = useState<{
     kind: "tm" | "assigned" | "task";
     label: string;
@@ -5405,6 +5386,8 @@ function AuthedShiftBuilder() {
         onZoomIn={handleZoomIn}
         onPrint={() => setIsPrintCenterOpen(true)}
         isSyncing={boardBackgroundSync}
+        rosterOpen={rosterOpen}
+        onRosterToggle={() => setRosterOpen((v) => !v)}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
@@ -5428,7 +5411,7 @@ function AuthedShiftBuilder() {
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
-          className={`sb-roster-shell fixed left-3 top-[64px] bottom-3 w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col ${rosterOpen ? "" : "pointer-events-none"}`}
+          className={`sb-roster-shell fixed w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col ${rosterOpen ? "" : "pointer-events-none"}`}
           style={{
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
             backdropFilter: "blur(48px) saturate(200%)",
@@ -5669,21 +5652,14 @@ function AuthedShiftBuilder() {
            actually painted, not the un-scaled layout box. */}
         <div
           ref={stageHostRef}
-          className="flex-1 overflow-auto bg-[#F2F2F4] dark:bg-[#0D0D0F] flex items-center justify-center transition-[padding] duration-300"
+          className="sb-stage-host flex-1 overflow-auto bg-[#F2F2F4] dark:bg-[#0D0D0F] flex items-center justify-center transition-[padding] duration-300"
           style={{
             // Explicit per-side padding so the artboard floats clear of every
-            // piece of floating chrome:
-            //   • Top:    Velvet top bar (56px) — pad 72px so the
-            //              artboard's top edge sits 12px below it.
-            //   • Right:  zoom chip top-right + status pill bottom-right —
-            //              the artboard never extends under either.
-            //   • Bottom: pill cluster + status pill share the bottom-3
-            //              baseline (~40px tall) — pad ~72px so the
-            //              artboard's bottom edge clears both with breathing
-            //              room.
-            //   • Left:   when roster panel is open, 296px (280px panel +
-            //              16px gap); when collapsed, 64px so the sphere
-            //              (left-3, 48px wide) has air around it.
+            // piece of floating chrome. On iPad, globals.css max() merges safe-area.
+            ["--sb-stage-inset-top" as string]: `${stageInsets.top}px`,
+            ["--sb-stage-inset-right" as string]: `${stageInsets.right}px`,
+            ["--sb-stage-inset-bottom" as string]: `${stageInsets.bottom}px`,
+            ["--sb-stage-inset-left" as string]: `${stageInsets.left}px`,
             paddingTop: stageInsets.top,
             paddingRight: stageInsets.right,
             paddingBottom: stageInsets.bottom,
@@ -5804,7 +5780,7 @@ function AuthedShiftBuilder() {
                 not chrome tacked on. When Builder active the xAI surfaces feel like deliberate editor's annotations
                 on the Golden; Preview is the pure untouched proof. */}
             <div
-              className="absolute top-1.5 right-1.5 z-[75] no-print inline-flex items-center rounded-2xl p-0.5 text-[8px] font-semibold tracking-[0.3px] overflow-hidden border border-white/40 dark:border-white/10 bg-white/88 dark:bg-zinc-950/85 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl"
+              className="sb-canvas-mode-toggle absolute top-1.5 right-1.5 z-[75] no-print inline-flex items-center rounded-2xl p-0.5 text-[8px] font-semibold tracking-[0.3px] overflow-hidden border border-white/40 dark:border-white/10 bg-white/88 dark:bg-zinc-950/85 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl"
               style={{ pointerEvents: 'auto', fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}
             >
               <button

@@ -658,7 +658,8 @@ body {
 .sb-floating-nav-pill {
   --sb-page-width: 1056px;
   --sb-nav-inset: max(0.75rem, calc((100vw - min(100vw - 1.5rem, var(--sb-page-width))) / 4));
-  left: var(--sb-nav-inset);
+  top: max(0.5rem, env(safe-area-inset-top, 0px));
+  left: max(var(--sb-nav-inset), env(safe-area-inset-left, 0px));
   right: auto;
   width: min(
     calc(100vw - 2 * var(--sb-nav-inset)),
@@ -1414,9 +1415,62 @@ body {
 }
 
 .sb-roster-shell {
+  top: max(64px, calc(env(safe-area-inset-top, 0px) + 56px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
   transition:
     transform var(--sb-dur-mid) var(--sb-spring-premium-snappy),
     opacity var(--sb-dur-fast) var(--sb-spring-gentle);
+}
+
+/* iPad Pro 13" — touch tablet optimizations (builder chrome only; print artboard untouched). */
+@media (pointer: coarse) and (min-width: 768px) {
+  .sb-tablet-touch-target {
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
+  }
+
+  .sb-roster-shell {
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+  }
+
+  .sb-floating-nav-pill.sb-tablet-nav {
+    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+    backdrop-filter: blur(20px) saturate(150%) !important;
+  }
+
+  .sb-stage-host {
+    padding-top: max(var(--sb-stage-inset-top, 68px), env(safe-area-inset-top, 0px)) !important;
+    padding-right: max(var(--sb-stage-inset-right, 32px), env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(var(--sb-stage-inset-bottom, 56px), env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: max(var(--sb-stage-inset-left, 32px), env(safe-area-inset-left, 0px)) !important;
+  }
+
+  .sb-canvas-mode-toggle button {
+    min-height: var(--touch-min);
+    min-width: 72px;
+    font-size: 10px !important;
+    padding: 6px 10px !important;
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .placement-pad.sb-tablet-bottom-sheet .sb-pad-close {
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
+    height: var(--touch-min);
+    width: var(--touch-min);
+    font-size: 18px;
+  }
 }
 
 .sb-loading-shell {

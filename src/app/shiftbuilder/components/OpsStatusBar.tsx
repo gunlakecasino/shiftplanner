@@ -66,8 +66,8 @@ function syncOutsideClickListener(open: boolean): void {
 function getPillShellStyles(): string {
   return `
     position: fixed !important;
-    bottom: 10px !important;
-    right: 10px !important;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+    right: max(10px, env(safe-area-inset-right, 0px)) !important;
     z-index: 2147483647 !important;
     font-family: var(--font-atkinson, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
     font-size: 9.5px !important;

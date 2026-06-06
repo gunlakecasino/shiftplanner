@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 /**
  * Bundles all pure-UI expand/collapse panel state for the floating Roster rail,
@@ -21,13 +22,22 @@ export function useRosterPanels() {
   }, [otherTmsExpanded]);
 
   // Floating roster panel open/close; persisted across refreshes.
+  // iPad: default collapsed so the artboard gets full width (~110% fit scale).
   const [rosterOpen, setRosterOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
+    if (isTabletTouchDevice()) {
+      const tabletSaved = localStorage.getItem("oms_roster_open_tablet");
+      return tabletSaved === "true";
+    }
     const saved = localStorage.getItem("oms_roster_open");
     return saved === null ? false : saved === "true";
   });
   useEffect(() => {
-    localStorage.setItem("oms_roster_open", String(rosterOpen));
+    if (isTabletTouchDevice()) {
+      localStorage.setItem("oms_roster_open_tablet", String(rosterOpen));
+    } else {
+      localStorage.setItem("oms_roster_open", String(rosterOpen));
+    }
   }, [rosterOpen]);
 
   // Called-off section expand toggle.

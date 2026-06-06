@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 export type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.15 | 1.25;
 
@@ -8,11 +9,7 @@ export type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.15 | 1.25;
 export const NATURAL_WIDTH = 1056;
 export const NATURAL_HEIGHT = 816;
 
-/** iPad / touch tablet — allow slightly above 100% so the board fills readable width. */
-export function isTabletTouchDevice(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(pointer: coarse) and (min-width: 768px)").matches;
-}
+export { isTabletTouchDevice };
 
 export function maxArtboardScale(): number {
   return isTabletTouchDevice() ? 1.25 : 1;
@@ -57,6 +54,9 @@ export function useZoom({
   const recomputeScale = useCallback(() => {
     const el = stageHostRef.current;
     const insets = stageInsets;
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const vpW = vv?.width ?? window.innerWidth;
+    const vpH = vv?.height ?? window.innerHeight;
     let availW = 0;
     let availH = 0;
 
@@ -65,8 +65,8 @@ export function useZoom({
       availW = el.clientWidth - insets.left - insets.right - 12;
       availH = el.clientHeight - insets.top - insets.bottom - 12;
     } else {
-      availW = window.innerWidth - insets.left - insets.right - 24;
-      availH = window.innerHeight - insets.top - insets.bottom - 24;
+      availW = vpW - insets.left - insets.right - 24;
+      availH = vpH - insets.top - insets.bottom - 24;
     }
 
     const max = maxArtboardScale();
@@ -96,6 +96,8 @@ export function useZoom({
 
     const onResize = () => recomputeScale();
     window.addEventListener("resize", onResize);
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener("resize", onResize);
 
     return () => {
       mq.removeEventListener("change", onMq);
@@ -103,6 +105,7 @@ export function useZoom({
       clearTimeout(t2);
       clearTimeout(t3);
       window.removeEventListener("resize", onResize);
+      if (vv) vv.removeEventListener("resize", onResize);
       if (ro) ro.disconnect();
     };
   }, [recomputeScale]);

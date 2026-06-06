@@ -19,7 +19,9 @@ import {
   Printer,
   LayoutGrid,
   Coffee,
+  Users,
 } from "lucide-react";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BuilderSyncStrip } from "./builderPrimitives";
@@ -53,6 +55,7 @@ function NavToolButton({
       aria-label={ariaLabel ?? title}
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/5",
+        isTabletTouchDevice() && "sb-tablet-touch-target h-11 w-11",
         active && "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100",
         className,
       )}
@@ -137,6 +140,9 @@ export interface FloatingNavProps {
   /** Open Sudo (only shown for privileged roles). Fulfills the post-PIN auth UX request. */
   onOpenSudo?: () => void;
   isSyncing?: boolean;
+  /** Floating roster panel — critical on iPad where roster defaults collapsed. */
+  rosterOpen?: boolean;
+  onRosterToggle?: () => void;
 }
 
 // ==================== SPRING ====================
@@ -169,6 +175,8 @@ export default function FloatingNav({
   onLogout,
   onOpenSudo,
   isSyncing = false,
+  rosterOpen = false,
+  onRosterToggle,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -235,7 +243,11 @@ export default function FloatingNav({
   return (
     <>
       <nav
-        className={cn(navVariants(), "relative overflow-hidden")}
+        className={cn(
+          navVariants(),
+          "relative overflow-hidden",
+          isTabletTouchDevice() && "sb-tablet-nav",
+        )}
         style={{ ...glassStyle, zIndex: 40 }}
       >
         <BuilderSyncStrip active={isSyncing} />
@@ -249,6 +261,16 @@ export default function FloatingNav({
           <NavToolButton onClick={onToday} title="Jump to today">
             <Calendar className={NAV_ICON} />
           </NavToolButton>
+          {onRosterToggle ? (
+            <NavToolButton
+              onClick={onRosterToggle}
+              title={rosterOpen ? "Hide roster" : "Show roster"}
+              ariaLabel={rosterOpen ? "Hide team roster panel" : "Show team roster panel"}
+              active={rosterOpen}
+            >
+              <Users className={NAV_ICON} />
+            </NavToolButton>
+          ) : null}
         </div>
 
         {/* CENTER: 9-day strip */}

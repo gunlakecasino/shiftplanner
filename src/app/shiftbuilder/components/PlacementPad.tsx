@@ -25,6 +25,7 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import {
   PLACEMENT_SPREAD_NIGHTS,
   getSpreadPlacementKeys,
@@ -92,6 +93,26 @@ export interface PlacementPadProps {
 const PAD_W = 272;
 /** Max pad height — fits iPad landscape with internal scroll for overflow */
 const PAD_MAX_HEIGHT = 600;
+const TABLET_SHEET_HEIGHT_RATIO = 0.45;
+const TABLET_SHEET_MAX_HEIGHT = 520;
+
+function computeTabletBottomSheetStyle(): React.CSSProperties {
+  const vv = window.visualViewport;
+  const h = vv?.height ?? window.innerHeight;
+  const maxH = Math.min(Math.round(h * TABLET_SHEET_HEIGHT_RATIO), TABLET_SHEET_MAX_HEIGHT);
+  return {
+    position: "fixed",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    zIndex: 200,
+    maxHeight: maxH,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+}
 
 function anchorClass(anchor: PlacementPadAnchor): string {
   if (anchor === "left") return "placement-pad absolute top-0 right-full mr-1.5";
@@ -159,6 +180,8 @@ function usePortalPlacementStyle(
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const tabletSheet = isTabletTouchDevice();
+
   const update = useCallback(() => {
     if (!hostId) {
       setStyle(null);
@@ -167,18 +190,25 @@ function usePortalPlacementStyle(
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
-      setStyle(computePortalStyle(hostId, anchor));
+      setStyle(
+        tabletSheet
+          ? computeTabletBottomSheetStyle()
+          : computePortalStyle(hostId, anchor),
+      );
     });
-  }, [hostId, anchor]);
+  }, [hostId, anchor, tabletSheet]);
 
   useLayoutEffect(() => {
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener("resize", update);
     return () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      if (vv) vv.removeEventListener("resize", update);
     };
   }, [update]);
 
@@ -482,6 +512,37 @@ function PlacementAnalystBlock({
 
         {showXaiBody && structured ? (
           <div className="mt-1.5 space-y-2 text-[9px] leading-snug text-neutral-700">
+            {/* Deep view also surfaces the key signals / evidence basis (iterated from light path).
+                Grounds the rich whyTonight, swaps, etc. in the same concrete rotation/spread/training context the model received.
+                Consistent with the light "Key signals" panel. Digital veil only. */}
+            {(padGoodExamples?.length ?? 0) > 0 || rotationGapsLine || slotSpreadCount !== undefined ? (
+              <div className="mb-1.5 p-1.5 rounded-lg border border-[#2F5C7C]/10 bg-white/60 text-[7.5px] leading-snug">
+                <div className="font-medium tracking-[0.15px] text-[#2F5C7C]/80 mb-0.5">✧ Key signals (basis for this analysis)</div>
+                {slotSpreadCount !== undefined && analystSlotKey && (
+                  <div>This TM on {analystSlotKey}: {slotSpreadCount}× in last 30 nights (spread freshness)</div>
+                )}
+                {rotationGapsLine && (
+                  <div>Week gaps: {rotationGapsLine.slice(0, 70)}{rotationGapsLine.length > 70 ? '…' : ''}</div>
+                )}
+                {(padGoodExamples?.length ?? 0) > 0 && (
+                  <div>{padGoodExamples!.length} Gold examples from this session injected as few-shots</div>
+                )}
+                <div>Full context: board + week health, TM trail, tasks, fill-order contract, graves schedule filter.</div>
+                {(padGoodExamples?.length ?? 0) > 0 && onClearTraining && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearTraining();
+                    }}
+                    className="mt-0.5 text-[6.5px] text-[#2F5C7C]/60 hover:text-[#2F5C7C] underline"
+                  >
+                    Clear session Gold examples
+                  </button>
+                )}
+              </div>
+            ) : null}
+
             <div>
               <p className="text-[8px] font-semibold uppercase tracking-wide text-neutral-400">
                 Tonight
@@ -782,6 +843,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const closeSide = anchor === "left" ? "left" : "right";
   const railSide = anchor === "left" ? "right" : "left";
   const portalStyle = usePortalPlacementStyle(hostId, anchor);
+  const tabletBottomSheet = isTabletTouchDevice() && !!hostId && !!portalStyle;
   const usePortal = !!hostId && !!portalStyle;
 
   useEffect(() => {
@@ -1392,7 +1454,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const padEl = (
     <div
-      className={`placement-pad sb-pad-enter no-print ${usePortal ? "fixed" : anchorClass(anchor)} z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]`}
+      className={`placement-pad sb-pad-enter no-print ${usePortal ? "fixed" : anchorClass(anchor)} ${tabletBottomSheet ? "sb-tablet-bottom-sheet" : ""} z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]`}
       style={
         usePortal
           ? portalStyle!
@@ -1416,7 +1478,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           e.stopPropagation();
           onClose();
         }}
-        className="absolute top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100/80 text-neutral-400 text-sm hover:bg-neutral-200/80 hover:text-neutral-600"
+        className="sb-pad-close absolute top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100/80 text-neutral-400 text-sm hover:bg-neutral-200/80 hover:text-neutral-600"
         style={{ [closeSide]: 8 }}
         aria-label="Close"
       >

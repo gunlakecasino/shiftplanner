@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import type React from "react";
+import { tabletPencilLongHoverDelay } from "./tabletDevice";
 
 // ─── Pencil hover hook ────────────────────────────────────────────────────────
 // Detects Apple Pencil Pro 2 hover (pointerType === "pen", buttons === 0)
@@ -15,7 +16,7 @@ import type React from "react";
 // the pending palette-open when the user makes contact instead of hovering.
 export function usePencilHover(
   onLongHover?: (el: HTMLElement) => void,
-  longHoverDelay = 3500,
+  longHoverDelay = tabletPencilLongHoverDelay(),
 ) {
   const [isPenHovering, setIsPenHovering] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
