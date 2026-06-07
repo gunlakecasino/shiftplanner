@@ -128,20 +128,20 @@ export function computePlacementHealthPoints(
       return Math.max(48, Math.min(74, p));
     }
     case "acceptable": {
-      let p = 94;
+      let p = 88;
       if (inLast5) p -= 3;
-      if (times >= 2) p -= Math.min(9, (times - 1) * 3);
-      if (week >= 2) p -= Math.min(10, (week - 1) * 4);
+      if (times >= 2) p -= Math.min(8, (times - 1) * 3);
+      if (week >= 2) p -= Math.min(8, (week - 1) * 4);
       if (partialSwaps > 0) p -= 2;
-      if (input.rationale) p += 2;
-      return Math.max(84, Math.min(97, p));
+      if (input.rationale) p += 1;
+      return Math.max(80, Math.min(89, p));
     }
     case "strong_fit": {
-      let p = 100;
-      if (inLast5) p -= 2;
-      if (week === 2) p -= 4;
-      if (!input.rationale) p -= 1;
-      return Math.max(96, Math.min(100, p));
+      let p = 98;
+      if (inLast5) p -= 3;
+      if (week === 2) p -= 5;
+      if (!input.rationale) p -= 2;
+      return Math.max(90, Math.min(100, p));
     }
     default:
       return 70;

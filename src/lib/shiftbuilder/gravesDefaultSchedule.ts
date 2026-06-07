@@ -165,6 +165,56 @@ export async function getScheduledIdsForNight(
   return { grave, amOverlap, pmOverlap, onCall };
 }
 
+/** Expand a schedule id set so both profile UUID and tm_id slug match board ids. */
+function expandIdSetWithProfiles(
+  ids: Set<string>,
+  profileIndex: Map<string, ScheduledTm>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const id of ids) {
+    out.add(id);
+    const tm = profileIndex.get(id);
+    if (tm) {
+      out.add(tm.id);
+      if (tm.tmId) out.add(tm.tmId);
+    }
+  }
+  return out;
+}
+
+/**
+ * Normalize scheduled ids to include all alias forms (profile.id + tm_id slug).
+ * graves_default_schedule may store either form; the board uses boardTmId (slug-first).
+ */
+export async function expandScheduledIdsForNight(
+  scheduledIds: ScheduledIdsForNight,
+): Promise<ScheduledIdsForNight> {
+  const supabase = createAdminClientSafe();
+  if (!supabase) return scheduledIds;
+
+  const profileIndex = await loadProfileIndex(supabase);
+  return {
+    grave: expandIdSetWithProfiles(scheduledIds.grave, profileIndex),
+    amOverlap: expandIdSetWithProfiles(scheduledIds.amOverlap, profileIndex),
+    pmOverlap: expandIdSetWithProfiles(scheduledIds.pmOverlap, profileIndex),
+    onCall: expandIdSetWithProfiles(scheduledIds.onCall, profileIndex),
+  };
+}
+
+/** True when tmId (any alias) appears in the schedule set. */
+export function isTmIdOnScheduleSet(
+  tmId: string,
+  scheduleSet: Set<string>,
+  profileIndex: Map<string, ScheduledTm>,
+): boolean {
+  if (scheduleSet.has(tmId)) return true;
+  const tm = profileIndex.get(tmId);
+  if (!tm) return false;
+  if (scheduleSet.has(tm.id)) return true;
+  if (tm.tmId && scheduleSet.has(tm.tmId)) return true;
+  return false;
+}
+
 /** API-compatible shape for useCurrentNight / scheduled-roster. */
 export async function getScheduledTmsFromGravesDefault(
   nightDate: Date,

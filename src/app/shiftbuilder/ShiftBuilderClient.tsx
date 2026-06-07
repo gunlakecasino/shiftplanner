@@ -4339,6 +4339,8 @@ function AuthedShiftBuilder() {
         };
 
         let recordedRealEngineUsage = false;
+        let healthOptimized: import("@/lib/shiftbuilder/rotationHealthEngineContext").HealthOptimizedDraftResult | null =
+          null;
         if (isGrokHybrid) {
           setEngineRunPhase("xai");
           const operatorNotes = notesRef.current?.innerText || "";
@@ -4363,6 +4365,7 @@ function AuthedShiftBuilder() {
 
           const {
             buildEngineRotationPack,
+            buildHealthOptimizedDraft,
             formatRotationPackForPrompt,
           } = await import("@/lib/shiftbuilder/rotationHealthEngineContext");
           const rosterLookup = buildTmLookupIndex(planningRoster);
@@ -4381,6 +4384,23 @@ function AuthedShiftBuilder() {
             candidates: Array<{ tmId: string; tmName: string }>;
           }>;
 
+          healthOptimized = buildHealthOptimizedDraft({
+            placementOrder: orderedSlots,
+            plannerResult,
+            tonightIso,
+            auxDefs: auxDefsForFit,
+            histories: effectiveWeekHistories,
+            weeklyRecentHistory: plannedThisWeekRecentHistory,
+            members: effectiveRealRoster as Array<Record<string, unknown>>,
+            rosterById: rosterLookup,
+            scheduledTmIds: effectiveScheduledTmIdsTonight,
+            baseAssignments: storeAssignmentsForFit as Record<string, any>,
+          });
+          const draftForGrok =
+            Object.keys(healthOptimized.draft).length > 0
+              ? healthOptimized.draft
+              : plannerDraft;
+
           const rotationPack = buildEngineRotationPack({
             tonightIso,
             assignments: storeAssignmentsForFit as Record<string, any>,
@@ -4391,6 +4411,7 @@ function AuthedShiftBuilder() {
             graveWeekDateKeys,
             rosterById: rosterLookup,
             plannerDraft,
+            healthOptimizedDraft: healthOptimized.draft,
             members: effectiveRealRoster as Array<Record<string, unknown>>,
             slotCandidates,
             maxCandidatesPerSlot: 4,
@@ -4398,6 +4419,7 @@ function AuthedShiftBuilder() {
           const rotationHealthPromptBlock = formatRotationPackForPrompt(
             rotationPack.brief,
             rotationPack.candidatePreviewsBySlot,
+            healthOptimized.picks,
           );
 
           const rulesContext = {
@@ -4412,7 +4434,7 @@ function AuthedShiftBuilder() {
               zoneMatrix: tmZoneMatrix,
             },
             auxDefs,
-            currentDraft: new Map(Object.entries(plannerDraft)),
+            currentDraft: new Map(Object.entries(draftForGrok)),
             scheduledTmIds: effectiveScheduledTmIdsTonight,
           };
 
@@ -4436,6 +4458,7 @@ function AuthedShiftBuilder() {
               rotationHealthBrief: rotationPack.brief,
               candidateRotationPreviews: rotationPack.candidatePreviewsBySlot,
               rotationHealthPromptBlock,
+              healthOptimizedDraft: healthOptimized.draft,
             });
           } catch (err) {
             console.error("[engine] snapshot build failed:", err);
@@ -4452,7 +4475,7 @@ function AuthedShiftBuilder() {
                 roster: planningRoster,
                 auxDefs,
                 engineConfig,
-                currentDraft: plannerDraft,
+                currentDraft: draftForGrok,
                 scoringData: {
                   skillScores: tmSkillScores,
                   slotDifficulty,
@@ -4577,9 +4600,17 @@ function AuthedShiftBuilder() {
             : hadGrokCall
               ? " (xAI consulted; 0 net overrides — planner + Grok reasons used)"
               : " (xAI skipped)";
+          const healthNote =
+            isGrokHybrid && healthOptimized?.projectedFitPercent != null
+              ? ` · rot ${healthOptimized.projectedFitPercent}%${
+                  healthOptimized.liftVsPlanner && healthOptimized.liftVsPlanner > 0
+                    ? ` (+${healthOptimized.liftVsPlanner} vs planner)`
+                    : ""
+                }`
+              : "";
           const baseMsg = hadGrokCall && grokResult.usedGrok
-            ? `xAI draft: ${draftSlotCount} placements${openSlots > 0 ? ` (${openSlots} open — check schedule/gender pool)` : ""}`
-            : `Planner draft: ${draftSlotCount} placements${xaiNote}`;
+            ? `xAI draft: ${draftSlotCount} placements${openSlots > 0 ? ` (${openSlots} open — check schedule/gender pool)` : ""}${healthNote}`
+            : `Planner draft: ${draftSlotCount} placements${xaiNote}${healthNote}`;
           const summary = grokResult.explanation ? ` — ${grokResult.explanation}` : "";
           showToast(
             baseMsg + summary,
@@ -4614,10 +4645,10 @@ function AuthedShiftBuilder() {
       deploymentFitBySlot,
       isDraftMode,
       draftAssignments,
-      plannedThisWeekRecentHistory,
       weekDailyHealths,
       effectiveWeekHistories,
       graveWeekDateKeys,
+      plannedThisWeekRecentHistory,
       effectiveRealRoster,
     ],
   );

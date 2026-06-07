@@ -11,7 +11,7 @@ import type {
 } from "@/lib/xai";
 
 // Vercel AI SDK (Phase 3 migration) — structured output + official xAI provider
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, tool } from "ai";
 import {
   createGrokEngineModel,
   createGrokSuggestionModel,
@@ -298,7 +298,7 @@ Produce a COMPLETE draft for every non-preserved slot: select one from its candi
 
 HARD RULE (graves_default_schedule sole root): ONLY pick TMs where getTMScheduleStatus confirms "On Graves Default Schedule for tonight". Never pick NOT on schedule.
 
-PRIMARY GOAL: Maximize rotation health. On BLANK boards use rotationHealthBrief + candidateRotationPreviews in the snapshot; call previewRotationFit as the draft grows. On partial boards also use rotationHealthPercent / fitVerdictBySlot. Pick on-schedule candidates that raise healthPoints, close spread gaps, and avoid new week violations.
+PRIMARY GOAL: Maximize rotation health. On BLANK boards use rotationHealthBrief + candidateRotationPreviews; call previewRotationFit and scoreDraftRotationHealth as the draft grows. Bands: strong_fit 90–100pt, acceptable 80–89pt. Start from healthOptimizedDraft baseline when present. Pick on-schedule candidates that raise projected fit % and avoid new week violations.
 
 Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) to compare. Always include "reason". Output ONLY the final JSON block.`;
 
@@ -390,7 +390,7 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
           },
           previewRotationFit: {
             description:
-              "Simulate rotation health if a TM were placed on a slot tonight, using the current engine draft as board context. Returns healthPoints (0-100), fitVerdict, last-30 spread count, week-repeat count, and top gap slots. Essential on blank boards — use before overriding the planner top pick.",
+              "Simulate rotation health if a TM were placed on a slot tonight, using the current engine draft as board context. Returns healthPoints (90+ strong, 80–89 acceptable), fitVerdict, last-30 spread count, week-repeat count, and top gap slots. Essential on blank boards.",
             parameters: z.object({
               tmId: z.string().describe("Team member id"),
               slotKey: z.string().describe("Deployment slot key e.g. Z3, MRR2"),
@@ -424,7 +424,28 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
               });
             },
           },
-
+          scoreDraftRotationHealth: {
+            description:
+              "Score the current engine draft's projected rotation health % (mean healthPoints across filled slots). Call before final JSON to verify you maximized fit. Returns projectedFitPercent and per-slot breakdown.",
+            parameters: z.object({}),
+            execute: async () => {
+              const rot = toolContext!.rotationEngineContext;
+              if (!rot) {
+                return { error: "Rotation engine context unavailable" };
+              }
+              const { scoreDraftRotationHealth } = await import(
+                "@/lib/shiftbuilder/rotationHealthEngineContext"
+              );
+              return scoreDraftRotationHealth(toolContext!.currentDraft ?? {}, {
+                tonightIso: rot.tonightIso,
+                auxDefs: rot.auxDefs,
+                histories: rot.histories,
+                weeklyRecentHistory: rot.weeklyRecentHistory,
+                members: rot.members,
+                rosterById: rot.rosterById,
+              });
+            },
+          },
           // New high-value tool: quick view of current board state for global reasoning
           getCurrentBoardState: {
             description: "Returns a compact summary of which TMs are currently assigned to which slots. Use this to understand the global board state before making new placement decisions.",
@@ -456,12 +477,13 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
 You have access to powerful live tools from the authoritative Rules Engine. USE THEM FREQUENTLY to make high-quality decisions:
 - checkEligibility(tmId, slotKey)
 - scoreCandidate(tmId, slotKey) — deterministic weighted score trade-offs
-- previewRotationFit(tmId, slotKey) — rotation health simulation (healthPoints, spread, week-repeat, gaps). USE ON BLANK BOARDS.
+- previewRotationFit(tmId, slotKey) — rotation health simulation (healthPoints 90+ strong / 80–89 acceptable). USE ON BLANK BOARDS.
+- scoreDraftRotationHealth() — projected fit % for the growing draft. CALL BEFORE FINAL JSON.
 - getCurrentBoardState() — see who's already placed where (global view)
 - getTMScheduleStatus(tmId) — check Graves Default Schedule for tonight (HARD GATE: only on-schedule TMs per graves_default_schedule may be placed; very important)
 - getRulesSummary() — if you need to re-read the full rule system
 
-Explore with tools (previewRotationFit + scoreCandidate, check schedule + board state) before deciding. ALWAYS produce a pick for every relevant slot (complete draft). PRIMARY GOAL: maximize rotation health (snapshot rotation pack on blank boards; live fit on partial). HARD RULE: never pick NOT on graves schedule. When ready, output ONLY the final JSON block.`;
+Explore with tools (previewRotationFit + scoreDraftRotationHealth + scoreCandidate, check schedule + board state) before deciding. ALWAYS produce a pick for every relevant slot (complete draft). PRIMARY GOAL: maximize rotation health (snapshot rotation pack; healthOptimizedDraft baseline). HARD RULE: never pick NOT on graves schedule. When ready, output ONLY the final JSON block.`;
 
       console.log(`[xai-placement-engine] grok-4.3 ${effort} (tools) for board draft picks`);
       const result = await generateText({
@@ -602,30 +624,12 @@ export type ValidationResult = {
  *
  * Called from the Client before optimistic update + DB write in applyDraft.
  */
-function indexProfiles(profiles: any[] | null | undefined): Map<string, any> {
-  const map = new Map<string, any>();
-  for (const p of profiles || []) {
-    if (p.id) map.set(p.id, p);
-    if (p.tm_id) map.set(p.tm_id, p);
-  }
-  return map;
-}
-
-function tmMatchesScheduleSet(
-  tmId: string,
-  profile: { id?: string; tm_id?: string } | undefined,
-  onScheduleTonight: Set<string>,
-): boolean {
-  const keys = [tmId, profile?.tm_id, profile?.id].filter(Boolean) as string[];
-  return keys.some((k) => onScheduleTonight.has(k));
-}
-
 export async function validateProposedAssignments(
   params: {
-    date: string; // YYYY-MM-DD (local grave night)
+    date: string; // YYYY-MM-DD local
     nightId?: string | null;
     proposals: ProposedAssignment[];
-    /** Client-loaded schedule ids — fallback when server schedule query is empty. */
+    /** Client-loaded board ids for tonight — fallback when server schedule is empty. */
     clientScheduledTmIds?: string[];
   }
 ): Promise<ValidationResult> {
@@ -634,9 +638,11 @@ export async function validateProposedAssignments(
   }
 
   // Dynamic imports to keep this actions module's static graph clean for Turbopack.
-  const { getScheduledIdsForNight } = await import(
-    "@/lib/shiftbuilder/gravesDefaultSchedule"
-  );
+  const {
+    getScheduledIdsForNight,
+    expandScheduledIdsForNight,
+    isTmIdOnScheduleSet,
+  } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
   const { isEligibleForSlot } = await import("@/lib/shiftbuilder/placement");
   const { parseLocalDateISO } = await import("@/lib/shiftbuilder/dateUtils");
   const { createAdminClientSafe } = await import(
@@ -644,17 +650,28 @@ export async function validateProposedAssignments(
   );
 
   const nightDate = parseLocalDateISO(params.date);
-  const scheduledIds = await getScheduledIdsForNight(nightDate, params.nightId ?? null);
+  let scheduledIds = await getScheduledIdsForNight(nightDate, params.nightId ?? null);
+  scheduledIds = await expandScheduledIdsForNight(scheduledIds);
 
-  const scheduledSlugIds = new Set<string>([
+  const serverScheduleEmpty =
+    scheduledIds.grave.size === 0 &&
+    scheduledIds.amOverlap.size === 0 &&
+    scheduledIds.pmOverlap.size === 0 &&
+    scheduledIds.onCall.size === 0;
+
+  if (serverScheduleEmpty && params.clientScheduledTmIds?.length) {
+    for (const id of params.clientScheduledTmIds) {
+      if (id) scheduledIds.grave.add(id);
+    }
+    scheduledIds = await expandScheduledIdsForNight(scheduledIds);
+  }
+
+  const onScheduleTonight = new Set<string>([
     ...scheduledIds.grave,
     ...scheduledIds.amOverlap,
     ...scheduledIds.pmOverlap,
     ...scheduledIds.onCall,
   ]);
-
-  // Accept both tm_id slugs and profile UUIDs for schedule membership.
-  const onScheduleTonight = new Set<string>(scheduledSlugIds);
 
   const supabase = createAdminClientSafe();
   const invalid: ValidationError[] = [];
@@ -663,57 +680,59 @@ export async function validateProposedAssignments(
   for (const p of params.proposals) {
     if (p.tmId) neededTmIds.add(p.tmId);
   }
+  for (const id of params.clientScheduledTmIds ?? []) {
+    if (id) neededTmIds.add(id);
+  }
 
-  let profileByIdOrTmId = new Map<string, any>();
+  const profileByIdOrTmId = new Map<string, any>();
+  const profileIndex = new Map<
+    string,
+    { id: string; tmId: string | null; name: string; gravePool: string | null; gender: string | null }
+  >();
 
-  if (supabase) {
-    const needed = Array.from(neededTmIds);
-    const slugList = Array.from(scheduledSlugIds);
+  if (supabase && neededTmIds.size > 0) {
+    const ids = Array.from(neededTmIds);
+    const [{ data: byId }, { data: byTmId }] = await Promise.all([
+      supabase
+        .from("tm_profiles")
+        .select("id, tm_id, grave_pool, gender, display_name, full_name")
+        .in("id", ids),
+      supabase
+        .from("tm_profiles")
+        .select("id, tm_id, grave_pool, gender, display_name, full_name")
+        .in("tm_id", ids),
+    ]);
+    const seen = new Set<string>();
+    const profiles = [...(byId || []), ...(byTmId || [])].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
 
-    const profileLoads = [];
-    if (needed.length > 0) {
-      profileLoads.push(
-        supabase
-          .from("tm_profiles")
-          .select("id, tm_id, grave_pool, gender, display_name, full_name")
-          .in("tm_id", needed),
-      );
-      profileLoads.push(
-        supabase
-          .from("tm_profiles")
-          .select("id, tm_id, grave_pool, gender, display_name, full_name")
-          .in("id", needed),
-      );
-    }
-    if (slugList.length > 0) {
-      profileLoads.push(
-        supabase
-          .from("tm_profiles")
-          .select("id, tm_id, grave_pool, gender, display_name, full_name")
-          .in("tm_id", slugList),
-      );
-    }
-
-    const results = await Promise.all(profileLoads);
-    const merged = new Map<string, any>();
-    for (const r of results) {
-      for (const [k, v] of indexProfiles(r.data)) merged.set(k, v);
-    }
-    profileByIdOrTmId = merged;
-
-    for (const slug of scheduledSlugIds) {
-      const profile = profileByIdOrTmId.get(slug);
-      onScheduleTonight.add(slug);
-      if (profile?.id) onScheduleTonight.add(profile.id);
-      if (profile?.tm_id) onScheduleTonight.add(profile.tm_id);
+    for (const p of profiles) {
+      profileByIdOrTmId.set(p.id, p);
+      if (p.tm_id) profileByIdOrTmId.set(p.tm_id, p);
+      const row = {
+        id: p.id,
+        tmId: p.tm_id,
+        name: p.display_name || p.full_name || p.tm_id || p.id,
+        gravePool: p.grave_pool,
+        gender: p.gender,
+      };
+      profileIndex.set(p.id, row);
+      if (p.tm_id) profileIndex.set(p.tm_id, row);
     }
   }
 
-  if (onScheduleTonight.size === 0 && params.clientScheduledTmIds?.length) {
-    console.warn(
-      "[validateProposedAssignments] Server schedule empty — using client scheduled ids fallback",
-    );
-    for (const id of params.clientScheduledTmIds) onScheduleTonight.add(id);
+  // Merge client schedule (already used by engine + picker) with all alias forms.
+  for (const id of params.clientScheduledTmIds ?? []) {
+    if (!id) continue;
+    onScheduleTonight.add(id);
+    const tm = profileIndex.get(id);
+    if (tm) {
+      onScheduleTonight.add(tm.id);
+      if (tm.tmId) onScheduleTonight.add(tm.tmId);
+    }
   }
 
   for (const proposal of params.proposals) {
@@ -723,9 +742,9 @@ export async function validateProposedAssignments(
       continue;
     }
 
-    const profile = profileByIdOrTmId.get(tmId);
+    const onSchedule = isTmIdOnScheduleSet(tmId, onScheduleTonight, profileIndex);
 
-    if (!tmMatchesScheduleSet(tmId, profile, onScheduleTonight)) {
+    if (!onSchedule) {
       invalid.push({
         slotKey,
         tmId,
@@ -734,6 +753,7 @@ export async function validateProposedAssignments(
       continue;
     }
 
+    const profile = profileByIdOrTmId.get(tmId);
     if (!profile) {
       invalid.push({
         slotKey,
@@ -743,14 +763,13 @@ export async function validateProposedAssignments(
       continue;
     }
 
-    const canonicalTmId = profile.tm_id || tmId;
     const tmForEligibility = {
       id: profile.id,
-      tmId: canonicalTmId,
+      tmId: profile.tm_id || tmId,
       gravePool: profile.grave_pool,
       gender: profile.gender,
-      isAMOverlap: scheduledIds.amOverlap.has(canonicalTmId),
-      isPMOverlap: scheduledIds.pmOverlap.has(canonicalTmId),
+      isAMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.amOverlap, profileIndex),
+      isPMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.pmOverlap, profileIndex),
     };
 
     try {

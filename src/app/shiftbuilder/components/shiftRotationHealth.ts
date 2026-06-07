@@ -41,8 +41,8 @@ export function computeWeekAverageHealth(
 
 /** Fallback bucket points when granular healthPoints are unavailable. */
 export const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
-  strong_fit: 100,
-  acceptable: 90,
+  strong_fit: 95,
+  acceptable: 85,
   questionable: 62,
   needs_swap: 45,
   poor_fit: 0,
