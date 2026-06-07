@@ -118,6 +118,9 @@ function TodayBoardShell({
           onRemoveTask={board.handleRemoveTask}
           onAssignSweeper={board.handleAssignSweeper}
           onAddCoverage={board.handleAddCoverage}
+          activeDrag={board.activeDrag}
+          onDragStart={board.onDragStart}
+          onDragEnd={board.onDragEnd}
         />
       )}
     </div>

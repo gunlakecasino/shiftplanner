@@ -121,6 +121,9 @@ export interface ShiftBuilderBoardProps {
   /** When false, PlacementPad renders without xAI analyst/matrix (e.g. /today). */
   placementPadInsightsEnabled?: boolean;
 
+  /** When true, TM picker rows are draggable onto slots (requires parent DndContext). */
+  enableTmDragAssign?: boolean;
+
   /** Weekly Overview focus (from navbar table): dims non-matching cards, highlights the focused TM's slot on this day. */
   focusedTmId?: string | null;
 }
@@ -200,6 +203,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   isPrintPreview = false,
   useExternalPad = false,
   placementPadInsightsEnabled = true,
+  enableTmDragAssign = false,
   focusedTmId,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
@@ -502,6 +506,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         draftAssignments={draftAssignments}
         weeklyRecentHistory={weeklyRecentHistory}
         insightsEnabled={placementPadInsightsEnabled}
+        enableTmDragAssign={enableTmDragAssign}
       />
     );
   };

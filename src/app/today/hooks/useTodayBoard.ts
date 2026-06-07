@@ -24,6 +24,7 @@ import {
 import { TODAY_STAGE_INSETS } from "../lib/constants";
 import { printTodaySchedule } from "../lib/printTodaySchedule";
 import type { TodayBoardView } from "./useTodayScheduleNav";
+import { useTodayDragDrop } from "./useTodayDragDrop";
 import {
   expandCoverageToKeys,
   getSlotAccentColor,
@@ -551,6 +552,17 @@ export function useTodayBoard({
     [nightId, showToast, logChange],
   );
 
+  const drag = useTodayDragDrop({
+    nightId,
+    selectedDay,
+    isScheduleReadOnly,
+    onAssign: handleAssign,
+    onClearSlot: handleClearSlot,
+    setSelectedTasks,
+    logChange,
+    showToast,
+  });
+
   return {
     nightId,
     selectedDayIndex,
@@ -592,5 +604,8 @@ export function useTodayBoard({
     handleRemoveTask,
     handleAssignSweeper,
     handleAddCoverage,
+    activeDrag: drag.activeDrag,
+    onDragStart: drag.onDragStart,
+    onDragEnd: drag.onDragEnd,
   };
 }

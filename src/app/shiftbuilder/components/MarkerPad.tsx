@@ -18,6 +18,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { useDraggable } from "@dnd-kit/core";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
@@ -753,6 +754,101 @@ const HistoryOverlay: React.FC<{
   );
 };
 
+function TmPickerRow({
+  tm,
+  enableDragAssign,
+  isTablet,
+  accent,
+  rowBg,
+  rowBorder,
+  textPrimary,
+  onPick,
+}: {
+  tm: TmEntry;
+  enableDragAssign: boolean;
+  isTablet: boolean;
+  accent: string;
+  rowBg: string;
+  rowBorder: string;
+  textPrimary: string;
+  onPick: (tm: TmEntry) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tm:${tm.tmId}`,
+    data: { type: "tm", tmId: tm.tmId, tmName: tm.tmName },
+    disabled: !enableDragAssign,
+  });
+  const initial = tm.tmName.charAt(0).toUpperCase();
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...(enableDragAssign ? { ...listeners, ...attributes } : {})}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick(tm);
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      className="sb-list-row sb-interactive"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: isTablet ? 12 : 8,
+        padding: isTablet ? "12px 14px" : "7px 10px",
+        borderRadius: isTablet ? 12 : 10,
+        minHeight: isTablet ? 56 : undefined,
+        background: rowBg,
+        border: `1px solid ${rowBorder}`,
+        cursor: enableDragAssign ? "grab" : "pointer",
+        textAlign: "left",
+        width: "100%",
+        opacity: isDragging ? 0.45 : 1,
+        touchAction: enableDragAssign ? "none" : undefined,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.background = `${accent}22`;
+        (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = rowBg;
+        (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
+      }}
+    >
+      <span
+        style={{
+          width: isTablet ? 40 : 22,
+          height: isTablet ? 40 : 22,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: `${accent}22`,
+          border: `1px solid ${accent}66`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: isTablet ? 17 : 10,
+          fontWeight: 800,
+          color: accent,
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+        }}
+      >
+        {initial}
+      </span>
+      <span
+        style={{
+          fontSize: isTablet ? 20 : 12.5,
+          fontWeight: 600,
+          color: textPrimary,
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+          letterSpacing: "-0.15px",
+        }}
+      >
+        {tm.tmName}
+      </span>
+    </button>
+  );
+}
+
 // ── TmPicker ──────────────────────────────────────────────────────────────────
 
 export const TmPicker: React.FC<{
@@ -768,7 +864,22 @@ export const TmPicker: React.FC<{
   isDark: boolean;
   /** iPad bottom sheet — larger type and touch rows */
   variant?: "default" | "tablet";
-}> = ({ tms, allTms, currentTmName, onPick, onAddOnCall, onMarkUnavailable, onCancel, confirmed, accent, isDark, variant = "default" }) => {
+  /** Drag TM rows onto slots (requires parent DndContext). Click-to-assign still works. */
+  enableDragAssign?: boolean;
+}> = ({
+  tms,
+  allTms,
+  currentTmName,
+  onPick,
+  onAddOnCall,
+  onMarkUnavailable,
+  onCancel,
+  confirmed,
+  accent,
+  isDark,
+  variant = "default",
+  enableDragAssign = false,
+}) => {
   const isTablet = variant === "tablet";
   const [filter, setFilter] = useState("");
   const [unavailableFor, setUnavailableFor] = useState<string | null>(null);
@@ -874,7 +985,6 @@ export const TmPicker: React.FC<{
             {filter.trim() ? "No match" : tms.length === 0 ? "All TMs placed" : "No match"}
           </div>
         ) : filtered.map(tm => {
-          const initial = tm.tmName.charAt(0).toUpperCase();
           const inDefaultList = scheduledIds.has(tm.tmId);
           const showOnCall =
             filter.trim() && onAddOnCall && !inDefaultList;
@@ -885,44 +995,16 @@ export const TmPicker: React.FC<{
                 display: "flex", flexDirection: "column", gap: 4, flexShrink: 0,
               }}
             >
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onPick(tm); }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="sb-list-row sb-interactive"
-                style={{
-                  display: "flex", alignItems: "center", gap: isTablet ? 12 : 8,
-                  padding: isTablet ? "12px 14px" : "7px 10px",
-                  borderRadius: isTablet ? 12 : 10,
-                  minHeight: isTablet ? 56 : undefined,
-                  background: rowBg, border: `1px solid ${rowBorder}`,
-                  cursor: "pointer", textAlign: "left",
-                  width: "100%",
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = `${accent}22`;
-                  (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = rowBg;
-                  (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
-                }}
-              >
-                <span style={{
-                  width: isTablet ? 40 : 22,
-                  height: isTablet ? 40 : 22,
-                  borderRadius: "50%", flexShrink: 0,
-                  background: `${accent}22`, border: `1px solid ${accent}66`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: isTablet ? 17 : 10, fontWeight: 800, color: accent,
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                }}>{initial}</span>
-                <span style={{
-                  fontSize: isTablet ? 20 : 12.5, fontWeight: 600, color: textPrimary,
-                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  letterSpacing: "-0.15px",
-                }}>{tm.tmName}</span>
-              </button>
+              <TmPickerRow
+                tm={tm}
+                enableDragAssign={enableDragAssign}
+                isTablet={isTablet}
+                accent={accent}
+                rowBg={rowBg}
+                rowBorder={rowBorder}
+                textPrimary={textPrimary}
+                onPick={onPick}
+              />
               {showOnCall && (
                 <button
                   type="button"

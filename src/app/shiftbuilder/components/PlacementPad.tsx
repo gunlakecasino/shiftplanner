@@ -93,6 +93,8 @@ export interface PlacementPadProps {
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
   /** When false, skip xAI calls and hide analyst/matrix surfaces (e.g. /today quick board). */
   insightsEnabled?: boolean;
+  /** When true, TM picker rows can be dragged onto slots (parent must provide DndContext). */
+  enableTmDragAssign?: boolean;
 }
 
 const PAD_W = 340;
@@ -791,6 +793,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   draftAssignments = {},
   weeklyRecentHistory,
   insightsEnabled = true,
+  enableTmDragAssign = false,
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -1725,6 +1728,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               accent={accent}
               isDark={false}
               variant={padLarge ? "tablet" : "default"}
+              enableDragAssign={enableTmDragAssign}
             />
           </div>
         ) : coverageMode ? (

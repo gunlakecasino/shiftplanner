@@ -1,7 +1,10 @@
 "use client";
 
 import ShiftBuilderBoard from "@/app/shiftbuilder/components/ShiftBuilderBoard";
+import InteractiveStage from "@/app/shiftbuilder/components/InteractiveStage";
 import { BuilderLoadingShell } from "@/app/shiftbuilder/components/builderPrimitives";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import type { TodayActiveDrag } from "../hooks/useTodayDragDrop";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
@@ -40,6 +43,9 @@ type TodayArtboardProps = {
   onRemoveTask: (slotKey: string, taskLabel: string) => void;
   onAssignSweeper: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onAddCoverage: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
+  activeDrag: TodayActiveDrag | null;
+  onDragStart: (event: DragStartEvent) => void;
+  onDragEnd: (event: DragEndEvent) => void;
 };
 
 export function TodayArtboard(props: TodayArtboardProps) {
@@ -75,6 +81,9 @@ export function TodayArtboard(props: TodayArtboardProps) {
     onRemoveTask,
     onAssignSweeper,
     onAddCoverage,
+    activeDrag,
+    onDragStart,
+    onDragEnd,
   } = props;
 
   return (
@@ -99,17 +108,23 @@ export function TodayArtboard(props: TodayArtboardProps) {
             overflow: "hidden",
           }}
         >
-          <div
-            ref={positioningRef}
-            className="print-stage-inner relative overflow-hidden"
-            style={{
-              width: naturalWidth,
-              height: naturalHeight,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-            }}
+          <InteractiveStage
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            activeDrag={activeDrag}
+            isDark={false}
           >
-            <ShiftBuilderBoard
+            <div
+              ref={positioningRef}
+              className="print-stage-inner relative overflow-hidden"
+              style={{
+                width: naturalWidth,
+                height: naturalHeight,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            >
+              <ShiftBuilderBoard
               nightId={nightId}
               selectedDay={selectedDay}
               selectedDayIndex={selectedDayIndex}
@@ -139,10 +154,12 @@ export function TodayArtboard(props: TodayArtboardProps) {
               members={effectiveRealRoster}
               isPrintPreview
               placementPadInsightsEnabled={false}
+              enableTmDragAssign
               artboardScale={scale}
               live={live}
             />
-          </div>
+            </div>
+          </InteractiveStage>
         </div>
       )}
     </div>
