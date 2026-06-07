@@ -1994,24 +1994,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                       <>
                         <div className="grid grid-cols-5 gap-0.5">
                           {ZONE_DEFS.map((z) => {
+                            // Matrix pills = last-30 spread only (nights strictly before viewed night).
+                            // Current assignment and future week plan do not color cells.
                             const n = spreadCountFor(z.key);
-                            const weekPrior = a.tmId
-                              ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, a.tmId, z.key).count
-                              : 0;
-                            const weekOnSlot =
-                              weekPrior + (z.key === slotKey && a.tmId ? 1 : 0);
-                            const col =
-                              n > 0 && spreadFrequencyAccent(n)
-                                ? spreadFrequencyAccent(n)
-                                : weekOnSlot > 1
-                                  ? "#ea580c"
-                                  : null;
-                            const title =
-                              n > 0
-                                ? `${z.key} · ${n}× in last 30 nights${weekOnSlot > 1 ? `; ${weekOnSlot}× this grave week` : ""}`
-                                : weekOnSlot > 1
-                                  ? `${z.key} · 0× last 30; ${weekOnSlot}× this grave week`
-                                  : z.key;
+                            const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
+                            const title = n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key;
                             return (
                               <span
                                 key={z.key}
