@@ -11,6 +11,8 @@ export type PrerenderedPlacementFit = {
   fitVerdict: PlacementFitVerdict;
   fitSummary: string;
   fitFactLine: string;
+  /** Continuous 0–100 slot contribution for rotation health (varies inside verdict bands). */
+  healthPoints?: number;
 };
 
 export type PlacementFitScoreInput = {
@@ -91,9 +93,73 @@ function formatGapList(gaps: string[], max = 3): string {
   return labels.join(", ");
 }
 
-/** Light spread load — matches strong_fit spread criteria (eligibility handled separately). */
-export function isStrongFitSpread(times: number, inLast5: boolean): boolean {
-  return times <= 1 && !inLast5;
+/** Light spread load — last-5 trail alone no longer blocks strong_fit. */
+export function isStrongFitSpread(times: number, _inLast5: boolean): boolean {
+  return times <= 1;
+}
+
+/**
+ * Granular 0–100 health points inside each verdict band.
+ * Spreads the rotation % so boards are not stuck on flat 85/100 buckets.
+ */
+export function computePlacementHealthPoints(
+  input: PlacementFitScoreInput,
+  verdict: PlacementFitVerdict,
+): number {
+  const times = input.timesInSpread ?? 0;
+  const week = input.weekRepeatThisSlot ?? 0;
+  const inLast5 = !!input.inLast5;
+  const partialSwaps = input.rotationBasics?.crossPatterns.length ?? 0;
+
+  switch (verdict) {
+    case "open_gap":
+    case "poor_fit":
+      return 0;
+    case "needs_swap":
+      return 44;
+    case "questionable": {
+      let p = 68;
+      if (week >= 3) p -= 14;
+      else if (week >= 2) p -= 8;
+      if (times >= 3) p -= 10;
+      else if (times >= 2) p -= 5;
+      if (inLast5) p -= 4;
+      if (partialSwaps > 0) p -= 3;
+      return Math.max(48, Math.min(74, p));
+    }
+    case "acceptable": {
+      let p = 88;
+      if (inLast5) p -= 3;
+      if (times >= 2) p -= Math.min(8, (times - 1) * 3);
+      if (week >= 2) p -= Math.min(8, (week - 1) * 4);
+      if (partialSwaps > 0) p -= 2;
+      if (input.rationale) p += 1;
+      return Math.max(80, Math.min(89, p));
+    }
+    case "strong_fit": {
+      let p = 98;
+      if (inLast5) p -= 3;
+      if (week === 2) p -= 5;
+      if (!input.rationale) p -= 2;
+      return Math.max(90, Math.min(100, p));
+    }
+    default:
+      return 70;
+  }
+}
+
+function finishFit(
+  input: PlacementFitScoreInput,
+  verdict: PlacementFitVerdict,
+  fitSummary: string,
+  fitFactLine: string,
+): PrerenderedPlacementFit {
+  return {
+    fitVerdict: verdict,
+    fitSummary,
+    fitFactLine,
+    healthPoints: computePlacementHealthPoints(input, verdict),
+  };
 }
 
 /** True when rotation gaps or swap lanes imply a clearly better placement than staying put. */
@@ -133,37 +199,41 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
 
   if (!input.assigned) {
     if (isOptionalDeploymentSlot(input.slotKey)) {
-      return {
-        fitVerdict: "open_gap",
-        fitSummary: `${slotLabel} is open — manual assign only (engine does not auto-fill main entry).`,
-        fitFactLine: buildFactLine(["Optional deployment slot"]),
-      };
+      return finishFit(
+        input,
+        "open_gap",
+        `${slotLabel} is open — manual assign only (engine does not auto-fill main entry).`,
+        buildFactLine(["Optional deployment slot"]),
+      );
     }
 
-    return {
-      fitVerdict: "open_gap",
-      fitSummary: `${slotLabel} is open — assign from the roster when you are ready.`,
-      fitFactLine: buildFactLine(["No TM placed here tonight"]),
-    };
+    return finishFit(
+      input,
+      "open_gap",
+      `${slotLabel} is open — assign from the roster when you are ready.`,
+      buildFactLine(["No TM placed here tonight"]),
+    );
   }
 
   const name = input.tmName || "TM";
   const weekRepeat = input.weekRepeatThisSlot ?? 0;
 
   if (input.padHistoryLoading) {
-    return {
-      fitVerdict: "acceptable",
-      fitSummary: `Checking ${name}'s rotation for ${slotLabel}…`,
-      fitFactLine: buildFactLine(["History loading"]),
-    };
+    return finishFit(
+      input,
+      "acceptable",
+      `Checking ${name}'s rotation for ${slotLabel}…`,
+      buildFactLine(["History loading"]),
+    );
   }
 
   if (input.tmEligibleForSlot === false) {
-    return {
-      fitVerdict: "poor_fit",
-      fitSummary: `${name} should not stay on ${slotLabel} tonight.`,
-      fitFactLine: buildFactLine(["Not eligible — grave pool or gender rules"]),
-    };
+    return finishFit(
+      input,
+      "poor_fit",
+      `${name} should not stay on ${slotLabel} tonight.`,
+      buildFactLine(["Not eligible — grave pool or gender rules"]),
+    );
   }
 
   const basics = input.rotationBasics;
@@ -175,11 +245,12 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
   if (bilateral.length > 0) {
     const swap = bilateral[0];
     const their = formatPlacementUiLabel(swap.theirSlotKey);
-    return {
-      fitVerdict: "needs_swap",
-      fitSummary: `Swap ${name} (${slotLabel}) with ${swap.otherTmName} (${their}) for fairer rotation.`,
-      fitFactLine: buildFactLine(["Bilateral swap lane", "Both missing each other's slot in spread"]),
-    };
+    return finishFit(
+      input,
+      "needs_swap",
+      `Swap ${name} (${slotLabel}) with ${swap.otherTmName} (${their}) for fairer rotation.`,
+      buildFactLine(["Bilateral swap lane", "Both missing each other's slot in spread"]),
+    );
   }
 
   const times = input.timesInSpread ?? 0;
@@ -202,68 +273,92 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     const gapOccupant = better.primaryGap
       ? input.assignments?.[better.primaryGap]?.tmName
       : undefined;
-    return {
-      fitVerdict: "questionable",
-      fitSummary: gapOccupant
+    return finishFit(
+      input,
+      "questionable",
+      gapOccupant
         ? `${name} on ${slotLabel} — consider a zone↔zone swap with ${gapOccupant} (${gapLabel}).`
         : `${name} on ${slotLabel} — rotation pressure on ${gapLabel}; use bilateral swaps only (no moves into open slots).`,
-      fitFactLine: buildFactLine([spreadFact, eightFact, gapFact]),
-    };
+      buildFactLine([spreadFact, eightFact, gapFact]),
+    );
   }
 
   if (weekRepeat >= 3) {
-    return {
-      fitVerdict: "questionable",
-      fitSummary: `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
-      fitFactLine: buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
-    };
+    return finishFit(
+      input,
+      "questionable",
+      `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
+      buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
+    );
   }
 
-  // Strong fit: light spread load (0–1× in 30), not in last-5 trail, no better gap elsewhere,
-  // *and* no problematic this-week repeat concentration in the same place.
-  if (times <= 1 && !inLast5 && weekRepeat <= 1) {
+  // Strong fit: light spread (0–1× in 30) and no week repeat problem. Last-5 trail is OK.
+  if (times <= 1 && weekRepeat <= 1) {
     const engineOk = !!input.rationale;
-    return {
-      fitVerdict: "strong_fit",
-      fitSummary: engineOk
-        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.`
-        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.`,
-      fitFactLine: buildFactLine([
+    const trailNote = inLast5 ? " — in last-5 trail but spread is light." : "";
+    return finishFit(
+      input,
+      "strong_fit",
+      engineOk
+        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.${trailNote}`
+        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.${trailNote}`,
+      buildFactLine([
         spreadFact,
         eightFact,
+        inLast5 ? "in last-5 trail" : null,
         engineOk ? "engine continuity" : gapFact,
       ]),
-    };
+    );
   }
 
-  // Acceptable: repeat exposure (2×+ in 30 or this week) or back-to-back in last-5 — still fine unless a better gap exists.
-  if (times >= 2 || inLast5 || weekRepeat >= 2) {
+  // Acceptable: spread repeat and/or this-grave-week repeat (last-5 alone stays strong above).
+  if (times >= 2 || weekRepeat >= 2) {
     const weekNote = weekRepeat >= 2 ? `week repeat ${weekRepeat}×` : null;
-    return {
-      fitVerdict: "acceptable",
-      fitSummary: `${name} on ${slotLabel} — repeat exposure is within reason for tonight.`,
-      fitFactLine: buildFactLine([
+    const spreadRepeat = times >= 2;
+    const last5Repeat = inLast5;
+    const weekOnlyRepeat = weekRepeat >= 2 && !spreadRepeat && !last5Repeat;
+
+    let fitSummary: string;
+    if (weekOnlyRepeat) {
+      fitSummary = `${name} on ${slotLabel} — ${weekRepeat}× this grave week (${spreadFact}); within policy for tonight.`;
+    } else if (spreadRepeat && last5Repeat) {
+      fitSummary = `${name} on ${slotLabel} — ${times}× in last 30 and in last-5 trail; within reason for tonight.`;
+    } else if (spreadRepeat) {
+      fitSummary = `${name} on ${slotLabel} — ${times}× in last 30; within reason for tonight.`;
+    } else if (last5Repeat) {
+      fitSummary = `${name} on ${slotLabel} — in last-5 trail (${spreadFact}); within reason for tonight.`;
+    } else {
+      fitSummary = `${name} on ${slotLabel} — repeat exposure is within reason for tonight.`;
+    }
+
+    return finishFit(
+      input,
+      "acceptable",
+      fitSummary,
+      buildFactLine([
         spreadFact,
         weekNote,
         inLast5 ? "in last-5 trail" : null,
         eightFact,
         gapFact,
       ]),
-    };
+    );
   }
 
   const partialSwaps = basics?.crossPatterns.length ?? 0;
   if (partialSwaps > 0) {
-    return {
-      fitVerdict: "acceptable",
-      fitSummary: `${name} fits ${slotLabel}; optional swap lane to rebalance coverage.`,
-      fitFactLine: buildFactLine([spreadFact, "partial swap lane"]),
-    };
+    return finishFit(
+      input,
+      "acceptable",
+      `${name} fits ${slotLabel}; optional swap lane to rebalance coverage.`,
+      buildFactLine([spreadFact, "partial swap lane"]),
+    );
   }
 
-  return {
-    fitVerdict: "acceptable",
-    fitSummary: `${name} on ${slotLabel} — acceptable fit for tonight.`,
-    fitFactLine: buildFactLine([spreadFact, eightFact, gapFact]),
-  };
+  return finishFit(
+    input,
+    "acceptable",
+    `${name} on ${slotLabel} — acceptable fit for tonight.`,
+    buildFactLine([spreadFact, eightFact, gapFact]),
+  );
 }

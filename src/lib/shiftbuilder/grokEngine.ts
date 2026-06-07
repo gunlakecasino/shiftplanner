@@ -30,6 +30,10 @@ import {
 } from "./xaiFillOrderContract";
 import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
 import { buildFewShotCorrectionsBlock } from "./ai/promptUtils"; // wire AI Lab feedback into production placements
+import type {
+  CandidateRotationPreview,
+  RotationHealthEngineBrief,
+} from "./rotationHealthEngineContext";
 
 // ---------------------------------------------------------------
 // Snapshot types
@@ -39,6 +43,8 @@ export interface GrokEnginePerSlotCandidate {
   tmId: string;
   tmName: string;
   score: number;
+  /** Rotation health points (90+ strong, 80–89 acceptable) when previews available. */
+  healthPoints?: number;
   topSignals: Array<{ name: string; weighted: number; note?: string }>;
 }
 
@@ -60,6 +66,14 @@ export interface GrokEngineSnapshot {
   rotationHealthPercent?: number | null;
   /** Per-slot instant fit verdicts for judgment layer context. */
   fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
+  /** Rich week + matrix briefing — primary signal on blank/partial boards. */
+  rotationHealthBrief?: RotationHealthEngineBrief;
+  /** Simulated fit per top-K candidate per slot (spread/last-30/week-repeat/gaps). */
+  candidateRotationPreviews?: Record<string, CandidateRotationPreview[]>;
+  /** Pre-rendered prompt block for rotation (brief + candidate previews). */
+  rotationHealthPromptBlock?: string;
+  /** Health-first greedy baseline draft (rotation-optimized seed for Grok). */
+  healthOptimizedDraft?: Record<string, string>;
   /** Operator's notes pad for tonight (raw text) */
   operatorNotes: string;
   /** TMs called off tonight (excluded from candidates already) */
@@ -133,6 +147,10 @@ export function buildGrokEngineSnapshot(args: {
   recentHumanFeedback?: any[];
   rotationHealthPercent?: number | null;
   fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
+  rotationHealthBrief?: RotationHealthEngineBrief;
+  candidateRotationPreviews?: Record<string, CandidateRotationPreview[]>;
+  rotationHealthPromptBlock?: string;
+  healthOptimizedDraft?: Record<string, string>;
 }): GrokEngineSnapshot {
   const {
     dayName,
@@ -165,19 +183,36 @@ export function buildGrokEngineSnapshot(args: {
           candidates: [],
         };
       }
-      const candidates = ranking.topCandidates.slice(0, topK).map((c) => {
-        const signalEntries = Object.entries(c.breakdown)
-          .filter(([_, s]) => Number.isFinite(s.weighted) && s.weighted !== 0)
-          .sort((a, b) => Math.abs(b[1].weighted) - Math.abs(a[1].weighted))
-          .slice(0, 3)
-          .map(([name, s]) => ({ name, weighted: round2(s.weighted), note: s.note }));
-        return {
-          tmId: c.tmId,
-          tmName: c.tmName,
-          score: round2(c.total),
-          topSignals: signalEntries,
-        };
-      });
+      const previews = args.candidateRotationPreviews?.[slotKey];
+      const previewOrder = previews
+        ? new Map(previews.map((p, i) => [p.tmId, { hp: p.healthPoints, idx: i }]))
+        : null;
+
+      const candidates = ranking.topCandidates
+        .slice(0, topK)
+        .map((c) => {
+          const signalEntries = Object.entries(c.breakdown)
+            .filter(([_, s]) => Number.isFinite(s.weighted) && s.weighted !== 0)
+            .sort((a, b) => Math.abs(b[1].weighted) - Math.abs(a[1].weighted))
+            .slice(0, 3)
+            .map(([name, s]) => ({ name, weighted: round2(s.weighted), note: s.note }));
+          const preview = previewOrder?.get(c.tmId);
+          return {
+            tmId: c.tmId,
+            tmName: c.tmName,
+            score: round2(c.total),
+            topSignals: signalEntries,
+            healthPoints: preview?.hp,
+            _previewIdx: preview?.idx ?? 999,
+          };
+        })
+        .sort((a, b) => {
+          if (a.healthPoints != null && b.healthPoints != null) {
+            return b.healthPoints - a.healthPoints;
+          }
+          return a._previewIdx - b._previewIdx;
+        })
+        .map(({ _previewIdx: _, ...c }) => c);
       return { slotKey, preserved: false, candidates };
     }
   );
@@ -212,9 +247,15 @@ export function buildGrokEngineSnapshot(args: {
     weights: config.weights,
     thresholds: config.thresholds,
     grokReasoningEffort: config.grokReasoningEffort,
-    deterministicDraft: { ...plannerResult.proposedAssignments },
+    deterministicDraft: args.healthOptimizedDraft && Object.keys(args.healthOptimizedDraft).length > 0
+      ? { ...args.healthOptimizedDraft }
+      : { ...plannerResult.proposedAssignments },
     rotationHealthPercent: args.rotationHealthPercent ?? null,
     fitVerdictBySlot: args.fitVerdictBySlot,
+    rotationHealthBrief: args.rotationHealthBrief,
+    candidateRotationPreviews: args.candidateRotationPreviews,
+    rotationHealthPromptBlock: args.rotationHealthPromptBlock,
+    healthOptimizedDraft: args.healthOptimizedDraft,
   };
 
   // === 2026-05-30 Evolution: Inject rich rules representation ===
@@ -255,7 +296,15 @@ export function buildGrokEngineSystemPrompt(snapshot: GrokEngineSnapshot): strin
 
   const rotationBlock =
     snapshot.rotationHealthPercent != null
-      ? `\n=== ROTATION HEALTH (instant fit map) ===\nBoard average: ${snapshot.rotationHealthPercent}% (target 85%). Respect strong_fit / acceptable slots; only override when judgment clearly improves net rotation health.\n`
+      ? `\n=== ROTATION HEALTH (live board fit) ===\nTonight fit average: ${snapshot.rotationHealthPercent}% (target 85%). Bands: strong_fit 90–100pt, acceptable 80–89pt. Respect strong slots; override when judgment clearly improves net rotation health.\n`
+      : snapshot.rotationHealthBrief?.boardState === "blank"
+        ? `\n=== ROTATION HEALTH (BLANK BOARD) ===\nNo live assignments yet — use rotationHealthBrief + candidateRotationPreviews (not fitVerdictBySlot). Build the draft in fill order; maximize projected health (90+ strong, 80–89 acceptable) and avoid new week violations.\n`
+        : "";
+
+  const rotationPackBlock = snapshot.rotationHealthPromptBlock
+    ? `\n=== ROTATION HEALTH DATA PACK ===\n${snapshot.rotationHealthPromptBlock}\n`
+    : snapshot.rotationHealthBrief?.summaryText
+      ? `\n=== ROTATION HEALTH BRIEF ===\n${snapshot.rotationHealthBrief.summaryText}\n`
       : "";
 
   const fitBlock = snapshot.fitVerdictBySlot
@@ -284,7 +333,7 @@ ${getXaiSwapHardRules()}
 === AUTHORITATIVE RULES ENGINE ===
 
 ${rulesText}
-${rotationBlock}${fitBlock}
+${rotationBlock}${rotationPackBlock}${fitBlock}
 OUTPUT CONTRACT — STRICT JSON SCHEMA (field names + casing are EXACT):
 
 1. Output exactly one fenced \`\`\`json block with this shape:
@@ -315,7 +364,7 @@ GUIDANCE:
   align with that sequence — only choose among each slot's ranked candidates; do not skip
   ahead to staff a zone while restrooms or earlier core slots are still empty.
 - **HARD CONSTRAINT**: Only pick TMs that are on the Graves Default Schedule for tonight (the sole source of truth via graves_default_schedule + night_on_call). Use the getTMScheduleStatus tool (or isOnSchedule) to confirm for candidates. Never propose a TM that getTMScheduleStatus reports as NOT on schedule for this night. If the schedule set is empty, fall back to full active roster.
-- **MAXIMIZE ROTATION HEALTH**: The snapshot includes rotationHealthPercent, gapsLine, swap opportunities, and per-slot fit verdicts. For every slot in the complete draft, choose the on-schedule candidate from the list that best improves the overall weekly rotation health, reduces gaps, and balances load (use tools to verify current scores and status). Use justified overrides to lift health where the top scorer alone would leave health low. The goal is the highest achievable health % while strictly inside fill order, candidate lists, and graves schedule.
+- **MAXIMIZE ROTATION HEALTH**: On a BLANK board, rotationHealthBrief + candidateRotationPreviews are authoritative (30-night spread, week repeats, gap slots, healthPoints per candidate). On partial/full boards also use rotationHealthPercent and fitVerdictBySlot. Candidates are sorted by healthPoints (90+ strong, 80–89 acceptable). healthOptimizedDraft is the rotation-first greedy baseline — start from it and refine with notes/chemistry. Call scoreDraftRotationHealth before final JSON; pick on-schedule candidates that raise projected fit %.
 - Override the top candidate (WHO) when higher-order context justifies it:
     - Tonight's specific conditions (notes, call-offs, weather, events, morale)
     - Rotation health and long-term fairness not fully captured in the matrix
