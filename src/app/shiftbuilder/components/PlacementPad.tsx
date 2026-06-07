@@ -91,6 +91,8 @@ export interface PlacementPadProps {
   >;
   /** Recent 7-night (this-week) history map for detecting same-area repeats for the viewed TM. */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+  /** When false, skip xAI calls and hide analyst/matrix surfaces (e.g. /today quick board). */
+  insightsEnabled?: boolean;
 }
 
 const PAD_W = 340;
@@ -788,6 +790,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   isDraftMode = false,
   draftAssignments = {},
   weeklyRecentHistory,
+  insightsEnabled = true,
 }) => {
   const { label, accent } = getSlotMeta(slotKey);
   const a = assignments[slotKey] || {};
@@ -871,8 +874,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     setSweeperOpen(false);
     setMatrixExpanded(false);
     setEvidenceOpen(false);
-    setBriefLoading(true);
-  }, [slotKey]);
+    setBriefLoading(insightsEnabled);
+  }, [slotKey, insightsEnabled]);
 
   useEffect(() => {
     if (analystDetailsOpen) setMatrixExpanded(false);
@@ -883,17 +886,22 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   // Safety timeout is generous enough for the (history + 50ms delayed light call) but brief in human terms.
   // The veil drops as soon as the headline populates (the primary signal the user wants to see first).
   useEffect(() => {
+    if (!insightsEnabled) {
+      setBriefLoading(false);
+      return;
+    }
     const t = setTimeout(() => setBriefLoading(false), 700);
     return () => clearTimeout(t);
-  }, [slotKey]);
+  }, [slotKey, insightsEnabled]);
 
   // Resolve the veil only when the xAI light headline is actually present (or in deep view).
   // History alone is not sufficient — the light call produces the headline we surface as the hero.
   useEffect(() => {
+    if (!insightsEnabled) return;
     if (insightStructured?.headline) {
       setBriefLoading(false);
     }
-  }, [insightStructured?.headline]);
+  }, [insightStructured?.headline, insightsEnabled]);
 
   useEffect(() => {
     if (!a.tmId) {
@@ -1462,24 +1470,32 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   // Re-run xAI when pad history loads or changes — matrix + headline must share the same facts.
   React.useEffect(() => {
+    if (!insightsEnabled) return;
     setInsightStructured(null);
     setInsightCached(false);
     setBriefLoading(true);
-  }, [padHistorySig, a.tmId, slotKey]);
+  }, [padHistorySig, a.tmId, slotKey, insightsEnabled]);
 
   // Auto-run the light headline determination once per pad open for assigned TMs.
   // This is the key UX refinement: the magic one-liner now appears in the builder surfaces (cards)
   // as soon as you click a card to open its pad, using a cheap fast-model call.
   React.useEffect(() => {
+    if (!insightsEnabled) return;
     if (!a.tmName || analystDetailsOpen || insightStructured?.headline || padHistoryLoading) return;
     // Smaller delay; wait for history so context (spread/last5/rotation) is ready for better bullets + less choppy re-renders before grok appears.
     const t = setTimeout(() => {
       void runLightDetermination();
     }, 50);
     return () => clearTimeout(t);
-  }, [a.tmName, analystDetailsOpen, insightStructured?.headline, padHistoryLoading, runLightDetermination]);
+  }, [a.tmName, analystDetailsOpen, insightStructured?.headline, padHistoryLoading, runLightDetermination, insightsEnabled]);
 
   useEffect(() => {
+    if (!insightsEnabled) {
+      setRotationBasics(null);
+      setRotationDisplay(null);
+      rotationSigRef.current = null;
+      return;
+    }
     if (!a.tmId) {
       setRotationBasics(null);
       setRotationDisplay(null);
@@ -1568,9 +1584,26 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     auxKeysSig,
     matrixSlotKeysSig,
     assignments,
+    insightsEnabled,
   ]);
 
+  const showMatrixSection =
+    !!a.tmName &&
+    (insightsEnabled
+      ? !briefLoading &&
+        (analystDetailsOpen ||
+          matrixExpanded ||
+          (!analystDetailsOpen && !!insightStructured?.headline) ||
+          !(!analystDetailsOpen && insightStructured?.headline))
+      : true);
 
+  const showMatrixGrid = insightsEnabled
+    ? analystDetailsOpen ||
+      matrixExpanded ||
+      (!analystDetailsOpen && !!insightStructured?.headline)
+    : true;
+
+  const matrixQuickMode = !insightsEnabled || !analystDetailsOpen;
 
   const padEl = (
     <div
@@ -1825,7 +1858,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 Shown while we are still awaiting the light determination headline.
                 This (combined with the strict mount guard on the analyst block below) eliminates
                 any flash of the engine baseline / "dry run" state before the xAI content. */}
-            {!(analystDetailsOpen || !!insightStructured?.headline) && (
+            {insightsEnabled && !(analystDetailsOpen || !!insightStructured?.headline) && (
               <div className="px-3 pt-1 pb-2">
                 <div
                   className="mb-2 rounded-2xl border border-[#2F5C7C]/15 bg-white/85 px-5 py-3.5"
@@ -1852,7 +1885,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               </div>
             )}
 
-            {(analystDetailsOpen || !!insightStructured?.headline) && (
+            {insightsEnabled && (analystDetailsOpen || !!insightStructured?.headline) && (
             <PlacementAnalystBlock
               compactTablet={tabletBottomSheet}
               prerendered={prerenderedFit}
@@ -1891,10 +1924,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             />
             )}
 
-            {!briefLoading && a.tmName && (analystDetailsOpen || matrixExpanded || (!analystDetailsOpen && !!insightStructured?.headline) || !( !analystDetailsOpen && insightStructured?.headline )) && (
-              <div className={`border-t border-black/[0.05] px-2.5 ${!analystDetailsOpen ? "py-0.5" : "py-1.5"}`}>
-                {/* Rotation history only in deep. */}
-                {analystDetailsOpen && (
+            {showMatrixSection && (
+              <div className={`border-t border-black/[0.05] px-2.5 ${matrixQuickMode ? "py-0.5" : "py-1.5"}`}>
+                {/* Rotation history only in deep xAI view. */}
+                {insightsEnabled && analystDetailsOpen && (
                   padHistoryLoading && !rotationDisplay ? (
                     <BuilderLoadingLine className="text-[10px]">Loading placement history</BuilderLoadingLine>
                   ) : rotationDisplay ? (
@@ -1931,22 +1964,23 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   )
                 )}
 
-                {/* Matrix panel always showing under the bold one-liner + expander (quick view).
-                    Compact inline cells in quick mode so the marker card adapts in height with no unnecessary scroll.
-                    Deep keeps the richer PlacementCell + spacing. */}
-                {(analystDetailsOpen || matrixExpanded || (!analystDetailsOpen && !!insightStructured?.headline)) && (
-                  <div className={!analystDetailsOpen ? "mt-0" : ""}>
-                    {!analystDetailsOpen ? (
+                {/* Matrix panel — always in quick view when xAI is off (/today); under xAI headline in builder. */}
+                {showMatrixGrid && (
+                  <div className={matrixQuickMode ? "mt-0" : ""}>
+                    {!insightsEnabled && padHistoryLoading ? (
+                      <BuilderLoadingLine className="text-[10px]">Loading placement matrix</BuilderLoadingLine>
+                    ) : (
+                      <>
+                    {matrixQuickMode ? (
                       <div className="text-[8.5px] font-medium tracking-[0.25px] text-[#2F5C7C]/80 mb-0.5 flex items-center gap-1" style={{ fontFamily: 'var(--font-atkinson, var(--font-ui, system-ui))' }}>
-                        ✧ Matrix surface · last 30 nights (spread) + last 5 placements
-                        {/* (Week repeat tell for current TM+slot is synthesized into the XAI FAST one-liner and provenance when >=2; the health pill on the board also reflects it.) */}
+                        {insightsEnabled ? "✧ Matrix surface" : "Matrix"} · last 30 nights (spread) + last 5 placements
                       </div>
                     ) : (
                       <SectionLabel>Matrix</SectionLabel>
                     )}
 
                     {/* Counts row */}
-                    <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono ${!analystDetailsOpen ? "text-[7.5px]" : "text-[9px]"}`}>
+                    <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono ${matrixQuickMode ? "text-[7.5px]" : "text-[9px]"}`}>
                       <span>
                         <span className="font-semibold" style={{ color: accent }}>RR</span>{" "}
                         <span className="font-bold text-neutral-800">{rrCount}</span>
@@ -1968,7 +2002,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     </div>
 
                     {/* Compact legend only in quick; deep uses its own */}
-                    {!analystDetailsOpen && (
+                    {matrixQuickMode && (
                       <div className="mt-0.5 mb-0.5 flex flex-wrap gap-x-1.5 gap-y-0 text-[6.5px] text-neutral-400">
                         <span className="inline-flex items-center gap-0.5">
                           <span className="h-1.5 w-2 rounded border" style={{ background: "#16a34a22", borderColor: "#16a34a55" }} />
@@ -1990,7 +2024,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     )}
 
                     {/* Grids: compact inline spans for quick (always visible, small height); PlacementCell for deep */}
-                    {!analystDetailsOpen ? (
+                    {matrixQuickMode ? (
                       <>
                         <div className="grid grid-cols-5 gap-0.5">
                           {ZONE_DEFS.map((z) => {
@@ -2133,10 +2167,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         </div>
                       </>
                     )}
+                      </>
+                    )}
                   </div>
                 )}
 
-                {analystDetailsOpen && hasProv && prov.rationale && (
+                {insightsEnabled && analystDetailsOpen && hasProv && prov.rationale && (
                   <p className="mt-2 text-[8px] text-neutral-400 leading-snug" title={prov.rationale}>Engine: {prov.rationale}</p>
                 )}
               </div>

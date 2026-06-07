@@ -485,16 +485,12 @@ export async function deleteSchedule(args: {
 
 /**
  * Set the publication status of an entire week.
- * 'published' = officially released / locked for ops use.
- * 'draft' = still in preparation.
- *
- * When publishing, the nights for that week are also locked.
- * When unpublishing, they are unlocked.
+ * 'published' = officially released for ops /today browsing.
+ * 'draft' = still in preparation (hidden from /today for most operators).
  */
 export async function setWeekPublished(weekId: string, published: boolean): Promise<void> {
   const status = published ? "published" : "draft";
 
-  // 1. Update week status
   const { error } = await supabase
     .from("weeks")
     .update({ status })
@@ -504,25 +500,16 @@ export async function setWeekPublished(weekId: string, published: boolean): Prom
     throw new Error(`setWeekPublished failed: ${error.message}`);
   }
 
-  // 2. Lock/unlock the individual nights
-  const { data: nightRows, error: nightsErr } = await supabase
+  const { error: nightsErr } = await supabase
     .from("nights")
-    .select("id")
+    .update({
+      status,
+      ...(published ? { is_locked: false } : {}),
+    })
     .eq("week_id", weekId);
 
   if (nightsErr) {
-    console.warn("[sudoActions] setWeekPublished - could not load nights for locking:", nightsErr.message);
-    return;
-  }
-
-  const nightIds = (nightRows ?? []).map((n: any) => n.id);
-  const { setNightLocked } = await import("./data");
-  for (const nightId of nightIds) {
-    try {
-      await setNightLocked(nightId, published);
-    } catch (lockErr) {
-      console.warn(`[sudoActions] Failed to ${published ? 'lock' : 'unlock'} night ${nightId}`, lockErr);
-    }
+    throw new Error(`setWeekPublished (nights) failed: ${nightsErr.message}`);
   }
 }
 
@@ -530,8 +517,7 @@ export async function setWeekPublished(weekId: string, published: boolean): Prom
  * Set publication status for specific individual days (by ISO date).
  * Useful for publishing only certain days of a week (granular control).
  *
- * When publishing days, those nights are also locked in the main planner.
- * When unpublishing, they are unlocked.
+ * Publication only — does not lock nights in the builder.
  */
 export async function setDatesPublished(
   dates: string[],
@@ -554,27 +540,19 @@ export async function setDatesPublished(
   const nightIds = (nights ?? []).map((n: any) => n.id);
   if (nightIds.length === 0) return { updated: 0 };
 
-  // Update status on nights
-  const { error: updErr, count } = await supabase
+  const { error: updErr } = await supabase
     .from("nights")
-    .update({ status })
+    .update({
+      status,
+      ...(published ? { is_locked: false } : {}),
+    })
     .in("id", nightIds);
 
   if (updErr) {
     throw new Error(`setDatesPublished failed: ${updErr.message}`);
   }
 
-  // Lock/unlock the nights
-  const { setNightLocked } = await import("./data");
-  for (const nightId of nightIds) {
-    try {
-      await setNightLocked(nightId, published);
-    } catch (lockErr) {
-      console.warn(`[sudoActions] Failed to ${published ? 'lock' : 'unlock'} night ${nightId}`, lockErr);
-    }
-  }
-
-  return { updated: count ?? 0 };
+  return { updated: nightIds.length };
 }
 
 // =====================================================================

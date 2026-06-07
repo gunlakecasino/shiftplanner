@@ -7,7 +7,7 @@ import {
 } from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
 import type { BreakGroupValue } from './breakGroupResolve';
-import { startOfRosterWeek, daysBetween } from './dateUtils';
+import { addDays, startOfRosterWeek, daysBetween } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
 import { isWorkingShift } from './types/schedules';
 
@@ -1140,24 +1140,63 @@ export async function setNightLocked(nightId: string, locked: boolean): Promise<
 }
 
 /**
+ * Publish or unpublish a single night by id (navbar day publish).
+ * Only toggles publication status — does not lock/unlock the board.
+ */
+export async function setNightPublished(nightId: string, published: boolean): Promise<void> {
+  if (!nightId) {
+    throw new Error('setNightPublished requires a nightId');
+  }
+
+  const client = getSupabaseClient();
+  const status = published ? 'published' : 'draft';
+
+  const { error } = await client
+    .from('nights')
+    .update({
+      status,
+      // Publishing is visibility-only; clear legacy publish→lock flags.
+      ...(published ? { is_locked: false } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', nightId);
+
+  if (error) {
+    logSupabaseError('setNightPublished failed', error);
+    throw new Error(`Failed to ${published ? 'publish' : 'unpublish'} day: ${error.message || 'unknown'}`);
+  }
+}
+
+/**
  * Returns whether the given night is locked.
  */
 export async function getNightLocked(nightId: string): Promise<boolean> {
-  if (!nightId) return false;
+  const meta = await getNightMeta(nightId);
+  return meta.isLocked;
+}
+
+/** Lock + publish status for a night row (used by /today schedule browser). */
+export async function getNightMeta(
+  nightId: string,
+): Promise<{ isLocked: boolean; status: string | null }> {
+  if (!nightId) return { isLocked: false, status: null };
 
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('nights')
-    .select('is_locked')
+    .select('is_locked, status')
     .eq('id', nightId)
     .single();
 
   if (error || !data) {
-    logSupabaseError('getNightLocked failed', error);
-    return false;
+    logSupabaseError('getNightMeta failed', error);
+    return { isLocked: false, status: null };
   }
 
-  return !!data.is_locked;
+  return {
+    isLocked: !!data.is_locked,
+    status: (data as { status?: string | null }).status ?? null,
+  };
 }
 
 // ============================================================================
@@ -3663,6 +3702,106 @@ export async function pushTaskDefaultsToWeek(
   }
 
   return { nights: nightIds.length, applied: totalApplied };
+}
+
+/** Sweeper tasks excluded when copying prior-week same-day tasks (day-specific). */
+export const SWEEPER_TASK_LABELS_EXCLUDED_FROM_COPY = [
+  'Sweep 9/10/SR',
+  'Sweeper 5 / 8 / HL',
+  'Sweep 5/8/HL',
+] as const;
+
+export type CopyPriorWeekTasksResult = {
+  sourceNightId: string;
+  targetNightId: string;
+  sourceDateIso: string;
+  copied: number;
+  excludedSweepers: number;
+  replacedExisting: number;
+};
+
+/**
+ * Copy all slot tasks from the same grave weekday one week earlier onto `targetDate`.
+ * Replace semantics: clears tonight's tasks first, then inserts the prior-week set.
+ * Sweeper labels are skipped (they vary night-to-night).
+ */
+export async function copyNightSlotTasksFromPriorWeekSameDay(
+  targetDate: Date,
+  targetDayName: string,
+): Promise<CopyPriorWeekTasksResult> {
+  const priorDate = addDays(targetDate, -7);
+  const sourceDateIso = localDateIso(priorDate);
+  const targetDateIso = localDateIso(targetDate);
+
+  const sourceNightId = await getNightIdForDate(priorDate);
+  if (!sourceNightId) {
+    throw new Error(
+      `No night found for last week's ${targetDayName} (${sourceDateIso})`,
+    );
+  }
+
+  const sourceTasks = await getNightSlotTasks(sourceNightId);
+  const sweeperSet = new Set<string>(SWEEPER_TASK_LABELS_EXCLUDED_FROM_COPY);
+  const toCopy = sourceTasks.filter((t) => !sweeperSet.has(t.taskLabel));
+  const excludedSweepers = sourceTasks.length - toCopy.length;
+
+  if (!toCopy.length) {
+    throw new Error(
+      `No copyable tasks on last week's ${targetDayName} (${sourceDateIso})`,
+    );
+  }
+
+  const targetNightId = await getOrCreateNightForDate(targetDate, targetDayName);
+
+  const { count: existingCount, error: countErr } = await supabase
+    .from('night_slot_tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('night_id', targetNightId);
+
+  if (countErr) {
+    console.error('[shiftbuilder/data] copyNightSlotTasks count error:', countErr);
+    throw new Error(`Failed to read tonight's tasks: ${countErr.message}`);
+  }
+
+  const { error: delErr } = await supabase
+    .from('night_slot_tasks')
+    .delete()
+    .eq('night_id', targetNightId);
+
+  if (delErr) {
+    console.error('[shiftbuilder/data] copyNightSlotTasks delete error:', delErr);
+    throw new Error(`Failed to clear tonight's tasks: ${delErr.message}`);
+  }
+
+  const inserts = toCopy.map((t) => ({
+    night_id: targetNightId,
+    slot_key: t.slotKey,
+    slot_type: t.slotType,
+    rr_side: t.rrSide,
+    task_label: t.taskLabel,
+    catalog_task_id: t.catalogTaskId,
+    sort_order: t.sortOrder,
+    color: t.color,
+    is_coverage: t.isCoverage,
+  }));
+
+  const { error: insErr } = await supabase.from('night_slot_tasks').insert(inserts);
+
+  if (insErr) {
+    console.error('[shiftbuilder/data] copyNightSlotTasks insert error:', insErr);
+    throw new Error(`Failed to copy tasks: ${insErr.message}`);
+  }
+
+  await bustNightBoardServerCache(targetDateIso);
+
+  return {
+    sourceNightId,
+    targetNightId,
+    sourceDateIso,
+    copied: toCopy.length,
+    excludedSweepers,
+    replacedExisting: existingCount ?? 0,
+  };
 }
 
 // =============================================================================

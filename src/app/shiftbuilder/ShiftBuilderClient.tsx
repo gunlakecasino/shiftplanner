@@ -51,6 +51,10 @@ import type { GrokEngineSnapshot } from "@/lib/shiftbuilder/grokEngine";
 // XAISphere import removed — was creating a static dependency chain through ./xai → @/lib/xai barrel → grokIntelligence.ts
 // If the sphere is still needed, it should be dynamically imported inside the render where the panel is toggled.
 import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
+import {
+  logDeploymentChange,
+  type DeploymentChangeAction,
+} from "@/app/today/lib/todayChangeLog";
 import { PinGate } from "./components/PinGate";
 import {
   PrintCommandCenter,
@@ -174,6 +178,7 @@ import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   computeShiftRotationHealth,
   computeDailyHealthPercent,
+  computeWeekAverageHealth,
   filterWeeklyHistoryThroughNight,
   getWeekRepeatViolations,
   suggestLocalRotationMoves,
@@ -942,6 +947,8 @@ function AuthedShiftBuilder() {
   // value here re-fetches roster + assignments via the effects below.
   const [nightId, setNightId] = useState<string | null>(null);
   const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
+  const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
+  const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
   const loadingAssignmentsRef = useRef<boolean>(false);
@@ -2507,6 +2514,40 @@ function AuthedShiftBuilder() {
     }
   }, [queryNightId, selectedDay.date, currentNight.queryClient]);
 
+  const builderOperatorName =
+    currentOperator?.full_name?.trim() ||
+    currentOperator?.username?.trim() ||
+    "Shift Builder";
+
+  const logBuilderChange = useCallback(
+    (params: {
+      action: DeploymentChangeAction;
+      slotKey?: string;
+      previousTmId?: string | null;
+      previousTmName?: string | null;
+      newTmId?: string | null;
+      newTmName?: string | null;
+      payload?: Record<string, unknown>;
+      targetNightId?: string | null;
+    }) => {
+      const activeNightId = params.targetNightId ?? nightId ?? queryNightId;
+      if (!activeNightId) return;
+      logDeploymentChange({
+        nightId: activeNightId,
+        nightDate: formatLocalDateISO(selectedDay.date),
+        operatorName: builderOperatorName,
+        action: params.action,
+        slotKey: params.slotKey,
+        previousTmId: params.previousTmId ?? null,
+        previousTmName: params.previousTmName ?? null,
+        newTmId: params.newTmId ?? null,
+        newTmName: params.newTmName ?? null,
+        payload: { source: "shiftbuilder", ...params.payload },
+      });
+    },
+    [builderOperatorName, nightId, queryNightId, selectedDay.date],
+  );
+
   // Global teardown safety on component unmount
   React.useEffect(() => {
     return () => {
@@ -2774,6 +2815,13 @@ function AuthedShiftBuilder() {
       [slotKey]: { ...prev[slotKey], breakGroup: group },
     }));
 
+    logBuilderChange({
+      action: "break_change",
+      slotKey,
+      targetNightId,
+      payload: { breakGroup: group, tmId },
+    });
+
     // Also push into the narrow store the board actually subscribes to (3.4), so BreakBadge
     // updates instantly when the operator taps a pill on the new isolated board.
     try {
@@ -2883,6 +2931,7 @@ function AuthedShiftBuilder() {
     // Phase 1 Live Optimistic Path (preferred)
     // Uses useLiveAssignments → instant dual-cache update (Query + Zustand) + rollback on conflict.
     // Falls back to legacy direct set + persistAssign for safety during migration.
+    const prevAssignment = assignments[slotKey];
     if (live?.assign) {
       live.assign(slotKey, tmId, tmName, {
         captureDate,
@@ -2907,6 +2956,15 @@ function AuthedShiftBuilder() {
       }));
       persistAssign(targetNightId, captureDate, captureDayName, slotKey, tmId, false);
     }
+    logBuilderChange({
+      action: "assign",
+      slotKey,
+      targetNightId,
+      previousTmId: prevAssignment?.tmId ?? null,
+      previousTmName: prevAssignment?.tmName ?? null,
+      newTmId: tmId,
+      newTmName: tmName,
+    });
   };
 
   const unassign = (slotKey: string) => {
@@ -2926,7 +2984,8 @@ function AuthedShiftBuilder() {
     const targetNightId = nightId;
     const captureDate = selectedDay.date;
     const captureDayName = selectedDay.name;
-    const tmIdBeingRemoved = assignments[slotKey]?.tmId ?? null;
+    const prevAssignment = assignments[slotKey];
+    const tmIdBeingRemoved = prevAssignment?.tmId ?? null;
 
     // Derive side for RR clears (MRR/WRR) so legacy direct delete path (if live layer not available) still targets the correct rr_side row.
     let derivedRrSide: 'mens' | 'womens' | null = null;
@@ -2972,6 +3031,14 @@ function AuthedShiftBuilder() {
       })();
     }
 
+    logBuilderChange({
+      action: "unassign",
+      slotKey,
+      targetNightId,
+      previousTmId: prevAssignment?.tmId ?? null,
+      previousTmName: prevAssignment?.tmName ?? null,
+    });
+
     // Drop the break_assignments row for this TM so a re-assign gets a fresh
     // group instead of inheriting a stale one. Fire-and-forget.
     if (tmIdBeingRemoved) {
@@ -2992,7 +3059,8 @@ function AuthedShiftBuilder() {
   const toggleLock = (slotKey: string) => {
     if (!requireLock()) return;
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    const willLock = !assignments[slotKey]?.isLocked;
+    const prevAssignment = assignments[slotKey];
+    const willLock = !prevAssignment?.isLocked;
     pendingHistoryRef.current = { description: `${willLock ? "Locked" : "Unlocked"} ${slotKey}`, before };
 
     const targetNightId = nightId;
@@ -3006,6 +3074,13 @@ function AuthedShiftBuilder() {
         ...prev,
         [slotKey]: { ...prev[slotKey], isLocked: nextLocked },
       };
+    });
+    logBuilderChange({
+      action: willLock ? "lock" : "unlock",
+      slotKey,
+      targetNightId,
+      previousTmId: prevAssignment?.tmId ?? null,
+      previousTmName: prevAssignment?.tmName ?? null,
     });
   };
 
@@ -3620,12 +3695,13 @@ function AuthedShiftBuilder() {
       const { setNightLocked } = await import("@/lib/shiftbuilder/data");
       await setNightLocked(nightId, true);
       setIsCurrentNightLocked(true);
+      logBuilderChange({ action: "night_lock", targetNightId: nightId });
       showToast(`Day locked`, "success");
     } catch (e: any) {
       console.error("Failed to lock day", e);
       showToast(`Failed to lock day: ${e?.message ?? "unknown"}`, "error");
     }
-  }, [nightId, requireLock]);
+  }, [nightId, requireLock, logBuilderChange]);
 
   const cmdActionUnlockDay = React.useCallback(async () => {
     if (!requireLock()) return;
@@ -3637,12 +3713,71 @@ function AuthedShiftBuilder() {
       const { setNightLocked } = await import("@/lib/shiftbuilder/data");
       await setNightLocked(nightId, false);
       setIsCurrentNightLocked(false);
+      logBuilderChange({ action: "night_unlock", targetNightId: nightId });
       showToast(`Day unlocked`, "success");
     } catch (e: any) {
       console.error("Failed to unlock day", e);
       showToast(`Failed to unlock day: ${e?.message ?? "unknown"}`, "error");
     }
-  }, [nightId, requireLock]);
+  }, [nightId, requireLock, logBuilderChange]);
+
+  const handleToggleDayPublished = React.useCallback(async () => {
+    if (!canPublish) {
+      showToast("You don't have permission to publish schedules", "error");
+      return;
+    }
+
+    const dateIso = formatLocalDateISO(selectedDay.date);
+    const dayLabel = selectedDay.name;
+    const willPublish = currentNightStatus !== "published";
+    const action = willPublish ? "publish" : "unpublish";
+
+    if (
+      !window.confirm(
+        `${willPublish ? "Publish" : "Unpublish"} ${dayLabel} (${dateIso})?` +
+          (willPublish
+            ? " This makes the schedule visible on /today."
+            : " This hides the schedule from /today for most operators."),
+      )
+    ) {
+      return;
+    }
+
+    setPublishDayBusy(true);
+    try {
+      let activeNightId = nightId ?? currentNight.nightId ?? null;
+      if (!activeNightId) {
+        const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+        activeNightId = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+        setNightId(activeNightId);
+      }
+
+      const { setNightPublished } = await import("@/lib/shiftbuilder/data");
+      await setNightPublished(activeNightId, willPublish);
+
+      setCurrentNightStatus(willPublish ? "published" : "draft");
+      logBuilderChange({
+        action: willPublish ? "publish" : "unpublish",
+        targetNightId: activeNightId,
+      });
+      showToast(`${dayLabel} ${willPublish ? "published" : "unpublished"}`, "success");
+      currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateIso] });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : `Failed to ${action} day`;
+      showToast(msg, "error");
+    } finally {
+      setPublishDayBusy(false);
+    }
+  }, [
+    canPublish,
+    selectedDay,
+    currentNightStatus,
+    nightId,
+    currentNight.nightId,
+    showToast,
+    currentNight.queryClient,
+    logBuilderChange,
+  ]);
 
   const cmdActionUndo = React.useCallback(() => {
     const prev = shiftHistory.undo();
@@ -3705,6 +3840,12 @@ function AuthedShiftBuilder() {
             taskLabel: taskLabel.trim(),
             sortOrder: 50,
           });
+          logBuilderChange({
+            action: "task_add",
+            slotKey: uiKey,
+            targetNightId: nightId,
+            payload: { taskLabel: taskLabel.trim() },
+          });
         }
         const fresh = await getNightSlotTasks(nightId);
         const byKey: Record<string, NightSlotTask[]> = {};
@@ -3719,8 +3860,7 @@ function AuthedShiftBuilder() {
         showToast("Failed to save task to one or more cards", "error");
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nightId, showToast]
+    [nightId, showToast, logBuilderChange, isCurrentNightLocked]
   );
 
   // Dedicated handler for the new "Assign Sweeper" quick action from MarkerPad.
@@ -3743,6 +3883,12 @@ function AuthedShiftBuilder() {
           sortOrder: 60,
           color: "#FF9F0A", // classic sweeper orange
         });
+        logBuilderChange({
+          action: "task_add",
+          slotKey: uiKey,
+          targetNightId: nightId,
+          payload: { taskLabel: sweeperLabel, sweeper: true },
+        });
 
         // Refresh tasks for the slot
         const fresh = await getNightSlotTasks(nightId);
@@ -3758,7 +3904,7 @@ function AuthedShiftBuilder() {
         showToast("Failed to assign sweeper task", "error");
       }
     },
-    [nightId, showToast]
+    [nightId, showToast, logBuilderChange]
   );
 
   const handleCmdkCycleBreak = React.useCallback(
@@ -3820,6 +3966,17 @@ function AuthedShiftBuilder() {
             color: accentColor,
             sortOrder: 99,
           });
+          logBuilderChange({
+            action: "coverage_add",
+            slotKey: sk,
+            targetNightId: nightId,
+            payload: {
+              taskLabel: `And ${targetLabel}`,
+              targetKey,
+              targetLabel,
+              sourceKey,
+            },
+          });
         }
         const fresh = await getNightSlotTasks(nightId);
         const byKey: Record<string, NightSlotTask[]> = {};
@@ -3835,8 +3992,7 @@ function AuthedShiftBuilder() {
         showToast("Failed to add coverage bar", "error");
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nightId, showToast]
+    [nightId, showToast, logBuilderChange]
   );
 
   // Stable computed arrays/objects for the palette — new references only when
@@ -4060,6 +4216,14 @@ function AuthedShiftBuilder() {
     } catch {}
   }, []);
 
+  const handleToggleWeekHealthTracker = React.useCallback(() => {
+    if (isWeekHealthTrackerDismissed) {
+      showWeekHealthTracker();
+    } else {
+      dismissWeekHealthTracker();
+    }
+  }, [isWeekHealthTrackerDismissed, showWeekHealthTracker, dismissWeekHealthTracker]);
+
   // Incremental 30-night history load — only fetches TMs not yet in cache; never blanks on TM-set growth.
   React.useEffect(() => {
     if (!weekPlanTmIdsKey) {
@@ -4257,6 +4421,11 @@ function AuthedShiftBuilder() {
   // Blank UI only when histories are still loading *and* we have nothing stable to show.
   const weekHealthLoading =
     weekHistoriesFetching && Object.keys(weekDailyHealths).length === 0;
+
+  const weekAverageHealth = React.useMemo(() => {
+    const orderedKeys = DAY_DEFS.map((d) => formatLocalDateISO(d.date));
+    return computeWeekAverageHealth(weekDailyHealths, orderedKeys);
+  }, [weekDailyHealths, DAY_DEFS]);
 
   const runCoverageEngine = React.useCallback(
     async (options?: CoverageEngineRunOptions) => {
@@ -5271,16 +5440,23 @@ function AuthedShiftBuilder() {
   React.useEffect(() => {
     if (!currentNight.nightId) {
       setIsCurrentNightLocked(false);
+      setCurrentNightStatus(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const { getNightLocked } = await import("@/lib/shiftbuilder/data");
-        const locked = await getNightLocked(currentNight.nightId!);
-        if (!cancelled) setIsCurrentNightLocked(!!locked);
+        const { getNightMeta } = await import("@/lib/shiftbuilder/data");
+        const meta = await getNightMeta(currentNight.nightId!);
+        if (!cancelled) {
+          setIsCurrentNightLocked(!!meta.isLocked);
+          setCurrentNightStatus(meta.status);
+        }
       } catch {
-        if (!cancelled) setIsCurrentNightLocked(false);
+        if (!cancelled) {
+          setIsCurrentNightLocked(false);
+          setCurrentNightStatus(null);
+        }
       }
     })();
     return () => {
@@ -5574,13 +5750,105 @@ function AuthedShiftBuilder() {
           const fresh = await getNightSlotTasks(nid);
           patchNightSecondaryTasksCache(qc, dateKey, fresh);
         }
+        logBuilderChange({
+          action: "task_add",
+          slotKey: uiKey,
+          targetNightId: nid,
+          payload: {
+            taskLabel: catalogTask.label,
+            catalogTaskId: catalogTask.id,
+          },
+        });
       } catch (e: any) {
         console.error("[shiftbuilder] add task failed for", uiKey, e);
         showToast(`Couldn't add task: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast, currentNight.queryClient]
+    [resolveNightIdForDate, showToast, currentNight.queryClient, logBuilderChange]
   );
+
+  const mapNightTasksToUiKeys = React.useCallback((rows: NightSlotTask[]) => {
+    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
+    rows.forEach((row) => {
+      const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
+      if (uiKey.startsWith("UNK:")) {
+        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
+          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
+          for (let i = 0; i < 6; i++) {
+            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
+          }
+        }
+        return;
+      }
+      (tasksByUiKey[uiKey] ??= []).push(row);
+    });
+    return tasksByUiKey;
+  }, []);
+
+  const handleCopyPriorWeekSameDayTasks = React.useCallback(async () => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — cannot copy tasks", "error");
+      return;
+    }
+
+    const captureDate = selectedDay.date;
+    const captureDayName = selectedDay.name;
+    const priorDate = addDays(captureDate, -7);
+    const priorDateLabel = formatLocalDateISO(priorDate);
+    const existingCount = Object.values(selectedTasks).reduce(
+      (sum, rows) => sum + rows.length,
+      0,
+    );
+    const confirmMsg =
+      existingCount > 0
+        ? `Copy tasks from ${priorDateLabel} (last week's ${captureDayName})? This replaces all ${existingCount} task(s) on tonight's board.`
+        : `Copy tasks from ${priorDateLabel} (last week's ${captureDayName})?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const { copyNightSlotTasksFromPriorWeekSameDay, getNightSlotTasks } =
+        await import("@/lib/shiftbuilder/data");
+      const result = await copyNightSlotTasksFromPriorWeekSameDay(
+        captureDate,
+        captureDayName,
+      );
+
+      if (result.targetNightId && result.targetNightId !== nightId) {
+        setNightId(result.targetNightId);
+      }
+
+      const fresh = await getNightSlotTasks(result.targetNightId);
+      const dateKey = formatLocalDateISO(captureDate);
+      if (currentNight.queryClient) {
+        patchNightSecondaryTasksCache(currentNight.queryClient, dateKey, fresh);
+      }
+
+      setSelectedTasks(mapNightTasksToUiKeys(fresh));
+      hydratedTasksDayRef.current = dateKey;
+
+      const sweeperNote =
+        result.excludedSweepers > 0
+          ? ` (${result.excludedSweepers} sweeper task${result.excludedSweepers === 1 ? "" : "s"} skipped)`
+          : "";
+      showToast(
+        `Copied ${result.copied} task${result.copied === 1 ? "" : "s"} from last week's ${captureDayName}${sweeperNote}`,
+        "success",
+      );
+    } catch (e: unknown) {
+      console.error("[shiftbuilder] copy prior week tasks failed", e);
+      const msg = e instanceof Error ? e.message : "Failed to copy tasks";
+      showToast(msg, "error");
+    }
+  }, [
+    isCurrentNightLocked,
+    selectedDay.date,
+    selectedDay.name,
+    selectedTasks,
+    nightId,
+    showToast,
+    currentNight.queryClient,
+    mapNightTasksToUiKeys,
+  ]);
 
   const persistRemoveTask = React.useCallback(
     async (
@@ -5613,12 +5881,18 @@ function AuthedShiftBuilder() {
           const fresh = await getNightSlotTasks(nid);
           patchNightSecondaryTasksCache(qc, dateKey, fresh);
         }
+        logBuilderChange({
+          action: "task_remove",
+          slotKey: uiKey,
+          targetNightId: nid,
+          payload: { taskLabel },
+        });
       } catch (e: any) {
         console.error("[shiftbuilder] remove task failed for", uiKey, e);
         showToast(`Couldn't remove task: ${e?.message ?? "unknown error"}`);
       }
     },
-    [resolveNightIdForDate, showToast, currentNight.queryClient]
+    [resolveNightIdForDate, showToast, currentNight.queryClient, logBuilderChange]
   );
 
   // Optimistic toggle. Local state updates immediately; persist is fire-and-
@@ -5697,6 +5971,13 @@ function AuthedShiftBuilder() {
         return { ...prev, [uiKey]: next };
       });
 
+      logBuilderChange({
+        action: "task_color",
+        slotKey: uiKey,
+        targetNightId,
+        payload: { taskLabel, color },
+      });
+
       // Persist to Supabase (use normalized db keys)
       import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskColor }) =>
         (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side).catch((err: unknown) => {
@@ -5704,7 +5985,7 @@ function AuthedShiftBuilder() {
         })
       );
     },
-    [nightId, selectedDay.date, selectedDay.name]
+    [nightId, selectedDay.date, selectedDay.name, logBuilderChange]
   );
 
   // Edit / rename an existing task label (inline edit)
@@ -5836,19 +6117,27 @@ function AuthedShiftBuilder() {
       });
     }
 
+    const prevAssignment = padAssignments[slotKey] ?? assignments[slotKey];
+    const reliableNightId = queryNightId || nightId;
     if (live?.unassign) {
-      const reliableNightId = queryNightId || nightId;
       live.unassign(slotKey, {
         captureDate: selectedDay.date,
         captureDayName: selectedDay.name,
         targetNightId: reliableNightId,
         isDraftMode,
       });
+      logBuilderChange({
+        action: "unassign",
+        slotKey,
+        targetNightId: reliableNightId,
+        previousTmId: prevAssignment?.tmId ?? null,
+        previousTmName: prevAssignment?.tmName ?? null,
+      });
     } else {
       unassign(slotKey);
     }
     setSelectedSlotKey(null);
-  }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments]);
+  }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments, logBuilderChange]);
 
   const handleClearBoard = React.useCallback(() => {
     if (!requireEdit()) return;
@@ -5907,12 +6196,21 @@ function AuthedShiftBuilder() {
     const captureDayName = selectedDay.name;
 
     for (const slotKey of clearable) {
+      const prevAssignment = padAssignments[slotKey];
       if (live?.unassign) {
         live.unassign(slotKey, {
           captureDate,
           captureDayName,
           targetNightId: reliableNightId,
           isDraftMode: false,
+        });
+        logBuilderChange({
+          action: "unassign",
+          slotKey,
+          targetNightId: reliableNightId,
+          previousTmId: prevAssignment?.tmId ?? null,
+          previousTmName: prevAssignment?.tmName ?? null,
+          payload: { bulkClear: true },
         });
       } else {
         unassign(slotKey);
@@ -5938,6 +6236,7 @@ function AuthedShiftBuilder() {
     live,
     unassign,
     showToast,
+    logBuilderChange,
   ]);
 
   const handlePadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
@@ -6367,7 +6666,13 @@ function AuthedShiftBuilder() {
         onLaunchpad={viewMode === "canvas" ? handleBackToLaunchpad : undefined}
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
-        onCommandOpen={() => setCmdkOpen(true)}
+        onCopyPriorWeekTasks={handleCopyPriorWeekSameDayTasks}
+        onToggleWeekHealth={
+          viewMode === "canvas" ? handleToggleWeekHealthTracker : undefined
+        }
+        weekHealthVisible={!isWeekHealthTrackerDismissed}
+        weekHealthPercent={weekAverageHealth}
+        weekHealthLoading={weekHealthLoading}
         onThemeToggle={toggleTheme}
         isDark={isDark}
         userInitials={currentOperator ? currentOperator.full_name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "OP"}
@@ -6390,6 +6695,12 @@ function AuthedShiftBuilder() {
         onRosterToggle={() => setRosterOpen((v) => !v)}
         canvasMode={canvasMode}
         onCanvasModeChange={setCanvasMode}
+        isDayPublished={currentNightStatus === "published"}
+        canPublishDay={canPublish}
+        onToggleDayPublished={
+          canPublish ? () => void handleToggleDayPublished() : undefined
+        }
+        publishDayBusy={publishDayBusy}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).

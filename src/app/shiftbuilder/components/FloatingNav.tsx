@@ -9,14 +9,11 @@ import { cn } from "@/lib/utils";
 import {
   Calendar,
   Rocket,
-  Undo2,
-  Redo2,
   Maximize2,
   ZoomIn,
   ZoomOut,
   Sun,
   Moon,
-  Search,
   Printer,
   LayoutGrid,
   Coffee,
@@ -24,14 +21,15 @@ import {
   PenLine,
   ScanEye,
   Table2,
+  ClipboardCopy,
+  Activity,
+  ScrollText,
 } from "lucide-react";
+import { rotationHealthFloaterColors } from "./shiftRotationHealth";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BuilderSyncStrip } from "./builderPrimitives";
-
-// Note: "cmdk" package import removed — the search capsule now exclusively triggers the global CommandPalette
-// (react-cmdk based) via onCommandOpen. Duplicate local palette caused z-index + focus conflicts.
 
 // ==================== CVA VARIANTS ====================
 const NAV_ICON = "h-3.5 w-3.5 shrink-0 opacity-80";
@@ -122,15 +120,19 @@ export interface FloatingNavProps {
   onLaunchpad?: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
+  /** Copy slot tasks from the same grave weekday one week earlier. */
+  onCopyPriorWeekTasks?: () => void;
+  /** Toggle the dismissable week rotation health tracker bar. */
+  onToggleWeekHealth?: () => void;
+  weekHealthVisible?: boolean;
+  weekHealthPercent?: number | null;
+  weekHealthLoading?: boolean;
   onZoomFit?: () => void;
   onZoomOut?: () => void;
   onZoomIn?: () => void;
   /** e.g. "108%" when zoomed; omit or "Fit" when at fit scale */
   zoomLabel?: string;
   isZoomed?: boolean;
-  onCommandOpen?: () => void;
   onThemeToggle?: () => void;
   onPrint?: () => void;
   isDark?: boolean;
@@ -153,6 +155,12 @@ export interface FloatingNavProps {
   /** Builder vs print-preview — lives in nav so it never covers zone cards. */
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
+  /** Selected night is officially published — shown as a read-only status pill. */
+  isDayPublished?: boolean;
+  /** Operator may publish or unpublish the selected day. */
+  canPublishDay?: boolean;
+  onToggleDayPublished?: () => void;
+  publishDayBusy?: boolean;
 }
 
 // ==================== SPRING ====================
@@ -171,14 +179,16 @@ export default function FloatingNav({
   onLaunchpad,
   onPrevWeek,
   onNextWeek,
-  onUndo,
-  onRedo,
+  onCopyPriorWeekTasks,
+  onToggleWeekHealth,
+  weekHealthVisible = false,
+  weekHealthPercent = null,
+  weekHealthLoading = false,
   onZoomFit,
   onZoomOut,
   onZoomIn,
   zoomLabel,
   isZoomed = false,
-  onCommandOpen,
   onThemeToggle,
   onPrint,
   isDark = false,
@@ -191,6 +201,10 @@ export default function FloatingNav({
   onRosterToggle,
   canvasMode = "builder",
   onCanvasModeChange,
+  isDayPublished = false,
+  canPublishDay = false,
+  onToggleDayPublished,
+  publishDayBusy = false,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -283,6 +297,24 @@ export default function FloatingNav({
   // Note: placedCount prop is kept for API compatibility but no longer used in the nav UI.
 
   const ACCENT = "#C13A14";
+  const weekHealthColors = rotationHealthFloaterColors(
+    weekHealthLoading ? null : weekHealthPercent,
+  );
+  const weekHealthIconColor =
+    weekHealthLoading || weekHealthPercent === null
+      ? undefined
+      : weekHealthPercent >= 85
+        ? "#16a34a"
+        : weekHealthPercent >= 70
+          ? "#d97706"
+          : "#dc2626";
+  const weekHealthTitle = weekHealthLoading
+    ? "Week rotation health — loading"
+    : weekHealthPercent !== null
+      ? `Week rotation health — ${weekHealthPercent}% avg (${weekHealthVisible ? "hide tracker" : "show tracker"})`
+      : weekHealthVisible
+        ? "Hide week rotation health tracker"
+        : "Show week rotation health tracker";
 
   const [compactCanvasToggle, setCompactCanvasToggle] = useState(false);
   useEffect(() => {
@@ -526,18 +558,65 @@ export default function FloatingNav({
             </div>
           ) : null}
 
-          <NavToolButton onClick={() => onCommandOpen?.()} title="Command (⌘K)" ariaLabel="Command palette">
-            <Search className={NAV_ICON} />
-          </NavToolButton>
+          {onCopyPriorWeekTasks ? (
+            <NavToolButton
+              onClick={onCopyPriorWeekTasks}
+              title="Copy prior week same-day tasks"
+              ariaLabel="Copy tasks from last week's same weekday"
+            >
+              <ClipboardCopy className={NAV_ICON} />
+            </NavToolButton>
+          ) : null}
 
-          <div className="flex shrink-0 items-center">
-            <NavToolButton onClick={onUndo} title="Undo">
-              <Undo2 className={NAV_ICON} />
+          {isDayPublished ? (
+            <span
+              className="inline-flex h-8 shrink-0 items-center rounded-lg bg-emerald-600/10 px-2 text-[10px] font-bold tracking-[0.3px] text-emerald-700 dark:text-emerald-400"
+              aria-label="This day is published"
+            >
+              Published
+            </span>
+          ) : null}
+
+          {canPublishDay && onToggleDayPublished ? (
+            <button
+              type="button"
+              onClick={onToggleDayPublished}
+              disabled={publishDayBusy}
+              className={cn(
+                "sb-interactive inline-flex h-8 shrink-0 items-center rounded-lg px-2.5 text-[10px] font-semibold tracking-[0.2px] transition-all active:scale-[0.97] disabled:opacity-50",
+                isTabletTouchDevice() && "min-h-11 px-3 text-[12px]",
+                isDayPublished
+                  ? "border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+                  : "bg-emerald-600 text-white shadow-sm hover:bg-emerald-500",
+              )}
+              title={isDayPublished ? "Unpublish this day" : "Publish this day"}
+              aria-label={isDayPublished ? "Unpublish this day" : "Publish this day"}
+            >
+              {publishDayBusy ? "…" : isDayPublished ? "Unpublish" : "Publish"}
+            </button>
+          ) : null}
+
+          {onToggleWeekHealth ? (
+            <NavToolButton
+              onClick={onToggleWeekHealth}
+              title={weekHealthTitle}
+              ariaLabel={weekHealthVisible ? "Hide week health tracker" : "Show week health tracker"}
+              active={weekHealthVisible}
+              className="relative"
+            >
+              <Activity
+                className={NAV_ICON}
+                style={{ color: weekHealthIconColor }}
+              />
+              {!weekHealthLoading && weekHealthPercent !== null ? (
+                <span
+                  className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full ring-1 ring-white/80 dark:ring-zinc-900/80"
+                  style={{ background: weekHealthColors.border }}
+                  aria-hidden
+                />
+              ) : null}
             </NavToolButton>
-            <NavToolButton onClick={onRedo} title="Redo">
-              <Redo2 className={NAV_ICON} />
-            </NavToolButton>
-          </div>
+          ) : null}
 
           <div
             className="flex shrink-0 items-center overflow-hidden rounded-lg border"
@@ -565,6 +644,15 @@ export default function FloatingNav({
               <ZoomIn className={NAV_ICON} />
             </NavToolButton>
           </div>
+
+          <a
+            href="/logs"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-600 transition-all hover:bg-black/5 active:scale-95 dark:text-zinc-400 dark:hover:bg-white/5"
+            title="Change log"
+            aria-label="Open deployment change log"
+          >
+            <ScrollText className={NAV_ICON} />
+          </a>
 
           <NavToolButton onClick={onPrint} title="Print Command Center (⌘P)" ariaLabel="Open print command center">
             <Printer className={NAV_ICON} />
@@ -663,7 +751,6 @@ export default function FloatingNav({
         </div>
       </nav>
 
-      {/* Command palette is rendered by ShiftBuilderClient; ⌘K icon above opens it. */}
     </>
   );
 }

@@ -115,6 +115,12 @@ export interface ShiftBuilderBoardProps {
   /** When true (print-preview mode), suppress digital-only assists (xAI chips/lines, fit chips, HUDs) so the live canvas matches the exact Golden that will be cloned for PDF/print. Core content (names, badges that print, tasks, etc.) unchanged. */
   isPrintPreview?: boolean;
 
+  /** When true, suppress card-attached PlacementPad — parent renders an external pad. */
+  useExternalPad?: boolean;
+
+  /** When false, PlacementPad renders without xAI analyst/matrix (e.g. /today). */
+  placementPadInsightsEnabled?: boolean;
+
   /** Weekly Overview focus (from navbar table): dims non-matching cards, highlights the focused TM's slot on this day. */
   focusedTmId?: string | null;
 }
@@ -192,6 +198,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   fitBySlot: fitBySlotProp,
   artboardScale,
   isPrintPreview = false,
+  useExternalPad = false,
+  placementPadInsightsEnabled = true,
   focusedTmId,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
@@ -461,6 +469,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     anchor: PlacementPadAnchor,
     hostId: string,
   ) => {
+    if (useExternalPad) return null;
     if (selectedSlotKey !== slotKey) return null;
     return (
       <PlacementPad
@@ -492,6 +501,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         isDraftMode={isDraftMode}
         draftAssignments={draftAssignments}
         weeklyRecentHistory={weeklyRecentHistory}
+        insightsEnabled={placementPadInsightsEnabled}
       />
     );
   };
@@ -871,7 +881,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
                   return (
-                    <div key={key} className="relative h-full overflow-hidden" data-slot-key={key} data-placement-host={key}> {/* overflow-hidden keeps multi-task AUX cards from escaping the fixed artboard / equalized band height */}
+                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
                       <AuxCard
                         def={def}
                         assignments={displayAssignments}
