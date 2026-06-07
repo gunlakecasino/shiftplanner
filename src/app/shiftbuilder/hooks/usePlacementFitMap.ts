@@ -21,6 +21,7 @@ import {
 import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
 import type { PlacementTmProfile } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { filterWeeklyHistoryThroughNight } from "@/app/shiftbuilder/components/shiftRotationHealth";
 
 export type UsePlacementFitMapArgs = {
   enabled: boolean;
@@ -163,6 +164,11 @@ export function usePlacementFitMap({
     };
   }, [scheduledUnassigned, allEligibleTms, members]);
 
+  const scopedWeekHistory = useMemo(
+    () => filterWeeklyHistoryThroughNight(weeklyRecentHistory, currentIso),
+    [weeklyRecentHistory, currentIso],
+  );
+
   const fitBySlot = useMemo(() => {
     if (!enabled) return {};
 
@@ -192,7 +198,7 @@ export function usePlacementFitMap({
         histories,
         historiesLoading,
         otherTmProfiles,
-        weeklyRecentHistory,
+        weeklyRecentHistory: scopedWeekHistory,
         candidateProfiles: assigned ? undefined : buildCandidates(slotKey),
         preferredCandidateIds: assigned ? undefined : preferredCandidateIds,
       });
@@ -212,7 +218,7 @@ export function usePlacementFitMap({
     otherTmProfiles,
     buildCandidates,
     preferredCandidateIds,
-    weeklyRecentHistory,
+    scopedWeekHistory,
   ]);
 
   return { fitBySlot, historiesLoading };

@@ -12,7 +12,7 @@ import {
   type PlacementRotationBasics,
   type PlacementTmProfile,
 } from "./placementPadHelpers";
-import { getTmThisWeekRepeatForSlot } from "./shiftRotationHealth";
+import { getTmWeekRepeatForSlotThroughNight } from "./shiftRotationHealth";
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import {
   rotationGapSlots,
@@ -342,7 +342,13 @@ export function computeSlotPlacementFit(
       : rotationBasics;
 
   const weekRepeatThisSlot = tmId
-    ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, tmId, slotKey).count + 1
+    ? getTmWeekRepeatForSlotThroughNight(
+        weeklyRecentHistory,
+        tmId,
+        slotKey,
+        currentIso,
+        true,
+      )
     : 0;
 
   const input: PlacementFitScoreInput = {

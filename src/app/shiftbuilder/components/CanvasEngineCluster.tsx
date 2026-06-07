@@ -158,15 +158,20 @@ export function CanvasEngineCluster({
   const colors = rotationHealthFloaterColors(dailyPercent);
   const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
+  const weekPolicyPercent = health.weekPolicyPercent ?? health.weeklyBalance;
+  const weekPolicyDisplay =
+    weekPolicyPercent !== undefined ? `${weekPolicyPercent}%` : "—%";
+
   const breakdownTitle = [
-    `Rotation health: big = this day's avg fit health. Small = ${GRAVE_WEEK_LABEL} grave week average (mean of built days, same as Week Health tracker).`,
-    `Target: ${ROTATION_HEALTH_TARGET}%`,
-    dailyPercent !== null ? `This day: ${dailyPercent}%` : "This day: —",
+    `Rotation health: big = tonight fit (spread/last-5/swap quality for this night).`,
+    `Small numbers: fit avg = mean nightly fit across built ${GRAVE_WEEK_LABEL} days; policy = week repeat max-1 penalty (separate).`,
+    `Target (tonight fit): ${ROTATION_HEALTH_TARGET}%`,
+    dailyPercent !== null ? `Tonight fit: ${dailyPercent}%` : "Tonight fit: —",
     weekAveragePercent !== null
-      ? `Week avg (${GRAVE_WEEK_LABEL} built days): ${weekAveragePercent}%`
-      : `Week avg (${GRAVE_WEEK_LABEL}): —`,
-    health.weeklyBalance !== undefined
-      ? `Policy-adjusted week score (repeats penalty): ${health.weeklyBalance}%`
+      ? `Week fit avg (${GRAVE_WEEK_LABEL} built days): ${weekAveragePercent}%`
+      : `Week fit avg (${GRAVE_WEEK_LABEL}): —`,
+    weekPolicyPercent !== undefined
+      ? `Week repeat policy: ${weekPolicyPercent}% (max repeat ${(health as any).maxWeeklyRepeat ?? 0}; violations ${(health as any).repeatViolations ?? 0})`
       : "",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
@@ -488,22 +493,39 @@ export function CanvasEngineCluster({
               <span
                 className="text-[20px] font-bold tabular-nums leading-none"
                 style={{ fontFamily: CANVAS_PILL_MONO }}
+                title="Tonight fit — granular spread/swap quality for this night"
               >
                 {display}
               </span>
               <span
-                className="text-[11px] font-semibold tabular-nums opacity-85"
-                style={{ fontFamily: CANVAS_PILL_MONO, lineHeight: 1 }}
-                title={`${GRAVE_WEEK_LABEL} grave week average health (mean of built days)`}
+                className="text-[7px] font-semibold uppercase tracking-[0.04em] opacity-75"
+                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))", lineHeight: 1 }}
               >
-                {weekAverageDisplay} wk avg
+                tonight
+              </span>
+            </span>
+            <span
+              className="flex items-baseline gap-2 text-[10px] font-semibold tabular-nums opacity-90"
+              style={{ fontFamily: CANVAS_PILL_MONO, lineHeight: 1.1 }}
+            >
+              <span title={`${GRAVE_WEEK_LABEL} mean nightly fit across built days`}>
+                {weekAverageDisplay} fit
+              </span>
+              <span
+                className="opacity-70"
+                title="Week repeat policy — max-1-per-area penalty (independent of tonight fit)"
+              >
+                ·
+              </span>
+              <span title="Week repeat policy score (lower when same TM repeats area 2×+ this grave week)">
+                {weekPolicyDisplay} policy
               </span>
             </span>
             <span
               className="text-[7.5px] opacity-80 tabular-nums"
               style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
-              this day · {GRAVE_WEEK_LABEL} avg · target {ROTATION_HEALTH_TARGET}%
+              tonight fit · {GRAVE_WEEK_LABEL} fit avg · repeat policy · target {ROTATION_HEALTH_TARGET}%
               {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
             </span>
           </span>

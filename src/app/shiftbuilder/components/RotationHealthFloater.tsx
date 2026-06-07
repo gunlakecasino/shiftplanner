@@ -52,7 +52,7 @@ function breakdownTitle(
   const violList = (health as any).violations as WeekRepeatViolation[] | undefined;
   const violNote = viols > 0 ? ` · ${viols} viol${viols > 1 ? "s" : ""} (use ADVISOR or week scan for moves)` : "";
   const lines = [
-    `Rotation health: big = this day's health. Small = ${GRAVE_WEEK_LABEL} week average (mean of built days).`,
+    `Rotation health: big = tonight fit. Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy (separate).`,
     "xAI fairnessSignals on violating placements can reduce the week penalty (numeric 'forgiveness').",
     "ADVISOR (main cluster) or 'xAI week scan' in WEEK BUILDER: concrete (TM+slot+night) moves to raise the week average.",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
@@ -164,19 +164,33 @@ export function RotationHealthFloater({
           <span
             className="text-[24px] font-bold tabular-nums leading-none"
             style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+            title="Tonight fit"
           >
             {display}
           </span>
           <span
-            className="text-[13px] font-semibold tabular-nums opacity-85"
-            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", lineHeight: 1 }}
+            className="text-[7px] font-semibold uppercase tracking-[0.04em] opacity-75"
+            style={{ lineHeight: 1 }}
           >
-            {weekAverageDisplay} wk avg
-            {xaiAdj > 0 && <span className="text-[10px] ml-0.5 opacity-70">xAI</span>}
+            tonight
+          </span>
+        </span>
+        <span
+          className="flex items-baseline gap-2 text-[11px] font-semibold tabular-nums opacity-90"
+          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", lineHeight: 1.1 }}
+        >
+          <span title={`${GRAVE_WEEK_LABEL} mean nightly fit`}>{weekAverageDisplay} fit</span>
+          <span className="opacity-60">·</span>
+          <span title="Week repeat policy">
+            {(health.weekPolicyPercent ?? health.weeklyBalance) != null
+              ? `${health.weekPolicyPercent ?? health.weeklyBalance}%`
+              : "—%"}{" "}
+            policy
+            {xaiAdj > 0 && <span className="text-[9px] ml-0.5 opacity-70">xAI</span>}
           </span>
         </span>
         <span className="text-[7.5px] opacity-80 tabular-nums" style={{ lineHeight: 1 }}>
-          this day · {GRAVE_WEEK_LABEL} avg · target {ROTATION_HEALTH_TARGET}%
+          tonight fit · {GRAVE_WEEK_LABEL} fit avg · repeat policy · target {ROTATION_HEALTH_TARGET}%
           {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
         </span>
       </div>

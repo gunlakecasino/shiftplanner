@@ -39,20 +39,69 @@ export function computeWeekAverageHealth(
   return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
 }
 
-const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
+/** Fallback bucket points when granular healthPoints are unavailable. */
+export const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
   strong_fit: 100,
-  acceptable: 85,
-  questionable: 55,
-  needs_swap: 40,
+  acceptable: 90,
+  questionable: 62,
+  needs_swap: 45,
   poor_fit: 0,
   open_gap: 0,
 };
 
+export type WeekNightRecord = { nightDate: string; slotKey: string };
+
+/** Grave-week history through a viewed night only (no forward-looking repeats). */
+export function filterWeeklyHistoryThroughNight(
+  weeklyRecentHistory: Map<string, WeekNightRecord[]> | undefined,
+  throughIso: string,
+): Map<string, WeekNightRecord[]> | undefined {
+  if (!weeklyRecentHistory) return undefined;
+  const out = new Map<string, WeekNightRecord[]>();
+  for (const [tmId, records] of weeklyRecentHistory.entries()) {
+    const filtered = records.filter((r) => r.nightDate <= throughIso);
+    if (filtered.length > 0) out.set(tmId, filtered);
+  }
+  return out;
+}
+
+/**
+ * Times a TM appears on slotKey in the grave week through throughIso (inclusive).
+ * Does not double-count tonight when the night is already in the history map.
+ */
+export function getTmWeekRepeatForSlotThroughNight(
+  weeklyRecentHistory: Map<string, WeekNightRecord[]> | undefined,
+  tmId: string | null | undefined,
+  slotKey: string,
+  throughIso: string,
+  /** Add 1 when assigned tonight but not yet mirrored into weeklyRecentHistory. */
+  countTonightIfAssigned = false,
+): number {
+  if (!weeklyRecentHistory || !tmId) return countTonightIfAssigned ? 1 : 0;
+  const records = weeklyRecentHistory.get(tmId) || [];
+  const matches = records.filter(
+    (r) => r.slotKey === slotKey && r.nightDate <= throughIso,
+  );
+  let count = matches.length;
+  if (countTonightIfAssigned && !matches.some((r) => r.nightDate === throughIso)) {
+    count += 1;
+  }
+  return count;
+}
+
+/** Resolve slot health contribution — prefers continuous healthPoints from fit scoring. */
+export function slotHealthPoints(fit: PrerenderedPlacementFit): number {
+  if (typeof fit.healthPoints === "number") return fit.healthPoints;
+  return VERDICT_POINTS[fit.fitVerdict] ?? 70;
+}
+
 export type ShiftRotationHealth = {
   /** Raw daily health for the selected/viewed day (avg of per-slot verdicts). Matches tracker pills. */
   dailyPercent: number | null;
-  /** Headline display: 0.7 × dailyPercent + 0.3 × weeklyBalance when week data exists; else dailyPercent. */
+  /** Legacy blend: 0.7 × dailyPercent + 0.3 × weekPolicyPercent when week data exists. */
   percent: number | null;
+  /** Week repeat-policy score (max-1-per-area); separate from nightly fit average. */
+  weekPolicyPercent?: number;
   meetsTarget: boolean;
   scoredCount: number;
   openGaps: number;
@@ -73,6 +122,7 @@ export type ShiftRotationHealth = {
    * The raw maxWeeklyRepeat, repeatViolations, and violations[] list are the diagnostics for *why* it is not higher.
    * Undefined if no weekly data provided.
    */
+  /** @deprecated Use weekPolicyPercent — same value, clearer name. */
   weeklyBalance?: number;
   /** Highest number of times any single TM was placed in one area this week (from zoneDates counts). */
   maxWeeklyRepeat?: number;
@@ -159,7 +209,7 @@ export function computeShiftRotationHealth(
     const fit = fitBySlot[slotKey];
     if (!fit) continue;
 
-    scores.push(VERDICT_POINTS[fit.fitVerdict] ?? 70);
+    scores.push(slotHealthPoints(fit));
     counts[fit.fitVerdict] += 1;
   }
 
@@ -273,20 +323,22 @@ export function computeShiftRotationHealth(
 
       let repeatPenalty = 0;
       if (maxWeeklyRepeat >= 3) {
-        repeatPenalty = Math.min(60, 40 + (maxWeeklyRepeat - 3) * 10);
+        repeatPenalty = Math.min(55, 35 + (maxWeeklyRepeat - 3) * 9);
       } else if (maxWeeklyRepeat === 2) {
-        repeatPenalty = 18;
+        repeatPenalty = 12;
       }
       repeatPenalty = Math.max(0, repeatPenalty - xaiRepeatPenaltyReduction);
 
-      // Each violation drags the week average a bit (reflects impact on the week's overall health %).
+      // Each violation drags policy score — scaled by severity for more spread in the 70–95 band.
       if (repeatViolations > 0) {
-        repeatPenalty += Math.min(12, repeatViolations * 3);
+        repeatPenalty += Math.min(14, repeatViolations * 2);
       }
 
       weeklyBalance = Math.max(40, Math.round(base - repeatPenalty));
     }
   }
+
+  const weekPolicyPercent = weeklyBalance;
 
   if (scores.length === 0) {
     return {
@@ -296,6 +348,7 @@ export function computeShiftRotationHealth(
       scoredCount: 0,
       openGaps,
       counts,
+      weekPolicyPercent,
       // weekly fields may be populated from recent fallback even if no scored slots tonight
       weeklyBalance,
       maxWeeklyRepeat,
@@ -318,10 +371,11 @@ export function computeShiftRotationHealth(
   return {
     dailyPercent: percent,
     percent: effectivePercentForDisplay,
-    meetsTarget: effectivePercentForDisplay >= ROTATION_HEALTH_TARGET,
+    meetsTarget: percent >= ROTATION_HEALTH_TARGET,
     scoredCount: scores.length,
     openGaps,
     counts,
+    weekPolicyPercent,
     weeklyBalance,
     maxWeeklyRepeat,
     repeatViolations,
@@ -422,7 +476,7 @@ export function computeDailyHealthPercent(
     const fit = fitBySlot[slotKey];
     if (!fit) continue;
 
-    scores.push(VERDICT_POINTS[fit.fitVerdict] ?? 70);
+    scores.push(slotHealthPoints(fit));
     counts[fit.fitVerdict] += 1;
   }
 

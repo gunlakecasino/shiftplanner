@@ -174,6 +174,7 @@ import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   computeShiftRotationHealth,
   computeDailyHealthPercent,
+  filterWeeklyHistoryThroughNight,
   getWeekRepeatViolations,
   suggestLocalRotationMoves,
   type WeekRepeatViolation,
@@ -4186,6 +4187,10 @@ function AuthedShiftBuilder() {
         if (!assigned) continue;
 
         try {
+          const dayScopedWeekHistory = filterWeeklyHistoryThroughNight(
+            plannedThisWeekRecentHistory,
+            dayIso,
+          );
           dayFitBySlot[slotKey] = computeSlotPlacementFit({
             slotKey,
             assignments: dayAssignments as any,
@@ -4197,7 +4202,7 @@ function AuthedShiftBuilder() {
             histories: effectiveWeekHistories,
             historiesLoading: false,
             otherTmProfiles: dayOther,
-            weeklyRecentHistory: plannedThisWeekRecentHistory,
+            weeklyRecentHistory: dayScopedWeekHistory,
           });
         } catch {
           dayFitBySlot[slotKey] = {
