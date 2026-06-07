@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 
 interface ProvenanceGlassProps {
@@ -11,6 +12,8 @@ interface ProvenanceGlassProps {
   fairnessSignals?: Record<string, number> | null;
   confidence?: number | null;
   onClose: () => void;
+  /** For week rotation advisor results (prescriptive moves to improve health %). */
+  advisorText?: string | null;
 }
 
 /**
@@ -35,6 +38,7 @@ export function ProvenanceGlass({
   fairnessSignals: signalsProp,
   confidence: confProp,
   onClose,
+  advisorText,
 }: ProvenanceGlassProps) {
   // Live lookup from the established store so we always get the latest engine output
   // (including provenance populated by the placement engine / scoring).
@@ -43,6 +47,7 @@ export function ProvenanceGlass({
 
   if (!slotKey) return null;
 
+  const isWeekAdvisor = slotKey === "week-rotation-advisor" || slotKey === "week-advisor" || /advisor/i.test(slotKey);
   const a = assignments?.[slotKey] || {};
   const prov = a.provenance || {};
 
@@ -75,11 +80,16 @@ export function ProvenanceGlass({
 
   const hasRealData = !!(rationale && rationale !== "No detailed rationale recorded.") || hasSignals;
 
-  if (!hasRealData) {
-    return null; // render nothing if no engine data; parent can still set key for other reasons, but no UI
+  // For the week rotation advisor we intentionally show the glass even without normal per-slot
+  // provenance/rationale/signals. The content comes from advisorText (or the legacy window stash).
+  if (!isWeekAdvisor && !hasRealData) {
+    return null; // render nothing if no engine data for normal provenance keys
   }
 
-  return (
+  // For advisor, we may have advisorText even before the xAI call completes (local suggestions are instant).
+  // Proceed to render the modal.
+
+  const overlay = (
     <div
       className="sb-overlay-backdrop sb-overlay-backdrop--fixed z-[70] flex items-center justify-center !bg-black/20"
       onClick={onClose}
@@ -90,9 +100,9 @@ export function ProvenanceGlass({
       >
         <div className="flex justify-between items-start mb-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[2px] text-[#8B6F2E] font-medium">Provenance</div>
+            <div className="text-[10px] uppercase tracking-[2px] text-[#8B6F2E] font-medium">{isWeekAdvisor ? "Rotation Health + xAI" : "Provenance"}</div>
             <div className="text-lg font-semibold mt-1">
-              Why {displayName} in {displaySlot}?
+              {isWeekAdvisor ? "Week rotation improvement plan" : `Why ${displayName} in ${displaySlot}?`}
             </div>
           </div>
           <button
@@ -103,17 +113,19 @@ export function ProvenanceGlass({
           </button>
         </div>
 
-        <div className="text-[15px] text-[#2F2F2D] leading-relaxed">
-          {rationale}
+        <div className="text-[15px] text-[#2F2F2D] leading-relaxed whitespace-pre-wrap">
+          {isWeekAdvisor
+            ? (advisorText || (window as any).__lastWeekAdvisorText || rationale || "Local suggestions + xAI plan will appear here. If nothing shows, the request may still be in flight or there were no violations in the week data.")
+            : (rationale || "No rationale recorded for this placement.")}
         </div>
 
-        {confidence !== undefined && confidence !== null && (
+        {!isWeekAdvisor && confidence !== undefined && confidence !== null && (
           <div className="mt-3 text-[12px] text-[#6E6E6A]">
             Confidence: {Math.round(Number(confidence) * 100)}%
           </div>
         )}
 
-        {hasSignals && (
+        {!isWeekAdvisor && hasSignals && (
           <div className="mt-5 pt-4 border-t border-[#EDE4D3]">
             <div className="text-[10px] uppercase tracking-[1.5px] text-[#6E6E6A] mb-2.5">Fairness Signals</div>
             <div className="space-y-2 text-sm">
@@ -132,11 +144,16 @@ export function ProvenanceGlass({
         )}
 
         <div className="mt-5 pt-4 border-t text-[10px] text-[#8B6F2E]/70">
-          This is the heartbeat of the system — engine intelligence combined with human factors.
+          {isWeekAdvisor
+            ? "Local suggestions are instant & deterministic. xAI suggestions (when available) are ranked for minimal high-impact moves that lift weeklyBalance by reducing the listed repeats. Execute via day jump + pad or direct edits in the WEEK BUILDER table."
+            : "This is the heartbeat of the system — engine intelligence combined with human factors."}
         </div>
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(overlay, document.body);
 }
 
 export default ProvenanceGlass;
