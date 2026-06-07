@@ -602,11 +602,31 @@ export type ValidationResult = {
  *
  * Called from the Client before optimistic update + DB write in applyDraft.
  */
+function indexProfiles(profiles: any[] | null | undefined): Map<string, any> {
+  const map = new Map<string, any>();
+  for (const p of profiles || []) {
+    if (p.id) map.set(p.id, p);
+    if (p.tm_id) map.set(p.tm_id, p);
+  }
+  return map;
+}
+
+function tmMatchesScheduleSet(
+  tmId: string,
+  profile: { id?: string; tm_id?: string } | undefined,
+  onScheduleTonight: Set<string>,
+): boolean {
+  const keys = [tmId, profile?.tm_id, profile?.id].filter(Boolean) as string[];
+  return keys.some((k) => onScheduleTonight.has(k));
+}
+
 export async function validateProposedAssignments(
   params: {
-    date: string; // YYYY-MM-DD
+    date: string; // YYYY-MM-DD (local grave night)
     nightId?: string | null;
     proposals: ProposedAssignment[];
+    /** Client-loaded schedule ids — fallback when server schedule query is empty. */
+    clientScheduledTmIds?: string[];
   }
 ): Promise<ValidationResult> {
   if (!params.proposals?.length) {
@@ -617,57 +637,95 @@ export async function validateProposedAssignments(
   const { getScheduledIdsForNight } = await import(
     "@/lib/shiftbuilder/gravesDefaultSchedule"
   );
-  const { isEligibleForSlot, normalizeGender } = await import(
-    "@/lib/shiftbuilder/placement"
-  );
+  const { isEligibleForSlot } = await import("@/lib/shiftbuilder/placement");
+  const { parseLocalDateISO } = await import("@/lib/shiftbuilder/dateUtils");
   const { createAdminClientSafe } = await import(
     "@/app/api/admin/_lib/createAdminClient"
   );
 
-  const nightDate = new Date(params.date);
+  const nightDate = parseLocalDateISO(params.date);
   const scheduledIds = await getScheduledIdsForNight(nightDate, params.nightId ?? null);
 
-  // Combined "on schedule tonight" set (grave + overlaps + onCall exceptions)
-  const onScheduleTonight = new Set<string>([
+  const scheduledSlugIds = new Set<string>([
     ...scheduledIds.grave,
     ...scheduledIds.amOverlap,
     ...scheduledIds.pmOverlap,
     ...scheduledIds.onCall,
   ]);
 
+  // Accept both tm_id slugs and profile UUIDs for schedule membership.
+  const onScheduleTonight = new Set<string>(scheduledSlugIds);
+
   const supabase = createAdminClientSafe();
   const invalid: ValidationError[] = [];
 
-  // Collect unique tmIds we need profiles for
   const neededTmIds = new Set<string>();
   for (const p of params.proposals) {
     if (p.tmId) neededTmIds.add(p.tmId);
   }
 
-  // Load minimal profiles for the proposed TMs (id, tm_id, grave_pool, gender)
   let profileByIdOrTmId = new Map<string, any>();
-  if (supabase && neededTmIds.size > 0) {
-    const { data: profiles } = await supabase
-      .from("tm_profiles")
-      .select("id, tm_id, grave_pool, gender, display_name, full_name")
-      .in("tm_id", Array.from(neededTmIds)); // tm_id is the common key from graves schedule
 
-    for (const p of profiles || []) {
-      profileByIdOrTmId.set(p.id, p);
-      if (p.tm_id) profileByIdOrTmId.set(p.tm_id, p);
+  if (supabase) {
+    const needed = Array.from(neededTmIds);
+    const slugList = Array.from(scheduledSlugIds);
+
+    const profileLoads = [];
+    if (needed.length > 0) {
+      profileLoads.push(
+        supabase
+          .from("tm_profiles")
+          .select("id, tm_id, grave_pool, gender, display_name, full_name")
+          .in("tm_id", needed),
+      );
+      profileLoads.push(
+        supabase
+          .from("tm_profiles")
+          .select("id, tm_id, grave_pool, gender, display_name, full_name")
+          .in("id", needed),
+      );
     }
+    if (slugList.length > 0) {
+      profileLoads.push(
+        supabase
+          .from("tm_profiles")
+          .select("id, tm_id, grave_pool, gender, display_name, full_name")
+          .in("tm_id", slugList),
+      );
+    }
+
+    const results = await Promise.all(profileLoads);
+    const merged = new Map<string, any>();
+    for (const r of results) {
+      for (const [k, v] of indexProfiles(r.data)) merged.set(k, v);
+    }
+    profileByIdOrTmId = merged;
+
+    for (const slug of scheduledSlugIds) {
+      const profile = profileByIdOrTmId.get(slug);
+      onScheduleTonight.add(slug);
+      if (profile?.id) onScheduleTonight.add(profile.id);
+      if (profile?.tm_id) onScheduleTonight.add(profile.tm_id);
+    }
+  }
+
+  if (onScheduleTonight.size === 0 && params.clientScheduledTmIds?.length) {
+    console.warn(
+      "[validateProposedAssignments] Server schedule empty — using client scheduled ids fallback",
+    );
+    for (const id of params.clientScheduledTmIds) onScheduleTonight.add(id);
   }
 
   for (const proposal of params.proposals) {
     const { slotKey, tmId } = proposal;
 
     if (!tmId) {
-      // Clearing a slot is generally allowed (subject to locks, handled client-side mostly)
       continue;
     }
 
-    // 1. Must be on the Graves Default Schedule (or night_on_call exception) for this night
-    if (!onScheduleTonight.has(tmId)) {
+    const profile = profileByIdOrTmId.get(tmId);
+
+    if (!tmMatchesScheduleSet(tmId, profile, onScheduleTonight)) {
       invalid.push({
         slotKey,
         tmId,
@@ -676,8 +734,6 @@ export async function validateProposedAssignments(
       continue;
     }
 
-    // 2. Run the full client eligibility rules (gender for RR, grave vs overlap, custom rules, etc.)
-    const profile = profileByIdOrTmId.get(tmId);
     if (!profile) {
       invalid.push({
         slotKey,
@@ -687,15 +743,14 @@ export async function validateProposedAssignments(
       continue;
     }
 
+    const canonicalTmId = profile.tm_id || tmId;
     const tmForEligibility = {
       id: profile.id,
-      tmId: profile.tm_id || tmId,
+      tmId: canonicalTmId,
       gravePool: profile.grave_pool,
       gender: profile.gender,
-      // The client often enriches with isAMOverlap / isPMOverlap from roster data.
-      // For server guard we conservatively rely on gravePool + the scheduled band check above.
-      isAMOverlap: scheduledIds.amOverlap.has(tmId),
-      isPMOverlap: scheduledIds.pmOverlap.has(tmId),
+      isAMOverlap: scheduledIds.amOverlap.has(canonicalTmId),
+      isPMOverlap: scheduledIds.pmOverlap.has(canonicalTmId),
     };
 
     try {
