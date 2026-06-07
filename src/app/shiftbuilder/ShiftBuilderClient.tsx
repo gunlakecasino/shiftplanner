@@ -1388,9 +1388,10 @@ function AuthedShiftBuilder() {
     try {
       const { validateProposedAssignments } = await import("./actions");
       const validation = await validateProposedAssignments({
-        date: selectedDay.date.toISOString().slice(0, 10),
+        date: formatLocalDateISO(selectedDay.date),
         nightId: nightId || queryNightId,
         proposals: proposalsForGuard,
+        clientScheduledTmIds: Array.from(effectiveScheduledTmIdsTonight),
       });
 
       if (!validation.valid) {
@@ -1434,7 +1435,7 @@ function AuthedShiftBuilder() {
       }
     }
 
-    const dateKey = selectedDay.date.toISOString().slice(0, 10);
+    const dateKey = formatLocalDateISO(selectedDay.date);
     const liveForNight: Record<string, { tmId: string; tmName: string | null }> = {};
     for (const [slotKey, row] of Object.entries(newAssignments)) {
       if (row?.tmId) {
