@@ -3,10 +3,15 @@
 import React from "react";
 import {
   computeShiftRotationHealth,
+  computeWeekAverageHealth,
+  GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   rotationHealthFloaterColors,
+  getWeekRepeatViolations,
   type ShiftRotationHealth,
+  type WeekRepeatViolation,
 } from "./shiftRotationHealth";
+// WeekRepeatViolation is referenced in breakdownTitle for the (optional) viol list note.
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
@@ -30,17 +35,35 @@ export type RotationHealthFloaterProps = {
   draftAssignments?: Record<string, DraftAssignmentRow>;
   /** above-ops-pill (default): fixed above ops telemetry; below-page: under artboard frame */
   placement?: RotationHealthPlacement;
+  weekDailyHealths?: Record<string, number>;
+  selectedDayDateKey?: string;
+  weekHealthLoading?: boolean;
 };
 
-function breakdownTitle(health: ShiftRotationHealth): string {
-  const { counts, openGaps, scoredCount, percent } = health;
+function breakdownTitle(
+  health: ShiftRotationHealth,
+  dailyPercent: number | null,
+  weekAveragePercent: number | null,
+): string {
+  const { counts, openGaps, scoredCount } = health;
+  const xaiAdj = (health as any).xaiRepeatPenaltyReduction || 0;
+  const viols = (health as any).repeatViolations ?? 0;
+  const maxR = (health as any).maxWeeklyRepeat ?? 0;
+  const violList = (health as any).violations as WeekRepeatViolation[] | undefined;
+  const violNote = viols > 0 ? ` · ${viols} viol${viols > 1 ? "s" : ""} (use ADVISOR or week scan for moves)` : "";
   const lines = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (repeats this grave week). Policy: max 1 per TM/area/week; penalty at 2, real bad at 3+.",
+    `Rotation health: big = this day's health. Small = ${GRAVE_WEEK_LABEL} week average (mean of built days).`,
+    "xAI fairnessSignals on violating placements can reduce the week penalty (numeric 'forgiveness').",
+    "ADVISOR (main cluster) or 'xAI week scan' in WEEK BUILDER: concrete (TM+slot+night) moves to raise the week average.",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
     "",
-    percent !== null ? `Tonight (fit): ${percent}%` : "Tonight: —",
-    (health as any).weeklyBalance !== undefined ? `Weekly (balance): ${(health as any).weeklyBalance}% (max repeat: ${(health as any).maxWeeklyRepeat ?? 0}, violations: ${(health as any).repeatViolations ?? 0})` : "Weekly: —",
+    dailyPercent !== null ? `This day: ${dailyPercent}%` : "This day: —",
+    weekAveragePercent !== null
+      ? `Week avg (${GRAVE_WEEK_LABEL}): ${weekAveragePercent}%`
+      : `Week avg (${GRAVE_WEEK_LABEL}): —`,
+    (health as any).weeklyBalance !== undefined ? `Policy week score: ${(health as any).weeklyBalance}% (max repeat: ${maxR}, violations: ${viols})${xaiAdj > 0 ? ` · xAI adj -${xaiAdj.toFixed(0)}pt` : ""}${violNote}` : "",
     `${scoredCount} assigned · ${openGaps} open gap${openGaps === 1 ? "" : "s"}`,
+    "Key signals: 30-night spread, last-5, this-week repeat per placement, bilateral swap lanes, xAI coverage on violators.",
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
   ];
@@ -56,30 +79,36 @@ export function RotationHealthFloater({
   isDraftMode,
   draftAssignments,
   placement = "above-ops-pill",
+  weekDailyHealths,
+  selectedDayDateKey,
+  weekHealthLoading,
 }: RotationHealthFloaterProps) {
   const health = React.useMemo(
     () =>
       computeShiftRotationHealth(auxDefs, assignments, fitBySlot, {
         isDraftMode,
         draftAssignments,
+        weekDailyHealths,
       }),
-    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments],
+    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weekDailyHealths],
   );
 
-  // Weekly % driven by real balance when the compute receives weeklyRecentHistory (policy max 1 / penalty 2 / real bad 3+).
-  // In this floater the compute is called without history (pure tonight fit); wk label falls back to synthetic.
-  // The main board pill (CanvasEngineCluster) receives the history and shows the blended health.
-  const realWeekly = (health as any).weeklyBalance;
-  const weeklyPercent = realWeekly !== undefined
-    ? Math.round(realWeekly)
-    : (health.percent !== null ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) : null);
-  const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
+  const trackerDaily =
+    selectedDayDateKey && weekDailyHealths
+      ? weekDailyHealths[selectedDayDateKey]
+      : undefined;
+  const dailyPercent = weekHealthLoading ? null : (trackerDaily ?? null);
+  const weekAveragePercent = weekHealthLoading
+    ? null
+    : computeWeekAverageHealth(weekDailyHealths);
+  const weekAverageDisplay =
+    weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
+  const xaiAdj = health.xaiRepeatPenaltyReduction || 0;
 
   if (!visible) return null;
 
-  const colors = rotationHealthFloaterColors(health.percent);
-  const display =
-    health.percent !== null ? `${health.percent}%` : "—%";
+  const colors = rotationHealthFloaterColors(dailyPercent);
+  const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
   const anchorStyle: React.CSSProperties =
     placement === "inline"
@@ -113,7 +142,7 @@ export function RotationHealthFloater({
         ...anchorStyle,
         pointerEvents: "auto",
       }}
-      title={breakdownTitle(health)}
+      title={breakdownTitle(health, dailyPercent, weekAveragePercent)}
     >
       <div
         className="sb-glass-pill flex flex-col items-end gap-0.5 rounded-xl px-4 py-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.75)]"
@@ -142,11 +171,12 @@ export function RotationHealthFloater({
             className="text-[13px] font-semibold tabular-nums opacity-85"
             style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", lineHeight: 1 }}
           >
-            {weeklyDisplay} wk
+            {weekAverageDisplay} wk avg
+            {xaiAdj > 0 && <span className="text-[10px] ml-0.5 opacity-70">xAI</span>}
           </span>
         </span>
         <span className="text-[7.5px] opacity-80 tabular-nums" style={{ lineHeight: 1 }}>
-          target {ROTATION_HEALTH_TARGET}%
+          this day · {GRAVE_WEEK_LABEL} avg · target {ROTATION_HEALTH_TARGET}%
           {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
         </span>
       </div>

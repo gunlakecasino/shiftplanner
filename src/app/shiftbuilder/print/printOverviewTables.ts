@@ -493,21 +493,21 @@ export function buildWeeklyOverviewArtboardHTML(
               const count = repeatCounts.get(key) || 0;
               if (count > 1) {
                 const isSevere = count >= 3;
-                const ovalStyle = `position:absolute;top:50%;left:50%;width:calc(100% + 6px);height:calc(100% + 4px);` +
-                  `transform:translate(-50%, -50%) rotate(-4deg);border:${isSevere ? "3px" : "2.5px"} solid #C13A14;` +
+                const ovalStyle = `position:absolute;top:50%;left:50%;width:calc(100% + 18px);height:calc(100% + 12px);` +
+                  `transform:translate(-50%, -50%) rotate(-4deg);border:${isSevere ? "2.5px" : "2px"} solid #C13A14;` +
                   `border-radius:9999px;pointer-events:none;z-index:0;` +
-                  `box-shadow:${isSevere ? "1.5px 2px 0 #C13A14, -1px -1px 0 #C13A14" : "1px 1.5px 0 #C13A14, -0.5px -1px 0 #C13A14"};`;
+                  `box-shadow:${isSevere ? "2px 3px 0 #C13A14, -1.5px -1.5px 0 #C13A14" : "1.5px 2px 0 #C13A14, -1px -1px 0 #C13A14"};`;
                 const badge = isSevere
-                  ? `<span style="position:absolute;top:-1px;right:-2px;min-width:9px;height:9px;padding:0 1.5px;font-size:6px;font-weight:800;` +
-                    `line-height:1;display:flex;align-items:center;justify-content:center;background:#C13A14;color:#fff;border-radius:999px;` +
-                    `pointer-events:none;z-index:2;font-family:var(--font-atkinson, system-ui);">${count}</span>`
+                  ? `<span style="min-width:9px;height:9px;padding:0 1.5px;font-size:6px;font-weight:800;` +
+                    `line-height:1;display:inline-flex;align-items:center;justify-content:center;background:#C13A14;color:#fff;border-radius:999px;` +
+                    `pointer-events:none;z-index:2;font-family:var(--font-atkinson, system-ui);margin-left:3px;flex-shrink:0;vertical-align:middle;">${count}</span>`
                   : "";
                 const bg = `background:rgba(239,68,68,0.03);`;
                 cellHTML = `<div style="flex:1;height:${rowH}px;line-height:${rowH}px;padding:0 3px;` +
                   `font-size:${layout.fontSize}px;font-weight:600;color:#1C1C1E;` +
                   `overflow:visible;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid #EBEBF0;text-align:center;box-sizing:border-box;${bg}">` +
                   `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;z-index:1;">${disp}` +
-                  `<span style="${ovalStyle}"></span>${badge}</span></div>`;
+                  `<span style="${ovalStyle}"></span></span>${badge}</div>`;
               }
             }
             return cellHTML;

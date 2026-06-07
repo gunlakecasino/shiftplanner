@@ -4,8 +4,11 @@ import React from "react";
 import { ChevronLeft, ChevronRight, Eraser, Check, X } from "lucide-react";
 import {
   computeShiftRotationHealth,
+  computeWeekAverageHealth,
+  GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   rotationHealthFloaterColors,
+  type WeekRepeatViolation,
 } from "./shiftRotationHealth";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
@@ -39,10 +42,24 @@ export type CanvasEngineClusterProps = {
   engineRunPhase: EngineRunPhase;
   /** Optional recent 7-night history (from currentNight / effectiveRecentZoneHistory) to power real weekly balance in health %. */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+  /** Per-day daily health % (built days only) — tracker + cluster read the same map. */
+  weekDailyHealths?: Record<string, number>;
+  /** ISO date (YYYY-MM-DD) for the selected grave night — aligns cluster daily with tracker pill. */
+  selectedDayDateKey?: string;
+  /** Fri→Thu ISO keys in order — week average uses only built days in this window. */
+  graveWeekDateKeys?: string[];
+  /** When true, daily/week numbers show "—" until week histories finish loading. */
+  weekHealthLoading?: boolean;
+  /** If provided (and tracker was dismissed), shows a small "Show week tracker" affordance. */
+  onShowWeekHealthTracker?: () => void;
   onRunXaiEngine: () => void;
   onClearBoard: () => void;
   onApplyDraft?: () => void;
   onDiscardDraft?: () => void;
+  /** When provided (and violations exist), shows an "Advisor" affordance next to / in the health pill drawer.
+   *  This is the primary surface for "rotation health + xAI breakdown of what to move where + why".
+   */
+  onRequestRotationAdvisor?: () => void | Promise<void>;
 };
 
 /**
@@ -61,10 +78,16 @@ export function CanvasEngineCluster({
   isCurrentNightLocked,
   engineRunPhase,
   weeklyRecentHistory,
+  weekDailyHealths,
+  selectedDayDateKey,
+  graveWeekDateKeys,
+  weekHealthLoading,
+  onShowWeekHealthTracker,
   onRunXaiEngine,
   onClearBoard,
   onApplyDraft,
   onDiscardDraft,
+  onRequestRotationAdvisor,
 }: CanvasEngineClusterProps) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -83,19 +106,25 @@ export function CanvasEngineCluster({
         isDraftMode,
         draftAssignments,
         weeklyRecentHistory,
+        weekDailyHealths,
       }),
-    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weeklyRecentHistory],
+    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weeklyRecentHistory, weekDailyHealths],
   );
 
-  // Weekly % now uses real balance from weeklyRecentHistory (or weeklyHistories) when available
-  // in the health compute (TM×area repeats this week, max=1 ideal, penalty at 2, real bad at 3+).
-  // The returned health.percent is a 0.7 tonight + 0.3 weekly blend so repeats visibly affect the main number.
-  // weeklyDisplay / breakdown show the raw weekly component + the max repeat stats.
-  const realWeekly = (health as any).weeklyBalance;
-  const weeklyPercent = realWeekly !== undefined
-    ? Math.round(realWeekly)
-    : (health.percent !== null ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) : null);
-  const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
+  // Big number = this selected day's health (matches the tracker's pill for that day).
+  const trackerDaily =
+    selectedDayDateKey && weekDailyHealths
+      ? weekDailyHealths[selectedDayDateKey]
+      : undefined;
+  // Single source: weekDailyHealths (selected day = live fit; other days = week histories path).
+  const dailyPercent = trackerDaily ?? null;
+
+  // Small number = Fri–Thu grave week average (mean of built days' daily health %).
+  const weekAveragePercent = weekHealthLoading
+    ? null
+    : computeWeekAverageHealth(weekDailyHealths, graveWeekDateKeys);
+  const weekAverageDisplay =
+    weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
 
   const running = engineRunPhase !== "idle";
   const engineDisabled = !canRunEngine || isCurrentNightLocked || running;
@@ -126,17 +155,23 @@ export function CanvasEngineCluster({
 
   if (!visible) return null;
 
-  const colors = rotationHealthFloaterColors(health.percent);
-  const display = health.percent !== null ? `${health.percent}%` : "—%";
+  const colors = rotationHealthFloaterColors(dailyPercent);
+  const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
   const breakdownTitle = [
-    "Rotation health averages assigned zone / RR / aux placements (open gaps excluded) and incorporates real weekly balance from histories (TM×area repeats). Policy: max repeat 1 per TM per area per week; penalty at 2, real bad at 3+.",
+    `Rotation health: big = this day's avg fit health. Small = ${GRAVE_WEEK_LABEL} grave week average (mean of built days, same as Week Health tracker).`,
     `Target: ${ROTATION_HEALTH_TARGET}%`,
-    health.percent !== null ? `Health (tonight fit + weekly blend): ${health.percent}%` : "Health: —",
-    weeklyPercent !== null ? `Weekly (raw balance): ${weeklyPercent}%` : "Weekly: —",
+    dailyPercent !== null ? `This day: ${dailyPercent}%` : "This day: —",
+    weekAveragePercent !== null
+      ? `Week avg (${GRAVE_WEEK_LABEL} built days): ${weekAveragePercent}%`
+      : `Week avg (${GRAVE_WEEK_LABEL}): —`,
+    health.weeklyBalance !== undefined
+      ? `Policy-adjusted week score (repeats penalty): ${health.weeklyBalance}%`
+      : "",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,
+    "Signals: spread freshness, last-5 trail, this-week repeats per placement, bilateral gaps, xAI fairness adj on violators.",
     "",
     isDraftMode
       ? "Draft mode: ✓ save all, ✕ discard, eraser clear, re-run engine."
@@ -314,6 +349,33 @@ export function CanvasEngineCluster({
               </button>
             </>
           )}
+          {/* Rotation advisor — available whenever week data is being built (the WEEK BUILDER sheet or when weeklyRecentHistory is populated).
+              We no longer gate strictly on filtered repeatViolations > 0, because we deliberately exclude overlaps/admin from the week rotation policy and viol count.
+              The advisor itself will focus only on relevant deployment slots (Z/RR/proper aux) and report if there are no current relevant repeats.
+              This + the "xAI week scan" in the WEEK BUILDER toolbar are the entry points for the "what to move where + why to raise the health %" breakdown. */}
+          {onRequestRotationAdvisor && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void onRequestRotationAdvisor();
+              }}
+              title="Rotation advisor: xAI + local suggestions for concrete moves (only on main deployment slots) that would reduce relevant repeats and raise weeklyBalance / overall health %"
+              className="sb-interactive rounded px-2 py-1 text-[9px] font-semibold disabled:opacity-40 shrink-0"
+              style={{
+                ...actionBtnBase,
+                fontSize: 9,
+                padding: "2px 6px",
+                background: "rgba(147,51,234,0.18)",
+                border: "1px solid rgba(147,51,234,0.35)",
+                color: colors.text,
+                cursor: "pointer",
+              }}
+            >
+              ADVISOR
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onClearBoard}
@@ -401,6 +463,27 @@ export function CanvasEngineCluster({
             >
               Rotation health
             </span>
+            {onShowWeekHealthTracker && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowWeekHealthTracker();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onShowWeekHealthTracker();
+                  }
+                }}
+                className="ml-2 text-[8px] uppercase tracking-[0.5px] opacity-70 hover:opacity-100 active:opacity-90 underline cursor-pointer"
+                title="Show the live per-day week health tracker"
+              >
+                tracker
+              </span>
+            )}
             <span className="flex items-baseline gap-1.5">
               <span
                 className="text-[20px] font-bold tabular-nums leading-none"
@@ -411,15 +494,16 @@ export function CanvasEngineCluster({
               <span
                 className="text-[11px] font-semibold tabular-nums opacity-85"
                 style={{ fontFamily: CANVAS_PILL_MONO, lineHeight: 1 }}
+                title={`${GRAVE_WEEK_LABEL} grave week average health (mean of built days)`}
               >
-                {weeklyDisplay} wk
+                {weekAverageDisplay} wk avg
               </span>
             </span>
             <span
               className="text-[7.5px] opacity-80 tabular-nums"
               style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
-              target {ROTATION_HEALTH_TARGET}%
+              this day · {GRAVE_WEEK_LABEL} avg · target {ROTATION_HEALTH_TARGET}%
               {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
             </span>
           </span>

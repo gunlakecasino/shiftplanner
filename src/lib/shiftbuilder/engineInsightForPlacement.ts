@@ -103,6 +103,42 @@ export type EngineInsightContext = {
    * not just the local slot (as requested for "board and week context").
    */
   boardAndWeekContext?: string;
+
+  /** When true, run the week-level rotation health advisor flow (prescriptive moves to raise weeklyBalance).
+   *  The response is a focused analysis + list of recommended (from → to) changes across the week plan,
+   *  with reasons tied directly to reducing the repeat violations that are pulling the health % down.
+   *  UI surfaces (health pill, WEEK BUILDER toolbar, viol lists in pad/overview) trigger this.
+   */
+  weekAdvisor?: boolean;
+  /** Snapshot of rotation health at advisor request time (for the prompt to know the current score + penalty). */
+  rotationHealthSnapshot?: {
+    percent?: number | null;
+    weeklyBalance?: number;
+    maxWeeklyRepeat?: number;
+    repeatViolations?: number;
+    xaiRepeatPenaltyReduction?: number;
+  };
+  /** The concrete violations (tm+slot with count>1 this week) that the advisor should target for fixes. */
+  violations?: Array<{
+    tmId: string;
+    slotKey: string;
+    count: number;
+    nights: string[];
+    severity: number;
+    hasXaiSignal?: boolean;
+    /** Human display name for this TM (e.g. "Sheri O"). When present, the advisor output MUST use this instead of the tmId. */
+    tmName?: string;
+  }>;
+  /** Compact summary of the week plan (e.g. per-day zone loads or the repeat map) for global reasoning. */
+  weekPlanSummary?: string;
+  /** Optional focus for the advisor (only consider moves involving this TM or this slotKey). */
+  focusTmId?: string;
+  focusSlotKey?: string;
+
+  /** tmId → display name map. The week advisor is required to use friendly names (Jared, Sheri O, Kaiden, Mike S, etc.)
+   *  everywhere in the output. Using raw "tm_xxx" ids violates the naming rules for all operator surfaces.
+   */
+  tmNames?: Record<string, string>;
 };
 
 export type EngineInsightResult = {
@@ -449,6 +485,13 @@ export async function runPlacementPadAnalyst(
     });
   }
 
+  // Week-level rotation health advisor: "what could be moved where and why to make the wk % / overall health higher".
+  // Triggered from health pill, WEEK BUILDER xAI scan, viol rows in WeeklyOverview/Pad, etc.
+  // Produces prescriptive, named suggestions rather than a single-slot headline+bullets.
+  if (ctx.weekAdvisor) {
+    return runWeekRotationAdvisor(ctx);
+  }
+
   if (mode === "light" || mode === "headline") {
     return runMagicOneLinerDetermination(ctx);
   }
@@ -741,4 +784,122 @@ export async function runMagicOneLinerDetermination(
     } as any,
     usage: { model: "fallback-prerender", reasoningEffort: "none" },
   };
+}
+
+/** Week rotation health advisor — prescriptive "what to move where + why" to raise the weeklyBalance / blended health %.
+ *  Triggered when the operator wants actionable fixes for the repeat violations that are costing points in the "wk" component.
+ *  Uses the violations list + health snapshot + (optional) compact week plan summary to produce a short list of
+ *  concrete moves the operator can evaluate (and then execute via the normal assign/day-jump/pad flows).
+ *  The prompt is deliberately different from per-slot analyst: it thinks globally across the 7-day plan.
+ */
+export async function runWeekRotationAdvisor(
+  ctx: EngineInsightContext,
+): Promise<EngineInsightResult> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    // Graceful local-only response using any pre-computed local suggestions the caller may have injected via weekPlanSummary or text.
+    const v = ctx.violations || [];
+    const snap = ctx.rotationHealthSnapshot;
+    const tmNames = ctx.tmNames || {};
+    const base = v.length
+      ? `Week has ${v.length} repeat violation${v.length === 1 ? "" : "s"} (max ${snap?.maxWeeklyRepeat ?? "?"}×). ` +
+        `Focus on: ${v.slice(0, 3).map((vv) => {
+          const d = (vv as any).tmName || tmNames[vv.tmId] || vv.tmId;
+          return `${d} on ${vv.slotKey} (${vv.count}×)`;
+        }).join("; ")}. ` +
+        `Target: reduce max repeat to 1 to lift weekly balance toward 100 (currently ${snap?.weeklyBalance ?? "—"}).`
+      : "No week repeat violations detected in the provided data.";
+    return { text: base, cached: false };
+  }
+
+  const v = ctx.violations || [];
+  const snap = ctx.rotationHealthSnapshot || {};
+  const focus = ctx.focusTmId || ctx.focusSlotKey ? `Focus area: ${ctx.focusTmId ? `TM ${ctx.focusTmId}` : ""}${ctx.focusSlotKey ? ` slot ${ctx.focusSlotKey}` : ""}. ` : "";
+
+  const tmNames = ctx.tmNames || {};
+  const violText = v.length
+    ? v.map((vv, i) => {
+        const display = (vv as any).tmName || tmNames[vv.tmId] || vv.tmId;
+        return `${i + 1}. ${display} ×${vv.count} on ${vv.slotKey} (id: ${vv.tmId}; nights: ${vv.nights?.join(",") || "—"}; severity ${vv.severity}${vv.hasXaiSignal ? " [xAI justified some coverage]" : ""})`;
+      }).join("\n")
+    : "None reported (weeklyBalance should be high).";
+
+  const planSummary = ctx.weekPlanSummary ? `\nWEEK PLAN / LOAD SNAPSHOT:\n${ctx.weekPlanSummary}\n` : "";
+
+  const healthLine = `Current blended health: ${snap.percent ?? "—"}% (weeklyBalance component: ${snap.weeklyBalance ?? "—"}%; max repeat ${snap.maxWeeklyRepeat ?? 0}; violations ${snap.repeatViolations ?? 0}; xAI penalty reduction ${snap.xaiRepeatPenaltyReduction ?? 0}pt).`;
+
+  const system = `You are a senior GRAVE shift planner and rotation coach for one expert operator.
+Your job is to propose the smallest number of high-leverage re-assignments (or bilateral swaps) across the current 7-day grave week plan that will reduce or eliminate repeat violations (same TM in same area/slot >1× per grave week) and therefore raise the weeklyBalance and overall rotation health %.
+STRICT NAMING RULE (non-negotiable — this has been escalated multiple times):
+- ALWAYS use the person's actual display / human name (e.g. "Sheri O", "Jared", "Kaiden", "Mike S", "Silvia", "Jamie").
+- The violations list below includes a friendly name before the (id: ...) for every entry. Use that name.
+- NEVER output raw internal identifiers like "tm_missy", "tm_becca", "tm_christina", "tm_sheri_o" etc. in the final text the operator sees. This directly violates the established naming rules for every operator-facing surface in the system (cards, weekly overview, pad, health, matrix, etc.).
+- The (id: tm_xxx) is provided only as a disambiguation key if two people have similar names; do not surface it in the suggestions.
+- Only ever use or target proper deployment slots for which shouldShowPlacementFitChip(slot) is true: the main Z1-Z9SR zones, the MRR/WRR restroom chain (gender rules apply), and valid board aux. 
+- NEVER suggest, reference as source, or target Admin (ADM, ADMIN, AUX_ADMIN or any admin), Overlaps (OL-*, overlap_am, overlap_pm, or any overlap), or physical RR host slots. The input violations have already been filtered to exclude them; do not invent any involving them. This is a hard rule for week rotation fixes.
+
+Other rules:
+- Prefer minimal changes: first try to give a repeated TM a fresh slot on one of the nights they are currently repeating (different day or different peer slot in family).
+- Respect hard constraints you are given (eligibility is assumed handled by caller data; do not invent cross-gender RR, admin, or overlap moves). Overlaps (OL-*) and Admin slots are never valid targets or sources for these rotation health improvement suggestions.
+- For each suggestion give: the exact "from" (TM + slot + one specific night), the "to" (target slot, and if a swap, the partner TM), and a one-sentence why it improves the week numbers (e.g. "creates a gap for TM on Z1; partner gets needed Z4 exposure; coverage on both nights preserved").
+- If xAI signals already forgave a placement, note it but still prefer to relieve the repeat if a clean move exists.
+- Output 1–4 concrete suggestions max. Lead with a 1-line summary of expected health lift (e.g. "Two moves would bring max repeat to 1 and lift weekly balance ~20–25 pts").
+- Be decisive and floor-actionable; no hedging, no generic "consider rotation".`;
+
+  const user = `WEEK ROTATION HEALTH ADVISOR REQUEST
+${healthLine}
+${focus}
+VIOLATIONS DRIVING THE PENALTY (these are the (TM, slot) pairs with count>1 this grave week):
+${violText}
+${planSummary}
+Use the human display names shown above (before the (id: ...)). Do not use tm_ ids in your response.
+Produce the prescriptive move list now. Keep it short, specific, and directly tied to reducing the listed violations.`;
+
+  try {
+    const { createGrokSuggestionModel } = await import("@/lib/shiftbuilder/grokClient");
+    const model = createGrokSuggestionModel();
+    const { text: raw, usage } = await generateText({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0.25,
+      maxTokens: 420,
+      providerOptions: { xai: { reasoningEffort: "medium" } },
+    });
+
+    const cleaned = (raw || "").trim();
+    const result: EngineInsightResult = {
+      text: cleaned || "No high-confidence rotation moves surfaced from the current week data.",
+      usage: {
+        inputTokens: usage?.promptTokens,
+        outputTokens: usage?.completionTokens,
+        model: "grok-4.3",
+        reasoningEffort: "medium",
+      },
+      cached: false,
+    };
+    // Cache lightly by a sig of the violation shape + health numbers.
+    try {
+      const { setInsightCache, stableInsightKey } = await import("@/lib/shiftbuilder/engineInsightCache");
+      const key = stableInsightKey({
+        mode: "week-advisor",
+        v: String(v.length),
+        maxR: String(snap.maxWeeklyRepeat ?? ""),
+        bal: String(snap.weeklyBalance ?? ""),
+      });
+      setInsightCache(key, result);
+    } catch {}
+    return result;
+  } catch (err: any) {
+    console.warn("[weekRotationAdvisor] xAI call failed, returning deterministic summary:", err?.message || err);
+    const tmNames = ctx.tmNames || {};
+    const top = v[0];
+    const topDisplay = top ? ((top as any).tmName || tmNames[top.tmId] || top.tmId) : "";
+    const fallback = v.length
+      ? `Week advisor unavailable right now. ${v.length} violation${v.length > 1 ? "s" : ""} (max ${snap.maxWeeklyRepeat ?? "?"}×) are costing points in weeklyBalance (${snap.weeklyBalance ?? "—"}%). Use the local suggestions in the health pill / pad matrix, or the WEEK BUILDER table to inspect repeats and hand-edit. Top viol: ${topDisplay} on ${top?.slotKey} (${top?.count}×).`
+      : "Week advisor: no violations in the snapshot.";
+    return { text: fallback };
+  }
 }
