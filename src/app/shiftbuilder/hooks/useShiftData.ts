@@ -3,7 +3,7 @@
 import React from "react";
 import { useCurrentNight } from "./useCurrentNight";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import {
   useShiftBuilderStore,
   useAssignments,
@@ -12,6 +12,7 @@ import {
 import {
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
+  setBoardAssignmentsDayKey,
 } from "@/lib/shiftbuilder/liveCache";
 import { patchNightCoreAssignmentsCache } from "@/lib/shiftbuilder/scheduleCacheSync";
 
@@ -138,15 +139,11 @@ export function useShiftData(selectedDay: DayDef): UseShiftDataReturn {
 
     if (isDaySwitch && prevDay) {
       try {
-        const prevDate = new Date(prevDay); // best-effort; callers usually pass proper Dates
-        if (!isNaN(prevDate.getTime())) {
-          mirrorMainAssignmentsToLiveStore(prevDate);
-        }
+        mirrorMainAssignmentsToLiveStore(parseLocalDateISO(prevDay));
       } catch {}
     }
 
     previousHydratedDayRef.current = dayKey;
-    hydratedAssignmentsDayRef.current = dayKey;
 
     let next: Record<string, any> = { ...fromQuery };
 
@@ -162,11 +159,15 @@ export function useShiftData(selectedDay: DayDef): UseShiftDataReturn {
 
     // Push into the main board store (cards/Board subscribe narrowly here)
     useShiftBuilderStore.getState().setAssignments(next);
+    setBoardAssignmentsDayKey(dayKey);
+    hydratedAssignmentsDayRef.current = dayKey;
 
     // Mirror for cross-day week consumers (Weekly Overview sheet, plannedThisWeekRecentHistory, etc.)
     try {
       mirrorMainAssignmentsToLiveStore(selectedDay.date);
     } catch {}
+
+    bumpLiveAssignVersion();
 
     // Keep the TanStack cache in sync if we merged anything.
     const qc = currentNight.queryClient;
@@ -179,31 +180,8 @@ export function useShiftData(selectedDay: DayDef): UseShiftDataReturn {
     currentNight.isCoreFetching,
     currentNight.queryClient,
     currentNight.assignments,
+    bumpLiveAssignVersion,
   ]);
-
-  // Ensure live store has a snapshot of the current selected day (defensive for week surfaces).
-  React.useEffect(() => {
-    if (selectedDay?.date) {
-      try {
-        mirrorMainAssignmentsToLiveStore(selectedDay.date);
-      } catch {}
-    }
-  }, [selectedDay?.date]);
-
-  // Week bootstrap: prefetch all DAY_DEFS + seed live store from cache for the full week.
-  // This powers stable Weekly Overview columns and "prior days in week" for repeats/fit/health/xAI.
-  // We keep a lightweight version here; the full subscription wiring that bumps liveAssignVersion
-  // on cache changes can remain in the orchestrator or be further extracted later.
-  React.useEffect(() => {
-    if (!currentNight?.queryClient) return;
-
-    // We cannot easily import DAY_DEFS here without creating a circular or heavy dep.
-    // The main Client still drives the explicit week prefetch + cache subscribe for live version bumps.
-    // This effect ensures at least the current day is mirrored on mount/hydrate.
-    try {
-      mirrorMainAssignmentsToLiveStore(selectedDay.date);
-    } catch {}
-  }, [currentNight?.queryClient, selectedDay.date]);
 
   // Public helpers for action paths (applyDraft, drag persist, engine runs, etc.)
   const mirrorCurrentDay = React.useCallback(() => {

@@ -114,6 +114,7 @@ import {
   teardownAllLiveCache,
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
+  getBoardAssignmentsDayKey,
   buildPadAssignmentsFromStore,
   nightDateKey,
 } from "@/lib/shiftbuilder/liveCache";
@@ -189,6 +190,11 @@ import {
   nightIsoFromDate,
   shouldShowPlacementFitChip,
 } from "./components/placementPadHelpers";
+import {
+  allWeekPlacementHistoriesCached,
+  ensureWeekPlacementHistories,
+  getCachedWeekPlacementHistories,
+} from "./lib/weekPlacementHistoriesCache";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 // LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
 // their (and their transitive deps like useCommandActions) out of the initial static
@@ -2011,30 +2017,6 @@ function AuthedShiftBuilder() {
   // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
   // (Declaration lives earlier near the shiftData integration; this is the usage site only.)
 
-  // Ensure the live cross-day accumulator always has a fresh snapshot of the *current* day's
-  // assignments (from the main zustand). Week overview sheet, history, repeats, etc. can then
-  // read it uniformly; the memos also defensively layer the live `assignments` for the exact
-  // selected day so optimistic board edits are visible immediately in the preview table.
-  // Snapshot the current day's main assignments into the live cross-day store when the selected
-  // day changes. This (plus the targeted mirrors inside the hydrate effect on switch/load, plus
-  // explicit mirrors on drag/live-assign persist paths) keeps weekOverviewNights, planned history,
-  // repeats, fit, and health able to see "prior days in this week" via the store.
-  //
-  // IMPORTANT: Do NOT depend on liveAssignVersion here. The live subscription effect bumps
-  // liveAssignVersion precisely when store writes happen (including our mirrors for the current
-  // dateKey). Depending on the version would create a direct feedback loop:
-  //   mirror -> setAssignmentsForNight -> subscription bump -> liveVersion++ -> this effect re-runs -> mirror...
-  // Current-day consumers (weekOverviewNights, plannedThisWeekRecentHistory) already defensively
-  // layer the live `assignments` state on top of the store entry for the exact selected day, so
-  // a slightly stale live entry for "today" is harmless. We only need the snapshot to survive day switches.
-  React.useEffect(() => {
-    if (selectedDay?.date) {
-      try {
-        mirrorMainAssignmentsToLiveStore(selectedDay.date);
-      } catch {}
-    }
-  }, [selectedDay?.date]);
-
   // Bootstrap liveAssignmentsStore for the full current grave week (and at least the "reached" days 0..selected).
   // This is what makes the Weekly Overview sheet, plannedThisWeekRecentHistory (used by fit chips, health,
   // pads, xAI, matrix), and week-repeat logic see prior days after a refresh or without the user having
@@ -2152,16 +2134,22 @@ function AuthedShiftBuilder() {
       const dayDef = DAY_DEFS[i];
       if (!dayDef) continue;
       const dateKey = formatLocalDateISO(dayDef.date);
-      let nightAss = storeState.assignmentsByNight[dateKey] || {};
-      // Fallback to TanStack query cache for this night (populated by our week bootstrap prefetch + listener,
-      // or any prior hover/visit). This ensures that after refresh, prior (and later built) days in the week
-      // are visible to week-repeat logic, fit chips, health, pads, and xAI.
-      // We now collect for the *full* week (no i <= selected limit) so the "week as a whole" repeat counts
-      // (and thus the "wk" health %) are consistent no matter which day is selected for viewing.
-      // Data for days is kept in the live store (via mirroring on day switches) even when viewing earlier days.
-      if ((!nightAss || Object.keys(nightAss).length === 0) && i !== selectedDayIndex && qc) {
+      let nightAss: Record<string, any> = {};
+      // Query cache is authoritative for non-selected days (live store can race during day switches).
+      if (qc) {
         const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
         if (cached?.assignments) nightAss = cached.assignments;
+      }
+      if (!nightAss || Object.keys(nightAss).length === 0) {
+        nightAss = storeState.assignmentsByNight[dateKey] || {};
+      }
+      // Selected day: layer live board only when store is hydrated for that exact night.
+      if (
+        i === selectedDayIndex &&
+        getBoardAssignmentsDayKey() === dateKey
+      ) {
+        const fromBoard = useShiftBuilderStore.getState().assignments ?? {};
+        nightAss = { ...nightAss, ...fromBoard };
       }
       // Collect from the (store or cached) for this day. Do *not* layer the live main here;
       // the health merge will ensure the current viewed day's live is counted toward this week.
@@ -2175,7 +2163,7 @@ function AuthedShiftBuilder() {
       }
     }
     return result;
-  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion, currentNight?.queryClient]);
+  }, [DAY_DEFS, selectedDayIndex, assignments, storeAssignments, liveAssignVersion, currentNight?.queryClient]);
 
   // Data for the weekly overview on the sheet (built from live assignments across the week days).
   // This feeds the print-preview style weekly table directly on the artboard (replacing the old side panel).
@@ -2198,17 +2186,22 @@ function AuthedShiftBuilder() {
     DAY_DEFS.forEach((def, dayIndex) => {
       const dateKey = formatLocalDateISO(def.date);
       let nightAss: Record<string, any> = {};
-      const fromStore = storeState.assignmentsByNight[dateKey] || {};
-      // Fallback to query cache for days in the week (seeded by the week bootstrap effect + cache listener,
-      // or direct from prefetch). Lets the sheet table show the full built week immediately after refresh
-      // or on first open of Weekly Overview, instead of only reached days.
-      let effective = fromStore;
-      if ((!effective || Object.keys(effective).length === 0) && dayIndex !== selectedDayIndex && qc) {
+      // Query cache is authoritative for non-selected days (live store can race during day switches).
+      if (qc) {
         const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
-        if (cached?.assignments) effective = cached.assignments;
+        if (cached?.assignments) nightAss = cached.assignments;
       }
-      const fromMain = (dayIndex === selectedDayIndex ? assignments : {});
-      nightAss = { ...effective, ...fromMain };
+      if (!nightAss || Object.keys(nightAss).length === 0) {
+        nightAss = storeState.assignmentsByNight[dateKey] || {};
+      }
+      // Selected day: overlay live zustand board only when hydrated for this exact night.
+      if (
+        dayIndex === selectedDayIndex &&
+        getBoardAssignmentsDayKey() === dateKey
+      ) {
+        const fromBoard = useShiftBuilderStore.getState().assignments ?? {};
+        nightAss = { ...nightAss, ...fromBoard };
+      }
       // If still empty for a day (not yet visited), leave as {} → will be blank "—" in the table.
       // No else blanking; if store has data from prior visit, include it for the full week view.
       const assignmentsForOverview: Record<string, { tmId: string; tmName: string; breakGroup?: number } | null> = {};
@@ -2225,7 +2218,7 @@ function AuthedShiftBuilder() {
       result.push({ dayIndex, assignments: assignmentsForOverview });
     });
     return result;
-  }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion, currentNight?.queryClient]);
+  }, [DAY_DEFS, selectedDayIndex, storeAssignments, liveAssignVersion, currentNight?.queryClient]);
 
   // WeekLens v2 shared memos (builder page only, but cheap to compute).
   // These power the top bar health/viol (already partially live) + the sidebar suggestions list.
@@ -3968,39 +3961,77 @@ function AuthedShiftBuilder() {
     viewMode === "canvas" && currentView === "deployment";
 
   const { fitBySlot: deploymentFitBySlot } = usePlacementFitMap({
-    enabled: deploymentRotationFitEnabled,
-    assignments: storeAssignmentsForFit,
-    isDraftMode,
-    draftAssignments,
-    members: effectiveRealRoster as Array<Record<string, unknown>>,
-    auxDefs: auxDefsForFit,
-    currentIso: nightIsoFromDate(selectedDay.date),
-    scheduledUnassigned: markerScheduledUnassigned,
-    allEligibleTms: markerAllEligibleTms,
-    weeklyRecentHistory: plannedThisWeekRecentHistory,
-  });
+      enabled: deploymentRotationFitEnabled,
+      assignments: storeAssignmentsForFit,
+      isDraftMode,
+      draftAssignments,
+      members: effectiveRealRoster as Array<Record<string, unknown>>,
+      auxDefs: auxDefsForFit,
+      currentIso: nightIsoFromDate(
+        DAY_DEFS[selectedDayIndex]?.date ?? selectedDay.date,
+      ),
+      scheduledUnassigned: markerScheduledUnassigned,
+      allEligibleTms: markerAllEligibleTms,
+      weeklyRecentHistory: plannedThisWeekRecentHistory,
+    });
 
-  // Consistent per-day daily health percentages for the *entire* week plan.
-  // This enables a true, stable arithmetic average for the week health number (mean of each day's percentage).
+  // Align with WeekHealthTracker pill index (selectedDayIndex), not deferred board index.
+  const selectedDayDateKey = React.useMemo(
+    () =>
+      formatLocalDateISO(
+        DAY_DEFS[selectedDayIndex]?.date ?? selectedDay.date,
+      ),
+    [DAY_DEFS, selectedDayIndex, selectedDay.date],
+  );
+
+  // TM ids across the full week plan — drives a single shared history fetch for all tracker days.
+  const weekPlanTmIdsKey = React.useMemo(() => {
+    const tmIds = new Set<string>();
+    for (const [tmId] of plannedThisWeekRecentHistory.entries()) {
+      if (tmId) tmIds.add(tmId);
+    }
+    for (const night of weekOverviewNights) {
+      for (const a of Object.values(night.assignments || {})) {
+        if ((a as any)?.tmId) tmIds.add((a as any).tmId);
+      }
+    }
+    return [...tmIds].sort().join(",");
+  }, [plannedThisWeekRecentHistory, weekOverviewNights]);
+
+  // Per-day daily health percentages for days that have assignments in the week plan.
+  // Powers the week average (mean of built days + repeat penalty) and both tracker surfaces.
   //
-  // - For every day with plan data (from weekOverviewNights), we compute a *proxy* daily health based on
-  //   the full week repeat violators: fraction of that day's relevant placements that land on a violating (tm,slot).
-  //   Proxy = 100 minus scaled penalty for bad fraction. This is fully derived from the week plan data.
-  // - Rich captured daily health (from the current day's full fit prerender: spread, gaps, last-5, etc.)
-  //   overrides the proxy for days that have been visited while the rich fit UI is active.
-  // - The resulting map always has an entry for *every* day that has assignments in the current week plan.
-  //   Therefore the mean is consistent no matter which day is selected.
-  //
-  // The rich capture effect below populates the rich overrides as you interact with days.
-  const [richWeekDailyHealths, setRichWeekDailyHealths] = React.useState<Record<string, number>>({});
+  // For each day with placements: run computeSlotPlacementFit (same path as the selected-day hook)
+  // using weekHistories + plannedThisWeekRecentHistory, then computeDailyHealthPercent.
+  // Days with no assignments are omitted (tracker shows "—"; they do not inflate the week mean).
 
   // Histories (30-night spread per TM) for all TMs that appear in the current week plan.
-  // Loaded separately so we can compute accurate daily health % for *every* day in the week,
-  // not just the currently selected one. This is what makes the per-day tracker accurate
-  // and "matching the day".
+  // Incremental cache (memory + sessionStorage) — adding a TM does not invalidate prior entries.
   const [weekHistories, setWeekHistories] = React.useState<Record<string, ZoneDetailEntry | null>>({});
-  const [weekHistoriesLoading, setWeekHistoriesLoading] = React.useState(false);
-  const lastWeekTmIdsKeyRef = React.useRef<string | null>(null);
+  /** Set when fetch for weekPlanTmIdsKey has completed (or key is empty). */
+  const [weekHistoriesReadyKey, setWeekHistoriesReadyKey] = React.useState<string>("");
+  const stableWeekDailyHealthsRef = React.useRef<Record<string, number>>({});
+
+  const weekPlanTmIds = React.useMemo(
+    () => (weekPlanTmIdsKey ? weekPlanTmIdsKey.split(",").filter(Boolean) : []),
+    [weekPlanTmIdsKey],
+  );
+
+  const weekHistoriesReady = React.useMemo(() => {
+    if (!weekPlanTmIdsKey) return true;
+    if (weekHistoriesReadyKey === weekPlanTmIdsKey) return true;
+    return allWeekPlacementHistoriesCached(weekPlanTmIds);
+  }, [weekPlanTmIdsKey, weekHistoriesReadyKey, weekPlanTmIds]);
+
+  const weekHistoriesFetching =
+    !!weekPlanTmIdsKey && !weekHistoriesReady;
+
+  // Merge React state with synchronous cache hits so first paint after refresh is warm.
+  const effectiveWeekHistories = React.useMemo(() => {
+    if (!weekPlanTmIds.length) return weekHistories;
+    const cached = getCachedWeekPlacementHistories(weekPlanTmIds);
+    return { ...cached, ...weekHistories };
+  }, [weekPlanTmIds, weekHistories]);
 
   // Dismissable persistent week health tracker state.
   // Persists the user's preference across sessions via localStorage.
@@ -4027,73 +4058,42 @@ function AuthedShiftBuilder() {
     } catch {}
   }, []);
 
-  // Capture rich (accurate) daily health for the *currently selected* day when rich fit data is available.
+  // Incremental 30-night history load — only fetches TMs not yet in cache; never blanks on TM-set growth.
   React.useEffect(() => {
-    if (!deploymentRotationFitEnabled || !deploymentFitBySlot || Object.keys(deploymentFitBySlot).length === 0) return;
-    const dateKey = formatLocalDateISO(selectedDay.date);
-    const daily = computeDailyHealthPercent(
-      auxDefsForFit,
-      storeAssignmentsForFit,
-      deploymentFitBySlot,
-      isDraftMode,
-      draftAssignments,
-    );
-    if (daily != null) {
-      setRichWeekDailyHealths((prev) => {
-        if (prev[dateKey] === daily) return prev;
-        return { ...prev, [dateKey]: daily };
-      });
-    }
-  }, [
-    deploymentRotationFitEnabled,
-    deploymentFitBySlot,
-    selectedDay.date,
-    auxDefsForFit,
-    storeAssignmentsForFit,
-    isDraftMode,
-    draftAssignments,
-  ]);
-
-  // Load 30-night histories for *all* TMs that appear anywhere in the current week plan.
-  // This allows us to compute accurate per-day daily health % for every day (not just the selected one)
-  // so the tracker shows values that match what the day would have if selected.
-  React.useEffect(() => {
-    // Collect all unique tmIds from the full week data.
-    const tmIds = new Set<string>();
-    for (const [tmId] of plannedThisWeekRecentHistory.entries()) {
-      if (tmId) tmIds.add(tmId);
-    }
-    // Also from weekOverviewNights for completeness.
-    for (const night of weekOverviewNights) {
-      for (const a of Object.values(night.assignments || {})) {
-        if ((a as any)?.tmId) tmIds.add((a as any).tmId);
-      }
-    }
-
-    const tmIdsKey = [...tmIds].sort().join(",");
-    if (!tmIdsKey || lastWeekTmIdsKeyRef.current === tmIdsKey) {
+    if (!weekPlanTmIdsKey) {
+      setWeekHistories({});
+      setWeekHistoriesReadyKey("");
       return;
     }
-    lastWeekTmIdsKeyRef.current = tmIdsKey;
 
-    setWeekHistoriesLoading(true);
+    const cached = getCachedWeekPlacementHistories(weekPlanTmIds);
+    if (Object.keys(cached).length > 0) {
+      setWeekHistories((prev) => ({ ...prev, ...cached }));
+    }
+    if (allWeekPlacementHistoriesCached(weekPlanTmIds)) {
+      setWeekHistoriesReadyKey(weekPlanTmIdsKey);
+      return;
+    }
 
+    let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/shiftbuilder/placement-histories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tmIds: [...tmIds], days: 30 }),
-        });
-        const data = await res.json();
-        setWeekHistories((data.histories as Record<string, ZoneDetailEntry | null>) ?? {});
+        const histories = await ensureWeekPlacementHistories(weekPlanTmIds);
+        if (cancelled) return;
+        setWeekHistories((prev) => ({ ...prev, ...histories }));
+        setWeekHistoriesReadyKey(weekPlanTmIdsKey);
       } catch {
-        setWeekHistories({});
-      } finally {
-        setWeekHistoriesLoading(false);
+        if (!cancelled && allWeekPlacementHistoriesCached(weekPlanTmIds)) {
+          setWeekHistories(getCachedWeekPlacementHistories(weekPlanTmIds));
+          setWeekHistoriesReadyKey(weekPlanTmIdsKey);
+        }
       }
     })();
-  }, [plannedThisWeekRecentHistory, weekOverviewNights]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [weekPlanTmIdsKey, weekPlanTmIds]);
 
   // The complete, consistent weekDailyHealths map passed to health computes.
   // This is what powers both the stable week *average* (mean of these) and the visible per-day tracker.
@@ -4110,23 +4110,32 @@ function AuthedShiftBuilder() {
   // When you select a day, the value for it in the tracker will match (or very closely match) the daily
   // health % shown in the main health pill / floater / pad for that day.
   //
-  // The set of days is always the full week plan, so the average and the tracker do not shift just by
-  // changing the selected day. Rich overrides from the current selected day's main hook computation
-  // can still take precedence if they differ slightly.
-  const weekDailyHealths = React.useMemo(() => {
-    const result: Record<string, number> = {};
+  // Only compute after week histories are ready — avoids different numbers on first paint vs after refresh.
+  const graveWeekDateKeys = React.useMemo(
+    () => DAY_DEFS.map((d) => formatLocalDateISO(d.date)),
+    [DAY_DEFS],
+  );
 
+  // One scoring path for every built day: same weekHistories, same computeSlotPlacementFit loop.
+  // Selected day uses the live zustand board (+ draft when active); other days use weekOverview data.
+  const weekDailyHealthsRaw = React.useMemo(() => {
+    if (!weekPlanTmIdsKey || !weekHistoriesReady) {
+      return {};
+    }
+
+    const result: Record<string, number> = {};
     const auxDefs = auxDefsForFit;
     const members = (effectiveRealRoster || []) as any[];
 
-    // Build a broad otherTmProfiles for TMs that appear in the week (for rotationBasics when a day's
-    // own TMs need neighbors from the plan).
     const allWeekTms = new Set<string>();
     for (const [tmId] of plannedThisWeekRecentHistory.entries()) if (tmId) allWeekTms.add(tmId);
     for (const night of weekOverviewNights) {
       for (const a of Object.values(night.assignments || {})) {
         if ((a as any)?.tmId) allWeekTms.add((a as any).tmId);
       }
+    }
+    for (const a of Object.values(storeAssignmentsForFit)) {
+      if ((a as any)?.tmId) allWeekTms.add((a as any).tmId);
     }
     const broadOther: Record<string, PlacementTmProfile | null> = {};
     for (const id of allWeekTms) {
@@ -4137,9 +4146,20 @@ function AuthedShiftBuilder() {
       if (!DAY_DEFS[night.dayIndex]) continue;
       const dayDef = DAY_DEFS[night.dayIndex];
       const dateKey = formatLocalDateISO(dayDef.date);
-      const dayAssignments = night.assignments || {};
+      const isActiveDay = night.dayIndex === selectedDayIndex;
+      const boardReadyForDay = getBoardAssignmentsDayKey() === dateKey;
+      const dayAssignments =
+        isActiveDay && boardReadyForDay
+          ? (storeAssignmentsForFit as Record<string, any>)
+          : ((night.assignments || {}) as Record<string, any>);
+      const dayIsDraft = isActiveDay && isDraftMode;
+      const dayDraftAssignments = dayIsDraft ? draftAssignments : {};
 
-      // Per-day otherTmProfiles (the "board" for this day).
+      const hasAssignments = Object.values(dayAssignments).some(
+        (a: any) => !!(a?.tmId || a?.tmName),
+      );
+      if (!hasAssignments) continue;
+
       const dayTms = new Set<string>();
       for (const a of Object.values(dayAssignments)) {
         if ((a as any)?.tmId) dayTms.add((a as any).tmId);
@@ -4149,7 +4169,6 @@ function AuthedShiftBuilder() {
         dayOther[id] = memberToPlacementProfile(members, id) || broadOther[id];
       }
 
-      // Compute fitBySlot for this day's assigned relevant slots.
       const dayFitBySlot: Record<string, any> = {};
       const slotKeys = collectDeploymentSlotKeys(auxDefs);
       const dayIso = formatLocalDateISO(dayDef.date);
@@ -4157,7 +4176,12 @@ function AuthedShiftBuilder() {
       for (const slotKey of slotKeys) {
         if (!shouldShowPlacementFitChip(slotKey)) continue;
 
-        const row = resolveSlotAssignmentRow(slotKey, dayAssignments as any, false, {});
+        const row = resolveSlotAssignmentRow(
+          slotKey,
+          dayAssignments as any,
+          dayIsDraft,
+          dayDraftAssignments,
+        );
         const assigned = !!(row?.tmName || row?.tmId);
         if (!assigned) continue;
 
@@ -4165,30 +4189,34 @@ function AuthedShiftBuilder() {
           dayFitBySlot[slotKey] = computeSlotPlacementFit({
             slotKey,
             assignments: dayAssignments as any,
-            isDraftMode: false,
-            draftAssignments: {},
+            isDraftMode: dayIsDraft,
+            draftAssignments: dayDraftAssignments,
             members,
             auxDefs,
             currentIso: dayIso,
-            histories: weekHistories,
-            historiesLoading: weekHistoriesLoading,
+            histories: effectiveWeekHistories,
+            historiesLoading: false,
             otherTmProfiles: dayOther,
             weeklyRecentHistory: plannedThisWeekRecentHistory,
           });
-        } catch (e) {
-          // Fallback for this slot if scoring can't run (e.g. missing history for a TM on this day).
-          dayFitBySlot[slotKey] = { fitVerdict: "acceptable" as const, fitSummary: "", fitFactLine: "" };
+        } catch {
+          dayFitBySlot[slotKey] = {
+            fitVerdict: "acceptable" as const,
+            fitSummary: "",
+            fitFactLine: "",
+          };
         }
       }
 
-      const daily = computeDailyHealthPercent(auxDefs, dayAssignments as any, dayFitBySlot as any, false, {});
-      result[dateKey] = daily ?? 92;
-    }
-
-    // Rich captured from the main hook (for the currently selected day) can override.
-    for (const [dateKey, rich] of Object.entries(richWeekDailyHealths)) {
-      if (typeof rich === "number") {
-        result[dateKey] = rich;
+      const daily = computeDailyHealthPercent(
+        auxDefs,
+        dayAssignments as any,
+        dayFitBySlot as any,
+        dayIsDraft,
+        dayDraftAssignments,
+      );
+      if (daily != null) {
+        result[dateKey] = daily;
       }
     }
 
@@ -4196,13 +4224,33 @@ function AuthedShiftBuilder() {
   }, [
     weekOverviewNights,
     plannedThisWeekRecentHistory,
-    richWeekDailyHealths,
+    weekHistoriesReady,
+    weekPlanTmIdsKey,
     DAY_DEFS,
-    weekHistories,
-    weekHistoriesLoading,
+    effectiveWeekHistories,
     auxDefsForFit,
     effectiveRealRoster,
+    selectedDayIndex,
+    storeAssignmentsForFit,
+    isDraftMode,
+    draftAssignments,
   ]);
+
+  // Keep last good per-day % visible while incremental history fetches run (TM set grew, refresh, etc.).
+  const weekDailyHealths = React.useMemo(() => {
+    if (Object.keys(weekDailyHealthsRaw).length > 0) {
+      stableWeekDailyHealthsRef.current = weekDailyHealthsRaw;
+      return weekDailyHealthsRaw;
+    }
+    if (weekHistoriesFetching) {
+      return stableWeekDailyHealthsRef.current;
+    }
+    return weekDailyHealthsRaw;
+  }, [weekDailyHealthsRaw, weekHistoriesFetching]);
+
+  // Blank UI only when histories are still loading *and* we have nothing stable to show.
+  const weekHealthLoading =
+    weekHistoriesFetching && Object.keys(weekDailyHealths).length === 0;
 
   const runCoverageEngine = React.useCallback(
     async (options?: CoverageEngineRunOptions) => {
@@ -6533,6 +6581,13 @@ function AuthedShiftBuilder() {
                 - the unscaled artboard overlay layer (absolutely centered, for Command Palette etc. at 1:1)
           */}
           <div
+            className="relative flex-shrink-0 flex flex-col items-center"
+            style={{
+              width: NATURAL_WIDTH * scale,
+              gap: 10,
+            }}
+          >
+          <div
             className="relative flex-shrink-0"
             style={{
               width: NATURAL_WIDTH * scale,
@@ -6608,6 +6663,27 @@ function AuthedShiftBuilder() {
                       title="Weekly Balance (wk): rotation fairness / repeat reduction score for the full grave week (higher = better, used for AI suggestions)"
                       style={{ background: 'rgba(16,185,129,0.15)', color: '#15803d', padding: '0 4px', borderRadius: 999, fontWeight: 700, fontSize: 8, lineHeight: '14px', height: 14, display: 'flex', alignItems: 'center' }}
                     >wk</div>
+                    {/* Per-day rotation health % — same data as the deploy-view tracker bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        paddingRight: 3,
+                        marginRight: 2,
+                        borderRight: '1px solid #E5E5EA',
+                      }}
+                      title="Per-day rotation health % (built days only). Click a day to select it."
+                    >
+                      <WeekHealthTracker
+                        visible
+                        variant="compact"
+                        healthLoading={weekHealthLoading}
+                        weekDailyHealths={weekDailyHealths}
+                        dayDefs={DAY_DEFS}
+                        selectedDayIndex={selectedDayIndex}
+                        onSelectDay={(idx) => setSelectedDayIndex(idx)}
+                      />
+                    </div>
                     {/* Mini sparkline from actual week headcounts - tightly packed */}
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 11, marginRight: 2, paddingRight: 3, borderRight: '1px solid #E5E5EA' }}>
                       {(weekOverviewNights || []).slice(0,7).map((n: any, i: number) => {
@@ -7063,7 +7139,26 @@ function AuthedShiftBuilder() {
             {/* Builder/Preview toggle moved to FloatingNav — avoids covering top-right zone cards. */}
           </div>
 
-        </div> {/* /relative visual frame (the thing flex actually centers) */}
+          </div> {/* /scaled artboard frame */}
+
+          {viewMode === "canvas" &&
+            currentView === "deployment" &&
+            deploymentRotationFitEnabled &&
+            !isWeekHealthTrackerDismissed && (
+              <WeekHealthTracker
+                visible
+                variant="bar"
+                placement="below-artboard"
+                healthLoading={weekHealthLoading}
+                weekDailyHealths={weekDailyHealths}
+                dayDefs={DAY_DEFS}
+                selectedDayIndex={selectedDayIndex}
+                onSelectDay={(idx) => setSelectedDayIndex(idx)}
+                onDismiss={dismissWeekHealthTracker}
+              />
+            )}
+
+        </div> {/* /stage column: artboard + week health below */}
       </div> {/* /stageHostRef content area */}
     </div> {/* /main flex row (roster chrome wrapper + stageHost) */}
 
@@ -7426,19 +7521,6 @@ function AuthedShiftBuilder() {
           Updates live as assignments, drafts, or fit data change.
           Click a day to switch to it. X to dismiss (preference persisted in localStorage).
           Re-open via the small button in the health cluster when dismissed. */}
-      {viewMode === 'canvas' && deploymentRotationFitEnabled && !isWeekHealthTrackerDismissed && (
-        <div className="flex justify-center mb-2">
-          <WeekHealthTracker
-            visible
-            weekDailyHealths={weekDailyHealths}
-            dayDefs={DAY_DEFS}
-            selectedDayIndex={selectedDayIndex}
-            onSelectDay={(idx) => setSelectedDayIndex(idx)}
-            onDismiss={dismissWeekHealthTracker}
-          />
-        </div>
-      )}
-
       {viewMode === 'canvas' && deploymentRotationFitEnabled && (
         <CanvasEngineCluster
           visible={!(isTabletTouchDevice() && selectedSlotKey)}
@@ -7458,6 +7540,9 @@ function AuthedShiftBuilder() {
           draftGrokExplanation={draftGrokExplanation}
           weeklyRecentHistory={plannedThisWeekRecentHistory}
           weekDailyHealths={weekDailyHealths}
+          selectedDayDateKey={selectedDayDateKey}
+          graveWeekDateKeys={graveWeekDateKeys}
+          weekHealthLoading={weekHealthLoading}
           onRequestRotationAdvisor={() => void handleRequestRotationAdvisor({ focusWeek: true })}
           // Pass re-show handler so user can bring back the tracker from the health UI
           onShowWeekHealthTracker={isWeekHealthTrackerDismissed ? showWeekHealthTracker : undefined}

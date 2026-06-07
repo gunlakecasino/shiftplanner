@@ -17,6 +17,28 @@ import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 /** Operator target for a healthy grave board before break. */
 export const ROTATION_HEALTH_TARGET = 85;
 
+/** Grave schedule week label (Fri → Thu). */
+export const GRAVE_WEEK_LABEL = "Fri–Thu";
+
+/**
+ * Pure arithmetic mean of per-day health % for built days in the grave week.
+ * This is the small "wk avg" number in the rotation health cluster (not repeat-penalty adjusted).
+ */
+export function computeWeekAverageHealth(
+  weekDailyHealths?: Record<string, number>,
+  /** Grave week day ISO keys in order (Fri→Thu). Averages only built days present in the map. */
+  orderedDateKeys?: string[],
+): number | null {
+  if (!weekDailyHealths) return null;
+  const vals = orderedDateKeys
+    ? orderedDateKeys
+        .map((k) => weekDailyHealths[k])
+        .filter((v): v is number => typeof v === "number")
+    : Object.values(weekDailyHealths).filter((v): v is number => typeof v === "number");
+  if (vals.length === 0) return null;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
 const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
   strong_fit: 100,
   acceptable: 85,
@@ -27,7 +49,9 @@ const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
 };
 
 export type ShiftRotationHealth = {
-  /** Rounded 0–100; null when no assigned swap-eligible slots to score. This is the "tonight" fit-quality component (average of per-slot verdicts). */
+  /** Raw daily health for the selected/viewed day (avg of per-slot verdicts). Matches tracker pills. */
+  dailyPercent: number | null;
+  /** Headline display: 0.7 × dailyPercent + 0.3 × weeklyBalance when week data exists; else dailyPercent. */
   percent: number | null;
   meetsTarget: boolean;
   scoredCount: number;
@@ -266,6 +290,7 @@ export function computeShiftRotationHealth(
 
   if (scores.length === 0) {
     return {
+      dailyPercent: null,
       percent: null,
       meetsTarget: false,
       scoredCount: 0,
@@ -291,6 +316,7 @@ export function computeShiftRotationHealth(
   }
 
   return {
+    dailyPercent: percent,
     percent: effectivePercentForDisplay,
     meetsTarget: effectivePercentForDisplay >= ROTATION_HEALTH_TARGET,
     scoredCount: scores.length,

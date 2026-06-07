@@ -73,6 +73,130 @@ This addresses the "card falls off the page" directly while keeping the design i
 
 ---
 
+## 2026-06-07 — Grok — Fix week overview corrupting when switching days
+
+**Task**: User screenshot + "whole week messes up when going through days" after persistence improvements.
+
+**Root cause**: Blind `mirrorMainAssignmentsToLiveStore(selectedDay.date)` effects ran on every day change *before* hydration finished — wrote the **previous day's** zustand board into the **new day's** `assignmentsByNight` key. `weekOverviewNights` preferred that corrupted live store over query cache; selected-day overlay also applied stale board during fetch gap.
+
+**Fix**:
+- `boardAssignmentsDayKey` guard in `liveCache.ts` — mirror only when store is hydrated for that exact ISO night.
+- Removed duplicate blind mirror effects (`useShiftData` + `ShiftBuilderClient`).
+- Hydration sets `boardAssignmentsDayKey` after `setAssignments`; prev-day mirror uses `parseLocalDateISO` (not UTC `new Date(iso)`).
+- `weekOverviewNights` + `plannedThisWeekRecentHistory`: query cache authoritative for non-selected days; zustand overlay only when `getBoardAssignmentsDayKey()` matches.
+- `weekDailyHealths` active day uses store only when board is ready for that date.
+- Synced to `oms_root`. tsc clean.
+
+**Files**: `liveCache.ts`, `useShiftData.ts`, `ShiftBuilderClient.tsx`.
+
+---
+
+## 2026-06-07 — Grok — Week health persistence (incremental history cache + stable display)
+
+**Task**: User: "much better, but struggling with persistence" — tracker/cluster blanking on refresh, day switch, or when TM set grows.
+
+**Root cause**: `weekPlanTmIdsKey` change reset `weekHistoriesReadyKey` to `""` → `weekDailyHealths` returned `{}` → all pills "—". Full refetch on every TM-set change; no sessionStorage cache wired despite `weekPlacementHistoriesCache.ts` existing.
+
+**Fix**:
+- Wired `ensureWeekPlacementHistories` / `getCachedWeekPlacementHistories` / `allWeekPlacementHistoriesCached` into `ShiftBuilderClient`.
+- Incremental fetch: only missing TMs hit API; prior entries kept in memory + `sessionStorage` (`oms_week_placement_histories_v1`).
+- `weekHistoriesReady` true immediately when cache covers current TM set (warm first paint after refresh).
+- `effectiveWeekHistories` merges sync cache + React state for scoring.
+- `stableWeekDailyHealthsRef` holds last good per-day % during delta fetches; `weekHealthLoading` only blanks UI when no stable values exist.
+- Synced `weekPlacementHistoriesCache.ts` + `ShiftBuilderClient.tsx` to `/Users/briankillian/oms_root`. tsc clean.
+
+**Files**: `ShiftBuilderClient.tsx`, `lib/weekPlacementHistoriesCache.ts` (+ synced to oms_root).
+
+---
+
+## 2026-06-07 — Grok — Unified single scoring path for all week health (follow-up)
+
+**Task**: User: "something is not right with it still" after prior alignment fixes.
+
+**Root cause (deeper)**: Selected day still used a separate `deploymentFitBySlot` fast-path while other days used the week `computeSlotPlacementFit` loop — two algorithms, two history sources, draft handling differed. Partial early publish while histories loaded made tracker/cluster diverge further. Worktree fixes were not in `oms_root` where `localhost:3000` runs.
+
+**Fix**:
+- Removed live `deploymentFitBySlot` shortcut entirely.
+- Every built day (including selected) uses one loop: `weekHistories` + per-day ISO + `storeAssignmentsForFit` on active day (+ draft when active).
+- All pills gated on `weekHistoriesReady` (show "—" until ready — no flicker).
+- `computeWeekAverageHealth` takes ordered Fri→Thu date keys.
+- `usePlacementFitMap` `currentIso` aligned to `selectedDayIndex`.
+- Synced health files to `/Users/briankillian/oms_root`. tsc clean.
+
+**Files**: `ShiftBuilderClient.tsx`, `shiftRotationHealth.ts`, `CanvasEngineCluster.tsx`, `WeekHealthTracker.tsx`, (+ synced to oms_root).
+
+---
+
+## 2026-06-07 — Grok — Fix tracker vs cluster mismatch (52% vs 55% screenshot)
+
+**Task**: User screenshot: Saturday pill 55%, rotation health big 52%, wk 46% — still doesn't match.
+
+**Root causes**:
+1. Cluster fell back to `health.dailyPercent` from `deploymentFitBySlot` when `weekDailyHealths` key differed or value differed.
+2. `weekOverviewNights` merged stale React `assignments` state, not zustand board (fit chip source).
+3. `selectedDayDateKey` used `deferredDayIndex` while tracker pills use `selectedDayIndex`.
+
+**Fixes**:
+- `weekDailyHealths`: selected day always from live `deploymentFitBySlot` + `storeAssignmentsForFit` (same as cards); other days from week history path after `weekHistoriesReady`.
+- `weekOverviewNights`: overlay `useShiftBuilderStore.getState().assignments` for selected day.
+- `selectedDayDateKey` from `DAY_DEFS[selectedDayIndex]`.
+- Cluster + tracker read only `weekDailyHealths` — no fallback path.
+- Tracker shows selected-day value even while week histories load; other pills wait.
+
+**Files**: `ShiftBuilderClient.tsx`, `CanvasEngineCluster.tsx`, `WeekHealthTracker.tsx`, `RotationHealthFloater.tsx`.
+
+---
+
+## 2026-06-07 — Grok — Rotation health display: big = this day, small = Fri–Thu week avg
+
+**Task**: User: big number should be that day's health; little number is the Friday–Thursday schedule week average.
+
+**Change**:
+- Added `computeWeekAverageHealth()` — pure mean of `weekDailyHealths` (built grave week days).
+- `CanvasEngineCluster`: big = selected day from `weekDailyHealths`; small = `wk avg` (Fri–Thu mean, not repeat-penalty `weeklyBalance`).
+- Labels/tooltips: "this day · Fri–Thu avg"; policy-adjusted score kept in tooltip only (advisor/engine).
+- `RotationHealthFloater` aligned to same contract.
+
+**Files**: `shiftRotationHealth.ts`, `CanvasEngineCluster.tsx`, `RotationHealthFloater.tsx`.
+
+---
+
+## 2026-06-07 — Grok — Tracker/cluster alignment + refresh stability (user screenshot follow-up)
+
+**Task**: User: week health pills "do not match up with the days" and rotation health % "changes just by refreshing".
+
+**Root causes**:
+1. Pills labeled with single weekday letter (`S` for both Sat and Sun) — ambiguous day mapping.
+2. Rotation health headline showed 70/30 blend (e.g. 71%) while tracker pill showed raw daily (e.g. 82% for Monday).
+3. `weekDailyHealths` computed before week histories finished loading → different scores on first paint vs after fetch; separate `richWeekDailyHealths` override from `deploymentFitBySlot` added a second conflicting path.
+
+**Fixes**:
+- Pill labels now `F5`, `S6`, `S7`, `M8` (letter + calendar date) with full day name in tooltip.
+- Removed `richWeekDailyHealths` dual path; single `weekPlanTmIdsKey` history fetch with `weekHistoriesReady` gate — no numbers until histories load (shows "—").
+- `computeShiftRotationHealth` exposes `dailyPercent`; cluster headline uses `weekDailyHealths[selectedDay]` (same as tracker pill), week % unchanged.
+- `WeekHealthTracker` + `CanvasEngineCluster` accept `healthLoading` / `weekHealthLoading`.
+
+**Files**: `WeekHealthTracker.tsx`, `CanvasEngineCluster.tsx`, `shiftRotationHealth.ts`, `ShiftBuilderClient.tsx`.
+
+---
+
+## 2026-06-07 — Grok — Week health tracker fixes: date keys, empty days, placement, WeekLens strip
+
+**Task**: User approved fixes after investigation of daily rotation health tracker + weekly day overview tracker bar.
+
+**Delivered**:
+1. **WeekHealthTracker date keys**: Replaced `toISOString().slice(0,10)` with `formatLocalDateISO` so pill lookups match `weekDailyHealths` keys (no timezone drift).
+2. **Empty days excluded**: `weekDailyHealths` memo now skips days with no assignments; no more default 92% inflating week mean or showing green on unbuilt days. Tracker shows "—" for those pills. Rich override only applies when the day already has a computed entry.
+3. **Fixed placement**: Deploy-view tracker bar is now `position: fixed` centered above `CanvasEngineCluster` (`WEEK_HEALTH_TRACKER_BOTTOM_PX` in canvasPillGlass.ts) instead of buried at page bottom in document flow.
+4. **Nested button fix**: "tracker" re-show control in CanvasEngineCluster changed from `<button>` inside health toggle to `<span role="button">` with stopPropagation.
+5. **WeekLens compact strip**: Weekly Overview builder top bar now embeds `WeekHealthTracker variant="compact"` (same `weekDailyHealths` data, click to select day).
+
+**Files**: `WeekHealthTracker.tsx`, `canvasPillGlass.ts`, `CanvasEngineCluster.tsx`, `ShiftBuilderClient.tsx`.
+
+Logged per contract.
+
+---
+
 ## 2026-06-10 — Grok 4.3 — Accuracy overhaul for per-day tracker: now uses the real scoring for every day
 
 **Task**: User (with screenshot): "it is just inaccurate" and "okay except it is not acurate and matching the day".

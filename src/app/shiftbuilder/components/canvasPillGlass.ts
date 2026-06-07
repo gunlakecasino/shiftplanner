@@ -20,3 +20,6 @@ export const CANVAS_PILL_MONO =
 
 /** Fixed stack anchor — sits above ops status pill (bottom 10px). */
 export const ROTATION_HEALTH_BOTTOM_PX = 44;
+
+/** Per-day week health tracker — stacked above the rotation health cluster. */
+export const WEEK_HEALTH_TRACKER_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX + 92;

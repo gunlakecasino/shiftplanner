@@ -4,6 +4,8 @@ import React from "react";
 import { ChevronLeft, ChevronRight, Eraser, Check, X } from "lucide-react";
 import {
   computeShiftRotationHealth,
+  computeWeekAverageHealth,
+  GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   rotationHealthFloaterColors,
   type WeekRepeatViolation,
@@ -40,8 +42,14 @@ export type CanvasEngineClusterProps = {
   engineRunPhase: EngineRunPhase;
   /** Optional recent 7-night history (from currentNight / effectiveRecentZoneHistory) to power real weekly balance in health %. */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
-  /** Accumulating per-day daily health % for true arithmetic week average (mean of dailies + dist. penalty). */
+  /** Per-day daily health % (built days only) — tracker + cluster read the same map. */
   weekDailyHealths?: Record<string, number>;
+  /** ISO date (YYYY-MM-DD) for the selected grave night — aligns cluster daily with tracker pill. */
+  selectedDayDateKey?: string;
+  /** Fri→Thu ISO keys in order — week average uses only built days in this window. */
+  graveWeekDateKeys?: string[];
+  /** When true, daily/week numbers show "—" until week histories finish loading. */
+  weekHealthLoading?: boolean;
   /** If provided (and tracker was dismissed), shows a small "Show week tracker" affordance. */
   onShowWeekHealthTracker?: () => void;
   onRunXaiEngine: () => void;
@@ -71,6 +79,9 @@ export function CanvasEngineCluster({
   engineRunPhase,
   weeklyRecentHistory,
   weekDailyHealths,
+  selectedDayDateKey,
+  graveWeekDateKeys,
+  weekHealthLoading,
   onShowWeekHealthTracker,
   onRunXaiEngine,
   onClearBoard,
@@ -100,15 +111,20 @@ export function CanvasEngineCluster({
     [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weeklyRecentHistory, weekDailyHealths],
   );
 
-  // Weekly % now uses real balance from weeklyRecentHistory (or weeklyHistories) when available
-  // in the health compute (TM×area repeats this week, max=1 ideal, penalty at 2, real bad at 3+).
-  // The returned health.percent is a 0.7 tonight + 0.3 weekly blend so repeats visibly affect the main number.
-  // weeklyDisplay / breakdown show the raw weekly component + the max repeat stats.
-  const realWeekly = (health as any).weeklyBalance;
-  const weeklyPercent = realWeekly !== undefined
-    ? Math.round(realWeekly)
-    : (health.percent !== null ? Math.max(health.percent - (health.openGaps > 4 ? 5 : 2), 70) : null);
-  const weeklyDisplay = weeklyPercent !== null ? `${weeklyPercent}%` : "—%";
+  // Big number = this selected day's health (matches the tracker's pill for that day).
+  const trackerDaily =
+    selectedDayDateKey && weekDailyHealths
+      ? weekDailyHealths[selectedDayDateKey]
+      : undefined;
+  // Single source: weekDailyHealths (selected day = live fit; other days = week histories path).
+  const dailyPercent = trackerDaily ?? null;
+
+  // Small number = Fri–Thu grave week average (mean of built days' daily health %).
+  const weekAveragePercent = weekHealthLoading
+    ? null
+    : computeWeekAverageHealth(weekDailyHealths, graveWeekDateKeys);
+  const weekAverageDisplay =
+    weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
 
   const running = engineRunPhase !== "idle";
   const engineDisabled = !canRunEngine || isCurrentNightLocked || running;
@@ -139,14 +155,19 @@ export function CanvasEngineCluster({
 
   if (!visible) return null;
 
-  const colors = rotationHealthFloaterColors(health.percent);
-  const display = health.percent !== null ? `${health.percent}%` : "—%";
+  const colors = rotationHealthFloaterColors(dailyPercent);
+  const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
   const breakdownTitle = [
-    "Rotation health: daily = avg of per-slot fit verdicts for the selected day (strong=100, acceptable=85…). The Week number is now the stable average health % for the whole week (true mean of captured daily healths when available + distribution penalty from repeats). Does not flip with selected day.",
+    `Rotation health: big = this day's avg fit health. Small = ${GRAVE_WEEK_LABEL} grave week average (mean of built days, same as Week Health tracker).`,
     `Target: ${ROTATION_HEALTH_TARGET}%`,
-    health.percent !== null ? `Health (daily + week blend): ${health.percent}%` : "Health: —",
-    weeklyPercent !== null ? `Week (stable avg of dailies + dist.): ${weeklyPercent}%` : "Week: —",
+    dailyPercent !== null ? `This day: ${dailyPercent}%` : "This day: —",
+    weekAveragePercent !== null
+      ? `Week avg (${GRAVE_WEEK_LABEL} built days): ${weekAveragePercent}%`
+      : `Week avg (${GRAVE_WEEK_LABEL}): —`,
+    health.weeklyBalance !== undefined
+      ? `Policy-adjusted week score (repeats penalty): ${health.weeklyBalance}%`
+      : "",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,
@@ -443,14 +464,25 @@ export function CanvasEngineCluster({
               Rotation health
             </span>
             {onShowWeekHealthTracker && (
-              <button
-                type="button"
-                onClick={onShowWeekHealthTracker}
-                className="ml-2 text-[8px] uppercase tracking-[0.5px] opacity-70 hover:opacity-100 active:opacity-90 underline"
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowWeekHealthTracker();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onShowWeekHealthTracker();
+                  }
+                }}
+                className="ml-2 text-[8px] uppercase tracking-[0.5px] opacity-70 hover:opacity-100 active:opacity-90 underline cursor-pointer"
                 title="Show the live per-day week health tracker"
               >
                 tracker
-              </button>
+              </span>
             )}
             <span className="flex items-baseline gap-1.5">
               <span
@@ -462,15 +494,16 @@ export function CanvasEngineCluster({
               <span
                 className="text-[11px] font-semibold tabular-nums opacity-85"
                 style={{ fontFamily: CANVAS_PILL_MONO, lineHeight: 1 }}
+                title={`${GRAVE_WEEK_LABEL} grave week average health (mean of built days)`}
               >
-                {weeklyDisplay} wk
+                {weekAverageDisplay} wk avg
               </span>
             </span>
             <span
               className="text-[7.5px] opacity-80 tabular-nums"
               style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
-              target {ROTATION_HEALTH_TARGET}%
+              this day · {GRAVE_WEEK_LABEL} avg · target {ROTATION_HEALTH_TARGET}%
               {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps === 1 ? "" : "s"}` : ""}
             </span>
           </span>

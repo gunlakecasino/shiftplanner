@@ -59,11 +59,28 @@ export function nightDateKey(date: Date): string {
 }
 
 /**
+ * Which grave night's assignments currently live in the main board store.
+ * Prevents day-switch races from writing the previous day's board into the wrong dateKey.
+ */
+let boardAssignmentsDayKey: string | null = null;
+
+export function getBoardAssignmentsDayKey(): string | null {
+  return boardAssignmentsDayKey;
+}
+
+export function setBoardAssignmentsDayKey(dayKey: string | null): void {
+  boardAssignmentsDayKey = dayKey;
+}
+
+/**
  * After drag/swap paths that only patch the main board store, mirror into
  * liveAssignmentsStore so MarkerPad / picker / padAssignments stay in sync.
  */
 export function mirrorMainAssignmentsToLiveStore(date: Date): void {
   const dateKey = nightDateKey(date);
+  if (boardAssignmentsDayKey !== dateKey) {
+    return;
+  }
   const main = useShiftBuilderStore.getState().assignments ?? {};
   const liveForNight: Record<string, LiveAssignment> = {};
   for (const [uiKey, row] of Object.entries(main)) {

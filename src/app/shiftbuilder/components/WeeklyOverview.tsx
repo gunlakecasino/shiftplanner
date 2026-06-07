@@ -146,7 +146,10 @@ export interface LiveWeeklyOverviewArtboardProps {
   /**
    * 'preview': clean, print-faithful view with diagnostic assists (current default for the print-preview sheet).
    * 'builder': richer, more interactive version tuned for actively constructing/editing the week as a whole.
-   * Screen-only differences; core geometry and print output are identical.
+   *   - More direct edit affordances (cells open pad/context for that placement).
+   *   - Stronger week-building signals (xAI cues, health, load, repeats with action hints).
+   *   - Additional tools/chrome for week-level decisions and edits (screen-only).
+   *   - Still respects the core data geometry for consistency.
    */
   mode?: 'preview' | 'builder';
 
