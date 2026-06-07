@@ -4341,6 +4341,7 @@ function AuthedShiftBuilder() {
         if (isGrokHybrid) {
           setEngineRunPhase("xai");
           const operatorNotes = notesRef.current?.innerText || "";
+          const tonightIso = formatLocalDateISO(selectedDay.date);
           const rotationHealth = computeShiftRotationHealth(
             auxDefsForFit,
             storeAssignmentsForFit,
@@ -4349,7 +4350,7 @@ function AuthedShiftBuilder() {
               isDraftMode,
               draftAssignments,
               weeklyRecentHistory: plannedThisWeekRecentHistory,
-              weekDailyHealths, // complete per-day healths (proxies + rich) for true stable week mean
+              weekDailyHealths,
             },
           );
           const fitVerdictBySlot = Object.fromEntries(
@@ -4357,6 +4358,45 @@ function AuthedShiftBuilder() {
               k,
               { verdict: v.fitVerdict, summary: v.fitSummary },
             ]),
+          );
+
+          const {
+            buildEngineRotationPack,
+            formatRotationPackForPrompt,
+          } = await import("@/lib/shiftbuilder/rotationHealthEngineContext");
+          const rosterLookup = buildTmLookupIndex(planningRoster);
+          const slotCandidates = orderedSlots
+            .map((slotKey) => {
+              const ranking = plannerResult.breakdown[slotKey];
+              if (!ranking || ranking.preserved) return null;
+              const candidates = ranking.topCandidates.slice(0, 5).map((c) => ({
+                tmId: c.tmId,
+                tmName: c.tmName,
+              }));
+              return candidates.length > 0 ? { slotKey, candidates } : null;
+            })
+            .filter(Boolean) as Array<{
+            slotKey: string;
+            candidates: Array<{ tmId: string; tmName: string }>;
+          }>;
+
+          const rotationPack = buildEngineRotationPack({
+            tonightIso,
+            assignments: storeAssignmentsForFit as Record<string, any>,
+            auxDefs: auxDefsForFit,
+            histories: effectiveWeekHistories,
+            weeklyRecentHistory: plannedThisWeekRecentHistory,
+            weekDailyHealths,
+            graveWeekDateKeys,
+            rosterById: rosterLookup,
+            plannerDraft,
+            members: effectiveRealRoster as Array<Record<string, unknown>>,
+            slotCandidates,
+            maxCandidatesPerSlot: 4,
+          });
+          const rotationHealthPromptBlock = formatRotationPackForPrompt(
+            rotationPack.brief,
+            rotationPack.candidatePreviewsBySlot,
           );
 
           const rulesContext = {
@@ -4389,8 +4429,12 @@ function AuthedShiftBuilder() {
               config: engineConfig,
               placementOrder: orderedSlots,
               rulesContext,
-              rotationHealthPercent: rotationHealth.percent,
+              rotationHealthPercent:
+                rotationHealth.dailyPercent ?? rotationHealth.percent,
               fitVerdictBySlot,
+              rotationHealthBrief: rotationPack.brief,
+              candidateRotationPreviews: rotationPack.candidatePreviewsBySlot,
+              rotationHealthPromptBlock,
             });
           } catch (err) {
             console.error("[engine] snapshot build failed:", err);
@@ -4417,6 +4461,14 @@ function AuthedShiftBuilder() {
                   zoneMatrix: tmZoneMatrix,
                 },
                 scheduledTmIds: effectiveScheduledTmIdsTonight,
+                rotationEngineContext: {
+                  tonightIso,
+                  auxDefs: auxDefsForFit,
+                  histories: effectiveWeekHistories,
+                  weeklyRecentHistory: plannedThisWeekRecentHistory,
+                  members: effectiveRealRoster as Array<Record<string, unknown>>,
+                  rosterById: rosterLookup,
+                },
               },
             });
             if (grokResult?.usage) {
@@ -4561,6 +4613,11 @@ function AuthedShiftBuilder() {
       deploymentFitBySlot,
       isDraftMode,
       draftAssignments,
+      plannedThisWeekRecentHistory,
+      weekDailyHealths,
+      effectiveWeekHistories,
+      graveWeekDateKeys,
+      effectiveRealRoster,
     ],
   );
 

@@ -30,6 +30,10 @@ import {
 } from "./xaiFillOrderContract";
 import { EngineRules, createEngineRules, type EngineRulesContext } from "./engineRules";
 import { buildFewShotCorrectionsBlock } from "./ai/promptUtils"; // wire AI Lab feedback into production placements
+import type {
+  CandidateRotationPreview,
+  RotationHealthEngineBrief,
+} from "./rotationHealthEngineContext";
 
 // ---------------------------------------------------------------
 // Snapshot types
@@ -60,6 +64,12 @@ export interface GrokEngineSnapshot {
   rotationHealthPercent?: number | null;
   /** Per-slot instant fit verdicts for judgment layer context. */
   fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
+  /** Rich week + matrix briefing — primary signal on blank/partial boards. */
+  rotationHealthBrief?: RotationHealthEngineBrief;
+  /** Simulated fit per top-K candidate per slot (spread/last-30/week-repeat/gaps). */
+  candidateRotationPreviews?: Record<string, CandidateRotationPreview[]>;
+  /** Pre-rendered prompt block for rotation (brief + candidate previews). */
+  rotationHealthPromptBlock?: string;
   /** Operator's notes pad for tonight (raw text) */
   operatorNotes: string;
   /** TMs called off tonight (excluded from candidates already) */
@@ -133,6 +143,9 @@ export function buildGrokEngineSnapshot(args: {
   recentHumanFeedback?: any[];
   rotationHealthPercent?: number | null;
   fitVerdictBySlot?: Record<string, { verdict: string; summary: string }>;
+  rotationHealthBrief?: RotationHealthEngineBrief;
+  candidateRotationPreviews?: Record<string, CandidateRotationPreview[]>;
+  rotationHealthPromptBlock?: string;
 }): GrokEngineSnapshot {
   const {
     dayName,
@@ -215,6 +228,9 @@ export function buildGrokEngineSnapshot(args: {
     deterministicDraft: { ...plannerResult.proposedAssignments },
     rotationHealthPercent: args.rotationHealthPercent ?? null,
     fitVerdictBySlot: args.fitVerdictBySlot,
+    rotationHealthBrief: args.rotationHealthBrief,
+    candidateRotationPreviews: args.candidateRotationPreviews,
+    rotationHealthPromptBlock: args.rotationHealthPromptBlock,
   };
 
   // === 2026-05-30 Evolution: Inject rich rules representation ===
@@ -255,7 +271,15 @@ export function buildGrokEngineSystemPrompt(snapshot: GrokEngineSnapshot): strin
 
   const rotationBlock =
     snapshot.rotationHealthPercent != null
-      ? `\n=== ROTATION HEALTH (instant fit map) ===\nBoard average: ${snapshot.rotationHealthPercent}% (target 85%). Respect strong_fit / acceptable slots; only override when judgment clearly improves net rotation health.\n`
+      ? `\n=== ROTATION HEALTH (live board fit) ===\nTonight fit average: ${snapshot.rotationHealthPercent}% (target 85%). Respect strong_fit / acceptable slots; only override when judgment clearly improves net rotation health.\n`
+      : snapshot.rotationHealthBrief?.boardState === "blank"
+        ? `\n=== ROTATION HEALTH (BLANK BOARD) ===\nNo live assignments yet — use rotationHealthBrief + candidateRotationPreviews (not fitVerdictBySlot). Build the draft in fill order; maximize projected health and avoid new week violations.\n`
+        : "";
+
+  const rotationPackBlock = snapshot.rotationHealthPromptBlock
+    ? `\n=== ROTATION HEALTH DATA PACK ===\n${snapshot.rotationHealthPromptBlock}\n`
+    : snapshot.rotationHealthBrief?.summaryText
+      ? `\n=== ROTATION HEALTH BRIEF ===\n${snapshot.rotationHealthBrief.summaryText}\n`
       : "";
 
   const fitBlock = snapshot.fitVerdictBySlot
@@ -284,7 +308,7 @@ ${getXaiSwapHardRules()}
 === AUTHORITATIVE RULES ENGINE ===
 
 ${rulesText}
-${rotationBlock}${fitBlock}
+${rotationBlock}${rotationPackBlock}${fitBlock}
 OUTPUT CONTRACT — STRICT JSON SCHEMA (field names + casing are EXACT):
 
 1. Output exactly one fenced \`\`\`json block with this shape:
@@ -315,7 +339,7 @@ GUIDANCE:
   align with that sequence — only choose among each slot's ranked candidates; do not skip
   ahead to staff a zone while restrooms or earlier core slots are still empty.
 - **HARD CONSTRAINT**: Only pick TMs that are on the Graves Default Schedule for tonight (the sole source of truth via graves_default_schedule + night_on_call). Use the getTMScheduleStatus tool (or isOnSchedule) to confirm for candidates. Never propose a TM that getTMScheduleStatus reports as NOT on schedule for this night. If the schedule set is empty, fall back to full active roster.
-- **MAXIMIZE ROTATION HEALTH**: The snapshot includes rotationHealthPercent, gapsLine, swap opportunities, and per-slot fit verdicts. For every slot in the complete draft, choose the on-schedule candidate from the list that best improves the overall weekly rotation health, reduces gaps, and balances load (use tools to verify current scores and status). Use justified overrides to lift health where the top scorer alone would leave health low. The goal is the highest achievable health % while strictly inside fill order, candidate lists, and graves schedule.
+- **MAXIMIZE ROTATION HEALTH**: On a BLANK board, rotationHealthBrief + candidateRotationPreviews are authoritative (30-night spread, week repeats through tonight, gap slots, projected healthPoints per candidate). On a partial/full board, also use rotationHealthPercent and fitVerdictBySlot. For every slot, pick the on-schedule candidate that best improves overall weekly rotation health, closes spread gaps, and avoids new week violations (use previewRotationFit tool as the draft grows). Override the planner top when healthPoints are clearly better.
 - Override the top candidate (WHO) when higher-order context justifies it:
     - Tonight's specific conditions (notes, call-offs, weather, events, morale)
     - Rotation health and long-term fairness not fully captured in the matrix

@@ -11,7 +11,7 @@ import type {
 } from "@/lib/xai";
 
 // Vercel AI SDK (Phase 3 migration) — structured output + official xAI provider
-import { generateObject, generateText, tool } from "ai";
+import { generateObject, generateText } from "ai";
 import {
   createGrokEngineModel,
   createGrokSuggestionModel,
@@ -33,6 +33,7 @@ import {
 
 import { createEngineRulesTools, EngineRules } from "@/lib/shiftbuilder/engineRules";
 import { scoreAssignment, buildDefaultAdjacency } from "@/lib/shiftbuilder/scoring";
+import { z } from "zod";
 
 export type GrokContext = {
   type: "slot" | "person";
@@ -267,6 +268,15 @@ export interface GrokEngineToolContext {
   };
   scheduledTmIds?: Set<string>;
   engineConfig?: EngineConfig;
+  /** Live rotation-health simulation context (blank/partial boards). */
+  rotationEngineContext?: {
+    tonightIso: string;
+    auxDefs: import("@/lib/shiftbuilder/placement").AuxDef[];
+    histories: Record<string, import("@/lib/shiftbuilder/data").ZoneDetailEntry | null>;
+    weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+    members?: Array<Record<string, unknown>>;
+    rosterById?: Map<string, { name?: string; fullName?: string }>;
+  };
 }
 
 export async function askGrokEngineDraft(
@@ -288,7 +298,7 @@ Produce a COMPLETE draft for every non-preserved slot: select one from its candi
 
 HARD RULE (graves_default_schedule sole root): ONLY pick TMs where getTMScheduleStatus confirms "On Graves Default Schedule for tonight". Never pick NOT on schedule.
 
-PRIMARY GOAL: Maximize rotation health % (use snapshot's rotationHealthPercent, gaps, fit verdicts). For the complete draft, for each slot pick the on-schedule candidate that best improves overall weekly health and closes gaps (verify with tools). Override when it lifts health net; for best top, confirm with reason citing data.
+PRIMARY GOAL: Maximize rotation health. On BLANK boards use rotationHealthBrief + candidateRotationPreviews in the snapshot; call previewRotationFit as the draft grows. On partial boards also use rotationHealthPercent / fitVerdictBySlot. Pick on-schedule candidates that raise healthPoints, close spread gaps, and avoid new week violations.
 
 Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) to compare. Always include "reason". Output ONLY the final JSON block.`;
 
@@ -378,6 +388,43 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
               }
             },
           },
+          previewRotationFit: {
+            description:
+              "Simulate rotation health if a TM were placed on a slot tonight, using the current engine draft as board context. Returns healthPoints (0-100), fitVerdict, last-30 spread count, week-repeat count, and top gap slots. Essential on blank boards — use before overriding the planner top pick.",
+            parameters: z.object({
+              tmId: z.string().describe("Team member id"),
+              slotKey: z.string().describe("Deployment slot key e.g. Z3, MRR2"),
+            }),
+            execute: async ({ tmId, slotKey }: { tmId: string; slotKey: string }) => {
+              const rot = toolContext!.rotationEngineContext;
+              if (!rot) {
+                return { tmId, slotKey, error: "Rotation engine context unavailable" };
+              }
+              const {
+                previewCandidateRotationFit,
+                assignmentsFromPlannerDraft,
+              } = await import("@/lib/shiftbuilder/rotationHealthEngineContext");
+              const tm = safeRoster.find((t: any) => t.id === tmId);
+              const tmName =
+                tm?.name || tm?.fullName || rot.rosterById?.get(tmId)?.name || tmId;
+              const assignments = assignmentsFromPlannerDraft(
+                toolContext!.currentDraft ?? {},
+                rot.rosterById,
+              );
+              return previewCandidateRotationFit({
+                tmId,
+                tmName,
+                slotKey,
+                tonightIso: rot.tonightIso,
+                assignments,
+                auxDefs: rot.auxDefs,
+                histories: rot.histories,
+                weeklyRecentHistory: rot.weeklyRecentHistory,
+                members: rot.members,
+              });
+            },
+          },
+
           // New high-value tool: quick view of current board state for global reasoning
           getCurrentBoardState: {
             description: "Returns a compact summary of which TMs are currently assigned to which slots. Use this to understand the global board state before making new placement decisions.",
@@ -408,12 +455,13 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
 
 You have access to powerful live tools from the authoritative Rules Engine. USE THEM FREQUENTLY to make high-quality decisions:
 - checkEligibility(tmId, slotKey)
-- scoreCandidate(tmId, slotKey) — your most important tool for understanding trade-offs
+- scoreCandidate(tmId, slotKey) — deterministic weighted score trade-offs
+- previewRotationFit(tmId, slotKey) — rotation health simulation (healthPoints, spread, week-repeat, gaps). USE ON BLANK BOARDS.
 - getCurrentBoardState() — see who's already placed where (global view)
 - getTMScheduleStatus(tmId) — check Graves Default Schedule for tonight (HARD GATE: only on-schedule TMs per graves_default_schedule may be placed; very important)
 - getRulesSummary() — if you need to re-read the full rule system
 
-Explore with tools (score several, check schedule + board state + current health impact) before deciding. ALWAYS produce a pick for every relevant slot (complete draft). PRIMARY GOAL: choose to maximize final rotation health % and minimize gaps (use snapshot rotationHealth + gaps data). HARD RULE: never pick NOT on graves schedule. For top, still pick with health-based reason. When ready, output ONLY the final JSON block.`;
+Explore with tools (previewRotationFit + scoreCandidate, check schedule + board state) before deciding. ALWAYS produce a pick for every relevant slot (complete draft). PRIMARY GOAL: maximize rotation health (snapshot rotation pack on blank boards; live fit on partial). HARD RULE: never pick NOT on graves schedule. When ready, output ONLY the final JSON block.`;
 
       console.log(`[xai-placement-engine] grok-4.3 ${effort} (tools) for board draft picks`);
       const result = await generateText({
