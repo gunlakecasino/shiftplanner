@@ -237,10 +237,57 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
   }
 
   const basics = input.rotationBasics;
+  const times = input.timesInSpread ?? 0;
+  const inLast5 = !!input.inLast5;
+  const count8w =
+    signalNumber(input.fairnessSignals, "count_8w") ??
+    signalNumber(input.fairnessSignals, "8w");
+  const spreadFact =
+    times > 0 ? `${times}× ${slotLabel} in last 30` : `0× ${slotLabel} in last 30`;
+  const eightFact = count8w !== null ? `8w=${count8w} here` : null;
+  const gapFact =
+    gaps.length > 0 ? `gaps: ${formatGapList(gaps)}` : "no open spread gaps";
+
   const bilateral =
     basics?.crossPatterns.filter(
       (c) => c.tmMissingFromTheirSlot && c.otherMissingFromCurrentSlot,
     ) ?? [];
+
+  if (weekRepeat >= 3) {
+    return finishFit(
+      input,
+      "questionable",
+      `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
+      buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
+    );
+  }
+
+  // Strong fit: light spread (0–1× in 30) and no week repeat problem. Last-5 trail is OK.
+  // Swap lanes are optional — they must not downgrade a light-spread placement to Consider swap.
+  if (times <= 1 && weekRepeat <= 1) {
+    const engineOk = !!input.rationale;
+    const trailNote = inLast5 ? " — in last-5 trail but spread is light." : "";
+    const swapNote =
+      bilateral.length > 0
+        ? "optional bilateral swap lane"
+        : gaps.length > 0
+          ? "optional swap lane"
+          : null;
+    return finishFit(
+      input,
+      "strong_fit",
+      engineOk
+        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.${trailNote}`
+        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.${trailNote}`,
+      buildFactLine([
+        spreadFact,
+        eightFact,
+        inLast5 ? "in last-5 trail" : null,
+        engineOk ? "engine continuity" : gapFact,
+        swapNote,
+      ]),
+    );
+  }
 
   if (bilateral.length > 0) {
     const swap = bilateral[0];
@@ -253,18 +300,7 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     );
   }
 
-  const times = input.timesInSpread ?? 0;
-  const inLast5 = !!input.inLast5;
-  const count8w =
-    signalNumber(input.fairnessSignals, "count_8w") ??
-    signalNumber(input.fairnessSignals, "8w");
-
   const better = findBetterSuited(gaps, times, count8w, inLast5);
-  const spreadFact =
-    times > 0 ? `${times}× ${slotLabel} in last 30` : `0× ${slotLabel} in last 30`;
-  const eightFact = count8w !== null ? `8w=${count8w} here` : null;
-  const gapFact =
-    gaps.length > 0 ? `gaps: ${formatGapList(gaps)}` : "no open spread gaps";
 
   if (better.better) {
     const gapLabel = better.primaryGap
@@ -280,34 +316,6 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
         ? `${name} on ${slotLabel} — consider a zone↔zone swap with ${gapOccupant} (${gapLabel}).`
         : `${name} on ${slotLabel} — rotation pressure on ${gapLabel}; use bilateral swaps only (no moves into open slots).`,
       buildFactLine([spreadFact, eightFact, gapFact]),
-    );
-  }
-
-  if (weekRepeat >= 3) {
-    return finishFit(
-      input,
-      "questionable",
-      `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
-      buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
-    );
-  }
-
-  // Strong fit: light spread (0–1× in 30) and no week repeat problem. Last-5 trail is OK.
-  if (times <= 1 && weekRepeat <= 1) {
-    const engineOk = !!input.rationale;
-    const trailNote = inLast5 ? " — in last-5 trail but spread is light." : "";
-    return finishFit(
-      input,
-      "strong_fit",
-      engineOk
-        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.${trailNote}`
-        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.${trailNote}`,
-      buildFactLine([
-        spreadFact,
-        eightFact,
-        inLast5 ? "in last-5 trail" : null,
-        engineOk ? "engine continuity" : gapFact,
-      ]),
     );
   }
 
