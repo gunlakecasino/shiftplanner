@@ -6,14 +6,17 @@
 
 ---
 
-## Active Plans (as of 2026-06-09)
+## Active Plans (as of 2026-06-10)
 
-- `active/ATTACK_PLAN_2026-05-22.md` — Primary web work (Wave 2/3 polish, architecture, AI co-pilot, engine, Sudo surfaces). Status tables inside are historical snapshots (May); many items addressed incrementally. Cross-check top of `AGENT_ACTIVITY_LOG.md` + `THIS_IS_WHAT_WE_ARE_DOING.md` for current shipped reality.
-- `active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` — Incremental extraction of ShiftBuilderClient orchestrator + hygiene (components/, hooks/, lib/ constants). Client remains large (~6k LOC as of June 2026); progress via Lazy boundaries + effect-driven loading for Turbopack safety. See recent log for actual state.
-- `active/OPSAPP_NATIVE_FIRST_2026-05-25.md` — Retained in active/ for future resumption. Native (SwiftUI + PencilKit) work is **paused** per user direction (2026-06-09); WebApp is the active development surface.
+- `active/ATTACK_PLAN_2026-05-22.md` — Historical web Wave 2/3 + architecture. Many items addressed incrementally; see top of AGENT_ACTIVITY_LOG for current reality.
+- `active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` — Monolith hygiene (significant extractions done; Client at 7264 LOC). Superseded by the (now archived) 2026-06-10 stabilization plan.
+- `active/OPSAPP_NATIVE_FIRST_2026-05-25.md` — Retained in active/ for future resumption. Native (SwiftUI + PencilKit) work is **paused** per user direction; WebApp is the active development surface.
+
+**Note**: The 2026-06-10 PRODUCTION_STABILIZATION plan has been fully shipped and moved to `archive/`. See Archive section and the plan file for delivered value (server guard, data layer, audit, atomicity + visibility).
 
 ## Archive
 
+- `archive/PRODUCTION_STABILIZATION_2026-06-10.md` — Production hardening & stabilization (slices 1/3/4/5 delivered + 6 partial; server eligibility guard, data layer centralization, Graves audit, applyDraft atomicity + visibility). Executed to completion per user "continue". Core goals met; deferred items (full drag extraction) noted for future. Plan archived after full implementation and gates.
 - `archive/2026-05-22-Agentic-Command-Post-Setup.md` — AI Agentic Command Post bootstrap (complete; verified by first magic-sentence activation)
 - `archive/2026-05-22-Sudo-Tasks-Tab.md`
 - `archive/2026-05-23-Reports-Tab.md`

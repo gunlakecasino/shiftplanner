@@ -526,3 +526,149 @@ export async function getEngineInsightForPlacement(
   );
   return runEngineInsightForPlacement(ctx);
 }
+
+// ========================================================
+// SLICE 4: Server-Side Eligibility Guard (Production Stabilization)
+// ========================================================
+
+export type ProposedAssignment = {
+  slotKey: string;
+  tmId: string | null;
+};
+
+export type ValidationError = {
+  slotKey: string;
+  tmId: string | null;
+  reason: string;
+};
+
+export type ValidationResult = {
+  valid: boolean;
+  invalid: ValidationError[];
+};
+
+/**
+ * Server-side re-validation of draft proposals before commit.
+ * This is the hard guard (W3-4) so that even Grok / engine suggestions
+ * cannot bypass graves_default_schedule + isEligibleForSlot.
+ *
+ * Called from the Client before optimistic update + DB write in applyDraft.
+ */
+export async function validateProposedAssignments(
+  params: {
+    date: string; // YYYY-MM-DD
+    nightId?: string | null;
+    proposals: ProposedAssignment[];
+  }
+): Promise<ValidationResult> {
+  if (!params.proposals?.length) {
+    return { valid: true, invalid: [] };
+  }
+
+  // Dynamic imports to keep this actions module's static graph clean for Turbopack.
+  const { getScheduledIdsForNight } = await import(
+    "@/lib/shiftbuilder/gravesDefaultSchedule"
+  );
+  const { isEligibleForSlot, normalizeGender } = await import(
+    "@/lib/shiftbuilder/placement"
+  );
+  const { createAdminClientSafe } = await import(
+    "@/app/api/admin/_lib/createAdminClient"
+  );
+
+  const nightDate = new Date(params.date);
+  const scheduledIds = await getScheduledIdsForNight(nightDate, params.nightId ?? null);
+
+  // Combined "on schedule tonight" set (grave + overlaps + onCall exceptions)
+  const onScheduleTonight = new Set<string>([
+    ...scheduledIds.grave,
+    ...scheduledIds.amOverlap,
+    ...scheduledIds.pmOverlap,
+    ...scheduledIds.onCall,
+  ]);
+
+  const supabase = createAdminClientSafe();
+  const invalid: ValidationError[] = [];
+
+  // Collect unique tmIds we need profiles for
+  const neededTmIds = new Set<string>();
+  for (const p of params.proposals) {
+    if (p.tmId) neededTmIds.add(p.tmId);
+  }
+
+  // Load minimal profiles for the proposed TMs (id, tm_id, grave_pool, gender)
+  let profileByIdOrTmId = new Map<string, any>();
+  if (supabase && neededTmIds.size > 0) {
+    const { data: profiles } = await supabase
+      .from("tm_profiles")
+      .select("id, tm_id, grave_pool, gender, display_name, full_name")
+      .in("tm_id", Array.from(neededTmIds)); // tm_id is the common key from graves schedule
+
+    for (const p of profiles || []) {
+      profileByIdOrTmId.set(p.id, p);
+      if (p.tm_id) profileByIdOrTmId.set(p.tm_id, p);
+    }
+  }
+
+  for (const proposal of params.proposals) {
+    const { slotKey, tmId } = proposal;
+
+    if (!tmId) {
+      // Clearing a slot is generally allowed (subject to locks, handled client-side mostly)
+      continue;
+    }
+
+    // 1. Must be on the Graves Default Schedule (or night_on_call exception) for this night
+    if (!onScheduleTonight.has(tmId)) {
+      invalid.push({
+        slotKey,
+        tmId,
+        reason: "Not scheduled on Graves Default Schedule for tonight",
+      });
+      continue;
+    }
+
+    // 2. Run the full client eligibility rules (gender for RR, grave vs overlap, custom rules, etc.)
+    const profile = profileByIdOrTmId.get(tmId);
+    if (!profile) {
+      invalid.push({
+        slotKey,
+        tmId,
+        reason: "TM profile not found",
+      });
+      continue;
+    }
+
+    const tmForEligibility = {
+      id: profile.id,
+      tmId: profile.tm_id || tmId,
+      gravePool: profile.grave_pool,
+      gender: profile.gender,
+      // The client often enriches with isAMOverlap / isPMOverlap from roster data.
+      // For server guard we conservatively rely on gravePool + the scheduled band check above.
+      isAMOverlap: scheduledIds.amOverlap.has(tmId),
+      isPMOverlap: scheduledIds.pmOverlap.has(tmId),
+    };
+
+    try {
+      if (!isEligibleForSlot(tmForEligibility, slotKey)) {
+        invalid.push({
+          slotKey,
+          tmId,
+          reason: `Not eligible for ${slotKey} per placement rules (grave pool / gender / overlap)`,
+        });
+      }
+    } catch (e) {
+      invalid.push({
+        slotKey,
+        tmId,
+        reason: "Eligibility check failed",
+      });
+    }
+  }
+
+  return {
+    valid: invalid.length === 0,
+    invalid,
+  };
+}

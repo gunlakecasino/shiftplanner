@@ -130,7 +130,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         )}
       </div>
 
-      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5">
+      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5 min-h-0"> {/* min-h-0 allows flex child to shrink for overflow control */}
         {loading && !hasTM ? (
           <AssignmentSkeleton size="lg" />
         ) : isDraftMode && draftInfo ? (
@@ -158,7 +158,11 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               )}
               <span
                 className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-                style={{ fontSize: 20, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                style={{ 
+                  fontSize: (selectedTasks[def.key]?.length || 0) > 0 ? 16 : 20, 
+                  lineHeight: 1.02, 
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))" 
+                }}
               >
                 {a.tmName}
               </span>
@@ -173,7 +177,17 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </div>
         )}
 
-        <ZoneTaskList tasks={selectedTasks[def.key]} hasTM={hasTM} slotKey={def.key} onRemoveTask={onRemoveTask} onSetTaskColor={onSetTaskColor} onEditTask={onEditTask} />
+        <div className="mt-auto max-h-[26px] overflow-hidden flex-shrink-0"> {/* Allow ~2 compact rows (9px text, tight leading) for AUX tasks so all 2 are visible without the card falling out of the 816pt artboard or equalized AUX band. 3+ shows "+N more". */}
+          <ZoneTaskList 
+            tasks={selectedTasks[def.key]} 
+            hasTM={hasTM} 
+            slotKey={def.key} 
+            onRemoveTask={onRemoveTask} 
+            onSetTaskColor={onSetTaskColor} 
+            onEditTask={onEditTask}
+            dense 
+          />
+        </div>
       </div>
     </div>
   );

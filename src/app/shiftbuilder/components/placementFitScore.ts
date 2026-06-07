@@ -41,7 +41,7 @@ export type PlacementFitScoreInput = {
   weekRepeatThisSlot?: number;
 };
 
-function signalNumber(
+export function signalNumber(
   signals: Record<string, number | string> | undefined,
   needle: string,
 ): number | null {

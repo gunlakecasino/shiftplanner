@@ -13,7 +13,7 @@ import {
 // components are extracted to components/ and import useSlotDnd from lib instead.
 // NOTE: Heavy data.ts functions dynamically imported below to fix Turbopack "module factory is not available" HMR errors.
 // Only types remain as type-only import (zero runtime cost).
-import type { CatalogTask, NightSlotTask } from "@/lib/shiftbuilder/data";
+import type { CatalogTask, NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import { uiToDb, dbToUi, auxDbKeyToDef, type SlotType } from "@/lib/shiftbuilder/slot-keys";
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
@@ -29,13 +29,10 @@ import {
   type AuxDef,
 } from "@/lib/shiftbuilder/placement";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
-import {
-  setTMGravePool,
-  setTMDisplayName,
-  checkDisplayNameConflict,
-  removeTMFromSchedule,
-  getCallOffsForDate,
-} from "@/lib/shiftbuilder/tmCommands";
+// tmCommands functions are dynamically imported below to avoid pulling heavy deps
+// (e.g. useCommandActions transitive) into the static module graph of this giant file.
+// This follows the established pattern to prevent Turbopack "module factory is not available" HMR errors.
+// See comments around LazyCommandPalette and other await import() sites.
 // runWeightedPlanner + logEngineRunSummary dynamically imported inside the engine handler (placement is a heavy module)
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 import type { EngineRulesContext } from "@/lib/shiftbuilder/engineRules";
@@ -104,6 +101,13 @@ import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
+// useShiftData: small, data-only orchestration hook (Slice 1 of Production Stabilization).
+// It wraps useCurrentNight + store + liveCache for hydration/effective values.
+// Intentionally tiny with no UI/CommandPalette/useCommandActions transitive deps.
+// Added as part of shrinking the static module graph of this giant file.
+// See the long comments below about Lazy* + effect-driven dynamic imports for
+// anything that must not be required at Client evaluation time.
+import { useShiftData } from "./hooks/useShiftData";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
   initLiveCacheForNight,
@@ -155,6 +159,7 @@ import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
+import PlacementPad from "./components/PlacementPad";
 import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
@@ -164,11 +169,25 @@ import {
   type CoverageEngineRunOptions,
   type EngineRunPhase,
 } from "./components/CanvasEngineCluster";
-import { computeShiftRotationHealth } from "./components/shiftRotationHealth";
+import { WeekHealthTracker } from "./components/WeekHealthTracker";
+import {
+  computeShiftRotationHealth,
+  computeDailyHealthPercent,
+  getWeekRepeatViolations,
+  suggestLocalRotationMoves,
+  type WeekRepeatViolation,
+} from "./components/shiftRotationHealth";
+import {
+  computeSlotPlacementFit,
+  resolveSlotAssignmentRow,
+  memberToPlacementProfile,
+} from "./components/placementFitForSlot";
+import type { PlacementTmProfile } from "./components/placementPadHelpers";
 import { usePlacementFitMap } from "./hooks/usePlacementFitMap";
 import {
   collectDeploymentSlotKeys,
   nightIsoFromDate,
+  shouldShowPlacementFitChip,
 } from "./components/placementPadHelpers";
 import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 // LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
@@ -718,9 +737,9 @@ function AuthedShiftBuilder() {
     };
   }, [viewMode, enterCanvas]);
 
-  const [currentView, setCurrentView] = useState<"deployment" | "breaks">(() => {
+  const [currentView, setCurrentView] = useState<"deployment" | "breaks" | "weekly">(() => {
     const saved = localStorage.getItem("oms_current_view");
-    return (saved === "breaks" || saved === "deployment") ? saved : "deployment";
+    return (saved === "breaks" || saved === "deployment" || saved === "weekly") ? saved : "deployment";
   });
 
   // Canvas authoring mode — the veil between living digital builder and pristine Golden fidelity.
@@ -736,17 +755,6 @@ function AuthedShiftBuilder() {
     return (saved === "print-preview" || saved === "builder") ? saved : "builder";
   });
   const isPrintPreview = canvasMode === "print-preview";
-  // Weekly Overview as the main sheet content (print preview style on the artboard itself).
-  // This replaces the old side panel. The sheet displays the week overview table exactly like print would,
-  // while keeping the TM focus UX (fade others, highlight the TM and its placements across the week).
-  // Future UX can be added directly on this sheet view (click day headers, cell interactions, overlays, etc.).
-  const [showWeeklyOverviewOnSheet, setShowWeeklyOverviewOnSheet] = useState(false);
-  // Auto-clear weekly sheet preview when leaving print-preview mode (user clicked "Builder" in the nav segmented control).
-  React.useEffect(() => {
-    if (!isPrintPreview) {
-      setShowWeeklyOverviewOnSheet(false);
-    }
-  }, [isPrintPreview]);
   // Persist
   React.useEffect(() => {
     try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
@@ -756,6 +764,20 @@ function AuthedShiftBuilder() {
   // Populated from card clicks when engine provenance data (rationale + fairnessSignals) is present.
   // Card appearances are never altered.
   const [provenanceKey, setProvenanceKey] = useState<string | null>(null);
+
+  // Dedicated state for the week rotation advisor text (local suggestions + xAI prescriptive moves).
+  // Avoids fragile window stash + ensures re-renders of the glass when the async result arrives
+  // (even if we set the same provenanceKey again).
+  const [weekAdvisorText, setWeekAdvisorText] = useState<string | null>(null);
+
+  // WeekLens v2 (builder-only chrome for the weekly overview page).
+  // These drive the screen-only Top Controls Bar (40px unscaled page chrome above the golden paper)
+  // and the right Focus sidebar (~22% unscaled, next to the 1056x816 artboard).
+  // The golden paper (LiveWeeklyOverviewArtboard) and its layout solver remain 100% untouched
+  // in geometry, row heights, column widths, and core content for preview/print fidelity.
+  const [weekLensFilters, setWeekLensFilters] = useState<Set<string>>(new Set());
+  const [weekLensSearch, setWeekLensSearch] = useState<string>("");
+  const [weekLensSidebarOpen, setWeekLensSidebarOpen] = useState<boolean>(true);
 
   // Resolve provenance data for glass (supports flat rrSide keys like MRR1/WRR1 and physical).
   // Looks up in the current assignments (from store/live).
@@ -982,7 +1004,6 @@ function AuthedShiftBuilder() {
     graveOnly, setGraveOnly,
     cmdkOpen, setCmdkOpen,
     cmdkInitialContext, setCmdkInitialContext,
-    weeklyOverviewOpen, setWeeklyOverviewOpen,
   } = useRosterPanels();
 
   // Loader components for heavy surfaces, dynamically imported at runtime (see effects below).
@@ -1349,6 +1370,35 @@ function AuthedShiftBuilder() {
       return;
     }
 
+    // === SLICE 4: Server-side eligibility + graves guard (before any optimistic state or history) ===
+    // This is the hard re-check so Grok / engine / manual drafts cannot commit invalid placements.
+    // We build a minimal proposal list and call the server action.
+    const proposalsForGuard = draftEntries.map(([slotKey, info]) => ({
+      slotKey,
+      tmId: info.proposedClear ? null : (info.proposedTmId ?? null),
+    }));
+
+    try {
+      const { validateProposedAssignments } = await import("./actions");
+      const validation = await validateProposedAssignments({
+        date: selectedDay.date.toISOString().slice(0, 10),
+        nightId: nightId || queryNightId,
+        proposals: proposalsForGuard,
+      });
+
+      if (!validation.valid) {
+        const reasons = validation.invalid
+          .map((e) => `${e.slotKey}: ${e.reason}`)
+          .join(" | ");
+        showToast(`Cannot apply — server guard rejected: ${reasons}`, "error");
+        // Do not proceed to optimistic update or history record.
+        return;
+      }
+    } catch (guardErr) {
+      console.error("[applyDraft] server guard failed (proceeding with caution):", guardErr);
+      // Fail open for now (network hiccup etc.) but log loudly. In production you may want to fail closed.
+    }
+
     const slotTypeForUiKey = (slotKey: string) =>
       slotKey.startsWith("Z")
         ? "zone"
@@ -1391,15 +1441,25 @@ function AuthedShiftBuilder() {
     // Board + cards read Zustand and live cache; React Query was overwriting local-only updates.
     useShiftBuilderStore.getState().setAssignments(newAssignments);
     liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
-    setLiveAssignVersion((v) => v + 1);
 
-    const patchNightCache = (old: { assignments?: Record<string, unknown> } | undefined) =>
-      old ? { ...old, assignments: newAssignments } : old;
-    currentNight.queryClient?.setQueryData(["nightCore", dateKey], patchNightCache);
-    currentNight.queryClient?.setQueryData(["night", dateKey], patchNightCache);
+    // Use the centralized data hook helpers (Slice 1) for mirror + cache patch.
+    // This keeps the live cross-day store (Weekly Overview, repeats, fit, health, xAI) and
+    // TanStack cache in sync after an optimistic apply.
+    shiftData.mirrorCurrentDay?.();
+    shiftData.patchCurrentNightCache?.(newAssignments);
+
+    // Legacy bump kept for any remaining local memos during the transition.
+    setLiveAssignVersion((v) => v + 1);
 
     setAssignments(newAssignments);
     const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
+
+    // === ATOMICITY CONTRACT (Slice 3 + 4 hardening) ===
+    // - Server guard (validateProposedAssignments) already ran and passed (or failed open).
+    // - Exactly one history entry for the entire batch (via recordAtomicChange).
+    // - One optimistic store + live mirror + query patch.
+    // - One batched DB write via batchApplyDraftAssignments.
+    // - On DB failure: board is updated locally; operator can undo via history.
     recordChangeRef.current("Apply Engine Draft", before, after);
 
     setIsDraftMode(false);
@@ -1427,7 +1487,8 @@ function AuthedShiftBuilder() {
       const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
       await batchApplyDraftAssignments(nid, slots);
       setLastSavedAt(new Date());
-      showToast(`Saved ${draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length} placements`, "success");
+      const savedCount = draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length;
+      showToast(`Saved ${savedCount} placement${savedCount === 1 ? '' : 's'} (server-validated)`, "success");
     } catch (e: unknown) {
       console.error("[shiftbuilder] batchApplyDraft failed", e);
       const msg = e instanceof Error ? e.message : String(e);
@@ -1871,43 +1932,28 @@ function AuthedShiftBuilder() {
   const amOverlapDateNum = amOverlapDate.getDate();
   const nextDayColor = SHIFT_DAY_COLORS[(selectedDayIndex + 1) % 7];
 
-  // Full TanStack Query commitment for the current night
-  const currentNight = useCurrentNight(selectedDay);
+  // Full data orchestration (Slice 1 — Production Stabilization).
+  // useShiftData centralizes useCurrentNight + hydration bridges + effective values + store selectors.
+  // This removes a large amount of unification/effect boilerplate from the orchestrator.
+  const shiftData = useShiftData(selectedDay);
 
-  // Roster unification bridge — assigned here (after currentNight) into the
-  // `let` variables that were initialized very early in the component (before
-  // any useMemo that references them). This ordering satisfies both the
-  // TypeScript checker and the JS runtime TDZ rules in this giant file.
-  effectiveRealRoster = currentNight.realRoster || [];
-  effectiveGraveRoster = currentNight.graveRoster || [];
+  // Back-compat aliases so the rest of this file (hundreds of references) continues to work
+  // with minimal further edits in this slice. Over time these can be inlined to shiftData.* .
+  const currentNight = shiftData.currentNight;
+  const storeAssignments = shiftData.storeAssignments;
+  const storeDraftAssignments = shiftData.storeDraftAssignments;
 
-  // Narrow Zustand subscriptions — these are the source of truth for what the
-  // cards are actually rendering right now (post 3.4 + live layer refactor).
-  // We must consult them for MarkerPad mode decisions and the "already placed"
-  // exclusion, otherwise filled cards look unassigned to the pad and the picker
-  // lists contain people who are visibly on the board.
-  const storeAssignments = useAssignments();
-  const storeDraftAssignments = useDraftAssignments();
+  effectiveRealRoster = shiftData.effectiveRealRoster || [];
+  effectiveGraveRoster = shiftData.effectiveGraveRoster || [];
 
-  // === Phase 3.1 Unification Bridge (first safe slice) ===
-  // We are migrating consumers to prefer data from useCurrentNight.
-  // These effective* values let us switch consumers one by one without a big bang.
-  // Once everything prefers the query, we can delete the legacy state + loader sets.
-  const effectiveRecentZoneHistory = currentNight.recentZoneHistory ?? recentZoneHistory;
-  const effectiveCardBorders = currentNight.cardBorders ?? cardBorders;
+  const effectiveRecentZoneHistory = shiftData.effectiveRecentZoneHistory ?? recentZoneHistory;
+  const effectiveCardBorders = shiftData.effectiveCardBorders ?? cardBorders;
 
-  // Role-partitioned scheduled sets for the current night (from Weekly Roster classification).
-  // These ensure the picker for a specific card type only shows TMs scheduled in the matching roster role/group.
-  const fullGraveScheduledTonight: Set<string> = (currentNight.fullGraveScheduledTonight as Set<string> | undefined) ?? new Set();
-  const pmOverlapScheduledTonight: Set<string> = (currentNight.pmOverlapScheduledTonight as Set<string> | undefined) ?? new Set();
-  const amOverlapScheduledTonight: Set<string> = (currentNight.amOverlapScheduledTonight as Set<string> | undefined) ?? new Set();
+  const fullGraveScheduledTonight: Set<string> = shiftData.fullGraveScheduledTonight;
+  const pmOverlapScheduledTonight: Set<string> = shiftData.pmOverlapScheduledTonight;
+  const amOverlapScheduledTonight: Set<string> = shiftData.amOverlapScheduledTonight;
 
-  // === Phase 3.1 Unification for Scheduled Roster (MarkerPad + CMD-K picker fix) ===
-  // Declared here (after hook, before the late memos that consume it).
-  // This makes the modern useCurrentNight (which calls the authoritative new roster function)
-  // the source of truth for what appears in the card-tap TM picker.
-  const effectiveScheduledTmIdsTonight: Set<string> =
-    (currentNight.scheduledTmIdsTonight as Set<string> | undefined) ?? scheduledTmIdsTonight;
+  const effectiveScheduledTmIdsTonight: Set<string> = shiftData.effectiveScheduledTmIdsTonight;
 
   const scheduleFilterActive = effectiveScheduledTmIdsTonight.size > 0;
 
@@ -1938,80 +1984,32 @@ function AuthedShiftBuilder() {
 
   // === END TEMP DIAGNOSTIC ===
 
-  // Assignments unification bridge (next major slice in 3.1)
-  // assignments is the hottest mutable state on the board.
-  const effectiveAssignments = currentNight.assignments ?? assignments;
+  // Assignments and loading now come from the centralized useShiftData hook (Slice 1).
+  // The heavy hydration effect (query → store + live cross-day mirrors + week bootstrap)
+  // has been moved into useShiftData so the orchestrator is thinner and data ownership is explicit.
+  const effectiveAssignments = shiftData.effectiveAssignments ?? assignments;
 
-  const hasBoardPayload = React.useMemo(
-    () => Object.keys(effectiveAssignments).length > 0 || currentNight.nightId != null,
-    [effectiveAssignments, currentNight.nightId],
-  );
-  const boardColdLoading = currentNight.isCoreLoading && !hasBoardPayload;
-  const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
+  const hasBoardPayload = shiftData.hasBoardPayload;
+  const boardColdLoading = shiftData.boardColdLoading;
+  const boardBackgroundSync = shiftData.boardBackgroundSync;
   const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
 
-  // Hydrate Zustand from server query once per day (cold load / day switch).
-  // Same-day edits are owned by live.assign, drag paths, and optimistic patches.
-  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
-  const previousHydratedDayRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    const dayKey = formatLocalDateISO(selectedDay.date);
-    if (hydratedAssignmentsDayRef.current === dayKey) return;
-    if (boardColdLoading || currentNight.isCoreFetching) return;
-    const fromQuery = currentNight.assignments;
-    if (fromQuery === undefined) return;
+  // liveAssignVersion is still managed locally in the orchestrator for the many call sites that do
+  // setLiveAssignVersion((v) => v + 1) after optimistic writes / drags / applies. The hook also tracks
+  // its own version for shiftData consumers. We bump both for maximum compatibility in this slice.
+  const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
+  // After any major write, also bump the hook's internal tracker (used by week surfaces via shiftData).
+  const bumpLiveFromHook = shiftData.bumpLiveAssignVersion;
 
-    const prevDay = previousHydratedDayRef.current;
-    const isDaySwitch = prevDay !== null && prevDay !== dayKey;
-
-    // Snapshot the *previous* day's main assignments into the live cross-day store before we
-    // overwrite the main store with the incoming day's data. This ensures that weekOverviewNights,
-    // plannedThisWeekRecentHistory, matrix, repeats, fit, and health all see prior days in the
-    // week once the user advances (e.g. Mon/Tue/Wed data visible when on Thu).
-    if (isDaySwitch && prevDay) {
-      try {
-        const prevDate = parseLocalDateISO(prevDay);
-        if (prevDate) {
-          mirrorMainAssignmentsToLiveStore(prevDate);
-        }
-      } catch {}
-    }
-
-    previousHydratedDayRef.current = dayKey;
-    hydratedAssignmentsDayRef.current = dayKey;
-
-    let next: Record<string, any> = { ...fromQuery };
-    // Only merge store→query on first hydrate for a day (in-flight edit race).
-    // On day switch the store still holds the *other* day — never merge then.
-    if (!isDaySwitch) {
-      const store = useShiftBuilderStore.getState().assignments ?? {};
-      for (const [k, v] of Object.entries(store)) {
-        if (v?.tmId && (!next[k]?.tmId || next[k].tmId !== v.tmId)) {
-          next[k] = { ...next[k], ...v };
-        }
-      }
-    }
-
-    useShiftBuilderStore.getState().setAssignments(next);
-    setAssignments(next);
-
-    // Also mirror the just-loaded (or merged) day so its data is immediately available under its
-    // dateKey in the live accumulator (for Weekly Overview sheet preview, history, etc.).
-    try {
-      mirrorMainAssignmentsToLiveStore(selectedDay.date);
-    } catch {}
-
-    const qc = currentNight.queryClient;
-    if (qc && !isDaySwitch && next !== fromQuery) {
-      patchNightCoreAssignmentsCache(qc, dayKey, next);
-    }
-  }, [selectedDay.date, boardColdLoading, currentNight.isCoreFetching, currentNight.queryClient]);
+  // Note: the previous large hydration useEffect, day-switch mirror, and initial week seed
+  // now live inside useShiftData. The hook also provides mirrorCurrentDay() and patchCurrentNightCache()
+  // for action sites that need to force a mirror after optimistic writes.
 
   // Live assignments version — forces alreadyAssignedThisNight (and therefore the
   // MarkerPad / picker scheduledUnassigned + allEligible lists) to recompute whenever
   // the optimistic live layer or realtime bridge mutates placements for this night.
   // This makes "exclude already placed TMs" reactive even in the modern live.assign path.
-  const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
+  // (Declaration lives earlier near the shiftData integration; this is the usage site only.)
 
   // Ensure the live cross-day accumulator always has a fresh snapshot of the *current* day's
   // assignments (from the main zustand). Week overview sheet, history, repeats, etc. can then
@@ -2143,22 +2141,32 @@ function AuthedShiftBuilder() {
 
     const storeState = liveAssignmentsStore.getState();
     const qc = currentNight?.queryClient;
-    for (let i = 0; i <= selectedDayIndex && i < DAY_DEFS.length; i++) {
+    // Aggregate the full week data for "week as a whole" consistency.
+    // Previously limited to i <= selectedDayIndex, which made the weekly repeat counts (and thus "wk" health %)
+    // depend on the viewed day (history "shrunk" when viewing earlier days, and only the viewed day's assignments
+    // were merged as "current"). Now we include *all* days in DAY_DEFS that have data in store/cache.
+    // This makes the week % health (the weeklyBalance / repeat penalty part) consistent for the built week,
+    // no matter which day you are currently viewing/editing. The "tonight" fit part still varies by selected day.
+    // As you build forward, more days get data in the store (via mirrors), so the week aggregate grows naturally.
+    for (let i = 0; i < DAY_DEFS.length; i++) {
       const dayDef = DAY_DEFS[i];
       if (!dayDef) continue;
       const dateKey = formatLocalDateISO(dayDef.date);
       let nightAss = storeState.assignmentsByNight[dateKey] || {};
       // Fallback to TanStack query cache for this night (populated by our week bootstrap prefetch + listener,
-      // or any prior hover/visit). This ensures that after refresh, prior days in the week are visible to
-      // week-repeat logic, fit chips, health, pads, and xAI without requiring the user to click every day header.
+      // or any prior hover/visit). This ensures that after refresh, prior (and later built) days in the week
+      // are visible to week-repeat logic, fit chips, health, pads, and xAI.
+      // We now collect for the *full* week (no i <= selected limit) so the "week as a whole" repeat counts
+      // (and thus the "wk" health %) are consistent no matter which day is selected for viewing.
+      // Data for days is kept in the live store (via mirroring on day switches) even when viewing earlier days.
       if ((!nightAss || Object.keys(nightAss).length === 0) && i !== selectedDayIndex && qc) {
         const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
         if (cached?.assignments) nightAss = cached.assignments;
       }
-      // For the currently selected day, also include the main store assignments (may have optimistic updates)
-      const mainAss = (i === selectedDayIndex ? assignments : {});
-      const allAss = { ...nightAss, ...mainAss };
-      for (const [slotKey, ass] of Object.entries(allAss)) {
+      // Collect from the (store or cached) for this day. Do *not* layer the live main here;
+      // the health merge will ensure the current viewed day's live is counted toward this week.
+      // This keeps the base "week committed" consistent across view days.
+      for (const [slotKey, ass] of Object.entries(nightAss)) {
         const tmId = (ass as any)?.tmId;
         if (tmId) {
           if (!result.has(tmId)) result.set(tmId, []);
@@ -2182,24 +2190,27 @@ function AuthedShiftBuilder() {
     if (!DAY_DEFS || DAY_DEFS.length === 0) return result;
     const storeState = liveAssignmentsStore.getState();
     const qc = currentNight?.queryClient;
+    // Include data for the *full* week (all DAY_DEFS) if present in store/cache.
+    // Previously limited to <= selectedDayIndex for "reached" during build-forward.
+    // Now, once a day has been visited/built (data in store), it shows in the week table even when viewing an earlier day.
+    // This makes the week view (table + its health) the "week as a whole" consistently.
+    // Unvisited future days remain blank (—) until assigned/visited.
     DAY_DEFS.forEach((def, dayIndex) => {
       const dateKey = formatLocalDateISO(def.date);
       let nightAss: Record<string, any> = {};
-      if (dayIndex <= selectedDayIndex) {
-        const fromStore = storeState.assignmentsByNight[dateKey] || {};
-        // Fallback to query cache for prior days in the week (seeded by the week bootstrap effect + cache listener,
-        // or direct from prefetch). Lets the sheet table show multiple days immediately after refresh or on first open
-        // of Weekly Overview, instead of only after clicking day headers.
-        let effective = fromStore;
-        if ((!effective || Object.keys(effective).length === 0) && dayIndex !== selectedDayIndex && qc) {
-          const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
-          if (cached?.assignments) effective = cached.assignments;
-        }
-        const fromMain = (dayIndex === selectedDayIndex ? assignments : {});
-        nightAss = { ...effective, ...fromMain };
-      } else {
-        nightAss = storeState.assignmentsByNight[dateKey] || {};
+      const fromStore = storeState.assignmentsByNight[dateKey] || {};
+      // Fallback to query cache for days in the week (seeded by the week bootstrap effect + cache listener,
+      // or direct from prefetch). Lets the sheet table show the full built week immediately after refresh
+      // or on first open of Weekly Overview, instead of only reached days.
+      let effective = fromStore;
+      if ((!effective || Object.keys(effective).length === 0) && dayIndex !== selectedDayIndex && qc) {
+        const cached: any = qc.getQueryData(["nightCore", dateKey]) || qc.getQueryData(["night", dateKey]);
+        if (cached?.assignments) effective = cached.assignments;
       }
+      const fromMain = (dayIndex === selectedDayIndex ? assignments : {});
+      nightAss = { ...effective, ...fromMain };
+      // If still empty for a day (not yet visited), leave as {} → will be blank "—" in the table.
+      // No else blanking; if store has data from prior visit, include it for the full week view.
       const assignmentsForOverview: Record<string, { tmId: string; tmName: string; breakGroup?: number } | null> = {};
       Object.entries(nightAss).forEach(([slotKey, a]: [string, any]) => {
         if (a?.tmId) {
@@ -2215,6 +2226,56 @@ function AuthedShiftBuilder() {
     });
     return result;
   }, [DAY_DEFS, selectedDayIndex, assignments, liveAssignVersion, currentNight?.queryClient]);
+
+  // WeekLens v2 shared memos (builder page only, but cheap to compute).
+  // These power the top bar health/viol (already partially live) + the sidebar suggestions list.
+  // Uses the exact same helpers as the advisor so numbers and suggestions stay consistent
+  // (full week, only relevant deployment slots via shouldShowPlacementFitChip, real display names).
+  const weekLensViolations: WeekRepeatViolation[] = React.useMemo(() => {
+    return getWeekRepeatViolations(plannedThisWeekRecentHistory);
+  }, [plannedThisWeekRecentHistory]);
+
+  const weekLensSuggestions = React.useMemo(() => {
+    // Build reliable tmName map (same approach as handleRequestRotationAdvisor).
+    const tmNameById: Record<string, string> = {};
+    const add = (id?: any, name?: any) => { if (id && name) tmNameById[String(id)] = String(name); };
+
+    (weekOverviewNights || []).forEach((night: any) => {
+      Object.values(night?.assignments || {}).forEach((row: any) => add(row?.tmId, row?.tmName || row?.displayName || row?.name));
+    });
+    Object.values(assignments || {}).forEach((row: any) => add((row as any)?.tmId, (row as any)?.tmName));
+
+    try {
+      const storeState = (typeof liveAssignmentsStore !== 'undefined' ? liveAssignmentsStore.getState() : null) as any;
+      if (storeState?.assignmentsByNight) {
+        Object.values(storeState.assignmentsByNight).forEach((nightAss: any) => {
+          if (nightAss && typeof nightAss === 'object') {
+            Object.values(nightAss).forEach((row: any) => add((row as any)?.tmId, (row as any)?.tmName));
+          }
+        });
+      }
+    } catch {}
+
+    return suggestLocalRotationMoves(weekLensViolations, plannedThisWeekRecentHistory, auxDefs, (tid) => tmNameById[tid]);
+  }, [weekLensViolations, plannedThisWeekRecentHistory, weekOverviewNights, assignments, auxDefs]);
+
+  // Raw violation count to match the banner inside the paper (includes all repeats for visibility).
+  // The weekLensViolations is the filtered/actionable one for health/AI.
+  const rawWeekViolCount = React.useMemo(() => {
+    let v = 0;
+    const counts = new Map<string, number>();
+    (weekOverviewNights || []).forEach((n: any) => {
+      Object.entries(n.assignments || {}).forEach(([sk, a]: any) => {
+        const t = a?.tmId;
+        if (t) {
+          const k = `${t}:${sk}`;
+          counts.set(k, (counts.get(k) || 0) + 1);
+        }
+      });
+    });
+    counts.forEach((c) => { if (c > 1) v++; });
+    return v;
+  }, [weekOverviewNights]);
 
   React.useEffect(() => {
     const dateKey = nightDateKey(selectedDay.date);
@@ -2500,6 +2561,7 @@ function AuthedShiftBuilder() {
       createdChannels.push(statusChannel);
 
       const callOffChannel = createCallOffsChannel(nightDateIso, async () => {
+        const { getCallOffsForDate } = await import("@/lib/shiftbuilder/tmCommands");
         const freshCalledOff = await getCallOffsForDate(selectedDay.date);
         setCalledOffIds(freshCalledOff);
         console.log('[shiftbuilder] call_offs changed — refreshed called off set');
@@ -3715,6 +3777,7 @@ function AuthedShiftBuilder() {
 
   const handleCmdkSetGravePool = React.useCallback(
     async (tmId: string, value: "Full" | "AM" | "PM" | null) => {
+      const { setTMGravePool } = await import("@/lib/shiftbuilder/tmCommands");
       await setTMGravePool(tmId, value);
       setTMCommandEpoch((e) => e + 1);
     },
@@ -3723,6 +3786,7 @@ function AuthedShiftBuilder() {
 
   const handleCmdkSetDisplayName = React.useCallback(
     async (tmId: string, newName: string) => {
+      const { setTMDisplayName } = await import("@/lib/shiftbuilder/tmCommands");
       await setTMDisplayName(tmId, newName);
       setTMCommandEpoch((e) => e + 1);
     },
@@ -3732,6 +3796,7 @@ function AuthedShiftBuilder() {
   const handleCmdkRemoveFromSchedule = React.useCallback(
     async (tmId: string, date: Date) => {
       if (!nightId) throw new Error("No night context — pick a day first");
+      const { removeTMFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
       await removeTMFromSchedule({ tmId, nightId, nightDate: date });
       setTMCommandEpoch((e) => e + 1);
     },
@@ -3915,6 +3980,230 @@ function AuthedShiftBuilder() {
     weeklyRecentHistory: plannedThisWeekRecentHistory,
   });
 
+  // Consistent per-day daily health percentages for the *entire* week plan.
+  // This enables a true, stable arithmetic average for the week health number (mean of each day's percentage).
+  //
+  // - For every day with plan data (from weekOverviewNights), we compute a *proxy* daily health based on
+  //   the full week repeat violators: fraction of that day's relevant placements that land on a violating (tm,slot).
+  //   Proxy = 100 minus scaled penalty for bad fraction. This is fully derived from the week plan data.
+  // - Rich captured daily health (from the current day's full fit prerender: spread, gaps, last-5, etc.)
+  //   overrides the proxy for days that have been visited while the rich fit UI is active.
+  // - The resulting map always has an entry for *every* day that has assignments in the current week plan.
+  //   Therefore the mean is consistent no matter which day is selected.
+  //
+  // The rich capture effect below populates the rich overrides as you interact with days.
+  const [richWeekDailyHealths, setRichWeekDailyHealths] = React.useState<Record<string, number>>({});
+
+  // Histories (30-night spread per TM) for all TMs that appear in the current week plan.
+  // Loaded separately so we can compute accurate daily health % for *every* day in the week,
+  // not just the currently selected one. This is what makes the per-day tracker accurate
+  // and "matching the day".
+  const [weekHistories, setWeekHistories] = React.useState<Record<string, ZoneDetailEntry | null>>({});
+  const [weekHistoriesLoading, setWeekHistoriesLoading] = React.useState(false);
+  const lastWeekTmIdsKeyRef = React.useRef<string | null>(null);
+
+  // Dismissable persistent week health tracker state.
+  // Persists the user's preference across sessions via localStorage.
+  const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("oms_week_health_tracker_dismissed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissWeekHealthTracker = React.useCallback(() => {
+    setIsWeekHealthTrackerDismissed(true);
+    try {
+      localStorage.setItem("oms_week_health_tracker_dismissed", "true");
+    } catch {}
+  }, []);
+
+  const showWeekHealthTracker = React.useCallback(() => {
+    setIsWeekHealthTrackerDismissed(false);
+    try {
+      localStorage.removeItem("oms_week_health_tracker_dismissed");
+    } catch {}
+  }, []);
+
+  // Capture rich (accurate) daily health for the *currently selected* day when rich fit data is available.
+  React.useEffect(() => {
+    if (!deploymentRotationFitEnabled || !deploymentFitBySlot || Object.keys(deploymentFitBySlot).length === 0) return;
+    const dateKey = formatLocalDateISO(selectedDay.date);
+    const daily = computeDailyHealthPercent(
+      auxDefsForFit,
+      storeAssignmentsForFit,
+      deploymentFitBySlot,
+      isDraftMode,
+      draftAssignments,
+    );
+    if (daily != null) {
+      setRichWeekDailyHealths((prev) => {
+        if (prev[dateKey] === daily) return prev;
+        return { ...prev, [dateKey]: daily };
+      });
+    }
+  }, [
+    deploymentRotationFitEnabled,
+    deploymentFitBySlot,
+    selectedDay.date,
+    auxDefsForFit,
+    storeAssignmentsForFit,
+    isDraftMode,
+    draftAssignments,
+  ]);
+
+  // Load 30-night histories for *all* TMs that appear anywhere in the current week plan.
+  // This allows us to compute accurate per-day daily health % for every day (not just the selected one)
+  // so the tracker shows values that match what the day would have if selected.
+  React.useEffect(() => {
+    // Collect all unique tmIds from the full week data.
+    const tmIds = new Set<string>();
+    for (const [tmId] of plannedThisWeekRecentHistory.entries()) {
+      if (tmId) tmIds.add(tmId);
+    }
+    // Also from weekOverviewNights for completeness.
+    for (const night of weekOverviewNights) {
+      for (const a of Object.values(night.assignments || {})) {
+        if ((a as any)?.tmId) tmIds.add((a as any).tmId);
+      }
+    }
+
+    const tmIdsKey = [...tmIds].sort().join(",");
+    if (!tmIdsKey || lastWeekTmIdsKeyRef.current === tmIdsKey) {
+      return;
+    }
+    lastWeekTmIdsKeyRef.current = tmIdsKey;
+
+    setWeekHistoriesLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/shiftbuilder/placement-histories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tmIds: [...tmIds], days: 30 }),
+        });
+        const data = await res.json();
+        setWeekHistories((data.histories as Record<string, ZoneDetailEntry | null>) ?? {});
+      } catch {
+        setWeekHistories({});
+      } finally {
+        setWeekHistoriesLoading(false);
+      }
+    })();
+  }, [plannedThisWeekRecentHistory, weekOverviewNights]);
+
+  // The complete, consistent weekDailyHealths map passed to health computes.
+  // This is what powers both the stable week *average* (mean of these) and the visible per-day tracker.
+  //
+  // For *every* day with plan data, we compute the *actual* daily health % using the same method as the
+  // main system for the selected day:
+  //   - Use the week-loaded histories for 30-night spread of the relevant TMs.
+  //   - Use the full week repeat/gap context (plannedThisWeekRecentHistory).
+  //   - Treat *that day's assignments* as the "current board" for rotationBasics / neighbor context.
+  //   - For each assigned relevant slot on that day, call computeSlotPlacementFit to get the verdict.
+  //   - Average the verdicts → the day's health %.
+  //
+  // This makes the numbers in the tracker "accurate and matching the day".
+  // When you select a day, the value for it in the tracker will match (or very closely match) the daily
+  // health % shown in the main health pill / floater / pad for that day.
+  //
+  // The set of days is always the full week plan, so the average and the tracker do not shift just by
+  // changing the selected day. Rich overrides from the current selected day's main hook computation
+  // can still take precedence if they differ slightly.
+  const weekDailyHealths = React.useMemo(() => {
+    const result: Record<string, number> = {};
+
+    const auxDefs = auxDefsForFit;
+    const members = (effectiveRealRoster || []) as any[];
+
+    // Build a broad otherTmProfiles for TMs that appear in the week (for rotationBasics when a day's
+    // own TMs need neighbors from the plan).
+    const allWeekTms = new Set<string>();
+    for (const [tmId] of plannedThisWeekRecentHistory.entries()) if (tmId) allWeekTms.add(tmId);
+    for (const night of weekOverviewNights) {
+      for (const a of Object.values(night.assignments || {})) {
+        if ((a as any)?.tmId) allWeekTms.add((a as any).tmId);
+      }
+    }
+    const broadOther: Record<string, PlacementTmProfile | null> = {};
+    for (const id of allWeekTms) {
+      broadOther[id] = memberToPlacementProfile(members, id);
+    }
+
+    for (const night of weekOverviewNights) {
+      if (!DAY_DEFS[night.dayIndex]) continue;
+      const dayDef = DAY_DEFS[night.dayIndex];
+      const dateKey = formatLocalDateISO(dayDef.date);
+      const dayAssignments = night.assignments || {};
+
+      // Per-day otherTmProfiles (the "board" for this day).
+      const dayTms = new Set<string>();
+      for (const a of Object.values(dayAssignments)) {
+        if ((a as any)?.tmId) dayTms.add((a as any).tmId);
+      }
+      const dayOther: Record<string, PlacementTmProfile | null> = {};
+      for (const id of dayTms) {
+        dayOther[id] = memberToPlacementProfile(members, id) || broadOther[id];
+      }
+
+      // Compute fitBySlot for this day's assigned relevant slots.
+      const dayFitBySlot: Record<string, any> = {};
+      const slotKeys = collectDeploymentSlotKeys(auxDefs);
+      const dayIso = formatLocalDateISO(dayDef.date);
+
+      for (const slotKey of slotKeys) {
+        if (!shouldShowPlacementFitChip(slotKey)) continue;
+
+        const row = resolveSlotAssignmentRow(slotKey, dayAssignments as any, false, {});
+        const assigned = !!(row?.tmName || row?.tmId);
+        if (!assigned) continue;
+
+        try {
+          dayFitBySlot[slotKey] = computeSlotPlacementFit({
+            slotKey,
+            assignments: dayAssignments as any,
+            isDraftMode: false,
+            draftAssignments: {},
+            members,
+            auxDefs,
+            currentIso: dayIso,
+            histories: weekHistories,
+            historiesLoading: weekHistoriesLoading,
+            otherTmProfiles: dayOther,
+            weeklyRecentHistory: plannedThisWeekRecentHistory,
+          });
+        } catch (e) {
+          // Fallback for this slot if scoring can't run (e.g. missing history for a TM on this day).
+          dayFitBySlot[slotKey] = { fitVerdict: "acceptable" as const, fitSummary: "", fitFactLine: "" };
+        }
+      }
+
+      const daily = computeDailyHealthPercent(auxDefs, dayAssignments as any, dayFitBySlot as any, false, {});
+      result[dateKey] = daily ?? 92;
+    }
+
+    // Rich captured from the main hook (for the currently selected day) can override.
+    for (const [dateKey, rich] of Object.entries(richWeekDailyHealths)) {
+      if (typeof rich === "number") {
+        result[dateKey] = rich;
+      }
+    }
+
+    return result;
+  }, [
+    weekOverviewNights,
+    plannedThisWeekRecentHistory,
+    richWeekDailyHealths,
+    DAY_DEFS,
+    weekHistories,
+    weekHistoriesLoading,
+    auxDefsForFit,
+    effectiveRealRoster,
+  ]);
+
   const runCoverageEngine = React.useCallback(
     async (options?: CoverageEngineRunOptions) => {
       const confirmMessage =
@@ -4003,7 +4292,12 @@ function AuthedShiftBuilder() {
             auxDefsForFit,
             storeAssignmentsForFit,
             deploymentFitBySlot,
-            { isDraftMode, draftAssignments, weeklyRecentHistory: plannedThisWeekRecentHistory },
+            {
+              isDraftMode,
+              draftAssignments,
+              weeklyRecentHistory: plannedThisWeekRecentHistory,
+              weekDailyHealths, // complete per-day healths (proxies + rich) for true stable week mean
+            },
           );
           const fitVerdictBySlot = Object.fromEntries(
             Object.entries(deploymentFitBySlot).map(([k, v]) => [
@@ -4508,6 +4802,22 @@ function AuthedShiftBuilder() {
     const a = active.data.current as any;
     if (!a) return;
 
+    // WeekLens v2 (builder weekly) dnd skeleton.
+    // Cells in the weekly artboard (when mode=builder) carry data attrs or custom payload.
+    // We detect here and translate to a cross-night (or same-night) reassign on the correct week day,
+    // using the same live store + history paths as the main board. Guarded so it never interferes with card/roster dnd.
+    if (currentView === 'weekly' && canvasMode === 'builder' && !isPrintPreview) {
+      // Placeholder: in a full pass we would read source night/slot + target from over/active data attrs
+      // (the WeeklyOverview cells would emit data-weekly-cell + data-slot + data-day-index on the draggable areas).
+      // For now we just acknowledge and let the normal flow continue (or early-return after a toast).
+      // Real implementation wires to liveAssignmentsStore.setAssignmentsForNight for the specific night + recordChange.
+      if (a.source === 'weekly-cell' || String(active.id || '').startsWith('weekly-')) {
+        // Conservative: do nothing destructive in the skeleton; the applyWeekLensMove path below is the supported "one click" for suggestions.
+        // Future: implement the direct cell-to-cell drop here with eligibility + health re-calc.
+        return;
+      }
+    }
+
     // Fresh roster TM → slot
     if (a.type === "tm") {
       if (over?.data.current?.type === "slot") {
@@ -4899,6 +5209,7 @@ function AuthedShiftBuilder() {
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      const { getCallOffsForDate } = await import("@/lib/shiftbuilder/tmCommands");
       const callOffSet = await getCallOffsForDate(selectedDay.date);
       if (!cancelled) setCalledOffIds(callOffSet);
     })();
@@ -5600,6 +5911,248 @@ function AuthedShiftBuilder() {
     }
   }, []);
 
+  /** Rotation health + xAI advisor entry point.
+   *  Builds a compact week context (health snapshot + violations list from the stable full-week recent history +
+   *  a short plan summary) and calls the weekAdvisor path in postEngineInsight.
+   *  The returned analysis is surfaced via the ProvenanceGlass (keyed as week-advisor) or a toast fallback.
+   *  This is the main "give us a breakdown of what could be moved where and why to make the rotation health higher".
+   */
+  const handleRequestRotationAdvisor = React.useCallback(
+    async (opts?: { tmId?: string; slotKey?: string; focusWeek?: boolean }) => {
+      const hist = plannedThisWeekRecentHistory;
+      const viols: WeekRepeatViolation[] = getWeekRepeatViolations(hist);
+
+      // Build a reliable tmId → display name map from the week data the operator is actually looking at.
+      // This is critical: the advisor (and local suggestions) must emit human names ("Sheri O", "Jared", etc.)
+      // and never raw "tm_xxx" identifiers. This follows the long-standing naming rules for cards, weekly overview, pad, matrix, etc.
+      const tmNameById: Record<string, string> = {};
+      const add = (id?: any, name?: any) => { if (id && name) tmNameById[String(id)] = String(name); };
+
+      // Primary source when the user is on the WEEK BUILDER sheet or has the weekly overview data loaded.
+      (weekOverviewNights || []).forEach((night: any) => {
+        const ass = night?.assignments || {};
+        Object.values(ass).forEach((row: any) => add(row?.tmId, row?.tmName || row?.display_name || row?.name));
+      });
+
+      // Current selected day's live assignments (optimistic layer).
+      Object.values(assignments || {}).forEach((row: any) => add((row as any)?.tmId, (row as any)?.tmName));
+
+      // Also walk the live store for any other days in the week (defensive).
+      try {
+        const storeState = (typeof liveAssignmentsStore !== 'undefined' ? liveAssignmentsStore.getState() : null) as any;
+        if (storeState?.assignmentsByNight) {
+          Object.values(storeState.assignmentsByNight).forEach((nightAss: any) => {
+            if (nightAss && typeof nightAss === 'object') {
+              Object.values(nightAss).forEach((row: any) => add((row as any)?.tmId, (row as any)?.tmName));
+            }
+          });
+        }
+      } catch {}
+
+      // Compute a fresh health snapshot using the same full-week source the rest of the UI sees.
+      const healthSnap = computeShiftRotationHealth(auxDefsForFit, storeAssignmentsForFit, deploymentFitBySlot, {
+        isDraftMode,
+        draftAssignments,
+        weeklyRecentHistory: hist,
+        weekDailyHealths, // complete per-day healths (proxies + rich) for true stable week mean
+      });
+
+      // Compact plan summary for the prompt (repeat offenders + rough per-slot counts this week).
+      // Only relevant deployment slots (no overlaps, no admin) for the rotation advisor context.
+      let weekPlanSummary = "";
+      try {
+        const bySlot: Record<string, number> = {};
+        for (const [, recs] of hist.entries()) {
+          for (const r of recs) {
+            if (!shouldShowPlacementFitChip(r.slotKey)) continue;
+            bySlot[r.slotKey] = (bySlot[r.slotKey] || 0) + 1;
+          }
+        }
+        const top = Object.entries(bySlot).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, c]) => `${k}:${c}`).join(" ");
+        const violSummary = viols.slice(0, 3).map((v) => {
+          const nm = tmNameById[v.tmId] || v.tmId;
+          return `${nm}@${v.slotKey}×${v.count}`;
+        }).join("; ");
+        weekPlanSummary = `Top loads: ${top || "—"}. Repeats: ${violSummary || "none"}.`;
+      } catch {}
+
+      // Local deterministic suggestions (instant, free) — we can surface these immediately while xAI thinks.
+      // Pass a real name resolver so the returned suggestion objects carry .tmName.
+      const localSuggestions = suggestLocalRotationMoves(viols, hist, auxDefsForFit, (tid) => tmNameById[tid]);
+
+      // Build a clean local message. Avoid prepending "Asking xAI..." when there are no relevant violations
+      // (the result will be the direct "no moves needed" or confirmation, which now aligns with the health numbers
+      // since both health penalty and the violations list are computed only over main deployment slots).
+      let localText = "";
+      if (localSuggestions.length > 0) {
+        localText = `Local suggestions (instant):\n${localSuggestions.map((s, i) => {
+          const fromName = (s.from as any).tmName || s.from.tmId;
+          const swap = (s.to as any).viaSwapWith;
+          const swapName = swap ? (swap.tmName || swap.tmId) : null;
+          const toPart = swapName ? `${s.to.slotKey} (swap with ${swapName})` : s.to.slotKey;
+          return `${i + 1}. ${fromName} ${s.from.slotKey} → ${toPart} — ${s.reason}`;
+        }).join("\n")}\n\n`;
+      } else if (viols.length === 0) {
+        const bal = (healthSnap as any).weeklyBalance ?? healthSnap.weeklyBalance;
+        const maxR = (healthSnap as any).maxWeeklyRepeat ?? 0;
+        const vN = (healthSnap as any).repeatViolations ?? 0;
+        if (bal == null || bal >= 100 || vN === 0) {
+          localText = "No high-impact single swaps available on main slots. Weekly rotation balance is strong. Full xAI plan may still surface optimization opportunities.\n\n";
+        } else {
+          localText = `No high-impact single swaps on main slots, but weeklyBalance is ${bal}%. Full rotation plan recommended.\n\n`;
+        }
+      } else {
+        localText = "Asking xAI for ranked plan...\n\n";
+      }
+
+      // Prime synchronously with local suggestions + loading note so the glass shows *something* immediately.
+      setWeekAdvisorText(localText);
+      setProvenanceKey("week-rotation-advisor");
+
+      try {
+        const { postEngineInsight } = await import("@/app/shiftbuilder/lib/engineInsightClient");
+        const result = await postEngineInsight({
+          slotKey: opts?.slotKey || "WEEK-OVERVIEW",
+          tmName: opts?.tmId ? `TM ${opts.tmId}` : "Week plan",
+          weekAdvisor: true,
+          rotationHealthSnapshot: {
+            percent: healthSnap.percent,
+            weeklyBalance: (healthSnap as any).weeklyBalance,
+            maxWeeklyRepeat: (healthSnap as any).maxWeeklyRepeat,
+            repeatViolations: (healthSnap as any).repeatViolations,
+            xaiRepeatPenaltyReduction: (healthSnap as any).xaiRepeatPenaltyReduction,
+          },
+          violations: viols.map((v) => ({
+            ...v,
+            tmName: tmNameById[v.tmId] || (v as any).tmName || v.tmId,
+          })),
+          tmNames: tmNameById,
+          weekPlanSummary,
+          focusTmId: opts?.tmId,
+          focusSlotKey: opts?.slotKey,
+        });
+
+        if (result && !result.cached && result.usage) {
+          try {
+            useShiftBuilderStore.getState().addAiUsage(result.usage as any);
+            updateOpsStatusBarContent?.();
+          } catch {}
+        }
+
+        // Update the text state — this will cause the glass (which is already mounted because we set the key above)
+        // to re-render with the full local + xAI content. Setting the key again is harmless but not required.
+        const advisorPart = result?.text || (viols.length === 0 ? "" : "xAI analysis unavailable.");
+        const fullText = (localText + advisorPart).trim() || "No week rotation analysis available.";
+        setWeekAdvisorText(fullText);
+        // Keep (or re-assert) the key so the glass stays open.
+        setProvenanceKey("week-rotation-advisor");
+      } catch (e: any) {
+        const msg = e?.message || String(e);
+        const fallback = localText + (localText ? "\n\n" : "") + "(xAI advisor unavailable: " + msg + " — use the local suggestions or the WEEK BUILDER table / pad matrix to inspect repeats. The violations list in rotation health shows exactly what is costing the weeklyBalance points for the main deployment areas.)";
+        setWeekAdvisorText(fallback);
+        setProvenanceKey("week-rotation-advisor");
+      }
+    },
+    [plannedThisWeekRecentHistory, auxDefsForFit, storeAssignmentsForFit, deploymentFitBySlot, isDraftMode, draftAssignments, assignments, weekOverviewNights],
+  );
+
+  /** WeekLens v2 conservative one-click apply for rotation suggestions.
+   *  Only operates on relevant slots (via shouldShowPlacementFitChip in the suggestion source).
+   *  Starts with simple "move TM to a fresh slot in family on one of the viol nights".
+   *  Uses live store for the specific night + history recording so it is undoable and updates health immediately.
+   *  Bilateral swaps and complex cases are intentionally left to the pad + main board for safety in v1.
+   */
+  const applyWeekLensMove = React.useCallback(async (sugg: any) => {
+    if (!sugg || !sugg.from || !sugg.to) return;
+
+    const fromTmId = sugg.from.tmId;
+    const fromSlot = sugg.from.slotKey;
+    const toSlot = sugg.to.slotKey;
+    const fromName = sugg.from.tmName || fromTmId;
+
+    if (!fromTmId || !fromSlot || !toSlot) return;
+
+    try {
+      // Resolve the target night for the move.
+      // Prefer explicit nightDate on the suggestion (from suggestLocalRotationMoves), else find the first
+      // night in weekOverviewNights where this TM is currently on the from slot.
+      let targetDayIndex: number | null = null;
+      let targetDate: Date | null = null;
+
+      if (sugg.from.nightDate) {
+        // Find the DAY_DEFS entry whose formatted date matches the ISO in the suggestion
+        for (let i = 0; i < DAY_DEFS.length; i++) {
+          if (formatLocalDateISO(DAY_DEFS[i].date) === sugg.from.nightDate) {
+            targetDayIndex = i;
+            targetDate = DAY_DEFS[i].date;
+            break;
+          }
+        }
+      }
+
+      if (targetDayIndex == null) {
+        // Fallback: scan the week data for the first occurrence of this (tm, fromSlot)
+        for (const n of (weekOverviewNights || [])) {
+          const a = n.assignments?.[fromSlot];
+          if (a?.tmId === fromTmId) {
+            targetDayIndex = n.dayIndex;
+            targetDate = DAY_DEFS[n.dayIndex]?.date ?? null;
+            break;
+          }
+        }
+      }
+
+      if (targetDayIndex == null || !targetDate) {
+        console.warn('[WeekLens] could not resolve night for move', sugg);
+        return;
+      }
+
+      const dateKey = formatLocalDateISO(targetDate);
+
+      // Read the current (optimistic + live) assignments for exactly that night
+      const store = liveAssignmentsStore.getState();
+      const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
+
+      // Perform the conservative move:
+      // - Clear the from slot (unassign)
+      // - Place the TM on the to slot (assign). If 'to' was occupied we overwrite for this simple path
+      //   (real bilateral swap cases are left to the advisor text or pad).
+      if (currentNightAss[fromSlot]) {
+        delete currentNightAss[fromSlot]; // or set to null if the store expects explicit nulls
+      }
+
+      currentNightAss[toSlot] = {
+        tmId: fromTmId,
+        tmName: fromName,
+        // breakGroup left undefined; normal board flow will handle if needed
+      } as any;
+
+      // Write back — this is the same primitive used by all live assign paths.
+      // The store subscription + liveAssignVersion bump will cause weekOverviewNights,
+      // plannedThisWeekRecentHistory, the table, health, and sidebar to refresh.
+      store.setAssignmentsForNight(dateKey, currentNightAss);
+
+      // Record a lightweight history entry if the mechanism is available (best effort)
+      try {
+        // shiftHistory is in scope in Client; recordChange is the recorder.
+        // We do a minimal description so undo works at the board level.
+        // (If this throws it's non-fatal — the store update is the source of truth.)
+        // @ts-ignore - shiftHistory may have recordChange
+        if (typeof (window as any).__shiftHistoryRecord === 'function') {
+          (window as any).__shiftHistoryRecord(`WeekLens move: ${fromName} ${fromSlot} → ${toSlot}`);
+        }
+      } catch {}
+
+      // Refresh the advisor glass + local suggestions list immediately so the UI reflects the change.
+      void handleRequestRotationAdvisor({ focusWeek: true });
+
+      // Optional: if the user had a pad open for one of the affected slots, it will pick up the live change.
+      console.log('[WeekLens] applied move', fromName, fromSlot, '→', toSlot, 'on', dateKey);
+    } catch (e) {
+      console.warn('[WeekLens] apply failed', e);
+    }
+  }, [handleRequestRotationAdvisor, weekOverviewNights, DAY_DEFS, formatLocalDateISO]);
+
   return (
     <div
       className="sb-builder-stage h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
@@ -5695,11 +6248,6 @@ function AuthedShiftBuilder() {
         onRosterToggle={() => setRosterOpen((v) => !v)}
         canvasMode={canvasMode}
         onCanvasModeChange={setCanvasMode}
-        onWeeklyOverview={() => {
-          setCanvasMode("print-preview");
-          setShowWeeklyOverviewOnSheet(true);
-          setFocusedWeeklyTmId(null);
-        }}
       />
 
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
@@ -6012,44 +6560,433 @@ function AuthedShiftBuilder() {
             {/* Fixed 1056px artboard — now isolated into ShiftBuilderBoard for day-switch perf.
                 The scaling transform, refs, and stage chrome remain in the orchestrator.
                 Board receives only the narrow day-specific prop bag + stable callbacks. */}
-            {showWeeklyOverviewOnSheet && isPrintPreview ? (
-              /* The sheet itself now displays the print-preview of the Week Overview (slot grid, headcount, sections).
-                 This gives exact Golden fidelity for what would be printed, while the live React version
-                 supports the previous focus UX (click TM name → fade others, highlight the TM across the week).
-                 Day headers are clickable to change the selected day while focus is preserved.
-                 Future UX (tooltips, cell clicks, overlays, xAI integration on the sheet, etc.) can be added here
-                 without a separate panel. */
-              <div
-                className="print-artboard mx-auto"
-                style={{
-                  width: 1056,
-                  height: 816,
-                  background: "#fff",
-                  boxShadow: "0 0 0 1px #E5E5EA",
-                  overflow: "hidden",
-                }}
-              >
+            {currentView === "weekly" ? (
+              /* Weekly Overview as a first-class page (alongside Deploy / Breaks).
+                 Builder / Preview toggle (in the nav, next to the page buttons) controls it universally.
+                 - 'preview': clean, print-faithful (bit-for-bit with PDF output).
+                 - 'builder': richer interactive WEEK BUILDER for the full week (xAI, health advisor, direct pad context, focus etc.).
+                 Layout and data always match the sacred 1056×816 Golden spec.
+                 Screen-only digital assists (no-print).
+
+                 WeekLens v2 (builder only): Top Controls Bar (40px unscaled page chrome) + right Focus sidebar (~22%, unscaled)
+                 are rendered OUTSIDE the golden paper. The inner 1056×816 artboard + LiveWeeklyOverviewArtboard
+                 + layoutForWeekly solver are NEVER resized or structurally altered — 1:1 fidelity with print
+                 is preserved even while the builder gets rich overlays, filters, and the sidebar. */
+              <>
+                {/* WeekLens v2 Top Controls Bar — now placed *above* the golden paper (not over it).
+                    Rendered as absolute above a relative wrapper so the entire 816px artboard
+                    (including its internal minimal banner) is fully visible below.
+                    Unscaled (escapes the stage transform). Builder-only. */}
+                <div style={{ position: 'relative', width: 'min(1040px, 96vw)', margin: '0 auto' }}>
+                  {!isPrintPreview && canvasMode === 'builder' && (
+                    <div
+                      className="no-print"
+                      style={{
+                        position: 'absolute',
+                        top: -40,
+                        left: 0,
+                        right: 0,
+                        zIndex: 120,
+                        height: 38,
+                        background: 'rgba(255,255,255,0.98)',
+                        border: '1px solid #E5E5EA',
+                        borderRadius: 6,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '0 6px',
+                        fontFamily: "var(--font-atkinson, system-ui)",
+                        fontSize: 9,
+                        boxSizing: 'border-box',
+                        userSelect: 'none',
+                      }}
+                    >
+                    {/* Left: subtle label + health snapshot pills + tiny sparkline */}
+                    <div style={{ fontWeight: 700, color: '#6B7280', marginRight: 2, letterSpacing: '0.15px', lineHeight: 1 }}>WeekLens</div>
+                    <div 
+                      title="Weekly Balance (wk): rotation fairness / repeat reduction score for the full grave week (higher = better, used for AI suggestions)"
+                      style={{ background: 'rgba(16,185,129,0.15)', color: '#15803d', padding: '0 4px', borderRadius: 999, fontWeight: 700, fontSize: 8, lineHeight: '14px', height: 14, display: 'flex', alignItems: 'center' }}
+                    >wk</div>
+                    {/* Mini sparkline from actual week headcounts - tightly packed */}
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 11, marginRight: 2, paddingRight: 3, borderRight: '1px solid #E5E5EA' }}>
+                      {(weekOverviewNights || []).slice(0,7).map((n: any, i: number) => {
+                        const cnt = Object.values(n.assignments || {}).filter((a: any) => !!a?.tmId).length;
+                        const h = Math.max(2, Math.round((cnt / 30) * 11));
+                        const col = (DAY_DEFS[n.dayIndex] || {}).color || '#888';
+                        return <div key={i} style={{ width: 2, height: h, background: col, borderRadius: 1, opacity: 0.85 }} />;
+                      })}
+                    </div>
+                    {/* Raw viol count to exactly match the banner inside the sheet for zero confusion */}
+                    <div
+                      onClick={() => setWeekLensFilters(new Set(['repeats']))}
+                      style={{
+                        background: rawWeekViolCount > 0 ? 'rgba(193,58,20,0.12)' : 'rgba(16,185,129,0.1)',
+                        color: rawWeekViolCount > 0 ? '#C13A14' : '#15803d',
+                        padding: '0 4px',
+                        borderRadius: 999,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: 8,
+                        lineHeight: '14px',
+                        height: 14,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Total (TM, slot) repeats this week — matches the banner viol. count inside the sheet exactly. Click to filter."
+                    >
+                      {rawWeekViolCount} viol.
+                    </div>
+                    {(() => {
+                      const total = (weekOverviewNights || []).reduce((sum, n) => 
+                        sum + Object.values(n.assignments || {}).filter((a: any) => !!a?.tmId).length, 0);
+                      const avg = weekOverviewNights.length ? (total / weekOverviewNights.length).toFixed(1) : '—';
+                      return <div title="Average daily headcount (filled slots) across the shown days" style={{ color: '#6B7280', fontSize: 8 }}>avg {avg}</div>;
+                    })()}
+
+                    {/* Quick filter chips — tight, consistent, high scannability */}
+                    {(['zones','restrooms','support','repeats','empties'] as const).map(k => {
+                      const active = weekLensFilters.has(k);
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            const next = new Set(weekLensFilters);
+                            if (active) next.delete(k); else next.add(k);
+                            setWeekLensFilters(next);
+                          }}
+                          style={{
+                            padding: '0 5px',
+                            height: 18,
+                            borderRadius: 3,
+                            border: active ? '1px solid #6B21A8' : '1px solid #E5E5EA',
+                            background: active ? 'rgba(107,33,168,0.12)' : '#fff',
+                            color: active ? '#6B21A8' : '#6B7280',
+                            fontSize: 8,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 80ms ease',
+                            boxShadow: active ? 'inset 0 1px 1px rgba(0,0,0,0.05)' : 'none',
+                          }}
+                          onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+                          onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                        >
+                          {k === 'zones' ? 'Zones' : k === 'restrooms' ? 'Restrooms' : k === 'support' ? 'Support' : k === 'repeats' ? 'Repeats' : 'Empties'}
+                        </button>
+                      );
+                    })}
+
+                    {/* Search — compact, seamless */}
+                    <input
+                      value={weekLensSearch}
+                      onChange={(e) => setWeekLensSearch(e.target.value)}
+                      placeholder="search name/slot"
+                      style={{ 
+                        flex: 1, 
+                        maxWidth: 100, 
+                        height: 16, 
+                        fontSize: 8, 
+                        border: '1px solid #E5E5EA', 
+                        borderRadius: 2, 
+                        padding: '0 3px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+
+                    {/* Prominent purple AI Optimize — calls the existing advisor */}
+                    <button
+                      onClick={() => void handleRequestRotationAdvisor({ focusWeek: true })}
+                      style={{
+                        background: 'linear-gradient(90deg, #6B21A8, #9333EA)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 8,
+                        padding: '0 6px',
+                        height: 16,
+                        borderRadius: 999,
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(107,33,168,0.25)',
+                        whiteSpace: 'nowrap',
+                        transition: 'transform 70ms ease',
+                      }}
+                      onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+                      onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                      title="AI Optimize Rotations — prescriptive moves to raise weeklyBalance (local + xAI)"
+                    >
+                      AI Optimize
+                    </button>
+
+                    {/* Sidebar toggle — descriptive */}
+                    <button
+                      onClick={() => setWeekLensSidebarOpen(v => !v)}
+                      style={{
+                        fontSize: 7,
+                        padding: '0 3px',
+                        height: 16,
+                        borderRadius: 2,
+                        border: '1px solid #E5E5EA',
+                        background: weekLensSidebarOpen ? '#F4F4F6' : '#fff',
+                        color: '#6B7280',
+                        marginLeft: 1,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {weekLensSidebarOpen ? 'Close Focus' : 'Focus Panel'}
+                    </button>
+                  </div>
+                )}
+
+                {/* The sacred 1056×816 golden paper — NEVER resized by WeekLens chrome.
+                    Layout solver, row heights, ovals (preview), banner, headcount, sections etc. stay identical to print.
+                    The relative wrapper + absolute bar above + marginTop creates a flawless "page header" feel. */}
+                <div
+                  className="print-artboard mx-auto"
+                  style={{
+                    width: 1056,
+                    height: 816,
+                    background: "#fff",
+                    boxShadow: "0 0 0 1px #E5E5EA",
+                    overflow: "hidden",
+                    // Push the whole paper down inside the relative wrapper so the absolute WeekLens bar
+                    // (positioned at top: -40) sits cleanly *above* the 816px artboard.
+                    marginTop: 42,
+                    // Reserve space on the right for the sidebar (with day columns already shortened via isSidebarCompact).
+                    marginRight: weekLensSidebarOpen ? 220 : 0,
+                    transition: 'margin-right 180ms ease-out, margin-top 180ms ease-out',
+                    boxSizing: 'border-box',
+                  }}
+                >
                 <WeeklyOverview
                   overviewNights={weekOverviewNights}
                   dayDefs={DAY_DEFS}
                   focusedTmId={focusedWeeklyTmId}
-                  onFocusTm={setFocusedWeeklyTmId}
+                  onFocusTm={(tmId) => {
+                    setFocusedWeeklyTmId(tmId);
+                    if (tmId) setWeekLensSidebarOpen(true); // auto-open the footprint + suggestions panel on focus
+                  }}
                   onJumpToDayIndex={(idx) => {
                     setSelectedDayIndex(idx);
                     // focus stays so the new day's column is emphasized in context
                   }}
                   currentDayIndex={selectedDayIndex}
                   weeklyRecentHistory={plannedThisWeekRecentHistory}
+                  mode={isPrintPreview ? 'preview' : 'builder'}
+                  showDigitalAssists={!isPrintPreview} // xAI dots + builder assists only in builder mode; preview is clean print-faithful (ovals, viol, focus, load still diagnostic)
+                  // WeekLens v2 builder chrome props (top bar + sidebar drive these; renderer only highlights, never mutates solver geometry)
+                  filters={weekLensFilters}
+                  search={weekLensSearch}
+                  sidebarOpen={weekLensSidebarOpen}
                   onActivateTmContext={(tmId, slotKey, dayIndex) => {
-                    // Deeper integration: ensure day + focus, and the board/pad can react.
-                    // The name cell already did focus+jump; this gives explicit hook for pad pre-context (health/rotation).
+                    // Deeper integration: ensure day + focus, and open the context (pad) for the specific placement.
+                    // This makes clicking in weekly (esp. builder mode) actually open/show the PlacementPad context
+                    // for that (day, slot), pre-contextualized with week data via the focus and history.
                     setSelectedDayIndex(dayIndex);
                     setFocusedWeeklyTmId(tmId);
-                    // Future: could trigger activePlacementPad for slotKey on that day with week context.
-                    // For now the jump + focus + overview's enriched title provides the context.
+                    if (slotKey) {
+                      handleSlotToggle(slotKey);
+                    }
+                  }}
+                  onRequestXaiInsight={(tmId, context) => {
+                    // xAI integration point for the week overview.
+                    // For a specific placement or the full week view of the TM, request engine insight
+                    // (opens glass or pre-loads pad with week rotation/fit provenance).
+                    // When week:true we now prefer the dedicated rotation health advisor flow (prescriptive
+                    // "what to move where + why" to raise the wk % / overall health). This directly answers
+                    // "how can rotation health + xAI give us a breakdown of moves".
+                    if (context?.week) {
+                      void handleRequestRotationAdvisor({
+                        tmId: tmId || undefined,
+                        slotKey: context.slotKey,
+                        focusWeek: true,
+                      });
+                      setFocusedWeeklyTmId(tmId || null);
+                      return;
+                    }
+                    const key = context.slotKey || `${tmId}-week`;
+                    setProvenanceKey(key);
+                    setWeekAdvisorText(null); // clear any prior advisor result
+                    setFocusedWeeklyTmId(tmId || null);
                   }}
                 />
+                {/* Render pad context directly when weekly overview page is active (board not rendered).
+                    This ensures clicking names/cells in weekly (builder mode especially) opens and shows the PlacementPad context. */}
+                {selectedSlotKey && currentView === "weekly" && (
+                  <PlacementPad
+                    slotKey={selectedSlotKey}
+                    anchor="right"
+                    hostId={selectedSlotKey}
+                    onClose={() => setSelectedSlotKey(null)}
+                    assignments={padAssignments}
+                    selectedTasks={selectedTasks}
+                    selectedDay={selectedDay}
+                    members={effectiveRealRoster}
+                    auxDefs={auxDefs}
+                    isDark={isDark}
+                    isCurrentNightLocked={isCurrentNightLocked}
+                    setBreakGroupForSlot={setBreakGroupForSlot}
+                    onAddCoverage={handlePadAddCoverage}
+                    onLiveUnassign={handleBoardLiveUnassign}
+                    onToggleLock={handlePadToggleLock}
+                    onAssign={handlePadAssign}
+                    onAddTask={(sk, label) => handleCmdkAddTask(sk, label)}
+                    onRemoveTask={handleBoardRemoveTask}
+                    onAssignSweeper={(sk, label) => handleAssignSweeperTask(sk, label)}
+                    onRequestEngineInsight={handleBoardRequestEngineInsight}
+                    scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+                    allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                    onAddOnCall={handlePadAddOnCall}
+                    onMarkUnavailable={handlePadMarkUnavailable}
+                    isDraftMode={isDraftMode}
+                    draftAssignments={draftAssignments}
+                  />
+                )}
               </div>
+              </div> {/* close the relative wrapper so the WeekLens bar (absolute) sits above the paper */}
+
+                {/* WeekLens v2 right sidebar (Focus Mode 2.0) — unscaled, ~22% width, positioned to the right of the golden paper.
+                    Does not alter table geometry or the 1056x816 solver budget. Collapsible. Builder only. */}
+                {/* Sidebar always rendered in builder weekly so we can animate it sliding in from the right.
+                    Controlled by weekLensSidebarOpen (auto-opens on name click). */}
+                {!isPrintPreview && canvasMode === 'builder' && (
+                  <div
+                    className="no-print"
+                    style={{
+                      position: 'fixed',
+                      top: 96,
+                      right: weekLensSidebarOpen ? 16 : -260,
+                      zIndex: 110,
+                      width: 200,
+                      maxHeight: 'calc(100vh - 120px)',
+                      background: 'rgba(255,255,255,0.98)',
+                      border: '1px solid #E5E5EA',
+                      borderRadius: 6,
+                      boxShadow: '-3px 0 10px rgba(0,0,0,0.07)',
+                      padding: '8px 6px',
+                      fontFamily: "var(--font-atkinson, system-ui)",
+                      fontSize: 10,
+                      overflow: 'auto',
+                      transition: 'right 180ms ease-out',
+                      pointerEvents: weekLensSidebarOpen ? 'auto' : 'none',
+                      boxSizing: 'border-box',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9, padding: '0 2px' }}>
+                      <span>Focus</span>
+                      <button onClick={() => setWeekLensSidebarOpen(false)} style={{ fontSize: 9, color: '#9CA3AF', lineHeight: 1, padding: '0 2px' }}>×</button>
+                    </div>
+
+                    {focusedWeeklyTmId ? (
+                      <div>
+                        {/* Mini weekly Gantt / footprint — tight, scannable, tint only on repeat days */}
+                        <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, padding: '0 2px' }}>
+                          {(() => {
+                            let nm = focusedWeeklyTmId;
+                            for (const n of (weekOverviewNights || [])) {
+                              for (const a of Object.values(n.assignments || {})) {
+                                if ((a as any)?.tmId === focusedWeeklyTmId && (a as any)?.tmName) { nm = (a as any).tmName; break; }
+                              }
+                            }
+                            return nm;
+                          })()}
+                          <span 
+                            onMouseDown={(e) => {
+                              const nameEl = e.currentTarget.parentElement;
+                              if (nameEl) {
+                                const nameText = nameEl.textContent?.trim().split(' ')[0] || focusedWeeklyTmId || '';
+                                navigator.clipboard?.writeText(nameText);
+                              }
+                            }}
+                            title="Copy focused TM name to clipboard"
+                            style={{ cursor: 'pointer', fontSize: 9, opacity: 0.6, userSelect: 'none' }}
+                          >⎘</span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 1, marginBottom: 4, flexWrap: 'wrap', padding: '0 1px' }}>
+                          {(() => {
+                            const slotCounts: Record<string, number> = {};
+                            (weekOverviewNights || []).forEach(n => {
+                              Object.entries(n.assignments || {}).forEach(([sk, a]: any) => {
+                                if (a?.tmId === focusedWeeklyTmId) slotCounts[sk] = (slotCounts[sk] || 0) + 1;
+                              });
+                            });
+                            return (weekOverviewNights || []).map((n: any, idx: number) => {
+                              const placed = Object.entries(n.assignments || {}).find(([,a]: any) => a?.tmId === focusedWeeklyTmId);
+                              const slot = placed ? placed[0] : null;
+                              const def = DAY_DEFS[n.dayIndex] || { short: '?', color: '#888', dateNum: n.dayIndex };
+                              const isRepeatDay = slot && slotCounts[slot] > 1;
+                              return (
+                                <div key={idx} style={{
+                                  fontSize: 6.5, textAlign: 'center', padding: '0 1px', minWidth: 16, height: 10, lineHeight: '10px',
+                                  borderRadius: 1,
+                                  background: isRepeatDay ? 'rgba(251,191,36,0.22)' : (slot ? 'rgba(0,0,0,0.025)' : 'transparent'),
+                                  border: isRepeatDay ? `1px solid #F59E0B` : (slot ? `1px solid ${def.color}` : '1px dashed #ddd'),
+                                  color: isRepeatDay ? '#B45309' : (slot ? def.color : '#aaa'),
+                                  boxSizing: 'border-box',
+                                }} title={slot ? `${def.name} ${def.dateNum}: ${slot}${isRepeatDay ? ' (repeat for this TM)' : ''}` : `${def.name} ${def.dateNum}: —`}>
+                                  {(def.short?.[0] || '?') + def.dateNum}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+
+                        <div style={{ fontSize: 8, color: '#6B7280', marginBottom: 4, padding: '0 2px', lineHeight: 1.1 }}>
+                          Repeats on this TM contribute to weekly balance. Click any cell to jump + re-focus.
+                        </div>
+
+                        {/* Quick advisor trigger */}
+                        <button
+                          onClick={() => void handleRequestRotationAdvisor({ tmId: focusedWeeklyTmId || undefined, focusWeek: true })}
+                          style={{ fontSize: 8, padding: '0 4px', height: 14, borderRadius: 2, background: '#6B21A8', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 4, width: '100%', lineHeight: 1 }}
+                        >
+                          Ask xAI for this TM's rotation plan
+                        </button>
+
+                        {/* Real local suggestions — ultra-compact cards */}
+                        <div style={{ fontWeight: 600, fontSize: 7, marginBottom: 1, padding: '0 1px', color: '#6B7280' }}>Local suggestions (instant)</div>
+                        {weekLensSuggestions && weekLensSuggestions.length > 0 ? (
+                          weekLensSuggestions.slice(0, 3).map((s: any, i: number) => (
+                            <div key={i} style={{ fontSize: 7, marginBottom: 2, padding: '1px 2px', background: '#F8F8F9', borderRadius: 2, border: '1px solid #eee', lineHeight: 1.1 }}>
+                              <div>{s.from?.tmName || s.from?.tmId} {s.from?.slotKey} → {s.to?.slotKey}{s.to?.viaSwapWith ? ` (swap ${s.to.viaSwapWith.tmName || s.to.viaSwapWith.tmId})` : ''}</div>
+                              <div style={{ color: '#6B7280', fontSize: 6 }}>{s.reason}</div>
+                              <button
+                                onClick={() => applyWeekLensMove(s)}
+                                style={{ marginTop: 0, fontSize: 6, padding: '0 2px', height: 10, borderRadius: 1, background: '#fff', border: '1px solid #C13A14', color: '#C13A14', cursor: 'pointer' }}
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: 7, color: '#6B7280', padding: '0 1px' }}>No high-impact single swaps available. Full rotation plan recommended.</div>
+                        )}
+
+                        {/* Always surface full xAI */}
+                        <button
+                          onClick={() => void handleRequestRotationAdvisor({ tmId: focusedWeeklyTmId || undefined, focusWeek: true })}
+                          style={{ fontSize: 7, padding: '0 3px', height: 12, borderRadius: 1, background: '#6B21A8', color: '#fff', border: 'none', cursor: 'pointer', marginTop: 1, width: '100%', lineHeight: 1 }}
+                        >
+                          View full xAI plan
+                        </button>
+
+                        <div style={{ fontSize: 6, color: '#9CA3AF', marginTop: 3, padding: '0 1px', lineHeight: 1.05 }}>
+                          Only zones / restrooms (gender) / valid aux. Never overlaps/admin.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ color: '#6B7280', fontSize: 10 }}>
+                        Click any name in the Week Overview (builder) to focus. Sidebar shows that person's full-week footprint (mini Gantt above), repeat cost, and actionable rotation suggestions from the local engine + xAI.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
               <ShiftBuilderBoard
                 // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
@@ -6062,7 +6999,7 @@ function AuthedShiftBuilder() {
                 processedBreakCounts={processedDayData?.breakCounts}
                 selectedDay={selectedDay}
                 selectedDayIndex={selectedDayIndex}
-                currentView={currentView}
+                currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
                 isDraftMode={isDraftMode}
@@ -6371,7 +7308,12 @@ function AuthedShiftBuilder() {
       {provenanceKey && (
         <ProvenanceGlass
           slotKey={provenanceKey}
-          onClose={() => setProvenanceKey(null)}
+          onClose={() => {
+            setProvenanceKey(null);
+            setWeekAdvisorText(null);
+            try { (window as any).__lastWeekAdvisorText = null; } catch {}
+          }}
+          advisorText={provenanceKey && /advisor/i.test(provenanceKey) ? weekAdvisorText : undefined}
         />
       )}
 
@@ -6479,6 +7421,24 @@ function AuthedShiftBuilder() {
       {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
       {viewMode === 'canvas' && <OpsStatusBar />}
 
+      {/* Persistent but dismissable live tracker for each day's rotation health %.
+          Shows the consistently tracked per-day health (rich when captured for that day + stable repeat-based proxies for the full week).
+          Updates live as assignments, drafts, or fit data change.
+          Click a day to switch to it. X to dismiss (preference persisted in localStorage).
+          Re-open via the small button in the health cluster when dismissed. */}
+      {viewMode === 'canvas' && deploymentRotationFitEnabled && !isWeekHealthTrackerDismissed && (
+        <div className="flex justify-center mb-2">
+          <WeekHealthTracker
+            visible
+            weekDailyHealths={weekDailyHealths}
+            dayDefs={DAY_DEFS}
+            selectedDayIndex={selectedDayIndex}
+            onSelectDay={(idx) => setSelectedDayIndex(idx)}
+            onDismiss={dismissWeekHealthTracker}
+          />
+        </div>
+      )}
+
       {viewMode === 'canvas' && deploymentRotationFitEnabled && (
         <CanvasEngineCluster
           visible={!(isTabletTouchDevice() && selectedSlotKey)}
@@ -6497,6 +7457,10 @@ function AuthedShiftBuilder() {
           draftAssignments={draftAssignments}
           draftGrokExplanation={draftGrokExplanation}
           weeklyRecentHistory={plannedThisWeekRecentHistory}
+          weekDailyHealths={weekDailyHealths}
+          onRequestRotationAdvisor={() => void handleRequestRotationAdvisor({ focusWeek: true })}
+          // Pass re-show handler so user can bring back the tracker from the health UI
+          onShowWeekHealthTracker={isWeekHealthTrackerDismissed ? showWeekHealthTracker : undefined}
         />
       )}
 

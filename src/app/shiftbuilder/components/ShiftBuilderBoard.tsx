@@ -871,7 +871,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
                   return (
-                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
+                    <div key={key} className="relative h-full overflow-hidden" data-slot-key={key} data-placement-host={key}> {/* overflow-hidden keeps multi-task AUX cards from escaping the fixed artboard / equalized band height */}
                       <AuxCard
                         def={def}
                         assignments={displayAssignments}

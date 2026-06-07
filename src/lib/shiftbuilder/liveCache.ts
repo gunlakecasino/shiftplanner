@@ -262,10 +262,20 @@ export function initLiveCacheForNight(
     .subscribe((status: any) => {
       if (status === "SUBSCRIBED") {
         liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connected");
+        if (typeof window !== "undefined") {
+          (window as any).__realtimeState = "LIVE";
+        }
         console.log(`[liveCache] Realtime connected for night ${nightId} (${dateKey})`);
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         liveAssignmentsStore.getState().setConnectionStatus(dateKey, "error");
+        if (typeof window !== "undefined") {
+          (window as any).__realtimeState = "OFFLINE";
+        }
         console.warn(`[liveCache] Realtime error for night ${nightId}`);
+      } else if (status === "SUBSCRIBING") {
+        if (typeof window !== "undefined") {
+          (window as any).__realtimeState = "SYNCING";
+        }
       }
     });
 
@@ -282,6 +292,9 @@ function teardownLiveCacheForNight(nightId: string, dateKey: string) {
     delete activeChannels[channelKey];
   }
   liveAssignmentsStore.getState().setConnectionStatus(dateKey, "disconnected");
+  if (typeof window !== "undefined") {
+    (window as any).__realtimeState = "OFFLINE";
+  }
 }
 
 /**

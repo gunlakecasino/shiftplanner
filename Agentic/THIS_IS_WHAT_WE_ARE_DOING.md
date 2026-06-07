@@ -1,6 +1,6 @@
 # THIS IS WHAT WE ARE DOING — OMS / ZDS ShiftPlanner (Master Context)
 
-**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — Weekly Overview live table added to navbar (next to Launchpad/Today); TM tap fades table rows + dims canvas cards while highlighting the TM + detail week strip with clickable days; reuses plannedThisWeekRecentHistory + focus prop drilling; version 0.822; tsc clean
+**Last Updated**: 2026-06-09 — by Grok 4.3 (WebApp primary focus) — Weekly Overview sheet print-preview (LiveWeeklyOverviewArtboard) fix: now populates all prior days in the week (Mon-Wed when on Thu) instead of only current day. Root cause was weekOverviewNights sourcing + missing cross-day snapshots into live store; paralleled the plannedThisWeekRecentHistory merge + added mirrorMain on switch + post-hydrate + current effect. Stable full-week columns, display name fallbacks, focus/day-jump preserved. Version 0.823; tsc clean. (Follow-up to the panel→sheet rethink.)
 **Status**: Active / In Progress  
 **Current Epic**: WebApp ShiftBuilder + Sudo tools + AI insights + Nightwatch (native `opsApp` paused for now)
 
@@ -31,10 +31,11 @@ See `Agentic/Plans/active/ATTACK_PLAN_2026-05-22.md` (and MONOLITH_SPLIT) for we
 
 ## Active Plan
 
-- **PRIMARY**: `Plans/active/ATTACK_PLAN_2026-05-22.md` (web Wave 2/3 polish + architecture) + `Plans/active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` (incremental extraction + hygiene; target slim orchestrator not yet fully realized).
-- **Supporting / On Hold**: `Plans/active/OPSAPP_NATIVE_FIRST_2026-05-25.md` (paused; plan + `/opsApp` preserved for resumption).
-- **Related Vision**: `SCHEDULING_MASTERLIST.md` (long-term north star — "the scheduling system operators revere")
-- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, `Key-Information/ops-agent-data-model.md`, `src/lib/shiftbuilder/` (placement, scoring, engineConfig, data, grok* )
+- **ARCHIVED (2026-06-10, execution to completion)**: `Plans/archive/PRODUCTION_STABILIZATION_2026-06-10.md` — Fully shipped and moved to archive/ after "continue" passes. Delivered: Slice 1 (useShiftData data layer), Slice 4 (server `validateProposedAssignments` guard on applyDraft — graves + isEligible re-check before commits, with UI feedback), Slice 5 (full Graves audit doc), Slice 3 (atomicity hardening + guard), Slice 6 partial (Realtime status wiring in liveCache + "server-validated" toast visibility). tsc clean, server data paths validated. Slice 2 deferred due to Turbopack risk. See archived plan + latest AGENT_ACTIVITY_LOG for full delivered value and impact on "trusted, fair, fast, explainable". (Active plans now focus on remaining historical items.)
+- **Supporting**: `Plans/active/ATTACK_PLAN_2026-05-22.md` (historical Wave 2/3 items; many addressed incrementally — cross-check recent log) + `Plans/active/SHIFTBUILDER_MONOLITH_SPLIT_2026-05-24.md` (extraction progress; Client still large at 7264 LOC as of June 2026).
+- **On Hold**: `Plans/active/OPSAPP_NATIVE_FIRST_2026-05-25.md` (paused; plan + `/opsApp` preserved).
+- **Related Vision**: `SCHEDULING_MASTERLIST.md`
+- **Related Technical**: `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`, `Key-Information/ops-agent-data-model.md`, `src/lib/shiftbuilder/` (placement, gravesDefaultSchedule, useShiftHistory, grok*, data, store patterns)
 - **Archive**: `Plans/archive/` — previous plans filed when complete.
 
 All new implementation plans go in `Plans/active/` and are archived when complete. Plans in active/ may be historical snapshots; cross-check top of AGENT_ACTIVITY_LOG for what actually shipped.

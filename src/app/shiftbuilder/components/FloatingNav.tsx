@@ -114,8 +114,8 @@ export interface FloatingNavProps {
   onDaySelect: (id: number, date: Date) => void;
   /** Called on hover for aggressive prefetch — makes day switching feel instant */
   onDayHover?: (id: number, date: Date) => void;
-  currentView: "deployment" | "breaks";
-  onViewChange: (view: "deployment" | "breaks") => void;
+  currentView: "deployment" | "breaks" | "weekly";
+  onViewChange: (view: "deployment" | "breaks" | "weekly") => void;
   placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
   onToday: () => void;
   /** Return to ShiftBuilder launchpad (canvas mode only). */
@@ -153,9 +153,6 @@ export interface FloatingNavProps {
   /** Builder vs print-preview — lives in nav so it never covers zone cards. */
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
-  /** Weekly Overview live table (next to Launchpad + Today). */
-  onWeeklyOverview?: () => void;
-  weeklyOverviewOpen?: boolean;
 }
 
 // ==================== SPRING ====================
@@ -194,8 +191,6 @@ export default function FloatingNav({
   onRosterToggle,
   canvasMode = "builder",
   onCanvasModeChange,
-  onWeeklyOverview,
-  weeklyOverviewOpen,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
 
@@ -337,16 +332,6 @@ export default function FloatingNav({
               active={rosterOpen}
             >
               <Users className={NAV_ICON} />
-            </NavToolButton>
-          ) : null}
-          {onWeeklyOverview ? (
-            <NavToolButton
-              onClick={onWeeklyOverview}
-              title="Weekly Overview"
-              ariaLabel="Open live weekly overview table"
-              active={weeklyOverviewOpen}
-            >
-              <Table2 className={NAV_ICON} />
             </NavToolButton>
           ) : null}
         </div>
@@ -492,6 +477,14 @@ export default function FloatingNav({
               active={currentView === "breaks"}
             >
               <Coffee className={NAV_ICON} />
+            </NavToolButton>
+            <NavToolButton
+              onClick={() => onViewChange("weekly")}
+              title="Week overview"
+              ariaLabel="Week overview"
+              active={currentView === "weekly"}
+            >
+              <Table2 className={NAV_ICON} />
             </NavToolButton>
           </div>
 
