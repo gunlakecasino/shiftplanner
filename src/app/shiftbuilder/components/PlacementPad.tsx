@@ -936,10 +936,6 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   };
 
   const currentIso = nightIsoFromDate(selectedDay.date);
-  const spreadKeys = getSpreadPlacementKeys(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
-  const spreadCounts = getSpreadPlacementCounts(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
-  const placedSet = new Set(spreadKeys);
-  const spreadCountFor = (ui: string) => spreadCounts.get(ui) ?? 0;
 
   const rrLocs = RR_DEFS.flatMap((d) => {
     const tmId = a?.tmId;
@@ -959,6 +955,84 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       label: formatPlacementUiLabel(d.key, d.label || d.key),
     }));
 
+  /** Single authoritative source for Matrix grid + xAI + prerender fit (padHistory only). */
+  const padMatrixFacts = React.useMemo(() => {
+    const spreadCounts = getSpreadPlacementCounts(
+      padHistory,
+      PLACEMENT_SPREAD_NIGHTS,
+      currentIso,
+    );
+    const spreadKeys = getSpreadPlacementKeys(
+      padHistory,
+      PLACEMENT_SPREAD_NIGHTS,
+      currentIso,
+    );
+    const last5Sequence = getLastPlacementSequence(
+      padHistory,
+      LAST5_COUNT,
+      currentIso,
+    );
+    const zoneLines = ZONE_DEFS.map(
+      (z) => `${z.key}:${spreadCounts.get(z.key) ?? 0}`,
+    ).join(" ");
+    const rrLines = rrLocs
+      .map((loc) => `${loc.ui}:${spreadCounts.get(loc.ui) ?? 0}`)
+      .join(" ");
+    const auxLines = auxLocs
+      .map((loc) => `${loc.ui}:${spreadCounts.get(loc.ui) ?? 0}`)
+      .join(" ");
+    const last5Line = last5Sequence.join(" → ") || "—";
+    const slotSpread = spreadCounts.get(slotKey) ?? 0;
+    const slotInLast5 = last5Sequence.includes(slotKey);
+    const weekPrior = a.tmId
+      ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, a.tmId, slotKey).count
+      : 0;
+    const weekRepeatTotal = weekPrior + (a.tmId ? 1 : 0);
+
+    const matrixSpreadSnapshot = [
+      "MATRIX SURFACE (authoritative — identical to the pad Matrix grid; do not contradict these counts):",
+      `Zones: ${zoneLines}`,
+      rrLines ? `RR: ${rrLines}` : null,
+      auxLines ? `Aux: ${auxLines}` : null,
+      `LAST-5 TRAIL (newest first): ${last5Line}`,
+      `CURRENT SLOT ${slotKey}: ${slotSpread}× in last-${PLACEMENT_SPREAD_NIGHTS}${slotInLast5 ? "; IN last-5 trail" : "; NOT in last-5 trail"}`,
+      weekRepeatTotal > 1
+        ? `THIS GRAVE WEEK on ${slotKey}: ${weekRepeatTotal}× (incl. tonight; last-30 may still be 0)`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const slotHistorySummary = a.tmId
+      ? slotSpread > 0
+        ? `${slotSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights; in last-5 trail: ${slotInLast5 ? "yes" : "no"}`
+        : `Not in last ${PLACEMENT_SPREAD_NIGHTS}-night spread${weekRepeatTotal > 1 ? `; ${weekRepeatTotal}× this grave week on ${slotKey}` : ""}`
+      : undefined;
+
+    return {
+      spreadCounts,
+      spreadKeys,
+      last5Sequence,
+      matrixSpreadSnapshot,
+      slotSpread,
+      slotInLast5,
+      weekRepeatTotal,
+      slotHistorySummary,
+    };
+  }, [
+    padHistory,
+    currentIso,
+    slotKey,
+    a.tmId,
+    weeklyRecentHistory,
+    rrLocs,
+    auxLocs,
+  ]);
+
+  const spreadKeys = padMatrixFacts.spreadKeys;
+  const placedSet = new Set(spreadKeys);
+  const spreadCountFor = (ui: string) => padMatrixFacts.spreadCounts.get(ui) ?? 0;
+
   const getPillAccent = (ui: string): string => {
     if (/^Z\d+$/.test(ui)) return getZoneColor(ui);
     if (ui.startsWith("MRR") || ui.startsWith("WRR")) {
@@ -972,7 +1046,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const z9Days = getDaysSinceForKey(padHistory, "Z9", currentIso);
   const z9srDays = getDaysSinceForKey(padHistory, "Z9SR", currentIso);
 
-  const last5Sequence = getLastPlacementSequence(padHistory, LAST5_COUNT, currentIso);
+  const last5Sequence = padMatrixFacts.last5Sequence;
   const last5Pills: Array<string | null> = [...last5Sequence];
   while (last5Pills.length < LAST5_COUNT) last5Pills.push(null);
 
@@ -1004,12 +1078,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     .map(([k, v]) => `${k}:${v.tmName}`)
     .join(", ");
 
-  const timesInSpread = spreadCountFor(slotKey);
-  const slotHistorySummary = a.tmId
-    ? timesInSpread > 0
-      ? `${timesInSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights; in last-5 trail: ${last5Sequence.includes(slotKey) ? "yes" : "no"}`
-      : `Not in last ${PLACEMENT_SPREAD_NIGHTS}-night spread`
-    : undefined;
+  const timesInSpread = padMatrixFacts.slotSpread;
+  const slotHistorySummary = padMatrixFacts.slotHistorySummary;
 
   const auxKeysSig = React.useMemo(
     () => auxDefs.filter((d) => !d.key.startsWith("SP")).map((d) => d.key).join(","),
@@ -1104,8 +1174,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     [scheduledUnassigned],
   );
 
+  // Always score from padHistory — same source as the Matrix surface (last-30 + last-5).
+  // boardPrerenderedFit uses the board hook's history cache and can disagree with the pad matrix.
   const prerenderedFit = React.useMemo((): PrerenderedPlacementFit => {
-    if (boardPrerenderedFit) return boardPrerenderedFit;
     const fit = computeSlotPlacementFit({
       slotKey,
       assignments,
@@ -1116,12 +1187,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       currentIso,
       histories: padHistory && a.tmId ? { [a.tmId]: padHistory } : {},
       historiesLoading: !!a.tmId && padHistoryLoading,
+      weeklyRecentHistory,
       candidateProfiles: a.tmName ? undefined : buildCandidateProfiles(),
       preferredCandidateIds: a.tmName ? undefined : preferredCandidateIds,
     });
     return fit;
   }, [
-    boardPrerenderedFit,
     slotKey,
     assignments,
     isDraftMode,
@@ -1132,6 +1203,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     padHistory,
     a.tmId,
     padHistoryLoading,
+    weeklyRecentHistory,
     a.tmName,
     buildCandidateProfiles,
     preferredCandidateIds,
@@ -1145,6 +1217,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         boardSig,
         currentIso,
         padHistorySig,
+        padMatrixFacts.matrixSpreadSnapshot,
         rotationDisplay?.gapsLine ?? "",
         (rotationDisplay?.swapLines ?? []).join("|"),
         prov.rationale ?? "",
@@ -1157,6 +1230,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       boardSig,
       currentIso,
       padHistorySig,
+      padMatrixFacts.matrixSpreadSnapshot,
       rotationDisplay?.gapsLine,
       rotationDisplay?.swapLines,
       prov.rationale,
@@ -1183,6 +1257,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       fairnessSignals: prov.fairnessSignals as Record<string, number | string> | undefined,
       recentPlacements: last5Sequence.filter(Boolean).join(" → ") || undefined,
       slotSpecificHistory: slotHistorySummary,
+      matrixSpreadSnapshot: padMatrixFacts.matrixSpreadSnapshot,
       currentContext: boardNeighborSummary || undefined,
       tmAttributes: tmMember
         ? {
@@ -1230,8 +1305,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           .filter(([k, v]) => v?.tmName)
           .slice(0, 20)
           .map(([k, v]) => {
-            const exp = thisWeekCountFor.get(k) ?? (spreadCountFor ? spreadCountFor(k) : 0);
-            return `${k}:${v.tmName}${exp ? `(${exp}× this week)` : ''}`;
+            const weekExp = thisWeekCountFor.get(k) ?? 0;
+            const spreadExp = spreadCountFor(k);
+            const tags: string[] = [];
+            if (weekExp > 0) tags.push(`${weekExp}× this week`);
+            if (spreadExp > 0) tags.push(`${spreadExp}× last-30`);
+            return `${k}:${v.tmName}${tags.length ? `(${tags.join("; ")})` : ""}`;
           })
           .join(' ');
         parts.push(`CURRENT BOARD STATE (full artboard right now + week exposure): ${boardLines || 'mostly empty'}`);
@@ -1303,6 +1382,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       boardNeighborSummary,
       selectedDay,
       padHistory,
+      padMatrixFacts.matrixSpreadSnapshot,
       currentIso,
       prerenderedFit.fitVerdict,
       prerenderedFit.fitSummary,
@@ -1379,6 +1459,13 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       // Silent fail is fine — prerender + rotation are still authoritative.
     }
   }, [a.tmName, buildInsightContext, hostId, slotKey]);
+
+  // Re-run xAI when pad history loads or changes — matrix + headline must share the same facts.
+  React.useEffect(() => {
+    setInsightStructured(null);
+    setInsightCached(false);
+    setBriefLoading(true);
+  }, [padHistorySig, a.tmId, slotKey]);
 
   // Auto-run the light headline determination once per pad open for assigned TMs.
   // This is the key UX refinement: the magic one-liner now appears in the builder surfaces (cards)
@@ -1908,13 +1995,29 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                         <div className="grid grid-cols-5 gap-0.5">
                           {ZONE_DEFS.map((z) => {
                             const n = spreadCountFor(z.key);
-                            const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
+                            const weekPrior = a.tmId
+                              ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, a.tmId, z.key).count
+                              : 0;
+                            const weekOnSlot =
+                              weekPrior + (z.key === slotKey && a.tmId ? 1 : 0);
+                            const col =
+                              n > 0 && spreadFrequencyAccent(n)
+                                ? spreadFrequencyAccent(n)
+                                : weekOnSlot > 1
+                                  ? "#ea580c"
+                                  : null;
+                            const title =
+                              n > 0
+                                ? `${z.key} · ${n}× in last 30 nights${weekOnSlot > 1 ? `; ${weekOnSlot}× this grave week` : ""}`
+                                : weekOnSlot > 1
+                                  ? `${z.key} · 0× last 30; ${weekOnSlot}× this grave week`
+                                  : z.key;
                             return (
                               <span
                                 key={z.key}
                                 className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
                                 style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
-                                title={n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key}
+                                title={title}
                               >
                                 {z.key}
                               </span>

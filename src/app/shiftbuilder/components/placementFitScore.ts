@@ -236,12 +236,29 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     };
   }
 
-  // Acceptable: repeat exposure (2×+ in 30 or this week) or back-to-back in last-5 — still fine unless a better gap exists.
+  // Acceptable: repeat in last-30, last-5 trail, and/or this grave week — message must name the actual signal(s).
   if (times >= 2 || inLast5 || weekRepeat >= 2) {
     const weekNote = weekRepeat >= 2 ? `week repeat ${weekRepeat}×` : null;
+    const spreadRepeat = times >= 2;
+    const last5Repeat = inLast5;
+    const weekOnlyRepeat = weekRepeat >= 2 && !spreadRepeat && !last5Repeat;
+
+    let fitSummary: string;
+    if (weekOnlyRepeat) {
+      fitSummary = `${name} on ${slotLabel} — ${weekRepeat}× this grave week (${spreadFact}); within policy for tonight.`;
+    } else if (spreadRepeat && last5Repeat) {
+      fitSummary = `${name} on ${slotLabel} — ${times}× in last 30 and in last-5 trail; within reason for tonight.`;
+    } else if (spreadRepeat) {
+      fitSummary = `${name} on ${slotLabel} — ${times}× in last 30; within reason for tonight.`;
+    } else if (last5Repeat) {
+      fitSummary = `${name} on ${slotLabel} — in last-5 trail (${spreadFact}); within reason for tonight.`;
+    } else {
+      fitSummary = `${name} on ${slotLabel} — repeat exposure is within reason for tonight.`;
+    }
+
     return {
       fitVerdict: "acceptable",
-      fitSummary: `${name} on ${slotLabel} — repeat exposure is within reason for tonight.`,
+      fitSummary,
       fitFactLine: buildFactLine([
         spreadFact,
         weekNote,

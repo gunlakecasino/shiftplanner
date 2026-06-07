@@ -62,6 +62,8 @@ export type EngineInsightContext = {
   spreadPlaced?: string;
   /** Comma-separated matrix keys not in spread. */
   spreadGaps?: string;
+  /** Authoritative last-30 + last-5 counts — must match the pad Matrix grid exactly. */
+  matrixSpreadSnapshot?: string;
   /** Pre-scored / filtered candidate rows for empty slots. */
   candidateProfiles?: PlacementCandidateProfile[];
   rotationBasicsText?: string;
@@ -275,6 +277,7 @@ ${getXaiSwapHardRules()}
 
 CONTEXT FOCUS: ${kindFocus}
 The INSTANT PRERENDER is just one weak baseline. 
+**MATRIXSPREADSNAPSHOT IS AUTHORITATIVE FOR LAST-30 AND LAST-5 COUNTS** — it is identical to the Matrix grid the operator sees. Never claim a TM has repeat exposure in the last 30 nights on a slot when that snapshot shows 0× for that slot. If only "THIS GRAVE WEEK" is elevated, say "this week" explicitly — not "repeat in spread".
 **BOARDANDWEEKCONTEXT IS THE PRIMARY SIGNAL YOU MUST USE FOR EVERY BULLET** (it contains the full current artboard placements with week exposure counts + this week's gaps + key swap lanes + under-used slots + board fill this night). 
 Your bullets must explicitly show you read and used the boardAndWeekContext — e.g. reference specific other slots' status this week, how the swap or placement helps close global gaps on the tier, or how it balances load across the current board. Do not ignore it or give local-only bullets.
 
@@ -330,6 +333,7 @@ function buildAnalystUserPrompt(ctx: EngineInsightContext): string {
     "",
     "=== DETERMINISTIC FACTS ===",
     ctx.rotationBrief ? `Rotation / swaps:\n${ctx.rotationBrief}` : null,
+    ctx.matrixSpreadSnapshot ? `${ctx.matrixSpreadSnapshot}` : null,
     ctx.spreadPlaced ? `Last-30 spread (placed): ${ctx.spreadPlaced}` : null,
     ctx.spreadGaps ? `Last-30 gaps (not placed): ${ctx.spreadGaps}` : null,
     ctx.slotSpecificHistory ? `This slot history: ${ctx.slotSpecificHistory}` : null,
@@ -395,6 +399,7 @@ function buildLightUserPrompt(ctx: EngineInsightContext): string {
     ctx.rotationBrief ? `Rotation brief:\n${ctx.rotationBrief}` : null,
     ctx.rotationGapsLine ? `Rotation gaps: ${ctx.rotationGapsLine}` : null,
     ctx.rotationSwapLines?.length ? `Specific swap lanes: ${ctx.rotationSwapLines.join(" | ")}` : null,
+    ctx.matrixSpreadSnapshot ? `${ctx.matrixSpreadSnapshot}` : null,
     ctx.spreadPlaced ? `Placed last-30: ${ctx.spreadPlaced}` : null,
     ctx.spreadGaps ? `Gaps last-30: ${ctx.spreadGaps}` : null,
     ctx.slotSpecificHistory ? `Slot history: ${ctx.slotSpecificHistory}` : null,
