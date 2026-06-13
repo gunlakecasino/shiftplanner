@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-06-12 — Grok 4.3 — Ship landed: 3cb4183 (today + shiftbuilder extraction/TS hygiene + infra) pushed + tagged
+
+**Task follow-up (completion record)**: Append-only record of successful commit + push per the 2026-06-12 ship task and Agentic contract (completion milestone).
+
+**Result**:
+- Commit: 3cb4183 on main
+- Tag (pushed): deploy/2026-06-12-234319
+- Push: 40a964a..3cb4183 main -> main (origin)
+- tsc gate: clean (0 errors) before commit
+- ShiftBuilder version: 0.828 (bumped + shipped)
+- All "not pushed" items from the investigation (including focused shiftbuilder: CommandPalette, ShiftBuilderClient, PlacementPad, new coverageHelpers extraction, version) are now on git main.
+- Working tree clean post-push.
+
+**Status**: Complete. No further local changes for this batch. The detailed investigation, decisions, shiftbuilder deltas, and conventional message live in the commit itself + the prior long log entry (which was included in 3cb4183).
+
+**Next**: User can pull or open the commit on GitHub. For Railway deploy: the push triggered the railpack build (monitor via `railway logs --build` or dashboard). If issues surface in prod build, re-enter coding-engineer fix loop immediately.
+
+---
+
 ## 2026-06-12 — Grok 4.3 — Git hygiene + ship: determine unpushed shiftbuilder (and tree) changes, pass gates, commit & push to main
 
 **Task**: "In shiftbuilder, determine what is not pushed to git main and commit and push it". Full investigation of working tree vs main, focus on shiftbuilder deltas, mandatory ship preflight (tsc gate), fix blocker, version bump, conventional commit, push.
