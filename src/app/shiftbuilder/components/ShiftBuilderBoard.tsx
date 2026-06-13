@@ -244,6 +244,55 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return copy;
   }, [assignments, pendingDrag]);
 
+  // === Duplicate TM conflict detection (per-night, across all position slots) ===
+  // High-class ops safety: flag cards so operators immediately see when the same TM
+  // has been placed in more than one spot on this night (zones + RR sides + aux + overlaps).
+  // Computed on the visual/proposed state (display + draft overlay).
+  // Passed down so cards can render refined, subtle digital-assist flags (no-print).
+  const { conflictingTms, tmConflictSlots } = React.useMemo(() => {
+    const tmToSlots: Record<string, string[]> = {};
+
+    // Helper to record a TM for a slot (prefers draft proposed state for what the operator sees)
+    const record = (slotKey: string) => {
+      const d = draftAssignments[slotKey] as any;
+      const live = displayAssignments[slotKey];
+      const tmId = d?.proposedTmId || live?.tmId;
+      if (tmId) {
+        (tmToSlots[tmId] ||= []).push(slotKey);
+      }
+    };
+
+    // Zones
+    ZONE_DEFS.forEach(d => record(d.key));
+
+    // Restrooms (both sides)
+    RR_DEFS.forEach(d => {
+      record(`MRR${d.num}`);
+      record(`WRR${d.num}`);
+    });
+
+    // Aux / support
+    auxDefs.forEach(d => record(d.key));
+
+    // Overlaps (any OL- keys present)
+    Object.keys(displayAssignments).forEach(k => {
+      if (k.startsWith('OL-')) record(k);
+    });
+    Object.keys(draftAssignments).forEach(k => {
+      if (k.startsWith('OL-')) record(k);
+    });
+
+    const dups = new Set<string>();
+    const slotsByTm: Record<string, string[]> = {};
+    Object.entries(tmToSlots).forEach(([tmId, slots]) => {
+      if (slots.length > 1) {
+        dups.add(tmId);
+        slotsByTm[tmId] = slots;
+      }
+    });
+    return { conflictingTms: dups, tmConflictSlots: slotsByTm };
+  }, [displayAssignments, draftAssignments, auxDefs]);
+
   const isAnyDragActive = !!pendingDrag;
   // === Local derived (was in giant parent; now scoped to board only) ===
   // Always call the hook (Rules of Hooks). Prefer worker value when available.
@@ -761,6 +810,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
                   ).length} / 10 FILLED
                 </span>
+                {conflictingTms.size > 0 && showDigitalAssists && (
+                  <span
+                    className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-mono tracking-[0.5px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                    title={`${conflictingTms.size} team member${conflictingTms.size > 1 ? 's' : ''} assigned to multiple slots this night`}
+                  >
+                    {conflictingTms.size} dup{conflictingTms.size > 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
               <div ref={zonesGridRef} className={`grid grid-cols-5 gap-1.5 flex-1${builderCardGridClass}`} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_DEFS.map((def) => {
@@ -791,6 +848,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
+                        conflictingTms={conflictingTms}
+                        tmConflictSlots={tmConflictSlots}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -850,6 +909,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         fitChipM={showDigitalAssists ? fitBySlot[mKey] : undefined}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
+                        conflictingTms={conflictingTms}
+                        tmConflictSlots={tmConflictSlots}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -906,6 +967,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
+                        conflictingTms={conflictingTms}
+                        tmConflictSlots={tmConflictSlots}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1088,6 +1151,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
                                 showDigitalAssists={showDigitalAssists}
                                 focusedTmId={focusedTmId}
+                                conflictingTms={conflictingTms}
+                                tmConflictSlots={tmConflictSlots}
                               />
                               {activePlacementPad?.hostId === slotKey &&
                                 renderPlacementPad(

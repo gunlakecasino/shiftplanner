@@ -37,6 +37,10 @@ export interface OverlapSlotProps {
 
   /** Weekly Overview focus for this small overlap cell. */
   focusedTmId?: string | null;
+
+  /** Duplicate TM flagging (same TM in >1 position this night) — high-class digital assist only. */
+  conflictingTms?: Set<string>;
+  tmConflictSlots?: Record<string, string[]>;
 }
 
 // One overlap cell (Break Sheet view) — a small assignable card. Backed by
@@ -62,6 +66,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   fitChip,
   showDigitalAssists = false,
   focusedTmId,
+  conflictingTms,
+  tmConflictSlots,
 }) => {
   const a = assignments[slotKey] || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
@@ -72,6 +78,11 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   const currentTmId = a?.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
+
+  const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
+  const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
+    ? tmConflictSlots[currentTmId].filter(s => s !== slotKey)
+    : [];
   const { isPenHovering, penHoverHandlers } = usePencilHover(
     (el) => { if (!isLocked && onCardClick) onCardClick(slotKey, el); },
   );
@@ -103,6 +114,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           >
             {a.tmName}
           </span>
+          {isDuplicate && showDigitalAssists && (
+            <span
+              className="ml-1 inline-flex items-center rounded px-0.5 py-px text-[8px] font-mono tracking-[0.5px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+              title={`Duplicate — also in: ${otherSlotsForTm.join(', ')}`}
+            >
+              2×
+            </span>
+          )}
           {fitChip && (
             <PlacementFitChip fit={fitChip} />
           )}

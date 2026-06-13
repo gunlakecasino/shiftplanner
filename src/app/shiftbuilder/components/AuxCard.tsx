@@ -43,6 +43,10 @@ export interface AuxCardProps {
 
   /** Weekly Overview focus: when provided, this card dims if its TM does not match, or highlights if it does. */
   focusedTmId?: string | null;
+
+  /** Duplicate TM flagging (same TM in >1 position this night) — high-class digital assist only. */
+  conflictingTms?: Set<string>;
+  tmConflictSlots?: Record<string, string[]>;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -64,6 +68,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   fitChip,
   showDigitalAssists = false,
   focusedTmId,
+  conflictingTms,
+  tmConflictSlots,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -77,6 +83,11 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const currentTmId = a?.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
+
+  const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
+  const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
+    ? tmConflictSlots[currentTmId].filter(s => s !== def.key)
+    : [];
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => { if (!isLocked) onCardClick(def.key, el); },
   );
@@ -141,6 +152,14 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             >
               {draftInfo.proposedTmName}
             </span>
+            {isDuplicate && showDigitalAssists && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+              >
+                2×
+              </span>
+            )}
             {draftInfo.previousTmName && (
               <span
                 className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
@@ -166,6 +185,14 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               >
                 {a.tmName}
               </span>
+              {isDuplicate && showDigitalAssists && (
+                <span
+                  className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                  title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+                >
+                  2×
+                </span>
+              )}
             </div>
           </>
         ) : (

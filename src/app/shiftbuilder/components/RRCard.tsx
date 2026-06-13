@@ -50,6 +50,10 @@ export interface RRCardProps {
 
   /** Weekly Overview focus: dims non-matching sides/cards, highlights matching TM side(s). */
   focusedTmId?: string | null;
+
+  /** Duplicate TM flagging (same TM in >1 position this night) — high-class digital assist only. */
+  conflictingTms?: Set<string>;
+  tmConflictSlots?: Record<string, string[]>;
 }
 
 // One gender side of an RR card is its own droppable/draggable so a TM can be
@@ -81,7 +85,10 @@ const RRSide: React.FC<{
 
   /** Weekly focus for this side. */
   focusedTmId?: string | null;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo, focusedTmId }) => {
+
+  conflictingTms?: Set<string>;
+  tmConflictSlots?: Record<string, string[]>;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo, focusedTmId, conflictingTms, tmConflictSlots }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -92,6 +99,11 @@ const RRSide: React.FC<{
   const currentTmId = assignment?.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
+
+  const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
+  const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
+    ? tmConflictSlots[currentTmId].filter(s => s !== slotKey)
+    : [];
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => onClick(slotKey, el),
   );
@@ -130,6 +142,14 @@ const RRSide: React.FC<{
             >
               {draftInfo.proposedTmName}
             </span>
+            {isDuplicate && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+              >
+                2×
+              </span>
+            )}
             {draftInfo.previousTmName && (
               <span
                 className="text-[8.5px] text-[#9CA3AF] line-through opacity-60 mt-0.5"
@@ -150,6 +170,14 @@ const RRSide: React.FC<{
             >
               {a.tmName}
             </span>
+            {isDuplicate && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+              >
+                2×
+              </span>
+            )}
           </div>
         ) : (
           <div className="unassigned-label mt-px text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[9.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
@@ -201,6 +229,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   fitChipW,
   fitChipM,
   focusedTmId,
+  conflictingTms,
+  tmConflictSlots,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -290,6 +320,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             isDraftMode={isDraftMode}
             draftInfo={draftInfoW}
             focusedTmId={focusedTmId}
+            conflictingTms={conflictingTms}
+            tmConflictSlots={tmConflictSlots}
           />
           {/* Women's coverage banners (independent per side now) */}
           {wCoverageTasks.map(t => (
@@ -345,6 +377,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             isDraftMode={isDraftMode}
             draftInfo={draftInfoM}
             focusedTmId={focusedTmId}
+            conflictingTms={conflictingTms}
+            tmConflictSlots={tmConflictSlots}
           />
           {/* Men's coverage banners (independent per side now) */}
           {mCoverageTasks.map(t => (
