@@ -49,6 +49,16 @@
 
 **Next**: Read the actual on-disk source for the new cyrus/mail/people files. Map every import/export. Implement the type separation + "only async actions" cleanup. Reproduce the error locally via tsc/build. Ship the fix.
 
+**Shipped**:
+- Commit: 8dbe10b (fix(cyrus): server actions + type boundaries...)
+- Tag: deploy/2026-06-12-234939 (pushed)
+- Push: 1d10819..8dbe10b main -> main
+- tsc clean before commit.
+- Version bumped to 0.829.
+- All 23 Turbopack errors from the 2026-06-13 Railway log should now be resolved (removed bad re-exports from mail/actions.ts; client CyrusSuggestions now imports cyrus symbols from the correct non-actions modules + shared plain types module).
+- New shared src/lib/cyrus/types.ts for CyrusSuggestion / EnrichResult / Mail* types.
+- The previous long investigation block for this failure was included in the hotfix commit.
+
 ---
 
 ## 2026-06-12 — Grok 4.3 — Ship landed: 3cb4183 (today + shiftbuilder extraction/TS hygiene + infra) pushed + tagged
