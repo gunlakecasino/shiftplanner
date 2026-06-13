@@ -37,6 +37,7 @@ interface InteractiveStageProps {
   children: React.ReactNode;
   onDragStart: (event: DragStartEvent) => void;
   onDragEnd: (event: DragEndEvent) => void;
+  onDragOver?: (event: any) => void; // for intra-list task reordering preview
   activeDrag: any; // the ghost data
   isDark: boolean;
   // Future: we will pass only the minimal droppable-related props
@@ -46,6 +47,7 @@ export default function InteractiveStage({
   children,
   onDragStart,
   onDragEnd,
+  onDragOver,
   activeDrag,
   isDark,
 }: InteractiveStageProps) {
@@ -62,6 +64,7 @@ export default function InteractiveStage({
       collisionDetection={closestCenter}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
       autoScroll={false}
     >
       {children}

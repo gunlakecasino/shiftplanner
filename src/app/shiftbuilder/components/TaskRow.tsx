@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useDraggable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
 // ============================================================================
@@ -82,6 +82,20 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     disabled: !effectiveDraggable || isEditing,
   });
 
+  // Droppable target for intra-slot reordering (drag a task over another task in the same list to reorder).
+  // Combined with the draggable for cross-slot moves/duplicates. The parent DndContext + onDragOver handles preview.
+  const {
+    setNodeRef: setTaskDropRef,
+    isOver: isOverTaskItem,
+  } = useDroppable({
+    id: `task-item:${slotKey}:${task.taskLabel}`,
+    data: {
+      type: "task-item",
+      slotKey,
+      taskLabel: task.taskLabel,
+    },
+  });
+
   const canDrag = effectiveDraggable && !isEditing;
 
   const startEditing = () => {
@@ -104,7 +118,11 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
   return (
     <div
-      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass}`}
+      ref={(node) => {
+        setTaskDragRef(node);
+        setTaskDropRef(node);
+      }}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''}`}
       onPointerUp={(e) => {
         // Touch tap outside the label: pin/unpin toolbar (label uses drag delay).
         if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-task-label]')) {

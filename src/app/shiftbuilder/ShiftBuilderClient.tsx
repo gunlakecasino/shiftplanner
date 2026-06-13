@@ -5075,6 +5075,24 @@ function AuthedShiftBuilder() {
     }
   };
 
+  const onDragOver = (event: any) => {
+    const a = event.active?.data?.current as any;
+    const o = event.over?.data?.current as any;
+    if (a?.type === "task" && o?.type === "task-item" && a.fromSlot === o.slotKey && a.taskLabel !== o.taskLabel) {
+      // Live preview: reorder the task list in state as the user hovers over other tasks in the same slot.
+      // This gives smooth drag-to-sort UX using only core dnd-kit (no extra sortable dep needed).
+      setSelectedTasks((prev) => {
+        const list = [...(prev[a.fromSlot] ?? [])];
+        const fromIdx = list.findIndex((t: any) => t.taskLabel === a.taskLabel);
+        const toIdx = list.findIndex((t: any) => t.taskLabel === o.taskLabel);
+        if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev;
+        const [moved] = list.splice(fromIdx, 1);
+        list.splice(toIdx, 0, moved);
+        return { ...prev, [a.fromSlot]: list };
+      });
+    }
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     setActiveDrag(null);
     
@@ -5120,17 +5138,111 @@ function AuthedShiftBuilder() {
     // TM block — a.type cannot simultaneously be "assigned" and "task", so
     // nesting this check inside the assigned block made it unreachable.
     if (a.type === "task") {
-      if (over?.data.current?.type === "slot") {
-        const toUiKey = (over.data.current as any).slotKey;
-        const fromUiKey = a.fromSlot;
-        if (toUiKey === fromUiKey) return;
+      const activatorEvent = event.activatorEvent as any;
+      const isDuplicateDrag = !!(activatorEvent && (activatorEvent.altKey || activatorEvent.optionKey));
+
+      const overData = over?.data.current as any;
+      let toUiKey: string | null = null;
+      if (overData?.type === "slot") {
+        toUiKey = overData.slotKey;
+      } else if (overData?.type === "task-item") {
+        toUiKey = overData.slotKey;
+      }
+      if (!toUiKey) return;
+
+      const fromUiKey = a.fromSlot;
+
+      if (toUiKey === fromUiKey) {
+        // Reorder within the same slot's task list (drag-to-sort).
+        // The live reorder preview was already applied in onDragOver.
+        // Persist the final order from current state.
+        (async () => {
+          let nid = nightId;
+          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+          if (!nid) return;
+
+          const currentList = selectedTasks[fromUiKey] ?? [];
+          const orderedLabels = currentList.map((t: any) => t.taskLabel);
+
+          try {
+            const { reorderNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+            const { slot_key, slot_type, rr_side } = uiToDb(fromUiKey);
+            await reorderNightSlotTasks(nid, slot_key, slot_type, rr_side, orderedLabels);
+          } catch (e: any) {
+            console.error("[shiftbuilder] task reorder persist failed", e);
+            showToast("Tasks reordered in UI but failed to save — refresh may revert");
+          }
+        })();
+        return;
+      }
+
+      if (isDuplicateDrag) {
+        // Option/Alt + drag task = duplicate (copy) to the target slot instead of move.
+        // Use current selectedTasks (from render scope at handler creation / end time).
+        const taskToCopy = (selectedTasks[fromUiKey] ?? []).find((t: any) => t.taskLabel === a.taskLabel);
+        if (!taskToCopy) return;
 
         const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKey);
-        const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } = uiToDb(fromUiKey);
+
+        // Optimistic add copy to target (keep source)
+        setSelectedTasks((prev) => {
+          const copied = {
+            ...taskToCopy,
+            slotKey: toSlotKey,
+            slotType: toSlotType,
+            rrSide: toRrSide,
+            // id will be server generated on refresh
+          };
+          const newTo = [...(prev[toUiKey] ?? []), copied];
+          return { ...prev, [toUiKey]: newTo };
+        });
+
+        (async () => {
+          let nid = nightId;
+          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+          if (!nid) return;
+
+          try {
+            const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
+            await addNightSlotTask({
+              nightId: nid,
+              slotKey: toSlotKey,
+              slotType: toSlotType,
+              rrSide: toRrSide,
+              taskLabel: a.taskLabel,
+              catalogTaskId: a.catalogTaskId ?? null,
+              color: a.color ?? null,
+              // sortOrder will default / append in add
+            });
+            // Refresh the target slot's tasks so order/sort_order is correct
+            const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
+            const byKey: Record<string, any[]> = {};
+            for (const t of fresh) {
+              const uiKey = t.slotKey; // already camelCase from the mapper in getNightSlotTasks
+              if (!byKey[uiKey]) byKey[uiKey] = [];
+              byKey[uiKey].push(t);
+            }
+            setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
+          } catch (e: any) {
+            console.error("[shiftbuilder] task duplicate persist failed", e);
+            showToast("Task duplicated in UI but failed to save — refresh may revert");
+          }
+        })();
+        return;
+      }
+
+      // Normal move (different slot, no modifier)
+      if (over?.data.current?.type === "slot") {
+        const toUiKeyMove = (over.data.current as any).slotKey;
+        const fromUiKeyMove = a.fromSlot;
+        if (toUiKeyMove === fromUiKeyMove) return;
+
+        const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKeyMove);
+        const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } = uiToDb(fromUiKeyMove);
 
         // Optimistic move in the selectedTasks buckets (same shape the card renderers use)
         setSelectedTasks((prev) => {
-          const fromList = prev[fromUiKey] ?? [];
+          const fromList = prev[fromUiKeyMove] ?? [];
           const taskToMove = fromList.find((t) => t.taskLabel === a.taskLabel);
           if (!taskToMove) return prev;
 
@@ -5141,8 +5253,8 @@ function AuthedShiftBuilder() {
             slotType: toSlotType,
             rrSide: toRrSide,
           };
-          const newTo = [...(prev[toUiKey] ?? []), movedTask];
-          return { ...prev, [fromUiKey]: newFrom, [toUiKey]: newTo };
+          const newTo = [...(prev[toUiKeyMove] ?? []), movedTask];
+          return { ...prev, [fromUiKeyMove]: newFrom, [toUiKeyMove]: newTo };
         });
 
         // Persist using the same coordinated-night pattern used for TM swaps
@@ -6687,6 +6799,7 @@ function AuthedShiftBuilder() {
       <InteractiveStage
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
         activeDrag={activeDrag}
         isDark={isDark}
       >

@@ -1736,6 +1736,48 @@ export async function moveNightSlotTask(params: MoveTaskParams): Promise<void> {
   await bustNightBoardServerCache();
 }
 
+/**
+ * Reorder tasks within a slot by updating their sort_order.
+ * Used for intra-slot drag-to-sort in the builder view.
+ * Assumes the provided orderedTaskLabels are the full current list for the slot (in new desired order).
+ */
+export async function reorderNightSlotTasks(
+  nightId: string,
+  slotKey: string,
+  slotType: 'zone' | 'rr' | 'aux' | 'overlap',
+  rrSide: 'mens' | 'womens' | null,
+  orderedTaskLabels: string[]
+): Promise<void> {
+  if (!nightId || !slotKey || !orderedTaskLabels.length) return;
+
+  for (let i = 0; i < orderedTaskLabels.length; i++) {
+    const taskLabel = orderedTaskLabels[i];
+    let q = supabase
+      .from('night_slot_tasks')
+      .update({ sort_order: i })
+      .match({
+        night_id: nightId,
+        slot_key: slotKey,
+        slot_type: slotType,
+        task_label: taskLabel,
+      });
+
+    if (rrSide) {
+      q = q.eq('rr_side', rrSide);
+    } else {
+      q = q.is('rr_side', null);
+    }
+
+    const { error } = await q;
+    if (error) {
+      logSupabaseError('reorderNightSlotTasks', error);
+      throw new Error(`Failed to reorder task at position ${i}: ${error.message || 'unknown'}`);
+    }
+  }
+
+  await bustNightBoardServerCache();
+}
+
 /** Batch update sort_order for several catalog rows (used by drag-reorder in the hub). */
 export async function updateCatalogSortOrders(updates: Array<{ id: string; sortOrder: number }>): Promise<void> {
   if (!updates.length) return;
