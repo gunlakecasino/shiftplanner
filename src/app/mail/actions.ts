@@ -13,44 +13,24 @@ import {
   enrichEmailWithCyrus,
   acceptCyrusTaskSuggestion,
   acceptCyrusProjectSuggestion,
-  type CyrusSuggestion,
-  type EnrichResult,
 } from "../cyrus/actions";
 
-export type { CyrusSuggestion, EnrichResult } from "../cyrus/actions";
-export { acceptCyrusTaskSuggestion, acceptCyrusProjectSuggestion } from "../cyrus/actions";
+// Shared types live in a plain module (safe for client + server, avoids "use server" export restrictions).
+import type {
+  CyrusSuggestion,
+  EnrichResult,
+  MailEmail,
+  MailEmailDetail,
+  MailListItem,
+} from "@/lib/cyrus/types";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// NOTE: We intentionally do NOT re-export the cyrus accept* functions here.
+// Re-exporting non-async (or any) values from a "use server" file is forbidden by Next/Turbopack.
+// Consumers that need the cyrus-specific accepts import them directly from @/app/cyrus/actions.
 
-export interface MailEmail {
-  message_id: string;
-  subject: string | null;
-  sender_name: string | null;
-  sender_email: string | null;
-  received_at: string | null;
-  content_excerpt: string | null;
-  has_attachments: boolean | null;
-  is_read: boolean | null;
-}
-
-export interface MailEmailDetail {
-  email: MailEmail;
-  enrichment: CyrusSuggestion | null;
-  organization: any | null; // raw email_organization row if present
-  linkedPerson: { id: string; name: string } | null;
-}
-
-export interface MailListItem extends MailEmail {
-  cluster?: string | null;
-  status?: string | null;
-  priority?: number | null;
-  cyrusConfidence?: number | null;
-  cyrus_enriched?: boolean;
-  has_pending_suggestions?: boolean;
-  cyrus_suggested_at?: string | null;
-}
+// Re-export the Mail surface types from the shared module so existing client imports
+// (mail/page.tsx etc.) that pull types from "./actions" continue to work without changes.
+export type { MailEmail, MailEmailDetail, MailListItem };
 
 // ---------------------------------------------------------------------------
 // List fetching (for Classic list and as base for radial)

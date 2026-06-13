@@ -22,45 +22,13 @@ import { supabase } from "@/lib/supabase";
 import { generateObject } from "ai";
 import { createGrokModel } from "@/lib/shiftbuilder/grokClient";
 import { z } from "zod";
+import type { CyrusSuggestion, EnrichResult } from "@/lib/cyrus/types";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// Re-export the shared types for any code that was importing them from here.
+export type { CyrusSuggestion, EnrichResult } from "@/lib/cyrus/types";
 
-export type CyrusCluster =
-  | "todays_priority"
-  | "gun_lake_ops"
-  | "staffing_hr"
-  | "vendors_contracts"
-  | "marketing_events"
-  | "unassigned_review";
-
-export type CyrusStatus = "needs_action" | "waiting" | "fyi" | "done";
-
-export interface CyrusSuggestion {
-  cluster: CyrusCluster;
-  status: CyrusStatus;
-  priority: number; // 1 (highest) - 5
-  linked_person_id: string | null; // exact entity id from context or null
-  suggested_tasks: Array<{
-    title: string;
-    due_date?: string;
-    priority?: number;
-  }>;
-  suggested_project: { title?: string; phase?: string } | null;
-  action_items: string[];
-  summary: string;
-  tone: string;
-  confidence: number; // 0.0 - 1.0
-}
-
-export interface EnrichResult {
-  success: boolean;
-  suggestion?: CyrusSuggestion;
-  emailId: string;
-  usage?: any;
-  error?: string;
-}
+// CyrusCluster / CyrusStatus are also useful; re-export from the shared module too for convenience.
+export type { CyrusCluster, CyrusStatus } from "@/lib/cyrus/types";
 
 // ---------------------------------------------------------------------------
 // Structured output schema (Zod). generateObject will enforce this.

@@ -3,16 +3,24 @@
 import React from "react";
 import { Sparkles, Check, X, Plus, Edit2, RefreshCw, UserCheck, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+// Server actions + types for the Cyrus suggestion UI.
+// - Cyrus-core actions (the ones that mutate the suggestion blob for tasks/projects) come from the cyrus module.
+// - Mail-specific actions (cluster/status, person link, acceptAll, reject, enrich wrapper) come from mail/actions.
+// - Types are in a plain shared module so they are visible to this client component without "use server" bundling problems.
+import {
+  acceptCyrusTaskSuggestion,
+  acceptCyrusProjectSuggestion,
+} from "@/app/cyrus/actions";
+
 import {
   acceptCyrusClusterStatus,
   acceptLinkedPerson,
-  acceptCyrusTaskSuggestion,
-  acceptCyrusProjectSuggestion,
   acceptAllHighConfidence,
   rejectCyrusSuggestion,
   enrichEmail,
-  type CyrusSuggestion,
 } from "@/app/mail/actions";
+
+import type { CyrusSuggestion } from "@/lib/cyrus/types";
 
 interface CyrusSuggestionsProps {
   emailId: string;

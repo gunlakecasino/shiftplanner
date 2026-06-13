@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-06-13 — Grok 4.3 — Railway build failure post-ship (3cb4183) — fix cyrus/mail/people server actions + "use server" violations
+
+**Task**: Railway deploy of the previous ship (3cb4183) failed hard on `pnpm build` (Turbopack) with 23 errors. Primary: src/app/mail/actions.ts and src/components/cyrus/CyrusSuggestions.tsx + src/app/mail/page.tsx. "Only async functions are allowed to be exported in a 'use server' file" + "Export X doesn't exist in target module" / "The module has no exports at all" when client components import from actions paths. User pasted full build log; immediate hotfix required to unblock production.
+
+**Context**: The 2026-06-12 ship batch intentionally included the new cyrus/mail/people surfaces (email processing, Cyrus AI suggestions for tasks/projects, people management). These were added as untracked files during the "determine what is not pushed" work and landed in 3cb4183. The architecture used re-exports from cyrus/actions into mail/actions (a route actions file) and had client components (CyrusSuggestions, mail/page) directly importing functions/types from the actions modules. In Next.js 16 + Turbopack (App Router), `app/*/actions.ts` files are special "use server" modules — only async server actions may be exported; client bundles see them as having no (or special) exports. Also triggered the middleware→proxy deprecation warning. Last good commit on main before failure: the ship itself. Agentic log + ship skill recovery protocol apply.
+
+**Phases Activated**:
+- Systematic debugging (read logs + source).
+- coding-engineer style fix (refactor boundaries for server actions / types / client imports).
+- Will follow ship skill for re-ship (tsc gate, version bump to .829, conventional commit, tag, push) once fixed.
+- Append-only Agentic logging.
+
+**Root Cause Analysis (from build log + expected file shapes)**:
+- `src/app/mail/actions.ts` contains or re-exports non-async items (types + functions like acceptCyrusTaskSuggestion etc. from "../cyrus/actions").
+- Client components import `{ getRecentEmails, enrichEmail, acceptCyrus*..., type CyrusSuggestion, ... } from "./actions"` or `"@/app/mail/actions"`.
+- Turbopack treats mail/actions.ts strictly as "use server" → non-async exports forbidden; cross-boundary imports from client fail to resolve the symbols ("module has no exports").
+- Many referenced functions (acceptAllHighConfidence, enrichEmail, getRecentEmails, getEmailDetail, getUnprocessedEmailIds, rejectCyrusSuggestion, acceptLinkedPerson, etc.) are either not defined/exported in the source cyrus/actions or the re-export chain was incomplete/broken at commit time.
+- Secondary: src/middleware.ts still present (deprecation).
+
+**Decisions**:
+- Primary fix: Create neutral type module (e.g. src/lib/cyrus/types.ts or src/app/cyrus/types.ts). Move all shared interfaces/types there.
+- actions.ts files (mail/ and cyrus/) must contain **only** `"use server";` + `export async function ...` (true server actions). No type re-exports if they cause issues; import types separately from the types module.
+- Update all consuming files (CyrusSuggestions.tsx, mail/page.tsx, and any people/ or other) to:
+  - Import types from the shared types file.
+  - Import server actions from the correct actions.ts (Next.js will provide the client-safe wrappers).
+- If some "actions" are actually client-side or pure helpers, move their implementation out of actions.ts.
+- Preserve intent of the Cyrus feature (email triage + AI suggestions for tasks/projects + cluster status + person linking).
+- After code fix: full tsc gate, local smoke if possible, version bump, new ship commit (feat(hotfix): ... or fix(cyrus): server actions boundary), new deploy tag, push.
+- Also address the middleware deprecation warning while here (rename or update convention if simple; proxy.ts we added earlier is for /frontman only).
+- Do not touch ShiftBuilder / Golden / Graves paths.
+
+**Files Likely to Touch**:
+- src/app/mail/actions.ts
+- src/app/cyrus/actions.ts (and any people equivalent)
+- src/components/cyrus/CyrusSuggestions.tsx
+- src/app/mail/page.tsx
+- New: src/lib/cyrus/types.ts (or app/cyrus/types.ts)
+- Possibly src/app/people/*, src/app/mail/* other files, src/middleware.ts
+- src/app/shiftbuilder/version.ts (bump)
+- Agentic/AGENT_ACTIVITY_LOG.md (this entry + completion)
+
+**Status**: In Progress — logs read, starting source exploration + refactor.
+
+**Next**: Read the actual on-disk source for the new cyrus/mail/people files. Map every import/export. Implement the type separation + "only async actions" cleanup. Reproduce the error locally via tsc/build. Ship the fix.
+
+---
+
 ## 2026-06-12 — Grok 4.3 — Ship landed: 3cb4183 (today + shiftbuilder extraction/TS hygiene + infra) pushed + tagged
 
 **Task follow-up (completion record)**: Append-only record of successful commit + push per the 2026-06-12 ship task and Agentic contract (completion milestone).
