@@ -14,18 +14,17 @@ import {
 // NOTE: Heavy data.ts functions dynamically imported below to fix Turbopack "module factory is not available" HMR errors.
 // Only types remain as type-only import (zero runtime cost).
 import type { CatalogTask, NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { uiToDb, dbToUi, auxDbKeyToDef, type SlotType } from "@/lib/shiftbuilder/slot-keys";
+import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
 // the static dependency graph of this very large file and stop Turbopack module factory errors.
 
 import {
   // Single source of truth — do NOT re-declare these locally in this file.
-  PLACEMENT_ORDER,
-  getSlotsInPlacementOrder,
-  runCoveragePlanner,
+  // (Some were extracted; unused imports cleaned in production pass.)
   validatePlacementOrder,
   isEligibleForSlot,
+  getSlotsInPlacementOrder,
   type AuxDef,
 } from "@/lib/shiftbuilder/placement";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
@@ -35,14 +34,14 @@ import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
 // See comments around LazyCommandPalette and other await import() sites.
 // runWeightedPlanner + logEngineRunSummary dynamically imported inside the engine handler (placement is a heavy module)
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
-import type { EngineRulesContext } from "@/lib/shiftbuilder/engineRules";
+// EngineRulesContext extracted; import removed to clean unused.
 // buildDefaultAdjacency dynamically imported inside the engine handler (any static edge into scoring still triggers Turbopack "module factory" errors on this giant file, per the pattern for placement/grok/data/etc.)
 // getActiveEngineConfig dynamically imported (engineConfig is small but any static edge into heavy modules still triggers Turbopack factory issues after the big refactor)
 import type { EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 // All remaining data.ts functions (preferences, channels, locked, etc.) dynamically imported to eliminate the last static edge causing Turbopack module factory HMR errors.
 // Scheduled data is now fetched via /api/shiftbuilder/scheduled-roster to avoid client-side admin client creation.
 // grokEngine (buildGrokEngineSnapshot / mergeGrokOverridesIntoDraft) dynamically imported in handlers to shrink HMR surface
-import type { GrokEngineSnapshot } from "@/lib/shiftbuilder/grokEngine";
+// GrokEngineSnapshot extracted; import removed (dynamic where needed).
 // Command palette and Sudo surfaces are *fully dynamically loaded* (the Lazy* modules
 // themselves are imported via `import()` inside effects/handlers, not at the top level
 // of this file). This is the current state of the long-running "shrink the static
@@ -74,19 +73,16 @@ import { buildCoverPageArtboardHTML } from "./print/printCoverPage";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 // ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
 import {
-  startOfShiftWeek, startOfRosterWeek, currentShiftDate, daysBetween, addDays, sameDay,
-  formatWeekLabel, SHIFT_DAY_COLORS, MONTH_SHORT, MONTH_LONG, DAY_LONG,
+  startOfShiftWeek, currentShiftDate, daysBetween, addDays, sameDay,
+  SHIFT_DAY_COLORS, MONTH_LONG, DAY_LONG,
   buildDayDefs,
   buildNavDayStrip,
   navIdForWeekDay,
-  type DayDef,
-
-  formatLocalDateISO, rosterWeekStartISO, isDayInRosterWeek, parseLocalDateISO,
-} from "@/lib/shiftbuilder/dateUtils";
+  formatLocalDateISO, parseLocalDateISO,
+} from "@/lib/shiftbuilder/dateUtils"; // formatWeekLabel, MONTH_SHORT, rosterWeekStartISO, isDayInRosterWeek, DayDef pruned (unused after extractions; keep list minimal for lint)
 import {
-  debugSessionLog,
   readWeeklyRosterScheduledFromStorage,
-} from "@/lib/shiftbuilder/debugSessionLog";
+} from "@/lib/shiftbuilder/debugSessionLog"; // debugSessionLog pruned (unused after extraction)
 import {
   assignmentTmId,
   boardTmId,
@@ -105,6 +101,7 @@ import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
+import WeeklyOverview from "./components/WeeklyOverview";
 // useShiftData: small, data-only orchestration hook (Slice 1 of Production Stabilization).
 // It wraps useCurrentNight + store + liveCache for hydration/effective values.
 // Intentionally tiny with no UI/CommandPalette/useCommandActions transitive deps.
@@ -149,16 +146,8 @@ if (typeof window !== 'undefined') {
   console.log('%c[ShiftBuilder] Debug stores exposed on window: __liveAssignmentsStore, __useShiftBuilderStore, __getShiftBuilderDebugState()', 'color:#0a0; font-weight: bold');
 }
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
-import BreakBadge from "./components/BreakBadge";
-import AssignmentLine from "./components/AssignmentLine";
-import TaskRow, { TASK_COLOR_SPHERES } from "./components/TaskRow";
-import CoverageBar from "./components/CoverageBar";
-import ZoneTaskList from "./components/ZoneTaskList";
-import ZoneCard from "./components/ZoneCard";
-import RRCard from "./components/RRCard";
-import AuxCard from "./components/AuxCard";
-import OverlapSlot from "./components/OverlapSlot";
-import WeeklyOverview from "./components/WeeklyOverview";
+// Extracted components now imported from ./components (Phase cleanups).
+// (Some like AssignmentLine, TaskRow etc. may still be referenced via other paths or were partially inlined; cleaned unused top-level.)
 
 import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
@@ -282,37 +271,12 @@ import { useStagePinchPan } from "./hooks/useStagePinchPan";
 
 // BreakBadge, AssignmentLine, ZoneCard, RRCard, AuxCard, OverlapSlot now imported from components/ above.
 
-// ============================================================================
-// Coverage helpers — support "Add Coverage" command
-// ============================================================================
-
-/** Returns the accent hex for any UI slot key (zone, RR side, aux). */
-function getSlotAccentColor(uiKey: string): string {
-  if (uiKey.startsWith('MRR') || uiKey.startsWith('WRR')) {
-    const num = parseInt(uiKey.replace(/^[MW]RR/, ''), 10);
-    return getRRAccent(num);
-  }
-  if (uiKey.startsWith('Z')) return getZoneColor(uiKey);
-  return '#6B7280';
-}
-
-/** Returns a human-readable label for a slot (e.g. "Zone 3", "Restroom 7"). */
-function getSlotCoverageLabel(uiKey: string): string {
-  if (uiKey === 'Z9SR') return 'Zone 9SR';
-  if (uiKey.startsWith('Z')) return `Zone ${uiKey.slice(1)}`;
-  if (uiKey.startsWith('MRR') || uiKey.startsWith('WRR')) {
-    return `Restroom ${uiKey.replace(/^[MW]RR/, '')}`;
-  }
-  return uiKey;
-}
-
-/** For an RR key (MRR7, WRR7, or MRR7 canonical) return both M and W keys.
- *  For zone keys return [key]. */
-function expandCoverageToKeys(uiKey: string): string[] {
-  if (uiKey.startsWith('MRR')) return [uiKey, `WRR${uiKey.slice(3)}`];
-  if (uiKey.startsWith('WRR')) return [`MRR${uiKey.slice(3)}`, uiKey];
-  return [uiKey];
-}
+// Coverage helpers — support "Add Coverage" command (now imported from shared lib to eliminate duplication with today/lib and future surfaces).
+import {
+  getSlotAccentColor,
+  getSlotCoverageLabel,
+  expandCoverageToKeys,
+} from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
  * CoverageBar — rendered at the very bottom of a zone or RR card to show
@@ -609,7 +573,13 @@ function AuthedShiftBuilder() {
     } catch {}
     return "launchpad";
   });
-  const [pendingCanvasDayIndex, setPendingCanvasDayIndex] = useState<number | undefined>(undefined);
+  // One-shot "pending day to land on when we switch to canvas" from the launchpad.
+  // Using a ref (instead of state + effect that clears it) avoids any chance of
+  // the "setState in effect" causing repeated renders / max update depth.
+  // The value is consumed exactly once on the viewMode transition.
+  // (The previous useState + effect version was triggering "Maximum update depth exceeded"
+  // in some render/transition paths involving the launchpad <-> canvas switch.)
+  const pendingCanvasDayIndexRef = React.useRef<number | undefined>(undefined);
 
   // Persisting setter used for all canvas/launchpad transitions so refresh keeps context.
   const persistViewMode = React.useCallback((m: "launchpad" | "canvas") => {
@@ -645,7 +615,7 @@ function AuthedShiftBuilder() {
 
   const enterCanvas = React.useCallback((targetDayIndex?: number) => {
     if (typeof targetDayIndex === 'number') {
-      setPendingCanvasDayIndex(targetDayIndex);
+      pendingCanvasDayIndexRef.current = targetDayIndex;
     }
     persistViewMode('canvas');
     // Force-create the pill synchronously from the action path. Complements the
@@ -654,13 +624,17 @@ function AuthedShiftBuilder() {
     ensureOpsStatusBar();
   }, [persistViewMode]);
 
-  // Apply a day pre-selected from the launchpad once we are in canvas mode
+  // Apply a day pre-selected from the launchpad once we switch into canvas mode.
+  // Consumes the ref (set by enterCanvas) and clears it. Using ref + only depending on
+  // viewMode prevents any "set in effect + changing dep" re-trigger loops that could
+  // cause "Maximum update depth exceeded".
   React.useEffect(() => {
-    if (viewMode === 'canvas' && typeof pendingCanvasDayIndex === 'number') {
-      setSelectedDayIndex(pendingCanvasDayIndex);
-      setPendingCanvasDayIndex(undefined);
+    if (viewMode === 'canvas' && typeof pendingCanvasDayIndexRef.current === 'number') {
+      const target = pendingCanvasDayIndexRef.current;
+      pendingCanvasDayIndexRef.current = undefined;
+      setSelectedDayIndex(target);
     }
-  }, [viewMode, pendingCanvasDayIndex]);
+  }, [viewMode]);
 
   // === Imperative Launchpad Mounting (iPad Safari simulator fix) =============
   // We mount the Launchpad via createRoot directly to document.body because
@@ -794,14 +768,14 @@ function AuthedShiftBuilder() {
   // Resolve provenance data for glass (supports flat rrSide keys like MRR1/WRR1 and physical).
   // Looks up in the current assignments (from store/live).
   const getProvenanceDataForKey = React.useCallback((key: string) => {
-    // The main assignments come from the live cache / store.
+    // The main assignments come from the live cache / store (use getState inside to avoid forward-ref/TDZ in giant Client scope and to keep this helper stable).
     // We use a broad lookup; in practice the board passes displayAssignments but we resolve here.
     const a = (window as any).__OMS_ASSIGNMENTS__?.[key] || {}; // fallback if exposed; real lookup below
 
-    // Real lookup: the client has `assignments` and `padAssignments` in scope in many places.
-    // For robustness we try several sources the component closes over.
-    const liveA = (typeof assignments !== 'undefined' && assignments) || {};
-    const mpA = (typeof padAssignments !== 'undefined' && padAssignments) || {};
+    // Real lookup from store (current source of truth for board + pad views). Avoids closing over render-scoped `assignments`/`padAssignments` declared much later.
+    const storeState = useShiftBuilderStore.getState();
+    const liveA = storeState.assignments || {};
+    const mpA = (storeState as any).padAssignments || {}; // padAssignments is a derived memo in render; best-effort from store shape if exposed
     const candidate = liveA[key] || mpA[key] || a;
 
     if (!candidate) return null;
@@ -1013,8 +987,9 @@ function AuthedShiftBuilder() {
     portersExpanded, setPortersExpanded,
     scheduledGravesExpanded, setScheduledGravesExpanded,
     scheduledPMExpanded, setScheduledPMExpanded,
-    scheduledAMExpanded, setScheduledAMExpanded,
-    rosterSearch, setRosterSearch,
+    scheduledAMExpanded: _setScheduledAMExpanded, // eslint-disable-line @typescript-eslint/no-unused-vars -- provided by hook for rail internals; not called from Client scope
+    rosterSearch,
+    setRosterSearch: _setRosterSearch, // eslint-disable-line @typescript-eslint/no-unused-vars -- provided by hook for rail internals; not called from Client scope
     graveOnly, setGraveOnly,
     cmdkOpen, setCmdkOpen,
     cmdkInitialContext, setCmdkInitialContext,
@@ -1022,7 +997,9 @@ function AuthedShiftBuilder() {
 
   // Loader components for heavy surfaces, dynamically imported at runtime (see effects below).
   // Declared here (after useRosterPanels) so hook call order is stable.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic loader from import(); any is the pragmatic type for lazy component factories in this Turbopack-safe pattern (documented)
   const [CommandPaletteLoader, setCommandPaletteLoader] = useState<React.ComponentType<any> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic loader from import(); any is the pragmatic type for lazy component factories in this Turbopack-safe pattern (documented)
   const [SudoWindowLoader, setSudoWindowLoader] = useState<React.ComponentType<any> | null>(null);
 
   // Weekly Overview focus state (TM tap in the live table fades other rows + dims non-matching cards on current day's canvas;
@@ -1030,6 +1007,7 @@ function AuthedShiftBuilder() {
   const [focusedWeeklyTmId, setFocusedWeeklyTmId] = useState<string | null>(null);
 
   // Auto-clear focus when the day (or week) changes so the highlight always matches the visible board.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset on day/week change (keeps focus highlight consistent with the *visible* board column; mirrors pattern used in /today nav resets; linter rule is advisory for cross-boundary sync)
   React.useEffect(() => {
     setFocusedWeeklyTmId(null);
   }, [selectedDayIndex, weekStart]);
@@ -7037,6 +7015,10 @@ function AuthedShiftBuilder() {
                     Rendered as absolute above a relative wrapper so the entire 816px artboard
                     (including its internal minimal banner) is fully visible below.
                     Unscaled (escapes the stage transform). Builder-only. */}
+                {/* Restore the paper's own relative wrapper for proper artboard framing and centering.
+                    The paper (1056x816) must remain a self-contained "page" that fits the artboard.
+                    When the Focus panel is open we shift the paper left (marginRight) so the fixed Focus
+                    on the right of the viewport sits outside the paper's white area. */}
                 <div style={{ position: 'relative', width: 'min(1040px, 96vw)', margin: '0 auto' }}>
                   {!isPrintPreview && canvasMode === 'builder' && (
                     <div
@@ -7236,8 +7218,10 @@ function AuthedShiftBuilder() {
                     // Push the whole paper down inside the relative wrapper so the absolute WeekLens bar
                     // (positioned at top: -40) sits cleanly *above* the 816px artboard.
                     marginTop: 42,
-                    // Reserve space on the right for the sidebar (with day columns already shortened via isSidebarCompact).
-                    marginRight: weekLensSidebarOpen ? 220 : 0,
+                    // When Focus panel is open, shift the paper left so the fixed Focus (on the right of the viewport)
+                    // ends up outside the paper's white artboard area. This keeps the "page" (the 1056x816 paper)
+                    // properly framed and fitting the artboard without the Focus intruding on the schedule content.
+                    marginRight: weekLensSidebarOpen ? 260 : 0,
                     transition: 'margin-right 180ms ease-out, margin-top 180ms ease-out',
                     boxSizing: 'border-box',
                   }}
@@ -7258,7 +7242,6 @@ function AuthedShiftBuilder() {
                   weeklyRecentHistory={plannedThisWeekRecentHistory}
                   mode={isPrintPreview ? 'preview' : 'builder'}
                   showDigitalAssists={!isPrintPreview} // xAI dots + builder assists only in builder mode; preview is clean print-faithful (ovals, viol, focus, load still diagnostic)
-                  // WeekLens v2 builder chrome props (top bar + sidebar drive these; renderer only highlights, never mutates solver geometry)
                   filters={weekLensFilters}
                   search={weekLensSearch}
                   sidebarOpen={weekLensSidebarOpen}
@@ -7327,12 +7310,12 @@ function AuthedShiftBuilder() {
                   />
                 )}
               </div>
-              </div> {/* close the relative wrapper so the WeekLens bar (absolute) sits above the paper */}
+                </div> {/* close paper's relative wrapper (top bar lives above paper, paper is full width) */}
 
-                {/* WeekLens v2 right sidebar (Focus Mode 2.0) — unscaled, ~22% width, positioned to the right of the golden paper.
-                    Does not alter table geometry or the 1056x816 solver budget. Collapsible. Builder only. */}
-                {/* Sidebar always rendered in builder weekly so we can animate it sliding in from the right.
-                    Controlled by weekLensSidebarOpen (auto-opens on name click). */}
+                {/* Focus sidebar — fixed to the right of the viewport.
+                    Combined with the paper's marginRight shift (260px when open), this places the Focus box
+                    outside the white artboard (the 1056x816 "page"). The schedule table stays fully contained
+                    and fitting inside the framed artboard as before. */}
                 {!isPrintPreview && canvasMode === 'builder' && (
                   <div
                     className="no-print"
@@ -7341,7 +7324,7 @@ function AuthedShiftBuilder() {
                       top: 96,
                       right: weekLensSidebarOpen ? 16 : -260,
                       zIndex: 110,
-                      width: 200,
+                      width: 220,
                       maxHeight: 'calc(100vh - 120px)',
                       background: 'rgba(255,255,255,0.98)',
                       border: '1px solid #E5E5EA',

@@ -113,12 +113,21 @@ export default function RootLayout({
     location.port === '3001'
   ) {
     // Dev: aggressively clean SWs and caches so Turbopack HMR stays healthy.
+    // This is the most common cause of "module factory is not available" errors.
     navigator.serviceWorker.getRegistrations().then(function(registrations) {
       registrations.forEach(function(registration) { registration.unregister(); });
     });
     if ('caches' in window) {
       caches.keys().then(function(keys) { keys.forEach(function(k){caches.delete(k);}); });
     }
+
+    // If a stale SW (from before our self-destruct logic) sends us a message, force reload.
+    navigator.serviceWorker.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'SW_SELF_DESTRUCTED_IN_DEV') {
+        setTimeout(() => { try { location.reload(); } catch {} }, 30);
+      }
+    });
+
     return;
   }
 

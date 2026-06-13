@@ -41,6 +41,8 @@ function safeNormalizeSlotKey(key: string): string {
     uiToDb(key);
     return key;
   } catch {
+    // Legacy / aux key fallbacks for older data or direct aux keys that don't go through the standard zone/rr/aux mapping.
+    // Keep this small and explicit; unknown keys are passed through so the caller (onAssign etc.) can still try.
     const map: Record<string, string> = {
       admin: "ADM",
       z9_sr: "Z9SR",
@@ -50,6 +52,16 @@ function safeNormalizeSlotKey(key: string): string {
   }
 }
 
+/**
+ * Pending drag helpers — bridge to the main ShiftBuilderStore so that
+ * ShiftBuilderBoard (and its displayAssignments memo) can keep the source
+ * card visually "occupied" with the original TM while a reassignment drag
+ * is in flight. This prevents the card from going empty mid-gesture and
+ * breaking the draggable state.
+ *
+ * The `typeof ... === "function"` checks are defensive (migration artifact
+ * between store shapes). On /today we always expect the modern shape.
+ */
 function clearPendingDrag(): void {
   const store = useShiftBuilderStore.getState();
   if (typeof store.setPendingDrag === "function") {
@@ -67,6 +79,22 @@ function setPendingDrag(fromSlot: string, tmId: string, tmName: string): void {
   } else {
     useShiftBuilderStore.setState({ pendingDrag: payload });
   }
+}
+
+/**
+ * Resolve (or lazily create) the nightId for persistence.
+ * Used by both task-move and assigned-reassign drag paths when the caller
+ * did not yet have a nightId (e.g. first edit on "tonight").
+ * Centralizing here reduces duplication and makes the "create on demand"
+ * behavior explicit for /today.
+ */
+async function resolveNightIdForDrag(
+  nightId: string | null,
+  selectedDay: DayDef,
+): Promise<string | null> {
+  if (nightId) return nightId;
+  const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+  return getOrCreateNightForDate(selectedDay.date, selectedDay.name);
 }
 
 export function useTodayDragDrop({
@@ -92,6 +120,10 @@ export function useTodayDragDrop({
     } | null;
     if (!d?.type) return;
 
+    // Three drag sources on /today (all require the ancestor InteractiveStage DndContext):
+    // - "tm": from the unilateral PlacementPad's TmPicker rows (when enableTmDragAssign)
+    // - "assigned": dragging a placed TM from a card to another slot (reassign/swap)
+    // - "task": dragging a task chip from one slot's task list to another slot
     if (d.type === "tm" && d.tmName) {
       setActiveDrag({ kind: "tm", label: d.tmName });
     } else if (d.type === "assigned" && d.tmName && d.fromSlot) {
@@ -164,12 +196,12 @@ export function useTodayDragDrop({
           payload: { taskLabel: a.taskLabel, movedFrom: fromUiKey },
         });
 
+        // Persist task move (using the shared resolver).
+        // Note: on persist failure we intentionally leave the optimistic local move
+        // in place (with a warning toast). There is no automatic rollback here
+        // (unlike live assignment mutations which have onError snapshots).
         void (async () => {
-          let nid = nightId;
-          if (!nid) {
-            const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
-            nid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
-          }
+          const nid = await resolveNightIdForDrag(nightId, selectedDay);
           if (!nid) return;
           try {
             const { moveNightSlotTask } = await import("@/lib/shiftbuilder/data");
@@ -191,6 +223,17 @@ export function useTodayDragDrop({
         return;
       }
 
+      // "assigned" drag: the user is dragging a TM that is already placed on the board
+      // (from a Zone/RR/Aux card). This supports:
+      // - Drop on another slot → move or swap (direct store mutation here, not via live.assign)
+      // - Drop outside any slot → clear (delegates to onClearSlot → live.unassign)
+      //
+      // Why not go through the live hook for the slot-to-slot case?
+      // The live hook's assign/unassign is optimized for "new placement from pad".
+      // Reassignment needs explicit swap semantics + immediate update of the main
+      // board store so that displayAssignments + pendingDrag visuals stay consistent
+      // and the narrow Zustand subscribers in Board/cards see the change instantly.
+      // We still patch the TanStack cache and emit the audit logs.
       if (a.type === "assigned" && a.fromSlot && a.tmId && a.tmName) {
         const fromKey = safeNormalizeSlotKey(a.fromSlot);
 
@@ -206,7 +249,10 @@ export function useTodayDragDrop({
           const displacedTmId = displacedFromMain?.tmId ?? null;
           const displacedTmName = displacedFromMain?.tmName ?? null;
 
-          useShiftBuilderStore.getState().setAssignments((prev: Record<string, any>) => {
+          // Direct mutation of the main assignments store (feeds Board narrow subs + pending logic).
+          useShiftBuilderStore.getState().setAssignments((prev: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any -- mirrors the intentionally loose shared Zustand store (see production review notes)
+            // Note: loose Record<any> here mirrors the store's own loose assignment typing.
+            // In a future tightening, this could use ShiftAssignment or a Today-specific subset.
             const next = { ...prev };
             if (displacedFromMain) {
               next[fromKey] = { ...displacedFromMain, slotKey: fromKey };
@@ -255,12 +301,10 @@ export function useTodayDragDrop({
             });
           }
 
+          // Persist path (using shared resolver).
+          // On error we leave the local store mutation (UI shows the move) + toast.
           void (async () => {
-            let nid = nightId;
-            if (!nid) {
-              const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
-              nid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
-            }
+            const nid = await resolveNightIdForDrag(nightId, selectedDay);
             if (!nid) return;
             try {
               const { upsertZoneAssignment, deleteZoneAssignment } =

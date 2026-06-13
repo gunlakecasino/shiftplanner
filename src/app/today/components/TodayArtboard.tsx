@@ -30,7 +30,7 @@ type TodayArtboardProps = {
   padAssignments: Record<string, unknown>;
   markerScheduledUnassigned: TmEntry[];
   markerAllEligibleTms: TmEntry[];
-  effectiveRealRoster: unknown[];
+  effectiveRealRoster: unknown[]; // TeamMember[] from shiftbuilder data layer (shared roster shape)
   live: ReturnType<typeof import("@/lib/shiftbuilder/useLiveAssignments").useLiveAssignments>;
   onSlotToggle: (slotKey: string) => void;
   onSlotClose: () => void;

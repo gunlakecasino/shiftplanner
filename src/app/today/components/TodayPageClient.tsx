@@ -9,7 +9,7 @@ import { useTodayScheduleNav } from "../hooks/useTodayScheduleNav";
 import { TodayOperatorGate } from "./TodayOperatorGate";
 import { TodayNav } from "./TodayNav";
 import { TodayArtboard } from "./TodayArtboard";
-import { TODAY_NAV_CLEARANCE, TODAY_STAGE_INSETS } from "../lib/constants";
+import { TODAY_STAGE_INSETS } from "../lib/constants"; // TODAY_NAV_CLEARANCE no longer used after banner removal
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 
 export function TodayPageClient() {
@@ -67,18 +67,13 @@ function TodayBoardShell({
         currentView={nav.currentView}
         onViewChange={nav.setCurrentView}
         showPrint={board.canPrint}
-        onPrint={() => void board.handlePrint()}
+        onPrint={board.handlePrint}
         isPrinting={board.isPrinting}
       />
 
-      {board.scheduleBanner ? (
-        <div
-          className="pointer-events-none fixed left-0 right-0 z-30 text-center text-[11px] font-medium text-[#6C6C72]"
-          style={{ top: TODAY_NAV_CLEARANCE - 22 }}
-        >
-          {board.scheduleBanner}
-        </div>
-      ) : null}
+      {/* scheduleBanner is intentionally null in the current /today implementation.
+          The conditional and the value in useTodayBoard are kept for future parity
+          with shiftbuilder banners (e.g. realtime status). No visual output today. */}
 
       {board.isScheduleHidden ? (
         <TodayUnpublishedPlaceholder

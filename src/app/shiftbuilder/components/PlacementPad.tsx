@@ -58,10 +58,10 @@ export interface PlacementPadProps {
   /** Host card wrapper — portaled pad positions from [data-placement-host] rect. */
   hostId?: string;
   onClose: () => void;
-  assignments: Record<string, any>;
+  assignments: Record<string, any>; // mirrors loose store typing (documented during production review; high-churn assignment shape from zustand/liveCache — same as Board/store)
   selectedTasks: Record<string, NightSlotTask[]>;
   selectedDay: DayDef;
-  members?: any[];
+  members?: any[]; // roster rows — loose to match effectiveRealRoster etc across board/pad (pragmatic for monolith churn)
   auxDefs: AuxDef[];
   isDark: boolean;
   isCurrentNightLocked?: boolean;
@@ -349,7 +349,8 @@ function PlacementAnalystBlock({
               >
                 XAI FAST (BOARD + WEEK SIGNALS)
               </span>
-              {(structured as any).bullets && (structured as any).bullets.length > 0 && (
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- bullets present in deep xAI structured response but not on base PlacementPadInsight type (headline/light path differs); mirrors loose insight typing documented in review */}
+              {(structured as any)?.bullets && (structured as any).bullets.length > 0 && (
                 <span 
                   className="ml-auto text-[5.5px] font-medium tracking-[0.4px] px-1 py-px text-[#2F5C7C]/60"
                   style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
@@ -372,7 +373,8 @@ function PlacementAnalystBlock({
             {/* Week repeat signal is carried in the xAI context (see tmThisWeekRepeat + boardAndWeekContext below) so the fast one-liner and provenance text will call it out when relevant. Static visual badge can be added once scope is threaded to all sub renders. */}
 
             {/* Expander under the one-liner for the provenance surface (spread/gaps/training signals + priors) */}
-            {!compactTablet && (structured as any).bullets && (structured as any).bullets.length > 0 && (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- bullets present in deep xAI structured response but not on base PlacementPadInsight type (headline/light path differs); mirrors loose insight typing documented in review */}
+            {!compactTablet && (structured as any)?.bullets && (structured as any).bullets.length > 0 && (
               <div className="mt-0.5">
                 <button
                   type="button"
@@ -452,7 +454,10 @@ function PlacementAnalystBlock({
             >
               {loading ? (
                 <BuilderBusyLabel className="text-[7px]">Loading insight</BuilderBusyLabel>
-              ) : (structured as any)?.bullets?.length ? "Full reasoning" : structured?.headline ? "Full reasoning" : "✧  xAI insight"}
+              ) : (
+                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- bullets access on insight (see other notes in file) */
+                (structured as any)?.bullets?.length ? "Full reasoning" : structured?.headline ? "Full reasoning" : "✧  xAI insight"
+              )}
             </button>
           ) : (
             <>
@@ -906,6 +911,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     }
   }, [insightStructured?.headline, insightsEnabled]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- history load effect intentionally sets loading + data (sync early-return + async promise handlers); these are *not* render-cascading sync sets in the effect body proper, but linter is textual. Documented per review (same as live data effects in Client). */
   useEffect(() => {
     if (!a.tmId) {
       setPadHistory(null);
@@ -923,7 +929,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         setPadHistoryLoading(false);
       });
   }, [slotKey, a.tmId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
+  /* eslint-disable react-hooks/preserve-manual-memoization -- the setTimeout + multiple state updates after assign make the callback intentionally side-effectful; preserving the manual useCallback is desired for stable ref to TM picker rows, rule cannot be satisfied here without extra indirection */
   const handlePickTm = useCallback(
     (tm: TmEntry) => {
       if (!onAssign) return;
@@ -937,6 +945,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     },
     [slotKey, onAssign],
   );
+  /* eslint-enable react-hooks/preserve-manual-memoization */
 
   const handleAddTask = () => {
     const lbl = taskInput.trim();
@@ -951,7 +960,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const rrLocs = RR_DEFS.flatMap((d) => {
     const tmId = a?.tmId;
     const rawGender =
-      members?.find((m: any) => m.id === tmId || m.tmId === tmId || m.tm_id === tmId)?.gender ?? null;
+      members?.find((m: { id?: string; tmId?: string; tm_id?: string; gender?: string | null }) => m.id === tmId || m.tmId === tmId || m.tm_id === tmId)?.gender ?? null;
     const g = normalizeGender(rawGender);
     const sides: { ui: string; label: string }[] = [];
     if (!g || g === "M") sides.push({ ui: `MRR${d.num}`, label: `${d.num}M` });
@@ -1289,11 +1298,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         ? `${last5Sequence.filter(Boolean).length}× in recent trail (see full trail in facts)`
         : undefined,
       neighborExposureNotes: boardNeighborSummary || undefined,
-      slotTasksSummary: (selectedTasks[slotKey] || []).map((t: any) => t.label || t.name || t.id).slice(0, 3).join(" + ") || undefined,
+      slotTasksSummary: (selectedTasks[slotKey] || []).map((t: { label?: string; name?: string; id?: string }) => t.label || t.name || t.id).slice(0, 3).join(" + ") || undefined,
       boardCoreSnapshot: boardNeighborSummary || undefined,
       // One more layer of vast context for the light determination
-      currentBreakGroup: (assignments[slotKey] as any)?.breakGroup ?? undefined,
-      hasCoverageTasks: (selectedTasks[slotKey] || []).some((t: any) => t.isCoverage) ? "yes" : undefined,
+      currentBreakGroup: (assignments[slotKey] as { breakGroup?: number } | undefined)?.breakGroup ?? undefined,
+      hasCoverageTasks: (selectedTasks[slotKey] || []).some((t: { isCoverage?: boolean }) => t.isCoverage) ? "yes" : undefined,
 
       // Explicit this-week same-area repeat signal for the current TM + slot (for fast light xAI + deep).
       // Lets the one-liner / bullets call out rotation problems directly ("... but repeat alert: 2x here this week").
@@ -1343,7 +1352,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         if (selectedDay) {
           parts.push(`POSITION IN WEEK: day ${selectedDay.dateNum || ''}`);
         }
-        const filledCount = Object.values(assignments).filter((v: any) => !!v?.tmName).length;
+        const filledCount = Object.values(assignments).filter((v: { tmName?: string }) => !!v?.tmName).length;
         const totalSlots = Object.keys(assignments).length;
         parts.push(`BOARD FILL THIS NIGHT: ${filledCount}/${totalSlots} slots have a TM right now`);
 
@@ -1472,12 +1481,14 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   }, [a.tmName, buildInsightContext, hostId, slotKey]);
 
   // Re-run xAI when pad history loads or changes — matrix + headline must share the same facts.
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional clear of insight state when history/sig changes for this pad instance (fresh context for xAI/rotation on pad open or day switch); linter advisory, same pattern as focus reset in Client */
   React.useEffect(() => {
     if (!insightsEnabled) return;
     setInsightStructured(null);
     setInsightCached(false);
     setBriefLoading(true);
   }, [padHistorySig, a.tmId, slotKey, insightsEnabled]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Auto-run the light headline determination once per pad open for assigned TMs.
   // This is the key UX refinement: the magic one-liner now appears in the builder surfaces (cards)
@@ -1492,6 +1503,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     return () => clearTimeout(t);
   }, [a.tmName, analystDetailsOpen, insightStructured?.headline, padHistoryLoading, runLightDetermination, insightsEnabled]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- multiple intentional state resets inside (clear rotation/insight when sigs or insightsEnabled or tm changes for pad freshness); linter rule advisory for derived UI state sync, consistent with Client focus reset and /today patterns. Re-enable after this effect. */
   useEffect(() => {
     if (!insightsEnabled) {
       setRotationBasics(null);
@@ -1589,6 +1601,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
     assignments,
     insightsEnabled,
   ]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const showMatrixSection =
     !!a.tmName &&

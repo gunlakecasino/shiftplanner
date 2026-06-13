@@ -23,6 +23,8 @@ pnpm dev:network
 
 The app expects a Supabase project with the ZDS GRAVE schema (tm_profiles, zone_assignments, overlap_assignments, break_assignments, tm_preferences, etc.).
 
+**UI/UX development**: Use **Frontman** for rapid visual iteration. After `pnpm dev`, open `/frontman` in a second tab/window, click any live element on the Golden artboard / PlacementPad / cards / etc., and describe the change in plain English. See `UI_UX_DEVELOPMENT.md` (and `src/app/shiftbuilder/GOLDEN_VISUAL_SPEC.md`).
+
 ## Repository Structure
 
 - `src/app/shiftbuilder/` — Main ShiftBuilder UI (the 1056×816 Golden artboard)

@@ -73,3 +73,7 @@ supabase/.temp/
 !SCHEDULING_MASTERLIST.md
 !COMMAND_PALETTE_UPGRADE_PLAN.md
 !GOLDEN_VISUAL_SPEC.md
+
+# Local GUI webapps (not on git)
+.gunlakecasino-email-gui
+.gunlakecasino-*

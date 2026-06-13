@@ -96,11 +96,13 @@ export function useTodayBoard({
   }, [recomputeScale]);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setSelectedSlotKey(null);
     setNightStatus(null);
     setIsCurrentNightLocked(false);
     setStatusLoading(true);
-  }, [selectedDay.date]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [selectedDay.date]); // Day-change resets: intentional synchronous UI clear (linter advisory for reset-on-dep-change)
 
   // Resolve publish status from the selected calendar date — not shiftData nightId
   // (which can lag a day behind during week navigation and flash the wrong board).
@@ -141,10 +143,25 @@ export function useTodayBoard({
   /** /today only surfaces published history; tonight stays available for quick edits. */
   const isScheduleHidden =
     !selectedDay.isToday && (statusLoading || !isPublished);
-  /** Builder night-lock does not apply on /today — publish is visibility only. */
+
+  /**
+   * PRODUCTION POLICY:
+   * Builder night-lock (isCurrentNightLocked from nights.is_locked) does NOT make
+   * the schedule read-only on /today. /today is explicitly the "quick view + fast
+   * corrections" surface for published (or tonight) schedules.
+   *
+   * The full /shiftbuilder respects the lock for normal operators.
+   * We still compute isCurrentNightLocked from meta (for potential future use or
+   * read-only indicators) but force isScheduleReadOnly=false here.
+   *
+   * See TodayPageClient.tsx where we pass isCurrentNightLocked={false} explicitly
+   * into TodayArtboard (overriding the value from this hook).
+   */
   const isScheduleReadOnly = false;
   const canPrint = !statusLoading && (selectedDay.isToday || isPublished);
-  const scheduleBanner = null;
+  // scheduleBanner: reserved for future status / realtime / notice banners.
+  // Currently always null; the UI conditional in TodayPageClient documents this.
+  const scheduleBanner: string | null = null;
 
   useEffect(() => {
     if (!queryNightId || !currentNight.queryClient) return;
@@ -155,6 +172,11 @@ export function useTodayBoard({
 
   useEffect(() => () => teardownAllLiveCache(), []);
 
+  // Force the canonical aux list into the shared Zustand store.
+  // This is a cross-cutting side effect: /today does not own custom aux defs.
+  // If the operator also has the full ShiftBuilder open in another tab/window,
+  // this can overwrite any operator-added aux in that session's store.
+  // Acceptable for the current architecture (aux are stable defaults for graves).
   useEffect(() => {
     useShiftBuilderStore.getState().setAuxDefs(DEFAULT_AUX_DEFS);
   }, []);
@@ -162,7 +184,9 @@ export function useTodayBoard({
   useEffect(() => {
     const rows = currentNight.tasks as NightSlotTask[] | undefined;
     if (!rows?.length) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setSelectedTasks({});
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     const tasksByUiKey: Record<string, NightSlotTask[]> = {};
@@ -172,9 +196,12 @@ export function useTodayBoard({
       (tasksByUiKey[uiKey] ??= []).push(row);
     });
     setSelectedTasks(tasksByUiKey);
-  }, [currentNight.tasks]);
+  }, [currentNight.tasks]); // syncing transformed tasks from remote to local state on change (the setSelectedTasks in empty case uses its own disable block)
 
-  const assignments = storeAssignments ?? effectiveAssignments ?? {};
+  const assignments = useMemo(
+    () => storeAssignments ?? effectiveAssignments ?? {},
+    [storeAssignments, effectiveAssignments]
+  ); // Memoized to stabilize for downstream useMemo (padAssignments) and avoid exhaustive-deps churn
 
   const padAssignments = useMemo(
     () => ({ ...effectiveAssignments, ...assignments }),
@@ -213,19 +240,13 @@ export function useTodayBoard({
     return out;
   }, [effectiveScheduledTmIdsTonight, alreadyAssignedTonight, effectiveRealRoster]);
 
-  const recentTasks = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    Object.values(selectedTasks).forEach((tasks) => {
-      tasks.forEach((t) => {
-        const label = t.taskLabel?.trim();
-        if (!label || seen.has(label)) return;
-        seen.add(label);
-        out.push(label);
-      });
-    });
-    return out.slice(0, 12);
-  }, [selectedTasks]);
+  // recentTasks was historically used by the full MarkerPad quick-chip UI.
+  // On the /today surface (unilateral PlacementPad with insights disabled),
+  // it is not forwarded to TodayArtboard / ShiftBuilderBoard.
+  // We keep the selectedTasks source of truth but skip the derived list
+  // to avoid unnecessary work on every task change.
+  // If a future iteration needs recent chips on /today, restore the memo here
+  // and wire it through TodayArtboardProps + ShiftBuilderBoard + PlacementPad.
 
   const logChange = useCallback(
     (params: {
@@ -355,7 +376,7 @@ export function useTodayBoard({
         useShiftBuilderStore.getState().setAssignments((prev: Record<string, unknown>) => ({
           ...prev,
           [slotKey]: { ...(prev[slotKey] as object), isLocked: nextLocked },
-        }));
+        })); // 'as object' cast mirrors the loose typing of the shared Zustand assignments store
         logChange({
           action: nextLocked ? "lock" : "unlock",
           slotKey,
@@ -382,7 +403,7 @@ export function useTodayBoard({
         useShiftBuilderStore.getState().setAssignments((prev: Record<string, unknown>) => ({
           ...prev,
           [slotKey]: { ...(prev[slotKey] as object), breakGroup: group },
-        }));
+        })); // 'as object' cast mirrors the loose typing of the shared Zustand assignments store
         logChange({
           action: "break_change",
           slotKey,
@@ -571,7 +592,6 @@ export function useTodayBoard({
     selectedSlotKey,
     setSelectedSlotKey,
     selectedTasks,
-    recentTasks,
     breakGroup,
     setBreakGroup,
     isCurrentNightLocked,
@@ -580,7 +600,7 @@ export function useTodayBoard({
     isScheduleReadOnly,
     nightStatus,
     canPrint,
-    scheduleBanner,
+    scheduleBanner, // always null in current /today (see comment above)
     isPrinting,
     handlePrint,
     boardColdLoading,

@@ -14,6 +14,15 @@ function nextFrames(n: number): Promise<void> {
   });
 }
 
+/**
+ * Imperative post-processing of the captured breaks artboard clone.
+ * These style overrides compensate for the fact that the live component tree
+ * is laid out for screen (with dynamic heights, scroll areas, etc.) and needs
+ * to be forced into a print-friendly fixed layout for the dual-page capture.
+ *
+ * WARNING: This is tightly coupled to the current JSX structure inside the
+ * breaks view of ShiftBuilderBoard / wave rendering. Update in lockstep.
+ */
 function postProcessBreaksArtboard(breaksArtboard: Element) {
   const contentArea = breaksArtboard.querySelector(
     ".flex-1.min-h-0.overflow-hidden.flex.flex-col",
@@ -44,6 +53,18 @@ function postProcessBreaksArtboard(breaksArtboard: Element) {
 /**
  * Capture deployment + breaks from the live `.print-artboard` and print both pages.
  * Mirrors ShiftBuilder's dual-page print path for a single already-loaded night.
+ *
+ * PRODUCTION NOTES / HARDENING TARGETS:
+ * - Heavy reliance on live DOM structure (class names like ".print-artboard",
+ *   ".flex-1.min-h-0.overflow-hidden.flex.flex-col", ".overlaps-section").
+ *   Any refactor of ShiftBuilderBoard / breaks rendering can break the capture.
+ * - Uses flushSync + rAF sequencing to let React commit view toggles before
+ *   reading outerHTML. Fragile but required for snapshotting the same mounted tree
+ *   in two states.
+ * - Temporarily mutates inline styles on the live artboard and the cloned breaks
+ *   one, then restores. postProcessBreaksArtboard does additional imperative fixes.
+ * - Falls back to plain window.print() if no artboard or capture fails.
+ * - The 816px forced height for breaks is tied to the sacred artboard contract.
  */
 export async function printTodaySchedule(options: {
   currentView: TodayBoardView;

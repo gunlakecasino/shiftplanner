@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { cva } from "class-variance-authority";
@@ -10,12 +10,11 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coffee, LayoutGrid, P
 import { cn } from "@/lib/utils";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import {
-  addDays,
   currentShiftDate,
   formatLocalDateISO,
   MONTH_LONG,
   sameDay,
-} from "@/lib/shiftbuilder/dateUtils";
+} from "@/lib/shiftbuilder/dateUtils"; // addDays removed after calendar month nav simplification
 import { clearTodayOperatorName } from "../lib/todayChangeLog";
 import type { NavDayStripItem, TodayBoardView } from "../hooks/useTodayScheduleNav";
 
@@ -145,12 +144,16 @@ export function TodayNav({
   const monthBtnRef = useRef<HTMLButtonElement>(null);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
 
+  // Close popover pos when calendar closes (moved out of effect body to satisfy lint)
+  const closeCalendar = useCallback(() => {
+    setCalendarOpen(false);
+    setPopoverPos(null);
+  }, []);
+
   useEffect(() => {
     if (!calendarOpen) {
-      setPopoverPos(null);
       return;
     }
-    setCalendarView(new Date(selectedDayDate));
 
     const compute = () => {
       const btn = monthBtnRef.current;
@@ -165,7 +168,7 @@ export function TodayNav({
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", compute);
     };
-  }, [calendarOpen, selectedDayDate]);
+  }, [calendarOpen, selectedDayDate]); // no direct setState in body now (setCalendarView moved to openCalendar)
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -174,10 +177,10 @@ export function TodayNav({
       if (monthBtnRef.current?.contains(target)) return;
       const pop = document.getElementById("today-nav-calendar-popover");
       if (pop?.contains(target)) return;
-      setCalendarOpen(false);
+      closeCalendar();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCalendarOpen(false);
+      if (e.key === "Escape") closeCalendar();
     };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
@@ -185,7 +188,7 @@ export function TodayNav({
       document.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [calendarOpen]);
+  }, [calendarOpen, closeCalendar]); // include stable closeCalendar to satisfy exhaustive-deps
 
   const monthRange = React.useMemo(() => {
     const year = calendarView.getFullYear();
@@ -202,21 +205,23 @@ export function TodayNav({
     enabled: calendarOpen,
   });
 
-  const glassStyle = {
-    background: "rgba(255,255,255,0.85)",
-    backdropFilter: "blur(32px) saturate(180%)",
-    WebkitBackdropFilter: "blur(32px) saturate(180%)",
-    border: "1px solid rgba(255,255,255,0.35)",
-    boxShadow:
-      "0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03), 0 25px 50px -12px rgb(0 0 0 / 0.25), inset 0 1px 0 rgba(255,255,255,0.98)",
-  };
+  // Note: glass appearance is primarily provided by navVariants() cva (glass variant).
+  // We only need an inline style here for the elevated z-index on the fixed nav.
+  // The previous duplicate glassStyle object (exact backdrop/shadow copy of the cva)
+  // was removed during production cleanup to eliminate drift.
 
   const monthLabel = `${MONTH_LONG[selectedDayDate.getMonth()]} ${selectedDayDate.getFullYear()}`;
   const todayShiftDate = React.useMemo(() => currentShiftDate(), []);
 
   const handlePickDate = (d: Date) => {
     onJumpToDate(d);
-    setCalendarOpen(false);
+    closeCalendar();
+  };
+
+  // When opening the calendar, sync the view to current selected day (moved out of effect to avoid setState-in-effect)
+  const openCalendar = () => {
+    setCalendarView(new Date(selectedDayDate));
+    setCalendarOpen(true);
   };
 
   return (
@@ -227,7 +232,7 @@ export function TodayNav({
           "relative overflow-hidden",
           isTabletTouchDevice() && "sb-tablet-nav",
         )}
-        style={{ ...glassStyle, zIndex: 40 }}
+        style={{ zIndex: 40 }}
         aria-label="Schedule navigation"
       >
         {/* LEFT: month picker + today */}
@@ -235,7 +240,13 @@ export function TodayNav({
           <button
             ref={monthBtnRef}
             type="button"
-            onClick={() => setCalendarOpen((o) => !o)}
+            onClick={() => {
+        if (calendarOpen) {
+          closeCalendar();
+        } else {
+          openCalendar();
+        }
+      }}
             className={cn(
               "sb-interactive inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold tracking-[0.2px] text-zinc-700 transition-all hover:bg-black/5",
               isTabletTouchDevice() && "h-11 px-3 text-[13px]",
@@ -450,7 +461,12 @@ export function TodayNav({
               <div className="mb-2 flex items-center justify-between px-1">
                 <button
                   type="button"
-                  onClick={() => setCalendarView(addDays(calendarView, -30))}
+                  onClick={() => {
+                    // Proper previous month (handles year rollover and varying month lengths)
+                    const y = calendarView.getFullYear();
+                    const m = calendarView.getMonth();
+                    setCalendarView(new Date(y, m - 1, 1));
+                  }}
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[#6B7280] hover:bg-[#F3F4F6]"
                   aria-label="Previous month"
                 >
@@ -461,7 +477,12 @@ export function TodayNav({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setCalendarView(addDays(calendarView, 32))}
+                  onClick={() => {
+                    // Proper next month
+                    const y = calendarView.getFullYear();
+                    const m = calendarView.getMonth();
+                    setCalendarView(new Date(y, m + 1, 1));
+                  }}
                   className="flex h-6 w-6 items-center justify-center rounded-full text-[#6B7280] hover:bg-[#F3F4F6]"
                   aria-label="Next month"
                 >
@@ -538,7 +559,7 @@ export function TodayNav({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCalendarOpen(false)}
+                  onClick={closeCalendar}
                   className="rounded-md px-2 py-0.5 text-[11px] text-[#6B7280] hover:bg-[#F3F4F6]"
                 >
                   Close
@@ -567,26 +588,34 @@ function CalendarDayButton({
   isTonight?: boolean;
   onPick: (d: Date) => void;
 }) {
+  // For unpublished non-tonight days on the /today board (not logs),
+  // render a non-interactive span. This prevents accidental navigation
+  // to a week that will just show the "No published schedule" placeholder,
+  // while still allowing the date to be visible in the grid for context.
+  if (isUnpublished) {
+    return (
+      <span
+        className="relative h-7 w-7 rounded-md text-[11px] cursor-default text-[#D1D5DB] opacity-55 select-none"
+        title="Not published — no schedule on /today"
+        aria-disabled="true"
+      >
+        {date.getDate()}
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={() => onPick(date)}
-      title={
-        isUnpublished
-          ? "Not published — no schedule on /today"
-          : isTonight
-            ? "Tonight"
-            : undefined
-      }
+      title={isTonight ? "Tonight" : undefined}
       className={cn(
         "relative h-7 w-7 rounded-md text-[11px] transition-colors",
         isSelected
           ? "bg-[#111] font-semibold text-white"
-          : isUnpublished
-            ? "cursor-default text-[#D1D5DB] opacity-55 hover:bg-transparent"
-            : muted
-              ? "text-[#C8C8CC] hover:bg-[#F3F4F6]"
-              : "text-[#1C1C1E] hover:bg-[#F3F4F6]",
+          : muted
+            ? "text-[#C8C8CC] hover:bg-[#F3F4F6]"
+            : "text-[#1C1C1E] hover:bg-[#F3F4F6]",
       )}
     >
       {date.getDate()}

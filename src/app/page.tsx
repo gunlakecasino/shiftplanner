@@ -45,6 +45,20 @@ export default function RootPage() {
           description="Live dashboard + freeform canvas for the grave shift. Notes, observations, tasks, and team intel."
           badge="NEW"
         />
+        <AppCard
+          href="/people"
+          accent="#5aa88f"
+          eyebrow="Email Relationships"
+          title="People"
+          description="Strictly the people you receive or communicate with via email. Your living relationship & colleague manager."
+        />
+        <AppCard
+          href="/mail"
+          accent="#3a9bb8"
+          eyebrow="Cyrus Intelligence"
+          title="Mail"
+          description="Radial clusters + classic list. Cyrus AI suggestions, enrichment, and action workflows for every email."
+        />
       </div>
 
       <p style={{ marginTop: '40px', fontSize: '11px', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.08em' }}>
