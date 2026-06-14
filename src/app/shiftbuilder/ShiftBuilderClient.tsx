@@ -1856,6 +1856,9 @@ function AuthedShiftBuilder() {
     isBuilderDeployment &&
     !isWeekHealthTrackerDismissed;
 
+  const builderContentRef = useRef<HTMLDivElement>(null);
+  const [builderContentHeight, setBuilderContentHeight] = useState(0);
+
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
     return {
@@ -1876,7 +1879,46 @@ function AuthedShiftBuilder() {
     zoomSteps,
     isTabletTouch,
     maxScale,
-  } = useZoom({ rosterOpen, stageInsets });
+  } = useZoom({
+    rosterOpen,
+    stageInsets,
+    builderFit: isBuilderDeployment
+      ? {
+          enabled: true,
+          contentRef: builderContentRef,
+          chromeHeightPx: showWeekHealthBar ? WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX : 0,
+        }
+      : undefined,
+  });
+
+  // Builder deployment: default to zoom-to-fit on load and day switches.
+  useEffect(() => {
+    if (!isBuilderDeployment || currentView !== "deployment") return;
+    setZoomMode("fit");
+    const t1 = requestAnimationFrame(recomputeScale);
+    const t2 = window.setTimeout(recomputeScale, 200);
+    return () => {
+      cancelAnimationFrame(t1);
+      clearTimeout(t2);
+    };
+  }, [isBuilderDeployment, currentView, selectedDayIndex, recomputeScale, setZoomMode]);
+
+  // Re-measure fit when chrome changes but preserve manual zoom if the user stepped in/out.
+  useEffect(() => {
+    if (!isBuilderDeployment || currentView !== "deployment") return;
+    recomputeScale();
+  }, [isBuilderDeployment, currentView, showWeekHealthBar, rosterOpen, recomputeScale]);
+
+  useEffect(() => {
+    if (!isBuilderDeployment) return;
+    const el = builderContentRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setBuilderContentHeight(el.scrollHeight || el.offsetHeight || 0);
+    measure();
+    const ro = new ResizeObserver(() => requestAnimationFrame(measure));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isBuilderDeployment, selectedDayIndex, currentView]);
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
@@ -7242,8 +7284,21 @@ function AuthedShiftBuilder() {
               and eliminate the giant blank space on the right. The old frame is hidden via CSS in this mode. */}
           {isBuilderDeployment && currentView === "deployment" && (
             <div
-              className={`w-full max-w-full min-w-0 box-border ${showWeekHealthBar ? "pt-2 pb-5" : "py-5"}`}
+              className="flex w-full min-h-0 flex-1 justify-center overflow-hidden"
+              style={
+                builderContentHeight > 0
+                  ? { height: Math.ceil(builderContentHeight * scale) + (showWeekHealthBar ? 28 : 40) }
+                  : undefined
+              }
             >
+              <div
+                className={`w-full max-w-full min-w-0 box-border ${showWeekHealthBar ? "pt-2 pb-5" : "py-5"}`}
+                style={{
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top center",
+                }}
+              >
+                <div ref={builderContentRef}>
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
@@ -7295,9 +7350,11 @@ function AuthedShiftBuilder() {
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
-                artboardScale={1}
+                artboardScale={scale}
                 isPrintPreview={false}
               />
+                </div>
+              </div>
             </div>
           )}
 

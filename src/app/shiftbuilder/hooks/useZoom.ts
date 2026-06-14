@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type RefObject } from "react";
 import { isTabletTouchDevice, rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 
 export type ZoomMode = "fit" | number;
@@ -30,17 +30,30 @@ export function zoomStepsForDevice(): readonly number[] {
 
 export type StageInsets = { top: number; right: number; bottom: number; left: number };
 
+export type BuilderFitOptions = {
+  /** When true, fit scale is derived from measured builder-workspace content (not Golden 1056×816). */
+  enabled: boolean;
+  contentRef: RefObject<HTMLDivElement | null>;
+  /** Extra vertical chrome inside stageHost (e.g. week health bar slot). */
+  chromeHeightPx?: number;
+};
+
 /**
  * Manages artboard zoom state and the stageHostRef used by the DndContext
  * wrapper. Accepts `rosterOpen` so it can re-fit the scale whenever the
  * floating roster panel opens/closes (the roster shift changes available width).
+ *
+ * When `builderFit.enabled`, the Fit target scales the full builder workspace
+ * (zones + restrooms + aux) into the viewport instead of the Golden paper box.
  */
 export function useZoom({
   rosterOpen,
   stageInsets,
+  builderFit,
 }: {
   rosterOpen: boolean;
   stageInsets: StageInsets;
+  builderFit?: BuilderFitOptions;
 }) {
   const [isTabletTouch, setIsTabletTouch] = useState(isTabletTouchDevice);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
@@ -57,6 +70,9 @@ export function useZoom({
     return Math.max(0.35, fit);
   });
   const stageHostRef = useRef<HTMLDivElement>(null);
+
+  const builderFitEnabled = builderFit?.enabled ?? false;
+  const builderChromeHeight = builderFit?.chromeHeightPx ?? 0;
 
   const recomputeScale = useCallback(() => {
     const el = stageHostRef.current;
@@ -76,15 +92,32 @@ export function useZoom({
       availH = vpH - insets.top - insets.bottom - 24;
     }
 
-    const max = maxArtboardScale();
-    const byWidth = availW / NATURAL_WIDTH;
-    const byHeight = availH / NATURAL_HEIGHT;
+    if (builderFitEnabled) {
+      availH -= builderChromeHeight;
+    }
 
-    // Fit both axes so the full Golden artboard stays visible without scroll or upscale past max.
+    const max = maxArtboardScale();
+    let naturalW = NATURAL_WIDTH;
+    let naturalH = NATURAL_HEIGHT;
+
+    if (builderFitEnabled) {
+      const content = builderFit?.contentRef.current;
+      if (content) {
+        const measuredW = content.scrollWidth || content.offsetWidth;
+        const measuredH = content.scrollHeight || content.offsetHeight;
+        if (measuredW > 80) naturalW = measuredW;
+        if (measuredH > 80) naturalH = measuredH;
+      }
+    }
+
+    const byWidth = availW / naturalW;
+    const byHeight = availH / naturalH;
+
+    // Fit both axes so the full surface stays visible without scroll or upscale past max.
     const next = Math.min(max, byWidth, byHeight);
 
     setFitScale(Math.max(0.25, next));
-  }, [stageInsets]);
+  }, [stageInsets, builderFitEnabled, builderChromeHeight, builderFit?.contentRef]);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px)");
@@ -125,6 +158,24 @@ export function useZoom({
       clearTimeout(t2);
     };
   }, [rosterOpen, stageInsets, recomputeScale]);
+
+  // Builder workspace: re-fit when content height changes (assignments, aux slots, etc.).
+  useEffect(() => {
+    if (!builderFitEnabled) return;
+    const content = builderFit?.contentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(recomputeScale);
+    });
+    ro.observe(content);
+
+    const t = window.setTimeout(recomputeScale, 120);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
+  }, [builderFitEnabled, builderFit?.contentRef, recomputeScale]);
 
   const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
   const scale = Math.min(rawScale, maxArtboardScale());
