@@ -10,9 +10,16 @@ import {
   getCachedGraveAvailableTeamMembers,
   getCachedSlotDefaults,
 } from "@/lib/shiftbuilder/data.server";
+import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import {
+  resolveAuxLayout,
+  remapAssignmentsToAuxKeys,
+  defaultAuxDefsForNewNight,
+} from "@/lib/shiftbuilder/auxLayout";
 type NightCoreApiPayload = {
   nightId: string | null;
   assignments: Record<string, any>;
+  auxDefs?: AuxDef[];
   members: any[];
   scheduledTmIdsTonight: string[];
   realRoster: any[];
@@ -35,6 +42,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
   return {
     nightId: raw.nightId,
     assignments: raw.assignments,
+    auxDefs: raw.auxDefs ?? defaultAuxDefsForNewNight(),
     members: raw.members,
     scheduledTmIdsTonight: toSet(raw.scheduledTmIdsTonight as string[]),
     realRoster: raw.realRoster,
@@ -83,7 +91,17 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
   ]);
 
   const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults as any);
-  const assignments = enrichAssignmentsWithBreakGroups(dbAssignments as any[], defaultBreakMap);
+  const legacyAssignments = enrichAssignmentsWithBreakGroups(dbAssignments as any[], defaultBreakMap);
+
+  let storedAuxLayout: unknown = null;
+  if (id) {
+    const { getNightAuxLayout } = await import("@/lib/shiftbuilder/data");
+    storedAuxLayout = await getNightAuxLayout(id);
+  }
+  const auxDefs = id
+    ? resolveAuxLayout(storedAuxLayout, dbAssignments as any[])
+    : defaultAuxDefsForNewNight();
+  const assignments = remapAssignmentsToAuxKeys(legacyAssignments, auxDefs);
 
   const members = allMembers.map((tm) => ({
     ...tm,
@@ -140,6 +158,7 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
   return {
     nightId: id,
     assignments,
+    auxDefs,
     members,
     scheduledTmIdsTonight: new Set(canonicalScheduled.allScheduled.map(scheduledId)),
     realRoster: enrich(members),

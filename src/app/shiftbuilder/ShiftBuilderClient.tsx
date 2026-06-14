@@ -26,7 +26,14 @@ import {
   isEligibleForSlot,
   getSlotsInPlacementOrder,
   type AuxDef,
+  type AuxRole,
 } from "@/lib/shiftbuilder/placement";
+import {
+  createBlankAuxSlot,
+  findRemovableEmptyAuxSlot,
+  applyAuxRole,
+  applyAuxLabel,
+} from "@/lib/shiftbuilder/auxLayout";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
 // tmCommands functions are dynamically imported below to avoid pulling heavy deps
 // (e.g. useCommandActions transitive) into the static module graph of this giant file.
@@ -91,7 +98,7 @@ import {
   resolveTmFromLookup,
 } from "@/lib/shiftbuilder/tmIdentity";
 import {
-  ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS, EXTRA_AUX_COLORS,
+  ZONE_DEFS, RR_DEFS, BLANK_AUX_DEFS, MAX_AUX_SLOTS, EXTRA_AUX_COLORS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS, getAuxIcon,
   ZONE_COLORS, getZoneColor, RR_COLORS, getRRAccent, AUX_COLORS, getAuxAccent,
   type BreakGroup, nextBreakGroup, COVERAGE_BAR_H,
@@ -123,6 +130,7 @@ import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
   patchNightCoreAssignmentsCache,
+  patchNightCoreAuxLayoutCache,
   patchNightSecondaryTasksCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
@@ -1256,35 +1264,45 @@ function AuthedShiftBuilder() {
   // Toast queue — extracted to useToast
   const { toasts, lastSavedAt, setLastSavedAt, showToast, dismissToast } = useToast();
 
-  // === Dynamic AUX slots ===
-  // Defaults to 5; operator can append from the overflow menu. Keys are
-  // unique per slot — assignments are stored by key in `assignments`, so a
-  // newly added slot starts empty and survives roster drags / engine runs
-  // exactly like a default slot.
-  const [auxDefs, setAuxDefs] = useState<AuxDef[]>(DEFAULT_AUX_DEFS);
+  // === Flex AUX row — per-night typed shells (6 blank default, max 10) ===
+  const [auxDefs, setAuxDefs] = useState<AuxDef[]>(() =>
+    BLANK_AUX_DEFS.map((d) => ({ ...d })),
+  );
+  const persistAuxLayoutNowRef = React.useRef<(layout: AuxDef[]) => void>(() => {});
+
   const addAuxSlot = () => {
+    if (auxDefs.length >= MAX_AUX_SLOTS) return;
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: "Added custom AUX slot", before };
+    pendingHistoryRef.current = { description: "Added blank AUX slot", before };
 
     setAuxDefs((prev) => {
-      let n = prev.length + 1;
-      let candidate = `AUX${n}`;
-      while (prev.some((d) => d.key === candidate)) {
-        n++;
-        candidate = `AUX${n}`;
-      }
-
-      const next = [...prev, { key: candidate, label: `AUX ${n}`, locations: [] }];
-
-      // Validate placement order for new dynamic slots
+      const slot = createBlankAuxSlot(prev);
+      if (!slot) return prev;
+      const next = [...prev, slot];
       const warnings = validatePlacementOrder(next);
       if (warnings.length > 0) {
         console.warn("[Placement] AUX slot added out of order:", warnings);
-        // Future: surface toast / warning in UI
       }
-
+      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
       return next;
     });
+  };
+
+  const setAuxRole = (slotKey: string, role: AuxRole) => {
+    if (role === "blank") return;
+    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
+    pendingHistoryRef.current = { description: `Set ${slotKey} role → ${role}`, before };
+    setAuxDefs((prev) => {
+      const next = applyAuxRole(prev, slotKey, role);
+      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
+      return next;
+    });
+  };
+
+  const setAuxLabel = (slotKey: string, label: string) => {
+    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
+    pendingHistoryRef.current = { description: `Renamed ${slotKey}`, before };
+    setAuxDefs((prev) => applyAuxLabel(prev, slotKey, label));
   };
 
   // Called-off TMs should never be picked by the engine or proposed by Grok
@@ -1696,19 +1714,29 @@ function AuthedShiftBuilder() {
   // operator can't accidentally remove SUPPORT 1 / TRASH 1 / etc. Any TM
   // assigned to the popped slot is automatically freed (their assignment
   // entry is cleared, so they re-appear as available in the roster).
-  const canRemoveAux = auxDefs.length > DEFAULT_AUX_DEFS.length;
-  const removeLastAuxSlot = () => {
-    if (!canRemoveAux) return;
-    const removed = auxDefs[auxDefs.length - 1];
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: `Removed ${removed.label}`, before };
+  const removableEmptyAux = React.useMemo(() => {
+    const live =
+      useShiftBuilderStore.getState().assignments ?? assignments;
+    return findRemovableEmptyAuxSlot(auxDefs, live);
+  }, [auxDefs, assignments]);
 
-    setAuxDefs((prev) => prev.slice(0, -1));
-    setAssignments((a: any) => {
-      if (!a[removed.key]) return a;
-      const copy = { ...a };
-      delete copy[removed.key];
-      return copy;
+  const canAddAux = auxDefs.length < MAX_AUX_SLOTS;
+  const canRemoveAux = !!removableEmptyAux;
+
+  const removeLastAuxSlot = () => {
+    const live =
+      useShiftBuilderStore.getState().assignments ?? assignments;
+    setAuxDefs((prev) => {
+      const removable = findRemovableEmptyAuxSlot(prev, live);
+      if (!removable) return prev;
+      const before = { assignments: { ...live }, auxDefs: [...prev] };
+      pendingHistoryRef.current = {
+        description: `Removed empty AUX slot ${removable.key}`,
+        before,
+      };
+      const next = prev.filter((d) => d.key !== removable.key);
+      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
+      return next;
     });
   };
 
@@ -1955,6 +1983,68 @@ function AuthedShiftBuilder() {
   // Back-compat aliases so the rest of this file (hundreds of references) continues to work
   // with minimal further edits in this slice. Over time these can be inlined to shiftData.* .
   const currentNight = shiftData.currentNight;
+
+  // Flex aux row — immediate persist (resolves nightId if needed, patches query cache)
+  const auxDefsLatestRef = React.useRef(auxDefs);
+  auxDefsLatestRef.current = auxDefs;
+  const auxSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const auxLayoutSavedFingerprintRef = React.useRef<string>("");
+
+  const flushAuxLayoutSave = React.useCallback(async () => {
+    if (auxSaveTimerRef.current) {
+      clearTimeout(auxSaveTimerRef.current);
+      auxSaveTimerRef.current = null;
+    }
+    const layout = auxDefsLatestRef.current;
+    const dateStr = formatLocalDateISO(selectedDay.date);
+    let nid = currentNight.nightId ?? nightId;
+    try {
+      if (!nid) {
+        const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+        nid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+        setNightId(nid);
+      }
+      const fp = `${nid}:${JSON.stringify(layout)}`;
+      if (fp === auxLayoutSavedFingerprintRef.current) return;
+
+      const { saveNightAuxLayout } = await import("@/lib/shiftbuilder/data");
+      await saveNightAuxLayout(nid, layout, dateStr);
+      auxLayoutSavedFingerprintRef.current = fp;
+
+      const qc = currentNight.queryClient;
+      if (qc) {
+        patchNightCoreAuxLayoutCache(qc, dateStr, layout);
+      }
+    } catch (e) {
+      console.warn("[ShiftBuilder] aux_layout save failed", e);
+      showToast("Aux layout could not be saved", "error");
+    }
+  }, [
+    selectedDay.date,
+    selectedDay.name,
+    currentNight.nightId,
+    currentNight.queryClient,
+    nightId,
+    showToast,
+  ]);
+
+  const scheduleAuxLayoutSave = React.useCallback(
+    (delayMs = 250) => {
+      if (auxSaveTimerRef.current) clearTimeout(auxSaveTimerRef.current);
+      auxSaveTimerRef.current = setTimeout(() => {
+        auxSaveTimerRef.current = null;
+        void flushAuxLayoutSave();
+      }, delayMs);
+    },
+    [flushAuxLayoutSave],
+  );
+
+  React.useEffect(() => {
+    persistAuxLayoutNowRef.current = (layout) => {
+      auxDefsLatestRef.current = layout;
+      void flushAuxLayoutSave();
+    };
+  }, [flushAuxLayoutSave]);
   const storeAssignments = shiftData.storeAssignments;
   const storeDraftAssignments = shiftData.storeDraftAssignments;
 
@@ -2318,6 +2408,50 @@ function AuthedShiftBuilder() {
       useShiftBuilderStore.getState().setAuxDefs(auxDefs);
     }
   }, []); // run once
+
+  // Hydrate auxDefs per night from night-core query
+  const hydratedAuxDayRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    hydratedAuxDayRef.current = null;
+    auxLayoutSavedFingerprintRef.current = "";
+  }, [selectedDay.date]);
+
+  React.useEffect(() => {
+    const dayKey = nightDateKey(selectedDay.date);
+    if (hydratedAuxDayRef.current === dayKey) return;
+    if (boardColdLoading || currentNight.isCoreFetching) return;
+
+    const fromQuery = currentNight.auxDefs;
+    if (!fromQuery?.length) return;
+
+    hydratedAuxDayRef.current = dayKey;
+    const normalized = fromQuery.map((d) => ({
+      ...d,
+      role: d.role ?? "blank",
+    }));
+    setAuxDefs(normalized);
+    const nid = currentNight.nightId;
+    if (nid) {
+      auxLayoutSavedFingerprintRef.current = `${nid}:${JSON.stringify(normalized)}`;
+    }
+  }, [
+    selectedDay.date,
+    boardColdLoading,
+    currentNight.isCoreFetching,
+    currentNight.auxDefs,
+    currentNight.nightId,
+  ]);
+
+  // Persist aux_layout whenever layout changes
+  React.useEffect(() => {
+    scheduleAuxLayoutSave(250);
+  }, [auxDefs, scheduleAuxLayoutSave]);
+
+  React.useEffect(() => {
+    return () => {
+      void flushAuxLayoutSave();
+    };
+  }, [flushAuxLayoutSave]);
 
   // === 3.2 Web Worker + 3.5 Measurement (Day Data Processor) ===
   // Offloads heavy post-processing from main thread (big win for iPad day switches).
@@ -7133,6 +7267,12 @@ function AuthedShiftBuilder() {
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
+                onAddAuxSlot={addAuxSlot}
+                onRemoveAuxSlot={removeLastAuxSlot}
+                canAddAux={canAddAux}
+                canRemoveAux={canRemoveAux}
+                onSetAuxRole={setAuxRole}
+                onSetAuxLabel={setAuxLabel}
                 onAddCoverage={handlePadAddCoverage}
                 onRequestEngineInsight={handleBoardRequestEngineInsight}
                 live={live}
@@ -7679,6 +7819,12 @@ function AuthedShiftBuilder() {
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
+                onAddAuxSlot={addAuxSlot}
+                onRemoveAuxSlot={removeLastAuxSlot}
+                canAddAux={canAddAux}
+                canRemoveAux={canRemoveAux}
+                onSetAuxRole={setAuxRole}
+                onSetAuxLabel={setAuxLabel}
                 onAddCoverage={handlePadAddCoverage}
                 onRequestEngineInsight={handleBoardRequestEngineInsight}
                 live={live}

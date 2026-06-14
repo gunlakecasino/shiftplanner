@@ -1235,6 +1235,43 @@ export async function saveNightNotes(nightId: string, notes: string): Promise<vo
   await bustNightBoardServerCache();
 }
 
+export async function getNightAuxLayout(nightId: string): Promise<unknown | null> {
+  const { data, error } = await supabase
+    .from("nights")
+    .select("aux_layout")
+    .eq("id", nightId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[shiftbuilder/data] getNightAuxLayout failed", error.message);
+    return null;
+  }
+  return data?.aux_layout ?? null;
+}
+
+export async function saveNightAuxLayout(
+  nightId: string,
+  auxDefs: import("./placement").AuxDef[],
+  isoDate?: string,
+): Promise<void> {
+  const res = await fetch("/api/shiftbuilder/aux-layout", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nightId, auxDefs, date: isoDate }),
+  });
+
+  if (!res.ok) {
+    let message = `Failed to save aux layout (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+}
+
 // ============================================================================
 // Slot Task Selector — catalog + per-night selections
 // ============================================================================

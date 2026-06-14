@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { AuxDef } from "./placement";
 import {
   revalidateNightBoardCaches,
   revalidateScheduledRosterCache,
@@ -44,6 +45,17 @@ export async function bustNightBoardServerCaches(isoDate?: string): Promise<void
   } catch (e) {
     console.warn("[scheduleCacheSync] night board revalidate failed (non-fatal)", e);
   }
+}
+
+/** Keep TanStack nightCore auxDefs in sync after flex aux row edits. */
+export function patchNightCoreAuxLayoutCache(
+  queryClient: QueryClient,
+  isoDate: string,
+  auxDefs: AuxDef[],
+): void {
+  const patch = (old: { auxDefs?: AuxDef[] } | undefined) =>
+    old ? { ...old, auxDefs } : old;
+  queryClient.setQueryData(["nightCore", isoDate], patch);
 }
 
 /** Keep TanStack nightCore in sync with the live board store after drag/swap paths. */

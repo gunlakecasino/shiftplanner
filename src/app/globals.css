@@ -826,6 +826,21 @@ body {
   min-width: 0;
 }
 
+/* Flex aux row — blank shells + slot chrome */
+.sb-builder-stage .sb-assignment-card.sb-aux-blank {
+  border: 1px dashed #D1D5DB;
+  background: #FAFAFA;
+}
+.sb-builder-stage .sb-aux-slot-btn {
+  border: 1px solid #D1D5DB;
+  color: #6B7280;
+  background: #fff;
+}
+.sb-builder-stage .sb-aux-slot-btn:hover:not(:disabled) {
+  border-color: #9CA3AF;
+  color: #374151;
+}
+
 @container builder (min-width: 560px) {
   .sb-builder-stage .sb-zone-grid,
   .sb-builder-stage .sb-rr-grid {

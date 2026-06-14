@@ -2,11 +2,12 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import {
   ZONE_DEFS,
   RR_DEFS,
-  DEFAULT_AUX_DEFS,
+  getAuxAccent,
   ZONE_COLORS,
   RR_COLORS,
-  AUX_COLORS,
 } from "@/lib/shiftbuilder/constants";
+import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import { activeAuxDefs } from "@/lib/shiftbuilder/auxLayout";
 
 /** Golden print artboard height in CSS px (11×8.5" @ 96dpi). */
 const ARTBOARD_H = 816;
@@ -43,7 +44,7 @@ export type OverviewSlotRow = {
   accent: string;
 };
 
-export function buildOverviewSlotRows(): OverviewSlotRow[] {
+export function buildOverviewSlotRows(auxDefs: AuxDef[] = []): OverviewSlotRow[] {
   const rows: OverviewSlotRow[] = [];
   ZONE_DEFS.forEach((z) =>
     rows.push({
@@ -67,12 +68,12 @@ export function buildOverviewSlotRows(): OverviewSlotRow[] {
       accent: RR_COLORS[rr.num] ?? "#6B7280",
     });
   });
-  DEFAULT_AUX_DEFS.forEach((a) =>
+  activeAuxDefs(auxDefs).forEach((a) =>
     rows.push({
       key: a.key,
       label: a.label,
       section: "SUPPORT",
-      accent: AUX_COLORS[a.key] ?? "#6B7280",
+      accent: getAuxAccent(a.key, a.role),
     }),
   );
   return rows;

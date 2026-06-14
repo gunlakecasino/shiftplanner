@@ -24,9 +24,9 @@ import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { BreakGroup } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
-  ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS,
+  ZONE_DEFS, RR_DEFS, BLANK_AUX_DEFS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS,
-  getZoneColor, getRRAccent, getAuxAccent,
+  getZoneColor, getRRAccent, getAuxAccent, getAuxIcon,
   nextBreakGroup,
 } from "@/lib/shiftbuilder/constants";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
@@ -62,7 +62,10 @@ export interface MarkerPadProps {
 
 // ── Slot metadata lookup ─────────────────────────────────────────────────────
 
-export function getSlotMeta(slotKey: string): { label: string; loc: string; icon: string; accent: string } {
+export function getSlotMeta(
+  slotKey: string,
+  auxDefs: import("@/lib/shiftbuilder/placement").AuxDef[] = [],
+): { label: string; loc: string; icon: string; accent: string } {
   const zd = ZONE_DEFS.find(z => z.key === slotKey);
   if (zd) return {
     label: zd.label,
@@ -84,12 +87,12 @@ export function getSlotMeta(slotKey: string): { label: string; loc: string; icon
     };
   }
 
-  const ad = DEFAULT_AUX_DEFS.find(a => a.key === slotKey);
-  if (ad) return {
+  const ad = auxDefs.find((a) => a.key === slotKey);
+  if (ad && ad.role !== "blank") return {
     label: ad.label,
     loc: ad.locations[0] ?? "",
-    icon: AUX_ICONS[slotKey] ?? "❖",
-    accent: getAuxAccent(slotKey),
+    icon: getAuxIcon(slotKey, ad.role),
+    accent: getAuxAccent(slotKey, ad.role),
   };
 
   return { label: slotKey, loc: "", icon: "●", accent: "#6B7280" };
@@ -1099,7 +1102,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   assignments: assignmentsProp,
   selectedTasks,
   recentTasks,
-  auxDefs = DEFAULT_AUX_DEFS,
+  auxDefs = BLANK_AUX_DEFS,
   scheduledUnassigned = [],
   allEligibleTms,
   setBreakGroupForSlot,
@@ -1220,7 +1223,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
 
   if (!slotKey) return null;
 
-  const { label, loc, icon, accent } = getSlotMeta(slotKey);
+  const { label, loc, icon, accent } = getSlotMeta(slotKey, auxDefs);
   const a = assignments[slotKey] || {};
   const tasks = (selectedTasks[slotKey] || []).filter(t => !t.isCoverage);
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;

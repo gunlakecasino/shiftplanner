@@ -1,10 +1,7 @@
 import { useState, useCallback } from "react";
+import type { AuxDef } from "./placement";
 
-export type AuxDef = {
-  key: string;
-  label: string;
-  locations: string[];
-};
+export type { AuxDef };
 
 export type AssignmentRecord = Record<string, any>;
 

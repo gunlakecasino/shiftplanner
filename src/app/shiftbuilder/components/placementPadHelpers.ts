@@ -191,7 +191,7 @@ export function buildMatrixSlotKeysForTm(
     if (!g || g === "F") keys.push(`WRR${d.num}`);
   }
   for (const d of auxDefs) {
-    if (!d.key.startsWith("SP")) keys.push(d.key);
+    if (d.role !== "blank" && d.role !== "support") keys.push(d.key);
   }
   return keys;
 }
@@ -203,7 +203,7 @@ export function collectDeploymentSlotKeys(auxDefs: AuxDef[]): string[] {
     keys.push(`MRR${d.num}`, `WRR${d.num}`);
   }
   for (const d of auxDefs) {
-    if (!d.key.startsWith("SP")) keys.push(d.key);
+    if (d.role !== "blank") keys.push(d.key);
   }
   return keys;
 }

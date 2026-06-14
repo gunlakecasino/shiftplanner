@@ -118,6 +118,13 @@ export interface ShiftBuilderBoardProps {
   /** When true, suppress card-attached PlacementPad — parent renders an external pad. */
   useExternalPad?: boolean;
 
+  onAddAuxSlot?: () => void;
+  onRemoveAuxSlot?: () => void;
+  canAddAux?: boolean;
+  canRemoveAux?: boolean;
+  onSetAuxRole?: (slotKey: string, role: import("@/lib/shiftbuilder/placement").AuxRole) => void;
+  onSetAuxLabel?: (slotKey: string, label: string) => void;
+
   /** When false, PlacementPad renders without xAI analyst/matrix (e.g. /today). */
   placementPadInsightsEnabled?: boolean;
 
@@ -203,6 +210,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   artboardScale,
   isPrintPreview = false,
   useExternalPad = false,
+  onAddAuxSlot,
+  onRemoveAuxSlot,
+  canAddAux = false,
+  canRemoveAux = false,
+  onSetAuxRole,
+  onSetAuxLabel,
   placementPadInsightsEnabled = true,
   enableTmDragAssign = false,
   focusedTmId,
@@ -970,9 +983,33 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <div className="divider" />
                 <span className="count">
                   {auxDefs.filter((d) =>
-                    slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
-                  ).length} / {auxDefs.length} FILLED
+                    d.role !== "blank" && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                  ).length} / {auxDefs.filter((d) => d.role !== "blank").length} FILLED
                 </span>
+                {!isPrintPreview && !isCurrentNightLocked && (
+                  <div className="flex items-center gap-1 ml-1 no-print">
+                    <button
+                      type="button"
+                      className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
+                      onClick={onAddAuxSlot}
+                      disabled={!canAddAux}
+                      title="Add blank aux slot"
+                      aria-label="Add aux slot"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
+                      onClick={onRemoveAuxSlot}
+                      disabled={!canRemoveAux}
+                      title="Remove last empty aux slot"
+                      aria-label="Remove empty aux slot"
+                    >
+                      −
+                    </button>
+                  </div>
+                )}
               </div>
               <div
                 ref={auxGridRef}
@@ -986,7 +1023,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               >
                 {auxDefs.map((def) => {
                   const key = def.key;
-                  const accent = getAuxAccent(key);
+                  const accent = getAuxAccent(key, def.role);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
@@ -1014,6 +1051,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
+                        onSetAuxRole={onSetAuxRole}
+                        onSetAuxLabel={onSetAuxLabel}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}

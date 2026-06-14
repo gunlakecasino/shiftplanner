@@ -22,13 +22,13 @@ import type { SlotDefault, SlotDefaultTask } from "@/lib/shiftbuilder/data";
 import {
   ZONE_DEFS,
   RR_DEFS,
-  DEFAULT_AUX_DEFS,
+  AUX_ROLE_PRESETS,
   ZONE_ICONS,
   RR_ICONS,
-  AUX_ICONS,
   getZoneColor,
   getRRAccent,
-  getAuxAccent,
+  getAuxIconForRole,
+  getAuxAccentForRole,
 } from "@/lib/shiftbuilder/constants";
 import { nextBreakGroup, type BreakGroup } from "@/lib/shiftbuilder/constants";
 
@@ -96,25 +96,23 @@ function buildSlotDefs(): SlotDef[] {
   }
 
   // AUX
-  const AUX_DB_KEYS: Record<string, string> = {
-    Z9SR: "z9_sr",
-    ADM: "admin",
-    TR1: "trash_1",
-    TR2: "trash_2",
-    SP1: "support_1",
-    SP2: "support_2",
+  const ROLE_DB_KEYS: Record<string, string> = {
+    z9sr: "z9_sr",
+    admin: "admin",
+    trash: "trash_1",
+    support: "support_1",
   };
-  for (const a of DEFAULT_AUX_DEFS) {
-    const dbKey = AUX_DB_KEYS[a.key] ?? a.key.toLowerCase();
+  for (const [role, preset] of Object.entries(AUX_ROLE_PRESETS)) {
+    const dbKey = ROLE_DB_KEYS[role] ?? role;
     out.push({
       compositeKey: `${dbKey}|`,
       dbKey,
       dbType: "aux",
       rrSide: "",
-      label: a.label,
-      sublabel: a.locations[0] ?? "",
-      icon: AUX_ICONS[a.key] ?? "✦",
-      accent: getAuxAccent(a.key),
+      label: preset.label ?? preset.labelBase ?? role,
+      sublabel: preset.locations[0] ?? "",
+      icon: getAuxIconForRole(role as import("@/lib/shiftbuilder/placement").AuxRole),
+      accent: getAuxAccentForRole(role as import("@/lib/shiftbuilder/placement").AuxRole),
       section: "aux",
     });
   }

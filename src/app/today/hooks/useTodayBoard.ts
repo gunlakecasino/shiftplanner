@@ -13,7 +13,7 @@ import { initLiveCacheForNight, teardownAllLiveCache } from "@/lib/shiftbuilder/
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb, dbToUi } from "@/lib/shiftbuilder/slot-keys";
-import { DEFAULT_AUX_DEFS } from "@/lib/shiftbuilder/constants";
+import { BLANK_AUX_DEFS } from "@/lib/shiftbuilder/constants";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
@@ -178,8 +178,11 @@ export function useTodayBoard({
   // this can overwrite any operator-added aux in that session's store.
   // Acceptable for the current architecture (aux are stable defaults for graves).
   useEffect(() => {
-    useShiftBuilderStore.getState().setAuxDefs(DEFAULT_AUX_DEFS);
-  }, []);
+    const fromNight = (currentNight as { auxDefs?: typeof BLANK_AUX_DEFS }).auxDefs;
+    useShiftBuilderStore.getState().setAuxDefs(
+      fromNight?.length ? fromNight : BLANK_AUX_DEFS,
+    );
+  }, [currentNight]);
 
   useEffect(() => {
     const rows = currentNight.tasks as NightSlotTask[] | undefined;

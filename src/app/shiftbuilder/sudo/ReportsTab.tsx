@@ -16,7 +16,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { SudoTabLoading } from "./SudoGlass";
 import {
-  ZONE_DEFS, RR_DEFS, DEFAULT_AUX_DEFS,
+  ZONE_DEFS, RR_DEFS, MAX_AUX_SLOTS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS,
   getZoneColor, getRRAccent, getAuxAccent,
 } from "@/lib/shiftbuilder/constants";
@@ -92,7 +92,7 @@ function sortedSlotKeys(keys: string[]): string[] {
 const ALL_SLOT_KEYS: string[] = sortedSlotKeys([
   ...ZONE_DEFS.map((z) => z.key),
   ...RR_DEFS.flatMap((r) => [`MRR${r.num}`, `WRR${r.num}`]),
-  ...DEFAULT_AUX_DEFS.map((a) => a.key),
+  ...Array.from({ length: MAX_AUX_SLOTS }, (_, i) => `AUX${i + 1}`),
 ]);
 
 /** Left-rail slot list entry */

@@ -121,7 +121,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
           throw new Error(`Could not resolve nightId for ${uiKey} — assignment not saved to Supabase`);
         }
 
-        const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+        const auxDefs = useShiftBuilderStore.getState().auxDefs;
+        const { slot_key, slot_type, rr_side } = uiToDb(uiKey, auxDefs);
 
         // For unassign (tmId null), use the robust delete that also cleans
         // legacy keys (e.g. "Z9" vs "zone_9"). This is the permanent fix for
@@ -288,7 +289,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
       const defaults = slotDefaultBreakMapFromRecord(core?.slotDefaultBreaks);
       let breakGroup = 0;
       try {
-        const { slot_key, rr_side } = uiToDb(p.uiKey);
+        const auxDefs = useShiftBuilderStore.getState().auxDefs;
+        const { slot_key, rr_side } = uiToDb(p.uiKey, auxDefs);
         breakGroup = resolveEffectiveBreakGroup(
           null,
           slot_key,

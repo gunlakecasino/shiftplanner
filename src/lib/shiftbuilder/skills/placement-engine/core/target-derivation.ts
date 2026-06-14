@@ -1,3 +1,6 @@
+import type { AuxDef } from "../../../placement";
+import { isTypedAuxDef } from "../../../auxLayout";
+
 /**
  * Target / Placement Order Derivation — part of the granular AI skill.
  *
@@ -62,6 +65,58 @@ export const COVERAGE_TIERS: readonly CoverageTier[] = [
   },
 ] as const;
 
+const CORE_ZONE_SLOTS = ["Z9", "Z4", "Z5", "Z1", "Z2", "Z3", "Z7", "Z8", "Z10", "Z6"] as const;
+
+/**
+ * Build coverage tiers from flex aux layout (roles on AUXn keys).
+ */
+export function buildCoverageTiers(auxDefs: AuxDef[] = []): CoverageTier[] {
+  const typed = auxDefs.filter(isTypedAuxDef);
+  const adminSlots = typed.filter((d) => d.role === "admin").map((d) => d.key);
+  const z9srSlots = typed.filter((d) => d.role === "z9sr").map((d) => d.key);
+  const trashSlots = typed.filter((d) => d.role === "trash").map((d) => d.key);
+  const supportSlots = typed.filter((d) => d.role === "support").map((d) => d.key);
+
+  const tier2Slots = [...adminSlots, ...CORE_ZONE_SLOTS];
+  const adminCount = adminSlots.length;
+
+  return [
+    COVERAGE_TIERS[0],
+    {
+      name: "Core - Admin + Zones",
+      slots: tier2Slots,
+      minUniqueTMs: adminCount + 10,
+      description: "Admin + all 10 main zones. These require dedicated full-grave TMs.",
+      isHardCoverage: true,
+    },
+    {
+      name: "High Value - Smoking Room",
+      slots: z9srSlots,
+      minUniqueTMs: z9srSlots.length,
+      description: "Zone 9 Smoking Room. High revenue / visibility area.",
+      isHardCoverage: false,
+    },
+    {
+      name: "Essential Support - Trash",
+      slots: trashSlots,
+      minUniqueTMs: trashSlots.length,
+      description: "Trash runs. Important for cleanliness and guest experience.",
+      isHardCoverage: false,
+    },
+    {
+      name: "Float / Overflow",
+      slots: supportSlots,
+      minUniqueTMs: 0,
+      description: "Support / float positions. Lowest priority in the strict order.",
+      isHardCoverage: false,
+    },
+  ];
+}
+
+export function hasFlexAuxLayout(auxDefs: AuxDef[] = []): boolean {
+  return auxDefs.some((d) => d.role !== undefined);
+}
+
 /**
  * Flattened authoritative order (derived from tiers for backward compatibility).
  */
@@ -69,13 +124,17 @@ export const DEFAULT_PLACEMENT_ORDER: readonly string[] = COVERAGE_TIERS.flatMap
 
 /**
  * Returns slots in the engine's fill order.
- * Extra auxDefs (dynamically added support slots) are always appended at the end.
+ * When auxDefs carry roles, tiers are derived from the flex aux row.
  */
-export function deriveTargetSlotsInOrder(auxDefs: Array<{ key: string }> = []): string[] {
+export function deriveTargetSlotsInOrder(auxDefs: AuxDef[] = []): string[] {
+  if (hasFlexAuxLayout(auxDefs)) {
+    return buildCoverageTiers(auxDefs).flatMap((t) => [...t.slots]);
+  }
+
   const fixed = [...DEFAULT_PLACEMENT_ORDER];
   const extras = auxDefs
-    .map(d => d.key)
-    .filter(k => !fixed.includes(k));
+    .map((d) => d.key)
+    .filter((k) => !fixed.includes(k));
 
   return [...fixed, ...extras];
 }

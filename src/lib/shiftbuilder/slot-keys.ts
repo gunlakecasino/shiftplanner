@@ -18,6 +18,9 @@
  * are paired in operations, so the DB key reflects that.
  */
 
+import type { AuxDef } from "./placement";
+import { auxUiKeyToDb } from "./auxLayout";
+
 export type SlotType = "zone" | "rr" | "aux" | "overlap";
 export type RRSide = "mens" | "womens" | null;
 
@@ -67,7 +70,27 @@ const AUX_DB_TO_UI: Record<string, string> = {
  * UI slot key → DB shape. Throws on unmappable keys so we fail loudly during
  * development rather than silently writing junk rows.
  */
-export function uiToDb(uiKey: string): DbSlot {
+function resolveAuxDefsForMapping(auxDefs?: AuxDef[]): AuxDef[] | undefined {
+  if (auxDefs?.length) return auxDefs;
+  if (typeof window !== "undefined") {
+    try {
+      const { useShiftBuilderStore } = require("@/app/shiftbuilder/store/useShiftBuilderStore");
+      const fromStore = useShiftBuilderStore.getState().auxDefs;
+      if (fromStore?.length) return fromStore;
+    } catch {
+      /* store unavailable during SSR/tests */
+    }
+  }
+  return auxDefs;
+}
+
+export function uiToDb(uiKey: string, auxDefs?: AuxDef[]): DbSlot {
+  const resolvedAux = resolveAuxDefsForMapping(auxDefs);
+  if (resolvedAux?.length) {
+    const flexMapped = auxUiKeyToDb(uiKey, resolvedAux);
+    if (flexMapped) return flexMapped;
+  }
+
   // === LEGACY KEY TOLERANCE (critical for drag-and-drop + old data) ===
   // These prevent the "cannot translate UI key 'admin' / 'z9_sr'" errors
   // that were causing 400s on zone_assignments during reassignment drags.

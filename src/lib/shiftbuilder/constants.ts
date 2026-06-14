@@ -2,7 +2,7 @@
 // All module-level definitions extracted from ShiftBuilderClient.tsx.
 // Do NOT re-declare these in the component files — import from here.
 
-import type { AuxDef } from "./placement";
+import type { AuxDef, AuxRole } from "./placement";
 
 // Zone identities — labels are rendered uppercase in the card per the Golden
 export const ZONE_DEFS = [
@@ -27,17 +27,43 @@ export const RR_DEFS = [
   { num: 10, label: "RR 10",  mensLoc: "Poker",       womensLoc: "Poker"       },
 ];
 
-// Auxiliary / Support slots
-// NOTE: Placement order is now defined in the skill (target-derivation.ts / DEFAULT_PLACEMENT_ORDER)
-// and re-exported here for backward compatibility. Support slots SP1/SP2 have fixed positions
-// after Trash per the operator's required fill sequence.
+// Flex aux row — per-night typed shells (see auxLayout.ts)
+export const MAX_AUX_SLOTS = 10;
+
+export const AUX_ROLE_PRESETS: Record<
+  Exclude<AuxRole, "blank">,
+  { label?: string; labelBase?: string; locations: string[] }
+> = {
+  z9sr: { label: "Z9 SR", locations: ["Z9 Smoking Room"] },
+  admin: { label: "ADMIN", locations: ["Floor Admin"] },
+  trash: { labelBase: "TRASH", locations: ["West Trash Run"] },
+  support: { labelBase: "SUPPORT", locations: ["Float Support"] },
+};
+
+export function defaultLabelForAuxRole(role: AuxRole, nthAmongRole = 0): string {
+  if (role === "blank") return "";
+  const preset = AUX_ROLE_PRESETS[role as Exclude<AuxRole, "blank">];
+  if (role === "trash" || role === "support") {
+    return `${preset.labelBase ?? role} ${nthAmongRole + 1}`;
+  }
+  return preset.label ?? role.toUpperCase();
+}
+
+export const BLANK_AUX_DEFS: AuxDef[] = Array.from({ length: 6 }, (_, i) => ({
+  key: `AUX${i + 1}`,
+  role: "blank" as const,
+  label: "",
+  locations: [],
+}));
+
+/** @deprecated Legacy fixed layout — use BLANK_AUX_DEFS + per-night aux_layout */
 export const DEFAULT_AUX_DEFS: AuxDef[] = [
-  { key: "Z9SR", label: "Z9 SR",     locations: ["Z9 Smoking Room"] },
-  { key: "ADM",  label: "ADMIN",     locations: ["Floor Admin"]     },
-  { key: "TR1",  label: "TRASH 1",   locations: ["West Trash Run"]  },
-  { key: "TR2",  label: "TRASH 2",   locations: ["East Trash Run"]  },
-  { key: "SP1",  label: "SUPPORT 1", locations: ["Float Support"]   },
-  { key: "SP2",  label: "SUPPORT 2", locations: ["Float Support"]   },
+  { key: "Z9SR", role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
+  { key: "ADM", role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
+  { key: "TR1", role: "trash", label: "TRASH 1", locations: ["West Trash Run"] },
+  { key: "TR2", role: "trash", label: "TRASH 2", locations: ["East Trash Run"] },
+  { key: "SP1", role: "support", label: "SUPPORT 1", locations: ["Float Support"] },
+  { key: "SP2", role: "support", label: "SUPPORT 2", locations: ["Float Support"] },
 ];
 
 // Fallback accents for operator-added AUX slots (cycle through these so they
@@ -69,15 +95,29 @@ export const RR_ICONS: Record<number, string> = {
 
 // AUX glyphs — chosen to evoke each AUX role without conflicting with the
 // zone glyphs. Operator-added AUX slots fall back to a generic ✦.
+export const AUX_ROLE_ICONS: Record<Exclude<AuxRole, "blank">, string> = {
+  z9sr: "☾",
+  admin: "❖",
+  trash: "✖",
+  support: "✦",
+};
+
 export const AUX_ICONS: Record<string, string> = {
-  Z9SR: "☾", // ☾ moon (mirrors Z9)
-  ADM:  "❖", // ❖ four-pointed-star (admin / paperwork)
-  TR1:  "✖", // ✖ heavy cross (trash route)
+  Z9SR: "☾",
+  ADM:  "❖",
+  TR1:  "✖",
   TR2:  "✖",
-  SP1:  "✦", // ✦ four-pointed star
+  SP1:  "✦",
   SP2:  "✦",
 };
-export const getAuxIcon = (key: string) => AUX_ICONS[key] || "✦";
+
+export const getAuxIconForRole = (role: AuxRole): string =>
+  role === "blank" ? "+" : AUX_ROLE_ICONS[role] ?? "✦";
+
+export const getAuxIcon = (key: string, role?: AuxRole) => {
+  if (role && role !== "blank") return getAuxIconForRole(role);
+  return AUX_ICONS[key] || "✦";
+};
 
 // Exact Golden palette (eyeballed from friday_golden_zoneCardSheet.png)
 export const ZONE_COLORS: Record<string, string> = {
@@ -106,18 +146,29 @@ export const RR_COLORS: Record<number, string> = {
 export const getRRAccent = (num: number) => RR_COLORS[num] || '#6B7280';
 
 // AUX accent palette
-export const AUX_COLORS: Record<string, string> = {
-  Z9SR: '#E53935', // red    (same as Z9)
-  ADM:  '#B7679A', // magenta
-  TR1:  '#FB8C00', // orange
-  TR2:  '#FB8C00', // orange
-  SP1:  '#1976D2', // blue
-  SP2:  '#1976D2', // blue (kept in palette; SP2 is still a valid key if added back)
+export const AUX_ROLE_COLORS: Record<Exclude<AuxRole, "blank">, string> = {
+  z9sr: "#E53935",
+  admin: "#B7679A",
+  trash: "#FB8C00",
+  support: "#1976D2",
 };
-// Operator-added slots (keys like "AUX6", "AUX7") fall through to a stable
-// color derived from the trailing digits so each added slot is visually
-// distinct without needing a color picker yet.
-export const getAuxAccent = (key: string): string => {
+
+export const AUX_COLORS: Record<string, string> = {
+  Z9SR: "#E53935",
+  ADM:  "#B7679A",
+  TR1:  "#FB8C00",
+  TR2:  "#FB8C00",
+  SP1:  "#1976D2",
+  SP2:  "#1976D2",
+};
+
+export const getAuxAccentForRole = (role: AuxRole): string => {
+  if (role === "blank") return "#9CA3AF";
+  return AUX_ROLE_COLORS[role] ?? "#6B7280";
+};
+
+export const getAuxAccent = (key: string, role?: AuxRole): string => {
+  if (role && role !== "blank") return getAuxAccentForRole(role);
   if (AUX_COLORS[key]) return AUX_COLORS[key];
   const m = key.match(/(\d+)$/);
   const idx = m ? parseInt(m[1], 10) : 0;

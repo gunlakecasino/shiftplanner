@@ -24,8 +24,11 @@ import {
 } from "./skills/placement-engine";
 
 // Minimal interface to avoid circular imports
+export type AuxRole = "blank" | "z9sr" | "admin" | "trash" | "support";
+
 export interface AuxDef {
   key: string;
+  role: AuxRole;
   label: string;
   locations: string[];
 }

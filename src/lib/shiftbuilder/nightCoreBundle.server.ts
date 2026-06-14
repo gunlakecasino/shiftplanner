@@ -17,6 +17,12 @@ import {
   getCachedNightIdForDate,
   getCachedSlotDefaults,
 } from "./data.server";
+import type { AuxDef } from "./placement";
+import {
+  resolveAuxLayout,
+  remapAssignmentsToAuxKeys,
+  defaultAuxDefsForNewNight,
+} from "./auxLayout";
 
 let _bundleClient: SupabaseClient | null = null;
 
@@ -142,6 +148,7 @@ async function fetchOnScheduleTmIds(
 export type NightCoreBundlePayload = {
   nightId: string | null;
   assignments: Record<string, any>;
+  auxDefs: AuxDef[];
   members: any[];
   scheduledTmIdsTonight: string[];
   realRoster: any[];
@@ -153,6 +160,20 @@ export type NightCoreBundlePayload = {
   rawBreakRows: any[];
   slotDefaultBreaks: Record<string, number>;
 };
+
+async function fetchAuxLayoutForNight(nightId: string): Promise<unknown | null> {
+  const supabase = getBundleSupabase();
+  const { data, error } = await supabase
+    .from("nights")
+    .select("aux_layout")
+    .eq("id", nightId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[nightCoreBundle] aux_layout fetch failed", error.message);
+    return null;
+  }
+  return data?.aux_layout ?? null;
+}
 
 async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreBundlePayload> {
   const nightDate = new Date(`${isoDate}T12:00:00`);
@@ -173,7 +194,15 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
   ]);
 
   const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults as any);
-  const assignments = enrichAssignmentsWithBreakGroups(dbAssignments, defaultBreakMap);
+  const legacyAssignments = enrichAssignmentsWithBreakGroups(dbAssignments, defaultBreakMap);
+
+  const storedAuxLayout = nightId ? await fetchAuxLayoutForNight(nightId) : null;
+  const auxDefs = storedAuxLayout
+    ? resolveAuxLayout(storedAuxLayout, dbAssignments)
+    : nightId
+      ? resolveAuxLayout(null, dbAssignments)
+      : defaultAuxDefsForNewNight();
+  const assignments = remapAssignmentsToAuxKeys(legacyAssignments, auxDefs);
 
   const members = allMembers.map((tm) => ({
     ...tm,
@@ -204,6 +233,7 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
   return {
     nightId,
     assignments,
+    auxDefs,
     members,
     scheduledTmIdsTonight: Array.from(allScheduled),
     realRoster: enrichRoster(members),
