@@ -89,7 +89,7 @@ export function WeekHealthTracker({
         : isChromeSlot
           ? {
               position: "relative",
-              width: "100%",
+              width: "fit-content",
               maxWidth: "100%",
             }
           : undefined;
@@ -135,9 +135,9 @@ export function WeekHealthTracker({
       className={`no-print sb-week-health-tracker flex flex-row items-center ${
         isCompact
           ? "sb-glass-pill rounded-2xl px-1.5 py-0.5 text-[8px] gap-1"
-          : `sb-week-health-bar rounded-2xl px-3 gap-2.5 ${
-              isFloaterChrome ? "sb-week-health-below-nav" : ""
-            }`
+          : `sb-week-health-bar rounded-2xl gap-1.5 ${
+              isChromeSlot ? "px-2 py-1" : "px-3 gap-2.5"
+            } ${isFloaterChrome && !isChromeSlot ? "sb-week-health-below-nav" : ""}`
       } ${className}`}
       style={shellStyle}
       role="region"
@@ -172,7 +172,9 @@ export function WeekHealthTracker({
                 key={index}
                 type="button"
                 onClick={() => onSelectDay?.(index)}
-                className="flex flex-row items-baseline gap-1 rounded-xl px-2.5 py-1.5 transition-all active:scale-[0.98]"
+                className={`flex flex-row items-baseline gap-1 rounded-xl transition-all active:scale-[0.98] ${
+                  isChromeSlot ? "px-2 py-1" : "px-2.5 py-1.5"
+                }`}
                 style={{
                   background: isSelected
                     ? SELECTED_ACCENT

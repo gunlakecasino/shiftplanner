@@ -738,18 +738,20 @@ body {
 }
 
 .sb-builder-stage .sb-week-health-chrome-slot {
-  padding: 0;
+  padding: 2px 0 4px;
   margin: 0;
+  width: 100%;
 }
 
 .sb-builder-stage .sb-week-health-chrome-slot .sb-week-health-tracker {
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
 }
 
 .sb-builder-scale-viewport {
   position: relative;
   width: 100%;
+  overflow: visible;
 }
 
 .sb-builder-scale-inner {

@@ -7256,7 +7256,7 @@ function AuthedShiftBuilder() {
            actually painted, not the un-scaled layout box. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 ${isBuilderDeployment ? "overflow-x-clip overflow-y-auto" : "overflow-auto"} ${isBuilderDeployment ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderDeployment ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 ${isBuilderDeployment ? "overflow-y-auto overflow-x-visible" : "overflow-auto"} ${isBuilderDeployment ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderDeployment ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7278,11 +7278,7 @@ function AuthedShiftBuilder() {
             >
               {showWeekHealthBar && (
                 <div
-                  className="sb-week-health-chrome-slot no-print w-full shrink-0 flex items-center justify-center box-border"
-                  style={{
-                    height: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
-                    minHeight: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
-                  }}
+                  className="sb-week-health-chrome-slot no-print shrink-0 flex items-center justify-start box-border"
                   aria-hidden={false}
                 >
                   <WeekHealthTracker
@@ -7301,15 +7297,10 @@ function AuthedShiftBuilder() {
               )}
 
               <div
-                className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-hidden"
-                style={
-                  builderContentHeight > 0
-                    ? {
-                        height: Math.ceil(builderContentHeight * scale),
-                        marginTop: showWeekHealthBar ? WEEK_HEALTH_BELOW_CONTENT_GAP_PX : 0,
-                      }
-                    : undefined
-                }
+                className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible"
+                style={{
+                  marginTop: showWeekHealthBar ? WEEK_HEALTH_BELOW_CONTENT_GAP_PX : 0,
+                }}
               >
                 <div
                   ref={builderContentRef}

@@ -113,10 +113,13 @@ export function useZoom({
     const byWidth = availW / naturalW;
     const byHeight = availH / naturalH;
 
-    // Fit both axes so the full surface stays visible without scroll or upscale past max.
-    const next = Math.min(max, byWidth, byHeight);
+    // Builder: fit width only so cards stay readable; the stage scrolls vertically.
+    // Preview/Golden: fit both axes to keep the sacred 1056×816 paper on screen.
+    const next = builderFitEnabled
+      ? Math.min(max, byWidth, 1)
+      : Math.min(max, byWidth, byHeight);
 
-    setFitScale(Math.max(0.25, next));
+    setFitScale(Math.max(builderFitEnabled ? 0.55 : 0.25, next));
   }, [stageInsets, builderFitEnabled, builderChromeHeight, builderFit?.contentRef]);
 
   useEffect(() => {
