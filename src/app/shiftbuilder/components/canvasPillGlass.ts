@@ -49,3 +49,6 @@ export function stageTopInsetPx(): number {
 export function builderStageBottomInsetPx(): number {
   return 20;
 }
+
+/** Centered builder column — matches Golden 5-col comfort (~240px cards) without full-bleed stretch. */
+export const BUILDER_CANVAS_MAX_WIDTH_PX = 1280;

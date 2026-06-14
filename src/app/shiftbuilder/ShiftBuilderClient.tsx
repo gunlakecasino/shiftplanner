@@ -175,6 +175,7 @@ import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   stageTopInsetPx,
   builderStageBottomInsetPx,
+  BUILDER_CANVAS_MAX_WIDTH_PX,
   WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
   WEEK_HEALTH_BELOW_CONTENT_GAP_PX,
 } from "./components/canvasPillGlass";
@@ -6882,7 +6883,10 @@ function AuthedShiftBuilder() {
   return (
     <div
       className="sb-builder-shell h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
-      style={{ "--stage-accent": selectedDay?.color ?? "var(--sb-gold)" } as React.CSSProperties}
+      style={{
+        "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
+        "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,
+      } as React.CSSProperties}
     >
       {/* ═══════════════════════════════════════════════════════════
           Floating Nav (Framer Motion + CVA)
@@ -6890,6 +6894,7 @@ function AuthedShiftBuilder() {
           All other controls preserved visually.
           ═══════════════════════════════════════════════════════════ */}
       <FloatingNav
+        contentMaxWidth={isBuilderDeployment ? BUILDER_CANVAS_MAX_WIDTH_PX : undefined}
         days={NAV_DAY_STRIP.map((d) => ({
           id: d.navId,
           label: String(d.dateNum),
@@ -7267,7 +7272,10 @@ function AuthedShiftBuilder() {
         >
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderDeployment && currentView === "deployment" && (
-            <div className="sb-builder-canvas flex min-h-0 w-full flex-1 flex-col">
+            <div
+              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
+              style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
+            >
               {showWeekHealthBar && (
                 <div
                   className="sb-week-health-chrome-slot no-print w-full shrink-0 flex items-center justify-center box-border"

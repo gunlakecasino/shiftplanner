@@ -726,12 +726,15 @@ body {
   min-width: 0;
 }
 
-/* Unified builder canvas — week health + board as one continuous surface. */
+/* Unified builder canvas — centered column aligned with date header + floating nav. */
 .sb-builder-canvas {
   width: 100%;
-  max-width: 100%;
+  max-width: var(--sb-builder-canvas-max, 1280px) !important;
+  margin-inline: auto !important;
+  padding-inline: clamp(10px, 1.5vw, 18px);
   min-width: 0;
   gap: 0;
+  box-sizing: border-box;
 }
 
 .sb-builder-stage .sb-week-health-chrome-slot {
@@ -1182,7 +1185,7 @@ body {
 }
 
 .sb-builder-stage.sb-stage-host {
-  align-items: stretch !important;
+  align-items: center !important;
   min-width: 0 !important;
   max-width: 100% !important;
   overflow-x: clip;
@@ -1252,11 +1255,7 @@ button,
   cursor: pointer;
 }
 
-/* Center and cap the floating nav pill to match the .builder-workspace content block below.
-   This makes the day selector, chevrons, view toggles, Builder/Preview, Publish, zoom, etc. structurally aligned
-   and visually balanced with the centered cards — exactly like the reference compact pill floating above the workspace.
-   The grid 1fr for the day strip stays prominent and centered within the same max-width. */
-/* FloatingNav owns position/width inline — keep only layout helpers here */
+/* Center and cap the floating nav pill to match the .builder-workspace content block below. */
 .sb-builder-stage .sb-floating-nav-pill {
   box-sizing: border-box;
 }

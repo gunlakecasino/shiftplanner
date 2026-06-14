@@ -136,6 +136,8 @@ export interface FloatingNavProps {
   onThemeToggle?: () => void;
   onPrint?: () => void;
   isDark?: boolean;
+  /** When set, nav pill is centered and capped to match the builder canvas column. */
+  contentMaxWidth?: number;
   userInitials?: string;
 
   /** Full authenticated operator for the profile dropdown */
@@ -192,6 +194,7 @@ export default function FloatingNav({
   onThemeToggle,
   onPrint,
   isDark = false,
+  contentMaxWidth,
   userInitials = "BC",
   currentUser,
   onLogout,
@@ -347,11 +350,21 @@ export default function FloatingNav({
           ...glassStyle,
           position: "fixed",
           top: 8,
-          left: 24,
-          right: 24,
-          width: "auto",
-          maxWidth: "none",
-          transform: "none",
+          ...(contentMaxWidth
+            ? {
+                left: "50%",
+                right: "auto",
+                width: `min(calc(100vw - 48px), ${contentMaxWidth}px)`,
+                maxWidth: contentMaxWidth,
+                transform: "translateX(-50%)",
+              }
+            : {
+                left: 24,
+                right: 24,
+                width: "auto",
+                maxWidth: "none",
+                transform: "none",
+              }),
           boxSizing: "border-box",
           zIndex: 40,
         }}
