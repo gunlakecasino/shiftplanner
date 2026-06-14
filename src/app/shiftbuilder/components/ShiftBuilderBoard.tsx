@@ -126,6 +126,7 @@ export interface ShiftBuilderBoardProps {
 
   /** Weekly Overview focus (from navbar table): dims non-matching cards, highlights the focused TM's slot on this day. */
   focusedTmId?: string | null;
+
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -329,6 +330,18 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // In print-preview mode the live canvas must match the exact Golden that print capture will clone (no digital chips/lines at all).
   const showDigitalAssists = !isPrintPreview;
   const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
+  const zoneGridClass = isPrintPreview
+    ? `grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
+    : `sb-zone-grid flex-1 w-full${builderCardGridClass}`;
+  const rrGridClass = isPrintPreview
+    ? `grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
+    : `sb-rr-grid flex-1 w-full${builderCardGridClass}`;
+  const auxGridClass = isPrintPreview
+    ? `grid gap-1.5 flex-1 w-full${builderCardGridClass}`
+    : `sb-aux-grid flex-1 w-full${builderCardGridClass}`;
+  const overlapGridClass = isPrintPreview
+    ? `flex-1 grid grid-cols-6 gap-1.5${builderCardGridClass}`
+    : `sb-overlap-grid flex-1${builderCardGridClass}`;
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -392,7 +405,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Re-runs when returning from the breaks view (grids unmount/remount) so heights
   // do not stay at natural uneven sizes after tab switches.
   React.useEffect(() => {
+    let innerRaf = 0;
+    let ro: ResizeObserver | null = null;
+
     if (currentView !== "deployment") return;
+
+    const getGridColumnCount = (gridEl: HTMLElement): number => {
+      const cols = getComputedStyle(gridEl).gridTemplateColumns;
+      if (!cols || cols === "none") return 5;
+      return cols.split(" ").filter((c) => c.trim()).length;
+    };
 
     const equalizeCardsInGrid = (gridEl: HTMLElement, colsPerRow: number) => {
       const wrappers = Array.from(gridEl.children) as HTMLElement[];
@@ -444,18 +466,26 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     };
 
     const equalize = () => {
+      if (isAnyDragActive) return; // Pause during active drag to stop mid-gesture reflows on the scaled artboard (prevents the "window zooms out" glitch on iPad/Mac).
       const zEl = zonesGridRef.current;
       const rEl = restroomsGridRef.current;
       const aEl = auxGridRef.current;
       if (!zEl || !rEl || !aEl) return;
 
-      equalizeCardsInGrid(zEl, 5);
-      equalizeRRGrid(rEl);
-      equalizeCardsInGrid(aEl, auxDefs?.length || 6);
+      if (isPrintPreview) {
+        // Sacred preview: full equalization for exact Golden paper band alignment
+        equalizeCardsInGrid(zEl, 5);
+        equalizeRRGrid(rEl);
+        equalizeCardsInGrid(aEl, auxDefs?.length || 6);
+      } else {
+        // Builder: keep RESTROOMS visually equal height "in a line" for clean horizontal band (user request),
+        // while ZONES and AUX stay natural/content-driven for the adaptive workspace feel.
+        equalizeRRGrid(rEl);
+        equalizeCardsInGrid(zEl, getGridColumnCount(zEl));
+        equalizeCardsInGrid(aEl, getGridColumnCount(aEl));
+      }
     };
 
-    let innerRaf = 0;
-    let ro: ResizeObserver | null = null;
     const attachResizeObserver = () => {
       const grids = [zonesGridRef.current, restroomsGridRef.current, auxGridRef.current].filter(
         Boolean,
@@ -468,17 +498,29 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       grids.forEach((el) => ro!.observe(el));
     };
 
-    const outerRaf = requestAnimationFrame(() => {
-      equalize();
-      innerRaf = requestAnimationFrame(() => {
+    if (!isAnyDragActive) {
+      // Only schedule equalize + attach ResizeObserver when NOT dragging.
+      // During active drag we completely avoid any RAFs and observer callbacks that would
+      // mutate card minHeight on the scaled artboard (primary cause of the perceived "zoom out" glitch).
+      const outerRaf = requestAnimationFrame(() => {
         equalize();
-        attachResizeObserver();
+        innerRaf = requestAnimationFrame(() => {
+          equalize();
+          attachResizeObserver();
+        });
       });
-    });
 
+      return () => {
+        cancelAnimationFrame(outerRaf);
+        cancelAnimationFrame(innerRaf);
+        ro?.disconnect();
+      };
+    }
+
+    // Drag active: no equalize work, no observer attached this effect run.
+    // equalize() itself also bails early (defense-in-depth if a stale callback fires at the boundary).
+    // Effect will re-run on isAnyDragActive change (it's a dep) and restore normal equalizing cleanly.
     return () => {
-      cancelAnimationFrame(outerRaf);
-      cancelAnimationFrame(innerRaf);
       ro?.disconnect();
     };
   }, [
@@ -492,6 +534,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     cardBorders,
     selectedSlotKey,
     artboardScale,
+    isAnyDragActive, // React to drag start/end so we can pause/restore cleanly.
   ]);
 
   // Helper used only inside breaks view wave rendering
@@ -637,7 +680,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [nightId]);
 
   return (
-    <div className={`print-artboard${showDigitalAssists ? " builder-luxe" : ""}`}>
+    <div className={isPrintPreview ? "print-artboard" : "builder-workspace"}>
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
       <div className="sheet-header flex items-end justify-between flex-shrink-0 pb-1.5 mb-2">
@@ -751,7 +794,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <div
                   key={i}
                   onClick={() => onDayPillClick?.(i)}
-                  className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px] cursor-pointer"
+                  className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px]"
                   style={{
                     background: isActive && color ? color : "transparent",
                     color: isActive ? "#fff" : (isDark ? "#9CA3AF" : "#6B7280"),
@@ -776,7 +819,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     <div
                       key={g}
                       onClick={() => onBreakGroupChange?.(g as 1 | 2 | 3)}
-                      className="min-w-[15px] h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px] cursor-pointer"
+                      className="min-w-[15px] h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px]"
                       style={{
                         background: isActive ? "#1C1C1E" : "#E5E5E7",
                         color: isActive ? "#fff" : "#6B7280",
@@ -797,11 +840,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+      <div className={`flex-1 min-h-0 overflow-hidden flex flex-col ${!isPrintPreview ? 'w-full' : ''}`}>
         {currentView === "deployment" ? (
           <>
             {/* ZONES — Golden: 2 rows × 5 cols */}
-            <section className="mb-2">
+            <section className="sb-builder-section mb-2">
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <div className="divider" />
@@ -819,7 +862,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   </span>
                 )}
               </div>
-              <div ref={zonesGridRef} className={`grid grid-cols-5 gap-1.5 flex-1${builderCardGridClass}`} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto" }}>
                 {ZONE_DEFS.map((def) => {
                   const key = def.key;
                   const accent = getZoneColor(key);
@@ -860,7 +903,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* RESTROOMS — Golden: 1 row × 5 cols */}
-            <section className="mb-2">
+            <section className="sb-builder-section mb-2">
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
                 <div className="divider" />
@@ -872,7 +915,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   }, 0)} / 10 FILLED
                 </span>
               </div>
-              <div ref={restroomsGridRef} className={`grid grid-cols-5 gap-1.5 flex-1${builderCardGridClass}`} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto" }}>
                 {RR_DEFS.map((def) => {
                   const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
                   const accent = getRRAccent(def.num);
@@ -921,7 +964,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* AUXILIARY */}
-            <section className="mb-2">
+            <section className="sb-builder-section mb-2">
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
@@ -933,10 +976,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
               <div
                 ref={auxGridRef}
-                className={`grid gap-1.5 flex-1${builderCardGridClass}`}
+                className={auxGridClass}
                 style={{
-                  gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
-                  gridAutoRows: "minmax(0, 1fr)",
+                  ...(isPrintPreview
+                    ? { gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))` }
+                    : {}),
+                  gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto",
                 }}
               >
                 {auxDefs.map((def) => {
@@ -1081,7 +1126,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </div>
 
             {/* OVERLAPS — Golden full-width pinned section */}
-            <section className="mt-auto pt-2 overlaps-section" data-print-target="overlaps">
+            <section className="sb-builder-section mt-auto pt-2 overlaps-section" data-print-target="overlaps">
               <div className="sheet-section-header">
                 <span className="label">OVERLAPS</span>
                 <div className="divider" />
@@ -1124,7 +1169,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
                         {row.time}
                       </div>
-                      <div className={`flex-1 grid grid-cols-6 gap-1.5${builderCardGridClass}`}>
+                      <div className={overlapGridClass}>
                         {Array.from({ length: 6 }).map((_, i) => {
                           const slotKey = `OL-${row.key}-${i}`;
                           return (
@@ -1173,17 +1218,36 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         )}
       </div>
 
-      {/* Sheet footer */}
-      <div className="sheet-footer flex-shrink-0">
-        <div className="flex items-center gap-1">
-          <span className="font-bold tracking-[1px] text-[#1C1C1E]">SBS</span>
-          <span className="text-[#9CA3AF]">⚙</span>
-          <span className="text-[#6B7280]">Weekly Zone Deployment Book</span>
-          <span className="text-[#C8C8CC] mx-1">·</span>
-          <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
+      {/* Sheet footer — single aligned row (brand · version · page) */}
+      <div
+        className={`sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] ${
+          isPrintPreview
+            ? "pt-[7px] border-t border-[#E5E5E7]"
+            : "pt-2 mt-3 border-t border-black/5 dark:border-white/[0.07]"
+        }`}
+        style={{
+          color: isDark ? "#9CA3AF" : "#9CA3AF",
+          fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+        }}
+      >
+        <div className="min-w-0 truncate">
+          <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+            SBS
+          </span>
+          <span className="mx-1 opacity-60">©</span>
+          <span style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}>Weekly Zone Deployment Book</span>
+          <span className="mx-1 opacity-40">—</span>
+          <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+            GRAVES
+          </span>
         </div>
-        <div className="text-[#9CA3AF] text-center">{shiftBuilderVersionLabel()}</div>
-        <div className="text-[#6B7280] text-right">— {currentView === "deployment" ? (selectedDayIndex * 2 + 1) : (selectedDayIndex * 2 + 2)} of 14 —</div>
+        <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
+        <div
+          className="shrink-0 tabular-nums text-right"
+          style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}
+        >
+          — {currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2} of 14 —
+        </div>
       </div>
 
     </div>

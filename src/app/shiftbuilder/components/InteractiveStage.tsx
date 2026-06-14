@@ -10,10 +10,51 @@ import {
   useSensor,
   useSensors,
   closestCenter,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
+  type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { createPortal } from "react-dom";
+import { snapTopLeftToCursor } from "@/lib/shiftbuilder/dndModifiers";
+
+function isDroppableVisible(
+  id: UniqueIdentifier,
+  args: Parameters<CollisionDetection>[0],
+): boolean {
+  const rect = args.droppableRects.get(id);
+  if (!rect || rect.width <= 4 || rect.height <= 4) return false;
+
+  const container = args.droppableContainers.find((c) => c.id === id);
+  const node = container?.node.current;
+  if (!node || typeof window === "undefined") return true;
+
+  let el: HTMLElement | null = node;
+  while (el) {
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      return false;
+    }
+    el = el.parentElement;
+  }
+  return true;
+}
+
+/** Prefer pointer-hit droppables; ignore hidden/off-screen/zero-size nodes. */
+const shiftBuilderCollisionDetection: CollisionDetection = (args) => {
+  const visibleHits = (collisions: ReturnType<typeof pointerWithin>) =>
+    collisions.filter((c) => isDroppableVisible(c.id, args));
+
+  const pointerHits = visibleHits(pointerWithin(args));
+  if (pointerHits.length > 0) return pointerHits;
+
+  const rectHits = visibleHits(rectIntersection(args));
+  if (rectHits.length > 0) return rectHits;
+
+  return visibleHits(closestCenter(args));
+};
 
 /**
  * InteractiveStage — Phase 1 Performance + Architecture
@@ -58,51 +99,105 @@ export default function InteractiveStage({
     useSensor(KeyboardSensor),
   );
 
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      autoScroll={false}
-    >
-      {children}
+  // Prevent iOS Safari (iPad) and Mac Safari from interpreting drag gestures as pinch-to-zoom or "smart zoom".
+  // Setting touch-action:none + user-select:none + overscroll:none on the drag surface during an active gesture
+  // stops the browser from "zooming the window out" or glitching the viewport/scale.
+  // We also toggle a global .sb-is-dragging class so CSS can reinforce (html/body + descendants).
+  // Restored cleanly on drag end. This is the standard high-signal fix for scaled artboard + dnd on touch devices.
+  React.useEffect(() => {
+    if (!activeDrag) return;
 
-      {/* Drag ghost — rendered in portal so it is never clipped */}
-      {typeof window !== "undefined" &&
-        createPortal(
-          <DragOverlay dropAnimation={null}>
-            {activeDrag ? (
-              (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
-                <div
-                  className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
-                  style={{
-                    padding: "5px 10px 5px 7px",
-                    background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
-                    color: isDark ? "#E5E5E7" : "#1C1C1E",
-                    border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
-                    boxShadow: isDark
-                      ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
-                      : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
-                    backdropFilter: "blur(20px)",
-                    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                  }}
-                >
-                  <span className="ms" style={{ fontSize: 16, color: "#9CA3AF", fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>drag_indicator</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
-                  {activeDrag.fromSlot && (
-                    <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
-                  )}
-                  {activeDrag.kind === "assigned" && (
-                    <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>reassign</span>
-                  )}
-                </div>
-              ) : null
-            ) : null}
-          </DragOverlay>,
-          document.body
-        )}
-    </DndContext>
+    const root = document.documentElement;
+    const body = document.body;
+
+    const prevRootTouch = root.style.touchAction;
+    const prevBodyTouch = body.style.touchAction;
+    const prevRootSelect = root.style.userSelect;
+    const prevBodySelect = body.style.userSelect;
+    const prevOverscroll = body.style.overscrollBehavior;
+
+    root.style.touchAction = 'none';
+    body.style.touchAction = 'none';
+    root.style.userSelect = 'none';
+    body.style.userSelect = 'none';
+    body.style.overscrollBehavior = 'none';
+
+    root.classList.add('sb-is-dragging');
+    body.classList.add('sb-is-dragging');
+
+    // Extra safety: if any touchmove sneaks through during active drag, kill the zoom gesture.
+    const prevent = (e: TouchEvent) => {
+      if (activeDrag) e.preventDefault();
+    };
+    // Use capture to be early.
+    document.addEventListener('touchmove', prevent, { passive: false, capture: true });
+
+    return () => {
+      root.style.touchAction = prevRootTouch;
+      body.style.touchAction = prevBodyTouch;
+      root.style.userSelect = prevRootSelect;
+      body.style.userSelect = prevBodySelect;
+      body.style.overscrollBehavior = prevOverscroll;
+      root.classList.remove('sb-is-dragging');
+      body.classList.remove('sb-is-dragging');
+      document.removeEventListener('touchmove', prevent, { capture: true } as any);
+    };
+  }, [activeDrag]);
+
+  // Root wrapper for the narrowed dnd surface.
+  // ALWAYS use display: 'contents' so this wrapper never participates in flex/grid sizing.
+  // Switching to a real block element during drag was breaking builder-workspace layout
+  // (cards shifted horizontally off-screen). Drag guards live on html/body via useEffect above.
+  return (
+    <div style={{ display: 'contents' }}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={shiftBuilderCollisionDetection}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
+        autoScroll={false}
+      >
+        {children}
+
+        {/* Drag ghost — rendered in portal so it is never clipped */}
+        {typeof window !== "undefined" &&
+          createPortal(
+            <DragOverlay
+              dropAnimation={null}
+              modifiers={[snapTopLeftToCursor]}
+              style={{ cursor: "default", width: "max-content", height: "max-content" }}
+            >
+              {activeDrag ? (
+                (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
+                  <div
+                    className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
+                    style={{
+                      padding: "5px 10px",
+                      background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
+                      color: isDark ? "#E5E5E7" : "#1C1C1E",
+                      border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
+                      boxShadow: isDark
+                        ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
+                        : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
+                      backdropFilter: "blur(20px)",
+                      fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
+                    {activeDrag.fromSlot && (
+                      <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
+                    )}
+                    {activeDrag.kind === "assigned" && (
+                      <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>reassign</span>
+                    )}
+                  </div>
+                ) : null
+              ) : null}
+            </DragOverlay>,
+            document.body
+          )}
+      </DndContext>
+    </div>
   );
 }

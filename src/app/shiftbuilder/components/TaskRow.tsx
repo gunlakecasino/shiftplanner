@@ -70,6 +70,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     attributes: taskDragAttributes,
     listeners: taskDragListeners,
     setNodeRef: setTaskDragRef,
+    isDragging,
   } = useDraggable({
     id: `task:${slotKey}:${task.taskLabel}`,
     data: {
@@ -98,6 +99,26 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
   const canDrag = effectiveDraggable && !isEditing;
 
+  const setRowRef = (node: HTMLElement | null) => {
+    setTaskDragRef(node);
+    setTaskDropRef(node);
+  };
+
+  const dragListeners = React.useMemo(() => {
+    if (!canDrag) return {};
+    const base = taskDragListeners as {
+      onPointerDown?: (ev: React.PointerEvent) => void;
+    };
+    return {
+      ...taskDragListeners,
+      onPointerDown: (e: React.PointerEvent) => {
+        // Keep task drags from bubbling to the parent assignment card (TM drag).
+        e.stopPropagation();
+        base.onPointerDown?.(e);
+      },
+    };
+  }, [canDrag, taskDragListeners]);
+
   const startEditing = () => {
     setIsEditing(true);
     setEditValue(task.taskLabel);
@@ -118,36 +139,20 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
   return (
     <div
-      ref={(node) => {
-        setTaskDragRef(node);
-        setTaskDropRef(node);
-      }}
-      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''}`}
+      ref={setRowRef}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
+      {...(canDrag ? dragListeners : {})}
+      {...(canDrag ? taskDragAttributes : {})}
       onPointerUp={(e) => {
-        // Touch tap outside the label: pin/unpin toolbar (label uses drag delay).
-        if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('[data-task-label]')) {
+        // Touch tap on toolbar controls: pin/unpin (row uses drag delay on touch).
+        if (e.pointerType === 'touch' && (e.target as HTMLElement).closest('.sb-task-toolbar')) {
           e.stopPropagation();
           setToolbarPinned((p) => !p);
         }
       }}
     >
-      {/* Label — draggable surface for cross-card task moves */}
-      <div
-        ref={setTaskDragRef}
-        data-task-label
-        className={`min-w-0 flex-1 leading-snug ${canDrag ? 'cursor-grab active:cursor-grabbing touch-none select-none' : ''}`}
-        title={canDrag ? 'Drag to reassign' : undefined}
-        {...(canDrag ? taskDragListeners : {})}
-        {...(canDrag ? taskDragAttributes : {})}
-        onPointerDown={
-          canDrag
-            ? (e) => {
-                e.stopPropagation();
-                (taskDragListeners as { onPointerDown?: (ev: React.PointerEvent) => void })?.onPointerDown?.(e);
-              }
-            : undefined
-        }
-      >
+      {/* Label — visual only; drag surface is the full row (matches TM card drag). */}
+      <div data-task-label className="min-w-0 flex-1 leading-snug">
         {isEditing ? (
           <input
             type="text"
@@ -179,12 +184,13 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       {/* Compact hover toolbar — collapsed by default for maximum density.
           Color control can be clicked to expand the full palette. */}
       {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
-        <div className={`absolute right-0.5 top-0.5 items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10 ${toolbarPinned ? 'flex' : 'hidden group-hover/task:flex'}`}>
+        <div className={`sb-task-toolbar absolute right-0.5 top-0.5 items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10 ${toolbarPinned ? 'flex' : 'hidden group-hover/task:flex'}`}>
           {/* Color control — collapsed until clicked */}
           {onSetTaskColor && (
             <>
               {!isColorExpanded ? (
                 <button
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsColorExpanded(true);
@@ -201,6 +207,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
                   {TASK_COLOR_SPHERES.map((c) => (
                     <button
                       key={c.hex}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         onSetTaskColor(slotKey, task.taskLabel, c.hex);
@@ -212,6 +219,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
                     />
                   ))}
                   <button
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSetTaskColor(slotKey, task.taskLabel, null);
@@ -238,6 +246,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           {/* Edit (pencil) */}
           {onEditTask && (
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 startEditing();
@@ -252,6 +261,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           {/* Delete */}
           {onRemoveTask && (
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 setToolbarPinned(false);

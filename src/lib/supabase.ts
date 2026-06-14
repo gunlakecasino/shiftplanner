@@ -24,11 +24,11 @@ export function getSupabaseRestOrigin(): string | null {
   }
 }
 
-// Safe access — prevents "Can't find variable: process" on iPad simulator / certain Turbopack chunks
-const IS_PRODUCTION =
-  typeof process !== 'undefined' &&
-  process.env &&
-  process.env.NODE_ENV === 'production';
+// Use the standard Next.js pattern. process.env.NODE_ENV is replaced at build time
+// by Turbopack/webpack. This avoids fragile runtime "process" polyfill dependencies
+// that trigger "module factory is not available" errors on large client pages
+// (ShiftBuilder) under dev + Safari/iPad.
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export function getSupabaseClient(): SupabaseClient {
   if (!_supabaseClient) {
@@ -39,10 +39,7 @@ export function getSupabaseClient(): SupabaseClient {
     const key = serviceKey || anonKey;
 
     if (!url || !key) {
-      const isProd =
-        typeof process !== 'undefined' &&
-        process.env &&
-        process.env.NODE_ENV === 'production';
+      const isProd = process.env.NODE_ENV === 'production';
       const missing = [];
       if (!url) missing.push('NEXT_PUBLIC_SUPABASE_URL');
       if (!serviceKey && !anonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY (or SERVICE_ROLE_KEY)');
@@ -51,10 +48,7 @@ export function getSupabaseClient(): SupabaseClient {
         hasUrl: !!url,
         hasAnonKey: !!anonKey,
         hasServiceKey: !!serviceKey,
-        nodeEnv:
-          typeof process !== 'undefined' && process.env
-            ? process.env.NODE_ENV
-            : 'unknown',
+        nodeEnv: process.env.NODE_ENV ?? 'unknown',
       });
 
       throw new Error(
@@ -70,8 +64,7 @@ export function getSupabaseClient(): SupabaseClient {
     // Helpful for prod debugging (Railway logs). In prod we are almost always on anon.
     // If you see "ShiftBuilder client initialized with anon key" + later empty result sets,
     // the problem is almost always RLS policies not granting SELECT to the anon role.
-    const envForLog =
-      typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : 'unknown';
+    const envForLog = process.env.NODE_ENV ?? 'unknown';
     console.log(
       `[supabase] ShiftBuilder client initialized with ${usingService ? 'SERVICE_ROLE' : 'anon'} key (env: ${envForLog})`
     );

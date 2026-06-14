@@ -165,6 +165,10 @@ import {
 } from "./components/CanvasEngineCluster";
 import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
+  stageTopInsetPx,
+  WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+} from "./components/canvasPillGlass";
+import {
   computeShiftRotationHealth,
   computeDailyHealthPercent,
   computeWeekAverageHealth,
@@ -741,6 +745,18 @@ function AuthedShiftBuilder() {
     return (saved === "print-preview" || saved === "builder") ? saved : "builder";
   });
   const isPrintPreview = canvasMode === "print-preview";
+  // Dismissable week health bar — placement under nav + stage top inset (see stageTopInsetPx).
+  const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("oms_week_health_tracker_dismissed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  // Builder deployment means: no sacred Golden frame, no paper, full adaptive sophisticated workspace (all cards visible, Apple-grade refinement).
+  const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
+  const relaxedFrameClass = isBuilderDeployment ? "sb-relaxed-frame" : "";
   // Persist
   React.useEffect(() => {
     try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
@@ -1806,10 +1822,16 @@ function AuthedShiftBuilder() {
   // are retired with the bottom UI.
 
   // === Zoom & centering (extracted to useZoom) ===
+  const showWeekHealthBar =
+    viewMode === "canvas" &&
+    currentView === "deployment" &&
+    isBuilderDeployment &&
+    !isWeekHealthTrackerDismissed;
+
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
     return {
-      top: 68,
+      top: stageTopInsetPx(),
       right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
@@ -2397,8 +2419,7 @@ function AuthedShiftBuilder() {
       // measure can throw if no start mark — that's expected on first load
     }
 
-    const isDevEnv = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
-    if (isDevEnv) {
+    if (process.env.NODE_ENV === 'development') {
       console.log(`[Perf] Night data ready: ${duration ? duration.toFixed(1) + 'ms' : 'initial/other path'}`, {
         nightId: currentNight.nightId,
         fromWorker: !!processedDayData,
@@ -4169,17 +4190,6 @@ function AuthedShiftBuilder() {
     return { ...cached, ...weekHistories };
   }, [weekPlanTmIds, weekHistories]);
 
-  // Dismissable persistent week health tracker state.
-  // Persists the user's preference across sessions via localStorage.
-  const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem("oms_week_health_tracker_dismissed") === "true";
-    } catch {
-      return false;
-    }
-  });
-
   const dismissWeekHealthTracker = React.useCallback(() => {
     setIsWeekHealthTrackerDismissed(true);
     try {
@@ -5075,23 +5085,9 @@ function AuthedShiftBuilder() {
     }
   };
 
-  const onDragOver = (event: any) => {
-    const a = event.active?.data?.current as any;
-    const o = event.over?.data?.current as any;
-    if (a?.type === "task" && o?.type === "task-item" && a.fromSlot === o.slotKey && a.taskLabel !== o.taskLabel) {
-      // Live preview: reorder the task list in state as the user hovers over other tasks in the same slot.
-      // This gives smooth drag-to-sort UX using only core dnd-kit (no extra sortable dep needed).
-      setSelectedTasks((prev) => {
-        const list = [...(prev[a.fromSlot] ?? [])];
-        const fromIdx = list.findIndex((t: any) => t.taskLabel === a.taskLabel);
-        const toIdx = list.findIndex((t: any) => t.taskLabel === o.taskLabel);
-        if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev;
-        const [moved] = list.splice(fromIdx, 1);
-        list.splice(toIdx, 0, moved);
-        return { ...prev, [a.fromSlot]: list };
-      });
-    }
-  };
+  // Task reorder commits on drag end (not live onDragOver) so the source row stays
+  // stable under the cursor — same feel as TM/name drags with the drag ghost.
+  const onDragOver = undefined;
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveDrag(null);
@@ -5153,16 +5149,29 @@ function AuthedShiftBuilder() {
       const fromUiKey = a.fromSlot;
 
       if (toUiKey === fromUiKey) {
-        // Reorder within the same slot's task list (drag-to-sort).
-        // The live reorder preview was already applied in onDragOver.
-        // Persist the final order from current state.
+        // Reorder within the same slot's task list (drag-to-sort) — commit once on drop.
+        const hoverLabel =
+          overData?.type === "task-item" && overData.taskLabel !== a.taskLabel
+            ? overData.taskLabel
+            : null;
+        if (!hoverLabel) return;
+
+        const currentList = selectedTasks[fromUiKey] ?? [];
+        const reordered = [...currentList];
+        const fromIdx = reordered.findIndex((t: any) => t.taskLabel === a.taskLabel);
+        const toIdx = reordered.findIndex((t: any) => t.taskLabel === hoverLabel);
+        if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+
+        const [moved] = reordered.splice(fromIdx, 1);
+        reordered.splice(toIdx, 0, moved);
+        const orderedLabels = reordered.map((t: any) => t.taskLabel);
+
+        setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: reordered }));
+
         (async () => {
           let nid = nightId;
           if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
           if (!nid) return;
-
-          const currentList = selectedTasks[fromUiKey] ?? [];
-          const orderedLabels = currentList.map((t: any) => t.taskLabel);
 
           try {
             const { reorderNightSlotTasks } = await import("@/lib/shiftbuilder/data");
@@ -6686,7 +6695,7 @@ function AuthedShiftBuilder() {
 
   return (
     <div
-      className="sb-builder-stage h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
+      className="sb-builder-shell h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
       style={{ "--stage-accent": selectedDay?.color ?? "var(--sb-gold)" } as React.CSSProperties}
     >
       {/* ═══════════════════════════════════════════════════════════
@@ -6811,7 +6820,7 @@ function AuthedShiftBuilder() {
          relative container so the canvas can take the full width. When the
          operator collapses the roster, a sphere appears in its place.
          min-h-0 is still critical for the canvas's nested scroll behavior. */}
-      <div className="flex flex-1 overflow-hidden min-h-0 relative">
+      <div className={`flex flex-1 overflow-hidden min-h-0 relative ${isBuilderDeployment ? 'sb-builder-main' : ''}`}>
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
@@ -7056,7 +7065,7 @@ function AuthedShiftBuilder() {
            actually painted, not the un-scaled layout box. */}
         <div
           ref={stageHostRef}
-          className="sb-stage-host flex-1 overflow-auto bg-[#F2F2F4] dark:bg-[#0D0D0F] flex items-center justify-center transition-[padding] duration-300"
+          className={`sb-stage-host flex-1 min-w-0 ${isBuilderDeployment ? "overflow-x-clip overflow-y-auto" : "overflow-auto"} ${isBuilderDeployment ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderDeployment ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7065,26 +7074,105 @@ function AuthedShiftBuilder() {
             ["--sb-stage-inset-bottom" as string]: `${stageInsets.bottom}px`,
             ["--sb-stage-inset-left" as string]: `${stageInsets.left}px`,
             paddingTop: stageInsets.top,
-            paddingRight: stageInsets.right,
+            paddingRight: isBuilderDeployment ? 16 : stageInsets.right,
             paddingBottom: stageInsets.bottom,
-            paddingLeft: stageInsets.left,
+            paddingLeft: isBuilderDeployment ? 16 : stageInsets.left,
           }}
         >
-          {/* Visual frame sized to the *scaled* artboard.
-              This is what flex centers (preserving the original containment + centering behavior).
-              Inside it we have:
-                - the scaled artboard content (top-left, transformed)
-                - the unscaled artboard overlay layer (absolutely centered, for Command Palette etc. at 1:1)
-          */}
+          {showWeekHealthBar && (
+            <div
+              className="sb-week-health-chrome-slot no-print w-full shrink-0 flex items-center justify-center box-border"
+              style={{
+                height: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+                minHeight: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+              }}
+              aria-hidden={false}
+            >
+              <WeekHealthTracker
+                visible
+                variant="bar"
+                placement="chrome-slot"
+                isDark={isDark}
+                healthLoading={weekHealthLoading}
+                weekDailyHealths={weekDailyHealths}
+                dayDefs={DAY_DEFS}
+                selectedDayIndex={selectedDayIndex}
+                onSelectDay={(idx) => setSelectedDayIndex(idx)}
+                onDismiss={dismissWeekHealthTracker}
+              />
+            </div>
+          )}
+
+          {/* Direct full-width adaptive board for builder deployment.
+              Bypasses the entire old scaled frame / print-stage-inner so the workspace can fill the stageHost
+              and eliminate the giant blank space on the right. The old frame is hidden via CSS in this mode. */}
+          {isBuilderDeployment && currentView === "deployment" && (
+            <div
+              className={`w-full max-w-full min-w-0 box-border ${showWeekHealthBar ? "pt-2 pb-5" : "py-5"}`}
+            >
+              <ShiftBuilderBoard
+                nightId={queryNightId || nightId}
+                selectedTasks={selectedTasks}
+                cardBorders={effectiveCardBorders}
+                focusedTmId={focusedWeeklyTmId}
+                processedWaves={processedDayData?.waves}
+                processedBreakCounts={processedDayData?.breakCounts}
+                selectedDay={selectedDay}
+                selectedDayIndex={selectedDayIndex}
+                currentView={currentView as "deployment" | "breaks"}
+                breakGroup={breakGroup}
+                isDark={isDark}
+                isDraftMode={isDraftMode}
+                isCurrentNightLocked={isCurrentNightLocked}
+                loadingAssignments={boardColdLoading}
+                onDayPillClick={handleBoardDayPill}
+                onBreakGroupChange={handleBoardBreakGroupChange}
+                onRemoveTask={handleBoardRemoveTask}
+                onSetTaskColor={handleBoardSetTaskColor}
+                onEditTask={handleBoardEditTask}
+                setBreakGroupForSlot={setBreakGroupForSlot}
+                onLiveAssign={handleBoardLiveAssign}
+                onLiveUnassign={handleBoardLiveUnassign}
+                onAddCoverage={handlePadAddCoverage}
+                onRequestEngineInsight={handleBoardRequestEngineInsight}
+                live={live}
+                amOverlapDayName={amOverlapDayName}
+                amOverlapDateNum={amOverlapDateNum}
+                selectedSlotKey={selectedSlotKey}
+                onSlotToggle={handleSlotToggle}
+                onSlotClose={handleSlotClose}
+                padAssignments={padAssignments}
+                scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                onAddOnCall={handlePadAddOnCall}
+                onMarkUnavailable={handlePadMarkUnavailable}
+                weeklyRecentHistory={plannedThisWeekRecentHistory}
+                onClearSlot={handlePadClearSlot}
+                onToggleLock={handlePadToggleLock}
+                onAssign={handlePadAssign}
+                onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
+                onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                nextDayColor={nextDayColor}
+                members={effectiveRealRoster}
+                fitBySlot={deploymentFitBySlot}
+                artboardScale={1}
+                isPrintPreview={false}
+              />
+            </div>
+          )}
+
+          {/* Golden / preview / weekly frame — unmounted in builder deployment so dnd-kit never
+              registers duplicate slot:* droppables from a hidden copy of the board. */}
+          {!isBuilderDeployment ? (
           <div
-            className="relative flex-shrink-0 flex flex-col items-center"
+            className={`relative flex-shrink-0 flex flex-col items-center ${relaxedFrameClass}`}
             style={{
               width: NATURAL_WIDTH * scale,
               gap: 10,
             }}
           >
           <div
-            className="relative flex-shrink-0"
+            className={`relative flex-shrink-0 ${relaxedFrameClass}`}
             style={{
               width: NATURAL_WIDTH * scale,
               height: NATURAL_HEIGHT * scale,
@@ -7093,7 +7181,7 @@ function AuthedShiftBuilder() {
           >
             {/* The actual scaled artboard (original print-stage-inner) */}
             <div
-              className="print-stage-inner relative overflow-hidden"
+              className={`print-stage-inner relative overflow-hidden ${relaxedFrameClass}`}
               ref={positioningRef}
               style={{
                 width: NATURAL_WIDTH,
@@ -7642,76 +7730,12 @@ function AuthedShiftBuilder() {
 
           </div> {/* /scaled artboard frame */}
 
-          {viewMode === "canvas" &&
-            currentView === "deployment" &&
-            deploymentRotationFitEnabled &&
-            !isWeekHealthTrackerDismissed && (
-              <WeekHealthTracker
-                visible
-                variant="bar"
-                placement="below-artboard"
-                healthLoading={weekHealthLoading}
-                weekDailyHealths={weekDailyHealths}
-                dayDefs={DAY_DEFS}
-                selectedDayIndex={selectedDayIndex}
-                onSelectDay={(idx) => setSelectedDayIndex(idx)}
-                onDismiss={dismissWeekHealthTracker}
-              />
-            )}
+        </div>
+          ) : null}
 
-        </div> {/* /stage column: artboard + week health below */}
       </div> {/* /stageHostRef content area */}
     </div> {/* /main flex row (roster chrome wrapper + stageHost) */}
 
-      {/* OLD DragOverlay block — being migrated into InteractiveStage.
-          Temporarily commented to avoid duplication during narrowing. */}
-      {/* <DragOverlay dropAnimation={null}> */}
-        {activeDrag ? (
-          activeDrag.kind === "task" ? (
-            /* Task drag ghost — label only */
-            <div
-              className="flex items-center rounded-lg pointer-events-none whitespace-nowrap"
-              style={{
-                padding: "5px 12px",
-                background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
-                color: isDark ? "#E5E5E7" : "#1C1C1E",
-                border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
-                boxShadow: isDark
-                  ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
-                  : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
-                backdropFilter: "blur(20px)",
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              }}
-            >
-              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
-              {activeDrag.fromSlot && (
-                <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
-              )}
-            </div>
-          ) : (
-            /* TM drag ghost — name chip */
-            <div
-              className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
-              style={{
-                padding: "6px 12px 6px 9px",
-                background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
-                color: isDark ? "#F2F2F4" : "#1C1C1E",
-                border: isDark ? "1px solid rgba(255,255,255,0.13)" : "1px solid rgba(0,0,0,0.09)",
-                boxShadow: isDark
-                  ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
-                  : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
-                backdropFilter: "blur(20px)",
-                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-              }}
-            >
-              <span className="ms" style={{ fontSize: 16, color: "#9CA3AF", fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}>person</span>
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.3px" }}>{activeDrag.label}</span>
-              {activeDrag.fromSlot && (
-                <span style={{ fontSize: 10, opacity: 0.45, marginLeft: 2 }}>{activeDrag.fromSlot}</span>
-              )}
-            </div>
-          )
-        ) : null}
       </InteractiveStage>
 
       {/* Task selector popover — fires when the operator picks "Tasks" from

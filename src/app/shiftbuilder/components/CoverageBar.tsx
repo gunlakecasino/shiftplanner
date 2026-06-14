@@ -22,7 +22,7 @@ const CoverageBar = React.memo(function CoverageBar({
 
   return (
     <div
-      className="group flex items-center justify-between px-2 select-none"
+      className="sb-coverage-bar group flex items-center justify-between px-2 select-none"
       style={{
         position: 'absolute',
         bottom: 0,

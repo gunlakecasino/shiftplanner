@@ -329,12 +329,10 @@ if (typeof window !== "undefined") {
 }
 
 // Optional: Dev-only subscribe for debugging day-switch impact
-const __DEV__ =
-  typeof process !== 'undefined' &&
-  process.env &&
-  process.env.NODE_ENV === 'development';
-
-if (__DEV__) {
+// Use bare process.env.NODE_ENV — Next/Turbopack inlines this at build time
+// without pulling the runtime process polyfill (avoids "module factory not available"
+// errors on large client chunks in dev, especially on iPad/Safari).
+if (process.env.NODE_ENV === 'development') {
   useShiftBuilderStore.subscribe(
     (state) => state.assignments,
     (assignments, prev) => {

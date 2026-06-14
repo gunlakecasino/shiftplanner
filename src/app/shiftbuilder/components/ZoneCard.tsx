@@ -90,6 +90,9 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(def.key, "zone", { tmId: a.tmId, tmName: a.tmName }, isLocked);
 
+  // Liquid paper treatment (Approach 2) applied via builder-luxe + explicit class for clarity.
+  // Only in builder (!isPrintPreview && showDigitalAssists) — reverts exactly in print-preview/Golden.
+
   // Phase 1 note: When onLiveAssign / onLiveUnassign are provided by parent,
   // they should be called from drag handlers / quick actions instead of (or in
   // addition to) the legacy direct setAssignments + persistAssign path.
@@ -125,7 +128,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       {...(hasTM && !isLocked ? attributes : {})}
 
       data-slot-key={def.key}
-      className={`assignment-card sb-assignment-card relative overflow-hidden cursor-pointer flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
       style={{
         ["--card-accent" as any]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -206,10 +209,13 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             </div>
           </>
         ) : (
-          <div className="unassigned-label mt-0.5 text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[10.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
-            — Unassigned —
+          <div className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
+            <span className="sb-unassigned-primary">— Unassigned —</span>
             {showDigitalAssists && (
-              <span className="no-print ml-1 text-[8px] text-[#2F5C7C]/35 tracking-normal">drop to assign</span>
+              <span className="sb-unassigned-hint no-print">
+                <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+                Drop to assign
+              </span>
             )}
           </div>
         )}

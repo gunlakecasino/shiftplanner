@@ -88,7 +88,8 @@ const RRSide: React.FC<{
 
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
-}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo, focusedTmId, conflictingTms, tmConflictSlots }) => {
+  showDigitalAssists?: boolean;
+}> = ({ slotKey, label, assignment, tasks, setBreakGroupForSlot, onClick, loading = false, onRemoveTask, onSetTaskColor, onEditTask, onLiveAssign, onLiveUnassign, isLocked = false, showBreakBadge = true, isDraftMode = false, draftInfo, focusedTmId, conflictingTms, tmConflictSlots, showDigitalAssists = false }) => {
   const a = assignment || {};
   const breakNum = (a.breakGroup ?? 0) as BreakGroup;
   const cycle = () => setBreakGroupForSlot(slotKey, nextBreakGroup(breakNum));
@@ -116,7 +117,7 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 cursor-pointer rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       {/* Label + badge row (skip label if empty, for stacked side cards where header already includes the side info). Badge row only if showBreakBadge (for stacked, badge lives in side-card header to pin name upper like Zone/Aux cards) */}
       {showBreakBadge && label && (
@@ -180,8 +181,14 @@ const RRSide: React.FC<{
             )}
           </div>
         ) : (
-          <div className="unassigned-label mt-px text-[#6B7280] dark:text-[#6C6C72] font-medium tracking-[0.3px] text-[9.5px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
-            — Unassigned —
+          <div className="unassigned-label mt-px text-[9.5px] tracking-[0.3px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
+            <span className="sb-unassigned-primary">— Unassigned —</span>
+            {showDigitalAssists && (
+              <span className="sb-unassigned-hint no-print">
+                <span className="ms" style={{ fontSize: 10, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+                Drop to assign
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -228,6 +235,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
+  showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
@@ -322,6 +330,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             focusedTmId={focusedTmId}
             conflictingTms={conflictingTms}
             tmConflictSlots={tmConflictSlots}
+            showDigitalAssists={showDigitalAssists}
           />
           {/* Women's coverage banners (independent per side now) */}
           {wCoverageTasks.map(t => (
@@ -379,6 +388,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             focusedTmId={focusedTmId}
             conflictingTms={conflictingTms}
             tmConflictSlots={tmConflictSlots}
+            showDigitalAssists={showDigitalAssists}
           />
           {/* Men's coverage banners (independent per side now) */}
           {mCoverageTasks.map(t => (

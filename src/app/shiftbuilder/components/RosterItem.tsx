@@ -46,37 +46,23 @@ const RosterItem = React.memo(function RosterItem({
     .slice(0, 2)
     .toUpperCase();
 
-  const isDraggable = !isAssigned && canEdit;
-
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`sb-roster-row group flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-sm touch-none border border-transparent ${
+      className={`sb-roster-row group flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm touch-none border border-transparent transition-colors ${
         isAssigned
           ? "opacity-45 cursor-not-allowed"
-          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm dark:hover:bg-white/5 dark:hover:border-white/10 ${
+          : `hover:bg-[#F8F8F9] hover:border-[#E5E5E7] hover:shadow-sm dark:hover:bg-white/5 dark:hover:border-white/10 active:scale-[0.995] ${
               emphasis === "on"
                 ? "border-l-2 border-[#007AFF] bg-white/70 dark:bg-white/5"
                 : emphasis === "scheduled"
                 ? "border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/10"
                 : ""
-            } cursor-grab active:cursor-grabbing`
+            }`
       } ${isDragging ? "sb-roster-row--dragging" : ""}`}
     >
-      {/* Drag grip */}
-      {isDraggable && (
-        <div className="flex h-5 w-4 shrink-0 items-center justify-center text-[#9CA3AF] group-hover:text-[#6B7280] transition-colors">
-          <span
-            className="ms"
-            style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 300, "opsz" 20' }}
-          >
-            drag_indicator
-          </span>
-        </div>
-      )}
-
       {/* Avatar (initials) */}
       <div
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70"

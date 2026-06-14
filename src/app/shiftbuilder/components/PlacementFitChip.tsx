@@ -36,8 +36,8 @@ export function PlacementFitChip({ fit, xaiFit }: PlacementFitChipProps) {
     : label;
 
   const chipClass = isXai 
-    ? "no-print inline-flex max-w-[118px] items-center justify-center rounded-[2px] px-1 py-0.5 text-[6.5px] font-medium tracking-[0.2px] leading-none shrink-0 truncate border" 
-    : "no-print inline-flex max-w-[64px] items-center justify-center rounded px-1 py-px text-[6.5px] font-bold uppercase tracking-[0.4px] leading-none shrink-0 truncate";
+    ? "sb-fit-chip no-print inline-flex max-w-[118px] items-center justify-center rounded-[2px] px-1 py-0.5 text-[6.5px] font-medium tracking-[0.2px] leading-none shrink-0 truncate border" 
+    : "sb-fit-chip no-print inline-flex max-w-[64px] items-center justify-center rounded px-1 py-px text-[6.5px] font-bold uppercase tracking-[0.4px] leading-none shrink-0 truncate";
 
   return (
     <span

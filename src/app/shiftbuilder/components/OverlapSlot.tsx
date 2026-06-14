@@ -97,7 +97,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 cursor-pointer touch-none ${
+      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 touch-none ${
         isOver ? "drop-target-active" : ""
       } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
@@ -128,12 +128,15 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         </div>
       ) : (
         <div
-          className="text-[9.5px] text-[#9CA3AF] font-medium tracking-[0.3px]"
+          className="unassigned-label text-[9.5px] tracking-[0.3px]"
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
-          — Unassigned —
+          <span className="sb-unassigned-primary">— Unassigned —</span>
           {showDigitalAssists && (
-            <span className="no-print ml-1 text-[7.5px] text-[#2F5C7C]/35 tracking-normal">drop</span>
+            <span className="sb-unassigned-hint no-print">
+              <span className="ms" style={{ fontSize: 10, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+              Drop to assign
+            </span>
           )}
         </div>
       )}

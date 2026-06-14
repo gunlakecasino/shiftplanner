@@ -68,7 +68,7 @@ function NavToolButton({
 }
 
 const navVariants = cva(
-  "sb-floating-nav-pill fixed top-2 z-40 grid h-14 grid-cols-[auto_minmax(0,1fr)_max-content] items-center gap-1.5 rounded-3xl px-3 sm:px-4 transition-all duration-200",
+  "sb-floating-nav-pill z-40 h-14 rounded-3xl px-3 sm:px-4 transition-all duration-200",
   {
     variants: {
       glass: {
@@ -340,12 +340,24 @@ export default function FloatingNav({
       <nav
         className={cn(
           navVariants(),
-          "relative overflow-hidden",
+          "overflow-hidden",
           isTabletTouchDevice() && "sb-tablet-nav",
         )}
-        style={{ ...glassStyle, zIndex: 40 }}
+        style={{
+          ...glassStyle,
+          position: "fixed",
+          top: 8,
+          left: 24,
+          right: 24,
+          width: "auto",
+          maxWidth: "none",
+          transform: "none",
+          boxSizing: "border-box",
+          zIndex: 40,
+        }}
       >
         <BuilderSyncStrip active={isSyncing} />
+        <div className="grid h-full w-full grid-cols-[auto_minmax(0,1fr)_max-content] items-center gap-1.5">
         {/* LEFT: Launchpad + Today */}
         <div className="flex shrink-0 items-center gap-0.5">
           {onLaunchpad ? (
@@ -682,7 +694,7 @@ export default function FloatingNav({
                 }
                 setProfileOpen(willOpen);
               }}
-              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] text-[10px] font-bold text-white ring-1 ring-white/20 transition-all hover:ring-white/40 active:scale-95"
+              className="sb-interactive flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] text-[10px] font-bold text-white ring-1 ring-white/20 transition-all hover:ring-white/40 active:scale-95"
               title={currentUser ? `${currentUser.full_name} — ${currentUser.role}` : "Account"}
               aria-expanded={profileOpen}
             >
@@ -748,6 +760,7 @@ export default function FloatingNav({
               document.body
             )}
           </div>
+        </div>
         </div>
       </nav>
 
