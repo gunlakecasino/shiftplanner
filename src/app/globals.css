@@ -737,13 +737,17 @@ body {
   box-sizing: border-box;
 }
 
-.sb-builder-stage .sb-week-health-chrome-slot {
-  padding: 2px 0 4px;
-  margin: 0;
+/* Week health floats in the sheet-header center band (beside the date block). */
+.sb-sheet-header-with-health {
   width: 100%;
 }
 
-.sb-builder-stage .sb-week-health-chrome-slot .sb-week-health-tracker {
+.sb-sheet-header-health {
+  justify-self: center;
+  align-self: end;
+}
+
+.sb-sheet-header-health .sb-week-health-tracker {
   width: fit-content;
   max-width: 100%;
 }

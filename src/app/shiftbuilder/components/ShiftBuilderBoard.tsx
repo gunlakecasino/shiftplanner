@@ -18,6 +18,7 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import { shiftBuilderVersionLabel } from "../version";
+import { WeekHealthTracker } from "./WeekHealthTracker";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
@@ -134,6 +135,20 @@ export interface ShiftBuilderBoardProps {
   /** Weekly Overview focus (from navbar table): dims non-matching cards, highlights the focused TM's slot on this day. */
   focusedTmId?: string | null;
 
+  /** Builder sheet-header week health floater (center band beside the date block). */
+  showWeekHealthBar?: boolean;
+  weekDailyHealths?: Record<string, number>;
+  weekHealthDayDefs?: Array<{
+    date: Date;
+    name: string;
+    short?: string;
+    index: number;
+    dateNum?: number;
+  }>;
+  weekHealthLoading?: boolean;
+  onWeekHealthSelectDay?: (index: number) => void;
+  onWeekHealthDismiss?: () => void;
+
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -219,6 +234,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   placementPadInsightsEnabled = true,
   enableTmDragAssign = false,
   focusedTmId,
+  showWeekHealthBar = false,
+  weekDailyHealths = {},
+  weekHealthDayDefs,
+  weekHealthLoading = false,
+  onWeekHealthSelectDay,
+  onWeekHealthDismiss,
 }: ShiftBuilderBoardProps) {
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -696,7 +717,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     <div className={isPrintPreview ? "print-artboard" : "builder-workspace sb-builder-compact"}>
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
-      <div className={`sheet-header flex items-end justify-between flex-shrink-0 ${isPrintPreview ? "pb-1.5 mb-2" : "pb-1 mb-0.5"}`}>
+      <div
+        className={`sheet-header flex-shrink-0 ${isPrintPreview ? "pb-1.5 mb-2" : "pb-1 mb-0.5"} ${
+          !isPrintPreview && showWeekHealthBar && weekHealthDayDefs?.length
+            ? "sb-sheet-header-with-health grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-x-3"
+            : "flex items-end justify-between"
+        }`}
+      >
         {/* LEFT */}
         <div className={`flex items-end ${isPrintPreview ? "gap-3" : "gap-2"}`}>
           <div
@@ -782,6 +809,24 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             )}
           </div>
         </div>
+
+        {/* CENTER — compact week health floater (builder only) */}
+        {!isPrintPreview && showWeekHealthBar && weekHealthDayDefs && weekHealthDayDefs.length > 0 ? (
+          <div className="sb-sheet-header-health no-print flex min-w-0 items-end justify-center self-end px-1">
+            <WeekHealthTracker
+              visible
+              variant="bar"
+              placement="header-inline"
+              isDark={isDark}
+              healthLoading={weekHealthLoading}
+              weekDailyHealths={weekDailyHealths}
+              dayDefs={weekHealthDayDefs}
+              selectedDayIndex={selectedDayIndex}
+              onSelectDay={onWeekHealthSelectDay}
+              onDismiss={onWeekHealthDismiss}
+            />
+          </div>
+        ) : null}
 
         {/* RIGHT */}
         <div className="flex flex-col items-end gap-1.5">

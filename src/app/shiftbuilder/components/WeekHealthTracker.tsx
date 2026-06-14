@@ -30,7 +30,7 @@ export type WeekHealthTrackerProps = {
   onDismiss?: () => void;
   className?: string;
   variant?: "bar" | "compact";
-  placement?: "below-artboard" | "below-nav" | "chrome-slot" | "fixed";
+  placement?: "below-artboard" | "below-nav" | "chrome-slot" | "header-inline" | "fixed";
   healthLoading?: boolean;
   isDark?: boolean;
 };
@@ -63,7 +63,8 @@ export function WeekHealthTracker({
   const isBar = !isCompact;
   const isBelowNav = isBar && placement === "below-nav";
   const isChromeSlot = isBar && placement === "chrome-slot";
-  const isFloaterChrome = isBelowNav || isChromeSlot;
+  const isHeaderInline = isBar && placement === "header-inline";
+  const isFloaterChrome = isBelowNav || isChromeSlot || isHeaderInline;
 
   const fixedChrome: React.CSSProperties | undefined = isCompact
     ? undefined
@@ -86,7 +87,7 @@ export function WeekHealthTracker({
             zIndex: 2147483645,
             pointerEvents: "auto",
           }
-        : isChromeSlot
+        : isChromeSlot || isHeaderInline
           ? {
               position: "relative",
               width: "fit-content",
@@ -136,8 +137,8 @@ export function WeekHealthTracker({
         isCompact
           ? "sb-glass-pill rounded-2xl px-1.5 py-0.5 text-[8px] gap-1"
           : `sb-week-health-bar rounded-2xl gap-1.5 ${
-              isChromeSlot ? "px-2 py-1" : "px-3 gap-2.5"
-            } ${isFloaterChrome && !isChromeSlot ? "sb-week-health-below-nav" : ""}`
+              isChromeSlot || isHeaderInline ? "px-2 py-1" : "px-3 gap-2.5"
+            } ${isBelowNav ? "sb-week-health-below-nav" : ""}`
       } ${className}`}
       style={shellStyle}
       role="region"
@@ -173,7 +174,7 @@ export function WeekHealthTracker({
                 type="button"
                 onClick={() => onSelectDay?.(index)}
                 className={`flex flex-row items-baseline gap-1 rounded-xl transition-all active:scale-[0.98] ${
-                  isChromeSlot ? "px-2 py-1" : "px-2.5 py-1.5"
+                  isChromeSlot || isHeaderInline ? "px-2 py-1" : "px-2.5 py-1.5"
                 }`}
                 style={{
                   background: isSelected

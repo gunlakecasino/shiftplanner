@@ -176,8 +176,6 @@ import {
   stageTopInsetPx,
   builderStageBottomInsetPx,
   BUILDER_CANVAS_MAX_WIDTH_PX,
-  WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
-  WEEK_HEALTH_BELOW_CONTENT_GAP_PX,
 } from "./components/canvasPillGlass";
 import {
   computeShiftRotationHealth,
@@ -1897,7 +1895,7 @@ function AuthedShiftBuilder() {
       ? {
           enabled: true,
           contentRef: builderContentRef,
-          chromeHeightPx: showWeekHealthBar ? WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX : 0,
+          chromeHeightPx: 0,
         }
       : undefined,
   });
@@ -7276,32 +7274,7 @@ function AuthedShiftBuilder() {
               className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
-              {showWeekHealthBar && (
-                <div
-                  className="sb-week-health-chrome-slot no-print shrink-0 flex items-center justify-start box-border"
-                  aria-hidden={false}
-                >
-                  <WeekHealthTracker
-                    visible
-                    variant="bar"
-                    placement="chrome-slot"
-                    isDark={isDark}
-                    healthLoading={weekHealthLoading}
-                    weekDailyHealths={weekDailyHealths}
-                    dayDefs={DAY_DEFS}
-                    selectedDayIndex={selectedDayIndex}
-                    onSelectDay={(idx) => setSelectedDayIndex(idx)}
-                    onDismiss={dismissWeekHealthTracker}
-                  />
-                </div>
-              )}
-
-              <div
-                className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible"
-                style={{
-                  marginTop: showWeekHealthBar ? WEEK_HEALTH_BELOW_CONTENT_GAP_PX : 0,
-                }}
-              >
+              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible">
                 <div
                   ref={builderContentRef}
                   className="sb-builder-scale-inner w-full"
@@ -7367,6 +7340,12 @@ function AuthedShiftBuilder() {
                 fitBySlot={deploymentFitBySlot}
                 artboardScale={scale}
                 isPrintPreview={false}
+                showWeekHealthBar={showWeekHealthBar}
+                weekDailyHealths={weekDailyHealths}
+                weekHealthDayDefs={DAY_DEFS}
+                weekHealthLoading={weekHealthLoading}
+                onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
+                onWeekHealthDismiss={dismissWeekHealthTracker}
               />
                 </div>
               </div>
