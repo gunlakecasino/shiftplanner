@@ -89,7 +89,8 @@ export function WeekHealthTracker({
         : isChromeSlot
           ? {
               position: "relative",
-              maxWidth: "calc(100% - 32px)",
+              width: "100%",
+              maxWidth: "100%",
             }
           : undefined;
 

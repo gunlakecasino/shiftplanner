@@ -726,6 +726,56 @@ body {
   min-width: 0;
 }
 
+/* Unified builder canvas — week health + board as one continuous surface. */
+.sb-builder-canvas {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+
+.sb-builder-stage .sb-week-health-chrome-slot {
+  padding: 0;
+  margin: 0;
+}
+
+.sb-builder-stage .sb-week-health-chrome-slot .sb-week-health-tracker {
+  width: 100%;
+  max-width: 100%;
+}
+
+.sb-builder-scale-viewport {
+  position: relative;
+  width: 100%;
+}
+
+.sb-builder-scale-inner {
+  will-change: transform;
+}
+
+/* Builder-only compact rhythm — tighter than preview/print. */
+.sb-builder-stage .builder-workspace.sb-builder-compact {
+  padding: 4px 8px 10px;
+}
+
+.sb-builder-stage .builder-workspace.sb-builder-compact .sheet-header {
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+}
+
+.sb-builder-stage .builder-workspace.sb-builder-compact .sheet-section-header {
+  margin: 8px 0 5px;
+  gap: 8px;
+}
+
+.sb-builder-stage .builder-workspace.sb-builder-compact .sb-builder-section {
+  margin-bottom: 0 !important;
+}
+
+.sb-builder-stage .builder-workspace.sb-builder-compact .sb-builder-section + .sb-builder-section {
+  margin-top: 2px;
+}
+
 /* Sheet header — subtle surface separation in builder (print preview unchanged). */
 .builder-workspace .sheet-header {
   padding-bottom: 14px;
@@ -803,7 +853,7 @@ body {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  gap: clamp(8px, 1vw, 14px);
+  gap: clamp(5px, 0.55vw, 9px);
 }
 
 .sb-builder-stage .sb-zone-grid,

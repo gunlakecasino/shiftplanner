@@ -174,7 +174,9 @@ import {
 import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   stageTopInsetPx,
+  builderStageBottomInsetPx,
   WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+  WEEK_HEALTH_BELOW_CONTENT_GAP_PX,
 } from "./components/canvasPillGlass";
 import {
   computeShiftRotationHealth,
@@ -1861,13 +1863,21 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
+    if (isBuilderDeployment) {
+      return {
+        top: stageTopInsetPx(),
+        right: tablet ? 12 : 16,
+        bottom: builderStageBottomInsetPx(),
+        left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 12 : 16,
+      };
+    }
     return {
       top: stageTopInsetPx(),
       right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
-  }, [rosterOpen]);
+  }, [rosterOpen, isBuilderDeployment]);
 
   const {
     zoomMode,
@@ -7250,55 +7260,61 @@ function AuthedShiftBuilder() {
             ["--sb-stage-inset-bottom" as string]: `${stageInsets.bottom}px`,
             ["--sb-stage-inset-left" as string]: `${stageInsets.left}px`,
             paddingTop: stageInsets.top,
-            paddingRight: isBuilderDeployment ? 16 : stageInsets.right,
+            paddingRight: stageInsets.right,
             paddingBottom: stageInsets.bottom,
-            paddingLeft: isBuilderDeployment ? 16 : stageInsets.left,
+            paddingLeft: stageInsets.left,
           }}
         >
-          {showWeekHealthBar && (
-            <div
-              className="sb-week-health-chrome-slot no-print w-full shrink-0 flex items-center justify-center box-border"
-              style={{
-                height: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
-                minHeight: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
-              }}
-              aria-hidden={false}
-            >
-              <WeekHealthTracker
-                visible
-                variant="bar"
-                placement="chrome-slot"
-                isDark={isDark}
-                healthLoading={weekHealthLoading}
-                weekDailyHealths={weekDailyHealths}
-                dayDefs={DAY_DEFS}
-                selectedDayIndex={selectedDayIndex}
-                onSelectDay={(idx) => setSelectedDayIndex(idx)}
-                onDismiss={dismissWeekHealthTracker}
-              />
-            </div>
-          )}
-
-          {/* Direct full-width adaptive board for builder deployment.
-              Bypasses the entire old scaled frame / print-stage-inner so the workspace can fill the stageHost
-              and eliminate the giant blank space on the right. The old frame is hidden via CSS in this mode. */}
+          {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderDeployment && currentView === "deployment" && (
-            <div
-              className="flex w-full min-h-0 flex-1 justify-center overflow-hidden"
-              style={
-                builderContentHeight > 0
-                  ? { height: Math.ceil(builderContentHeight * scale) + (showWeekHealthBar ? 28 : 40) }
-                  : undefined
-              }
-            >
+            <div className="sb-builder-canvas flex min-h-0 w-full flex-1 flex-col">
+              {showWeekHealthBar && (
+                <div
+                  className="sb-week-health-chrome-slot no-print w-full shrink-0 flex items-center justify-center box-border"
+                  style={{
+                    height: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+                    minHeight: WEEK_HEALTH_CHROME_SLOT_HEIGHT_PX,
+                  }}
+                  aria-hidden={false}
+                >
+                  <WeekHealthTracker
+                    visible
+                    variant="bar"
+                    placement="chrome-slot"
+                    isDark={isDark}
+                    healthLoading={weekHealthLoading}
+                    weekDailyHealths={weekDailyHealths}
+                    dayDefs={DAY_DEFS}
+                    selectedDayIndex={selectedDayIndex}
+                    onSelectDay={(idx) => setSelectedDayIndex(idx)}
+                    onDismiss={dismissWeekHealthTracker}
+                  />
+                </div>
+              )}
+
               <div
-                className={`w-full max-w-full min-w-0 box-border ${showWeekHealthBar ? "pt-2 pb-5" : "py-5"}`}
-                style={{
-                  transform: `scale(${scale})`,
-                  transformOrigin: "top center",
-                }}
+                className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-hidden"
+                style={
+                  builderContentHeight > 0
+                    ? {
+                        height: Math.ceil(builderContentHeight * scale),
+                        marginTop: showWeekHealthBar ? WEEK_HEALTH_BELOW_CONTENT_GAP_PX : 0,
+                      }
+                    : undefined
+                }
               >
-                <div ref={builderContentRef}>
+                <div
+                  ref={builderContentRef}
+                  className="sb-builder-scale-inner w-full"
+                  style={{
+                    transform: `scale(${scale})`,
+                    transformOrigin: "top center",
+                    marginBottom:
+                      builderContentHeight > 0 && scale < 1
+                        ? -Math.round(builderContentHeight * (1 - scale))
+                        : undefined,
+                  }}
+                >
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}

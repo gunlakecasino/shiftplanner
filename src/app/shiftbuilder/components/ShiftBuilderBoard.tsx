@@ -693,16 +693,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [nightId]);
 
   return (
-    <div className={isPrintPreview ? "print-artboard" : "builder-workspace"}>
+    <div className={isPrintPreview ? "print-artboard" : "builder-workspace sb-builder-compact"}>
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
-      <div className="sheet-header flex items-end justify-between flex-shrink-0 pb-1.5 mb-2">
+      <div className={`sheet-header flex items-end justify-between flex-shrink-0 ${isPrintPreview ? "pb-1.5 mb-2" : "pb-1 mb-0.5"}`}>
         {/* LEFT */}
-        <div className="flex items-end gap-3">
+        <div className={`flex items-end ${isPrintPreview ? "gap-3" : "gap-2"}`}>
           <div
             className="font-black tabular-nums leading-[0.78]"
             style={{
-              fontSize: 58,
+              fontSize: isPrintPreview ? 58 : 44,
               letterSpacing: "-3px",
               fontFamily: "var(--font-atkinson)",
               ...(currentView === "deployment"
@@ -719,7 +719,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           <div className="-mb-0.5 flex flex-col">
             <div
               className="font-bold leading-none flex items-center gap-2"
-              style={{ color: selectedDay.color, fontSize: 26, letterSpacing: "-0.8px", fontFamily: "var(--font-atkinson)" }}
+              style={{ color: selectedDay.color, fontSize: isPrintPreview ? 26 : 22, letterSpacing: "-0.8px", fontFamily: "var(--font-atkinson)" }}
             >
               {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
               {isCurrentNightLocked && (
@@ -857,7 +857,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         {currentView === "deployment" ? (
           <>
             {/* ZONES — Golden: 2 rows × 5 cols */}
-            <section className="sb-builder-section mb-2">
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <div className="divider" />
@@ -916,7 +916,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* RESTROOMS — Golden: 1 row × 5 cols */}
-            <section className="sb-builder-section mb-2">
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
                 <div className="divider" />
@@ -977,7 +977,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* AUXILIARY */}
-            <section className="sb-builder-section mb-2">
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
