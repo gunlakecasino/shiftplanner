@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
 
+  experimental: {
+    optimizePackageImports: ['framer-motion'],
+  },
+
   // Enable standalone output for smaller Docker images
   output: "standalone",
 
