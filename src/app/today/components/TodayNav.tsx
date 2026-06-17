@@ -428,9 +428,9 @@ export function TodayNav({
               onChangeOperator?.();
             }}
             className="rounded-lg border border-black/10 px-2 py-1 font-medium text-[#1C1C1E] transition-colors hover:bg-black/5"
-            title="Sign out and return to PIN entry"
+            title="Change operator name for change logs"
           >
-            Sign out
+            Change name
           </button>
         </div>
       </nav>

@@ -87,10 +87,12 @@ export async function POST(request: NextRequest) {
   }
 
   const source = typeof payload?.source === "string" ? payload.source : "";
-  const requiresOpsAuth =
+  const fromTodayBoard =
     source === "today_deployment_board" || source === "today_marker_pad";
 
-  if (requiresOpsAuth) {
+  // /today uses a name gate only — opsUserId is optional. When present (e.g. ShiftBuilder),
+  // validate it matches operatorName; otherwise accept the self-reported name for audit.
+  if (fromTodayBoard && opsUserId?.trim()) {
     const authCheck = await validateOpsOperator(client, opsUserId, operatorName);
     if (!authCheck.ok) {
       return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });

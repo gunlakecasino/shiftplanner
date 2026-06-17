@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShiftData } from "@/app/shiftbuilder/hooks/useShiftData";
 import { useToast } from "@/app/shiftbuilder/hooks/useToast";
-import { usePermissions } from "@/lib/auth/opsAuth";
+
 import {
   useZoom,
   NATURAL_WIDTH,
@@ -35,7 +35,6 @@ type UseTodayBoardParams = {
   selectedDay: DayDef;
   selectedDayIndex: number;
   operatorName: string;
-  opsUserId: string;
   currentView: TodayBoardView;
   setCurrentView: (view: TodayBoardView) => void;
 };
@@ -59,12 +58,10 @@ export function useTodayBoard({
   selectedDay,
   selectedDayIndex,
   operatorName,
-  opsUserId,
   currentView,
   setCurrentView,
 }: UseTodayBoardParams) {
   const { showToast } = useToast();
-  const { canEditAssignments } = usePermissions();
   const shiftData = useShiftData(selectedDay);
   const {
     currentNight,
@@ -149,14 +146,11 @@ export function useTodayBoard({
 
   /**
    * PRODUCTION POLICY:
-   * Builder night-lock (isCurrentNightLocked from nights.is_locked) does NOT make
-   * the schedule read-only on /today — quick corrections stay available when the
-   * operator has canEditAssignments. Night-lock may still surface in UI later.
-   *
-   * See TodayPageClient.tsx where we pass isCurrentNightLocked={false} explicitly
-   * into TodayArtboard (builder lock is not enforced on this surface).
+   * /today is a floor quick-edit surface — no PIN or role gate. Builder night-lock
+   * (isCurrentNightLocked) is also not enforced here. Operator name is captured for
+   * audit logs only (TodayNameGate → sessionStorage).
    */
-  const isScheduleReadOnly = !canEditAssignments;
+  const isScheduleReadOnly = false;
   const canPrint = !statusLoading && (selectedDay.isToday || isPublished);
   // scheduleBanner: reserved for future status / realtime / notice banners.
   // Currently always null; the UI conditional in TodayPageClient documents this.
@@ -262,12 +256,11 @@ export function useTodayBoard({
         nightId,
         nightDate: formatLocalDateISO(selectedDay.date),
         operatorName,
-        opsUserId,
         ...params,
         payload: { source: "today_deployment_board", ...params.payload },
       });
     },
-    [nightId, selectedDay.date, operatorName, opsUserId],
+    [nightId, selectedDay.date, operatorName],
   );
 
   const handleSlotToggle = useCallback(

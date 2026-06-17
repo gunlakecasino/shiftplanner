@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
-import { clearTodayOperatorName, writeTodayOperatorName } from "../lib/todayChangeLog";
-import { TodayPinGate } from "./TodayPinGate";
+import {
+  clearTodayOperatorName,
+  readTodayOperatorName,
+  writeTodayOperatorName,
+} from "../lib/todayChangeLog";
+import { TodayNameGate } from "./TodayNameGate";
 import { TodayLoadingShell } from "./TodayLoadingShell";
 
 import { useTodayBoard } from "../hooks/useTodayBoard";
@@ -14,66 +17,46 @@ import { TodayArtboard } from "./TodayArtboard";
 import { TODAY_STAGE_INSETS } from "../lib/constants";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 
-function resolveOperatorName(user: {
-  full_name?: string | null;
-  username?: string | null;
-  email?: string | null;
-}): string {
-  const name = user.full_name?.trim() || user.username?.trim() || user.email?.trim();
-  return name || "Operator";
-}
-
 export function TodayPageClient() {
-  const { isAuthenticated, isLoading, user, logout } = useOpsAuth();
-
-  if (isLoading) {
-    return <TodayLoadingShell label="Loading ops session…" />;
-  }
-
-  if (!isAuthenticated || !user) {
-    return <TodayPinGate />;
-  }
-
-  return (
-    <AuthedTodayBoard
-      user={user}
-      onLogout={() => {
-        clearTodayOperatorName();
-        logout();
-      }}
-    />
-  );
-}
-
-function AuthedTodayBoard({
-  user,
-  onLogout,
-}: {
-  user: OpsUser;
-  onLogout: () => void;
-}) {
-  const operatorName = resolveOperatorName(user);
+  const [operatorName, setOperatorName] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    writeTodayOperatorName(operatorName);
-  }, [operatorName]);
+    setOperatorName(readTodayOperatorName());
+    setHydrated(true);
+  }, []);
+
+  const handleNameSubmit = useCallback((name: string) => {
+    writeTodayOperatorName(name);
+    setOperatorName(name);
+  }, []);
+
+  const handleChangeOperator = useCallback(() => {
+    clearTodayOperatorName();
+    setOperatorName(null);
+  }, []);
+
+  if (!hydrated) {
+    return <TodayLoadingShell label="Loading deployment board…" />;
+  }
+
+  if (!operatorName) {
+    return <TodayNameGate onSubmit={handleNameSubmit} />;
+  }
 
   return (
     <TodayBoardShell
       operatorName={operatorName}
-      opsUserId={user.id}
-      onChangeOperator={onLogout}
+      onChangeOperator={handleChangeOperator}
     />
   );
 }
 
 function TodayBoardShell({
   operatorName,
-  opsUserId,
   onChangeOperator,
 }: {
   operatorName: string;
-  opsUserId: string;
   onChangeOperator: () => void;
 }) {
   const nav = useTodayScheduleNav();
@@ -81,7 +64,6 @@ function TodayBoardShell({
     selectedDay: nav.selectedDay,
     selectedDayIndex: nav.selectedDayIndex,
     operatorName,
-    opsUserId,
     currentView: nav.currentView,
     setCurrentView: nav.setCurrentView,
   });
@@ -95,15 +77,6 @@ function TodayBoardShell({
       }}
     >
       <Toaster position="top-center" richColors closeButton />
-      {board.isScheduleReadOnly ? (
-        <div
-          className="pointer-events-none fixed left-1/2 z-30 -translate-x-1/2 rounded-full border border-amber-200/80 bg-amber-50/95 px-3 py-1 text-[11px] font-medium text-amber-900 shadow-sm backdrop-blur-sm"
-          style={{ top: TODAY_STAGE_INSETS.top - 28 }}
-          role="status"
-        >
-          View only — assignment edits are disabled for your role
-        </div>
-      ) : null}
       <TodayNav
         navStrip={nav.navStrip}
         selectedNavId={nav.selectedNavId}

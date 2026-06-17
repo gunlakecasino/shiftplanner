@@ -20,7 +20,7 @@ export type DeploymentChangeInput = {
   nightId: string;
   nightDate: string;
   operatorName: string;
-  /** Authenticated ops user id — validated server-side when present. */
+  /** Ops user id when PIN-authenticated (ShiftBuilder). /today is name-only — omit. */
   opsUserId?: string;
   action: DeploymentChangeAction;
   slotKey?: string;
