@@ -389,6 +389,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // In print-preview mode the live canvas must match the exact Golden that print capture will clone (no digital chips/lines at all).
   const showDigitalAssists = !isPrintPreview;
   const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
+  /** Grid cell host — stretches to row height so cards align across columns. */
+  const gridHostClass = isPrintPreview ? "relative h-full" : "relative h-full min-h-0 flex flex-col";
   const zoneGridClass = isPrintPreview
     ? `grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
     : `sb-zone-grid flex-1 w-full${builderCardGridClass}`;
@@ -972,7 +974,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   </span>
                 )}
               </div>
-              <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto" }}>
+              <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {ZONE_VISUAL_ORDER.map((zKey, visualIdx) => {
                   const def = ZONE_DEFS.find((d) => d.key === zKey)!;
                   const key = def.key;
@@ -1019,7 +1021,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ) : (
                     <motion.div
                       key={key}
-                      className="relative"
+                      className={gridHostClass}
                       data-slot-key={key}
                       data-placement-host={key}
                       {...premiumEntrance}
@@ -1047,7 +1049,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   }, 0)} / 10 FILLED
                 </span>
               </div>
-              <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto" }}>
+              <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
                 {RR_DEFS.map((def, idx) => {
                   const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
                   const accent = getRRAccent(def.num);
@@ -1100,7 +1102,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ) : (
                     <motion.div
                       key={def.num}
-                      className="relative"
+                      className={gridHostClass}
                       data-slot-key={key}
                       data-pad-host={rrHostId}
                       data-placement-host={rrHostId}
@@ -1162,7 +1164,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ...(isPrintPreview
                     ? { gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))` }
                     : {}),
-                  gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto",
+                  gridAutoRows: "minmax(0, 1fr)",
                 }}
               >
                 {!isPrintPreview ? (
@@ -1215,7 +1217,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         <motion.div
                           key={key}
                           layout  // smooth reflow of siblings when aux count changes (add/remove)
-                          className="relative"
+                          className={gridHostClass}
                           data-slot-key={key}
                           data-placement-host={key}
                           {...entrance}

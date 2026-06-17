@@ -131,7 +131,7 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col ${showDigitalAssists ? "" : "flex-1"} rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       <div className={`min-w-0 ${showDigitalAssists ? "" : "pt-1 pb-0.5"}`}>
         <SlotAssignmentBody
@@ -211,7 +211,7 @@ function RRSideShell({
 
   return (
     <div
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -232,7 +232,7 @@ function RRSideShell({
         )}
       />
       <div
-        className="flex flex-col flex-1 px-2 pt-1"
+        className="flex flex-col flex-1 min-h-0 px-2 pt-1"
         style={{ paddingBottom: coveragePb }}
       >
         {body}
@@ -323,7 +323,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   return (
     <div
       onPointerMove={handleSpotlightMove}
-      className={`relative overflow-hidden flex flex-col gap-1 ${bothEmpty ? "empty" : ""}`}
+      className={`relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${bothEmpty ? "empty" : ""}`}
       style={{ ["--card-accent" as string]: color }}
     >
       <RRSideShell

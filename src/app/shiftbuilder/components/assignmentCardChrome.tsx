@@ -381,11 +381,12 @@ export function SlotAssignmentBody({
           </div>
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
-        <UnassignedInvite
-          key="unassigned"
-          size={inviteSize}
-          onClick={onUnassignedClick}
-        />
+        <div key="unassigned" className="flex-1 flex flex-col justify-center min-h-0">
+          <UnassignedInvite
+            size={inviteSize}
+            onClick={onUnassignedClick}
+          />
+        </div>
       ) : showDigitalAssists && emptyPresentation === "label" ? (
         <motion.div
           key="unassigned-label"
