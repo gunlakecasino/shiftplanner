@@ -152,6 +152,8 @@ export interface ShiftBuilderBoardProps {
     dateNum?: number;
   }>;
   weekHealthLoading?: boolean;
+  /** ISO date for selectedDayIndex — must match WeekHealthTracker keys (not deferred board day). */
+  selectedDayDateKey?: string;
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
@@ -253,6 +255,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   weekDailyHealths = {},
   weekHealthDayDefs,
   weekHealthLoading = false,
+  selectedDayDateKey: selectedDayDateKeyProp,
   onWeekHealthSelectDay,
   onWeekHealthDismiss,
 
@@ -1498,7 +1501,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           draftAssignments={draftAssignments}
           placement="side-right-collapsed"
           weekDailyHealths={weekDailyHealths}
-          selectedDayDateKey={currentIso}
+          selectedDayDateKey={selectedDayDateKeyProp ?? currentIso}
           weekHealthLoading={weekHealthLoading}
           weeklyRecentHistory={weeklyRecentHistory}
           canRunEngine={canRunEngine}

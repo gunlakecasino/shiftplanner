@@ -198,6 +198,7 @@ import {
   computeSlotPlacementFit,
   resolveSlotAssignmentRow,
   memberToPlacementProfile,
+  type SlotAssignmentRow,
 } from "./components/placementFitForSlot";
 import type { PlacementTmProfile } from "./components/placementPadHelpers";
 import { usePlacementFitMap } from "./hooks/usePlacementFitMap";
@@ -4507,23 +4508,58 @@ function AuthedShiftBuilder() {
     storeAssignmentsForFit,
     isDraftMode,
     draftAssignments,
+    liveAssignVersion,
+  ]);
+
+  // Selected day: same fit map as card chips / ROT pill (immediate selectedDayIndex, not deferred board).
+  const selectedDayLiveHealth = React.useMemo(() => {
+    if (!deploymentRotationFitEnabled) return null;
+    if (Object.keys(deploymentFitBySlot).length === 0) return null;
+    return computeDailyHealthPercent(
+      auxDefsForFit,
+      storeAssignmentsForFit as Record<string, SlotAssignmentRow>,
+      deploymentFitBySlot,
+      isDraftMode,
+      draftAssignments,
+    );
+  }, [
+    deploymentRotationFitEnabled,
+    auxDefsForFit,
+    storeAssignmentsForFit,
+    deploymentFitBySlot,
+    isDraftMode,
+    draftAssignments,
   ]);
 
   // Keep last good per-day % visible while incremental history fetches run (TM set grew, refresh, etc.).
+  // Overlay selected day with live board fit so the header tracker pill matches ROT / chips.
   const weekDailyHealths = React.useMemo(() => {
+    let base: Record<string, number>;
     if (Object.keys(weekDailyHealthsRaw).length > 0) {
       stableWeekDailyHealthsRef.current = weekDailyHealthsRaw;
-      return weekDailyHealthsRaw;
+      base = weekDailyHealthsRaw;
+    } else if (weekHistoriesFetching) {
+      base = stableWeekDailyHealthsRef.current;
+    } else {
+      base = weekDailyHealthsRaw;
     }
-    if (weekHistoriesFetching) {
-      return stableWeekDailyHealthsRef.current;
-    }
-    return weekDailyHealthsRaw;
-  }, [weekDailyHealthsRaw, weekHistoriesFetching]);
 
-  // Blank UI only when histories are still loading *and* we have nothing stable to show.
+    if (selectedDayDateKey && selectedDayLiveHealth != null) {
+      return { ...base, [selectedDayDateKey]: selectedDayLiveHealth };
+    }
+    return base;
+  }, [
+    weekDailyHealthsRaw,
+    weekHistoriesFetching,
+    selectedDayDateKey,
+    selectedDayLiveHealth,
+  ]);
+
+  // Blank UI only when histories are still loading *and* we have nothing stable or live to show.
   const weekHealthLoading =
-    weekHistoriesFetching && Object.keys(weekDailyHealths).length === 0;
+    weekHistoriesFetching &&
+    Object.keys(weekDailyHealths).length === 0 &&
+    selectedDayLiveHealth == null;
 
   const weekAverageHealth = React.useMemo(() => {
     const orderedKeys = DAY_DEFS.map((d) => formatLocalDateISO(d.date));
@@ -7294,6 +7330,7 @@ function AuthedShiftBuilder() {
                 showWeekHealthBar={showWeekHealthBar}
                 weekDailyHealths={weekDailyHealths}
                 weekHealthDayDefs={DAY_DEFS}
+                selectedDayDateKey={selectedDayDateKey}
                 weekHealthLoading={weekHealthLoading}
                 onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}

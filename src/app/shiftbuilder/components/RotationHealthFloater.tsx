@@ -142,10 +142,8 @@ export function RotationHealthFloater({
     selectedDayDateKey && weekDailyHealths
       ? weekDailyHealths[selectedDayDateKey]
       : undefined;
-  // Live board fit wins for tonight; tracker is fallback while histories load.
-  const dailyPercentRaw = weekHealthLoading
-    ? null
-    : (health.dailyPercent ?? trackerDaily ?? null);
+  // Single source: weekDailyHealths (selected day overlays live fit in the orchestrator).
+  const dailyPercentRaw = weekHealthLoading ? null : (trackerDaily ?? null);
   const dailyPercent = normalizeRotationHealthPercent(dailyPercentRaw);
   const weekAveragePercent = normalizeRotationHealthPercent(
     weekHealthLoading ? null : computeWeekAverageHealth(weekDailyHealths),
