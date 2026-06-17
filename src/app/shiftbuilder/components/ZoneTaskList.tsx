@@ -5,8 +5,9 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import TaskRow from "./TaskRow";
 
 // Compact list of selected tasks shown at the bottom of a Zone / AUX card.
-// Replaces the static `def.locations` strings we used to render. When empty,
-// renders nothing so the card collapses gracefully.
+// When empty, renders nothing so the card collapses gracefully.
+// Deeper card interiors polish: subtle top border when tasks present for visual separation
+// from name (improves hierarchy + task integration). Builder-only enhancements.
 const ZoneTaskList: React.FC<{
   tasks: NightSlotTask[] | undefined;
   hasTM: boolean;
@@ -14,9 +15,17 @@ const ZoneTaskList: React.FC<{
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  /** Double-click a task row to open the text/font attributes pad. */
+  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   /** For AUX cards and tight spaces: use smaller text, tighter spacing, and cap visible tasks. */
   dense?: boolean;
-}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask, dense = false }) => {
+  /** Forwarded to TaskRow: when true use static golden sizes (no dynamic measurement). */
+  isPrintPreview?: boolean;
+  /** Accepted for call-site compatibility (ZoneCard etc); ZoneTaskList computes its own internal textSize. */
+  textSize?: string;
+  /** Accepted for call-site compatibility; ZoneTaskList computes its own textColor. */
+  textColorClass?: string;
+}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask, onOpenTaskTextEdit, dense = false, isPrintPreview = false }) => {
   if (!tasks || tasks.length === 0) return null;
   const textColor = hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
 
@@ -29,17 +38,18 @@ const ZoneTaskList: React.FC<{
   const visibleTasks = tasks.slice(0, maxVisible);
   const extra = tasks.length - visibleTasks.length;
 
-  const textSize = dense ? "text-[9px]" : "text-[11.5px]";
+  const isPrint = isPrintPreview;
+  const textSize = dense ? "text-[9px]" : (isPrint ? "text-[9.5px]" : "text-[11.5px]");
   const containerClass = dense
     ? `mt-auto pt-0 text-[9px] leading-[1.0] ${textColor}`
-    : `mt-auto pt-1 text-[11.5px] leading-tight ${textColor}`;
+    : `mt-auto ${isPrint ? 'pt-0.5' : 'pt-1'} ${isPrint ? 'text-[9.5px]' : 'text-[11.5px]'} leading-tight ${textColor}`;
 
   return (
     <div
       className={containerClass}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
-      {visibleTasks.map((t) => (
+      {visibleTasks.map((t, i) => (
         <TaskRow
           key={t.id}
           task={t}
@@ -47,8 +57,10 @@ const ZoneTaskList: React.FC<{
           onRemoveTask={onRemoveTask}
           onSetTaskColor={onSetTaskColor}
           onEditTask={onEditTask}
+          onOpenTaskTextEdit={onOpenTaskTextEdit}
           textSize={textSize}
           textColorClass={textColor}
+          isPrintPreview={isPrintPreview}
         />
       ))}
       {extra > 0 && dense && (

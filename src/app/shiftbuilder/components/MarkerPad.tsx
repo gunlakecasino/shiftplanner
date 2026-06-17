@@ -69,7 +69,7 @@ export function getSlotMeta(
   const zd = ZONE_DEFS.find(z => z.key === slotKey);
   if (zd) return {
     label: zd.label,
-    loc: zd.locations[0] ?? "",
+    loc: "",
     icon: ZONE_ICONS[slotKey] ?? "●",
     accent: getZoneColor(slotKey),
   };
@@ -81,7 +81,7 @@ export function getSlotMeta(
     const rd = RR_DEFS.find(r => r.num === num);
     return {
       label: `${side} · ${rd?.label ?? `RR ${num}`}`,
-      loc: (side === "Men's" ? rd?.mensLoc : rd?.womensLoc) ?? "",
+      loc: "",
       icon: RR_ICONS[num] ?? "●",
       accent: getRRAccent(num),
     };

@@ -12,27 +12,33 @@ const CoverageBar = React.memo(function CoverageBar({
   task,
   slotKey,
   onRemoveTask,
+  builderCalm = false,
 }: {
   task: NightSlotTask;
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  /** Softer saturation in live builder — print/preview stays full strength. */
+  builderCalm?: boolean;
 }) {
   const [hovered, setHovered] = React.useState(false);
   const bg = task.color || '#6B7280';
 
   return (
     <div
-      className="sb-coverage-bar group flex items-center justify-between px-2 select-none"
+      className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""}`}
       style={{
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        background: bg,
+        background: builderCalm ? `color-mix(in srgb, ${bg} 72%, white)` : bg,
         borderRadius: '0 0 3px 3px',
-        paddingTop: 4,
-        paddingBottom: 4,
+        paddingTop: 3,
+        paddingBottom: 3,
         zIndex: 2,
+        borderTop: builderCalm
+          ? '1px solid rgba(255,255,255,0.18)'
+          : '1px solid rgba(255,255,255,0.25)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -40,7 +46,7 @@ const CoverageBar = React.memo(function CoverageBar({
     >
       <span
         className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
-        style={{ fontSize: 8.5, fontFamily: 'var(--font-atkinson)' }}
+        style={{ fontSize: 8, fontFamily: 'var(--font-atkinson)' }}
       >
         {task.taskLabel}
       </span>
@@ -50,14 +56,15 @@ const CoverageBar = React.memo(function CoverageBar({
             e.stopPropagation();
             onRemoveTask(slotKey, task.taskLabel);
           }}
-          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-opacity"
+          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all"
           style={{
-            color: 'rgba(255,255,255,0.45)',
-            fontSize: 14,
-            opacity: hovered ? 1 : 0.45,
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: 13,
+            opacity: hovered ? 1 : 0.55,
+            transform: hovered ? 'scale(1.1)' : 'scale(1)',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.45)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.55)')}
           title="Remove coverage"
         >
           ×

@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { premiumSpring, premiumEntrance, premiumHoverLift, premiumStagger } from "@/lib/premiumSpring";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { premiumSpring, premiumSpringReduced, premiumEntrance, premiumHoverLift, premiumStagger, premiumButton, premiumEntranceReduced, premiumPresenceReduced } from "@/lib/premiumSpring";
 import ZoneCard from "./ZoneCard";
 import RRCard from "./RRCard";
 import AuxCard from "./AuxCard";
@@ -13,14 +13,18 @@ import {
   getZoneColor,
   getRRAccent,
   getAuxAccent,
+  ZONE_VISUAL_ORDER,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
+import TaskTextEditPad from "./TaskTextEditPad";
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
+import { RotationHealthFloater } from "./RotationHealthFloater";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
@@ -151,6 +155,15 @@ export interface ShiftBuilderBoardProps {
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
+  /** Rotation health side drawer engine controls (clear + run xAI/rotation engine). Passed from orchestrator / cluster. */
+  canRunEngine?: boolean;
+  onRunXaiEngine?: () => void;
+  onClearBoard?: () => void;
+  engineRunning?: boolean;
+  onApplyDraft?: () => void;
+  onDiscardDraft?: () => void;
+  draftGrokExplanation?: string;
+
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -242,7 +255,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   weekHealthLoading = false,
   onWeekHealthSelectDay,
   onWeekHealthDismiss,
+
+  canRunEngine,
+  onRunXaiEngine,
+  onClearBoard,
+  engineRunning,
+  onApplyDraft,
+  onDiscardDraft,
+  draftGrokExplanation,
 }: ShiftBuilderBoardProps) {
+  const reducedMotion = useReducedMotion();
+
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
   const assignments = useAssignments() ?? assignmentsProp ?? {};
@@ -254,11 +277,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // making assigned TM drag feel solid like task drag.
   const pendingDrag = useShiftBuilderStore(s => s.pendingDrag) ?? null;
 
-  // Refs for measuring grid heights to equalize the visual height of the three groups
-  // (ZONES, RESTROOMS, AUXILIARY). Cards can expand with tasks (natural content height),
-  // but we force the shorter groups' card areas (via minHeight on their grids) to match
-  // the tallest group's card area so that the overall group bands have equivalent height
-  // for consistency/alignment. Only structural wrappers and containers here; no card edits.
+  // Refs for grids (used for ResizeObserver in some paths, but in builder we let cards
+  // size naturally to their content — strict padding + tasks + wrapped text determine height.
+  // No forced minHeight equalization in builder so cards "adapt to the size they need".
+  // The overall page/sheet area adapts (scrolls when necessary) to fully show the layout.
+  // Print-preview path still uses CSS 1fr + h-full for the Golden capture fidelity.
   const zonesGridRef = React.useRef<HTMLDivElement>(null);
   const restroomsGridRef = React.useRef<HTMLDivElement>(null);
   const auxGridRef = React.useRef<HTMLDivElement>(null);
@@ -437,6 +460,40 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return () => document.removeEventListener("click", onDocClick, true);
   }, [selectedSlotKey, onSlotClose]);
 
+  // === Task text/font attributes pad (double-click on TaskRow) ===
+  // Local to Board (builder-only UI state). No need to lift open/close to Client.
+  const [activeTaskEditPad, setActiveTaskEditPad] = React.useState<null | {
+    slotKey: string;
+    task: NightSlotTask;
+    hostId: string;
+  }>(null);
+
+  const handleOpenTaskTextEdit = React.useCallback((slotKey: string, task: NightSlotTask) => {
+    if (isPrintPreview) return;
+    const hostId = `task-${slotKey}-${task.id}`;
+    setActiveTaskEditPad({ slotKey, task, hostId });
+  }, [isPrintPreview]);
+
+  const closeTaskTextEditPad = React.useCallback(() => {
+    setActiveTaskEditPad(null);
+  }, []);
+
+  const renderTaskTextEditPad = () => {
+    if (isPrintPreview || !activeTaskEditPad) return null;
+    return (
+      <TaskTextEditPad
+        slotKey={activeTaskEditPad.slotKey}
+        task={activeTaskEditPad.task}
+        hostId={activeTaskEditPad.hostId}
+        onClose={closeTaskTextEditPad}
+        onEditTask={onEditTask}
+        onSetTaskColor={onSetTaskColor}
+        onRemoveTask={onRemoveTask}
+        isDark={isDark}
+      />
+    );
+  };
+
   // Equalize card heights within each grid row on the deployment sheet.
   // Re-runs when returning from the breaks view (grids unmount/remount) so heights
   // do not stay at natural uneven sizes after tab switches.
@@ -502,24 +559,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     };
 
     const equalize = () => {
-      if (isAnyDragActive) return; // Pause during active drag to stop mid-gesture reflows on the scaled artboard (prevents the "window zooms out" glitch on iPad/Mac).
-      const zEl = zonesGridRef.current;
-      const rEl = restroomsGridRef.current;
-      const aEl = auxGridRef.current;
-      if (!zEl || !rEl || !aEl) return;
-
-      if (isPrintPreview) {
-        // Sacred preview: full equalization for exact Golden paper band alignment
-        equalizeCardsInGrid(zEl, 5);
-        equalizeRRGrid(rEl);
-        equalizeCardsInGrid(aEl, auxDefs?.length || 6);
-      } else {
-        // Builder: keep RESTROOMS visually equal height "in a line" for clean horizontal band (user request),
-        // while ZONES and AUX stay natural/content-driven for the adaptive workspace feel.
-        equalizeRRGrid(rEl);
-        equalizeCardsInGrid(zEl, getGridColumnCount(zEl));
-        equalizeCardsInGrid(aEl, getGridColumnCount(aEl));
-      }
+      if (isPrintPreview) return; // Pure CSS distribution (minmax(0,1fr) + h-full) in sacred preview/capture.
+      if (isAnyDragActive) return;
+      // Builder: do NOT force minHeights. Cards (and thus rows/sections) size to what their
+      // content needs (text + strict padding + variable # of tasks pinned at bottom).
+      // The sheet container below will adapt (overflow-y-auto) so the full natural layout is visible.
+      // (Previously we equalized bands; that is now relaxed per request for content-adaptive cards.)
     };
 
     const attachResizeObserver = () => {
@@ -641,13 +686,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const getLocs = (a: any) => {
     if (a.type === "zone") {
-      const z = ZONE_DEFS.find((zz) => zz.key === a.slotKey);
-      return z ? z.locations.join(" · ") : "";
+      // Static zone "locations" (area names) removed as placeholder/fake data.
+      // Dynamic/recent placement history is handled separately elsewhere.
+      return "";
     }
     if (a.type === "rr") {
-      const num = parseInt((a.slotKey || "").replace(/\D/g, "")) || 1;
-      const def = RR_DEFS.find((r) => r.num === num);
-      return def ? `${def.mensLoc} / ${def.womensLoc}` : "";
+      // Static RR side locations removed (were placeholder data).
+      return "";
     }
     if (a.type === "aux") {
       const aux = auxDefs.find((x) => x.key === a.slotKey);
@@ -720,7 +765,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
       <div
-        className={`sheet-header flex-shrink-0 ${isPrintPreview ? "pb-1.5 mb-2" : "pb-1 mb-0.5"} ${
+        className={`sheet-header flex-shrink-0 ${isPrintPreview ? "pb-1 mb-1" : "pb-1 mb-0.5"} ${
           !isPrintPreview && showWeekHealthBar && weekHealthDayDefs?.length
             ? "sb-sheet-header-with-health grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-x-3"
             : "flex items-end justify-between"
@@ -900,11 +945,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         </div>
       </div>
 
-      <div className={`flex-1 min-h-0 overflow-hidden flex flex-col ${!isPrintPreview ? 'w-full' : ''}`}>
+      <div className={`flex flex-col w-full ${isPrintPreview ? 'flex-1 min-h-0 overflow-hidden' : 'overflow-y-auto pb-8'}`}>
+        {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
+        {renderTaskTextEditPad()}
         {currentView === "deployment" ? (
           <>
-            {/* ZONES — Golden: 2 rows × 5 cols */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
+            {/* ZONES — custom layout (ZONE_VISUAL_ORDER from constants):
+                 Row 1: Z1 | Z3 | Z4 | Z5 | Z9
+                 Row 2: Z2 | Z6 | Z7 | Z8 | Z10
+                 (5-col CSS grid; child order = visual positions. Mirrored in print overview for PDF consistency.) */}
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <div className="divider" />
@@ -923,8 +973,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 )}
               </div>
               <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto" }}>
-                {ZONE_DEFS.map((def, idx) => {
+                {ZONE_VISUAL_ORDER.map((zKey, visualIdx) => {
+                  const def = ZONE_DEFS.find((d) => d.key === zKey)!;
                   const key = def.key;
+                  const idx = visualIdx; // visual position for entrance stagger in the laid-out grid
                   const accent = getZoneColor(key);
                   const a = displayAssignments[key] || {};
                   const prov = a.provenance || {};
@@ -945,6 +997,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onRemoveTask={onRemoveTask}
                         onSetTaskColor={onSetTaskColor}
                         onEditTask={onEditTask}
+                        onOpenTaskTextEdit={handleOpenTaskTextEdit}
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
@@ -966,7 +1019,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ) : (
                     <motion.div
                       key={key}
-                      className="relative h-full"
+                      className="relative"
                       data-slot-key={key}
                       data-placement-host={key}
                       {...premiumEntrance}
@@ -982,7 +1035,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* RESTROOMS — Golden: 1 row × 5 cols */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
                 <div className="divider" />
@@ -1018,6 +1071,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onRemoveTask={onRemoveTask}
                         onSetTaskColor={onSetTaskColor}
                         onEditTask={onEditTask}
+                        onOpenTaskTextEdit={handleOpenTaskTextEdit}
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
@@ -1046,7 +1100,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   ) : (
                     <motion.div
                       key={def.num}
-                      className="relative h-full"
+                      className="relative"
                       data-slot-key={key}
                       data-pad-host={rrHostId}
                       data-placement-host={rrHostId}
@@ -1063,37 +1117,41 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* AUXILIARY */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`} style={{ position: 'relative' }}>
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
                 <span className="count">
                   {auxDefs.filter((d) =>
-                    d.role !== "blank" && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
-                  ).length} / {auxDefs.filter((d) => d.role !== "blank").length} FILLED
+                    (d.role !== "blank" || !!d.label) && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                  ).length} / {auxDefs.filter((d) => d.role !== "blank" || !!d.label).length} FILLED
                 </span>
                 {!isPrintPreview && !isCurrentNightLocked && (
                   <div className="flex items-center gap-1 ml-1 no-print">
-                    <button
+                    <motion.button
                       type="button"
                       className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
                       onClick={onAddAuxSlot}
                       disabled={!canAddAux}
                       title="Add blank aux slot"
                       aria-label="Add aux slot"
+                      {...premiumButton}
+                      transition={premiumSpring}
                     >
                       +
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
                       type="button"
                       className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
                       onClick={onRemoveAuxSlot}
                       disabled={!canRemoveAux}
                       title="Remove last empty aux slot"
                       aria-label="Remove empty aux slot"
+                      {...premiumButton}
+                      transition={premiumSpring}
                     >
                       −
-                    </button>
+                    </motion.button>
                   </div>
                 )}
               </div>
@@ -1107,64 +1165,151 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto",
                 }}
               >
-                {auxDefs.map((def, idx) => {
-                  const key = def.key;
-                  const accent = getAuxAccent(key, def.role);
-                  const a = displayAssignments[key] || {};
-                  const prov = a.provenance || {};
-                  const hasProv = prov.rationale || prov.fairnessSignals;
+                {!isPrintPreview ? (
+                  <AnimatePresence>
+                    {auxDefs.map((def, idx) => {
+                      const key = def.key;
+                      const accent = getAuxAccent(key, def.role);
+                      const a = displayAssignments[key] || {};
+                      const prov = a.provenance || {};
+                      const hasProv = prov.rationale || prov.fairnessSignals;
 
-                  const cardContent = (
-                    <>
-                      <AuxCard
-                        def={def}
-                        assignments={displayAssignments}
-                        selectedTasks={selectedTasks}
-                        setBreakGroupForSlot={setBreakGroupForSlot}
-                        onCardClick={handleCardClickForPad}
-                        loading={loadingAssignments}
-                        borderColor={cardBorders[key]}
-                        isDraftMode={isDraftMode}
-                        draftInfo={draftAssignments[key]}
-                        onRemoveTask={onRemoveTask}
-                        onSetTaskColor={onSetTaskColor}
-                        onEditTask={onEditTask}
-                        isLocked={isCurrentNightLocked}
-                        onLiveAssign={onLiveAssign}
-                        onLiveUnassign={onLiveUnassign}
-                        fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
-                        showDigitalAssists={showDigitalAssists}
-                        focusedTmId={focusedTmId}
-                        conflictingTms={conflictingTms}
-                        tmConflictSlots={tmConflictSlots}
-                        onSetAuxRole={onSetAuxRole}
-                        onSetAuxLabel={onSetAuxLabel}
-                      />
-                      {activePlacementPad?.hostId === key &&
-                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
-                    </>
-                  );
+                      const cardContent = (
+                        <>
+                          <AuxCard
+                            def={def}
+                            assignments={displayAssignments}
+                            selectedTasks={selectedTasks}
+                            setBreakGroupForSlot={setBreakGroupForSlot}
+                            onCardClick={handleCardClickForPad}
+                            loading={loadingAssignments}
+                            borderColor={cardBorders[key]}
+                            isDraftMode={isDraftMode}
+                            draftInfo={draftAssignments[key]}
+                            onRemoveTask={onRemoveTask}
+                            onSetTaskColor={onSetTaskColor}
+                            onEditTask={onEditTask}
+                            onOpenTaskTextEdit={handleOpenTaskTextEdit}
+                            isLocked={isCurrentNightLocked}
+                            onLiveAssign={onLiveAssign}
+                            onLiveUnassign={onLiveUnassign}
+                            fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                            showDigitalAssists={showDigitalAssists}
+                            focusedTmId={focusedTmId}
+                            conflictingTms={conflictingTms}
+                            tmConflictSlots={tmConflictSlots}
+                            onSetAuxRole={onSetAuxRole}
+                            onSetAuxLabel={onSetAuxLabel}
+                          />
+                          {activePlacementPad?.hostId === key &&
+                            renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
+                        </>
+                      );
 
-                  return isPrintPreview ? (
-                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
-                      {cardContent}
-                    </div>
-                  ) : (
-                    <motion.div
-                      key={key}
-                      className="relative h-full"
-                      data-slot-key={key}
-                      data-placement-host={key}
-                      {...premiumEntrance}
-                      {...premiumHoverLift}
-                      custom={idx}
-                      transition={premiumStagger(idx)}
-                    >
-                      {cardContent}
-                    </motion.div>
-                  );
-                })}
+                      const entrance = reducedMotion ? premiumEntranceReduced : premiumEntrance;
+                      const exitTrans = reducedMotion 
+                        ? { ...premiumSpringReduced } 
+                        : { ...premiumSpring, stiffness: 300, damping: 22 };
+
+                      return (
+                        <motion.div
+                          key={key}
+                          layout  // smooth reflow of siblings when aux count changes (add/remove)
+                          className="relative"
+                          data-slot-key={key}
+                          data-placement-host={key}
+                          {...entrance}
+                          {...premiumHoverLift}
+                          custom={idx}
+                          transition={premiumStagger(idx)}
+                          exit={{
+                            opacity: 0,
+                            scale: 0.92,
+                            y: 8,
+                            transition: exitTrans
+                          }}
+                        >
+                          {cardContent}
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                ) : (
+                  auxDefs.map((def, idx) => {
+                    const key = def.key;
+                    const accent = getAuxAccent(key, def.role);
+                    const a = displayAssignments[key] || {};
+                    const prov = a.provenance || {};
+                    const hasProv = prov.rationale || prov.fairnessSignals;
+
+                    const cardContent = (
+                      <>
+                        <AuxCard
+                          def={def}
+                          assignments={displayAssignments}
+                          selectedTasks={selectedTasks}
+                          setBreakGroupForSlot={setBreakGroupForSlot}
+                          onCardClick={handleCardClickForPad}
+                          loading={loadingAssignments}
+                          borderColor={cardBorders[key]}
+                          isDraftMode={isDraftMode}
+                          draftInfo={draftAssignments[key]}
+                          onRemoveTask={onRemoveTask}
+                          onSetTaskColor={onSetTaskColor}
+                          onEditTask={onEditTask}
+                          onOpenTaskTextEdit={handleOpenTaskTextEdit}
+                          isLocked={isCurrentNightLocked}
+                          onLiveAssign={onLiveAssign}
+                          onLiveUnassign={onLiveUnassign}
+                          fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                          showDigitalAssists={showDigitalAssists}
+                          focusedTmId={focusedTmId}
+                          conflictingTms={conflictingTms}
+                          tmConflictSlots={tmConflictSlots}
+                          onSetAuxRole={onSetAuxRole}
+                          onSetAuxLabel={onSetAuxLabel}
+                        />
+                        {activePlacementPad?.hostId === key &&
+                          renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
+                      </>
+                    );
+
+                    return (
+                      <div key={key} className={`relative ${isPrintPreview ? 'h-full' : ''}`} data-slot-key={key} data-placement-host={key}>
+                        {cardContent}
+                      </div>
+                    );
+                  })
+                )}
               </div>
+
+              {/* Rotation health as compact side drawer/indicator (small section of right edge, not full height).
+                  Click to expand drawer with full details + Clear / Run engine buttons.
+                  Positioned off to the side (right margin), small height so it doesn't overtake/overlap the grid or empty states.
+                  Builder-only via !isPrintPreview. */}
+              {!isPrintPreview && (
+                <RotationHealthFloater
+                  visible
+                  auxDefs={auxDefs}
+                  assignments={displayAssignments}
+                  fitBySlot={fitBySlot || {}}
+                  isDraftMode={isDraftMode}
+                  draftAssignments={draftAssignments}
+                  placement="side-right-collapsed"
+                  weekDailyHealths={weekDailyHealths}
+                  selectedDayDateKey={currentIso}
+                  weekHealthLoading={weekHealthLoading}
+                  // Engine controls for the drawer (clear board + run xAI engine for rotation health)
+                  canRunEngine={canRunEngine}
+                  onRunEngine={onRunXaiEngine}
+                  onClear={onClearBoard}
+                  running={engineRunning}
+                  onApplyDraft={onApplyDraft}
+                  onDiscardDraft={onDiscardDraft}
+                  draftGrokExplanation={draftGrokExplanation}
+                  isCurrentNightLocked={isCurrentNightLocked}
+                />
+              )}
             </section>
           </>
         ) : (
@@ -1270,7 +1415,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </div>
 
             {/* OVERLAPS — Golden full-width pinned section */}
-            <section className="sb-builder-section mt-auto pt-2 overlaps-section" data-print-target="overlaps">
+            <section className="sb-builder-section mt-auto pt-1.5 overlaps-section" data-print-target="overlaps">
               <div className="sheet-section-header">
                 <span className="label">OVERLAPS</span>
                 <div className="divider" />
@@ -1319,7 +1464,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           return (
                             <div
                               key={i}
-                              className="relative h-full"
+                              className={`relative ${isPrintPreview ? 'h-full' : ''}`}
                               data-slot-key={slotKey}
                               data-placement-host={slotKey}
                             >
@@ -1334,6 +1479,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 onRemoveTask={onRemoveTask}
                                 onSetTaskColor={onSetTaskColor}
                                 onEditTask={onEditTask}
+                                onOpenTaskTextEdit={handleOpenTaskTextEdit}
                                 isLocked={isCurrentNightLocked}
                                 onLiveAssign={onLiveAssign}
                                 onLiveUnassign={onLiveUnassign}
@@ -1366,7 +1512,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       <div
         className={`sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] ${
           isPrintPreview
-            ? "pt-[7px] border-t border-[#E5E5E7]"
+            ? "pt-1 border-t border-[#E5E5E7]"
             : "pt-2 mt-3 border-t border-black/5 dark:border-white/[0.07]"
         }`}
         style={{

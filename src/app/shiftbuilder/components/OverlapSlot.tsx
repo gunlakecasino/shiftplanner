@@ -1,13 +1,15 @@
 "use client";
 
 import React from "react";
+import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import TaskRow from "./TaskRow";
 import { PlacementFitChip } from "./PlacementFitChip";
-import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
+import { AssignmentSkeleton, penHoverClass, UnassignedDropHint } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import { premiumSpring } from "@/lib/premiumSpring";
 
 /** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
 
@@ -22,6 +24,8 @@ export interface OverlapSlotProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
+  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
 
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
@@ -60,6 +64,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onOpenTaskTextEdit,
   onLiveAssign,
   onLiveUnassign,
   isLocked = false,
@@ -97,9 +102,9 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[40px] px-2 py-1 touch-none ${
+      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[48px] px-2.5 py-1.5 touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
     >
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
@@ -108,12 +113,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           {a.isLocked && (
             <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
           )}
-          <span
-            className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate"
+          <motion.span
+            className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
             style={{ fontSize: 13, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
+            whileHover={showDigitalAssists ? { scale: 1.01 } : {}}
+            transition={premiumSpring}
           >
             {a.tmName}
-          </span>
+          </motion.span>
           {isDuplicate && showDigitalAssists && (
             <span
               className="ml-1 inline-flex items-center rounded px-0.5 py-px text-[8px] font-mono tracking-[0.5px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
@@ -128,21 +135,16 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         </div>
       ) : (
         <div
-          className="unassigned-label text-[9.5px] tracking-[0.3px]"
+          className="unassigned-label flex flex-col items-center text-[9.5px] tracking-[0.3px]"
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
-          <span className="sb-unassigned-primary">— Unassigned —</span>
-          {showDigitalAssists && (
-            <span className="sb-unassigned-hint no-print">
-              <span className="ms" style={{ fontSize: 10, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
-              Drop to assign
-            </span>
-          )}
+          <span className="sb-unassigned-primary px-1 py-[1px] inline-block">— Unassigned —</span>
+          <UnassignedDropHint className="mt-px" />
         </div>
       )}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-0.5 text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`mt-0.5 text-[9.5px] leading-tight overflow-hidden ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -153,8 +155,10 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
               onEditTask={onEditTask}
+              onOpenTaskTextEdit={onOpenTaskTextEdit}
               textSize="text-[9.5px]"
               textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              isPrintPreview={!showDigitalAssists}
             />
           ))}
         </div>

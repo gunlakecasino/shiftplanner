@@ -2,21 +2,31 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import {
   type BreakGroup, nextBreakGroup,
   getAuxAccent, getAuxIcon,
 } from "@/lib/shiftbuilder/constants";
+import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
+import { applyAuxRole, applyAuxLabel } from "@/lib/shiftbuilder/auxLayout";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
 import { PlacementFitChip } from "./PlacementFitChip";
-import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
+import { penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
+import { premiumSpring } from "@/lib/premiumSpring";
+import {
+  CardAccentStripe,
+  SlotAssignmentBody,
+  TaskListDivider,
+  type SlotAssignmentState,
+} from "./assignmentCardChrome";
 
 export interface AuxCardProps {
   def: AuxDef;
@@ -31,6 +41,8 @@ export interface AuxCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
+  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
@@ -56,6 +68,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
+  onOpenTaskTextEdit,
   onLiveUnassign,
   isLocked = false,
   fitChip,
@@ -144,8 +157,15 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
   const commitLabel = () => {
     setEditingLabel(false);
-    if (onSetAuxLabel && labelDraft.trim() !== def.label) {
-      onSetAuxLabel(def.key, labelDraft.trim() || def.label);
+    const newLabel = labelDraft.trim() || def.label;
+    if (newLabel !== def.label) {
+      if (onSetAuxLabel) {
+        onSetAuxLabel(def.key, newLabel);
+      } else {
+        // fallback direct store update so custom label works even if handler prop not wired
+        const store = useShiftBuilderStore.getState();
+        store.setAuxDefs((prev: AuxDef[]) => applyAuxLabel(prev, def.key, newLabel));
+      }
     }
   };
 
@@ -166,19 +186,29 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(hasTM && !isLocked && !isBlank ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card relative flex flex-col h-full rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isBlank ? "sb-aux-blank" : ""} ${!isBlank ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`assignment-card sb-assignment-card relative ${showDigitalAssists && !isBlank ? '' : 'overflow-hidden'} flex flex-col ${showDigitalAssists && !isBlank ? '' : 'h-full'} rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isBlank ? "sb-aux-blank" : ""} ${!isBlank ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && !isBlank ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <div className="h-[3px] w-full shrink-0" style={{ background: isBlank ? "#D1D5DB" : color }} />
+      <CardAccentStripe color={isBlank ? "#D1D5DB" : color} />
       <div
         className="flex items-start justify-between gap-1 px-2 pt-1 pb-1"
         style={{ borderBottom: `1px solid ${isBlank ? "#E5E7EB" : `${color}33`}` }}
       >
-        {isBlank ? (
-          <div className="flex items-center gap-1 leading-none min-w-0 text-[#9CA3AF]">
+        {(isBlank && !def.label && !editingLabel) ? (
+          <div 
+            className="flex items-center gap-1 leading-none min-w-0 text-[#9CA3AF]"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (!isLocked) {
+                setLabelDraft("");
+                setEditingLabel(true);
+              }
+            }}
+            title="Double-click to set custom text label"
+          >
             <span className="text-[14px] leading-none shrink-0 font-light">+</span>
             <span
               className="font-semibold tracking-[0.3px] uppercase truncate"
@@ -188,18 +218,24 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color }}>
+          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color: (isBlank && def.label) ? '#9CA3AF' : color }}>
             <button
               type="button"
               className="flex items-center gap-1 min-w-0 text-left"
               onClick={(e) => {
                 e.stopPropagation();
                 if (!isLocked) {
-                  computeAndSetPickerPosition();
-                  setShowRolePicker((v) => !v);
+                  if (isBlank) {
+                    // for blank (custom or role) still allow opening picker to choose/ change role
+                    computeAndSetPickerPosition();
+                    setShowRolePicker((v) => !v);
+                  } else {
+                    computeAndSetPickerPosition();
+                    setShowRolePicker((v) => !v);
+                  }
                 }
               }}
-              title="Change role"
+              title={isBlank ? "Set role or double-click label for custom" : "Change role"}
             >
               <span className="text-[11px] leading-none shrink-0">{icon}</span>
               {editingLabel ? (
@@ -221,23 +257,23 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 />
               ) : (
                 <span
-                  className="font-extrabold tracking-[0.4px] uppercase truncate"
+                  className="font-extrabold tracking-[0.4px] uppercase truncate px-1 py-[1px] inline-block"
                   style={{ fontSize: 10, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
-                    if (!isLocked && onSetAuxLabel) setEditingLabel(true);
+                    if (!isLocked) setEditingLabel(true);
                   }}
-                  title="Double-click to edit label"
+                  title="Double-click to edit label (custom text for blank aux)"
                 >
-                  {def.label}
+                  {def.label || (isBlank ? "Set role" : "")}
                 </span>
               )}
             </button>
           </div>
         )}
         <div className="flex items-center gap-0.5 shrink-0">
-          {!isBlank && <PlacementFitChip fit={fitChip} />}
-          {!isBlank && <BreakBadge value={currentBreak} onCycle={cycleBreak} />}
+          {!(isBlank && !def.label) && <PlacementFitChip fit={fitChip} />}
+          {!(isBlank && !def.label) && <BreakBadge value={currentBreak} onCycle={cycleBreak} />}
         </div>
         {hasTM && !isLocked && onLiveUnassign && (
           <button
@@ -266,7 +302,13 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         >
           <AuxRolePicker
             onSelect={(r) => {
-              onSetAuxRole(def.key, r);
+              if (onSetAuxRole) {
+                onSetAuxRole(def.key, r);
+              } else {
+                // fallback direct store update so role choice works even if handler prop not wired
+                const store = useShiftBuilderStore.getState();
+                store.setAuxDefs((prev: AuxDef[]) => applyAuxRole(prev, def.key, r));
+              }
               setShowRolePicker(false);
               setPickerPosition(null);
               clearLongHoverTimer();
@@ -280,88 +322,91 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         document.body
       )}
 
-      <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5 min-h-0">
-        {isBlank ? (
-          <div className="flex-1 flex items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px]">
+      <div 
+        className={`flex flex-col flex-1 px-2 ${showDigitalAssists ? 'pt-1.5 pb-1.5' : 'px-3 pt-1.5 pb-1.5'} min-h-0 overflow-hidden`}
+        style={{ 
+          background: showDigitalAssists ? 'rgba(255,255,255,0.018)' : undefined,
+        }}
+      >
+        {(isBlank && !def.label && !editingLabel) ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2">
             {showDigitalAssists && (
-              <span className="no-print opacity-70">Tap to choose role</span>
-            )}
-          </div>
-        ) : loading && !hasTM ? (
-          <AssignmentSkeleton size="lg" />
-        ) : isDraftMode && draftInfo ? (
-          <div className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
-            >
-              {draftInfo.proposedTmName}
-            </span>
-            {isDuplicate && showDigitalAssists && (
-              <span
-                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
-                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+              <motion.div
+                className="flex flex-col items-center gap-0.5"
+                whileHover={{ scale: 1.02 }}
+                transition={premiumSpring}
               >
-                2×
-              </span>
-            )}
-            {draftInfo.previousTmName && (
-              <span
-                className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-              >
-                was: {draftInfo.previousTmName}
-              </span>
-            )}
-          </div>
-        ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
-            )}
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{
-                fontSize: (selectedTasks[def.key]?.length || 0) > 0 ? 16 : 20,
-                lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {a.tmName}
-            </span>
-            {isDuplicate && showDigitalAssists && (
-              <span
-                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
-                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
-              >
-                2×
-              </span>
+                <motion.span 
+                  className="text-[22px] leading-none opacity-60"
+                  whileHover={{ scale: 1.15, rotate: 90 }}
+                  transition={{ ...premiumSpring, stiffness: 300 }}
+                >
+                  +
+                </motion.span>
+                <span className="font-semibold tracking-[0.6px] text-[10px] text-[#8a8a8f]">SET ROLE</span>
+                <span className="no-print text-[8.5px] opacity-60">Tap to choose role</span>
+                <span className="no-print text-[7.5px] opacity-50 mt-0.5">or double-click to set custom text</span>
+              </motion.div>
             )}
           </div>
         ) : (
-          <div className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
-            <span className="sb-unassigned-primary">— Unassigned —</span>
-            {showDigitalAssists && (
-              <span className="sb-unassigned-hint no-print">
-                <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
-                Drop to assign
-              </span>
-            )}
-          </div>
+          <SlotAssignmentBody
+            state={
+              loading && !hasTM
+                ? { kind: "loading" }
+                : isDraftMode && draftInfo?.proposedTmName
+                  ? {
+                      kind: "draft",
+                      proposedName: draftInfo.proposedTmName,
+                      previousName: draftInfo.previousTmName,
+                    }
+                  : hasTM
+                    ? {
+                        kind: "assigned",
+                        tmName: a.tmName,
+                        tmId: currentTmId,
+                        isLocked: a.isLocked,
+                      }
+                    : { kind: "unassigned" }
+            }
+            scale="aux"
+            showDigitalAssists={showDigitalAssists}
+            isDuplicate={isDuplicate}
+            otherSlotsForTm={otherSlotsForTm}
+            inviteSize="aux"
+            emptyPresentation="label"
+            nameSizeOverride={
+              hasTM
+                ? ((selectedTasks[def.key]?.length || 0) > 0 ? 16 : showDigitalAssists ? 20 : 18)
+                : undefined
+            }
+            onUnassignedClick={(e) => {
+              e.stopPropagation();
+              onCardClick(def.key, e.currentTarget, e);
+            }}
+          />
         )}
 
-        {!isBlank && (
-          <div className="mt-auto max-h-[26px] overflow-hidden flex-shrink-0">
-            <ZoneTaskList
-              tasks={selectedTasks[def.key]}
-              hasTM={hasTM}
-              slotKey={def.key}
-              onRemoveTask={onRemoveTask}
-              onSetTaskColor={onSetTaskColor}
-              onEditTask={onEditTask}
-              dense
-            />
-          </div>
+        {!(isBlank && !def.label) && (
+          <>
+            {/* Subtle task separator for interiors hierarchy (builder only). */}
+            {(selectedTasks[def.key] || []).some((t) => !t.isCoverage) ? (
+              <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
+            ) : null}
+            <div className="mt-auto max-h-[26px] overflow-hidden flex-shrink-0">
+              <ZoneTaskList
+                tasks={selectedTasks[def.key]}
+                hasTM={hasTM}
+                slotKey={def.key}
+                onRemoveTask={onRemoveTask}
+                onSetTaskColor={onSetTaskColor}
+                onEditTask={onEditTask}
+                onOpenTaskTextEdit={onOpenTaskTextEdit}
+                dense
+                isPrintPreview={!showDigitalAssists}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>

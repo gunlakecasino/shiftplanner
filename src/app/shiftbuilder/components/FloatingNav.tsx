@@ -4,6 +4,7 @@ import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+import { premiumSpring, premiumButton, premiumChevronShift } from "@/lib/premiumSpring";
 import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
@@ -166,6 +167,7 @@ export interface FloatingNavProps {
 }
 
 // ==================== SPRING ====================
+// Local SPRING kept for the active pill layoutId (subtle slide). New premium interactions now use shared premium* helpers (builder view only).
 const SPRING = { type: "spring" as const, stiffness: 400, damping: 25 };
 
 // ==================== COMPONENT ====================
@@ -210,6 +212,9 @@ export default function FloatingNav({
   publishDayBusy = false,
 }: FloatingNavProps) {
   const queryClient = useQueryClient();
+
+  // Builder-only premium motion guard (never in print-preview / golden)
+  const isBuilderView = canvasMode === "builder";
 
   // Profile avatar dropdown state
   const [profileOpen, setProfileOpen] = useState(false);
@@ -400,9 +405,8 @@ export default function FloatingNav({
             {onPrevWeek && (
               <motion.button
                 onClick={onPrevWeek}
-                whileHover={{ scale: 1.08, opacity: 0.95 }}
-                whileTap={{ scale: 0.88 }}
-                transition={SPRING}
+                {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
+                transition={isBuilderView ? premiumSpring : SPRING}
                 className="absolute left-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
                 style={{
                   background: "rgba(0,0,0,0.025)",
@@ -411,8 +415,7 @@ export default function FloatingNav({
                 aria-label="Previous GRAVE week — jump to Friday"
               >
                 <motion.span
-                  whileHover={{ x: -1.5 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                  {...(isBuilderView ? premiumChevronShift(-1) : { whileHover: { x: -1 } })}
                 >
                   <ChevronLeft className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
                 </motion.span>
@@ -492,9 +495,8 @@ export default function FloatingNav({
             {onNextWeek && (
               <motion.button
                 onClick={onNextWeek}
-                whileHover={{ scale: 1.08, opacity: 0.95 }}
-                whileTap={{ scale: 0.88 }}
-                transition={SPRING}
+                {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
+                transition={isBuilderView ? premiumSpring : SPRING}
                 className="absolute right-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
                 style={{
                   background: "rgba(0,0,0,0.025)",
@@ -503,8 +505,7 @@ export default function FloatingNav({
                 aria-label="Next GRAVE week — jump to Friday"
               >
                 <motion.span
-                  whileHover={{ x: 1.5 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                  {...(isBuilderView ? premiumChevronShift(1) : { whileHover: { x: 1 } })}
                 >
                   <ChevronRight className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
                 </motion.span>

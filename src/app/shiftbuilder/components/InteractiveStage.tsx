@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   DndContext,
   DragOverlay,
@@ -19,6 +20,7 @@ import {
 } from "@dnd-kit/core";
 import { createPortal } from "react-dom";
 import { snapTopLeftToCursor } from "@/lib/shiftbuilder/dndModifiers";
+import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 
 function isDroppableVisible(
   id: UniqueIdentifier,
@@ -92,6 +94,8 @@ export default function InteractiveStage({
   activeDrag,
   isDark,
 }: InteractiveStageProps) {
+  const reducedMotion = useReducedMotion();
+
   // Sensors tuned for iPad + Pencil (same logic as before, now co-located)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -170,7 +174,7 @@ export default function InteractiveStage({
             >
               {activeDrag ? (
                 (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
-                  <div
+                  <motion.div
                     className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
                     style={{
                       padding: "5px 10px",
@@ -183,6 +187,10 @@ export default function InteractiveStage({
                       backdropFilter: "blur(20px)",
                       fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                     }}
+                    initial={{ scale: 0.96, y: 2, opacity: 0.85 }}
+                    animate={{ scale: reducedMotion ? 1 : 1.04, y: reducedMotion ? 0 : -4, opacity: 1 }}
+                    transition={reducedMotion ? premiumSpringReduced : { ...premiumSpring, stiffness: 320 }}
+                    // Refined drag ghost: subtle lift (y) + scale for premium "picked up" feel. Reduced motion safe.
                   >
                     <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
                     {activeDrag.fromSlot && (
@@ -191,7 +199,7 @@ export default function InteractiveStage({
                     {activeDrag.kind === "assigned" && (
                       <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>reassign</span>
                     )}
-                  </div>
+                  </motion.div>
                 ) : null
               ) : null}
             </DragOverlay>,

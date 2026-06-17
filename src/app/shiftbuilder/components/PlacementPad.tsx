@@ -2,7 +2,9 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
+import { premiumSpring, premiumPresence, premiumPresenceReduced, premiumButton, premiumTap } from "@/lib/premiumSpring";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender, isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsightSchema";
@@ -184,7 +186,7 @@ function computePortalStyle(
   return { ...base, top };
 }
 
-function usePortalPlacementStyle(
+export function usePortalPlacementStyle(
   hostId: string | undefined,
   anchor: PlacementPadAnchor,
   tabletPickerOpen = false,
@@ -338,7 +340,7 @@ function PlacementAnalystBlock({
             The marker card height will adapt (see outer body/pad style changes) so this + tasks + actions rarely forces scroll. */}
         {!detailsOpen && structured?.headline && (
           <div 
-            className={`mb-0.5 rounded-2xl border border-[#2F5C7C]/15 bg-white/97 px-3 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.1),_inset_0_1px_0_rgba(255,255,255,0.9),_inset_0_-1px_0_rgba(0,0,0,0.02)]${compactTablet ? " sb-pad-xai-compact text-[13px]" : " text-[11px]"}`}
+            className={`mb-0.5 rounded-2xl border border-[#2F5C7C]/15 bg-white/97 px-3 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.1),_inset_0_1px_0_rgba(255,255,255,0.9),_inset_0_-1px_0_rgba(0,0,0,0.02)]${compactTablet ? " sb-pad-xai-compact text-[13px]" : " text-[11px]"} hover:scale-[1.005] hover:-translate-y-px transition-all duration-150`}
             style={{ borderLeft: '5px solid #2F5C7C55', backdropFilter: 'blur(16px) saturate(160%)' }}
           >
             <div className="flex items-baseline gap-1 mb-1">
@@ -663,7 +665,7 @@ function PlacementCell({
   const pillAccent = spreadFrequencyAccent(spreadCount);
 
   return (
-    <span
+    <motion.div
       title={title ?? label}
       className="flex h-[26px] items-center justify-center rounded-md text-[10px] font-bold tabular-nums transition-colors"
       style={
@@ -679,9 +681,11 @@ function PlacementCell({
               color: "rgba(82,82,82,0.72)",
             }
       }
+      whileHover={{ scale: 1.1, y: -1, transition: premiumSpring }}
+      whileTap={{ scale: 0.92, transition: premiumTap }}
     >
       {label}
-    </span>
+    </motion.div>
   );
 }
 
@@ -725,11 +729,17 @@ function InlineCoverage({
           title: "Aux",
           items: auxDefs
             .filter((d) => !d.key.startsWith("SP"))
-            .map((aux) => ({
-              key: aux.key,
-              label: (aux.label || aux.key).replace(/ .*/, "").slice(0, 5),
-              color: getAuxAccent(aux.key),
-            })),
+            .map((aux) => {
+              const isZ9SR = aux.role === "z9sr" || aux.key === "Z9SR";
+              const displayLabel = isZ9SR
+                ? "Z9 SR"
+                : (aux.label || aux.key).replace(/ .*/, "").slice(0, 5);
+              return {
+                key: aux.key,
+                label: displayLabel,
+                color: getAuxAccent(aux.key),
+              };
+            }),
         },
       ].map((section) => (
         <div key={section.title}>
@@ -766,6 +776,38 @@ function InlineCoverage({
           </div>
         </div>
       ))}
+
+      {/* Custom coverage text, pinned to bottom as isCoverage task */}
+      <div className="border-t border-black/[0.06] pt-2 mt-1">
+        <div className="text-[10px] text-neutral-600 mb-1">Custom text (pinned bottom)</div>
+        <form
+          className="flex gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const input = (e.currentTarget.elements.namedItem("customCoverage") as HTMLInputElement);
+            const val = input.value.trim();
+            if (val) {
+              onPick(`custom:${val}`);
+              input.value = "";
+            }
+          }}
+        >
+          <input
+            name="customCoverage"
+            type="text"
+            placeholder="e.g. High Limit Slots"
+            className="flex-1 text-[10px] border border-black/[0.1] px-1 py-0.5 rounded bg-white"
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          <button
+            type="submit"
+            className="text-[10px] px-2 py-0.5 rounded border border-black/[0.1] bg-white hover:bg-neutral-50"
+          >
+            Add
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -855,6 +897,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const tabletBottomSheet = isTabletTouchDevice() && !!hostId && !!portalStyle;
   const usePortal = !!hostId && !!portalStyle;
   const padLarge = tabletBottomSheet;
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!tabletBottomSheet || typeof document === "undefined") return;
@@ -1622,7 +1665,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const matrixQuickMode = !insightsEnabled || !analystDetailsOpen;
 
   const padEl = (
-    <div
+    <motion.div
       className={`placement-pad sb-pad-enter no-print ${usePortal ? "fixed" : anchorClass(anchor)} ${tabletBottomSheet ? "sb-tablet-bottom-sheet" : ""} z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]`}
       style={
         usePortal
@@ -1630,6 +1673,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           : { width: PAD_W, maxHeight: (analystDetailsOpen || showTmPicker) ? PAD_MAX_HEIGHT : Math.min(520, PAD_MAX_HEIGHT), display: "flex", flexDirection: "column" }
       }
       onClick={(e) => e.stopPropagation()}
+      {...(reducedMotion ? premiumPresenceReduced : premiumPresence)}
+      // Premium entrance for the placement pad popup in builder view — smooth pop with spring for Apple feel.
+      // Only rendered in !isPrintPreview contexts via caller in Board. Reduced-motion safe.
     >
       {tabletBottomSheet ? (
         <div className="sb-pad-handle" aria-hidden />
@@ -1644,7 +1690,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         }}
       />
 
-      <button
+      <motion.button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
@@ -1653,9 +1699,12 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         className="sb-pad-close absolute top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100/80 text-neutral-400 text-sm hover:bg-neutral-200/80 hover:text-neutral-600"
         style={tabletBottomSheet ? { right: 8, left: "auto" } : { [closeSide]: 8 }}
         aria-label="Close"
+        {...premiumTap}
+        whileHover={{ scale: 1.1 }}
+        transition={premiumSpring}
       >
         ×
-      </button>
+      </motion.button>
 
       {/* Header — fixed, never scrolls away */}
       <div className="shrink-0">
@@ -1679,7 +1728,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               {a.tmName || "Unassigned"}
             </div>
             {a.tmName && onMarkUnavailable && (
-              <button
+              <motion.button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1688,9 +1737,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 onPointerDown={(e) => e.stopPropagation()}
                 className="ml-2 text-[8px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
                 style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+                {...premiumTap}
+                whileHover={{ scale: 1.05, transition: premiumSpring }}
               >
                 Mark unavailable
-              </button>
+              </motion.button>
             )}
           </div>
           {a.breakGroup != null && a.breakGroup > 0 && (
@@ -1721,6 +1772,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       >
         {showTmPicker ? (
           <div className={`flex h-full flex-col ${padLarge ? "min-h-[340px] px-4 py-3" : "min-h-[280px] px-2.5 py-2"}`}>
+            <motion.div {...(reducedMotion ? premiumPresenceReduced : premiumPresence)} className="contents">
             <TmPicker
               tms={scheduledUnassigned}
               allTms={allEligibleTms}
@@ -1743,6 +1795,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               variant={padLarge ? "tablet" : "default"}
               enableDragAssign={enableTmDragAssign}
             />
+            </motion.div>
           </div>
         ) : coverageMode ? (
           <InlineCoverage
@@ -1779,65 +1832,88 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   Tasks{tasks.length > 0 ? ` · ${tasks.length}` : ""}
                 </SectionLabel>
                 {onAssignSweeper && (
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => setSweeperOpen((v) => !v)}
                     className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
+                    {...premiumButton}
+                    whileHover={{ scale: 1.03 }}
+                    transition={premiumSpring}
                   >
                     Sweeper
-                  </button>
+                  </motion.button>
                 )}
               </div>
 
               {sweeperOpen && onAssignSweeper && (
                 <div className="mb-1.5 flex flex-col gap-1">
-                  {["Sweep 5/8/HL", "Sweep 9/10/SR"].map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => {
-                        void onAssignSweeper(slotKey, opt);
-                        setSweeperOpen(false);
-                      }}
-                      className="rounded-lg border border-amber-200/80 bg-amber-50 px-2.5 py-1.5 text-left text-[10px] font-semibold text-amber-700 hover:bg-amber-100/80"
-                    >
-                      {opt}
-                    </button>
-                  ))}
+                  <AnimatePresence>
+                    {["Sweep 5/8/HL", "Sweep 9/10/SR"].map((opt, i) => (
+                      <motion.button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          void onAssignSweeper(slotKey, opt);
+                          setSweeperOpen(false);
+                        }}
+                        className="rounded-lg border border-amber-200/80 bg-amber-50 px-2.5 py-1.5 text-left text-[10px] font-semibold text-amber-700 hover:bg-amber-100/80"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ ...premiumSpring, delay: i * 0.03 }}
+                        whileHover={{ scale: 1.02, transition: premiumSpring }}
+                        whileTap={{ scale: 0.97, transition: premiumTap }}
+                      >
+                        {opt}
+                      </motion.button>
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
 
               {tasks.length > 0 && (
                 <div className="mb-1.5 flex flex-col gap-1">
-                  {tasks.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center gap-2 rounded-lg border border-black/[0.06] bg-neutral-50/90 px-2 py-1.5"
-                    >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-sm"
-                        style={{ background: t.color ?? accent }}
-                      />
-                      <span className={`flex-1 truncate font-medium text-neutral-900 ${padLarge ? "text-[17px]" : "text-[11.5px]"}`}>
-                        {t.taskLabel}
-                      </span>
-                      {onRemoveTask && (
-                        <button
-                          type="button"
-                          onClick={() => onRemoveTask(slotKey, t.taskLabel)}
-                          className="text-neutral-400 hover:text-neutral-600 text-xs leading-none px-0.5"
-                          aria-label={`Remove ${t.taskLabel}`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  <AnimatePresence>
+                    {tasks.map((t) => (
+                      <motion.div
+                        key={t.id}
+                        layout
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                        transition={premiumSpring}
+                        className="flex items-center gap-2 rounded-lg border border-black/[0.06] bg-neutral-50/90 px-2 py-1.5"
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-sm"
+                          style={{ background: t.color ?? accent }}
+                        />
+                        <span className={`flex-1 truncate font-medium text-neutral-900 ${padLarge ? "text-[17px]" : "text-[11.5px]"}`}>
+                          {t.taskLabel}
+                        </span>
+                        {onRemoveTask && (
+                          <button
+                            type="button"
+                            onClick={() => onRemoveTask(slotKey, t.taskLabel)}
+                            className="text-neutral-400 hover:text-neutral-600 text-xs leading-none px-0.5"
+                            aria-label={`Remove ${t.taskLabel}`}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
 
               {onAddTask && (
-                <div className="flex gap-1.5">
+                <motion.div 
+                  className="flex gap-1.5"
+                  initial={{ opacity: 0.9 }}
+                  animate={{ opacity: 1 }}
+                  transition={premiumSpring}
+                >
                   <input
                     ref={taskInputRef}
                     type="text"
@@ -1857,16 +1933,29 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                     }`}
                   />
                   {taskInput.trim() && (
-                    <button
+                    <motion.button
                       type="button"
                       onClick={handleAddTask}
                       className={`shrink-0 rounded-lg px-2.5 font-bold text-white ${padLarge ? "text-[14px] py-2" : "text-[10px]"}`}
                       style={{ background: accent }}
+                      {...premiumButton}
+                      whileHover={{ scale: 1.05 }}
+                      transition={premiumSpring}
                     >
                       Add
+                    </motion.button>
+                  )}
+                  {taskInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setTaskInput("")}
+                      className="shrink-0 text-neutral-400 hover:text-neutral-600 px-1 text-lg leading-none"
+                      aria-label="Clear task input"
+                    >
+                      ×
                     </button>
                   )}
-                </div>
+                </motion.div>
               )}
             </div>
 
@@ -2051,14 +2140,19 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
                             const title = n > 0 ? `${z.key} · ${n}× in last 30 nights` : z.key;
                             return (
-                              <span
+                              <motion.div
                                 key={z.key}
                                 className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
                                 style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
                                 title={title}
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ ...premiumSpring, delay: 0.01 * (ZONE_DEFS.findIndex(zz => zz.key === z.key) || 0) }}
+                                whileHover={{ scale: 1.08, y: -1, transition: premiumSpring }}
+                                whileTap={{ scale: 0.95, transition: premiumTap }}
                               >
                                 {z.key}
-                              </span>
+                              </motion.div>
                             );
                           })}
                         </div>
@@ -2069,14 +2163,16 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               const n = spreadCountFor(loc.ui);
                               const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
                               return (
-                                <span
+                                <motion.div
                                   key={loc.ui}
                                   className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
                                   style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
                                   title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                                  whileHover={{ scale: 1.08, y: -1, transition: premiumSpring }}
+                                  whileTap={{ scale: 0.95, transition: premiumTap }}
                                 >
                                   {loc.label}
-                                </span>
+                                </motion.div>
                               );
                             })}
                           </div>
@@ -2088,14 +2184,16 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                               const n = spreadCountFor(loc.ui);
                               const col = n > 0 && spreadFrequencyAccent(n) ? spreadFrequencyAccent(n) : null;
                               return (
-                                <span
+                                <motion.div
                                   key={loc.ui}
                                   className="flex h-4 items-center justify-center rounded text-[7px] font-bold tabular-nums"
                                   style={col ? { background: `${col}22`, border: `1px solid ${col}55`, color: col } : { background: "rgba(115,115,115,0.14)", border: "1px dashed rgba(115,115,115,0.38)", color: "rgba(82,82,82,0.72)" }}
                                   title={n > 0 ? `${loc.ui} · ${n}× in last 30 nights` : loc.ui}
+                                  whileHover={{ scale: 1.08, y: -1, transition: premiumSpring }}
+                                  whileTap={{ scale: 0.95, transition: premiumTap }}
                                 >
                                   {loc.label}
-                                </span>
+                                </motion.div>
                               );
                             })}
                           </div>
@@ -2178,7 +2276,16 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                             const pillAccent = getPillAccent(ui);
                             const pillLabel = formatPlacementUiLabel(ui);
                             return (
-                              <span key={`${ui}-${i}`} title={ui} className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums" style={{ background: `${pillAccent}22`, border: `1px solid ${pillAccent}55`, color: pillAccent }}>{pillLabel}</span>
+                              <motion.div
+                                key={`${ui}-${i}`}
+                                title={ui}
+                                className="flex h-[22px] items-center justify-center rounded-md text-[9px] font-bold tabular-nums"
+                                style={{ background: `${pillAccent}22`, border: `1px solid ${pillAccent}55`, color: pillAccent }}
+                                whileHover={{ scale: 1.08, y: -1, transition: premiumSpring }}
+                                whileTap={{ scale: 0.95, transition: premiumTap }}
+                              >
+                                {pillLabel}
+                              </motion.div>
                             );
                           })}
                         </div>
@@ -2208,7 +2315,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
               { label: "Swap", onClick: () => setAssignMode(true), variant: "default" as const },
             ] as const
           ).map((btn) => (
-            <button
+            <motion.button
               key={btn.label}
               type="button"
               disabled={isCurrentNightLocked}
@@ -2220,13 +2327,15 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                   ? "border border-red-200/80 bg-red-50 text-red-600 hover:bg-red-100/80"
                   : "border border-black/[0.08] bg-white text-neutral-600 hover:bg-neutral-100"
               }`}
+              {...premiumButton}
+              transition={premiumSpring}
             >
               {btn.label}
-            </button>
+            </motion.button>
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 
   if (usePortal && typeof document !== "undefined") {

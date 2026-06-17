@@ -3,13 +3,9 @@
 import React from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import { premiumSpring } from "@/lib/premiumSpring";
 
-// ============================================================================
-// TaskRow — shared per-task line with always-visible color sphere + hover picker
-// Used by Zone cards, RR sides, and Overlap slots. The sphere prints because
-// it is real DOM content (backgroundColor on a div).
-// ============================================================================
-
+// Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
 export const TASK_COLOR_SPHERES = [
   { name: 'Gold',    hex: '#B89708' },
   { name: 'Red',     hex: '#E53935' },
@@ -20,18 +16,28 @@ export const TASK_COLOR_SPHERES = [
   { name: 'Orange',  hex: '#FB8C00' },
 ] as const;
 
+// ============================================================================
+// TaskRow — static per-task line (color accent border for text attr).
+// Double-click anywhere on the row to open the dedicated TaskTextEditPad (pops like PlacementPad).
+// No more hover quick-edit toolbar (color / pencil / delete). Used by Zone/RR/Aux/Overlap cards.
+// ============================================================================
+
 export interface TaskRowProps {
   task: NightSlotTask;
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  /** Double-click opens the pop-up font/text attributes pad (like PlacementPad). Provided only in builder (not print). */
+  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   // Slight visual tweaks per context (Zone vs tight RR/Overlap)
   textSize?: string;
   textColorClass?: string;
   /** When true (default), the task label is draggable for cross-card reassign.
    *  Can be overridden via localStorage key shiftbuilder:taskUxPrefs { dragEnabled: false }. */
   draggable?: boolean;
+  /** When true, use static compact sizing for the sacred Golden (print-preview capture). No measurement, no ResizeObserver, no dynamic 13/10 shrink/hang. */
+  isPrintPreview?: boolean;
 }
 
 const TaskRow: React.FC<TaskRowProps> = React.memo(({
@@ -40,10 +46,81 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   onRemoveTask,
   onSetTaskColor,
   onEditTask,
-  textSize = "text-[11.5px]",
+  onOpenTaskTextEdit,
+  textSize = "text-[13px]",
   textColorClass = "text-[#1f2937] dark:text-[#C7C7CC]",
   draggable = true,
+  isPrintPreview = false,
 }) => {
+  const hasColor = !!task.color;
+
+  const labelRef = React.useRef<HTMLSpanElement>(null);
+  const [fontSize, setFontSize] = React.useState(isPrintPreview ? '9.5px' : '13px');
+  const [hanging, setHanging] = React.useState<{ textIndent: string; paddingLeft: string }>({
+    textIndent: '0',
+    paddingLeft: hasColor ? (isPrintPreview ? '6px' : '9px') : '0'
+  });
+
+  // Responsive task label: base 13px consistent across all cards.
+  // If overflows single line at 13px -> shrink to 10px.
+  // If still overflows -> wrap with hanging indent.
+  // ONLY in builder (!isPrintPreview). In print-preview / PDF capture we use the static
+  // compact textSize passed from the card lists (matches Golden spec exactly, no
+  // measurement side-effects or ResizeObserver during the settle frames before capture).
+  React.useLayoutEffect(() => {
+    if (isPrintPreview) {
+      // Static compact for sacred print capture. Pick a safe small size from the
+      // prop or default. No hanging indent (prevents extra layout height). No RO.
+      // Additionally force nowrap + truncate so long custom labels (e.g. "Lobby")
+      // or measurement differences never add a second line in any browser's print engine.
+      const staticSize = textSize?.match(/\[([\d.]+)px\]/)?.[1] ? textSize.match(/\[([\d.]+)px\]/)![1] + 'px' : '9.5px';
+      setFontSize(staticSize);
+      setHanging({ textIndent: '0', paddingLeft: hasColor ? '6px' : '0' });
+      return;
+    }
+
+    const el = labelRef.current;
+    if (!el) return;
+    const container = el.parentElement;
+    if (!container) return;
+
+    const compute = () => {
+      // measure at base
+      el.style.fontSize = '13px';
+      el.style.textIndent = '0';
+      el.style.paddingLeft = hasColor ? '9px' : '0';
+      el.style.whiteSpace = 'nowrap';
+
+      const needed = el.scrollWidth;
+      const avail = Math.max(20, container.clientWidth - 4); // tolerance for borders/padding
+
+      let fs = '13px';
+      let ti = '0';
+      let pl = hasColor ? '9px' : '0';
+
+      if (needed > avail) {
+        el.style.fontSize = '10px';
+        const needed10 = el.scrollWidth;
+        if (needed10 > avail) {
+          fs = '10px';
+          ti = '-1.15em';
+          pl = hasColor ? 'calc(9px + 1.15em)' : '1.15em';
+        } else {
+          fs = '10px';
+        }
+      }
+
+      el.style.whiteSpace = 'normal';
+      setFontSize(fs);
+      setHanging({ textIndent: ti, paddingLeft: pl });
+    };
+
+    compute();
+
+    const ro = new ResizeObserver(compute);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [task.taskLabel, hasColor, isPrintPreview, textSize]);
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
   // The Sudo Tasks tab writes to the same localStorage key.
   const effectiveDraggable = React.useMemo(() => {
@@ -58,12 +135,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     return draggable;
   }, [draggable]);
 
-  const hasColor = !!task.color;
-  const [isColorExpanded, setIsColorExpanded] = React.useState(false);
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editValue, setEditValue] = React.useState('');
-  // Touch devices have no hover — a tap on the row pins/unpins the toolbar.
-  const [toolbarPinned, setToolbarPinned] = React.useState(false);
+  // hasColor declared early (before states/effect) for the responsive text sizing logic below.
 
   // dnd-kit: drag from the task label (not a separate grip).
   const {
@@ -80,7 +152,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       catalogTaskId: task.catalogTaskId ?? null,
       color: task.color ?? null,
     },
-    disabled: !effectiveDraggable || isEditing,
+    disabled: !effectiveDraggable,
   });
 
   // Droppable target for intra-slot reordering (drag a task over another task in the same list to reorder).
@@ -97,7 +169,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     },
   });
 
-  const canDrag = effectiveDraggable && !isEditing;
+  const canDrag = effectiveDraggable;
 
   const setRowRef = (node: HTMLElement | null) => {
     setTaskDragRef(node);
@@ -119,162 +191,42 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     };
   }, [canDrag, taskDragListeners]);
 
-  const startEditing = () => {
-    setIsEditing(true);
-    setEditValue(task.taskLabel);
-    setIsColorExpanded(false);
-  };
-
-  const saveEdit = () => {
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== task.taskLabel) {
-      onEditTask?.(slotKey, task.taskLabel, trimmed);
-    }
-    setIsEditing(false);
-  };
-
-  const cancelEdit = () => {
-    setIsEditing(false);
-  };
+  const taskHostId = `task-${slotKey}-${task.id}`;
 
   return (
     <div
       ref={setRowRef}
-      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-0.5 -mx-0.5 py-px hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
+      data-task-host={taskHostId}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
       {...(canDrag ? dragListeners : {})}
       {...(canDrag ? taskDragAttributes : {})}
-      onPointerUp={(e) => {
-        // Touch tap on toolbar controls: pin/unpin (row uses drag delay on touch).
-        if (e.pointerType === 'touch' && (e.target as HTMLElement).closest('.sb-task-toolbar')) {
-          e.stopPropagation();
-          setToolbarPinned((p) => !p);
-        }
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOpenTaskTextEdit?.(slotKey, task);
       }}
     >
-      {/* Label — visual only; drag surface is the full row (matches TM card drag). */}
-      <div data-task-label className="min-w-0 flex-1 leading-snug">
-        {isEditing ? (
-          <input
-            type="text"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={saveEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveEdit();
-              if (e.key === 'Escape') cancelEdit();
-            }}
-            className="w-full bg-white dark:bg-[#2C2C2E] border border-[#007AFF]/40 rounded px-1 py-0.5 text-inherit focus:outline-none"
-            autoFocus
-          />
-        ) : (
-          <span
-            className="block rounded-sm transition-colors font-medium"
-            style={hasColor ? {
-              backgroundColor: `${task.color}15`,
-              borderLeft: `3px solid ${task.color}`,
-              paddingLeft: '9px',
-              marginLeft: '-1px'
-            } : undefined}
-          >
-            {task.taskLabel}
-          </span>
-        )}
+      {/* Label — static; color accent (left border + subtle tint) is the persistent visual for the text attribute.
+          Double-click the row anywhere to open the full text/font edit pad (label + color). Hover toolbar removed per spec. */}
+      <div data-task-label className={`min-w-0 flex-1 ${isPrintPreview ? 'leading-[1.05]' : 'leading-snug'}`}>
+        <span
+          ref={labelRef}
+          className="block rounded-sm transition-colors font-medium py-px"
+          style={hasColor ? {
+            backgroundColor: `${task.color}15`,
+            borderLeft: `3px solid ${task.color}`,
+            fontSize,
+            textIndent: hanging.textIndent,
+            paddingLeft: hanging.paddingLeft,
+            marginLeft: '-1px',
+            ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
+          } : {
+            fontSize,
+            ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
+          }}
+        >
+          {task.taskLabel}
+        </span>
       </div>
-
-      {/* Compact hover toolbar — collapsed by default for maximum density.
-          Color control can be clicked to expand the full palette. */}
-      {(onRemoveTask || onSetTaskColor || onEditTask) && !isEditing && (
-        <div className={`sb-task-toolbar absolute right-0.5 top-0.5 items-center gap-1 bg-white/95 dark:bg-[#3A3A3C] rounded-sm px-1 py-px shadow-sm ring-1 ring-black/10 dark:ring-white/10 z-10 ${toolbarPinned ? 'flex' : 'hidden group-hover/task:flex'}`}>
-          {/* Color control — collapsed until clicked */}
-          {onSetTaskColor && (
-            <>
-              {!isColorExpanded ? (
-                <button
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsColorExpanded(true);
-                  }}
-                  className="sb-interactive flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-black/20 hover:ring-black/40"
-                  style={{ backgroundColor: hasColor ? task.color! : '#E5E5E7' }}
-                  title="Change task color"
-                >
-                  <span className="text-[7px] leading-none text-white/70">●</span>
-                </button>
-              ) : (
-                /* Expanded color palette */
-                <div className="flex items-center gap-1">
-                  {TASK_COLOR_SPHERES.map((c) => (
-                    <button
-                      key={c.hex}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSetTaskColor(slotKey, task.taskLabel, c.hex);
-                        setIsColorExpanded(false);
-                      }}
-                      className="w-2.5 h-2.5 rounded-full ring-1 ring-black/15 hover:ring-black/40"
-                      style={{ backgroundColor: c.hex }}
-                      title={c.name}
-                    />
-                  ))}
-                  <button
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSetTaskColor(slotKey, task.taskLabel, null);
-                      setIsColorExpanded(false);
-                    }}
-                    className="w-2.5 h-2.5 rounded-full bg-white ring-1 ring-black/20 text-[7px] text-[#9CA3AF]"
-                    title="Remove color"
-                  >
-                    ×
-                  </button>
-                  {/* Collapse button */}
-                  <button
-                    onClick={() => setIsColorExpanded(false)}
-                    className="ml-0.5 text-[10px] text-[#9CA3AF] hover:text-[#6B7280]"
-                    title="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Edit (pencil) */}
-          {onEditTask && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                startEditing();
-              }}
-              className="text-[#6B7280] hover:text-[#007AFF] text-[11px] leading-none"
-              title="Edit task"
-            >
-              ✎
-            </button>
-          )}
-
-          {/* Delete */}
-          {onRemoveTask && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setToolbarPinned(false);
-                onRemoveTask(slotKey, task.taskLabel);
-              }}
-              className="text-red-400 hover:text-red-500 text-[12px] leading-none font-bold"
-              title="Remove task"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 });

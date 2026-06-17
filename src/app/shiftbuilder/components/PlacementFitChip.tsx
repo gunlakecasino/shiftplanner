@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   fitVerdictLabel,
   fitVerdictStyles,
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import { premiumSpring } from "@/lib/premiumSpring";
 
 export type PlacementFitChipProps = {
   /** Same prerender the placement pad instant block uses. */
@@ -40,20 +42,28 @@ export function PlacementFitChip({ fit, xaiFit }: PlacementFitChipProps) {
     : "sb-fit-chip no-print inline-flex max-w-[64px] items-center justify-center rounded px-1 py-px text-[6.5px] font-bold uppercase tracking-[0.4px] leading-none shrink-0 truncate";
 
   return (
-    <span
-      className={chipClass}
-      style={{
-        background: styles.bg,
-        color: styles.text,
-        border: `1px solid ${styles.border}`,
-        fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-      }}
-      title={title + (isXai ? "  ·  xAI insight loaded in builder; hidden in print-preview/PDF" : "")}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      {isXai && <span className="opacity-60 mr-px" style={{ fontSize: "6.5px", letterSpacing: "0" }}>✧</span>}
-      {displayText}
-    </span>
+    <AnimatePresence>
+      <motion.span
+        key={isXai ? "xai" : effectiveVerdict}
+        className={chipClass}
+        style={{
+          background: styles.bg,
+          color: styles.text,
+          border: `1px solid ${styles.border}`,
+          fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+        }}
+        title={title + (isXai ? "  ·  xAI insight loaded in builder; hidden in print-preview/PDF" : "")}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.8, y: 1 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.85 }}
+        transition={premiumSpring}
+        // Tiny premium pop for the fit/xAI chip on appear/update — builder visual sugar only.
+      >
+        {isXai && <span className="opacity-60 mr-px" style={{ fontSize: "6.5px", letterSpacing: "0" }}>✧</span>}
+        {displayText}
+      </motion.span>
+    </AnimatePresence>
   );
 }

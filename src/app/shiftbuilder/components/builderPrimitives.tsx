@@ -331,3 +331,14 @@ export function SudoTabLoading({
     </BuilderLoadingLine>
   );
 }
+
+/** Unified "drop to assign" hint for empty/unassigned card states (builder-only, no-print). */
+export function UnassignedDropHint({ showDigitalAssists = true, className = "" }: { showDigitalAssists?: boolean; className?: string }) {
+  if (!showDigitalAssists) return null;
+  return (
+    <span className={`sb-unassigned-hint no-print flex items-center gap-1 text-[9.5px] opacity-75 hover:opacity-100 ${className}`}>
+      <span className="ms" style={{ fontSize: 10, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+      <span>Drop to assign</span>
+    </span>
+  );
+}
