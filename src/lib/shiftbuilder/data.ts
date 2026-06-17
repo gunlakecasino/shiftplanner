@@ -2049,7 +2049,7 @@ export async function removeNightCardBorder(nightId: string, slotKey: string): P
 export interface BreakAssignmentRow {
   nightId: string;
   tmId: string;
-  groupNum: 0 | 1 | 2 | 3;
+  groupNum: BreakGroupValue;
   breakWave: number;
   slotRef: string | null;
 }
@@ -2081,7 +2081,7 @@ export async function getNightBreakAssignments(nightId: string): Promise<BreakAs
 export interface UpsertBreakParams {
   nightId: string;
   tmId: string;
-  groupNum: 0 | 1 | 2 | 3;
+  groupNum: BreakGroupValue;
   slotRef?: string | null;
   breakWave?: number;
 }
@@ -3444,7 +3444,7 @@ export interface SlotDefault {
   slotKey: string;           // DB key e.g. "zone_1", "rr_1_2", "admin"
   slotType: 'zone' | 'rr' | 'aux';
   rrSide: string;            // '' for non-RR; 'mens'|'womens' for RR
-  defaultBreakGroup: 0 | 1 | 2 | 3;
+  defaultBreakGroup: BreakGroupValue;
 }
 
 export interface SlotDefaultTask {
@@ -3515,7 +3515,7 @@ export async function upsertSlotDefault(params: {
   slotKey: string;
   slotType: 'zone' | 'rr' | 'aux';
   rrSide?: string;
-  defaultBreakGroup: 0 | 1 | 2 | 3;
+  defaultBreakGroup: BreakGroupValue;
 }): Promise<void> {
   const { slotKey, slotType, rrSide = '', defaultBreakGroup } = params;
 

@@ -13,6 +13,8 @@ import {
   getAuxAccent,
   getAuxIcon,
   COVERAGE_BAR_H,
+  BREAK_GROUP_FILTERS,
+  breakGroupLabel,
 } from "@/lib/shiftbuilder/constants";
 import type { PrintTaskLine } from "./printPreviewTypes";
 
@@ -27,7 +29,7 @@ export function GoldenBreakPill({ value }: { value: number }) {
       }`}
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      {isOff ? "–" : value}
+      {isOff ? "–" : breakGroupLabel(value)}
     </span>
   );
 }
@@ -502,8 +504,8 @@ export function GoldenDeploymentHeader({
   day: DayDef;
   dayIndex: number;
   weekDayDefs: DayDef[];
-  breakCounts: Record<1 | 2 | 3, number>;
-  activeBreakGroup?: 1 | 2 | 3;
+  breakCounts: Record<1 | 2 | 3 | 4, number>;
+  activeBreakGroup?: 1 | 2 | 3 | 4;
 }) {
   return (
     <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-end justify-between">
@@ -541,13 +543,13 @@ export function GoldenDeploymentHeader({
               BREAKS
             </span>
             <div className="flex gap-[2px]">
-              {([1, 2, 3] as const).map((g) => (
+              {BREAK_GROUP_FILTERS.map((g) => (
                 <div
                   key={g}
-                  className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums bg-[#1C1C1E] text-white"
+                  className={`${g === 4 ? "min-w-[16px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums bg-[#1C1C1E] text-white`}
                   style={{ fontFamily: "var(--font-atkinson)" }}
                 >
-                  {breakCounts[g] || ""}
+                  {breakCounts[g] > 0 ? breakCounts[g] : ""}
                 </div>
               ))}
             </div>
@@ -581,19 +583,19 @@ export function GoldenDeploymentHeader({
             GROUP
           </span>
           <div className="flex gap-[3px]">
-            {([1, 2, 3] as const).map((g) => {
+            {BREAK_GROUP_FILTERS.map((g) => {
               const isActive = activeBreakGroup === g;
               return (
                 <div
                   key={g}
-                  className="min-w-[15px] h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px]"
+                  className={`${g === 4 ? "min-w-[18px]" : "min-w-[15px]"} h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px]`}
                   style={{
                     background: isActive ? "#1C1C1E" : "#E5E5E7",
                     color: isActive ? "#fff" : "#6B7280",
                     fontFamily: "var(--font-atkinson)",
                   }}
                 >
-                  {g}
+                  {breakGroupLabel(g)}
                 </div>
               );
             })}
@@ -614,7 +616,7 @@ export function GoldenBreaksHeader({
   day: DayDef;
   dayIndex: number;
   weekDayDefs: DayDef[];
-  breakCounts: Record<1 | 2 | 3, number>;
+  breakCounts: Record<1 | 2 | 3 | 4, number>;
   inRotationCount: number;
 }) {
   return (
@@ -661,13 +663,13 @@ export function GoldenBreaksHeader({
               BREAKS
             </span>
             <div className="flex gap-[2px]">
-              {([1, 2, 3] as const).map((g) => (
+              {BREAK_GROUP_FILTERS.map((g) => (
                 <div
                   key={g}
-                  className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums bg-[#1C1C1E] text-white"
+                  className={`${g === 4 ? "min-w-[16px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums bg-[#1C1C1E] text-white`}
                   style={{ fontFamily: "var(--font-atkinson)" }}
                 >
-                  {breakCounts[g] || ""}
+                  {breakCounts[g] > 0 ? breakCounts[g] : ""}
                 </div>
               ))}
             </div>

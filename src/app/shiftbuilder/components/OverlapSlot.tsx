@@ -6,10 +6,15 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import TaskRow from "./TaskRow";
+import BreakBadge from "./BreakBadge";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, penHoverClass, UnassignedDropHint } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { premiumSpring } from "@/lib/premiumSpring";
+import {
+  nextBreakGroup,
+  type BreakGroup,
+} from "@/lib/shiftbuilder/constants";
 
 /** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
 
@@ -30,6 +35,7 @@ export interface OverlapSlotProps {
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
+  setBreakGroupForSlot?: (k: string, g: BreakGroup) => void;
 
   // Locked state for the night (disables interactions)
   isLocked?: boolean;
@@ -67,6 +73,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onOpenTaskTextEdit,
   onLiveAssign,
   onLiveUnassign,
+  setBreakGroupForSlot,
   isLocked = false,
   fitChip,
   showDigitalAssists = false,
@@ -75,8 +82,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   tmConflictSlots,
 }) => {
   const a = assignments[slotKey] || {};
+  const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
   const dim = !hasTM && !loading;
+  const cycleBreak = () => {
+    if (setBreakGroupForSlot) {
+      setBreakGroupForSlot(slotKey, nextBreakGroup(currentBreak));
+    }
+  };
 
   // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
@@ -106,6 +119,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         isOver ? "drop-target-active" : ""
       } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
     >
+      <div className="flex items-center justify-between gap-1 min-h-[16px]">
+        {showDigitalAssists && setBreakGroupForSlot ? (
+          <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" />
+        ) : (
+          <span className="w-0" />
+        )}
+        {fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} /> : null}
+      </div>
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
       ) : hasTM ? (
@@ -128,9 +149,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
             >
               2×
             </span>
-          )}
-          {fitChip && (
-            <PlacementFitChip fit={fitChip} />
           )}
         </div>
       ) : (

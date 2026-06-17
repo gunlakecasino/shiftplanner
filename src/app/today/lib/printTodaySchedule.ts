@@ -1,6 +1,11 @@
 import { flushSync } from "react-dom";
+import { NATURAL_HEIGHT } from "@/app/shiftbuilder/hooks/useZoom";
 
 export type TodayBoardView = "deployment" | "breaks";
+
+export type PrintTodayResult =
+  | { ok: true }
+  | { ok: false; reason: string };
 
 function nextFrames(n: number): Promise<void> {
   return new Promise((resolve) => {
@@ -14,14 +19,18 @@ function nextFrames(n: number): Promise<void> {
   });
 }
 
+function captureArtboardHtml(): string {
+  const el = document.querySelector(".print-artboard") as HTMLElement | null;
+  return el?.outerHTML ?? "";
+}
+
+function isValidArtboardCapture(html: string): boolean {
+  return html.includes("print-artboard") && html.length > 200;
+}
+
 /**
  * Imperative post-processing of the captured breaks artboard clone.
- * These style overrides compensate for the fact that the live component tree
- * is laid out for screen (with dynamic heights, scroll areas, etc.) and needs
- * to be forced into a print-friendly fixed layout for the dual-page capture.
- *
- * WARNING: This is tightly coupled to the current JSX structure inside the
- * breaks view of ShiftBuilderBoard / wave rendering. Update in lockstep.
+ * Compensates for screen layout vs print-fixed layout on the breaks view.
  */
 function postProcessBreaksArtboard(breaksArtboard: Element) {
   const contentArea = breaksArtboard.querySelector(
@@ -52,34 +61,26 @@ function postProcessBreaksArtboard(breaksArtboard: Element) {
 
 /**
  * Capture deployment + breaks from the live `.print-artboard` and print both pages.
- * Mirrors ShiftBuilder's dual-page print path for a single already-loaded night.
- *
- * PRODUCTION NOTES / HARDENING TARGETS:
- * - Heavy reliance on live DOM structure (class names like ".print-artboard",
- *   ".flex-1.min-h-0.overflow-hidden.flex.flex-col", ".overlaps-section").
- *   Any refactor of ShiftBuilderBoard / breaks rendering can break the capture.
- * - Uses flushSync + rAF sequencing to let React commit view toggles before
- *   reading outerHTML. Fragile but required for snapshotting the same mounted tree
- *   in two states.
- * - Temporarily mutates inline styles on the live artboard and the cloned breaks
- *   one, then restores. postProcessBreaksArtboard does additional imperative fixes.
- * - Falls back to plain window.print() if no artboard or capture fails.
- * - The 816px forced height for breaks is tied to the sacred artboard contract.
  */
 export async function printTodaySchedule(options: {
   currentView: TodayBoardView;
   setCurrentView: (view: TodayBoardView) => void;
   onSlotClose?: () => void;
-}): Promise<void> {
+}): Promise<PrintTodayResult> {
   options.onSlotClose?.();
 
   const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
   if (!liveArtboard) {
-    window.print();
-    return;
+    return { ok: false, reason: "Board isn't ready to print yet" };
   }
 
   const originalView = options.currentView;
+  const prevVisibility = liveArtboard.style.visibility;
+
+  const restoreLiveArtboard = () => {
+    liveArtboard.style.visibility = prevVisibility || "";
+    flushSync(() => options.setCurrentView(originalView));
+  };
 
   try {
     liveArtboard.style.visibility = "hidden";
@@ -87,9 +88,13 @@ export async function printTodaySchedule(options: {
     flushSync(() => options.setCurrentView("deployment"));
     await nextFrames(2);
     liveArtboard.style.visibility = "";
-    const deploymentHTML =
-      (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
+    const deploymentHTML = captureArtboardHtml();
     liveArtboard.style.visibility = "hidden";
+
+    if (!isValidArtboardCapture(deploymentHTML)) {
+      restoreLiveArtboard();
+      return { ok: false, reason: "Couldn't capture deployment sheet" };
+    }
 
     flushSync(() => options.setCurrentView("breaks"));
     await nextFrames(2);
@@ -101,8 +106,8 @@ export async function printTodaySchedule(options: {
     const prevFlexDir = artboardForBreaks?.style.flexDirection;
 
     if (artboardForBreaks) {
-      artboardForBreaks.style.height = "816px";
-      artboardForBreaks.style.minHeight = "816px";
+      artboardForBreaks.style.height = `${NATURAL_HEIGHT}px`;
+      artboardForBreaks.style.minHeight = `${NATURAL_HEIGHT}px`;
       artboardForBreaks.style.display = "flex";
       artboardForBreaks.style.flexDirection = "column";
     }
@@ -110,8 +115,7 @@ export async function printTodaySchedule(options: {
     artboardForBreaks?.getBoundingClientRect();
     await nextFrames(1);
 
-    const breaksHTML =
-      (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
+    const breaksHTML = captureArtboardHtml();
 
     if (artboardForBreaks) {
       artboardForBreaks.style.height = prevHeight || "";
@@ -120,14 +124,11 @@ export async function printTodaySchedule(options: {
       artboardForBreaks.style.flexDirection = prevFlexDir || "";
     }
 
-    flushSync(() => options.setCurrentView(originalView));
+    restoreLiveArtboard();
     await nextFrames(1);
-    liveArtboard.style.visibility = "";
 
-    if (!deploymentHTML || !breaksHTML) {
-      console.warn("[today] dual-page print failed to capture views; falling back");
-      window.print();
-      return;
+    if (!isValidArtboardCapture(breaksHTML)) {
+      return { ok: false, reason: "Couldn't capture break sheet" };
     }
 
     const container = document.createElement("div");
@@ -158,9 +159,13 @@ export async function printTodaySchedule(options: {
       document.body.classList.remove("printing-dual-mode");
       container.remove();
     }
+
+    return { ok: true };
   } catch (e) {
     console.error("[today] dual-page print error", e);
+    restoreLiveArtboard();
     document.body.classList.remove("printing-dual-mode");
     document.querySelector(".print-dual-container")?.remove();
+    return { ok: false, reason: "Print failed — try again" };
   }
 }

@@ -68,6 +68,10 @@ export interface LiveAssignOptions {
   targetNightId?: string | null;
   /** Whether we are currently in Draft Mode (affects how the caller layers the change) */
   isDraftMode?: boolean;
+  /** Called only after the server persist succeeds (after optimistic update). */
+  onPersisted?: () => void;
+  /** Called when persist fails and optimistic state was rolled back. */
+  onPersistFailed?: (error: unknown) => void;
 }
 
 export interface UseLiveAssignmentsResult {
@@ -235,6 +239,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
       },
 
       onError: (err, params, context: any) => {
+        params.onPersistFailed?.(err);
+
         // PERFECT ROLLBACK (all three layers + correct core key)
         if (context?.previousNightData) {
           queryClient.setQueryData(["night", context.dateKey], context.previousNightData);
@@ -267,12 +273,13 @@ export function useLiveAssignments(selectedDay: DayDef) {
         });
       },
 
-      onSuccess: (_data, _vars, context: any) => {
+      onSuccess: (_data, params, context: any) => {
         // Re-assert store → query after DB write so day switches use patched cache, not stale bundles.
         if (context?.dateKey) {
           const store = useShiftBuilderStore.getState().assignments ?? {};
           patchNightCoreAssignmentsCache(queryClient, context.dateKey, store);
         }
+        params.onPersisted?.();
       },
 
       // Do not invalidateQueries here — refetch can return stale server-cached bundles

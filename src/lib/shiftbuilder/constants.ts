@@ -183,18 +183,59 @@ export const getAuxAccent = (key: string, role?: AuxRole): string => {
 };
 
 // Break-group state model:
-//   0 (or no row) = off the break sheet this shift ("–" badge) — used for overlaps
-//                   and anyone deliberately not put on the break rotation.
-//   1/2/3         = numeric break group.
-// Cycle order is 1 → 2 → 3 → – → 1. Choosing "–" removes the break record.
-export type BreakGroup = 0 | 1 | 2 | 3;
+//   0 (or no row) = off the break sheet this shift ("–" badge).
+//   1/2/3         = grave break waves.
+//   4 (OVERLAPS)  = overlaps break group — badge reads "OL".
+// Cycle order is 1 → 2 → 3 → OL → – → 1. Choosing "–" removes the break record.
+export const BREAK_GROUP_OVERLAPS = 4 as const;
+
+export type BreakGroup = 0 | 1 | 2 | 3 | typeof BREAK_GROUP_OVERLAPS;
+
+/** Break wave selector on the deployment board (not 0). */
+export type BreakGroupFilter = 1 | 2 | 3 | typeof BREAK_GROUP_OVERLAPS;
+
+/** Active GROUP filter — null means no filter (show full board). */
+export type ActiveBreakGroupFilter = BreakGroupFilter | null;
+
+export const BREAK_GROUP_FILTERS: BreakGroupFilter[] = [1, 2, 3, BREAK_GROUP_OVERLAPS];
+
+export function breakGroupLabel(g: number): string {
+  if (g === 0) return "–";
+  if (g === BREAK_GROUP_OVERLAPS) return "OL";
+  return String(g);
+}
+
+export function isInBreakRotation(g: number): boolean {
+  return g === 1 || g === 2 || g === 3 || g === BREAK_GROUP_OVERLAPS;
+}
 
 export const nextBreakGroup = (cur: BreakGroup): BreakGroup => {
-  // 1→2, 2→3, 3→0 (off), 0→1
   if (cur === 0) return 1;
-  if (cur === 3) return 0;
-  return ((cur + 1) as BreakGroup);
+  if (cur === 1) return 2;
+  if (cur === 2) return 3;
+  if (cur === 3) return BREAK_GROUP_OVERLAPS;
+  return 0;
 };
+
+/** Whether a deployment slot should render under the active GROUP filter. */
+export function shouldShowSlotForBreakFilter(
+  slotKey: string,
+  assignment: { tmId?: string | null; tmName?: string; breakGroup?: number } | undefined,
+  filter: ActiveBreakGroupFilter,
+): boolean {
+  if (filter === null) return true;
+  const g = assignment?.breakGroup ?? 0;
+  const hasTm = !!(assignment?.tmId || assignment?.tmName);
+
+  if (filter === BREAK_GROUP_OVERLAPS) {
+    if (slotKey.startsWith("OL-")) return true;
+    return hasTm && g === BREAK_GROUP_OVERLAPS;
+  }
+
+  if (slotKey.startsWith("OL-")) return false;
+  if (!hasTm) return false;
+  return g === filter;
+}
 
 /** Height in px of a CoverageBar row — shared between ZoneCard and CoverageBar. */
 export const COVERAGE_BAR_H = 17;

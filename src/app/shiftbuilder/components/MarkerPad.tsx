@@ -21,7 +21,11 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import type { BreakGroup } from "@/lib/shiftbuilder/constants";
+import {
+  BREAK_GROUP_OVERLAPS,
+  breakGroupLabel,
+  type BreakGroup,
+} from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
   ZONE_DEFS, RR_DEFS, BLANK_AUX_DEFS,
@@ -114,6 +118,7 @@ const BreakWave: React.FC<{
     { v: 1, l: "1",   sub: "12:00a"   },
     { v: 2, l: "2",   sub: "1:30a"    },
     { v: 3, l: "3",   sub: "3:00a"    },
+    { v: BREAK_GROUP_OVERLAPS, l: "OL", sub: "overlaps" },
   ];
   return (
     <div>
@@ -123,11 +128,11 @@ const BreakWave: React.FC<{
         </span>
         {current > 0 && (
           <span className="text-[9.5px] font-semibold" style={{ color: "var(--sb-gold-bright, #E9B948)", fontFamily: "var(--font-jetbrains, monospace)" }}>
-            Group {current}
+            Group {breakGroupLabel(current)}
           </span>
         )}
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-5 gap-1.5">
         {opts.map(o => {
           const active = o.v === current;
           return (

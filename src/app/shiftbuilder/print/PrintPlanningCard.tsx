@@ -1,7 +1,7 @@
 import React from "react";
 import type { PrintPlanningCardModel } from "./printPreviewTypes";
 
-const BREAK_LABEL: Record<number, string> = { 0: "–", 1: "1", 2: "2", 3: "3" };
+import { breakGroupLabel } from "@/lib/shiftbuilder/constants";
 
 export type PrintPlanningCardProps = {
   model: PrintPlanningCardModel;
@@ -52,7 +52,7 @@ export function PrintPlanningCard({ model }: PrintPlanningCardProps) {
           </span>
         </div>
         {kind !== "overlap" && breakGroup > 0 ? (
-          <span className="ppc-break-pill">{BREAK_LABEL[breakGroup] ?? breakGroup}</span>
+          <span className="ppc-break-pill">{breakGroupLabel(breakGroup)}</span>
         ) : null}
       </div>
 

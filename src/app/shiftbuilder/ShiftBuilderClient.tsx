@@ -102,7 +102,11 @@ import {
   ZONE_DEFS, RR_DEFS, BLANK_AUX_DEFS, MAX_AUX_SLOTS, EXTRA_AUX_COLORS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS, getAuxIcon,
   ZONE_COLORS, getZoneColor, RR_COLORS, getRRAccent, AUX_COLORS, getAuxAccent,
-  type BreakGroup, nextBreakGroup, COVERAGE_BAR_H,
+  type BreakGroup,
+  type ActiveBreakGroupFilter,
+  BREAK_GROUP_OVERLAPS,
+  nextBreakGroup,
+  COVERAGE_BAR_H,
 } from "@/lib/shiftbuilder/constants";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
@@ -895,7 +899,7 @@ function AuthedShiftBuilder() {
 
   // (Dock calendar close effect removed along with the old bottom dock popover)
 
-  const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(1);
+  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(1);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
   const [realRoster, setRealRoster] = useState<any[]>([]);
   const [graveRoster, setGraveRoster] = useState<any[]>([]); // GRAVE-shift filtered roster (Option B)
@@ -1218,16 +1222,19 @@ function AuthedShiftBuilder() {
   // small badges in the artboard header so operators can see at a glance
   // how balanced the wave loads are. Recomputes whenever assignments shift.
   const breakCounts = React.useMemo(() => {
-    const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+    const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
     Object.values(assignments).forEach((a: any) => {
       if (!a?.tmId && !a?.tmName) return;
       const g = (a.breakGroup ?? 0) as BreakGroup;
       // Off-the-sheet (0) intentionally excluded from rotation counts.
-      if (g === 1 || g === 2 || g === 3) counts[g]++;
+      if (g === 1) counts[1]++;
+      else if (g === 2) counts[2]++;
+      else if (g === 3) counts[3]++;
+      else if (g === BREAK_GROUP_OVERLAPS) counts[4]++;
     });
     return counts;
   }, [assignments]);
-  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
+  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
 
   // === Roster filtering (Phase 1 + GRAVE Phase 2) ============================
   // Component-level Set for O(1) "is this TM already on the board?" checks.
@@ -3889,9 +3896,8 @@ function AuthedShiftBuilder() {
 
   const cmdActionCycleBreak = React.useCallback(
     (slotKey: string) => {
-      const current = assignments[slotKey]?.breakGroup ?? 0;
-      const next = (current % 3) + 1;
-      setBreakGroupForSlot(slotKey, next as any);
+      const current = (assignments[slotKey]?.breakGroup ?? 0) as BreakGroup;
+      setBreakGroupForSlot(slotKey, nextBreakGroup(current));
     },
     [assignments, setBreakGroupForSlot]
   );
@@ -4007,9 +4013,8 @@ function AuthedShiftBuilder() {
 
   const handleCmdkCycleBreak = React.useCallback(
     (slotKey: string) => {
-      const current = assignments[slotKey]?.breakGroup ?? 0;
-      const next = (current % 3) + 1;
-      setBreakGroupForSlot(slotKey, next as any);
+      const current = (assignments[slotKey]?.breakGroup ?? 0) as BreakGroup;
+      setBreakGroupForSlot(slotKey, nextBreakGroup(current));
     },
     [assignments, setBreakGroupForSlot]
   );
@@ -6341,7 +6346,7 @@ function AuthedShiftBuilder() {
     startDayTransition(() => setSelectedDayIndex(idx));
   }, [selectedDayIndex, startDayTransition]);
 
-  const handleBoardBreakGroupChange = React.useCallback((g: 1 | 2 | 3) => {
+  const handleBoardBreakGroupChange = React.useCallback((g: ActiveBreakGroupFilter) => {
     setBreakGroup(g);
   }, []);
 

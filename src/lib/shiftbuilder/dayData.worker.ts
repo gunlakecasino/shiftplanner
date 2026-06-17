@@ -49,7 +49,7 @@ self.onmessage = (event: MessageEvent) => {
           type: 'PROCESSED_NIGHT',
           payload: {
             assignments: {},
-            breakCounts: { 1: 0, 2: 0, 3: 0 },
+            breakCounts: { 1: 0, 2: 0, 3: 0, 4: 0 },
             waves: [],
           },
         });

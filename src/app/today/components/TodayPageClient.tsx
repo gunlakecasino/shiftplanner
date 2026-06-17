@@ -1,37 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
-import { readTodayOperatorName } from "../lib/todayChangeLog";
+import { useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
+import { clearTodayOperatorName, writeTodayOperatorName } from "../lib/todayChangeLog";
+import { TodayPinGate } from "./TodayPinGate";
+import { TodayLoadingShell } from "./TodayLoadingShell";
 
 import { useTodayBoard } from "../hooks/useTodayBoard";
 import { useTodayScheduleNav } from "../hooks/useTodayScheduleNav";
-import { TodayOperatorGate } from "./TodayOperatorGate";
 import { TodayNav } from "./TodayNav";
 import { TodayArtboard } from "./TodayArtboard";
-import { TODAY_STAGE_INSETS } from "../lib/constants"; // TODAY_NAV_CLEARANCE no longer used after banner removal
+import { TODAY_STAGE_INSETS } from "../lib/constants";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 
-export function TodayPageClient() {
-  const [operatorName, setOperatorName] = useState<string | null>(() => readTodayOperatorName());
+function resolveOperatorName(user: {
+  full_name?: string | null;
+  username?: string | null;
+  email?: string | null;
+}): string {
+  const name = user.full_name?.trim() || user.username?.trim() || user.email?.trim();
+  return name || "Operator";
+}
 
-  if (!operatorName) {
-    return <TodayOperatorGate onReady={setOperatorName} />;
+export function TodayPageClient() {
+  const { isAuthenticated, isLoading, user, logout } = useOpsAuth();
+
+  if (isLoading) {
+    return <TodayLoadingShell label="Loading ops session…" />;
   }
+
+  if (!isAuthenticated || !user) {
+    return <TodayPinGate />;
+  }
+
+  return (
+    <AuthedTodayBoard
+      user={user}
+      onLogout={() => {
+        clearTodayOperatorName();
+        logout();
+      }}
+    />
+  );
+}
+
+function AuthedTodayBoard({
+  user,
+  onLogout,
+}: {
+  user: OpsUser;
+  onLogout: () => void;
+}) {
+  const operatorName = resolveOperatorName(user);
+
+  useEffect(() => {
+    writeTodayOperatorName(operatorName);
+  }, [operatorName]);
 
   return (
     <TodayBoardShell
       operatorName={operatorName}
-      onChangeOperator={() => setOperatorName(null)}
+      opsUserId={user.id}
+      onChangeOperator={onLogout}
     />
   );
 }
 
 function TodayBoardShell({
   operatorName,
+  opsUserId,
   onChangeOperator,
 }: {
   operatorName: string;
+  opsUserId: string;
   onChangeOperator: () => void;
 }) {
   const nav = useTodayScheduleNav();
@@ -39,6 +81,7 @@ function TodayBoardShell({
     selectedDay: nav.selectedDay,
     selectedDayIndex: nav.selectedDayIndex,
     operatorName,
+    opsUserId,
     currentView: nav.currentView,
     setCurrentView: nav.setCurrentView,
   });
@@ -52,6 +95,15 @@ function TodayBoardShell({
       }}
     >
       <Toaster position="top-center" richColors closeButton />
+      {board.isScheduleReadOnly ? (
+        <div
+          className="pointer-events-none fixed left-1/2 z-30 -translate-x-1/2 rounded-full border border-amber-200/80 bg-amber-50/95 px-3 py-1 text-[11px] font-medium text-amber-900 shadow-sm backdrop-blur-sm"
+          style={{ top: TODAY_STAGE_INSETS.top - 28 }}
+          role="status"
+        >
+          View only — assignment edits are disabled for your role
+        </div>
+      ) : null}
       <TodayNav
         navStrip={nav.navStrip}
         selectedNavId={nav.selectedNavId}
@@ -70,10 +122,6 @@ function TodayBoardShell({
         onPrint={board.handlePrint}
         isPrinting={board.isPrinting}
       />
-
-      {/* scheduleBanner is intentionally null in the current /today implementation.
-          The conditional and the value in useTodayBoard are kept for future parity
-          with shiftbuilder banners (e.g. realtime status). No visual output today. */}
 
       {board.isScheduleHidden ? (
         <TodayUnpublishedPlaceholder

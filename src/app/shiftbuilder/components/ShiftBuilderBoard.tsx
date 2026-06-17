@@ -14,6 +14,11 @@ import {
   getRRAccent,
   getAuxAccent,
   ZONE_VISUAL_ORDER,
+  BREAK_GROUP_OVERLAPS,
+  BREAK_GROUP_FILTERS,
+  breakGroupLabel,
+  shouldShowSlotForBreakFilter,
+  type ActiveBreakGroupFilter,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
@@ -49,7 +54,7 @@ function slotShowsFilled(
 export interface ShiftBuilderBoardProps {
   // Pre-processed wave data from worker (3.2) – used in breaks view for performance
   processedWaves?: any[];
-  processedBreakCounts?: { 1: number; 2: number; 3: number }; // from worker (3.4/3.2 hardening)
+  processedBreakCounts?: { 1: number; 2: number; 3: number; 4: number }; // from worker (3.4/3.2 hardening)
   // Core day data (from useCurrentNight core + secondary)
   assignments?: Record<string, any>; // optional — prefer store selector (3.4 narrow subscription)
   nightId?: string | null;
@@ -70,7 +75,7 @@ export interface ShiftBuilderBoardProps {
   selectedDay: DayDef;
   selectedDayIndex: number;
   currentView: "deployment" | "breaks";
-  breakGroup: 1 | 2 | 3;
+  breakGroup: ActiveBreakGroupFilter;
   isDark: boolean;
   isDraftMode: boolean;
   draftAssignments?: Record<string, any>; // optional — prefer store selector (3.4)
@@ -80,7 +85,7 @@ export interface ShiftBuilderBoardProps {
 
   // Stable callbacks (memoized in parent) — loose to match the many call sites
   onDayPillClick?: (idx: number) => void;
-  onBreakGroupChange?: (g: 1 | 2 | 3) => void;
+  onBreakGroupChange?: (g: ActiveBreakGroupFilter) => void;
   onCardClick?: any;
   onGenderClick?: (k: string, el?: HTMLElement, e?: React.MouseEvent) => void;
   onRemoveTask?: any;
@@ -134,6 +139,9 @@ export interface ShiftBuilderBoardProps {
 
   /** When false, PlacementPad renders without xAI analyst/matrix (e.g. /today). */
   placementPadInsightsEnabled?: boolean;
+
+  /** Footer brand line (default: Weekly Zone Deployment Book). */
+  sheetBrandTitle?: string;
 
   /** When true, TM picker rows are draggable onto slots (requires parent DndContext). */
   enableTmDragAssign?: boolean;
@@ -249,6 +257,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onSetAuxRole,
   onSetAuxLabel,
   placementPadInsightsEnabled = true,
+  sheetBrandTitle = "Weekly Zone Deployment Book",
   enableTmDragAssign = false,
   focusedTmId,
   showWeekHealthBar = false,
@@ -360,18 +369,21 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // === Local derived (was in giant parent; now scoped to board only) ===
   // Always call the hook (Rules of Hooks). Prefer worker value when available.
   const computedBreakCounts = React.useMemo(() => {
-    const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+    const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
     Object.values(assignments).forEach((a: any) => {
       if (!a?.tmId && !a?.tmName) return;
-      const g = (a.breakGroup ?? 0) as 1 | 2 | 3;
-      if (g === 1 || g === 2 || g === 3) counts[g]++;
+      const g = a.breakGroup ?? 0;
+      if (g === 1) counts[1]++;
+      else if (g === 2) counts[2]++;
+      else if (g === 3) counts[3]++;
+      else if (g === BREAK_GROUP_OVERLAPS) counts[4]++;
     });
     return counts;
   }, [assignments]);
 
   const breakCounts = processedBreakCounts ?? computedBreakCounts;
 
-  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
+  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
 
   const padDisplayAssignments = padAssignments ?? displayAssignments;
 
@@ -625,12 +637,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   ]);
 
   // Helper used only inside breaks view wave rendering
-  const slotRefType = (ref: string | null): "zone" | "rr" | "aux" => {
+  const slotRefType = (ref: string | null): "zone" | "rr" | "aux" | "overlap" => {
     if (!ref) return "zone";
+    if (ref.startsWith("OL-")) return "overlap";
     if (ref.startsWith("MRR") || ref.startsWith("WRR")) return "rr";
     if (/^Z\d+$/.test(ref)) return "zone";
     return "aux";
   };
+
+  const breakFilterActive =
+    !isPrintPreview && currentView === "deployment" && breakGroup != null;
 
   // Wrapped handlers so clicks on cards (or card sub-parts) set the unilateral marker pad.
   // IMPORTANT: We no longer auto-delegate to the parent onCardClick/onGenderClick here.
@@ -708,6 +724,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   };
 
   const accentFor = (a: any): string => {
+    if (a.type === "overlap") return "#B45309";
     if (a.type === "zone") return getZoneColor(a.slotKey);
     if (a.type === "rr") {
       const num = parseInt((a.slotKey || "").replace(/\D/g, ""), 10) || 1;
@@ -717,6 +734,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   };
 
   const chipLabel = (a: any): string => {
+    if (a.type === "overlap") {
+      return (a.slotKey || "OL").replace(/^OL-/, "");
+    }
     if (a.type === "zone") {
       return `ZONE ${(a.slotKey || "").replace(/\D/g, "")}`;
     }
@@ -829,14 +849,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="flex items-center gap-1.5 mt-1.5">
                 <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>BREAKS</span>
                 <div className="flex gap-[2px]">
-                  {[1, 2, 3].map((g) => (
+                  {([1, 2, 3, 4] as const).map((g) => (
                     <div
                       key={g}
-                      className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
+                      className={`${breakCounts[g] >= 10 ? "min-w-[18px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums`}
                       style={{ background: isDark ? "#E5E5E7" : "#1C1C1E", color: isDark ? "#1C1C1E" : "#fff", fontFamily: "var(--font-atkinson)" }}
-                      title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
+                      title={`Break ${breakGroupLabel(g)}: ${breakCounts[g]} TM${breakCounts[g] === 1 ? "" : "s"}`}
                     >
-                      {breakCounts[g as 1 | 2 | 3] || ""}
+                      {breakCounts[g] > 0 ? breakCounts[g] : ""}
                     </div>
                   ))}
                 </div>
@@ -847,14 +867,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>IN ROTATION</span>
                 <span className="text-[8.5px] font-bold tracking-[1px] ml-1.5" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>BREAKS</span>
                 <div className="flex gap-[2px]">
-                  {[1, 2, 3].map((g) => (
+                  {([1, 2, 3, 4] as const).map((g) => (
                     <div
                       key={g}
-                      className="w-[14px] h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums"
+                      className={`${breakCounts[g] >= 10 ? "min-w-[18px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums`}
                       style={{ background: isDark ? "#E5E5E7" : "#1C1C1E", color: isDark ? "#1C1C1E" : "#fff", fontFamily: "var(--font-atkinson)" }}
-                      title={`Break ${g}: ${breakCounts[g as 1 | 2 | 3]} TM${breakCounts[g as 1 | 2 | 3] === 1 ? "" : "s"}`}
+                      title={`Break ${breakGroupLabel(g)}: ${breakCounts[g]} TM${breakCounts[g] === 1 ? "" : "s"}`}
                     >
-                      {breakCounts[g as 1 | 2 | 3] || ""}
+                      {breakCounts[g] > 0 ? breakCounts[g] : ""}
                     </div>
                   ))}
                 </div>
@@ -924,21 +944,21 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             <div className="flex items-center gap-1.5">
               <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>GROUP</span>
               <div className="flex gap-[3px]">
-                {[1, 2, 3].map((g) => {
+                {BREAK_GROUP_FILTERS.map((g) => {
                   const isActive = breakGroup === g;
                   return (
                     <div
                       key={g}
-                      onClick={() => onBreakGroupChange?.(g as 1 | 2 | 3)}
-                      className="min-w-[15px] h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px]"
+                      onClick={() => onBreakGroupChange?.(isActive ? null : g)}
+                      className={`${g === BREAK_GROUP_OVERLAPS ? "min-w-[18px]" : "min-w-[15px]"} h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px] cursor-pointer`}
                       style={{
                         background: isActive ? "#1C1C1E" : "#E5E5E7",
                         color: isActive ? "#fff" : "#6B7280",
                         fontFamily: "var(--font-atkinson)",
                       }}
-                      title={`Break Group ${g}`}
+                      title={isActive ? `Clear filter — show full board` : `Filter board — Break ${breakGroupLabel(g)}`}
                     >
-                      {g}
+                      {breakGroupLabel(g)}
                     </div>
                   );
                 })}
@@ -985,6 +1005,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const idx = visualIdx; // visual position for entrance stagger in the laid-out grid
                   const accent = getZoneColor(key);
                   const a = displayAssignments[key] || {};
+                  if (
+                    breakFilterActive &&
+                    !shouldShowSlotForBreakFilter(key, a, breakGroup)
+                  ) {
+                    return null;
+                  }
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
@@ -1060,6 +1086,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const mKey = `MRR${def.num}`;
                   const wKey = `WRR${def.num}`;
                   const rrHostId = `rr-${def.num}`;
+                  if (
+                    breakFilterActive &&
+                    !shouldShowSlotForBreakFilter(mKey, displayAssignments[mKey], breakGroup) &&
+                    !shouldShowSlotForBreakFilter(wKey, displayAssignments[wKey], breakGroup)
+                  ) {
+                    return null;
+                  }
 
                   const cardContent = (
                     <>
@@ -1177,6 +1210,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       const key = def.key;
                       const accent = getAuxAccent(key, def.role);
                       const a = displayAssignments[key] || {};
+                      if (
+                        breakFilterActive &&
+                        !shouldShowSlotForBreakFilter(key, a, breakGroup)
+                      ) {
+                        return null;
+                      }
                       const prov = a.provenance || {};
                       const hasProv = prov.rationale || prov.fairnessSignals;
 
@@ -1245,6 +1284,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     const key = def.key;
                     const accent = getAuxAccent(key, def.role);
                     const a = displayAssignments[key] || {};
+                    if (
+                      breakFilterActive &&
+                      !shouldShowSlotForBreakFilter(key, a, breakGroup)
+                    ) {
+                      return null;
+                    }
                     const prov = a.provenance || {};
                     const hasProv = prov.rationale || prov.fairnessSignals;
 
@@ -1290,12 +1335,98 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
 
             </section>
+
+            {/* OVERLAPS — visible on deployment when GROUP filter is OL */}
+            {breakGroup === BREAK_GROUP_OVERLAPS && !isPrintPreview ? (
+              <section className="sb-builder-section pt-1.5 overlaps-section" data-print-target="overlaps">
+                <div className="sheet-section-header">
+                  <span className="label">OVERLAPS</span>
+                  <div className="divider" />
+                </div>
+                <div className="space-y-2">
+                  {[
+                    {
+                      time: "11p – 1a (swings)",
+                      key: "PM" as const,
+                      dayName: selectedDay.name,
+                      dateNum: selectedDay.dateNum,
+                      headerColor: selectedDay.color,
+                    },
+                    {
+                      time: "5a – 7a (days)",
+                      key: "AM" as const,
+                      dayName: amOverlapDayName,
+                      dateNum: amOverlapDateNum,
+                      headerColor: nextDayColor,
+                    },
+                  ].map((row) => (
+                    <div key={row.key}>
+                      <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+                        <div
+                          className="font-black tabular-nums leading-none"
+                          style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
+                        >
+                          {row.dateNum}
+                        </div>
+                        <div
+                          className="font-bold tracking-[-0.4px] leading-none"
+                          style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
+                        >
+                          {row.dayName}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
+                          {row.time}
+                        </div>
+                        <div className={overlapGridClass}>
+                          {Array.from({ length: 6 }).map((_, i) => {
+                            const slotKey = `OL-${row.key}-${i}`;
+                            return (
+                              <div
+                                key={i}
+                                className={gridHostClass}
+                                data-slot-key={slotKey}
+                                data-placement-host={slotKey}
+                              >
+                                <OverlapSlot
+                                  slotKey={slotKey}
+                                  assignments={displayAssignments}
+                                  selectedTasks={selectedTasks}
+                                  setBreakGroupForSlot={setBreakGroupForSlot}
+                                  onCardClick={handleCardClickForPad}
+                                  loading={loadingAssignments}
+                                  isDraftMode={isDraftMode}
+                                  draftInfo={draftAssignments[slotKey]}
+                                  onRemoveTask={onRemoveTask}
+                                  onSetTaskColor={onSetTaskColor}
+                                  onEditTask={onEditTask}
+                                  onOpenTaskTextEdit={handleOpenTaskTextEdit}
+                                  isLocked={isCurrentNightLocked}
+                                  onLiveAssign={onLiveAssign}
+                                  onLiveUnassign={onLiveUnassign}
+                                  fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
+                                  showDigitalAssists={showDigitalAssists}
+                                  focusedTmId={focusedTmId}
+                                  conflictingTms={conflictingTms}
+                                  tmConflictSlots={tmConflictSlots}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </>
         ) : (
           <>
-            {/* 3 Break Wave Columns — Golden tight layout */}
-            <div className="grid grid-cols-3 gap-1 mb-1.5">
-              {[1, 2, 3].map((wave) => {
+            {/* 4 Break Wave Columns — waves 1–3 + OL */}
+            <div className="grid grid-cols-4 gap-1 mb-1.5">
+              {([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
                 // Always derive wave membership from the live Zustand assignments.
                 // This is the exact same data source the BreakBadge pills read on the
                 // deployment view. Pill taps via setBreakGroupForSlot mutate the store
@@ -1316,8 +1447,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   .filter(Boolean) as any[];
 
                 const count = waveAssignments.length;
+                const isOlWave = wave === BREAK_GROUP_OVERLAPS;
                 const waveColor =
-                  wave === 1 ? "#1a2332" : wave === 2 ? "#5a6b7d" : "#c8d3dc";
+                  wave === 1
+                    ? "#1a2332"
+                    : wave === 2
+                      ? "#5a6b7d"
+                      : isOlWave
+                        ? "#B45309"
+                        : "#c8d3dc";
 
                 return (
                   <div
@@ -1328,27 +1466,38 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4] dark:border-[#2C2C2E]">
                       <div
                         className="font-black tabular-nums leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
-                        style={{ fontSize: 42, letterSpacing: "-2px", fontFamily: "var(--font-atkinson)" }}
+                        style={{
+                          fontSize: isOlWave ? 28 : 42,
+                          letterSpacing: isOlWave ? "-1px" : "-2px",
+                          fontFamily: "var(--font-atkinson)",
+                        }}
                       >
-                        {wave}
+                        {breakGroupLabel(wave)}
                       </div>
                       <div className="-mb-0.5">
                         <div
                           className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
                           style={{ fontSize: 13, fontFamily: "var(--font-atkinson)" }}
                         >
-                          Break {wave}
+                          {isOlWave ? "Overlaps" : `Break ${wave}`}
                         </div>
                         <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5">{count} people</div>
                       </div>
                     </div>
 
                     <div className="px-2 pb-1 pt-1 space-y-1 text-[9px]">
-                      {["zone", "rr", "aux"].map((cat) => {
+                      {(["zone", "rr", "aux", "overlap"] as const).map((cat) => {
                         const items = waveAssignments.filter((a: any) => (a as any).type === cat);
                         if (!items.length) return null;
 
-                        const label = cat === "zone" ? "ZONES" : cat === "rr" ? "RESTROOMS" : "AUXILIARY";
+                        const label =
+                          cat === "zone"
+                            ? "ZONES"
+                            : cat === "rr"
+                              ? "RESTROOMS"
+                              : cat === "aux"
+                                ? "AUXILIARY"
+                                : "OVERLAPS";
 
                         return (
                           <div key={cat}>
@@ -1454,6 +1603,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 slotKey={slotKey}
                                 assignments={displayAssignments}
                                 selectedTasks={selectedTasks}
+                                setBreakGroupForSlot={setBreakGroupForSlot}
                                 onCardClick={handleCardClickForPad}
                                 loading={loadingAssignments}
                                 isDraftMode={isDraftMode}
@@ -1532,7 +1682,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             SBS
           </span>
           <span className="mx-1 opacity-60">©</span>
-          <span style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}>Weekly Zone Deployment Book</span>
+          <span style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}>{sheetBrandTitle}</span>
           <span className="mx-1 opacity-40">—</span>
           <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
             GRAVES

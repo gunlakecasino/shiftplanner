@@ -254,12 +254,14 @@ function displayTmName(name: string, layout: Pick<WeeklyLayout, "nameMax" | "use
 
 function breakBadge(group?: number): string {
   if (!group || group <= 0) return "";
-  const colors = ["", "#34C759", "#FF9F0A", "#5856D6"];
+  const colors = ["", "#34C759", "#FF9F0A", "#5856D6", "#0EA5E9"];
+  const labels = ["", "1", "2", "3", "OL"];
   const bg = colors[group] ?? "#8E8E93";
+  const label = labels[group] ?? String(group);
   return (
     `<span style="display:inline-flex;align-items:center;justify-content:center;` +
     `min-width:14px;height:14px;padding:0 3px;border-radius:3px;font-size:7.5px;font-weight:800;` +
-    `color:#fff;background:${bg};margin-left:4px;flex-shrink:0;">${group}</span>`
+    `color:#fff;background:${bg};margin-left:4px;flex-shrink:0;">${label}</span>`
   );
 }
 

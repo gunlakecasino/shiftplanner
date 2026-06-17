@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import type { BreakGroup } from "@/lib/shiftbuilder/constants";
+import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { useAssignments, useAuxDefs } from "../store/useShiftBuilderStore";
 import { shiftBuilderVersionLabel } from "../version";
 import { buildLivePrintDaySnapshot } from "./buildLivePrintDaySnapshot";
@@ -23,7 +23,7 @@ export type LivePrintPreviewArtboardProps = {
   amOverlapDayName: string;
   amOverlapDateNum: number;
   nextDayColor: string;
-  breakGroup: BreakGroup;
+  breakGroup: ActiveBreakGroupFilter;
   weekDayDefs: DayDef[];
 };
 
@@ -46,8 +46,10 @@ export function LivePrintPreviewArtboard({
   const auxDefs = useAuxDefs() ?? [];
 
   const view: PrintPreviewView = currentView === "breaks" ? "breaks" : "deployment";
-  const activeBreakGroup: 1 | 2 | 3 =
-    breakGroup === 1 || breakGroup === 2 || breakGroup === 3 ? breakGroup : 1;
+  const activeBreakGroup: 1 | 2 | 3 | 4 =
+    breakGroup === 1 || breakGroup === 2 || breakGroup === 3 || breakGroup === 4
+      ? breakGroup
+      : 1;
 
   const snapshot = useMemo(
     () =>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { useTodayScheduleNav } from "@/app/today/hooks/useTodayScheduleNav";
 import { TODAY_NAV_CLEARANCE } from "@/app/today/lib/constants";
-import { TodayNav } from "@/app/today/components/TodayNav";
+import { LogsNav } from "./LogsNav";
 import { useDeploymentLogs } from "../hooks/useDeploymentLogs";
 import { LogsTimeline } from "./LogsTimeline";
 
@@ -29,8 +29,7 @@ export function LogsPageClient() {
         fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
       }}
     >
-      <TodayNav
-        variant="logs"
+      <LogsNav
         navStrip={nav.navStrip}
         selectedNavId={nav.selectedNavId}
         selectedDayDate={nav.selectedDay.date}

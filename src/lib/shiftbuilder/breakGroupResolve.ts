@@ -9,7 +9,9 @@
 import { dbToUi } from "./slot-keys";
 import type { SlotDefault } from "./data";
 
-export type BreakGroupValue = 0 | 1 | 2 | 3;
+import { BREAK_GROUP_OVERLAPS } from "./constants";
+
+export type BreakGroupValue = 0 | 1 | 2 | 3 | typeof BREAK_GROUP_OVERLAPS;
 
 export type SlotDefaultBreakMap = Map<string, BreakGroupValue>;
 
@@ -50,7 +52,9 @@ export function slotDefaultBreakMapFromRecord(
   const map = new Map<string, BreakGroupValue>();
   if (!rec) return map;
   for (const [k, v] of Object.entries(rec)) {
-    if (v === 0 || v === 1 || v === 2 || v === 3) map.set(k, v);
+    if (v === 0 || v === 1 || v === 2 || v === 3 || v === BREAK_GROUP_OVERLAPS) {
+      map.set(k, v);
+    }
   }
   return map;
 }
@@ -67,7 +71,9 @@ export function resolveEffectiveBreakGroup(
 ): BreakGroupValue {
   if (storedBreakGroup !== null && storedBreakGroup !== undefined) {
     const n = Number(storedBreakGroup);
-    if (n === 0 || n === 1 || n === 2 || n === 3) return n as BreakGroupValue;
+    if (n === 0 || n === 1 || n === 2 || n === 3 || n === BREAK_GROUP_OVERLAPS) {
+      return n as BreakGroupValue;
+    }
   }
   const def = defaults.get(slotDefaultLookupKey(dbSlotKey, rrSide));
   if (def !== undefined) return def;

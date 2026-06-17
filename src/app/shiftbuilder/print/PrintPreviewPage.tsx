@@ -1,5 +1,5 @@
 import React from "react";
-import { ZONE_DEFS, RR_DEFS } from "@/lib/shiftbuilder/constants";
+import { ZONE_DEFS, RR_DEFS, BREAK_GROUP_OVERLAPS, breakGroupLabel } from "@/lib/shiftbuilder/constants";
 import type { PrintPreviewPageProps } from "./printPreviewTypes";
 import {
   GoldenAuxCard,
@@ -36,7 +36,7 @@ export function PrintPreviewPage({
   activeBreakGroup = 1,
 }: PrintPreviewPageProps) {
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
-  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3];
+  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
 
   if (view === "breaks") {
     const waves = buildBreaksWaves(snapshot);
@@ -53,10 +53,17 @@ export function PrintPreviewPage({
         />
 
         <div className="flex flex-col w-full flex-1 min-h-0 overflow-hidden">
-          <div className="grid grid-cols-3 gap-1 mb-1.5">
+          <div className="grid grid-cols-4 gap-1 mb-1.5">
             {waves.map((w) => {
+              const isOlWave = w.wave === BREAK_GROUP_OVERLAPS;
               const waveColor =
-                w.wave === 1 ? "#1a2332" : w.wave === 2 ? "#5a6b7d" : "#c8d3dc";
+                w.wave === 1
+                  ? "#1a2332"
+                  : w.wave === 2
+                    ? "#5a6b7d"
+                    : isOlWave
+                      ? "#0EA5E9"
+                      : "#c8d3dc";
               const byCat = (cat: string) => w.people.filter((p) => p.category === cat);
               return (
                 <div
@@ -73,14 +80,14 @@ export function PrintPreviewPage({
                         fontFamily: "var(--font-atkinson)",
                       }}
                     >
-                      {w.wave}
+                      {breakGroupLabel(w.wave)}
                     </div>
                     <div className="-mb-0.5">
                       <div
                         className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E]"
                         style={{ fontSize: 13, fontFamily: "var(--font-atkinson)" }}
                       >
-                        Break {w.wave}
+                        {isOlWave ? "Overlaps" : `Break ${w.wave}`}
                       </div>
                       <div className="text-[10px] text-[#6B7280] mt-0.5">
                         {w.people.length} people
@@ -88,11 +95,17 @@ export function PrintPreviewPage({
                     </div>
                   </div>
                   <div className="px-2 pb-1 pt-1 space-y-1 text-[9px]">
-                    {(["zone", "rr", "aux"] as const).map((cat) => {
+                    {(["zone", "rr", "aux", "overlap"] as const).map((cat) => {
                       const items = byCat(cat);
                       if (!items.length) return null;
                       const label =
-                        cat === "zone" ? "ZONES" : cat === "rr" ? "RESTROOMS" : "AUXILIARY";
+                        cat === "zone"
+                          ? "ZONES"
+                          : cat === "rr"
+                            ? "RESTROOMS"
+                            : cat === "overlap"
+                              ? "OVERLAPS"
+                              : "AUXILIARY";
                       return (
                         <div key={cat}>
                           <div className="flex items-center gap-1 mb-1">

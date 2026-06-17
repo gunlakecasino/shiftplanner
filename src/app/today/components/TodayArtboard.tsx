@@ -2,12 +2,13 @@
 
 import ShiftBuilderBoard from "@/app/shiftbuilder/components/ShiftBuilderBoard";
 import InteractiveStage from "@/app/shiftbuilder/components/InteractiveStage";
-import { BuilderLoadingShell } from "@/app/shiftbuilder/components/builderPrimitives";
+import { TodayLoadingShell } from "./TodayLoadingShell";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import type { TodayActiveDrag } from "../hooks/useTodayDragDrop";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
+import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { TODAY_STAGE_INSETS } from "../lib/constants";
 import type { TodayBoardView } from "../hooks/useTodayScheduleNav";
 
@@ -23,7 +24,7 @@ type TodayArtboardProps = {
   naturalWidth: number;
   naturalHeight: number;
   selectedSlotKey: string | null;
-  breakGroup: 1 | 2 | 3;
+  breakGroup: ActiveBreakGroupFilter;
   isCurrentNightLocked: boolean;
   selectedTasks: Record<string, NightSlotTask[]>;
   effectiveCardBorders: Record<string, string>;
@@ -37,8 +38,8 @@ type TodayArtboardProps = {
   onAssign: (slotKey: string, tmId: string, tmName: string) => void;
   onClearSlot: (slotKey: string) => void;
   onToggleLock: (slotKey: string) => void;
-  setBreakGroupForSlot: (slotKey: string, group: 0 | 1 | 2 | 3) => void;
-  onBreakGroupChange: (g: 1 | 2 | 3) => void;
+  setBreakGroupForSlot: (slotKey: string, group: 0 | 1 | 2 | 3 | 4) => void | Promise<void>;
+  onBreakGroupChange: (g: ActiveBreakGroupFilter) => void;
   onAddTask: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask: (slotKey: string, taskLabel: string) => void;
   onAssignSweeper: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
@@ -98,7 +99,7 @@ export function TodayArtboard(props: TodayArtboardProps) {
       }}
     >
       {boardColdLoading ? (
-        <BuilderLoadingShell label="Loading schedule…" />
+        <TodayLoadingShell label="Loading schedule…" compact />
       ) : (
         <div
           className="relative flex-shrink-0"
@@ -153,6 +154,7 @@ export function TodayArtboard(props: TodayArtboardProps) {
               onAddCoverage={onAddCoverage}
               members={effectiveRealRoster}
               isPrintPreview
+              sheetBrandTitle="Graves Deployment Board"
               placementPadInsightsEnabled={false}
               enableTmDragAssign
               artboardScale={scale}

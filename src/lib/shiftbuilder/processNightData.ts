@@ -12,6 +12,7 @@
  * Goal: Make the post-query CPU work on day arrival as cheap and offloadable as possible.
  */
 
+import { BREAK_GROUP_OVERLAPS } from "./constants";
 import type { AuxDef } from "./placement";
 import {
   enrichAssignmentsWithBreakGroups,
@@ -37,6 +38,7 @@ export interface BreakCounts {
   1: number;
   2: number;
   3: number;
+  4: number;
 }
 
 /**
@@ -61,18 +63,21 @@ export function buildAssignmentsRecord(
  * Moving the source of truth here lets a worker pre-compute it.
  */
 export function computeBreakCounts(assignments: Record<string, any> | undefined | null): BreakCounts {
-  const counts: BreakCounts = { 1: 0, 2: 0, 3: 0 };
+  const counts: BreakCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
   if (!assignments) return counts;
   Object.values(assignments).forEach((a: any) => {
     if (!a?.tmId && !a?.tmName) return;
-    const g = (a.breakGroup ?? 0) as 1 | 2 | 3;
-    if (g === 1 || g === 2 || g === 3) counts[g]++;
+    const g = a.breakGroup ?? 0;
+    if (g === 1) counts[1]++;
+    else if (g === 2) counts[2]++;
+    else if (g === 3) counts[3]++;
+    else if (g === BREAK_GROUP_OVERLAPS) counts[4]++;
   });
   return counts;
 }
 
 export function computeInRotationCount(counts: BreakCounts): number {
-  return counts[1] + counts[2] + counts[3];
+  return counts[1] + counts[2] + counts[3] + counts[4];
 }
 
 /**
@@ -82,13 +87,13 @@ export function computeInRotationCount(counts: BreakCounts): number {
  */
 export interface WaveItem {
   slotKey: string;
-  type: "zone" | "rr" | "aux";
+  type: "zone" | "rr" | "aux" | "overlap";
   tmName: string;
   notPlaced?: boolean;
 }
 
 export interface WaveColumn {
-  wave: 1 | 2 | 3;
+  wave: 1 | 2 | 3 | typeof BREAK_GROUP_OVERLAPS;
   count: number;
   items: WaveItem[];
 }
@@ -98,14 +103,15 @@ export function prepareBreaksWaveData(
   auxDefs: AuxDef[] = []
 ): WaveColumn[] {
   if (!assignments) return [];
-  const slotRefType = (ref: string | null): "zone" | "rr" | "aux" => {
+  const slotRefType = (ref: string | null): "zone" | "rr" | "aux" | "overlap" => {
     if (!ref) return "zone";
+    if (ref.startsWith("OL-")) return "overlap";
     if (ref.startsWith("MRR") || ref.startsWith("WRR")) return "rr";
     if (/^Z\d+$/.test(ref)) return "zone";
     return "aux";
   };
 
-  return [1, 2, 3].map((wave) => {
+  return ([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
     const items = Object.entries(assignments)
       .map(([slotKey, a]: [string, any]) => {
         if (!a?.tmId || a.breakGroup !== wave) return null;

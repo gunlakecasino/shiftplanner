@@ -22,7 +22,7 @@ export type PrintPlanningCardModel = {
   tasks: PrintTaskLine[];
   coverageLabel?: string | null;
   coverageColor?: string | null;
-  breakGroup?: 0 | 1 | 2 | 3;
+  breakGroup?: 0 | 1 | 2 | 3 | 4;
   empty?: boolean;
   blankAux?: boolean;
   sideLabel?: string;
@@ -35,11 +35,11 @@ export type PrintBreaksPerson = {
   chipLabel: string;
   accentColor: string;
   sideLetter?: string;
-  category: "zone" | "rr" | "aux";
+  category: "zone" | "rr" | "aux" | "overlap";
 };
 
 export type PrintBreaksWave = {
-  wave: 1 | 2 | 3;
+  wave: 1 | 2 | 3 | 4;
   people: PrintBreaksPerson[];
 };
 
@@ -61,7 +61,7 @@ export type PrintDaySnapshot = {
   amOverlapDayName: string;
   amOverlapDateNum: number;
   nextDayColor: string;
-  breakCounts: Record<1 | 2 | 3, number>;
+  breakCounts: Record<1 | 2 | 3 | 4, number>;
 };
 
 export type PrintPreviewPageProps = {
@@ -70,5 +70,5 @@ export type PrintPreviewPageProps = {
   pageLabel: string;
   versionLabel: string;
   weekDayDefs: DayDef[];
-  activeBreakGroup?: 1 | 2 | 3;
+  activeBreakGroup?: 1 | 2 | 3 | 4;
 };

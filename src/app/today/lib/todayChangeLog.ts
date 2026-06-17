@@ -20,6 +20,8 @@ export type DeploymentChangeInput = {
   nightId: string;
   nightDate: string;
   operatorName: string;
+  /** Authenticated ops user id — validated server-side when present. */
+  opsUserId?: string;
   action: DeploymentChangeAction;
   slotKey?: string;
   slotType?: string | null;
@@ -36,7 +38,7 @@ export type TodayAssignmentChangeInput = DeploymentChangeInput;
 
 const META_SLOT_KEY = "__meta__";
 
-/** Fire-and-forget audit log for /today and Shift Builder edits. Never blocks the UI. */
+/** Fire-and-forget audit log for deployment board edits. Never blocks the UI. */
 export function logDeploymentChange(input: DeploymentChangeInput): void {
   const slotKey = input.slotKey?.trim() || META_SLOT_KEY;
   void fetch("/api/today/log-change", {

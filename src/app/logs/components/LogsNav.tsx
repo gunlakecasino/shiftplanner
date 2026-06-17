@@ -5,19 +5,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { cva } from "class-variance-authority";
-import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coffee, LayoutGrid, Printer } from "lucide-react";
+
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import {
   currentShiftDate,
-  formatLocalDateISO,
   MONTH_LONG,
   sameDay,
-} from "@/lib/shiftbuilder/dateUtils"; // addDays removed after calendar month nav simplification
+} from "@/lib/shiftbuilder/dateUtils";
 import { DEPLOYMENT_CANVAS_MAX_WIDTH_PX } from "@/lib/shiftbuilder/canvasLayout";
-import { clearTodayOperatorName } from "../lib/todayChangeLog";
-import type { NavDayStripItem, TodayBoardView } from "../hooks/useTodayScheduleNav";
+import type { NavDayStripItem } from "@/app/today/hooks/useTodayScheduleNav";
 
 const NAV_ICON = "h-3.5 w-3.5 shrink-0 opacity-80";
 const ACCENT = "#C13A14";
@@ -82,19 +81,7 @@ function NavToolButton({
   );
 }
 
-async function fetchPublishedDates(from: string, to: string): Promise<Set<string>> {
-  const res = await fetch(
-    `/api/today/published-dates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "same-origin", cache: "no-store" },
-  );
-  if (!res.ok) {
-    throw new Error(`Published dates unavailable (${res.status})`);
-  }
-  const json = (await res.json()) as { dates?: string[] };
-  return new Set(json.dates ?? []);
-}
-
-export type TodayNavProps = {
+export type LogsNavProps = {
   navStrip: NavDayStripItem[];
   selectedNavId: number;
   selectedDayDate: Date;
@@ -104,17 +91,12 @@ export type TodayNavProps = {
   onNextWeek: () => void;
   onToday: () => void;
   onJumpToDate: (date: Date) => void;
-  operatorName?: string;
-  onChangeOperator?: () => void;
-  currentView?: TodayBoardView;
-  onViewChange?: (view: TodayBoardView) => void;
-  /** Show print for tonight or published schedules only. */
-  showPrint?: boolean;
-  onPrint?: () => void;
-  isPrinting?: boolean;
+  logOperators?: string[];
+  selectedLogOperator?: string | null;
+  onLogOperatorChange?: (operator: string | null) => void;
 };
 
-export function TodayNav({
+export function LogsNav({
   navStrip,
   selectedNavId,
   selectedDayDate,
@@ -124,14 +106,10 @@ export function TodayNav({
   onNextWeek,
   onToday,
   onJumpToDate,
-  operatorName = "",
-  onChangeOperator,
-  currentView = "deployment",
-  onViewChange,
-  showPrint = false,
-  onPrint,
-  isPrinting = false,
-}: TodayNavProps) {
+  logOperators = [],
+  selectedLogOperator = null,
+  onLogOperatorChange,
+}: LogsNavProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState(() => new Date(selectedDayDate));
   const monthBtnRef = useRef<HTMLButtonElement>(null);
@@ -168,7 +146,7 @@ export function TodayNav({
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
       if (monthBtnRef.current?.contains(target)) return;
-      const pop = document.getElementById("today-nav-calendar-popover");
+      const pop = document.getElementById("logs-nav-calendar-popover");
       if (pop?.contains(target)) return;
       closeCalendar();
     };
@@ -182,27 +160,6 @@ export function TodayNav({
       window.removeEventListener("keydown", onKey);
     };
   }, [calendarOpen, closeCalendar]); // include stable closeCalendar to satisfy exhaustive-deps
-
-  const monthRange = React.useMemo(() => {
-    const year = calendarView.getFullYear();
-    const month = calendarView.getMonth();
-    const from = formatLocalDateISO(new Date(year, month, 1));
-    const to = formatLocalDateISO(new Date(year, month + 1, 0));
-    return { from, to };
-  }, [calendarView]);
-
-  const {
-    data: publishedDates,
-    isError: publishedDatesError,
-    isFetching: publishedDatesFetching,
-    refetch: refetchPublishedDates,
-  } = useQuery({
-    queryKey: ["todayPublishedDates", monthRange.from, monthRange.to],
-    queryFn: () => fetchPublishedDates(monthRange.from, monthRange.to),
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-    enabled: calendarOpen,
-  });
 
   // Note: glass appearance is primarily provided by navVariants() cva (glass variant).
   // We only need an inline style here for the elevated z-index on the fixed nav.
@@ -242,7 +199,7 @@ export function TodayNav({
           boxSizing: "border-box",
           zIndex: 40,
         }}
-        aria-label="Schedule navigation"
+        aria-label="Change log date navigation"
       >
         {/* LEFT: month picker + today */}
         <div className="flex shrink-0 items-center gap-0.5">
@@ -334,7 +291,7 @@ export function TodayNav({
                   >
                     {isActive && (
                       <motion.div
-                        layoutId="today-active-date-pill"
+                        layoutId="logs-active-date-pill"
                         className="absolute inset-0 -z-10 rounded-full"
                         style={{ background: ACCENT }}
                         transition={SPRING}
@@ -376,66 +333,39 @@ export function TodayNav({
           </div>
         </div>
 
-        {/* RIGHT: deployment board tools (no outbound nav links) */}
+        {/* RIGHT: log filters + link back to deployment board */}
         <div className="flex shrink-0 items-center gap-2 border-l border-white/20 pl-2 text-[11px]">
-          <div
-            className="flex shrink-0 items-center rounded-lg p-0.5"
-            style={{ background: "rgba(0,0,0,0.04)" }}
+          <label className="sr-only" htmlFor="logs-operator-filter">
+            Filter by person
+          </label>
+          <select
+            id="logs-operator-filter"
+            value={selectedLogOperator ?? ""}
+            onChange={(e) =>
+              onLogOperatorChange?.(e.target.value ? e.target.value : null)
+            }
+            className="max-w-[9rem] truncate rounded-lg border border-black/10 bg-white/90 px-2 py-1.5 text-[11px] font-medium text-[#1C1C1E] outline-none focus:ring-2 focus:ring-[#C13A14]/30"
           >
-            <NavToolButton
-              onClick={() => onViewChange?.("deployment")}
-              title="Deployment board"
-              ariaLabel="Deployment board"
-              active={currentView === "deployment"}
-            >
-              <LayoutGrid className={NAV_ICON} />
-            </NavToolButton>
-            <NavToolButton
-              onClick={() => onViewChange?.("breaks")}
-              title="Break sheet"
-              ariaLabel="Break sheet"
-              active={currentView === "breaks"}
-            >
-              <Coffee className={NAV_ICON} />
-            </NavToolButton>
-          </div>
-          {showPrint && onPrint ? (
-            <NavToolButton
-              onClick={onPrint}
-              title="Print deployment + breaks"
-              ariaLabel={
-                isPrinting
-                  ? "Printing deployment and break sheets"
-                  : "Print deployment and break sheets"
-              }
-              active={isPrinting}
-              className={isPrinting ? "opacity-60" : undefined}
-            >
-              <Printer className={NAV_ICON} />
-            </NavToolButton>
-          ) : null}
-          <span className="hidden text-[#6C6C72] sm:inline">Logged as</span>
-          <span className="max-w-[7rem] truncate font-semibold text-[#1C1C1E]">
-            {operatorName}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              clearTodayOperatorName();
-              onChangeOperator?.();
-            }}
-            className="rounded-lg border border-black/10 px-2 py-1 font-medium text-[#1C1C1E] transition-colors hover:bg-black/5"
-            title="Sign out and return to PIN entry"
+            <option value="">Everyone</option>
+            {logOperators.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <Link
+            href="/today"
+            className="rounded-lg border border-black/10 px-2 py-1 font-medium text-[#6C6C72] transition-colors hover:bg-black/5"
           >
-            Sign out
-          </button>
+            Board
+          </Link>
         </div>
       </nav>
 
       {calendarOpen && popoverPos
         ? createPortal(
             <div
-              id="today-nav-calendar-popover"
+              id="logs-nav-calendar-popover"
               role="dialog"
               aria-label="Choose a date"
               className="fixed z-[70] w-[280px] rounded-2xl border border-white/70 bg-white/95 p-3 text-[12px] shadow-2xl shadow-black/10 backdrop-blur-xl"
@@ -474,22 +404,6 @@ export function TodayNav({
                 </button>
               </div>
 
-              {publishedDatesFetching && !publishedDates ? (
-                <p className="mb-2 px-1 text-center text-[10px] text-[#8E8E93]">Loading publish status…</p>
-              ) : null}
-              {publishedDatesError ? (
-                <div className="mb-2 rounded-lg border border-amber-200/80 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-900">
-                  <p>Couldn&apos;t load publish status.</p>
-                  <button
-                    type="button"
-                    onClick={() => void refetchPublishedDates()}
-                    className="mt-0.5 font-semibold text-[#C13A14] hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : null}
-
               <div className="mb-1 grid grid-cols-7 text-center font-medium text-[#8E8E93]">
                 {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
                   <div key={i}>{d}</div>
@@ -506,13 +420,7 @@ export function TodayNav({
                   const cells: React.ReactNode[] = [];
 
                   const renderDay = (d: Date, key: string, muted = false) => {
-                    const iso = formatLocalDateISO(d);
                     const isTonight = sameDay(d, todayShiftDate);
-                    const isPublished = publishedDates?.has(iso) ?? false;
-                    const datesReady =
-                      publishedDates !== undefined && !publishedDatesError;
-                    const isUnpublished =
-                      datesReady && !isPublished && !isTonight;
 
                     return (
                       <CalendarDayButton
@@ -520,7 +428,7 @@ export function TodayNav({
                         date={d}
                         muted={muted}
                         isSelected={sameDay(d, selectedDayDate)}
-                        isUnpublished={isUnpublished}
+                        isUnpublished={false}
                         isTonight={isTonight}
                         onPick={handlePickDate}
                       />

@@ -10,6 +10,7 @@ import {
   daysBetween,
   formatLocalDateISO,
   navIdForWeekDay,
+  sameDay,
   startOfShiftWeek,
   type DayDef,
   type NavDayStripItem,
@@ -26,9 +27,33 @@ function dayDefFromDate(date: Date, today: Date): DayDef {
   return defs[idx] ?? defs[0];
 }
 
+/** Keeps grave-shift "today" fresh across midnight and the 8:30am rollover. */
+function useShiftTodayDate(): Date {
+  const [todayDate, setTodayDate] = useState(() => currentShiftDate());
+
+  useEffect(() => {
+    const sync = () => {
+      const next = currentShiftDate();
+      setTodayDate((prev) => (sameDay(prev, next) ? prev : next));
+    };
+    sync();
+    const interval = window.setInterval(sync, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  return todayDate;
+}
+
 export function useTodayScheduleNav() {
   const queryClient = useQueryClient();
-  const [todayDate] = useState(() => currentShiftDate());
+  const todayDate = useShiftTodayDate();
 
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const saved = readSavedScheduleDate();

@@ -169,7 +169,9 @@ export function useTodayDragDrop({
         const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } =
           uiToDb(fromUiKey);
 
+        let tasksSnapshot: Record<string, NightSlotTask[]> | null = null;
         setSelectedTasks((prev) => {
+          tasksSnapshot = prev;
           const fromList = prev[fromUiKey] ?? [];
           const taskToMove = fromList.find((t) => t.taskLabel === a.taskLabel);
           if (!taskToMove) return prev;
@@ -185,24 +187,13 @@ export function useTodayDragDrop({
           return { ...prev, [fromUiKey]: newFrom, [toUiKey]: newTo };
         });
 
-        logChange({
-          action: "task_remove",
-          slotKey: fromUiKey,
-          payload: { taskLabel: a.taskLabel, movedTo: toUiKey },
-        });
-        logChange({
-          action: "task_add",
-          slotKey: toUiKey,
-          payload: { taskLabel: a.taskLabel, movedFrom: fromUiKey },
-        });
-
-        // Persist task move (using the shared resolver).
-        // Note: on persist failure we intentionally leave the optimistic local move
-        // in place (with a warning toast). There is no automatic rollback here
-        // (unlike live assignment mutations which have onError snapshots).
         void (async () => {
           const nid = await resolveNightIdForDrag(nightId, selectedDay);
-          if (!nid) return;
+          if (!nid) {
+            if (tasksSnapshot) setSelectedTasks(tasksSnapshot);
+            showToast("Couldn't save task move", "error");
+            return;
+          }
           try {
             const { moveNightSlotTask } = await import("@/lib/shiftbuilder/data");
             await moveNightSlotTask({
@@ -215,9 +206,20 @@ export function useTodayDragDrop({
               toRrSide,
               taskLabel: a.taskLabel!,
             });
+            logChange({
+              action: "task_remove",
+              slotKey: fromUiKey,
+              payload: { taskLabel: a.taskLabel, movedTo: toUiKey },
+            });
+            logChange({
+              action: "task_add",
+              slotKey: toUiKey,
+              payload: { taskLabel: a.taskLabel, movedFrom: fromUiKey },
+            });
           } catch (e) {
             console.error("[today] task move persist failed", e);
-            showToast("Task moved on screen but failed to save", "error");
+            if (tasksSnapshot) setSelectedTasks(tasksSnapshot);
+            showToast("Couldn't move task — reverted", "error");
           }
         })();
         return;
@@ -241,71 +243,52 @@ export function useTodayDragDrop({
           const toKey = safeNormalizeSlotKey((over.data.current as { slotKey: string }).slotKey);
           if (toKey === fromKey) return;
 
-          const mainAssignments = useShiftBuilderStore.getState().assignments || {};
-          const movingFromMain = mainAssignments[fromKey];
-          const displacedFromMain = mainAssignments[toKey];
+          const assignmentsSnapshot = {
+            ...(useShiftBuilderStore.getState().assignments || {}),
+          };
+          const movingFromMain = assignmentsSnapshot[fromKey];
+          const displacedFromMain = assignmentsSnapshot[toKey];
           const movingTmId = movingFromMain?.tmId ?? a.tmId;
           const movingTmName = movingFromMain?.tmName ?? a.tmName;
           const displacedTmId = displacedFromMain?.tmId ?? null;
           const displacedTmName = displacedFromMain?.tmName ?? null;
 
-          // Direct mutation of the main assignments store (feeds Board narrow subs + pending logic).
-          useShiftBuilderStore.getState().setAssignments((prev: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any -- mirrors the intentionally loose shared Zustand store (see production review notes)
-            // Note: loose Record<any> here mirrors the store's own loose assignment typing.
-            // In a future tightening, this could use ShiftAssignment or a Today-specific subset.
-            const next = { ...prev };
-            if (displacedFromMain) {
-              next[fromKey] = { ...displacedFromMain, slotKey: fromKey };
-            } else {
-              delete next[fromKey];
-            }
-            if (movingFromMain) {
-              next[toKey] = { ...movingFromMain, slotKey: toKey };
-            }
-            return next;
-          });
-
           const dateKey = formatLocalDateISO(selectedDay.date);
-          patchNightCoreAssignmentsCache(
-            queryClient,
-            dateKey,
-            useShiftBuilderStore.getState().assignments ?? {},
-          );
 
-          logChange({
-            action: "assign",
-            slotKey: toKey,
-            previousTmId: displacedTmId,
-            previousTmName: displacedTmName,
-            newTmId: movingTmId,
-            newTmName: movingTmName,
-            payload: { dragFrom: fromKey },
-          });
-          if (displacedTmId) {
-            logChange({
-              action: "assign",
-              slotKey: fromKey,
-              previousTmId: movingTmId,
-              previousTmName: movingTmName,
-              newTmId: displacedTmId,
-              newTmName: displacedTmName,
-              payload: { dragSwap: true, dragFrom: toKey },
+          const applyOptimisticAssignments = () => {
+            useShiftBuilderStore.getState().setAssignments((prev: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+              const next = { ...prev };
+              if (displacedFromMain) {
+                next[fromKey] = { ...displacedFromMain, slotKey: fromKey };
+              } else {
+                delete next[fromKey];
+              }
+              if (movingFromMain) {
+                next[toKey] = { ...movingFromMain, slotKey: toKey };
+              }
+              return next;
             });
-          } else {
-            logChange({
-              action: "unassign",
-              slotKey: fromKey,
-              previousTmId: movingTmId,
-              previousTmName: movingTmName,
-              payload: { dragMove: true, dragTo: toKey },
-            });
-          }
+            patchNightCoreAssignmentsCache(
+              queryClient,
+              dateKey,
+              useShiftBuilderStore.getState().assignments ?? {},
+            );
+          };
 
-          // Persist path (using shared resolver).
-          // On error we leave the local store mutation (UI shows the move) + toast.
+          const rollbackAssignments = () => {
+            useShiftBuilderStore.getState().setAssignments(assignmentsSnapshot);
+            patchNightCoreAssignmentsCache(queryClient, dateKey, assignmentsSnapshot);
+          };
+
+          applyOptimisticAssignments();
+
           void (async () => {
             const nid = await resolveNightIdForDrag(nightId, selectedDay);
-            if (!nid) return;
+            if (!nid) {
+              rollbackAssignments();
+              showToast("Couldn't save assignment move", "error");
+              return;
+            }
             try {
               const { upsertZoneAssignment, deleteZoneAssignment } =
                 await import("@/lib/shiftbuilder/data");
@@ -329,9 +312,39 @@ export function useTodayDragDrop({
               } else {
                 await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
               }
+
+              logChange({
+                action: "assign",
+                slotKey: toKey,
+                previousTmId: displacedTmId,
+                previousTmName: displacedTmName,
+                newTmId: movingTmId,
+                newTmName: movingTmName,
+                payload: { dragFrom: fromKey },
+              });
+              if (displacedTmId) {
+                logChange({
+                  action: "assign",
+                  slotKey: fromKey,
+                  previousTmId: movingTmId,
+                  previousTmName: movingTmName,
+                  newTmId: displacedTmId,
+                  newTmName: displacedTmName,
+                  payload: { dragSwap: true, dragFrom: toKey },
+                });
+              } else {
+                logChange({
+                  action: "unassign",
+                  slotKey: fromKey,
+                  previousTmId: movingTmId,
+                  previousTmName: movingTmName,
+                  payload: { dragMove: true, dragTo: toKey },
+                });
+              }
             } catch (e) {
               console.error("[today] assignment drag persist failed", e);
-              showToast("Move applied on screen but failed to save", "error");
+              rollbackAssignments();
+              showToast("Couldn't save move — reverted", "error");
             }
           })();
           return;

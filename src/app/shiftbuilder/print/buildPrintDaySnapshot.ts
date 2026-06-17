@@ -60,29 +60,23 @@ export function slotShowsFilled(
   return !!assignments[slotKey]?.tmName?.trim();
 }
 
-export function computeBreakCounts(
-  assignments: Record<string, { tmId?: string; breakGroup?: number }>,
-): Record<1 | 2 | 3, number> {
-  const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
-  Object.values(assignments).forEach((a) => {
-    const g = a?.breakGroup ?? 0;
-    if (g === 1 || g === 2 || g === 3) counts[g] += 1;
-  });
-  return counts;
-}
+import { computeBreakCounts } from "@/lib/shiftbuilder/processNightData";
+export { computeBreakCounts };
 
 function coverageFromTasks(tasks: PrintTaskLine[]): { label: string | null; color: string | null } {
   const cov = tasks.find((t) => t.isCoverage);
   return cov ? { label: cov.label, color: cov.color ?? null } : { label: null, color: null };
 }
 
-function slotRefType(ref: string): "zone" | "rr" | "aux" {
+function slotRefType(ref: string): "zone" | "rr" | "aux" | "overlap" {
+  if (ref.startsWith("OL-")) return "overlap";
   if (ref.startsWith("MRR") || ref.startsWith("WRR")) return "rr";
   if (/^Z\d+$/.test(ref)) return "zone";
   return "aux";
 }
 
 function chipLabel(slotKey: string, auxDefs: AuxDef[]): string {
+  if (slotKey.startsWith("OL-")) return slotKey.replace(/^OL-/, "");
   if (/^Z\d+$/.test(slotKey)) return `ZONE ${slotKey.replace(/\D/g, "")}`;
   if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) {
     const num = slotKey.replace(/\D/g, "");
@@ -213,7 +207,7 @@ export function buildAuxCardModels(snapshot: PrintDaySnapshot): PrintPlanningCar
 
 export function buildBreaksWaves(snapshot: PrintDaySnapshot): PrintBreaksWave[] {
   const waves: PrintBreaksWave[] = [];
-  for (const wave of [1, 2, 3] as const) {
+  for (const wave of [1, 2, 3, 4] as const) {
     const people: PrintBreaksPerson[] = [];
     Object.entries(snapshot.assignments).forEach(([slotKey, a]) => {
       if (!a?.tmId || (a.breakGroup ?? 0) !== wave) return;

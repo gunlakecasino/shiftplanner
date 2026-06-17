@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShiftData } from "@/app/shiftbuilder/hooks/useShiftData";
 import { useToast } from "@/app/shiftbuilder/hooks/useToast";
+import { usePermissions } from "@/lib/auth/opsAuth";
 import {
   useZoom,
   NATURAL_WIDTH,
@@ -13,7 +14,7 @@ import { initLiveCacheForNight, teardownAllLiveCache } from "@/lib/shiftbuilder/
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb, dbToUi } from "@/lib/shiftbuilder/slot-keys";
-import { BLANK_AUX_DEFS } from "@/lib/shiftbuilder/constants";
+import { BLANK_AUX_DEFS, type BreakGroup, type ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
@@ -35,6 +36,7 @@ type UseTodayBoardParams = {
   selectedDay: DayDef;
   selectedDayIndex: number;
   operatorName: string;
+  opsUserId: string;
   currentView: TodayBoardView;
   setCurrentView: (view: TodayBoardView) => void;
 };
@@ -58,10 +60,12 @@ export function useTodayBoard({
   selectedDay,
   selectedDayIndex,
   operatorName,
+  opsUserId,
   currentView,
   setCurrentView,
 }: UseTodayBoardParams) {
   const { showToast } = useToast();
+  const { canEditAssignments } = usePermissions();
   const shiftData = useShiftData(selectedDay);
   const {
     currentNight,
@@ -83,7 +87,7 @@ export function useTodayBoard({
   const [statusLoading, setStatusLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, NightSlotTask[]>>({});
-  const [breakGroup, setBreakGroup] = useState<1 | 2 | 3>(1);
+  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(1);
   const positioningRef = useRef<HTMLDivElement>(null);
 
   const { stageHostRef, scale, recomputeScale } = useZoom({
@@ -147,17 +151,13 @@ export function useTodayBoard({
   /**
    * PRODUCTION POLICY:
    * Builder night-lock (isCurrentNightLocked from nights.is_locked) does NOT make
-   * the schedule read-only on /today. /today is explicitly the "quick view + fast
-   * corrections" surface for published (or tonight) schedules.
-   *
-   * The full /shiftbuilder respects the lock for normal operators.
-   * We still compute isCurrentNightLocked from meta (for potential future use or
-   * read-only indicators) but force isScheduleReadOnly=false here.
+   * the schedule read-only on /today — quick corrections stay available when the
+   * operator has canEditAssignments. Night-lock may still surface in UI later.
    *
    * See TodayPageClient.tsx where we pass isCurrentNightLocked={false} explicitly
-   * into TodayArtboard (overriding the value from this hook).
+   * into TodayArtboard (builder lock is not enforced on this surface).
    */
-  const isScheduleReadOnly = false;
+  const isScheduleReadOnly = !canEditAssignments;
   const canPrint = !statusLoading && (selectedDay.isToday || isPublished);
   // scheduleBanner: reserved for future status / realtime / notice banners.
   // Currently always null; the UI conditional in TodayPageClient documents this.
@@ -201,15 +201,12 @@ export function useTodayBoard({
     setSelectedTasks(tasksByUiKey);
   }, [currentNight.tasks]); // syncing transformed tasks from remote to local state on change (the setSelectedTasks in empty case uses its own disable block)
 
-  const assignments = useMemo(
-    () => storeAssignments ?? effectiveAssignments ?? {},
-    [storeAssignments, effectiveAssignments]
-  ); // Memoized to stabilize for downstream useMemo (padAssignments) and avoid exhaustive-deps churn
-
-  const padAssignments = useMemo(
-    () => ({ ...effectiveAssignments, ...assignments }),
-    [effectiveAssignments, assignments],
-  );
+  const padAssignments = useMemo(() => {
+    const base = effectiveAssignments ?? {};
+    const store = storeAssignments ?? {};
+    if (Object.keys(store).length === 0) return base;
+    return { ...base, ...store };
+  }, [effectiveAssignments, storeAssignments]);
 
   const alreadyAssignedTonight = useMemo(() => {
     const set = new Set<string>();
@@ -266,11 +263,12 @@ export function useTodayBoard({
         nightId,
         nightDate: formatLocalDateISO(selectedDay.date),
         operatorName,
+        opsUserId,
         ...params,
-        payload: { source: "today_marker_pad", ...params.payload },
+        payload: { source: "today_deployment_board", ...params.payload },
       });
     },
-    [nightId, selectedDay.date, operatorName],
+    [nightId, selectedDay.date, operatorName, opsUserId],
   );
 
   const handleSlotToggle = useCallback(
@@ -306,16 +304,18 @@ export function useTodayBoard({
         captureDayName: selectedDay.name,
         targetNightId: nightId,
         isDraftMode: false,
+        onPersisted: () => {
+          logChange({
+            action: "assign",
+            slotKey,
+            previousTmId: prev?.tmId ?? null,
+            previousTmName: prev?.tmName ?? null,
+            newTmId: tmId,
+            newTmName: tmName,
+          });
+          showToast(`Assigned ${tmName} → ${slotKey}`, "success");
+        },
       });
-      logChange({
-        action: "assign",
-        slotKey,
-        previousTmId: prev?.tmId ?? null,
-        previousTmName: prev?.tmName ?? null,
-        newTmId: tmId,
-        newTmName: tmName,
-      });
-      showToast(`Assigned ${tmName} → ${slotKey}`, "success");
     },
     [
       isScheduleReadOnly,
@@ -340,15 +340,17 @@ export function useTodayBoard({
         captureDayName: selectedDay.name,
         targetNightId: nightId,
         isDraftMode: false,
+        onPersisted: () => {
+          logChange({
+            action: "unassign",
+            slotKey,
+            previousTmId: prev?.tmId ?? null,
+            previousTmName: prev?.tmName ?? null,
+          });
+          setSelectedSlotKey(null);
+          showToast(`Cleared ${slotKey}`, "success");
+        },
       });
-      logChange({
-        action: "unassign",
-        slotKey,
-        previousTmId: prev?.tmId ?? null,
-        previousTmName: prev?.tmName ?? null,
-      });
-      setSelectedSlotKey(null);
-      showToast(`Cleared ${slotKey}`, "success");
     },
     [
       isScheduleReadOnly,
@@ -363,6 +365,10 @@ export function useTodayBoard({
 
   const handleToggleLock = useCallback(
     async (slotKey: string) => {
+      if (isScheduleReadOnly) {
+        showToast("You don't have permission to lock slots", "error");
+        return;
+      }
       if (!nightId) return;
       const current = !!padAssignments[slotKey]?.isLocked;
       const nextLocked = !current;
@@ -392,12 +398,16 @@ export function useTodayBoard({
         showToast(msg, "error");
       }
     },
-    [nightId, padAssignments, logChange, showToast],
+    [isScheduleReadOnly, nightId, padAssignments, logChange, showToast],
   );
 
   const setBreakGroupForSlot = useCallback(
-    async (slotKey: string, group: 0 | 1 | 2 | 3) => {
-      if (!nightId || isScheduleReadOnly) return;
+    async (slotKey: string, group: BreakGroup) => {
+      if (isScheduleReadOnly) {
+        showToast("You don't have permission to change break groups", "error");
+        return;
+      }
+      if (!nightId) return;
       try {
         const { updateSlotBreakGroup } = await import("@/lib/shiftbuilder/data");
         const { slot_key, rr_side } = uiToDb(slotKey);
@@ -463,11 +473,14 @@ export function useTodayBoard({
     }
     setIsPrinting(true);
     try {
-      await printTodaySchedule({
+      const result = await printTodaySchedule({
         currentView,
         setCurrentView,
         onSlotClose: () => setSelectedSlotKey(null),
       });
+      if (!result.ok) {
+        showToast(result.reason, "error");
+      }
     } finally {
       setIsPrinting(false);
     }
@@ -475,6 +488,10 @@ export function useTodayBoard({
 
   const handleRemoveTask = useCallback(
     async (slotKey: string, taskLabel: string) => {
+      if (isScheduleReadOnly) {
+        showToast("You don't have permission to remove tasks", "error");
+        return;
+      }
       if (!nightId) return;
       setSelectedTasks((prev) => {
         const existing = prev[slotKey] || [];
@@ -500,11 +517,15 @@ export function useTodayBoard({
         await refreshTasksForNight(nightId, setSelectedTasks);
       }
     },
-    [nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, showToast, logChange],
   );
 
   const handleAssignSweeper = useCallback(
     async (slotKey: string, sweeperLabel: string) => {
+      if (isScheduleReadOnly) {
+        showToast("You don't have permission to assign sweepers", "error");
+        return;
+      }
       if (!nightId) {
         showToast("No active night selected", "error");
         return;
@@ -531,11 +552,15 @@ export function useTodayBoard({
         showToast("Failed to assign sweeper", "error");
       }
     },
-    [nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, showToast, logChange],
   );
 
   const handleAddCoverage = useCallback(
     async (sourceKey: string, targetKey: string) => {
+      if (isScheduleReadOnly) {
+        showToast("You don't have permission to add coverage", "error");
+        return;
+      }
       if (!nightId) {
         showToast("No active night selected", "error");
         return;
@@ -573,7 +598,7 @@ export function useTodayBoard({
         showToast("Failed to add coverage", "error");
       }
     },
-    [nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, showToast, logChange],
   );
 
   const drag = useTodayDragDrop({
@@ -590,7 +615,6 @@ export function useTodayBoard({
   return {
     nightId,
     selectedDayIndex,
-    assignments,
     padAssignments,
     selectedSlotKey,
     setSelectedSlotKey,
