@@ -54,7 +54,7 @@ export function PrintPreviewPage({
         />
 
         <div className="flex flex-col w-full flex-1 min-h-0 overflow-hidden">
-          <div className="grid grid-cols-4 gap-1 mb-1.5">
+          <div className="sb-breaks-wave-grid grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full">
             {waves.map((w) => {
               const isOlWave = w.wave === BREAK_GROUP_OVERLAPS;
               const waveColor =
@@ -69,7 +69,7 @@ export function PrintPreviewPage({
               return (
                 <div
                   key={w.wave}
-                  className="border border-[#E5E5E7] rounded-[3px] bg-white overflow-hidden flex flex-col"
+                  className="border border-[#E5E5E7] rounded-[3px] bg-white overflow-hidden flex flex-col h-full min-h-0"
                   style={{ borderTop: `3px solid ${waveColor}` }}
                 >
                   <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4]">

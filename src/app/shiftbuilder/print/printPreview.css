@@ -15,7 +15,7 @@ body.golden-export-raster .print-dual-container .print-artboard {
   display: flex;
   flex-direction: column;
   background: #ffffff;
-  border-radius: 2px;
+  border-radius: 0;
   box-shadow: none;
   box-sizing: border-box;
   font-family: var(--font-atkinson), var(--font-geist-sans), system-ui, sans-serif;
@@ -46,8 +46,32 @@ body.golden-export-raster .print-dual-container .print-artboard .assignment-card
 }
 
 body.printing-dual-mode .print-dual-container .print-artboard .sheet-header,
-body.golden-export-raster .print-dual-container .print-artboard .sheet-header {
+body.golden-export-raster .print-dual-container .print-artboard .sheet-header,
+.print-stage-inner .print-artboard .sheet-header {
+  width: 100%;
+  max-width: 100%;
   border-bottom: 1px solid #e5e5e7;
+}
+
+/* Break sheet — four wave columns fill width + height between header and overlaps */
+.print-stage-inner .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid {
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: stretch;
+}
+
+.print-stage-inner .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 body.printing-dual-mode .print-dual-container .print-artboard .sheet-section-header,
@@ -119,6 +143,8 @@ body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="d
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-deployment-body {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sheet-section-header,
@@ -132,6 +158,8 @@ body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="d
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section {
   flex-shrink: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-zones,
@@ -157,7 +185,18 @@ body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="d
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-card-grid {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
   align-content: stretch;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-zones .sb-print-card-grid,
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-rr .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr .sb-print-card-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-card-grid > [data-slot-key],

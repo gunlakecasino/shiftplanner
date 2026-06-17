@@ -578,8 +578,8 @@ export function GoldenDeploymentHeader({
   activeBreakGroup?: 1 | 2 | 3 | 4;
 }) {
   return (
-    <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-end justify-between">
-      <div className="flex items-end gap-3">
+    <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
+      <div className="flex items-end gap-3 min-w-0">
         <div
           className="font-black tabular-nums leading-[0.78] text-[#1C1C1E]"
           style={{
@@ -590,7 +590,7 @@ export function GoldenDeploymentHeader({
         >
           {day.dateNum}
         </div>
-        <div className="-mb-0.5 flex flex-col">
+        <div className="-mb-0.5 flex flex-col min-w-0">
           <div
             className="font-bold leading-none"
             style={{
@@ -626,7 +626,7 @@ export function GoldenDeploymentHeader({
           </div>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
         <div className="flex gap-[2px]">
           {weekDayDefs.map((def, i) => {
             const isActive = i === dayIndex;
@@ -690,8 +690,8 @@ export function GoldenBreaksHeader({
   inRotationCount: number;
 }) {
   return (
-    <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-end justify-between">
-      <div className="flex items-end gap-3">
+    <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
+      <div className="flex items-end gap-3 min-w-0">
         <div
           className="font-black tabular-nums leading-[0.78]"
           style={{
@@ -704,7 +704,7 @@ export function GoldenBreaksHeader({
         >
           {day.dateNum}
         </div>
-        <div className="-mb-0.5 flex flex-col">
+        <div className="-mb-0.5 flex flex-col min-w-0">
           <div
             className="font-bold leading-none text-[#1C1C1E]"
             style={{
@@ -746,7 +746,7 @@ export function GoldenBreaksHeader({
           </div>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
         <div
           className="text-[9.5px] font-bold tracking-[1.2px] uppercase text-[#1C1C1E]"
           style={{ fontFamily: "var(--font-atkinson)" }}
