@@ -24,6 +24,7 @@ import {
   type WeekRepeatViolation,
 } from "@/app/shiftbuilder/components/shiftRotationHealth";
 import {
+  getLastPlacementSequence,
   getSpreadPlacementCounts,
   getSpreadPlacementKeys,
   PLACEMENT_SPREAD_NIGHTS,
@@ -544,7 +545,7 @@ export function buildRotationHealthEngineBrief(
     `WEEK VIOLATIONS (TM same area >1× this grave week through tonight):`,
     violLines,
     boardState === "blank"
-      ? "BLANK BOARD GUIDANCE: No live fit map exists yet. Use candidateRotationPreviews per slot (spread/last-5/week-repeat/gaps) and build the draft slot-by-slot in fill order. Prefer candidates with high healthPoints (90+ strong, 80–89 acceptable), 0× week repeat on that slot, and who close spread gaps. Call scoreDraftRotationHealth before final JSON."
+      ? "BLANK BOARD GUIDANCE: No live fit map exists yet. Use candidateRotationPreviews per slot (spread/last-5/week-repeat/gaps) and build the draft slot-by-slot in fill order. Prefer candidates with high healthPoints (90+ = strong: ≤1× spread AND not in last-5 for that area; 76–84 acceptable), 0× week repeat on that slot, and who close spread gaps. Open slots never reduce rotation health %. Call scoreDraftRotationHealth before final JSON."
       : "Use live fit + candidate previews; override planner top when rotation health clearly improves. Call scoreDraftRotationHealth before final JSON.",
   ]
     .filter(Boolean)
@@ -641,6 +642,7 @@ export function previewCandidateRotationFit(
     tonightIso,
     true,
   );
+  const last5 = getLastPlacementSequence(history, 5, tonightIso);
 
   return {
     tmId,
@@ -649,7 +651,7 @@ export function previewCandidateRotationFit(
     fitVerdict: fit.fitVerdict,
     healthPoints: slotHealthPoints(fit),
     timesInSpread: spreadCounts.get(slotKey) ?? 0,
-    inLast5: false,
+    inLast5: last5.includes(slotKey),
     weekRepeat,
     topGaps,
     fitSummary: fit.fitSummary,

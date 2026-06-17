@@ -77,7 +77,9 @@ function breakdownTitle(
   const maxR = (health as any).maxWeeklyRepeat ?? 0;
   const violNote = viols > 0 ? ` · ${viols} viol${viols > 1 ? "s" : ""} (use ADVISOR or week scan for moves)` : "";
   const lines = [
-    `Rotation health: big = tonight fit. Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy (separate).`,
+    `Rotation health % = placed TMs only (open gaps do not reduce it).`,
+    `Big number = tonight fit (spread + last-5 trail + week repeat per area). Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
+    "Last-5 trail in the same area blocks strong fit and pulls points down.",
     "xAI fairnessSignals on violating placements can reduce the week penalty (numeric 'forgiveness').",
     "ADVISOR (main cluster) or 'xAI week scan' in WEEK BUILDER: concrete (TM+slot+night) moves to raise the week average.",
     `Target: ${ROTATION_HEALTH_TARGET}%`,
@@ -87,8 +89,8 @@ function breakdownTitle(
       ? `Week avg (${GRAVE_WEEK_LABEL}): ${weekAveragePercent}%`
       : `Week avg (${GRAVE_WEEK_LABEL}): —`,
     (health as any).weeklyBalance !== undefined ? `Policy week score: ${(health as any).weeklyBalance}% (max repeat: ${maxR}, violations: ${viols})${xaiAdj > 0 ? ` · xAI adj -${xaiAdj.toFixed(0)}pt` : ""}${violNote}` : "",
-    `${scoredCount} assigned · ${openGaps} open gap${openGaps === 1 ? "" : "s"}`,
-    "Key signals: 30-night spread, last-5, this-week repeat per placement, bilateral swap lanes, xAI coverage on violators.",
+    `${scoredCount} placed scored · ${openGaps} open gap${openGaps === 1 ? "" : "s"} (info only)`,
+    "Signals: 30-night spread in area, last-5 trail, this-week repeat, bilateral swap lanes, xAI coverage on violators.",
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
   ];

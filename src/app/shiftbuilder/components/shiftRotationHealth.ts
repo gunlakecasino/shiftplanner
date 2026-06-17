@@ -257,6 +257,7 @@ export function computeShiftRotationHealth(
     );
     const assigned = !!(row?.tmName || row?.tmId);
     if (!assigned) {
+      // Open gaps are informational only — never penalize unfilled slots in the %.
       if (!isOptionalDeploymentSlot(slotKey)) openGaps += 1;
       continue;
     }

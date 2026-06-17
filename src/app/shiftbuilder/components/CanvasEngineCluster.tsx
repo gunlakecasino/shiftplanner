@@ -163,8 +163,8 @@ export function CanvasEngineCluster({
     weekPolicyPercent !== undefined ? `${weekPolicyPercent}%` : "—%";
 
   const breakdownTitle = [
-    `Rotation health: big = tonight fit (spread/last-5/swap quality for this night).`,
-    `Small numbers: fit avg = mean nightly fit across built ${GRAVE_WEEK_LABEL} days; policy = week repeat max-1 penalty (separate).`,
+    `Rotation health % = placed TMs only (open gaps do not reduce it).`,
+    `Big = tonight fit (spread + last-5 trail + week repeat per area). Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
     `Target (tonight fit): ${ROTATION_HEALTH_TARGET}%`,
     dailyPercent !== null ? `Tonight fit: ${dailyPercent}%` : "Tonight fit: —",
     weekAveragePercent !== null
@@ -174,9 +174,9 @@ export function CanvasEngineCluster({
       ? `Week repeat policy: ${weekPolicyPercent}% (max repeat ${(health as any).maxWeeklyRepeat ?? 0}; violations ${(health as any).repeatViolations ?? 0})`
       : "",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
-    `${health.scoredCount} assigned · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"}`,
+    `${health.scoredCount} placed scored · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"} (info only)`,
     `${health.counts.strong_fit} strong · ${health.counts.acceptable} acceptable · ${health.counts.questionable} check`,
-    "Signals: spread freshness, last-5 trail, this-week repeats per placement, bilateral gaps, xAI fairness adj on violators.",
+    "Signals: spread in area, last-5 trail (blocks strong), this-week repeats, bilateral gaps, xAI adj on violators.",
     "",
     isDraftMode
       ? "Draft mode: ✓ save all, ✕ discard, eraser clear, re-run engine."

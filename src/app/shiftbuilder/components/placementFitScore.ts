@@ -93,9 +93,9 @@ function formatGapList(gaps: string[], max = 3): string {
   return labels.join(", ");
 }
 
-/** Light spread load — last-5 trail alone no longer blocks strong_fit. */
-export function isStrongFitSpread(times: number, _inLast5: boolean): boolean {
-  return times <= 1;
+/** Strong fit: light spread in this area and not in the last-5 trail for that slot. */
+export function isStrongFitSpread(times: number, inLast5: boolean): boolean {
+  return times <= 1 && !inLast5;
 }
 
 /**
@@ -123,22 +123,21 @@ export function computePlacementHealthPoints(
       else if (week >= 2) p -= 8;
       if (times >= 3) p -= 10;
       else if (times >= 2) p -= 5;
-      if (inLast5) p -= 4;
+      if (inLast5) p -= 8;
       if (partialSwaps > 0) p -= 3;
       return Math.max(48, Math.min(74, p));
     }
     case "acceptable": {
       let p = 88;
-      if (inLast5) p -= 3;
+      if (inLast5) p -= 7;
       if (times >= 2) p -= Math.min(8, (times - 1) * 3);
       if (week >= 2) p -= Math.min(8, (week - 1) * 4);
       if (partialSwaps > 0) p -= 2;
       if (input.rationale) p += 1;
-      return Math.max(80, Math.min(84, p));
+      return Math.max(76, Math.min(84, p));
     }
     case "strong_fit": {
       let p = 98;
-      if (inLast5) p -= 3;
       if (week === 2) p -= 5;
       if (!input.rationale) p -= 2;
       return Math.max(90, Math.min(100, p));
@@ -176,6 +175,10 @@ export function findBetterSuited(
   }
 
   if (count8w !== null && count8w > 3) {
+    return { better: true, primaryGap: gaps[0] };
+  }
+
+  if (inLast5 && gaps.length > 0) {
     return { better: true, primaryGap: gaps[0] };
   }
 
@@ -262,11 +265,9 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     );
   }
 
-  // Strong fit: light spread (0–1× in 30) and no week repeat problem. Last-5 trail is OK.
-  // Swap lanes are optional — they must not downgrade a light-spread placement to Consider swap.
-  if (times <= 1 && weekRepeat <= 1) {
+  // Strong fit: light spread (0–1× in 30), no week repeat problem, and NOT in last-5 for this area.
+  if (isStrongFitSpread(times, inLast5) && weekRepeat <= 1) {
     const engineOk = !!input.rationale;
-    const trailNote = inLast5 ? " — in last-5 trail but spread is light." : "";
     const swapNote =
       bilateral.length > 0
         ? "optional bilateral swap lane"
@@ -277,15 +278,41 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
       input,
       "strong_fit",
       engineOk
-        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.${trailNote}`
-        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.${trailNote}`,
+        ? `${name} is a strong fit on ${slotLabel} — engine-backed with light spread exposure.`
+        : `${name} is a strong fit on ${slotLabel} — first or single exposure in the 30-night spread.`,
       buildFactLine([
         spreadFact,
         eightFact,
-        inLast5 ? "in last-5 trail" : null,
         engineOk ? "engine continuity" : gapFact,
         swapNote,
       ]),
+    );
+  }
+
+  // Last-5 trail in this area: never strong_fit — score placed TM rotation only.
+  if (inLast5 && times <= 1 && weekRepeat <= 1) {
+    const trailBetter = findBetterSuited(gaps, times, count8w, inLast5);
+    if (trailBetter.better) {
+      const gapLabel = trailBetter.primaryGap
+        ? formatPlacementUiLabel(trailBetter.primaryGap)
+        : formatGapList(gaps, 1);
+      const gapOccupant = trailBetter.primaryGap
+        ? input.assignments?.[trailBetter.primaryGap]?.tmName
+        : undefined;
+      return finishFit(
+        input,
+        "questionable",
+        gapOccupant
+          ? `${name} on ${slotLabel} — in last-5 trail; consider a zone↔zone swap with ${gapOccupant} (${gapLabel}).`
+          : `${name} on ${slotLabel} — in last-5 trail for this area; rotation pressure on ${gapLabel}.`,
+        buildFactLine([spreadFact, eightFact, "in last-5 trail", gapFact]),
+      );
+    }
+    return finishFit(
+      input,
+      "acceptable",
+      `${name} on ${slotLabel} — in last-5 trail for this area; acceptable tonight if no swap lane.`,
+      buildFactLine([spreadFact, eightFact, "in last-5 trail", gapFact]),
     );
   }
 
@@ -319,7 +346,7 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     );
   }
 
-  // Acceptable: spread repeat and/or this-grave-week repeat (last-5 alone stays strong above).
+  // Acceptable: spread repeat and/or this-grave-week repeat (last-5 handled above).
   if (times >= 2 || weekRepeat >= 2) {
     const weekNote = weekRepeat >= 2 ? `week repeat ${weekRepeat}×` : null;
     const spreadRepeat = times >= 2;
