@@ -3692,7 +3692,7 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
   const breakMap = buildSlotDefaultBreakMap(defaults);
 
   let applied = 0;
-  const upserts: Promise<void>[] = [];
+  const upsertJobs: Array<() => Promise<void>> = [];
 
   for (const [mapKey, groupNum] of breakMap) {
     if (!groupNum) continue; // 0 = unset, skip
@@ -3704,25 +3704,28 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
     const slotKey = mapKey.slice(0, sep);
     const rrSide = mapKey.slice(sep + 1);
 
-    // Write to break_assignments (for break sheet / print / TM-centric group)
-    upserts.push(
+    upsertJobs.push(() =>
       upsertBreakAssignment({
         nightId,
         tmId,
         groupNum,
         slotRef: slotKey,
-      })
+      }),
     );
-    // ALSO write to zone_assignments.break_group so the placement card pills (which may
-    // source from the assignment row in some paths) and the "canonical display column"
-    // get the default immediately. Matches what manual cycle does.
-    upserts.push(
-      updateSlotBreakGroup(nightId, slotKey, rrSide || null, groupNum, tmId)
+    upsertJobs.push(() =>
+      updateSlotBreakGroup(nightId, slotKey, rrSide || null, groupNum, tmId),
     );
     applied++;
   }
 
-  await Promise.all(upserts);
+  const { yieldToMain } = await import('./yieldToMain');
+  const CHUNK = 8;
+  for (let i = 0; i < upsertJobs.length; i += CHUNK) {
+    const slice = upsertJobs.slice(i, i + CHUNK);
+    await Promise.all(slice.map((job) => job()));
+    if (i + CHUNK < upsertJobs.length) await yieldToMain();
+  }
+
   await bustNightBoardServerCache();
   return { applied };
 }
@@ -3733,10 +3736,12 @@ export async function pushBreakDefaultsToWeek(
 ): Promise<{ nights: number; applied: number }> {
   const nightIds = await resolveWeekNightIds(weekStart);
   let totalApplied = 0;
+  const { yieldToMain } = await import('./yieldToMain');
 
-  for (const nightId of nightIds) {
-    const { applied } = await pushBreakDefaultsToNight(nightId);
+  for (let i = 0; i < nightIds.length; i++) {
+    const { applied } = await pushBreakDefaultsToNight(nightIds[i]);
     totalApplied += applied;
+    if (i + 1 < nightIds.length) await yieldToMain();
   }
 
   return { nights: nightIds.length, applied: totalApplied };
@@ -3765,29 +3770,29 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
   }
 
   let applied = 0;
+  const slotEntries = [...bySlot.entries()];
+  const { yieldToMain } = await import('./yieldToMain');
+  const CHUNK = 5;
 
-  for (const [compositeKey, tasks] of bySlot.entries()) {
+  const replaceSlotTasks = async (compositeKey: string, tasks: SlotDefaultTask[]) => {
     const [slotKey, rrSide] = compositeKey.split('|');
     const slotType = tasks[0].slotType;
 
-    // Delete existing tasks for this slot on this night
     const deleteQuery = supabase
       .from('night_slot_tasks')
       .delete()
       .eq('night_id', nightId)
       .eq('slot_key', slotKey);
 
-    // RR slots have rr_side; others use empty string
     const delResult = rrSide
       ? await deleteQuery.eq('rr_side', rrSide)
       : await deleteQuery;
 
     if (delResult.error) {
       console.error('[shiftbuilder/data] pushTaskDefaultsToNight delete error:', delResult.error);
-      continue; // best-effort: skip this slot
+      return 0;
     }
 
-    // Insert fresh rows
     const inserts = tasks.map((t, idx) => ({
       night_id: nightId,
       slot_key: slotKey,
@@ -3800,18 +3805,25 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
       is_coverage: t.isCoverage,
     }));
 
-    const { error: insErr } = await supabase
-      .from('night_slot_tasks')
-      .insert(inserts);
-
+    const { error: insErr } = await supabase.from('night_slot_tasks').insert(inserts);
     if (insErr) {
       console.error('[shiftbuilder/data] pushTaskDefaultsToNight insert error:', insErr);
-      continue;
+      return 0;
     }
 
-    applied += tasks.length;
+    return tasks.length;
+  };
+
+  for (let i = 0; i < slotEntries.length; i += CHUNK) {
+    const slice = slotEntries.slice(i, i + CHUNK);
+    const counts = await Promise.all(
+      slice.map(([compositeKey, tasks]) => replaceSlotTasks(compositeKey, tasks)),
+    );
+    applied += counts.reduce((sum, n) => sum + n, 0);
+    if (i + CHUNK < slotEntries.length) await yieldToMain();
   }
 
+  await bustNightBoardServerCache();
   return { applied };
 }
 
@@ -3822,9 +3834,11 @@ export async function pushTaskDefaultsToWeek(
   const nightIds = await resolveWeekNightIds(weekStart);
   let totalApplied = 0;
 
-  for (const nightId of nightIds) {
-    const { applied } = await pushTaskDefaultsToNight(nightId);
+  const { yieldToMain } = await import('./yieldToMain');
+  for (let i = 0; i < nightIds.length; i++) {
+    const { applied } = await pushTaskDefaultsToNight(nightIds[i]);
     totalApplied += applied;
+    if (i + 1 < nightIds.length) await yieldToMain();
   }
 
   return { nights: nightIds.length, applied: totalApplied };

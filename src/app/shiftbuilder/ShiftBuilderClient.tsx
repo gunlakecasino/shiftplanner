@@ -849,6 +849,7 @@ function AuthedShiftBuilder() {
   // Day changes should feel instant. We use startTransition so React can keep
   // the old UI responsive while the new day's heavy board renders.
   const [isPending, startDayTransition] = useTransition();
+  const [, startHeavyTransition] = useTransition();
   const deferredDayIndex = useDeferredValue(selectedDayIndex);
 
   // (Dock-specific calendar popover removed — calendar now lives in the floating top header date navigator)
@@ -1417,13 +1418,15 @@ function AuthedShiftBuilder() {
         previousTmName: current?.tmName,
       };
     });
-    setDraftAssignments(newDraft);
-    useShiftBuilderStore.getState().setDraftAssignments(newDraft);
-    setDraftBreakdown(result.breakdown);
-    setDraftGrokReasoning(reasoningBySlot);
-    setDraftGrokExplanation(grokExplanation);
-    setDraftEngineWarnings(warnings);
-    setIsDraftMode(true);
+    startHeavyTransition(() => {
+      setDraftAssignments(newDraft);
+      useShiftBuilderStore.getState().setDraftAssignments(newDraft);
+      setDraftBreakdown(result.breakdown);
+      setDraftGrokReasoning(reasoningBySlot);
+      setDraftGrokExplanation(grokExplanation);
+      setDraftEngineWarnings(warnings);
+      setIsDraftMode(true);
+    });
   };
 
   const applyDraft = async () => {
@@ -4235,15 +4238,21 @@ function AuthedShiftBuilder() {
 
   const storeAssignmentsForFit = useAssignments() ?? {};
   const auxDefsForFit = useAuxDefs() ?? [];
+  const deferredAssignmentsForFit = useDeferredValue(storeAssignmentsForFit);
+  const deferredDraftAssignmentsForFit = useDeferredValue(draftAssignments);
 
   const deploymentRotationFitEnabled =
-    viewMode === "canvas" && currentView === "deployment";
+    viewMode === "canvas" &&
+    currentView === "deployment" &&
+    engineRunPhase === "idle" &&
+    !restoreDefaultBreaksBusy &&
+    !currentNight.isFetching;
 
   const { fitBySlot: deploymentFitBySlot } = usePlacementFitMap({
       enabled: deploymentRotationFitEnabled,
-      assignments: storeAssignmentsForFit,
+      assignments: deferredAssignmentsForFit,
       isDraftMode,
-      draftAssignments,
+      draftAssignments: deferredDraftAssignmentsForFit,
       members: effectiveRealRoster as Array<Record<string, unknown>>,
       auxDefs: auxDefsForFit,
       currentIso: nightIsoFromDate(
@@ -4606,6 +4615,8 @@ function AuthedShiftBuilder() {
 
         const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
         const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
+        const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
+        await yieldToMain();
         const plannerResult = runWeightedPlanner({
           orderedSlots,
           assignments,
@@ -4623,6 +4634,7 @@ function AuthedShiftBuilder() {
             zoneMatrix: tmZoneMatrix,
           },
         });
+        await yieldToMain();
 
         const plannerDraft = Object.fromEntries(
           Object.entries(plannerResult.proposedAssignments).filter(([, tmId]) => !!tmId),
@@ -4698,6 +4710,7 @@ function AuthedShiftBuilder() {
             candidates: Array<{ tmId: string; tmName: string }>;
           }>;
 
+          await yieldToMain();
           healthOptimized = buildHealthOptimizedDraft({
             placementOrder: orderedSlots,
             plannerResult,
@@ -4710,6 +4723,7 @@ function AuthedShiftBuilder() {
             scheduledTmIds: effectiveScheduledTmIdsTonight,
             baseAssignments: storeAssignmentsForFit as Record<string, any>,
           });
+          await yieldToMain();
           const draftForGrok =
             Object.keys(healthOptimized.draft).length > 0
               ? healthOptimized.draft
@@ -4897,6 +4911,7 @@ function AuthedShiftBuilder() {
           placementMethod: isGrokHybrid ? "grok-hybrid" : engineConfig.placementMethod,
         });
 
+        await yieldToMain();
         applyPlannerResultAsDraft(
           { ...plannerResult, proposedAssignments },
           rosterForEngine,
@@ -5731,19 +5746,22 @@ function AuthedShiftBuilder() {
     }
   }, [currentNight.notes, selectedDay.date]);
 
-  const hydratedTasksDayRef = React.useRef<string | null>(null);
-  const previousHydratedTasksDayRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
+  const lastHydratedTasksSigRef = React.useRef<string>("");
+  const nightTasksSig = React.useMemo(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
+    const rows = currentNight.tasks as NightSlotTask[] | undefined;
+    if (!rows?.length) return `${dayKey}:0`;
+    return `${dayKey}:${rows.length}:${rows.map((r) => r.id).join(",")}`;
+  }, [currentNight.tasks, selectedDay.date]);
+
+  React.useEffect(() => {
     if (currentNight.isSecondaryLoading) return;
-    if (hydratedTasksDayRef.current === dayKey) return;
+    if (lastHydratedTasksSigRef.current === nightTasksSig) return;
+    lastHydratedTasksSigRef.current = nightTasksSig;
 
     const nightTaskRows = currentNight.tasks as NightSlotTask[] | undefined;
-    previousHydratedTasksDayRef.current = dayKey;
-    hydratedTasksDayRef.current = dayKey;
-
     if (!nightTaskRows?.length) {
-      setSelectedTasks({});
+      startHeavyTransition(() => setSelectedTasks({}));
       return;
     }
     const tasksByUiKey: Record<string, NightSlotTask[]> = {};
@@ -5761,8 +5779,8 @@ function AuthedShiftBuilder() {
       }
       (tasksByUiKey[uiKey] ??= []).push(row);
     });
-    setSelectedTasks(tasksByUiKey);
-  }, [currentNight.isSecondaryLoading, currentNight.tasks, selectedDay.date]);
+    startHeavyTransition(() => setSelectedTasks(tasksByUiKey));
+  }, [currentNight.isSecondaryLoading, nightTasksSig, currentNight.tasks, startHeavyTransition]);
 
   React.useEffect(() => {
     const next = effectiveCardBorders;
@@ -6075,8 +6093,9 @@ function AuthedShiftBuilder() {
         patchNightSecondaryTasksCache(currentNight.queryClient, dateKey, fresh);
       }
 
-      setSelectedTasks(mapNightTasksToUiKeys(fresh));
-      hydratedTasksDayRef.current = dateKey;
+      const mapped = mapNightTasksToUiKeys(fresh);
+      startHeavyTransition(() => setSelectedTasks(mapped));
+      lastHydratedTasksSigRef.current = `${dateKey}:${fresh.length}:${fresh.map((r) => r.id).join(",")}`;
 
       const sweeperNote =
         result.excludedSweepers > 0
@@ -6087,7 +6106,23 @@ function AuthedShiftBuilder() {
         "success",
       );
     },
-    [nightId, currentNight.queryClient, mapNightTasksToUiKeys, showToast],
+    [nightId, currentNight.queryClient, mapNightTasksToUiKeys, showToast, startHeavyTransition],
+  );
+
+  const refreshNightTasksFromServer = React.useCallback(
+    async (targetNightId: string, captureDate: Date) => {
+      if (!targetNightId) return;
+      const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+      const fresh = await getNightSlotTasks(targetNightId);
+      const dateKey = formatLocalDateISO(captureDate);
+      if (currentNight.queryClient) {
+        patchNightSecondaryTasksCache(currentNight.queryClient, dateKey, fresh);
+      }
+      const mapped = mapNightTasksToUiKeys(fresh);
+      startHeavyTransition(() => setSelectedTasks(mapped));
+      lastHydratedTasksSigRef.current = `${dateKey}:${fresh.length}:${fresh.map((r) => r.id).join(",")}`;
+    },
+    [currentNight.queryClient, mapNightTasksToUiKeys, startHeavyTransition],
   );
 
   const handleCopyTasksFromSource = React.useCallback(
@@ -6190,7 +6225,11 @@ function AuthedShiftBuilder() {
 
       const dateKey = formatLocalDateISO(selectedDay.date);
       await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
       await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+
+      const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
+      await yieldToMain();
 
       const freshBreaks = await getNightBreakAssignments(nid);
       const breakByTm: Record<string, number> = {};
@@ -6209,12 +6248,14 @@ function AuthedShiftBuilder() {
         return next;
       };
 
-      setAssignments(patchBreakGroups);
-      try {
-        useShiftBuilderStore.getState().setAssignments(patchBreakGroups);
-      } catch {
-        /* store optional */
-      }
+      startHeavyTransition(() => {
+        setAssignments(patchBreakGroups);
+        try {
+          useShiftBuilderStore.getState().setAssignments(patchBreakGroups);
+        } catch {
+          /* store optional */
+        }
+      });
 
       showToast(
         `Restored default breaks — ${applied} slot${applied !== 1 ? "s" : ""} updated`,
@@ -6236,6 +6277,7 @@ function AuthedShiftBuilder() {
     showToast,
     currentNight.queryClient,
     resolveNightIdForDate,
+    startHeavyTransition,
   ]);
 
   const persistRemoveTask = React.useCallback(
@@ -8402,15 +8444,25 @@ function AuthedShiftBuilder() {
             setTMCommandEpoch((e) => e + 1);
             setSudoDataEpoch((e) => e + 1);
 
-            // Force the TanStack Query layer (useCurrentNight) to refetch the current night.
-            // This is the primary source for many surfaces and will pick up assignment,
-            // break, task, and note changes pushed from Sudo.
+            const dateKey = formatLocalDateISO(selectedDay.date);
             try {
-              const dateKey = selectedDay.date.toISOString().slice(0, 10);
-              // Use the real core key that powers the board + live layer
-            currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-            currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] }); // legacy listeners too
-            } catch {}
+              currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+              currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+              currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+            } catch {
+              /* ignore */
+            }
+
+            const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
+            await yieldToMain();
+
+            if (nightId) {
+              try {
+                await refreshNightTasksFromServer(nightId, selectedDay.date);
+              } catch (e) {
+                console.warn("[sudo] failed to refresh tasks after Sudo change", e);
+              }
+            }
 
             // Force-refresh the current night's break data (and other day-specific data)
             // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
@@ -8423,34 +8475,33 @@ function AuthedShiftBuilder() {
                   if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
                 });
 
-                setAssignments((prev: any) => {
-                  const next = { ...prev };
-                  Object.keys(next).forEach(k => {
-                    const a = next[k];
-                    if (a.tmId && breakByTm[a.tmId] !== undefined) {
-                      next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
-                    }
-                  });
-                  return next;
-                });
-
-                // Also patch the Zustand store that the isolated Board (and BreakBadge on cards)
-                // subscribes to via useAssignments(). This makes defaults push from Sudo
-                // immediately visible on placement cards without waiting for the query refetch.
-                try {
-                  useShiftBuilderStore.getState().setAssignments((prev: any) => {
+                startHeavyTransition(() => {
+                  setAssignments((prev: any) => {
                     const next = { ...prev };
                     Object.keys(next).forEach(k => {
                       const a = next[k];
-                      if (a?.tmId && breakByTm[a.tmId] !== undefined) {
+                      if (a.tmId && breakByTm[a.tmId] !== undefined) {
                         next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
                       }
                     });
                     return next;
                   });
-                } catch (e) {
-                  console.warn('[sudo] failed to patch store with breakGroups after Sudo change', e);
-                }
+
+                  try {
+                    useShiftBuilderStore.getState().setAssignments((prev: any) => {
+                      const next = { ...prev };
+                      Object.keys(next).forEach(k => {
+                        const a = next[k];
+                        if (a?.tmId && breakByTm[a.tmId] !== undefined) {
+                          next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
+                        }
+                      });
+                      return next;
+                    });
+                  } catch (e) {
+                    console.warn('[sudo] failed to patch store with breakGroups after Sudo change', e);
+                  }
+                });
 
                 // Per operator rule: after Sudo changes (e.g. Defaults push), only keep
                 // break rows for TMs who are actually placed on the current deployment.
