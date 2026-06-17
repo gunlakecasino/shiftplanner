@@ -15,11 +15,14 @@ body.golden-export-raster .print-dual-container .print-artboard {
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  border: none;
+  outline: none;
   border-radius: 0;
-  box-shadow: none;
+  box-shadow: none !important;
+  filter: none;
   box-sizing: border-box;
   font-family: var(--font-atkinson), var(--font-geist-sans), system-ui, sans-serif;
-  contain: layout style paint;
+  contain: none;
 }
 
 body.printing-dual-mode .print-dual-container .print-artboard .assignment-card,

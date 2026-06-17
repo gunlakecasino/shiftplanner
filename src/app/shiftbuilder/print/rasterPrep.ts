@@ -9,9 +9,27 @@ import type { GoldenPrintSession } from "./printSession";
  * Stage export artboards off-screen at full opacity so html-to-image captures faithfully
  * without flashing pages over the Print Command Center UI.
  */
+/** Kill paper chrome that html-to-image paints as a gray halo around the 1056×816 sheet. */
+export function stripGoldenRasterChrome(artboard: HTMLElement): void {
+  const chrome: Array<[string, string]> = [
+    ["box-shadow", "none"],
+    ["border", "none"],
+    ["outline", "none"],
+    ["border-radius", "0"],
+    ["filter", "none"],
+    ["contain", "none"],
+    ["margin", "0"],
+    ["background-color", "#ffffff"],
+  ];
+  for (const [prop, value] of chrome) {
+    artboard.style.setProperty(prop, value, "important");
+  }
+}
+
 export function prepareExportSessionForRaster(session: GoldenPrintSession): void {
   if (typeof document !== "undefined") {
-    document.body.classList.remove("golden-export-raster");
+    // Keep export CSS active while html-to-image clones computed styles.
+    document.body.classList.add("golden-export-raster", "printing-dual-mode");
   }
 
   const container = session.container;
@@ -34,6 +52,7 @@ export function prepareExportSessionForRaster(session: GoldenPrintSession): void
   container.querySelectorAll<HTMLElement>(".print-artboard").forEach((ab) => {
     ab.style.opacity = "1";
     ab.style.visibility = "visible";
+    stripGoldenRasterChrome(ab);
   });
 }
 

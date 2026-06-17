@@ -64,9 +64,28 @@ function injectSessionStyles(config: PrintConfig, mode: GoldenPrintSessionMode):
       ? ""
       : `@media print { .print-dual-container .print-artboard { zoom: ${zoomValue} !important; } }`;
 
+  const exportRasterChrome =
+    mode === "export"
+      ? `
+    body.printing-dual-mode .print-dual-container,
+    body.golden-export-raster .print-dual-container,
+    body.printing-dual-mode .print-dual-container .print-artboard,
+    body.golden-export-raster .print-dual-container .print-artboard {
+      box-shadow: none !important;
+      border: none !important;
+      outline: none !important;
+      border-radius: 0 !important;
+      filter: none !important;
+      contain: none !important;
+      background: #ffffff !important;
+    }
+  `
+      : "";
+
   style.textContent = `
     @page { size: 11in 8.5in landscape; margin: ${marginValue} !important; }
     ${zoomRule}
+    ${exportRasterChrome}
   `;
   document.head.appendChild(style);
   return style;

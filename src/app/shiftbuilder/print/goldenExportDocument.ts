@@ -6,6 +6,7 @@ import {
   GOLDEN_RASTER_STAGING_LEFT_PX,
   GOLDEN_WIDTH_PX,
 } from "./goldenConstants";
+import { stripGoldenRasterChrome } from "./rasterPrep";
 import { waitForGoldenRenderSettled } from "./printSession";
 
 type RasterResult = {
@@ -101,10 +102,24 @@ async function measureRasterDataUrl(dataUrl: string): Promise<{ width: number; h
   });
 }
 
+const GOLDEN_RASTER_ROOT_STYLE: Partial<CSSStyleDeclaration> = {
+  boxShadow: "none",
+  border: "none",
+  outline: "none",
+  borderRadius: "0",
+  filter: "none",
+  contain: "none",
+  margin: "0",
+  overflow: "hidden",
+  backgroundColor: "#ffffff",
+};
+
 async function captureArtboardPixels(
   artboard: HTMLElement,
   args: { pixelRatio: number; usePng: boolean },
 ): Promise<RasterResult> {
+  stripGoldenRasterChrome(artboard);
+
   const captureOpts = {
     pixelRatio: args.pixelRatio,
     width: GOLDEN_WIDTH_PX,
@@ -112,6 +127,7 @@ async function captureArtboardPixels(
     cacheBust: true,
     backgroundColor: "#ffffff",
     skipFonts: false,
+    style: GOLDEN_RASTER_ROOT_STYLE,
   };
 
   const dataUrl = args.usePng
@@ -140,15 +156,13 @@ function applyArtboardContract(artboard: HTMLElement): void {
   artboard.style.height = `${GOLDEN_HEIGHT_PX}px`;
   artboard.style.minHeight = `${GOLDEN_HEIGHT_PX}px`;
   artboard.style.maxHeight = `${GOLDEN_HEIGHT_PX}px`;
-  artboard.style.overflow = "hidden";
-  artboard.style.margin = "0";
-  artboard.style.boxShadow = "none";
   artboard.style.zoom = "1";
   artboard.style.transform = "none";
   artboard.style.display = "flex";
   artboard.style.flexDirection = "column";
   artboard.style.opacity = "1";
   artboard.style.visibility = "visible";
+  stripGoldenRasterChrome(artboard);
 }
 
 /**
