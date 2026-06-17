@@ -176,6 +176,8 @@ import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
 import PlacementPad from "./components/PlacementPad";
+import PlacementDock from "./components/placement-dock/PlacementDock";
+import { placementDockStageRightInset } from "@/lib/shiftbuilder/tabletDevice";
 import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
@@ -1884,16 +1886,6 @@ function AuthedShiftBuilder() {
     }
   }, [cmdkOpen, selectedSlotKey]);
 
-  // iPad: hide bottom chrome while PlacementPad sheet is open (avoids LIVE + rotation overlap).
-  React.useEffect(() => {
-    if (viewMode !== "canvas") return;
-    if (isTabletTouchDevice() && selectedSlotKey) {
-      hideOpsStatusBar();
-      return;
-    }
-    ensureOpsStatusBar();
-  }, [viewMode, selectedSlotKey]);
-
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
 
   // Each pill group collapses to its active value by default and expands
@@ -1915,21 +1907,22 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
+    const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
       return {
         top: stageTopInsetPx(),
-        right: tablet ? 12 : 16,
+        right: (tablet ? 12 : 16) + dockInset,
         bottom: builderStageBottomInsetPx(),
         left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 12 : 16,
       };
     }
     return {
       top: stageTopInsetPx(),
-      right: tablet ? 32 : 40,
+      right: (tablet ? 32 : 40) + dockInset,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
-  }, [rosterOpen, isBuilderLiveCanvas]);
+  }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey]);
 
   const {
     zoomMode,
@@ -7754,36 +7747,43 @@ function AuthedShiftBuilder() {
                 />
                 {/* Render pad context directly when weekly overview page is active (board not rendered).
                     This ensures clicking names/cells in weekly (builder mode especially) opens and shows the PlacementPad context. */}
-                {selectedSlotKey && currentView === "weekly" && (
-                  <PlacementPad
-                    slotKey={selectedSlotKey}
-                    anchor="right"
-                    hostId={selectedSlotKey}
-                    onClose={() => setSelectedSlotKey(null)}
-                    assignments={padAssignments}
-                    selectedTasks={selectedTasks}
-                    selectedDay={selectedDay}
-                    members={effectiveRealRoster}
-                    auxDefs={auxDefs}
-                    isDark={isDark}
-                    isCurrentNightLocked={isCurrentNightLocked}
-                    setBreakGroupForSlot={setBreakGroupForSlot}
-                    onAddCoverage={handlePadAddCoverage}
-                    onLiveUnassign={handleBoardLiveUnassign}
-                    onToggleLock={handlePadToggleLock}
-                    onAssign={handlePadAssign}
-                    onAddTask={(sk, label) => handleCmdkAddTask(sk, label)}
-                    onRemoveTask={handleBoardRemoveTask}
-                    onAssignSweeper={(sk, label) => handleAssignSweeperTask(sk, label)}
-                    onRequestEngineInsight={handleBoardRequestEngineInsight}
-                    scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
-                    allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
-                    onAddOnCall={handlePadAddOnCall}
-                    onMarkUnavailable={handlePadMarkUnavailable}
-                    isDraftMode={isDraftMode}
-                    draftAssignments={draftAssignments}
-                  />
-                )}
+                {selectedSlotKey && currentView === "weekly" && (() => {
+                  const weeklyPadProps = {
+                    slotKey: selectedSlotKey,
+                    onClose: () => setSelectedSlotKey(null),
+                    assignments: padAssignments,
+                    selectedTasks,
+                    selectedDay,
+                    members: effectiveRealRoster,
+                    auxDefs,
+                    isDark,
+                    isCurrentNightLocked,
+                    setBreakGroupForSlot,
+                    onAddCoverage: handlePadAddCoverage,
+                    onLiveUnassign: handleBoardLiveUnassign,
+                    onToggleLock: handlePadToggleLock,
+                    onAssign: handlePadAssign,
+                    onAddTask: (sk: string, label: string) => handleCmdkAddTask(sk, label),
+                    onRemoveTask: handleBoardRemoveTask,
+                    onAssignSweeper: (sk: string, label: string) => handleAssignSweeperTask(sk, label),
+                    onRequestEngineInsight: handleBoardRequestEngineInsight,
+                    scheduledUnassigned: selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned,
+                    allEligibleTms: selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms,
+                    onAddOnCall: handlePadAddOnCall,
+                    onMarkUnavailable: handlePadMarkUnavailable,
+                    isDraftMode,
+                    draftAssignments,
+                  };
+                  return isTabletTouchDevice() ? (
+                    <PlacementDock {...weeklyPadProps} />
+                  ) : (
+                    <PlacementPad
+                      {...weeklyPadProps}
+                      anchor="right"
+                      hostId={selectedSlotKey}
+                    />
+                  );
+                })()}
               </div>
                 </div> {/* close paper's relative wrapper (top bar lives above paper, paper is full width) */}
 

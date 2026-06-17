@@ -25,6 +25,8 @@ import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
+import PlacementDock from "./placement-dock/PlacementDock";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import TaskTextEditPad from "./TaskTextEditPad";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
@@ -465,18 +467,37 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return null;
   }, [selectedSlotKey, auxDefs]);
 
-  // Close placement pad on outside click
+  // Close placement pad on outside click (flyout + right-side dock)
   React.useEffect(() => {
     if (!selectedSlotKey) return;
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest("[data-slot-key]") && !target.closest(".placement-pad")) {
+      if (
+        !target.closest("[data-slot-key]") &&
+        !target.closest(".placement-pad") &&
+        !target.closest(".placement-dock")
+      ) {
         onSlotClose?.();
       }
     };
     document.addEventListener("click", onDocClick, true);
     return () => document.removeEventListener("click", onDocClick, true);
   }, [selectedSlotKey, onSlotClose]);
+
+  // iPad dock: ring the active slot card while the inspector is open
+  React.useEffect(() => {
+    document.querySelectorAll(".sb-dock-active-slot").forEach((el) => {
+      el.classList.remove("sb-dock-active-slot");
+    });
+    if (!isTabletTouchDevice() || !selectedSlotKey) return;
+    const hosts = document.querySelectorAll(
+      `[data-slot-key="${CSS.escape(selectedSlotKey)}"]`,
+    );
+    hosts.forEach((el) => el.classList.add("sb-dock-active-slot"));
+    return () => {
+      hosts.forEach((el) => el.classList.remove("sb-dock-active-slot"));
+    };
+  }, [selectedSlotKey, currentView]);
 
   // === Task text/font attributes pad (double-click on TaskRow) ===
   // Local to Board (builder-only UI state). No need to lift open/close to Client.
@@ -663,47 +684,57 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     onSlotToggle?.(k);
   }, [onSlotToggle]);
 
+  const placementPadProps = (slotKey: string) => ({
+    slotKey,
+    onClose: () => onSlotClose?.(),
+    assignments: padDisplayAssignments,
+    selectedTasks,
+    selectedDay,
+    members,
+    auxDefs,
+    isDark,
+    isCurrentNightLocked,
+    setBreakGroupForSlot,
+    onAddCoverage,
+    onLiveUnassign: onClearSlot ?? onLiveUnassign,
+    onToggleLock,
+    onAssign,
+    onAddTask,
+    onRemoveTask,
+    onAssignSweeper,
+    onRequestEngineInsight,
+    scheduledUnassigned,
+    allEligibleTms,
+    onAddOnCall,
+    onMarkUnavailable,
+    boardPrerenderedFit: fitBySlot[slotKey],
+    isDraftMode,
+    draftAssignments,
+    weeklyRecentHistory,
+    insightsEnabled: placementPadInsightsEnabled,
+    enableTmDragAssign,
+  });
+
   const renderPlacementPad = (
     slotKey: string,
     anchor: PlacementPadAnchor,
     hostId: string,
   ) => {
-    if (useExternalPad) return null;
+    if (useExternalPad || isTabletTouchDevice()) return null;
     if (selectedSlotKey !== slotKey) return null;
     return (
       <PlacementPad
-        slotKey={slotKey}
+        {...placementPadProps(slotKey)}
         anchor={anchor}
         hostId={hostId}
-        onClose={() => onSlotClose?.()}
-        assignments={padDisplayAssignments}
-        selectedTasks={selectedTasks}
-        selectedDay={selectedDay}
-        members={members}
-        auxDefs={auxDefs}
-        isDark={isDark}
-        isCurrentNightLocked={isCurrentNightLocked}
-        setBreakGroupForSlot={setBreakGroupForSlot}
-        onAddCoverage={onAddCoverage}
-        onLiveUnassign={onClearSlot ?? onLiveUnassign}
-        onToggleLock={onToggleLock}
-        onAssign={onAssign}
-        onAddTask={onAddTask}
-        onRemoveTask={onRemoveTask}
-        onAssignSweeper={onAssignSweeper}
-        onRequestEngineInsight={onRequestEngineInsight}
-        scheduledUnassigned={scheduledUnassigned}
-        allEligibleTms={allEligibleTms}
-        onAddOnCall={onAddOnCall}
-        onMarkUnavailable={onMarkUnavailable}
-        boardPrerenderedFit={fitBySlot[slotKey]}
-        isDraftMode={isDraftMode}
-        draftAssignments={draftAssignments}
-        weeklyRecentHistory={weeklyRecentHistory}
-        insightsEnabled={placementPadInsightsEnabled}
-        enableTmDragAssign={enableTmDragAssign}
       />
     );
+  };
+
+  const renderPlacementDock = () => {
+    if (useExternalPad || !isTabletTouchDevice()) return null;
+    if (!activePlacementPad || !selectedSlotKey) return null;
+    return <PlacementDock {...placementPadProps(activePlacementPad.slotKey)} />;
   };
 
   const getLocs = (a: any) => {
@@ -974,6 +1005,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       <div className={`flex flex-col w-full ${isPrintPreview ? 'flex-1 min-h-0 overflow-hidden' : 'overflow-y-auto pb-8'}`}>
         {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
         {renderTaskTextEditPad()}
+        {renderPlacementDock()}
         {currentView === "deployment" ? (
           <>
             {/* ZONES — custom layout (ZONE_VISUAL_ORDER from constants):

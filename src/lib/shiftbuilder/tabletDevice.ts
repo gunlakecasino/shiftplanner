@@ -26,3 +26,10 @@ export function rosterStageLeftInset(): number {
 export function tabletPencilLongHoverDelay(): number {
   return isTabletTouchDevice() ? 1500 : 3500;
 }
+
+/** Right-side Placement Dock width on iPad (inspector panel). */
+export const PLACEMENT_DOCK_WIDTH_PX = 380;
+
+export function placementDockStageRightInset(): number {
+  return isTabletTouchDevice() ? PLACEMENT_DOCK_WIDTH_PX + 8 : 0;
+}

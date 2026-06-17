@@ -53,10 +53,16 @@ const Z9_STAT_RED = "#E53935";
 const LAST5_COUNT = 5;
 
 export type PlacementPadAnchor = "left" | "right" | "bottom";
+export type PlacementPadPresentation = "flyout" | "dock";
+export type PlacementDockTab = "assign" | "tasks" | "intel";
 
 export interface PlacementPadProps {
   slotKey: string;
   anchor: PlacementPadAnchor;
+  /** Tablet inspector — rendered inside PlacementDock (no bottom sheet / backdrop). */
+  presentation?: PlacementPadPresentation;
+  dockTab?: PlacementDockTab;
+  onDockTabChange?: (tab: PlacementDockTab) => void;
   /** Host card wrapper — portaled pad positions from [data-placement-host] rect. */
   hostId?: string;
   onClose: () => void;
@@ -816,6 +822,9 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   slotKey,
   anchor,
   hostId,
+  presentation = "flyout",
+  dockTab = "assign",
+  onDockTabChange,
   onClose,
   assignments,
   selectedTasks,
@@ -892,11 +901,18 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const closeSide = anchor === "left" ? "left" : "right";
   const railSide = anchor === "left" ? "right" : "left";
-  const showTmPicker = onAssign && (!a.tmId || assignMode);
-  const portalStyle = usePortalPlacementStyle(hostId, anchor, showTmPicker);
-  const tabletBottomSheet = isTabletTouchDevice() && !!hostId && !!portalStyle;
-  const usePortal = !!hostId && !!portalStyle;
-  const padLarge = tabletBottomSheet;
+  const isDock = presentation === "dock";
+  const showDockAssignedSummary =
+    isDock && dockTab === "assign" && !!a.tmId && !assignMode;
+  const showTmPicker =
+    onAssign && (assignMode || !a.tmId) && !showDockAssignedSummary;
+  const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
+  const tabletBottomSheet =
+    !isDock && isTabletTouchDevice() && !!hostId && !!portalStyle;
+  const usePortal = !isDock && !!hostId && !!portalStyle;
+  const padLarge = isDock || tabletBottomSheet;
+  const showTasksPane = !isDock || dockTab === "tasks";
+  const showIntelPane = !isDock || dockTab === "intel";
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -1666,11 +1682,21 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
   const padEl = (
     <motion.div
-      className={`placement-pad sb-pad-enter no-print ${usePortal ? "fixed" : anchorClass(anchor)} ${tabletBottomSheet ? "sb-tablet-bottom-sheet" : ""} z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]`}
+      className={`placement-pad sb-pad-enter no-print ${isDock ? "placement-dock-inner h-full" : usePortal ? "fixed" : anchorClass(anchor)} ${tabletBottomSheet ? "sb-tablet-bottom-sheet" : ""} ${isDock ? "" : "z-[60] rounded-2xl border border-white/40 dark:border-white/10 bg-white/95 dark:bg-zinc-950/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.32),0_2px_4px_-1px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[28px]"} flex flex-col overflow-hidden`}
       style={
-        usePortal
-          ? portalStyle!
-          : { width: PAD_W, maxHeight: (analystDetailsOpen || showTmPicker) ? PAD_MAX_HEIGHT : Math.min(520, PAD_MAX_HEIGHT), display: "flex", flexDirection: "column" }
+        isDock
+          ? { display: "flex", flexDirection: "column", height: "100%", width: "100%" }
+          : usePortal
+            ? portalStyle!
+            : {
+                width: PAD_W,
+                maxHeight:
+                  analystDetailsOpen || showTmPicker
+                    ? PAD_MAX_HEIGHT
+                    : Math.min(520, PAD_MAX_HEIGHT),
+                display: "flex",
+                flexDirection: "column",
+              }
       }
       onClick={(e) => e.stopPropagation()}
       {...(reducedMotion ? premiumPresenceReduced : premiumPresence)}
@@ -1680,6 +1706,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       {tabletBottomSheet ? (
         <div className="sb-pad-handle" aria-hidden />
       ) : null}
+      {!isDock ? (
+        <>
       {/* Accent rail */}
       <div
         className="absolute top-3 h-10 w-[3px] rounded-full"
@@ -1705,8 +1733,11 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       >
         ×
       </motion.button>
+        </>
+      ) : null}
 
-      {/* Header — fixed, never scrolls away */}
+      {/* Header — fixed, never scrolls away (flyout only; dock uses PlacementDock header) */}
+      {!isDock ? (
       <div className="shrink-0">
         <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2 pr-10">
           <div
@@ -1758,19 +1789,49 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
         </div>
         <div className="mx-3 border-t border-black/[0.06]" />
       </div>
+      ) : null}
 
       {/* Body — only this region scrolls when content is tall.
           In quick view (bold one-liner + provenance expander + always Matrix) we let height adapt to content
           so the marker card grows naturally with no scroll bar if the total fits under the screen-safe max. */}
       <div
         className={`min-h-0 overscroll-contain ${
-          (showTmPicker || analystDetailsOpen)
+          isDock || showTmPicker || analystDetailsOpen
             ? `flex-1 overflow-y-auto ${showTmPicker ? (padLarge ? "min-h-[360px]" : "min-h-[300px]") : ""}`
             : "overflow-visible"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        {showTmPicker ? (
+        {showDockAssignedSummary ? (
+          <div className={`flex flex-col gap-3 ${padLarge ? "px-4 py-4" : "px-3 py-3"}`}>
+            <p className={`font-medium text-neutral-600 ${padLarge ? "text-[15px]" : "text-[11px]"}`}>
+              {a.tmName} is assigned to this slot tonight.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setAssignMode(true);
+                onDockTabChange?.("assign");
+              }}
+              className={`w-full rounded-xl font-semibold text-white ${padLarge ? "min-h-11 py-3 text-[16px]" : "py-2 text-[11px]"}`}
+              style={{ background: accent }}
+            >
+              Swap team member
+            </button>
+            {a.tmName && onMarkUnavailable ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onMarkUnavailable(a.tmId, a.tmName, "called_off");
+                }}
+                className={`rounded-xl border border-amber-300 bg-amber-50 font-semibold text-amber-800 hover:bg-amber-100 ${padLarge ? "min-h-11 py-3 text-[14px]" : "py-2 text-[10px]"}`}
+              >
+                Mark unavailable
+              </button>
+            ) : null}
+          </div>
+        ) : showTmPicker ? (
           <div className={`flex h-full flex-col ${padLarge ? "min-h-[340px] px-4 py-3" : "min-h-[280px] px-2.5 py-2"}`}>
             <motion.div {...(reducedMotion ? premiumPresenceReduced : premiumPresence)} className="contents">
             <TmPicker
@@ -1797,7 +1858,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             />
             </motion.div>
           </div>
-        ) : coverageMode ? (
+        ) : coverageMode && showTasksPane ? (
           <InlineCoverage
             sourceKey={slotKey}
             auxDefs={auxDefs}
@@ -1809,7 +1870,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
           />
         ) : (
           <div className="flex flex-col">
-            {!a.tmName && (
+            {!a.tmName && !isDock && (
               <div className="px-3 pt-2 pb-1 space-y-2">
                 <button
                   type="button"
@@ -1826,6 +1887,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             )}
 
             {/* Tasks — visible immediately (they are current state, not dependent on xAI enrichment) */}
+            {showTasksPane ? (
             <div className="px-3 pt-2.5 pb-1">
               <div className="flex items-center justify-between mb-1.5">
                 <SectionLabel large={padLarge}>
@@ -1958,7 +2020,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 </motion.div>
               )}
             </div>
+            ) : null}
 
+            {showIntelPane ? (
+            <>
             {/* Targeted skeleton for the xAI area (bold one-liner + expander + always Matrix).
                 Placed exactly where the real xAI glass will appear (after tasks).
                 Shown while we are still awaiting the light determination headline.
@@ -1993,7 +2058,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
 
             {insightsEnabled && (analystDetailsOpen || !!insightStructured?.headline) && (
             <PlacementAnalystBlock
-              compactTablet={tabletBottomSheet}
+              compactTablet={padLarge}
               prerendered={prerenderedFit}
               loading={deepInsightLoading}
               detailsOpen={analystDetailsOpen}
@@ -2301,18 +2366,34 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
                 )}
               </div>
             )}
+            </>
+            ) : null}
           </div>
         )}
       </div>
 
-      {!showTmPicker && !coverageMode && (
+      {(isDock || (!showTmPicker && !coverageMode)) && (
         <div className="sb-pad-actions grid grid-cols-4 gap-1 border-t border-black/[0.06] bg-neutral-50/50 p-1.5 shrink-0">
           {(
             [
               { label: a.isLocked ? "Locked" : "Lock", onClick: () => onToggleLock?.(slotKey), variant: "default" as const },
               { label: "Clear", onClick: () => onLiveUnassign?.(slotKey), variant: "danger" as const },
-              { label: "Coverage", onClick: () => setCoverageMode(true), variant: "default" as const },
-              { label: "Swap", onClick: () => setAssignMode(true), variant: "default" as const },
+              {
+                label: "Coverage",
+                onClick: () => {
+                  setCoverageMode(true);
+                  onDockTabChange?.("tasks");
+                },
+                variant: "default" as const,
+              },
+              {
+                label: "Swap",
+                onClick: () => {
+                  setAssignMode(true);
+                  onDockTabChange?.("assign");
+                },
+                variant: "default" as const,
+              },
             ] as const
           ).map((btn) => (
             <motion.button
@@ -2337,6 +2418,10 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
       )}
     </motion.div>
   );
+
+  if (isDock) {
+    return padEl;
+  }
 
   if (usePortal && typeof document !== "undefined") {
     const portalContent = tabletBottomSheet ? (

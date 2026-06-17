@@ -1384,7 +1384,55 @@ button,
     padding-left: calc(var(--sb-stage-inset-left, 12px) + env(safe-area-inset-left, 0px)) !important;
   }
 
-  /* Placement pad bottom sheet */
+  /* Placement Dock — right-side inspector (replaces bottom sheet on iPad) */
+  .placement-dock {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    right: env(safe-area-inset-right, 0px);
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    width: 380px;
+    max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    border-radius: 20px 0 0 20px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-right: none;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    box-shadow: -10px 0 40px -12px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  .dark .placement-dock {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(12, 12, 14, 0.97);
+  }
+
+  .placement-dock-inner {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .placement-dock-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sb-dock-active-slot > .assignment-card,
+  .sb-dock-active-slot.assignment-card {
+    box-shadow:
+      0 0 0 2px #007aff,
+      0 0 0 5px rgba(0, 122, 255, 0.16) !important;
+  }
+
+  /* Placement pad bottom sheet (legacy — desktop flyout still uses portal on tablet if dock bypassed) */
   .sb-tablet-bottom-sheet {
     border-radius: 20px 20px 0 0 !important;
     border-bottom: none !important;
