@@ -106,38 +106,44 @@ export function useTodayBoard({
 
   // Resolve publish status from the selected calendar date — not shiftData nightId
   // (which can lag a day behind during week navigation and flash the wrong board).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { getNightIdForDate, getNightMeta } = await import("@/lib/shiftbuilder/data");
-        const id = await getNightIdForDate(selectedDay.date);
-        if (!id) {
-          if (!cancelled) {
-            setNightStatus(null);
-            setIsCurrentNightLocked(false);
-            setStatusLoading(false);
-          }
-          return;
-        }
-        const meta = await getNightMeta(id);
-        if (!cancelled) {
-          setIsCurrentNightLocked(!!meta.isLocked);
-          setNightStatus(meta.status);
-          setStatusLoading(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setNightStatus(null);
-          setIsCurrentNightLocked(false);
-          setStatusLoading(false);
-        }
+  const refreshPublishMeta = useCallback(async (date: Date, opts?: { showLoading?: boolean }) => {
+    if (opts?.showLoading) setStatusLoading(true);
+    try {
+      const { getNightIdForDate, getNightMeta } = await import("@/lib/shiftbuilder/data");
+      const id = await getNightIdForDate(date);
+      if (!id) {
+        setNightStatus(null);
+        setIsCurrentNightLocked(false);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
+      const meta = await getNightMeta(id);
+      setIsCurrentNightLocked(!!meta.isLocked);
+      setNightStatus(meta.status);
+    } catch {
+      setNightStatus(null);
+      setIsCurrentNightLocked(false);
+    } finally {
+      if (opts?.showLoading) setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPublishMeta(selectedDay.date, { showLoading: true });
+  }, [selectedDay.date, refreshPublishMeta]);
+
+  // Live publish: refetch meta while staying on the same day (Builder publish/unpublish).
+  useEffect(() => {
+    const sync = () => void refreshPublishMeta(selectedDay.date);
+    const interval = window.setInterval(sync, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
     };
-  }, [selectedDay.date]);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [selectedDay.date, refreshPublishMeta]);
 
   const isPublished = nightStatus === "published";
   /** /today only surfaces published history; tonight stays available for quick edits. */

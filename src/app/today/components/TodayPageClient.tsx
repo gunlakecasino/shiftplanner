@@ -95,6 +95,8 @@ function TodayBoardShell({
         onPrint={board.handlePrint}
         isPrinting={board.isPrinting}
         todayShiftDate={nav.todayDate}
+        publishedStripDates={nav.publishedStripDates}
+        publishedStripDatesLoading={nav.publishedStripDatesFetching}
       />
 
       {board.isScheduleHidden ? (

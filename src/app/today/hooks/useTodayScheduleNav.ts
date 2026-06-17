@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addDays,
   buildDayDefs,
@@ -16,6 +16,7 @@ import {
   type NavDayStripItem,
 } from "@/lib/shiftbuilder/dateUtils";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
+import { fetchPublishedDates } from "../lib/publishedDates";
 import { readSavedScheduleDate, writeSavedScheduleDate } from "../lib/scheduleNavStorage";
 
 export type TodayBoardView = "deployment" | "breaks";
@@ -82,6 +83,34 @@ export function useTodayScheduleNav() {
     () => buildNavDayStrip(weekStart, todayDate),
     [weekStart, todayDate],
   );
+
+  const stripPublishRange = useMemo(() => {
+    if (navStrip.length === 0) return null;
+    let min = navStrip[0].date.getTime();
+    let max = min;
+    for (const item of navStrip) {
+      const t = item.date.getTime();
+      if (t < min) min = t;
+      if (t > max) max = t;
+    }
+    return {
+      from: formatLocalDateISO(new Date(min)),
+      to: formatLocalDateISO(new Date(max)),
+    };
+  }, [navStrip]);
+
+  const {
+    data: publishedStripDates,
+    isFetching: publishedStripDatesFetching,
+  } = useQuery({
+    queryKey: ["todayPublishedDates", stripPublishRange?.from, stripPublishRange?.to],
+    queryFn: () => fetchPublishedDates(stripPublishRange!.from, stripPublishRange!.to),
+    enabled: !!stripPublishRange,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
 
   const selectedDay = dayDefs[selectedDayIndex] ?? dayDefs[0];
   const selectedNavId = navIdForWeekDay(selectedDayIndex);
@@ -180,6 +209,8 @@ export function useTodayScheduleNav() {
     selectNavDay,
     jumpToDate,
     prefetchNight,
+    publishedStripDates,
+    publishedStripDatesFetching,
   };
 }
 

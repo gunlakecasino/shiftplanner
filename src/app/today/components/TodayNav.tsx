@@ -17,6 +17,7 @@ import {
 } from "@/lib/shiftbuilder/dateUtils"; // addDays removed after calendar month nav simplification
 import { DEPLOYMENT_CANVAS_MAX_WIDTH_PX } from "@/lib/shiftbuilder/canvasLayout";
 import { clearTodayOperatorName } from "../lib/todayChangeLog";
+import { fetchPublishedDates } from "../lib/publishedDates";
 import type { NavDayStripItem, TodayBoardView } from "../hooks/useTodayScheduleNav";
 
 const NAV_ICON = "h-3.5 w-3.5 shrink-0 opacity-80";
@@ -82,18 +83,6 @@ function NavToolButton({
   );
 }
 
-async function fetchPublishedDates(from: string, to: string): Promise<Set<string>> {
-  const res = await fetch(
-    `/api/today/published-dates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "same-origin", cache: "no-store" },
-  );
-  if (!res.ok) {
-    throw new Error(`Published dates unavailable (${res.status})`);
-  }
-  const json = (await res.json()) as { dates?: string[] };
-  return new Set(json.dates ?? []);
-}
-
 export type TodayNavProps = {
   navStrip: NavDayStripItem[];
   selectedNavId: number;
@@ -114,6 +103,9 @@ export type TodayNavProps = {
   isPrinting?: boolean;
   /** Shift-aware today (8:30am rollover) — keep calendar in sync with the nav strip. */
   todayShiftDate?: Date;
+  /** Published dates for the visible 9-day strip (grey out unpublished history). */
+  publishedStripDates?: Set<string>;
+  publishedStripDatesLoading?: boolean;
 };
 
 export function TodayNav({
@@ -134,6 +126,8 @@ export function TodayNav({
   onPrint,
   isPrinting = false,
   todayShiftDate: todayShiftDateProp,
+  publishedStripDates,
+  publishedStripDatesLoading = false,
 }: TodayNavProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState(() => new Date(selectedDayDate));
@@ -203,6 +197,8 @@ export function TodayNav({
     queryKey: ["todayPublishedDates", monthRange.from, monthRange.to],
     queryFn: () => fetchPublishedDates(monthRange.from, monthRange.to),
     staleTime: 1000 * 60 * 5,
+    refetchInterval: calendarOpen ? 60_000 : false,
+    refetchOnWindowFocus: true,
     retry: 1,
     enabled: calendarOpen,
   });
@@ -214,6 +210,8 @@ export function TodayNav({
 
   const monthLabel = `${MONTH_LONG[selectedDayDate.getMonth()]} ${selectedDayDate.getFullYear()}`;
   const todayShiftDate = todayShiftDateProp ?? currentShiftDate();
+  const stripPublishReady =
+    publishedStripDates !== undefined && !publishedStripDatesLoading;
 
   const handlePickDate = (d: Date) => {
     onJumpToDate(d);
@@ -302,69 +300,17 @@ export function TodayNav({
                 border: "1px solid var(--sb-glass-border)",
               }}
             >
-              {navStrip.map((day) => {
-                const isActive = day.navId === selectedNavId;
-                const isBridge = !!day.bridge;
-
-                return (
-                  <button
-                    key={day.navId}
-                    type="button"
-                    onClick={() => onSelectNavDay(day.navId)}
-                    onMouseEnter={() => onDayHover?.(day.date)}
-                    onTouchStart={() => onDayHover?.(day.date)}
-                    aria-current={isActive ? "date" : undefined}
-                    className={cn(
-                      datePillVariants({ active: isActive }),
-                      "relative z-10 flex min-h-[36px] w-full min-w-0 touch-manipulation items-center justify-center rounded-full px-0.5 font-semibold tabular-nums transition-all",
-                      isActive ? "px-1 text-[13px]" : "text-[12px]",
-                    )}
-                    style={{
-                      background: isActive ? ACCENT : "transparent",
-                      color: isActive ? "#fff" : "#52525B",
-                      border: isActive
-                        ? `1px solid ${ACCENT}`
-                        : isBridge
-                          ? "1px dashed rgba(0,0,0,0.15)"
-                          : "1px solid transparent",
-                      fontWeight: isActive ? 700 : 600,
-                      opacity: isBridge && !isActive ? 0.85 : 1,
-                    }}
-                    title={
-                      isBridge
-                        ? day.bridge === "prev-week-last"
-                          ? "Last day of previous GRAVE week (Thursday)"
-                          : "First day of next GRAVE week (Friday)"
-                        : undefined
-                    }
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="today-active-date-pill"
-                        className="absolute inset-0 -z-10 rounded-full"
-                        style={{ background: ACCENT }}
-                        transition={SPRING}
-                      />
-                    )}
-                    <span className="flex w-full min-w-0 flex-col items-center justify-center gap-0 truncate leading-none tabular-nums">
-                      {isActive && day.shortLabel ? (
-                        <span
-                          className="text-[9px] font-bold leading-none tracking-[0.4px] opacity-90"
-                          style={{ color: "#fff" }}
-                        >
-                          {day.shortLabel}
-                        </span>
-                      ) : null}
-                      <span className="leading-none">
-                        {isActive ? String(day.dateNum) : day.dayLetter}
-                      </span>
-                    </span>
-                    {day.isToday && !isActive ? (
-                      <span className="absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#007AFF]" />
-                    ) : null}
-                  </button>
-                );
-              })}
+              {navStrip.map((day) => (
+                <NavStripDayPill
+                  key={day.navId}
+                  day={day}
+                  isActive={day.navId === selectedNavId}
+                  stripPublishReady={stripPublishReady}
+                  publishedStripDates={publishedStripDates}
+                  onSelectNavDay={onSelectNavDay}
+                  onDayHover={onDayHover}
+                />
+              ))}
             </div>
 
             <motion.button
@@ -577,6 +523,106 @@ export function TodayNav({
           )
         : null}
     </>
+  );
+}
+
+function NavStripDayPill({
+  day,
+  isActive,
+  stripPublishReady,
+  publishedStripDates,
+  onSelectNavDay,
+  onDayHover,
+}: {
+  day: NavDayStripItem;
+  isActive: boolean;
+  stripPublishReady: boolean;
+  publishedStripDates?: Set<string>;
+  onSelectNavDay: (navId: number) => void;
+  onDayHover?: (date: Date) => void;
+}) {
+  const isBridge = !!day.bridge;
+  const iso = formatLocalDateISO(day.date);
+  const isPublished = publishedStripDates?.has(iso) ?? false;
+  const isUnpublished =
+    stripPublishReady && !day.isToday && !isPublished && !isActive;
+
+  if (isUnpublished) {
+    return (
+      <span
+        className={cn(
+          datePillVariants({ active: false }),
+          "relative z-10 flex min-h-[36px] w-full min-w-0 cursor-default items-center justify-center rounded-full px-0.5 text-[12px] font-semibold tabular-nums select-none",
+        )}
+        style={{
+          color: "#D1D5DB",
+          opacity: 0.55,
+          border: isBridge ? "1px dashed rgba(0,0,0,0.08)" : "1px solid transparent",
+        }}
+        title="Not published — no schedule on /today"
+        aria-disabled="true"
+      >
+        <span className="leading-none">{day.dayLetter}</span>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectNavDay(day.navId)}
+      onMouseEnter={() => onDayHover?.(day.date)}
+      onTouchStart={() => onDayHover?.(day.date)}
+      aria-current={isActive ? "date" : undefined}
+      className={cn(
+        datePillVariants({ active: isActive }),
+        "relative z-10 flex min-h-[36px] w-full min-w-0 touch-manipulation items-center justify-center rounded-full px-0.5 font-semibold tabular-nums transition-all",
+        isActive ? "px-1 text-[13px]" : "text-[12px]",
+      )}
+      style={{
+        background: isActive ? ACCENT : "transparent",
+        color: isActive ? "#fff" : "#52525B",
+        border: isActive
+          ? `1px solid ${ACCENT}`
+          : isBridge
+            ? "1px dashed rgba(0,0,0,0.15)"
+            : "1px solid transparent",
+        fontWeight: isActive ? 700 : 600,
+        opacity: isBridge && !isActive ? 0.85 : 1,
+      }}
+      title={
+        isBridge
+          ? day.bridge === "prev-week-last"
+            ? "Last day of previous GRAVE week (Thursday)"
+            : "First day of next GRAVE week (Friday)"
+          : undefined
+      }
+    >
+      {isActive ? (
+        <motion.div
+          layoutId="today-active-date-pill"
+          className="absolute inset-0 -z-10 rounded-full"
+          style={{ background: ACCENT }}
+          transition={SPRING}
+        />
+      ) : null}
+      <span className="flex w-full min-w-0 flex-col items-center justify-center gap-0 truncate leading-none tabular-nums">
+        {isActive && day.shortLabel ? (
+          <span
+            className="text-[9px] font-bold leading-none tracking-[0.4px] opacity-90"
+            style={{ color: "#fff" }}
+          >
+            {day.shortLabel}
+          </span>
+        ) : null}
+        <span className="leading-none">
+          {isActive ? String(day.dateNum) : day.dayLetter}
+        </span>
+      </span>
+      {day.isToday && !isActive ? (
+        <span className="absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#007AFF]" />
+      ) : null}
+    </button>
   );
 }
 
