@@ -91,6 +91,76 @@ function isStageBleedGray(r: number, g: number, b: number): boolean {
   return r === g && g === b && r >= 240 && r <= 252;
 }
 
+function isRasterBackgroundPixel(r: number, g: number, b: number): boolean {
+  if (r >= 250 && g >= 250 && b >= 250) return true;
+  return isStageBleedGray(r, g, b);
+}
+
+/** Shift captured pixels so sheet content is centered in the 1056×816 raster. */
+export async function centerGoldenRasterContent(
+  dataUrl: string,
+  format: "PNG" | "JPEG",
+  quality = 0.92,
+): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const probe = new Image();
+    probe.onload = () => resolve(probe);
+    probe.onerror = () => reject(new Error("Golden raster center probe failed"));
+    probe.src = dataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+
+  ctx.drawImage(img, 0, 0);
+  const w = canvas.width;
+  const h = canvas.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+
+  let left = w;
+  let right = -1;
+  let top = h;
+  let bottom = -1;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (isRasterBackgroundPixel(d[i], d[i + 1], d[i + 2])) continue;
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+  }
+
+  if (right < left || bottom < top) return dataUrl;
+
+  const contentW = right - left + 1;
+  const contentH = bottom - top + 1;
+  const shiftX = Math.round((w - contentW) / 2 - left);
+  const shiftY = Math.round((h - contentH) / 2 - top);
+
+  if (shiftX === 0 && shiftY === 0) return dataUrl;
+
+  const centered = document.createElement("canvas");
+  centered.width = w;
+  centered.height = h;
+  const cctx = centered.getContext("2d");
+  if (!cctx) return dataUrl;
+
+  cctx.fillStyle = "#ffffff";
+  cctx.fillRect(0, 0, w, h);
+  cctx.drawImage(img, shiftX, shiftY);
+
+  return format === "PNG"
+    ? centered.toDataURL("image/png")
+    : centered.toDataURL("image/jpeg", quality);
+}
+
 /** Flatten stage-gray bleed strips on the right/bottom of a captured Golden page. */
 export async function flattenGoldenRasterStageBleed(
   dataUrl: string,

@@ -10,7 +10,7 @@ import {
   type GoldenPrintSession,
   waitForGoldenRenderSettled,
 } from "./printSession";
-import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX, LETTER_LANDSCAPE_PT } from "./goldenConstants";
+import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
 
 export type ExportProgress = {
   current: number;
@@ -29,8 +29,8 @@ function getPdfImagePlacement(config: PrintConfig): {
 } {
   const zoom = getPrintZoom(config);
   const { width: boxW, height: boxH, marginX, marginY } = getPrintContentBoxPt(config);
-  const imgW = LETTER_LANDSCAPE_PT.width * zoom;
-  const imgH = LETTER_LANDSCAPE_PT.height * zoom;
+  const imgW = boxW * zoom;
+  const imgH = boxH * zoom;
   return {
     x: marginX + (boxW - imgW) / 2,
     y: marginY + (boxH - imgH) / 2,

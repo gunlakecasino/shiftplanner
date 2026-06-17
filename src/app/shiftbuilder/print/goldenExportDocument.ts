@@ -7,6 +7,7 @@ import {
   GOLDEN_WIDTH_PX,
 } from "./goldenConstants";
 import {
+  centerGoldenRasterContent,
   flattenGoldenRasterStageBleed,
   mountGoldenRasterCaptureShell,
   stripGoldenRasterChrome,
@@ -152,6 +153,7 @@ async function captureArtboardPixels(
 
   const format = args.usePng ? "PNG" : "JPEG";
   dataUrl = await flattenGoldenRasterStageBleed(dataUrl, format, 0.92);
+  dataUrl = await centerGoldenRasterContent(dataUrl, format, 0.92);
 
   const dims = await measureRasterDataUrl(dataUrl);
 
