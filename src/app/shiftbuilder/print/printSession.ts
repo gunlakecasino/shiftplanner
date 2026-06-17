@@ -119,6 +119,8 @@ export function mountGoldenPrintSession(
     container.classList.add("golden-export-raster");
   }
 
+  document.documentElement.style.backgroundColor = "#ffffff";
+  document.body.style.backgroundColor = "#ffffff";
   document.body.classList.add("printing-dual-mode");
   if (mode === "export") {
     document.body.classList.add("golden-export-raster");
@@ -141,6 +143,8 @@ export function mountGoldenPrintSession(
       el.style.display = prevDisplay;
     });
     document.body.classList.remove("printing-dual-mode", "golden-export-raster");
+    document.documentElement.style.removeProperty("background-color");
+    document.body.style.removeProperty("background-color");
     container.remove();
     styleEl.remove();
   };

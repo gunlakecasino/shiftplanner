@@ -26,6 +26,138 @@ export function stripGoldenRasterChrome(artboard: HTMLElement): void {
   }
 }
 
+export type GoldenRasterCaptureMount = {
+  shell: HTMLElement;
+  artboard: HTMLElement;
+  restore: () => void;
+};
+
+/**
+ * html-to-image foreignObject can paint the builder stage gray (#F8F8FA) outside the
+ * artboard's painted box. Mount a hard white 1056×816 shell and capture that instead.
+ */
+export function mountGoldenRasterCaptureShell(artboard: HTMLElement): GoldenRasterCaptureMount {
+  const parent = artboard.parentElement;
+  if (!parent) {
+    throw new Error("Golden raster: artboard has no parent");
+  }
+
+  const shell = document.createElement("div");
+  shell.className = "sb-golden-raster-shell";
+  shell.setAttribute("data-golden-raster-shell", "1");
+  shell.style.cssText = [
+    `width:${GOLDEN_WIDTH_PX}px`,
+    `height:${GOLDEN_HEIGHT_PX}px`,
+    "overflow:hidden",
+    "background:#ffffff",
+    "box-sizing:border-box",
+    "margin:0",
+    "padding:0",
+    "border:none",
+    "outline:none",
+    "box-shadow:none",
+    "position:relative",
+    "display:block",
+  ].join(";");
+
+  const nextSibling = artboard.nextSibling;
+  parent.insertBefore(shell, artboard);
+  shell.appendChild(artboard);
+
+  artboard.style.setProperty("width", "100%", "important");
+  artboard.style.setProperty("height", "100%", "important");
+  artboard.style.setProperty("max-width", "100%", "important");
+  artboard.style.setProperty("min-width", "0", "important");
+  stripGoldenRasterChrome(artboard);
+
+  const restore = () => {
+    if (nextSibling) {
+      parent.insertBefore(artboard, nextSibling);
+    } else {
+      parent.appendChild(artboard);
+    }
+    shell.remove();
+    artboard.style.removeProperty("width");
+    artboard.style.removeProperty("height");
+    artboard.style.removeProperty("max-width");
+    artboard.style.removeProperty("min-width");
+  };
+
+  return { shell, artboard, restore };
+}
+
+/** Builder stage grays that leak into export rasters when foreignObject under-paints. */
+function isStageBleedGray(r: number, g: number, b: number): boolean {
+  return r === g && g === b && r >= 240 && r <= 252;
+}
+
+/** Flatten stage-gray bleed strips on the right/bottom of a captured Golden page. */
+export async function flattenGoldenRasterStageBleed(
+  dataUrl: string,
+  format: "PNG" | "JPEG",
+  quality = 0.92,
+): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const probe = new Image();
+    probe.onload = () => resolve(probe);
+    probe.onerror = () => reject(new Error("Golden raster bleed probe failed"));
+    probe.src = dataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const rightStripStart = Math.floor(w * 0.9);
+  const bottomStripStart = Math.floor(h * 0.9);
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const inRightBleed = x >= rightStripStart;
+      const inBottomBleed = y >= bottomStripStart;
+      if (!inRightBleed && !inBottomBleed) continue;
+      const i = (y * w + x) * 4;
+      if (!isStageBleedGray(d[i], d[i + 1], d[i + 2])) continue;
+      d[i] = 255;
+      d[i + 1] = 255;
+      d[i + 2] = 255;
+      d[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return format === "PNG"
+    ? canvas.toDataURL("image/png")
+    : canvas.toDataURL("image/jpeg", quality);
+}
+
+export async function withWhiteDocumentBackground<T>(fn: () => Promise<T>): Promise<T> {
+  const html = document.documentElement;
+  const body = document.body;
+  const prev = {
+    htmlBg: html.style.backgroundColor,
+    bodyBg: body.style.backgroundColor,
+  };
+  html.style.backgroundColor = "#ffffff";
+  body.style.backgroundColor = "#ffffff";
+  try {
+    return await fn();
+  } finally {
+    html.style.backgroundColor = prev.htmlBg;
+    body.style.backgroundColor = prev.bodyBg;
+  }
+}
+
 export function prepareExportSessionForRaster(session: GoldenPrintSession): void {
   if (typeof document !== "undefined") {
     // Keep export CSS active while html-to-image clones computed styles.

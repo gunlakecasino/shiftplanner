@@ -24,8 +24,14 @@ body.printing-dual-mode .print-dual-container .print-artboard {
 }
 
 body.golden-export-raster .print-dual-container .print-artboard {
-  contain: layout style paint;
+  contain: none;
   overflow: hidden;
+}
+
+body.printing-dual-mode,
+body.golden-export-raster,
+body.sb-print-export-busy {
+  background: #ffffff !important;
 }
 
 body.golden-export-raster .print-dual-container .print-artboard > * {
@@ -60,6 +66,11 @@ body.golden-export-raster .print-dual-container {
 }
 
 @media print {
+  body.printing-dual-mode,
+  html.printing-dual-mode {
+    background: #ffffff !important;
+  }
+
   body.printing-dual-mode > *:not(.print-dual-container):not(style):not(script) {
     display: none !important;
   }
@@ -68,5 +79,6 @@ body.golden-export-raster .print-dual-container {
     display: block !important;
     opacity: 1 !important;
     position: static !important;
+    background: #ffffff !important;
   }
 }

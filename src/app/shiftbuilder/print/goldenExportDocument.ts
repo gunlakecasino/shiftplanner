@@ -6,7 +6,12 @@ import {
   GOLDEN_RASTER_STAGING_LEFT_PX,
   GOLDEN_WIDTH_PX,
 } from "./goldenConstants";
-import { stripGoldenRasterChrome } from "./rasterPrep";
+import {
+  flattenGoldenRasterStageBleed,
+  mountGoldenRasterCaptureShell,
+  stripGoldenRasterChrome,
+  withWhiteDocumentBackground,
+} from "./rasterPrep";
 import { waitForGoldenRenderSettled } from "./printSession";
 
 type RasterResult = {
@@ -119,6 +124,7 @@ async function captureArtboardPixels(
   args: { pixelRatio: number; usePng: boolean },
 ): Promise<RasterResult> {
   stripGoldenRasterChrome(artboard);
+  const mount = mountGoldenRasterCaptureShell(artboard);
 
   const captureOpts = {
     pixelRatio: args.pixelRatio,
@@ -127,12 +133,25 @@ async function captureArtboardPixels(
     cacheBust: true,
     backgroundColor: "#ffffff",
     skipFonts: false,
-    style: GOLDEN_RASTER_ROOT_STYLE,
+    style: {
+      ...GOLDEN_RASTER_ROOT_STYLE,
+      width: `${GOLDEN_WIDTH_PX}px`,
+      height: `${GOLDEN_HEIGHT_PX}px`,
+      backgroundColor: "#ffffff",
+    },
   };
 
-  const dataUrl = args.usePng
-    ? await toPng(artboard, captureOpts)
-    : await toJpeg(artboard, { ...captureOpts, quality: 0.92 });
+  let dataUrl: string;
+  try {
+    dataUrl = args.usePng
+      ? await toPng(mount.shell, captureOpts)
+      : await toJpeg(mount.shell, { ...captureOpts, quality: 0.92 });
+  } finally {
+    mount.restore();
+  }
+
+  const format = args.usePng ? "PNG" : "JPEG";
+  dataUrl = await flattenGoldenRasterStageBleed(dataUrl, format, 0.92);
 
   const dims = await measureRasterDataUrl(dataUrl);
 
@@ -186,10 +205,12 @@ export async function rasterizeGoldenArtboardElement(args: {
     requestAnimationFrame(() => requestAnimationFrame(() => r()));
   });
 
-  return captureArtboardPixels(args.artboard, {
-    pixelRatio: args.pixelRatio,
-    usePng: args.usePng,
-  });
+  return withWhiteDocumentBackground(() =>
+    captureArtboardPixels(args.artboard, {
+      pixelRatio: args.pixelRatio,
+      usePng: args.usePng,
+    }),
+  );
 }
 
 /**
@@ -226,7 +247,8 @@ export async function rasterizeGoldenPageHtml(args: {
       '<link rel="stylesheet" href="/shiftbuilder-print-preview.css" />' +
       "</head><body class=\"printing-dual-mode golden-export-raster\" " +
       'style="margin:0;padding:0;background:#ffffff">' +
-      `<div class="print-dual-container">${args.pageHtml}</div></body></html>`,
+      `<div class="print-dual-container" style="width:${GOLDEN_WIDTH_PX}px;height:${GOLDEN_HEIGHT_PX}px;background:#ffffff;overflow:hidden;margin:0;padding:0">` +
+      `${args.pageHtml}</div></body></html>`,
     );
     doc.close();
 
@@ -250,10 +272,12 @@ export async function rasterizeGoldenPageHtml(args: {
       requestAnimationFrame(() => requestAnimationFrame(() => r()));
     });
 
-    return captureArtboardPixels(artboard, {
-      pixelRatio: args.pixelRatio,
-      usePng: args.usePng,
-    });
+    return withWhiteDocumentBackground(() =>
+      captureArtboardPixels(artboard, {
+        pixelRatio: args.pixelRatio,
+        usePng: args.usePng,
+      }),
+    );
   } finally {
     iframe.remove();
   }
