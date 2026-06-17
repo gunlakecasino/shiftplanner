@@ -35,6 +35,7 @@ import { RotationHealthFloater } from "./RotationHealthFloater";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
+import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
 
@@ -388,6 +389,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
 
   const padDisplayAssignments = padAssignments ?? displayAssignments;
+
+  /** Target slots → TM names covering them (inverse of source isCoverage tasks). */
+  const coveredByIndex = React.useMemo(
+    () => buildCoveredByIndex(displayAssignments, selectedTasks, auxDefs),
+    [displayAssignments, selectedTasks, auxDefs],
+  );
 
   const currentIso = nightIsoFromDate(selectedDay.date);
 
@@ -1070,6 +1077,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
+                        coveredByNames={coveredByIndex[key]}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1152,6 +1160,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
+                        coveredByIndex={coveredByIndex}
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -1275,6 +1284,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             focusedTmId={focusedTmId}
                             conflictingTms={conflictingTms}
                             tmConflictSlots={tmConflictSlots}
+                            coveredByNames={coveredByIndex[key]}
                             onSetAuxRole={onSetAuxRole}
                             onSetAuxLabel={onSetAuxLabel}
                           />
@@ -1349,6 +1359,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           focusedTmId={focusedTmId}
                           conflictingTms={conflictingTms}
                           tmConflictSlots={tmConflictSlots}
+                          coveredByNames={coveredByIndex[key]}
                           onSetAuxRole={onSetAuxRole}
                           onSetAuxLabel={onSetAuxLabel}
                         />

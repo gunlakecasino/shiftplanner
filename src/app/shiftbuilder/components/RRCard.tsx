@@ -48,6 +48,7 @@ export interface RRCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
+  coveredByIndex?: Record<string, string[]>;
 }
 
 const RRSide: React.FC<{
@@ -67,6 +68,7 @@ const RRSide: React.FC<{
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
   showDigitalAssists?: boolean;
+  coveredByNames?: string[];
 }> = ({
   slotKey,
   assignment,
@@ -84,6 +86,7 @@ const RRSide: React.FC<{
   conflictingTms,
   tmConflictSlots,
   showDigitalAssists = false,
+  coveredByNames = [],
 }) => {
   const a = assignment || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
@@ -119,6 +122,8 @@ const RRSide: React.FC<{
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
+  } else if (coveredByNames.length > 0) {
+    assignmentState = { kind: "covered", coveredByNames };
   } else {
     assignmentState = { kind: "unassigned" };
   }
@@ -272,6 +277,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
+  coveredByIndex = {},
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -345,6 +351,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[wKey]}
             tasks={wRegular}
             draftInfo={draftInfoW}
+            coveredByNames={coveredByIndex[wKey]}
             {...sideProps}
           />
         )}
@@ -369,6 +376,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[mKey]}
             tasks={mRegular}
             draftInfo={draftInfoM}
+            coveredByNames={coveredByIndex[mKey]}
             {...sideProps}
           />
         )}

@@ -4,4 +4,6 @@ export {
   getSlotAccentColor,
   getSlotCoverageLabel,
   expandCoverageToKeys,
+  buildCoveredByIndex,
+  formatCoveredByNames,
 } from "@/lib/shiftbuilder/coverageHelpers";

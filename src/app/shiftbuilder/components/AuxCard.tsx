@@ -55,6 +55,7 @@ export interface AuxCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
+  coveredByNames?: string[];
   onSetAuxRole?: (slotKey: string, role: Exclude<AuxRole, "blank">) => void;
   onSetAuxLabel?: (slotKey: string, label: string) => void;
 }
@@ -80,6 +81,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
+  coveredByNames = [],
   onSetAuxRole,
   onSetAuxLabel,
 }) => {
@@ -270,6 +272,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
+  } else if (coveredByNames.length > 0) {
+    assignmentState = { kind: "covered", coveredByNames };
   } else {
     assignmentState = { kind: "unassigned" };
   }

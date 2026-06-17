@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
+import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 
 /** Shared typography scale for assignment card name rows. */
 export type CardNameScale = "zone" | "rr" | "aux";
@@ -207,6 +208,95 @@ export function UnassignedInvite({
   );
 }
 
+const COVERED_LABEL_SIZE: Record<UnassignedInviteSize, number> = {
+  zone: 8.5,
+  rr: 7.5,
+  aux: 7.5,
+};
+
+const COVERED_NAME_SIZE: Record<UnassignedInviteSize, number> = {
+  zone: 18,
+  rr: 14,
+  aux: 14,
+};
+
+/** Builder covered-by overlay — empty slot visually referenced by coverers elsewhere. */
+export function CoveredByOverlay({
+  size,
+  coveredByNames,
+  onClick,
+  title = "Covered by another placement — tap to open slot",
+}: {
+  size: UnassignedInviteSize;
+  coveredByNames: string[];
+  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  title?: string;
+}) {
+  const cfg = INVITE_CONFIG[size];
+  const namesLine = formatCoveredByNames(coveredByNames);
+
+  return (
+    <motion.div
+      key="covered-by-overlay"
+      className={`sb-covered-by-overlay flex flex-col items-center justify-center text-center tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
+      style={{
+        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+        minHeight: cfg.minH,
+        maxHeight: cfg.maxH,
+        border: "1px solid rgba(0,0,0,0.04)",
+        background: "rgba(245,245,247,0.92)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+      }}
+      initial={{ opacity: 0.92, y: 1 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{
+        borderColor: "rgba(0,0,0,0.07)",
+        background: "rgba(240,240,244,0.98)",
+      }}
+      whileTap={{ scale: 0.985 }}
+      transition={premiumSpring}
+      onClick={onClick}
+      title={title}
+    >
+      <span
+        className="font-bold uppercase tracking-[0.22em] text-[#9CA3AF]"
+        style={{ fontSize: COVERED_LABEL_SIZE[size] }}
+      >
+        Covered by
+      </span>
+      <span
+        className="font-bold tracking-[-0.25px] text-[#6B7280] mt-1.5 px-1 leading-tight"
+        style={{
+          fontSize: COVERED_NAME_SIZE[size],
+          fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+        }}
+      >
+        {namesLine}
+      </span>
+    </motion.div>
+  );
+}
+
+/** Print / preview covered-by line. */
+export function CoveredByPrintLabel({ coveredByNames }: { coveredByNames: string[] }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center text-center px-1 py-1 min-h-[48px]"
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+    >
+      <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#9CA3AF]">
+        Covered by
+      </span>
+      <span
+        className="font-bold text-[#4B5563] mt-0.5 leading-tight"
+        style={{ fontFamily: "var(--font-bricolage, var(--font-atkinson))", fontSize: 14 }}
+      >
+        {formatCoveredByNames(coveredByNames)}
+      </span>
+    </div>
+  );
+}
+
 /** Print / preview unassigned line. */
 export function UnassignedPrintLabel({ showDigitalAssists }: { showDigitalAssists: boolean }) {
   return (
@@ -234,6 +324,7 @@ export type SlotAssignmentState =
   | { kind: "loading" }
   | { kind: "draft"; proposedName: string; previousName?: string }
   | { kind: "assigned"; tmName: string; tmId?: string; isLocked?: boolean }
+  | { kind: "covered"; coveredByNames: string[] }
   | { kind: "unassigned" };
 
 /** Unified name / empty / draft row used inside Zone, RR side, and Aux cards. */
@@ -379,6 +470,18 @@ export function SlotAssignmentBody({
               <DuplicateTmBadge otherSlots={otherSlotsForTm} />
             ) : null}
           </div>
+        )
+      ) : state.kind === "covered" ? (
+        showDigitalAssists && onUnassignedClick ? (
+          <div key="covered" className="flex-1 flex flex-col justify-center min-h-0">
+            <CoveredByOverlay
+              size={inviteSize}
+              coveredByNames={state.coveredByNames}
+              onClick={onUnassignedClick}
+            />
+          </div>
+        ) : (
+          <CoveredByPrintLabel key="covered-print" coveredByNames={state.coveredByNames} />
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
         <div key="unassigned" className="flex-1 flex flex-col justify-center min-h-0">

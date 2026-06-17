@@ -48,6 +48,8 @@ export interface ZoneCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
+  /** TM names covering this slot via coverage tasks on other placements. */
+  coveredByNames?: string[];
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
@@ -70,6 +72,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
+  coveredByNames = [],
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -113,6 +116,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
+  } else if (coveredByNames.length > 0) {
+    assignmentState = { kind: "covered", coveredByNames };
   } else {
     assignmentState = { kind: "unassigned" };
   }
