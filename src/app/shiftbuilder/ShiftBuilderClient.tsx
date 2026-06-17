@@ -770,9 +770,11 @@ function AuthedShiftBuilder() {
       return false;
     }
   });
-  // Builder deployment means: no sacred Golden frame, no paper, full adaptive sophisticated workspace (all cards visible, Apple-grade refinement).
+  // Builder live canvas: deployment + breaks use the relaxed workspace (not the fixed 816px Golden frame).
+  const isBuilderLiveCanvas =
+    (currentView === "deployment" || currentView === "breaks") && !isPrintPreview;
   const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
-  const relaxedFrameClass = isBuilderDeployment ? "sb-relaxed-frame" : "";
+  const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
   // Persist
   React.useEffect(() => {
     try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
@@ -1898,7 +1900,7 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
-    if (isBuilderDeployment) {
+    if (isBuilderLiveCanvas) {
       return {
         top: stageTopInsetPx(),
         right: tablet ? 12 : 16,
@@ -1912,7 +1914,7 @@ function AuthedShiftBuilder() {
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
-  }, [rosterOpen, isBuilderDeployment]);
+  }, [rosterOpen, isBuilderLiveCanvas]);
 
   const {
     zoomMode,
@@ -1927,7 +1929,7 @@ function AuthedShiftBuilder() {
   } = useZoom({
     rosterOpen,
     stageInsets,
-    builderFit: isBuilderDeployment
+    builderFit: isBuilderLiveCanvas
       ? {
           enabled: true,
           contentRef: builderContentRef,
@@ -1936,9 +1938,9 @@ function AuthedShiftBuilder() {
       : undefined,
   });
 
-  // Builder deployment: default to zoom-to-fit on load and day switches.
+  // Builder canvas: default to zoom-to-fit on load, day switches, and deployment ↔ breaks toggles.
   useEffect(() => {
-    if (!isBuilderDeployment || currentView !== "deployment") return;
+    if (!isBuilderLiveCanvas) return;
     setZoomMode("fit");
     const t1 = requestAnimationFrame(recomputeScale);
     const t2 = window.setTimeout(recomputeScale, 200);
@@ -1946,16 +1948,16 @@ function AuthedShiftBuilder() {
       cancelAnimationFrame(t1);
       clearTimeout(t2);
     };
-  }, [isBuilderDeployment, currentView, selectedDayIndex, recomputeScale, setZoomMode]);
+  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, recomputeScale, setZoomMode]);
 
   // Re-measure fit when chrome changes but preserve manual zoom if the user stepped in/out.
   useEffect(() => {
-    if (!isBuilderDeployment || currentView !== "deployment") return;
+    if (!isBuilderLiveCanvas) return;
     recomputeScale();
-  }, [isBuilderDeployment, currentView, showWeekHealthBar, rosterOpen, recomputeScale]);
+  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, recomputeScale]);
 
   useEffect(() => {
-    if (!isBuilderDeployment) return;
+    if (!isBuilderLiveCanvas) return;
     const el = builderContentRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const measure = () => setBuilderContentHeight(el.scrollHeight || el.offsetHeight || 0);
@@ -1963,7 +1965,7 @@ function AuthedShiftBuilder() {
     const ro = new ResizeObserver(() => requestAnimationFrame(measure));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isBuilderDeployment, selectedDayIndex, currentView]);
+  }, [isBuilderLiveCanvas, selectedDayIndex, currentView]);
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
@@ -6833,7 +6835,7 @@ function AuthedShiftBuilder() {
           All other controls preserved visually.
           ═══════════════════════════════════════════════════════════ */}
       <FloatingNav
-        contentMaxWidth={isBuilderDeployment ? BUILDER_CANVAS_MAX_WIDTH_PX : undefined}
+        contentMaxWidth={isBuilderLiveCanvas ? BUILDER_CANVAS_MAX_WIDTH_PX : undefined}
         days={NAV_DAY_STRIP.map((d) => ({
           id: d.navId,
           label: String(d.dateNum),
@@ -6950,7 +6952,7 @@ function AuthedShiftBuilder() {
          relative container so the canvas can take the full width. When the
          operator collapses the roster, a sphere appears in its place.
          min-h-0 is still critical for the canvas's nested scroll behavior. */}
-      <div className={`flex flex-1 relative ${isBuilderDeployment ? 'sb-builder-main overflow-y-auto' : 'overflow-hidden min-h-0'}`}>
+      <div className={`flex flex-1 relative ${isBuilderLiveCanvas ? 'sb-builder-main overflow-y-auto' : 'overflow-hidden min-h-0'}`}>
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
@@ -7195,7 +7197,7 @@ function AuthedShiftBuilder() {
            actually painted, not the un-scaled layout box. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 ${isBuilderDeployment ? "overflow-y-auto overflow-x-visible" : "overflow-auto"} ${isBuilderDeployment ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderDeployment ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 ${isBuilderLiveCanvas ? "overflow-y-auto overflow-x-visible" : "overflow-auto"} ${isBuilderLiveCanvas ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7210,7 +7212,7 @@ function AuthedShiftBuilder() {
           }}
         >
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
-          {isBuilderDeployment && currentView === "deployment" && (
+          {isBuilderLiveCanvas && (
             <div
               className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
@@ -7303,7 +7305,7 @@ function AuthedShiftBuilder() {
 
           {/* Golden / preview / weekly frame — unmounted in builder deployment so dnd-kit never
               registers duplicate slot:* droppables from a hidden copy of the board. */}
-          {!isBuilderDeployment ? (
+          {!isBuilderLiveCanvas ? (
           <div
             className={`relative flex-shrink-0 flex flex-col items-center ${relaxedFrameClass}`}
             style={{

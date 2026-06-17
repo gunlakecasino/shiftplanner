@@ -400,9 +400,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const auxGridClass = isPrintPreview
     ? `grid gap-1.5 flex-1 w-full${builderCardGridClass}`
     : `sb-aux-grid flex-1 w-full${builderCardGridClass}`;
+  // Overlap strips: 6-across with row-equal heights (dedicated grid, not zone card grid).
   const overlapGridClass = isPrintPreview
-    ? `flex-1 grid grid-cols-6 gap-1.5${builderCardGridClass}`
-    : `sb-overlap-grid flex-1${builderCardGridClass}`;
+    ? "sb-overlap-grid sb-overlap-card-grid flex-1 grid grid-cols-6 gap-1.5 min-w-0"
+    : "sb-overlap-grid sb-overlap-card-grid flex-1 min-w-0";
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -1417,7 +1418,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </div>
 
             {/* OVERLAPS — Golden full-width pinned section */}
-            <section className="sb-builder-section mt-auto pt-1.5 overlaps-section" data-print-target="overlaps">
+            <section
+              className={`sb-builder-section pt-1.5 overlaps-section${isPrintPreview ? " mt-auto" : ""}`}
+              data-print-target="overlaps"
+            >
               <div className="sheet-section-header">
                 <span className="label">OVERLAPS</span>
                 <div className="divider" />
@@ -1466,7 +1470,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           return (
                             <div
                               key={i}
-                              className={`relative ${isPrintPreview ? 'h-full' : ''}`}
+                              className={gridHostClass}
                               data-slot-key={slotKey}
                               data-placement-host={slotKey}
                             >

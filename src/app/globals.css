@@ -856,8 +856,13 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Overlap strips are always 6 slots wide (OL-*-0..5), unlike zone/RR/aux responsive grids. */
+.sb-overlap-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .sb-builder-stage .sb-overlap-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
 }
 
 .sb-builder-stage .sb-zone-grid > *,
@@ -908,8 +913,7 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .sb-builder-stage .sb-aux-grid,
-  .sb-builder-stage .sb-overlap-grid {
+  .sb-builder-stage .sb-aux-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -920,8 +924,7 @@ body {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .sb-builder-stage .sb-aux-grid,
-  .sb-builder-stage .sb-overlap-grid {
+  .sb-builder-stage .sb-aux-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
@@ -938,14 +941,10 @@ body {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  .sb-builder-stage .sb-overlap-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
 }
 
 @container builder (min-width: 1100px) {
-  .sb-builder-stage .sb-aux-grid,
-  .sb-builder-stage .sb-overlap-grid {
+  .sb-builder-stage .sb-aux-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
@@ -1156,6 +1155,30 @@ body {
 /* Overlaps section (at bottom) gets a little extra love for visibility. */
 .builder-workspace .overlaps-section {
   margin-top: 4px;
+}
+
+/* Overlap row equal heights — stretch cells to tallest card in the row (compact min, not zone 84px). */
+.sb-overlap-card-grid {
+  align-items: stretch;
+}
+
+.sb-overlap-card-grid > * {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-overlap-card-grid .assignment-card,
+.sb-overlap-card-grid .sb-assignment-card {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 48px;
+}
+
+.builder-workspace .sb-overlap-card-grid .assignment-card.empty,
+.builder-workspace .sb-overlap-card-grid .assignment-card.sb-card-empty {
+  min-height: 48px;
 }
 
 /* Frame relaxation ONLY when the stageHost carries the sb-builder-stage marker.
