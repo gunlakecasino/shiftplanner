@@ -1320,19 +1320,49 @@ button,
     min-height: var(--touch-min, 44px);
   }
 
-  /* Floating nav — safe-area + horizontal breathing room on narrow portrait */
+  /* Floating nav shell — safe-area top, clip children (scroll lives in toolbar) */
   .sb-tablet-nav {
     top: max(8px, env(safe-area-inset-top, 0px)) !important;
-    left: max(12px, env(safe-area-inset-left, 0px)) !important;
-    right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    overflow: hidden;
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-right: max(0px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Centered pill (builder / today / logs) — preserve translateX centering */
+  .sb-tablet-nav.sb-tablet-nav--centered {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(
+      calc(100vw - 48px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)),
+      var(--sb-nav-max-width, 1280px)
+    ) !important;
+    max-width: var(--sb-nav-max-width, 1280px);
+  }
+
+  /* Full-bleed nav when not width-capped */
+  .sb-tablet-nav:not(.sb-tablet-nav--centered) {
+    left: max(24px, env(safe-area-inset-left, 0px)) !important;
+    right: max(24px, env(safe-area-inset-right, 0px)) !important;
+  }
+
+  /* Right tool cluster scrolls inside the pill instead of blowing out the layout */
+  .sb-tablet-nav .sb-tablet-nav-toolbar {
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    flex-wrap: nowrap;
   }
 
-  .sb-tablet-nav::-webkit-scrollbar {
+  .sb-tablet-nav .sb-tablet-nav-toolbar::-webkit-scrollbar {
     display: none;
+  }
+
+  .sb-tablet-nav .sb-tablet-nav-grid {
+    min-width: 0;
   }
 
   /* Icon-only Builder/Preview when compactCanvasToggle (≤1400px tablet widths) */

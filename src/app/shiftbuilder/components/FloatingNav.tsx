@@ -341,6 +341,9 @@ export default function FloatingNav({
     return () => mq.removeEventListener("change", onMq);
   }, []);
 
+  const tabletNav = isTabletTouchDevice();
+  const navCentered = contentMaxWidth != null && contentMaxWidth > 0;
+
   const glassStyle = {
     background: isDark ? "rgba(9,9,11,0.85)" : "rgba(255,255,255,0.85)",
     backdropFilter: "blur(32px) saturate(180%)",
@@ -356,33 +359,42 @@ export default function FloatingNav({
       <nav
         className={cn(
           navVariants(),
-          isTabletTouchDevice() ? "sb-tablet-nav" : "overflow-hidden",
+          tabletNav ? "sb-tablet-nav" : "overflow-hidden",
+          tabletNav && navCentered && "sb-tablet-nav--centered",
         )}
         style={{
           ...glassStyle,
           position: "fixed",
-          top: 8,
-          ...(contentMaxWidth
+          ...(tabletNav
             ? {
-                left: "50%",
-                right: "auto",
-                width: `min(calc(100vw - 48px), ${contentMaxWidth}px)`,
-                maxWidth: contentMaxWidth,
-                transform: "translateX(-50%)",
+                ...(navCentered
+                  ? { ["--sb-nav-max-width" as string]: `${contentMaxWidth}px` }
+                  : {}),
               }
             : {
-                left: 24,
-                right: 24,
-                width: "auto",
-                maxWidth: "none",
-                transform: "none",
+                top: 8,
+                ...(navCentered
+                  ? {
+                      left: "50%",
+                      right: "auto",
+                      width: `min(calc(100vw - 48px), ${contentMaxWidth}px)`,
+                      maxWidth: contentMaxWidth,
+                      transform: "translateX(-50%)",
+                    }
+                  : {
+                      left: 24,
+                      right: 24,
+                      width: "auto",
+                      maxWidth: "none",
+                      transform: "none",
+                    }),
               }),
           boxSizing: "border-box",
           zIndex: 40,
         }}
       >
         <BuilderSyncStrip active={isSyncing} />
-        <div className="grid h-full w-full grid-cols-[auto_minmax(0,1fr)_max-content] items-center gap-1.5">
+        <div className="sb-tablet-nav-grid grid h-full w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)] items-center gap-1.5">
         {/* LEFT: Launchpad + Today */}
         <div className="flex shrink-0 items-center gap-0.5">
           {onLaunchpad ? (
@@ -529,7 +541,7 @@ export default function FloatingNav({
         </div>
 
         {/* RIGHT: compact icon toolbar */}
-        <div className="flex shrink-0 items-center gap-0.5 border-l border-white/20 pl-1.5 dark:border-white/10">
+        <div className="sb-tablet-nav-toolbar flex min-w-0 max-w-full shrink items-center gap-0.5 border-l border-white/20 pl-1.5 dark:border-white/10">
           <div
             className="flex shrink-0 items-center rounded-lg p-0.5"
             style={{ background: "rgba(0,0,0,0.04)" }}

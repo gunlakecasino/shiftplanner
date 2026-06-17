@@ -228,17 +228,20 @@ export function TodayNav({
       <nav
         className={cn(
           navVariants(),
-          "overflow-hidden",
-          isTabletTouchDevice() && "sb-tablet-nav",
+          isTabletTouchDevice() ? "sb-tablet-nav sb-tablet-nav--centered" : "overflow-hidden",
         )}
         style={{
           position: "fixed",
-          top: 8,
-          left: "50%",
-          right: "auto",
-          width: `min(calc(100vw - 48px), ${DEPLOYMENT_CANVAS_MAX_WIDTH_PX}px)`,
-          maxWidth: DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
-          transform: "translateX(-50%)",
+          ...(isTabletTouchDevice()
+            ? { ["--sb-nav-max-width" as string]: `${DEPLOYMENT_CANVAS_MAX_WIDTH_PX}px` }
+            : {
+                top: 8,
+                left: "50%",
+                right: "auto",
+                width: `min(calc(100vw - 48px), ${DEPLOYMENT_CANVAS_MAX_WIDTH_PX}px)`,
+                maxWidth: DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
+                transform: "translateX(-50%)",
+              }),
           boxSizing: "border-box",
           zIndex: 40,
         }}
