@@ -1286,33 +1286,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 )}
               </div>
 
-              {/* Rotation health as compact side drawer/indicator (small section of right edge, not full height).
-                  Click to expand drawer with full details + Clear / Run engine buttons.
-                  Positioned off to the side (right margin), small height so it doesn't overtake/overlap the grid or empty states.
-                  Builder-only via !isPrintPreview. */}
-              {!isPrintPreview && (
-                <RotationHealthFloater
-                  visible
-                  auxDefs={auxDefs}
-                  assignments={displayAssignments}
-                  fitBySlot={fitBySlot || {}}
-                  isDraftMode={isDraftMode}
-                  draftAssignments={draftAssignments}
-                  placement="side-right-collapsed"
-                  weekDailyHealths={weekDailyHealths}
-                  selectedDayDateKey={currentIso}
-                  weekHealthLoading={weekHealthLoading}
-                  // Engine controls for the drawer (clear board + run xAI engine for rotation health)
-                  canRunEngine={canRunEngine}
-                  onRunEngine={onRunXaiEngine}
-                  onClear={onClearBoard}
-                  running={engineRunning}
-                  onApplyDraft={onApplyDraft}
-                  onDiscardDraft={onDiscardDraft}
-                  draftGrokExplanation={draftGrokExplanation}
-                  isCurrentNightLocked={isCurrentNightLocked}
-                />
-              )}
             </section>
           </>
         ) : (
@@ -1513,6 +1486,30 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           </>
         )}
       </div>
+
+      {/* Rotation health — fixed bottom-corner drawer above LIVE pill; all builder views. */}
+      {!isPrintPreview && (
+        <RotationHealthFloater
+          visible
+          auxDefs={auxDefs}
+          assignments={displayAssignments}
+          fitBySlot={fitBySlot || {}}
+          isDraftMode={isDraftMode}
+          draftAssignments={draftAssignments}
+          placement="side-right-collapsed"
+          weekDailyHealths={weekDailyHealths}
+          selectedDayDateKey={currentIso}
+          weekHealthLoading={weekHealthLoading}
+          canRunEngine={canRunEngine}
+          onRunEngine={onRunXaiEngine}
+          onClear={onClearBoard}
+          running={engineRunning}
+          onApplyDraft={onApplyDraft}
+          onDiscardDraft={onDiscardDraft}
+          draftGrokExplanation={draftGrokExplanation}
+          isCurrentNightLocked={isCurrentNightLocked}
+        />
+      )}
 
       {/* Sheet footer — single aligned row (brand · version · page) */}
       <div

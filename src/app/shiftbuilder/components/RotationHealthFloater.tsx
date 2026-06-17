@@ -8,18 +8,17 @@ import {
   GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   rotationHealthFloaterColors,
-  getWeekRepeatViolations,
   type ShiftRotationHealth,
-  type WeekRepeatViolation,
 } from "./shiftRotationHealth";
-// WeekRepeatViolation is referenced in breakdownTitle for the (optional) viol list note.
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
 import { premiumSpring } from "@/lib/premiumSpring";
+import { ROTATION_HEALTH_BOTTOM_PX } from "./canvasPillGlass";
+import { SB_DRAWER_TRANSITION } from "./builderPrimitives";
 
-/** above-ops-pill: fixed bottom-right; inline: parent flex cluster handles position. 
- *  side-right-collapsed: thin vertical bar on right side of builder canvas (collapsed health to the side). 
+/** above-ops-pill: fixed bottom-right; inline: parent flex cluster handles position.
+ *  side-right-collapsed: compact pill above LIVE ops bar; expands left as a drawer.
  */
 export type RotationHealthPlacement =
   | "above-ops-pill"
@@ -28,8 +27,13 @@ export type RotationHealthPlacement =
   | "page-corner"
   | "side-right-collapsed";
 
-/** Viewport offset from bottom — clears the ops status pill (~28px) + 10px margin. */
-const OPS_PILL_STACK_BOTTOM_PX = 44;
+/** Viewport offset from bottom — clears the ops status pill (~28px) + margin. */
+const OPS_PILL_STACK_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX;
+
+/** Matches OpsStatusBar shell — sit directly above LIVE with same right inset. */
+const OPS_PILL_RIGHT_INSET = "max(10px, env(safe-area-inset-right, 0px))";
+const OPS_PILL_Z = 2147483647;
+const ROTATION_HEALTH_Z = OPS_PILL_Z - 1;
 
 export type RotationHealthFloaterProps = {
   visible: boolean;
@@ -38,16 +42,11 @@ export type RotationHealthFloaterProps = {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   isDraftMode?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
-  /** above-ops-pill (default): fixed above ops telemetry; below-page: under artboard frame.
-   * side-right-collapsed: compact indicator on the right edge (small section, not full height) that expands as a drawer with details + engine controls.
-   */
   placement?: RotationHealthPlacement;
   weekDailyHealths?: Record<string, number>;
   selectedDayDateKey?: string;
   weekHealthLoading?: boolean;
 
-  // Engine controls to embed in the expanded drawer (clear + run xAI/rotation engine).
-  // Only shown in builder view when provided.
   canRunEngine?: boolean;
   running?: boolean;
   onRunEngine?: () => void;
@@ -67,7 +66,6 @@ function breakdownTitle(
   const xaiAdj = (health as any).xaiRepeatPenaltyReduction || 0;
   const viols = (health as any).repeatViolations ?? 0;
   const maxR = (health as any).maxWeeklyRepeat ?? 0;
-  const violList = (health as any).violations as WeekRepeatViolation[] | undefined;
   const violNote = viols > 0 ? ` · ${viols} viol${viols > 1 ? "s" : ""} (use ADVISOR or week scan for moves)` : "";
   const lines = [
     `Rotation health: big = tonight fit. Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy (separate).`,
@@ -100,7 +98,6 @@ export function RotationHealthFloater({
   weekDailyHealths,
   selectedDayDateKey,
   weekHealthLoading,
-  // Engine controls for the side drawer
   canRunEngine,
   onRunEngine,
   onClear,
@@ -132,6 +129,7 @@ export function RotationHealthFloater({
     weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
   const xaiAdj = health.xaiRepeatPenaltyReduction || 0;
   const [expanded, setExpanded] = React.useState(false);
+  const clusterRef = React.useRef<HTMLDivElement>(null);
   const draftSlotCount = React.useMemo(
     () =>
       Object.values(draftAssignments ?? {}).filter(
@@ -143,127 +141,137 @@ export function RotationHealthFloater({
   const canApplyDraft = !draftActionsDisabled && draftSlotCount > 0;
   const canDiscardDraft = !draftActionsDisabled && Boolean(isDraftMode);
 
+  React.useEffect(() => {
+    if (!expanded) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!clusterRef.current?.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [expanded]);
+
   if (!visible) return null;
 
   const colors = rotationHealthFloaterColors(dailyPercent);
   const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
-  // Collapsed to the side as a little drawer / indicator (builder view only).
-  // Small section of the right edge (compact height, not full side), positioned off to the side at bottom of aux/grid.
-  // Click the indicator to toggle the drawer panel that slides in with full health details + clear/run engine controls.
-  // Does not overtake the surface. Uses premiumSpring for smooth expand.
   if (placement === "side-right-collapsed") {
-    const indicatorRight = 8; // just off the scrollbar, right-aligned to the Live pill
-    const indicatorBottom = 20; // bottom of the tab sits on the top of the Live pill
-    const indicatorWidth = 16;
-    const indicatorHeight = 30; // small compact tab directly on the top right of the Live pill
-
     return (
-      <>
-        {/* Compact indicator / drawer handle - small vertical tab pinned on the top right of the Live pill */}
-        <motion.div
+      <div
+        ref={clusterRef}
+        className="no-print"
+        style={{
+          position: "fixed",
+          right: OPS_PILL_RIGHT_INSET,
+          bottom: `max(${OPS_PILL_STACK_BOTTOM_PX}px, calc(${OPS_PILL_STACK_BOTTOM_PX}px + env(safe-area-inset-bottom, 0px)))`,
+          zIndex: ROTATION_HEALTH_Z,
+          display: "flex",
+          flexDirection: "row-reverse",
+          alignItems: "stretch",
+          pointerEvents: "auto",
+          fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+        }}
+      >
+        {/* Collapsed handle — horizontal pill above LIVE */}
+        <motion.button
+          type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="no-print flex flex-col items-center justify-center cursor-pointer select-none"
+          className="flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 cursor-pointer select-none shrink-0"
           style={{
-            position: "fixed",
-            right: indicatorRight,
-            bottom: indicatorBottom,
-            width: indicatorWidth,
-            height: indicatorHeight,
             background: colors.bg,
-            borderLeft: `1px solid ${colors.border}`,
-            borderTop: `1px solid ${colors.border}`,
-            borderBottom: `1px solid ${colors.border}`,
+            border: `1px solid ${colors.border}`,
             color: colors.text,
-            fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            zIndex: 60,
+            boxShadow: "0 4px 14px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.12)",
+            minHeight: 32,
+            minWidth: 72,
           }}
-          whileHover={{ scale: 1.05 }}
+          whileHover={{ scale: 1.02 }}
           transition={premiumSpring}
-          title={expanded ? "Collapse rotation health drawer" : "Expand for details + engine controls"}
+          title={expanded ? "Collapse rotation health drawer" : breakdownTitle(health, dailyPercent, weekAveragePercent)}
           aria-expanded={expanded}
+          aria-label={`Rotation health ${display}. ${expanded ? "Collapse" : "Expand"} drawer`}
         >
-          <div
-            style={{
-              writingMode: "vertical-rl",
-              transform: "rotate(180deg)",
-              fontSize: "9px",
-              fontWeight: 700,
-              letterSpacing: "0.5px",
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              whiteSpace: "nowrap",
-              height: "100%",
-              justifyContent: "center",
-            }}
+          <span className="text-[7px] font-bold uppercase tracking-[0.6px] opacity-85">ROT</span>
+          <span
+            className="text-[13px] font-bold tabular-nums leading-none"
+            style={{ fontFamily: "ui-monospace, monospace" }}
           >
-            <span style={{ fontSize: "11px", fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{display}</span>
-          </div>
-          <span style={{ fontSize: 6, opacity: 0.7 }}>{expanded ? "‹" : "›"}</span>
-        </motion.div>
+            {display}
+          </span>
+          <span className="text-[10px] opacity-70" aria-hidden="true">
+            {expanded ? "›" : "‹"}
+          </span>
+        </motion.button>
 
-        {/* Expandable drawer panel - to the left of the indicator, larger for details, pinned above the Live pill */}
-        <AnimatePresence>
+        {/* Drawer expands left (same pattern as LIVE ops telemetry) */}
+        <AnimatePresence initial={false}>
           {expanded && (
             <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 160, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={premiumSpring}
-              className="no-print overflow-hidden"
-              style={{
-                position: "fixed",
-                right: indicatorRight + indicatorWidth,
-                bottom: indicatorBottom,
-                width: 160,
-                height: 110, // larger for readable details + buttons, still compact at bottom right
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                color: colors.text,
-                fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-                boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
-                zIndex: 60,
-              }}
+              initial={{ maxWidth: 0, opacity: 0, paddingLeft: 0, paddingRight: 0 }}
+              animate={{ maxWidth: 220, opacity: 1, paddingLeft: 0, paddingRight: 8 }}
+              exit={{ maxWidth: 0, opacity: 0, paddingLeft: 0, paddingRight: 0 }}
+              transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+              className="overflow-hidden flex items-stretch"
+              style={{ transition: SB_DRAWER_TRANSITION }}
             >
-              <div style={{ padding: "4px 6px", fontSize: "8px", lineHeight: 1.15, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                {/* Health summary */}
+              <div
+                className="rounded-[10px] overflow-hidden flex flex-col justify-between"
+                style={{
+                  width: 212,
+                  minHeight: 32,
+                  maxHeight: 148,
+                  background: colors.bg,
+                  border: `1px solid ${colors.border}`,
+                  color: colors.text,
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
+                  padding: "6px 8px",
+                  fontSize: 9,
+                  lineHeight: 1.25,
+                }}
+              >
                 <div>
-                  <div className="text-[6px] font-semibold uppercase tracking-[0.5px] opacity-85">Rotation health</div>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-[14px] font-bold tabular-nums" style={{ fontFamily: "ui-monospace, monospace" }}>{display}</span>
-                    <span className="text-[6px] uppercase tracking-[0.04em] opacity-70">tonight</span>
+                  <div className="text-[7px] font-semibold uppercase tracking-[0.5px] opacity-85">
+                    Rotation health
                   </div>
-                  <div className="text-[7px] font-semibold tabular-nums opacity-90 mt-0.5">
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span
+                      className="text-[18px] font-bold tabular-nums leading-none"
+                      style={{ fontFamily: "ui-monospace, monospace" }}
+                    >
+                      {display}
+                    </span>
+                    <span className="text-[7px] uppercase tracking-[0.04em] opacity-70">tonight</span>
+                  </div>
+                  <div className="text-[8px] font-semibold tabular-nums opacity-90 mt-0.5">
                     {weekAverageDisplay} fit · {(health.weekPolicyPercent ?? health.weeklyBalance) ?? "—"}% policy
                     {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps > 1 ? "s" : ""}` : ""}
                   </div>
-                  <div className="text-[6px] opacity-70 mt-0.5 leading-snug">
+                  <div className="text-[7px] opacity-70 mt-0.5 leading-snug">
                     tonight · {GRAVE_WEEK_LABEL} avg · policy · target {ROTATION_HEALTH_TARGET}%
                   </div>
                 </div>
 
                 {isDraftMode && (
-                  <div className="mt-0.5 text-[6px] opacity-85 leading-snug">
+                  <div className="mt-1 text-[7px] opacity-85 leading-snug">
                     Draft preview · {draftSlotCount} placement{draftSlotCount === 1 ? "" : "s"}
                     {draftGrokExplanation ? (
                       <div className="opacity-75 mt-0.5 line-clamp-2" title={draftGrokExplanation}>
-                        {draftGrokExplanation.slice(0, 80)}{draftGrokExplanation.length > 80 ? "…" : ""}
+                        {draftGrokExplanation.slice(0, 96)}{draftGrokExplanation.length > 96 ? "…" : ""}
                       </div>
                     ) : null}
                   </div>
                 )}
 
                 {(onApplyDraft || onDiscardDraft) && isDraftMode && (
-                  <div className="mt-1 flex gap-1">
+                  <div className="mt-1.5 flex gap-1">
                     {onDiscardDraft && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onDiscardDraft(); }}
                         disabled={!canDiscardDraft}
-                        className="flex-1 text-[6px] px-1 py-0.5 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
-                        style={{ fontFamily: "inherit" }}
+                        className="flex-1 text-[7px] px-1.5 py-1 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
                       >
                         Discard
                       </button>
@@ -273,8 +281,7 @@ export function RotationHealthFloater({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); void onApplyDraft(); setExpanded(false); }}
                         disabled={!canApplyDraft}
-                        className="flex-1 text-[6px] px-1 py-0.5 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
-                        style={{ fontFamily: "inherit" }}
+                        className="flex-1 text-[7px] px-1.5 py-1 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
                       >
                         Apply
                       </button>
@@ -282,16 +289,14 @@ export function RotationHealthFloater({
                   </div>
                 )}
 
-                {/* Clear and Run engine controls in the drawer */}
                 {(onClear || onRunEngine) && (
-                  <div className="mt-1 pt-1 border-t border-current opacity-30 flex gap-1">
+                  <div className="mt-1.5 pt-1 border-t border-current/30 flex gap-1">
                     {onClear && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onClear(); setExpanded(false); }}
                         disabled={!onClear}
-                        className="flex-1 text-[6px] px-1 py-0.5 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
-                        style={{ fontFamily: "inherit" }}
+                        className="flex-1 text-[7px] px-1.5 py-1 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
                       >
                         Clear
                       </button>
@@ -301,27 +306,19 @@ export function RotationHealthFloater({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onRunEngine(); }}
                         disabled={!canRunEngine || running}
-                        className="flex-1 text-[6px] px-1 py-0.5 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
-                        style={{ fontFamily: "inherit", opacity: running ? 0.6 : 0.85 }}
+                        className="flex-1 text-[7px] px-1.5 py-1 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
+                        style={{ opacity: running ? 0.6 : 0.9 }}
                       >
-                        {running ? "Running..." : "Run engine"}
+                        {running ? "Running…" : "Run engine"}
                       </button>
                     )}
                   </div>
                 )}
-
-                <button
-                  onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-                  className="self-end mt-0.5 text-[6px] opacity-60 hover:opacity-100 underline"
-                  style={{ fontFamily: "inherit" }}
-                >
-                  close
-                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </>
+      </div>
     );
   }
 
@@ -332,8 +329,8 @@ export function RotationHealthFloater({
         ? {
             position: "fixed",
             bottom: OPS_PILL_STACK_BOTTOM_PX,
-            right: 10,
-            zIndex: 2147483646,
+            right: OPS_PILL_RIGHT_INSET,
+            zIndex: ROTATION_HEALTH_Z,
           }
         : placement === "page-corner"
         ? {
