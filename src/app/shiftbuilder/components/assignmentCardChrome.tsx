@@ -208,92 +208,122 @@ export function UnassignedInvite({
   );
 }
 
-const COVERED_LABEL_SIZE: Record<UnassignedInviteSize, number> = {
+const COVERED_LABEL_SIZE_BUILDER: Record<CardNameScale, number> = {
   zone: 8.5,
   rr: 7.5,
   aux: 7.5,
 };
 
-const COVERED_NAME_SIZE: Record<UnassignedInviteSize, number> = {
-  zone: 18,
-  rr: 14,
-  aux: 14,
+const COVERED_LABEL_SIZE_PRINT: Record<CardNameScale, number> = {
+  zone: 7.5,
+  rr: 7,
+  aux: 7,
 };
 
-/** Builder covered-by overlay — empty slot visually referenced by coverers elsewhere. */
-export function CoveredByOverlay({
-  size,
+function CoveredByBlock({
   coveredByNames,
-  onClick,
-  title = "Covered by another placement — tap to open slot",
+  scale,
+  showDigitalAssists,
+  nameSizeOverride,
 }: {
-  size: UnassignedInviteSize;
   coveredByNames: string[];
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  title?: string;
+  scale: CardNameScale;
+  showDigitalAssists: boolean;
+  nameSizeOverride?: number;
 }) {
-  const cfg = INVITE_CONFIG[size];
   const namesLine = formatCoveredByNames(coveredByNames);
+  const nameFontSize =
+    nameSizeOverride ??
+    (showDigitalAssists ? NAME_SIZE_BUILDER[scale] : NAME_SIZE_PRINT[scale]);
+  const labelFontSize = showDigitalAssists
+    ? COVERED_LABEL_SIZE_BUILDER[scale]
+    : COVERED_LABEL_SIZE_PRINT[scale];
 
   return (
-    <motion.div
-      key="covered-by-overlay"
-      className={`sb-covered-by-overlay flex flex-col items-center justify-center text-center tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
-      style={{
-        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-        minHeight: cfg.minH,
-        maxHeight: cfg.maxH,
-        border: "1px solid rgba(0,0,0,0.04)",
-        background: "rgba(245,245,247,0.92)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
-      }}
-      initial={{ opacity: 0.92, y: 1 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{
-        borderColor: "rgba(0,0,0,0.07)",
-        background: "rgba(240,240,244,0.98)",
-      }}
-      whileTap={{ scale: 0.985 }}
-      transition={premiumSpring}
-      onClick={onClick}
-      title={title}
+    <div
+      className={`sb-covered-by-block flex flex-col min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
     >
       <span
-        className="font-bold uppercase tracking-[0.22em] text-[#9CA3AF]"
-        style={{ fontSize: COVERED_LABEL_SIZE[size] }}
+        className={`sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block ${
+          showDigitalAssists ? "text-[#9CA3AF]" : "text-[#B0B0B8]"
+        }`}
+        style={{
+          fontSize: labelFontSize,
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+          lineHeight: 1.15,
+        }}
       >
         Covered by
       </span>
       <span
-        className="font-bold tracking-[-0.25px] text-[#6B7280] mt-1.5 px-1 leading-tight"
+        className={`sb-covered-by-names font-bold tracking-[-0.35px] px-1 py-[1px] inline-block leading-tight ${
+          showDigitalAssists ? "text-[#6B7280]" : "text-[#9CA3AF]"
+        }`}
         style={{
-          fontSize: COVERED_NAME_SIZE[size],
+          fontSize: nameFontSize,
+          lineHeight: 1.08,
           fontFamily: "var(--font-bricolage, var(--font-atkinson))",
         }}
       >
         {namesLine}
       </span>
+    </div>
+  );
+}
+
+/** Builder covered-by row — top-pinned like assigned TM names. */
+export function CoveredByOverlay({
+  scale,
+  coveredByNames,
+  onClick,
+  nameSizeOverride,
+  title = "Covered by another placement — tap to open slot",
+}: {
+  scale: CardNameScale;
+  coveredByNames: string[];
+  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  nameSizeOverride?: number;
+  title?: string;
+}) {
+  return (
+    <motion.div
+      key="covered-by-overlay"
+      className="sb-covered-by-overlay min-w-0 cursor-pointer"
+      initial={{ opacity: 0.92, y: 2 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ opacity: 0.92 }}
+      whileTap={{ scale: 0.995 }}
+      transition={premiumSpring}
+      onClick={onClick}
+      title={title}
+    >
+      <CoveredByBlock
+        coveredByNames={coveredByNames}
+        scale={scale}
+        showDigitalAssists
+        nameSizeOverride={nameSizeOverride}
+      />
     </motion.div>
   );
 }
 
-/** Print / preview covered-by line. */
-export function CoveredByPrintLabel({ coveredByNames }: { coveredByNames: string[] }) {
+/** Print / preview covered-by row — top-pinned, extra-muted vs builder. */
+export function CoveredByPrintLabel({
+  coveredByNames,
+  scale = "zone",
+  nameSizeOverride,
+}: {
+  coveredByNames: string[];
+  scale?: CardNameScale;
+  nameSizeOverride?: number;
+}) {
   return (
-    <div
-      className="flex flex-col items-center justify-center text-center px-1 py-1 min-h-[48px]"
-      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-    >
-      <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#9CA3AF]">
-        Covered by
-      </span>
-      <span
-        className="font-bold text-[#4B5563] mt-0.5 leading-tight"
-        style={{ fontFamily: "var(--font-bricolage, var(--font-atkinson))", fontSize: 14 }}
-      >
-        {formatCoveredByNames(coveredByNames)}
-      </span>
-    </div>
+    <CoveredByBlock
+      coveredByNames={coveredByNames}
+      scale={scale}
+      showDigitalAssists={false}
+      nameSizeOverride={nameSizeOverride}
+    />
   );
 }
 
@@ -473,15 +503,20 @@ export function SlotAssignmentBody({
         )
       ) : state.kind === "covered" ? (
         showDigitalAssists && onUnassignedClick ? (
-          <div key="covered" className="flex-1 flex flex-col justify-center min-h-0">
-            <CoveredByOverlay
-              size={inviteSize}
-              coveredByNames={state.coveredByNames}
-              onClick={onUnassignedClick}
-            />
-          </div>
+          <CoveredByOverlay
+            key="covered"
+            scale={scale}
+            coveredByNames={state.coveredByNames}
+            onClick={onUnassignedClick}
+            nameSizeOverride={nameSizeOverride}
+          />
         ) : (
-          <CoveredByPrintLabel key="covered-print" coveredByNames={state.coveredByNames} />
+          <CoveredByPrintLabel
+            key="covered-print"
+            coveredByNames={state.coveredByNames}
+            scale={scale}
+            nameSizeOverride={nameSizeOverride}
+          />
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
         <div key="unassigned" className="flex-1 flex flex-col justify-center min-h-0">
