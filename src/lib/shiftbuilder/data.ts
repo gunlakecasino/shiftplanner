@@ -3429,7 +3429,7 @@ export async function getTmPlacementHistory(
 // Slot Defaults — per-slot default break groups and task chips
 // ============================================================================
 //
-// slot_defaults   : one row per (slot_key, rr_side) → default_break_group (0–3)
+// slot_defaults   : one row per (slot_key, rr_side) → default_break_group (0–4)
 // slot_default_tasks : N rows per (slot_key, rr_side) → task chips to seed
 //
 // Push operations:
@@ -3509,6 +3509,45 @@ export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
 }
 
 // ── Writers ──────────────────────────────────────────────────────────────────
+
+/** Upsert many slot default rows (e.g. GRAVE break group map). */
+export async function bulkUpsertSlotDefaults(rows: SlotDefault[]): Promise<void> {
+  if (!rows.length) return;
+
+  const payload = rows.map((r) => ({
+    slot_key: r.slotKey,
+    slot_type: r.slotType,
+    rr_side: r.rrSide ?? "",
+    default_break_group: r.defaultBreakGroup,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from("slot_defaults")
+    .upsert(payload, { onConflict: "slot_key,rr_side" });
+
+  if (error) {
+    console.error("[shiftbuilder/data] bulkUpsertSlotDefaults error:", error);
+    throw new Error(`Failed to save slot defaults: ${(error as any).message ?? "unknown"}`);
+  }
+
+  writeSlotDefaultsCache(rows);
+}
+
+/** Seed the canonical GRAVE break-group map into slot_defaults. */
+export async function seedGraveBreakGroupDefaults(): Promise<{ count: number }> {
+  const { graveBreakGroupSlotDefaults } = await import("./graveBreakGroupDefaults");
+  const rows = graveBreakGroupSlotDefaults();
+  await bulkUpsertSlotDefaults(rows);
+  try {
+    const { revalidateSlotDefaultsCache } = await import("./revalidateOpsCache");
+    await revalidateSlotDefaultsCache();
+  } catch {
+    /* server revalidate optional from browser */
+  }
+  await bustNightBoardServerCache();
+  return { count: rows.length };
+}
 
 /** Upsert the break group default for a single slot. */
 export async function upsertSlotDefault(params: {
@@ -3626,6 +3665,8 @@ async function resolveWeekNightIds(weekStart: Date): Promise<string[]> {
 export async function pushBreakDefaultsToNight(nightId: string): Promise<{ applied: number }> {
   if (!nightId) return { applied: 0 };
 
+  const { buildSlotDefaultBreakMap } = await import('./breakGroupResolve');
+
   const [defaults, assignments] = await Promise.all([
     getSlotDefaults(),
     // Fetch current zone_assignments for the night
@@ -3648,35 +3689,41 @@ export async function pushBreakDefaultsToNight(nightId: string): Promise<{ appli
     if (row.tm_id) assignMap.set(key, row.tm_id);
   }
 
+  const breakMap = buildSlotDefaultBreakMap(defaults);
+
   let applied = 0;
   const upserts: Promise<void>[] = [];
 
-  for (const def of defaults) {
-    if (!def.defaultBreakGroup) continue; // 0 = unset, skip
+  for (const [mapKey, groupNum] of breakMap) {
+    if (!groupNum) continue; // 0 = unset, skip
 
-    const mapKey = `${def.slotKey}|${def.rrSide}`;
     const tmId = assignMap.get(mapKey);
     if (!tmId) continue; // nobody assigned here tonight
+
+    const sep = mapKey.lastIndexOf('|');
+    const slotKey = mapKey.slice(0, sep);
+    const rrSide = mapKey.slice(sep + 1);
 
     // Write to break_assignments (for break sheet / print / TM-centric group)
     upserts.push(
       upsertBreakAssignment({
         nightId,
         tmId,
-        groupNum: def.defaultBreakGroup,
-        slotRef: def.slotKey,
+        groupNum,
+        slotRef: slotKey,
       })
     );
     // ALSO write to zone_assignments.break_group so the placement card pills (which may
     // source from the assignment row in some paths) and the "canonical display column"
     // get the default immediately. Matches what manual cycle does.
     upserts.push(
-      updateSlotBreakGroup(nightId, def.slotKey, def.rrSide || null, def.defaultBreakGroup, tmId)
+      updateSlotBreakGroup(nightId, slotKey, rrSide || null, groupNum, tmId)
     );
     applied++;
   }
 
   await Promise.all(upserts);
+  await bustNightBoardServerCache();
   return { applied };
 }
 

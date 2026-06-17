@@ -23,6 +23,7 @@ import {
   ScanEye,
   Table2,
   ClipboardCopy,
+  RotateCcw,
   Activity,
   ScrollText,
 } from "lucide-react";
@@ -43,6 +44,7 @@ function NavToolButton({
   title,
   ariaLabel,
   active = false,
+  disabled = false,
   children,
   className,
 }: {
@@ -50,6 +52,7 @@ function NavToolButton({
   title: string;
   ariaLabel?: string;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -57,12 +60,14 @@ function NavToolButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={title}
       aria-label={ariaLabel ?? title}
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/5",
         isTabletTouchDevice() && "sb-tablet-touch-target h-11 w-11",
         active && "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100",
+        disabled && "pointer-events-none opacity-40",
         className,
       )}
     >
@@ -126,6 +131,9 @@ export interface FloatingNavProps {
   onNextWeek?: () => void;
   /** Copy slot tasks from the same grave weekday one week earlier. */
   onCopyPriorWeekTasks?: () => void;
+  /** Restore card-default break groups onto assigned slots for the selected night. */
+  onRestoreDefaultBreaks?: () => void;
+  restoreDefaultBreaksBusy?: boolean;
   /** Toggle the dismissable week rotation health tracker bar. */
   onToggleWeekHealth?: () => void;
   weekHealthVisible?: boolean;
@@ -187,6 +195,8 @@ export default function FloatingNav({
   onPrevWeek,
   onNextWeek,
   onCopyPriorWeekTasks,
+  onRestoreDefaultBreaks,
+  restoreDefaultBreaksBusy = false,
   onToggleWeekHealth,
   weekHealthVisible = false,
   weekHealthPercent = null,
@@ -589,6 +599,21 @@ export default function FloatingNav({
               ariaLabel="Copy tasks from last week's same weekday"
             >
               <ClipboardCopy className={NAV_ICON} />
+            </NavToolButton>
+          ) : null}
+
+          {onRestoreDefaultBreaks ? (
+            <NavToolButton
+              onClick={onRestoreDefaultBreaks}
+              title="Restore default break groups"
+              ariaLabel="Restore card-default break groups for assigned slots tonight"
+              disabled={restoreDefaultBreaksBusy}
+            >
+              {restoreDefaultBreaksBusy ? (
+                <span className="text-[10px] font-bold tabular-nums text-zinc-500">…</span>
+              ) : (
+                <RotateCcw className={NAV_ICON} />
+              )}
             </NavToolButton>
           ) : null}
 

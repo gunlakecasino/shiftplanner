@@ -31,6 +31,10 @@ import {
   getAuxAccentForRole,
 } from "@/lib/shiftbuilder/constants";
 import { nextBreakGroup, type BreakGroup } from "@/lib/shiftbuilder/constants";
+import {
+  graveBreakGroupForCompositeKey,
+  graveBreakGroupSlotDefaults,
+} from "@/lib/shiftbuilder/graveBreakGroupDefaults";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slot descriptor — flattened list of all manageable slots
@@ -162,6 +166,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
 
   // Push operation loading states
   const [pushing, setPushing] = useState<"breaks-today" | "breaks-week" | "tasks-today" | "tasks-week" | null>(null);
+  const [seedingGrave, setSeedingGrave] = useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -177,6 +182,12 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       for (const d of defaults) {
         const ck = `${d.slotKey}|${d.rrSide}`;
         bg[ck] = d.defaultBreakGroup;
+      }
+      for (const row of graveBreakGroupSlotDefaults()) {
+        const ck = `${row.slotKey}|${row.rrSide}`;
+        if (!(ck in bg)) {
+          bg[ck] = row.defaultBreakGroup as BreakGroup;
+        }
       }
       setBreakGroups(bg);
 
@@ -211,9 +222,26 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
   };
 
   // ── Break group cycling ───────────────────────────────────────────────────
+  const handleSaveGraveBreakMap = useCallback(async () => {
+    if (seedingGrave) return;
+    setSeedingGrave(true);
+    try {
+      const { seedGraveBreakGroupDefaults } = await import("@/lib/shiftbuilder/data");
+      const { count } = await seedGraveBreakGroupDefaults();
+      await load();
+      showToast(`GRAVE break map saved (${count} slots)`, "success");
+    } catch (e: any) {
+      showToast("Failed to save GRAVE break map: " + (e?.message ?? "unknown"), "error");
+    } finally {
+      setSeedingGrave(false);
+    }
+  }, [seedingGrave, load]);
+
   const handleCycleBreak = useCallback(
     async (def: SlotDef) => {
-      const cur = (breakGroups[def.compositeKey] ?? 0) as BreakGroup;
+      const cur = (breakGroups[def.compositeKey]
+        ?? graveBreakGroupForCompositeKey(def.compositeKey)
+        ?? 0) as BreakGroup;
       const next = nextBreakGroup(cur);
 
       // Optimistic update
@@ -408,6 +436,13 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               onClick={() => handlePush("breaks-week")}
             />
             <PushButton
+              label="Save GRAVE break map"
+              icon={<span className="ms" style={{ fontSize: 14 }}>save</span>}
+              loading={seedingGrave}
+              disabled={seedingGrave || pushing !== null}
+              onClick={handleSaveGraveBreakMap}
+            />
+            <PushButton
               label="Tasks → Today"
               icon={<span className="ms" style={{ fontSize: 14 }}>calendar_month</span>}
               loading={pushing === "tasks-today"}
@@ -446,7 +481,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
         <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-500">
           <span className="flex items-center gap-1">
             <span className="w-[18px] h-[12px] bg-[#1C1C1E] text-white text-[8px] font-bold rounded-[2px] flex items-center justify-center">1</span>
-            Break group default (click to cycle: 1 → 2 → 3 → –)
+            Break group default (click to cycle: 1 → 2 → 3 → OL → –)
           </span>
           <span>· Task chips are pushed as <em>replace</em> (existing chips are wiped)</span>
         </div>
@@ -477,7 +512,9 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
                     <SlotRow
                       key={def.compositeKey}
                       def={def}
-                      breakGroup={(breakGroups[def.compositeKey] ?? 0) as BreakGroup}
+                      breakGroup={(breakGroups[def.compositeKey]
+                        ?? graveBreakGroupForCompositeKey(def.compositeKey)
+                        ?? 0) as BreakGroup}
                       tasks={tasksBySlot[def.compositeKey] ?? []}
                       isAdding={addingFor === def.compositeKey}
                       addInput={addInput}

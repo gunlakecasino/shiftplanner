@@ -899,7 +899,7 @@ function AuthedShiftBuilder() {
 
   // (Dock calendar close effect removed along with the old bottom dock popover)
 
-  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(1);
+  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(null);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
   const [realRoster, setRealRoster] = useState<any[]>([]);
   const [graveRoster, setGraveRoster] = useState<any[]>([]); // GRAVE-shift filtered roster (Option B)
@@ -964,6 +964,7 @@ function AuthedShiftBuilder() {
   const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
+  const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
   const loadingAssignmentsRef = useRef<boolean>(false);
@@ -6124,6 +6125,85 @@ function AuthedShiftBuilder() {
     mapNightTasksToUiKeys,
   ]);
 
+  const handleRestoreDefaultBreaks = React.useCallback(async () => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — cannot restore break defaults", "error");
+      return;
+    }
+
+    if (
+      !confirm(
+        "Restore card-default break groups for all assigned slots tonight? This overwrites any per-shift break overrides.",
+      )
+    ) {
+      return;
+    }
+
+    setRestoreDefaultBreaksBusy(true);
+    try {
+      let nid = queryNightId || nightId;
+      if (!nid) {
+        nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+      }
+      if (!nid) {
+        showToast("No night loaded — pick a day first", "error");
+        return;
+      }
+
+      const { pushBreakDefaultsToNight, getNightBreakAssignments } =
+        await import("@/lib/shiftbuilder/data");
+      const { applied } = await pushBreakDefaultsToNight(nid);
+
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+
+      const freshBreaks = await getNightBreakAssignments(nid);
+      const breakByTm: Record<string, number> = {};
+      freshBreaks.forEach((r: { tmId?: string | null; groupNum?: number | null }) => {
+        if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
+      });
+
+      const patchBreakGroups = (prev: Record<string, any>) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((k) => {
+          const a = next[k];
+          if (a?.tmId && breakByTm[a.tmId] !== undefined) {
+            next[k] = { ...a, breakGroup: breakByTm[a.tmId], breakGroupExplicit: true };
+          }
+        });
+        return next;
+      };
+
+      setAssignments(patchBreakGroups);
+      try {
+        useShiftBuilderStore.getState().setAssignments(patchBreakGroups);
+      } catch {
+        /* store optional */
+      }
+
+      showToast(
+        `Restored default breaks — ${applied} slot${applied !== 1 ? "s" : ""} updated`,
+        "success",
+      );
+    } catch (e: unknown) {
+      console.error("[shiftbuilder] restore default breaks failed", e);
+      const msg = e instanceof Error ? e.message : "Failed to restore default breaks";
+      showToast(msg, "error");
+    } finally {
+      setRestoreDefaultBreaksBusy(false);
+    }
+  }, [
+    isCurrentNightLocked,
+    queryNightId,
+    nightId,
+    selectedDay.date,
+    selectedDay.name,
+    showToast,
+    currentNight.queryClient,
+    resolveNightIdForDate,
+  ]);
+
   const persistRemoveTask = React.useCallback(
     async (
       targetNightId: string | null,
@@ -6945,6 +7025,10 @@ function AuthedShiftBuilder() {
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
         onCopyPriorWeekTasks={handleCopyPriorWeekSameDayTasks}
+        onRestoreDefaultBreaks={
+          viewMode === "canvas" ? handleRestoreDefaultBreaks : undefined
+        }
+        restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
         onToggleWeekHealth={
           viewMode === "canvas" ? handleToggleWeekHealthTracker : undefined
         }

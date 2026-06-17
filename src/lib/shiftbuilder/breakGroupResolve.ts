@@ -8,6 +8,7 @@
 
 import { dbToUi } from "./slot-keys";
 import type { SlotDefault } from "./data";
+import { graveBreakGroupSlotDefaults } from "./graveBreakGroupDefaults";
 
 import { BREAK_GROUP_OVERLAPS } from "./constants";
 
@@ -31,6 +32,13 @@ export function buildSlotDefaultBreakMap(
       slotDefaultLookupKey(d.slotKey, d.rrSide),
       d.defaultBreakGroup as BreakGroupValue,
     );
+  }
+  // DB rows win; fill any missing slots from the canonical GRAVE map.
+  for (const d of graveBreakGroupSlotDefaults()) {
+    const key = slotDefaultLookupKey(d.slotKey, d.rrSide);
+    if (!map.has(key)) {
+      map.set(key, d.defaultBreakGroup as BreakGroupValue);
+    }
   }
   return map;
 }

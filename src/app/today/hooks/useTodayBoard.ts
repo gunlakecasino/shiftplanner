@@ -87,7 +87,7 @@ export function useTodayBoard({
   const [statusLoading, setStatusLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, NightSlotTask[]>>({});
-  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(1);
+  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(null);
   const positioningRef = useRef<HTMLDivElement>(null);
 
   const { stageHostRef, scale, recomputeScale } = useZoom({
