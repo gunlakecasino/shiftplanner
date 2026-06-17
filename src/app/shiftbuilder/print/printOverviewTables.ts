@@ -5,6 +5,7 @@ import {
   getAuxAccent,
   ZONE_COLORS,
   RR_COLORS,
+  ZONE_VISUAL_ORDER,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { activeAuxDefs } from "@/lib/shiftbuilder/auxLayout";
@@ -46,14 +47,18 @@ export type OverviewSlotRow = {
 
 export function buildOverviewSlotRows(auxDefs: AuxDef[] = []): OverviewSlotRow[] {
   const rows: OverviewSlotRow[] = [];
-  ZONE_DEFS.forEach((z) =>
-    rows.push({
-      key: z.key,
-      label: z.label,
-      section: "ZONES",
-      accent: ZONE_COLORS[z.key] ?? "#6B7280",
-    }),
-  );
+  // Use the same visual row order as the builder canvas so print book/overview matches the on-screen layout.
+  ZONE_VISUAL_ORDER.forEach((zKey) => {
+    const z = ZONE_DEFS.find((d) => d.key === zKey);
+    if (z) {
+      rows.push({
+        key: z.key,
+        label: z.label,
+        section: "ZONES",
+        accent: ZONE_COLORS[z.key] ?? "#6B7280",
+      });
+    }
+  });
   RR_DEFS.forEach((rr) => {
     rows.push({
       key: `MRR${rr.num}`,

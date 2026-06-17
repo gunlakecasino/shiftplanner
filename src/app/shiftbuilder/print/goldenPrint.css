@@ -1,0 +1,72 @@
+/**
+ * Golden print session — shared by browser print() and PDF export rasterization.
+ * Sacred 1056×816 artboard contract; breaks flex column pins overlaps at bottom.
+ */
+
+body.printing-dual-mode .print-dual-container {
+  display: block;
+  width: 1056px;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard {
+  width: 1056px;
+  height: 816px;
+  min-height: 816px;
+  max-height: 816px;
+  overflow: hidden;
+  box-shadow: none;
+  margin: 0;
+  page-break-after: always;
+  break-after: page;
+  background: #ffffff;
+  zoom: 1;
+  transform: none;
+}
+
+body.golden-export-raster .print-dual-container .print-artboard {
+  contain: layout style paint;
+  overflow: hidden;
+}
+
+body.golden-export-raster .print-dual-container .print-artboard > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Export raster peek — superseded by off-screen staging once prepareExportSessionForRaster runs. */
+body.golden-export-raster .print-dual-container {
+  position: fixed;
+  left: -10960px;
+  top: 0;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+/* While Print Command Center is busy, never show Golden pages on screen. */
+@media screen {
+  body.sb-print-export-busy .print-dual-container {
+    position: fixed !important;
+    left: -10960px !important;
+    top: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+    overflow: hidden !important;
+  }
+}
+
+@media print {
+  body.printing-dual-mode > *:not(.print-dual-container):not(style):not(script) {
+    display: none !important;
+  }
+
+  body.printing-dual-mode .print-dual-container {
+    display: block !important;
+    opacity: 1 !important;
+    position: static !important;
+  }
+}

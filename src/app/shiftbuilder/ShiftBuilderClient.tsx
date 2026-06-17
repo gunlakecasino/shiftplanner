@@ -33,6 +33,8 @@ import {
   findRemovableEmptyAuxSlot,
   applyAuxRole,
   applyAuxLabel,
+  defaultAuxDefsForNewNight,
+  ensureAdminFirst,
 } from "@/lib/shiftbuilder/auxLayout";
 import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
 // tmCommands functions are dynamically imported below to avoid pulling heavy deps
@@ -65,9 +67,8 @@ import { PinGate } from "./components/PinGate";
 import {
   PrintCommandCenter,
   type PrintConfig,
-  MARGIN_VALUES,
-  MARGIN_ZOOM,
 } from "./components/PrintCommandCenter";
+import { PrintExportProgressOverlay } from "./components/PrintExportProgressOverlay";
 import {
   buildPrintQueue,
   applyCustomQueueOrder,
@@ -138,6 +139,15 @@ import {
   nextFrames as printNextFrames,
   waitForPrintArtboardSettled,
 } from "./print/printHydrateNight";
+import { generatePrintPreviewGoldenPages } from "./print/printPreviewPipeline";
+import { postProcessBreaksArtboard } from "./print/breaksArtboard";
+import { exportGoldenPdf } from "./print/exportPdf";
+import {
+  mountGoldenPrintSession,
+  runBrowserPrint,
+  waitForGoldenRenderSettled,
+} from "./print/printSession";
+import { LivePrintPreviewArtboard } from "./print/LivePrintPreviewArtboard";
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -166,11 +176,9 @@ import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrim
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
-import {
-  CanvasEngineCluster,
-  type CoverageEngineRunOptions,
-  type EngineRunPhase,
-} from "./components/CanvasEngineCluster";
+// CanvasEngineCluster removed (its week/rotation health box + pill was the "old" one overtaking the surface).
+// Rotation health is now the compact side drawer in RotationHealthFloater (with Clear/Run engine inside).
+import type { EngineRunPhase, CoverageEngineRunOptions } from "./components/CanvasEngineCluster";
 import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   stageTopInsetPx,
@@ -745,10 +753,9 @@ function AuthedShiftBuilder() {
   // "builder": the full artistic authoring surface. xAI magic lines, enhanced corner reads, micro digital ink,
   //            hover states, and power affordances appear as an integrated "whisper" on the sheet.
   //            Feels like one cohesive piece — liquid glass + Atkinson + calm zincs + zone accents + GRAVE red notes.
-  // "print-preview": live on-canvas is bit-for-bit what the PDF clone will capture. Zero digital assists leak.
-  //            The sacred 1056×816 Golden (Atkinson, exact spacing, liquid glass cards) is untouched.
-  // Toggle itself is pure digital chrome (unscaled overlay, no-print, outside .print-artboard subtree).
-  // Persisted like currentView. Real print/PDF path is always the clean clone regardless.
+  // "print-preview": live on-canvas renders PrintPreviewPage (same component as export/print HTML).
+  //            Sacred 1056×816 Golden artboard — identical markup to PDF/browser print output.
+  // Toggle is pure digital chrome (FloatingNav). Export still fetches committed Supabase data per night.
   const [canvasMode, setCanvasMode] = useState<"builder" | "print-preview">(() => {
     const saved = localStorage.getItem("oms_canvas_mode");
     return (saved === "print-preview" || saved === "builder") ? saved : "builder";
@@ -959,7 +966,7 @@ function AuthedShiftBuilder() {
   //
   // selectedTasks: per-night SELECTIONS, keyed by the UI slot key (Z1, MRR1,
   // etc.) so the card renderers can read tasks for a slot without round-tripping
-  // through the db key. Replaces the static `def.locations` arrays.
+  // through the db key.
   //
   // tasksOpenFor: ui slot key when the task-selector popover is open; null
   // when closed.
@@ -1142,7 +1149,17 @@ function AuthedShiftBuilder() {
   // === Print Command Center ===
   const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printBusyMode, setPrintBusyMode] = useState<"print" | "export">("print");
   const [printProgress, setPrintProgress] = useState<{ current: number; total: number; label: string } | null>(null);
+
+  useEffect(() => {
+    if (!isPrinting) {
+      document.body.classList.remove("sb-print-export-busy");
+      return;
+    }
+    document.body.classList.add("sb-print-export-busy");
+    return () => document.body.classList.remove("sb-print-export-busy");
+  }, [isPrinting]);
 
   // Card borders for attention / marking (visual only)
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
@@ -1265,10 +1282,11 @@ function AuthedShiftBuilder() {
   // Toast queue — extracted to useToast
   const { toasts, lastSavedAt, setLastSavedAt, showToast, dismissToast } = useToast();
 
-  // === Flex AUX row — per-night typed shells (6 blank default, max 10) ===
+  // === Flex AUX row — per-night typed shells (admin first + 5 blanks, max 10) ===
   const [auxDefs, setAuxDefs] = useState<AuxDef[]>(() =>
-    BLANK_AUX_DEFS.map((d) => ({ ...d })),
+    defaultAuxDefsForNewNight().map((d) => ({ ...d })),
   );
+  const [customCoverageTargets, setCustomCoverageTargets] = useState<string[]>([]);
   const persistAuxLayoutNowRef = React.useRef<(layout: AuxDef[]) => void>(() => {});
 
   const addAuxSlot = () => {
@@ -1757,6 +1775,24 @@ function AuthedShiftBuilder() {
       pendingHistoryRef.current = null;
     }
   }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Enforce that the "admin" aux (role === 'admin') is always the first card
+  // in the AUXILIARY section. This reorders the auxDefs array (which controls
+  // both visual order in the grid and the persisted aux_layout) whenever a
+  // role change or load results in admin not being first.
+  React.useEffect(() => {
+    if (!auxDefs || auxDefs.length <= 1) return;
+    const adminIndex = auxDefs.findIndex((d) => d.role === 'admin');
+    if (adminIndex > 0) {
+      setAuxDefs((prev) => {
+        const admin = prev[adminIndex];
+        const rest = prev.filter((_, i) => i !== adminIndex);
+        const next = [admin, ...rest];
+        queueMicrotask(() => persistAuxLayoutNowRef.current(next));
+        return next;
+      });
+    }
+  }, [auxDefs]);
 
   // Keyboard shortcuts for undo/redo (one tab session)
   useEffect(() => {
@@ -2480,10 +2516,11 @@ function AuthedShiftBuilder() {
       ...d,
       role: d.role ?? "blank",
     }));
-    setAuxDefs(normalized);
+    const ensured = ensureAdminFirst(normalized);
+    setAuxDefs(ensured);
     const nid = currentNight.nightId;
     if (nid) {
-      auxLayoutSavedFingerprintRef.current = `${nid}:${JSON.stringify(normalized)}`;
+      auxLayoutSavedFingerprintRef.current = `${nid}:${JSON.stringify(ensured)}`;
     }
   }, [
     selectedDay.date,
@@ -3512,18 +3549,12 @@ function AuthedShiftBuilder() {
   // Generalizes handlePrintWeek: iterates only the days/pages requested in config,
   // assembles them in the specified page order, and applies dynamic @page margins
   // + zoom so the output matches exactly what the Print Command Center previewed.
-  const handlePrintWithConfig = React.useCallback(async (config: PrintConfig) => {
+  const handlePrintWithConfig = React.useCallback(async (config: PrintConfig, options: { exportMode?: boolean } = {}) => {
+    const { exportMode = false } = options;
     handleSlotClose();
     const originalDayIndex = selectedDayIndex;
     const originalView = currentView;
     const originalCanvasMode = canvasMode;
-
-    const nextFrames = (n: number) =>
-      new Promise<void>((resolve) => {
-        let count = 0;
-        const tick = () => { count++; if (count >= n) resolve(); else requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-      });
 
     const waitForLoad = (timeoutMs = 15000) =>
       new Promise<void>((resolve, reject) => {
@@ -3537,34 +3568,13 @@ function AuthedShiftBuilder() {
         setTimeout(check, 60);
       });
 
-    const postProcessBreaksArtboard = (artboard: Element) => {
-      const el = artboard as HTMLElement;
-      const contentArea = el.querySelector(".flex-1.min-h-0.overflow-hidden.flex.flex-col") as HTMLElement | null;
-      if (contentArea) {
-        contentArea.style.display = "flex";
-        contentArea.style.flexDirection = "column";
-        contentArea.style.flex = "1 1 0%";
-        contentArea.style.minHeight = "0";
-        contentArea.style.overflow = "hidden";
-      }
-      const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
-      if (waveGrid && !waveGrid.classList.contains("overlaps-section")) {
-        waveGrid.style.flex = "1 1 0%";
-        waveGrid.style.minHeight = "0";
-        waveGrid.style.overflow = "hidden";
-        waveGrid.style.alignContent = "start";
-      }
-      const overlaps = el.querySelector(".overlaps-section") as HTMLElement | null;
-      if (overlaps) { overlaps.style.flexShrink = "0"; overlaps.style.marginTop = "0"; }
-    };
-
     const activeDays = config.days.filter(d => d.printDeploy || d.printBreaks);
     const overviewDays = config.includeOverview ? config.days.filter(d => d.inOverview) : [];
     const hasOverview = config.includeOverview && overviewDays.length > 0;
     const hasCover    = config.includeCoverPage;
 
-    if (activeDays.length === 0 && !hasOverview) {
-      showToast("No pages selected to print.", "error");
+    if (activeDays.length === 0 && !hasOverview && !hasCover) {
+      showToast(exportMode ? "Nothing to export. (no pages selected)" : "No pages selected to print.", "error");
       return;
     }
 
@@ -3586,8 +3596,13 @@ function AuthedShiftBuilder() {
     // Unique sorted day indices we need to load/capture
     const dayIndices = [...new Set(activeDays.map(d => d.dayIndex))].sort((a, b) => a - b);
 
+    setPrintBusyMode(exportMode ? "export" : "print");
     setIsPrinting(true);
-    setPrintProgress({ current: 0, total: totalPages, label: "Preparing…" });
+    setPrintProgress({
+      current: 0,
+      total: totalPages,
+      label: exportMode ? "Gathering schedule data…" : "Preparing sheets…",
+    });
 
     let pageProgress = 0;
     const bumpProgress = (label: string) => {
@@ -3595,63 +3610,7 @@ function AuthedShiftBuilder() {
       setPrintProgress({ current: pageProgress, total: totalPages, label });
     };
 
-    // captured[dayIndex] = { deployHTML?, breaksHTML? }
-    const capturedPages = new Map<number, { deployHTML?: string; breaksHTML?: string }>();
-
-    // Force print-preview mode so the board root gets "print-artboard" class and print-optimized content
-    // (no digital assists, proper styling). This ensures capture finds populated .print-artboard elements.
-    flushSync(() => setCanvasMode("print-preview"));
-
     try {
-      for (let i = 0; i < dayIndices.length; i++) {
-        const dayIdx = dayIndices[i];
-        const dayConf = activeDays.find(d => d.dayIndex === dayIdx)!;
-        const dayName = DAY_DEFS[dayIdx]?.name ?? `Day ${dayIdx}`;
-
-        setPrintProgress({ current: pageProgress, total: totalPages, label: `Loading ${dayName}…` });
-
-        await preparePrintDay(dayIdx);
-
-        const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
-        if (!liveArtboard) continue;
-
-        const captured: { deployHTML?: string; breaksHTML?: string } = {};
-
-        if (dayConf.printDeploy) {
-          flushSync(() => setCurrentView("deployment"));
-          await printNextFrames(2);
-          liveArtboard.style.visibility = "";
-          captured.deployHTML = liveArtboard.outerHTML;
-          liveArtboard.style.visibility = "hidden";
-          bumpProgress(`${dayName} deploy`);
-        }
-
-        if (dayConf.printBreaks) {
-          flushSync(() => setCurrentView("breaks"));
-          await printNextFrames(2);
-          const prevH = liveArtboard.style.height;
-          const prevMH = liveArtboard.style.minHeight;
-          const prevD = liveArtboard.style.display;
-          const prevFD = liveArtboard.style.flexDirection;
-          liveArtboard.style.height = "816px";
-          liveArtboard.style.minHeight = "816px";
-          liveArtboard.style.display = "flex";
-          liveArtboard.style.flexDirection = "column";
-          liveArtboard.getBoundingClientRect();
-          await printNextFrames(1);
-          liveArtboard.style.visibility = "";
-          captured.breaksHTML = liveArtboard.outerHTML;
-          liveArtboard.style.height = prevH || "";
-          liveArtboard.style.minHeight = prevMH || "";
-          liveArtboard.style.display = prevD || "";
-          liveArtboard.style.flexDirection = prevFD || "";
-          liveArtboard.style.visibility = "";
-          bumpProgress(`${dayName} breaks`);
-        }
-
-        capturedPages.set(dayIdx, captured);
-      }
-
       // ── Phase 2: fetch overview data directly from Supabase ──────────────────
       let overviewHTML: string | null = null;
       let coverHTML: string | null = null;
@@ -3699,126 +3658,55 @@ function AuthedShiftBuilder() {
         bumpProgress("Cover page");
       }
 
-      // ── Assemble pages ────────────────────────────────────────────────────────
-      const allPageHTML: string[] = [];
-      const allPageIsBreaks: boolean[] = [];
 
-      if (customQueueOrder && customQueueOrder.length > 0) {
-        // Custom drag-to-reorder: respect the queue exactly as the operator arranged it
-        const pageMap = new Map<string, { html: string; isBreaks: boolean }>();
-        if (coverHTML)    pageMap.set("__cover",    { html: coverHTML,    isBreaks: false });
-        if (overviewHTML) pageMap.set("__overview", { html: overviewHTML, isBreaks: false });
-        for (const d of activeDays) {
-          const c = capturedPages.get(d.dayIndex);
-          if (!c) continue;
-          if (d.printDeploy && c.deployHTML) pageMap.set(`${d.dayIndex}-d`, { html: c.deployHTML, isBreaks: false });
-          if (d.printBreaks && c.breaksHTML) pageMap.set(`${d.dayIndex}-b`, { html: c.breaksHTML, isBreaks: true  });
-        }
-        for (const queueId of customQueueOrder) {
-          const page = pageMap.get(queueId);
-          if (page) { allPageHTML.push(page.html); allPageIsBreaks.push(page.isBreaks); }
-        }
-      } else {
-        // Default positional assembly: cover (if first), then day pages, then cover (if last)
-        const insertSpecial = (pos: "first" | "last" | null, html: string | null, isBreaks: boolean) => {
-          if (html && pos === "first") { allPageHTML.push(html); allPageIsBreaks.push(isBreaks); }
-        };
-        const appendSpecial = (pos: "first" | "last" | null, html: string | null, isBreaks: boolean) => {
-          if (html && pos === "last") { allPageHTML.push(html); allPageIsBreaks.push(isBreaks); }
-        };
 
-        insertSpecial(hasCover    ? config.coverPagePosition    : null, coverHTML,    false);
-        insertSpecial(overviewHTML ? config.overviewPosition : null, overviewHTML, false);
+      const goldenPages = await generatePrintPreviewGoldenPages({
+        config,
+        dayDefs: DAY_DEFS,
+        activeDays,
+        coverHTML,
+        overviewHTML,
+        onProgress: (label) => {
+          bumpProgress(label);
+        },
+      });
 
-        // Day pages in selected order
-        if (config.pageOrder === "paired") {
-          for (const d of activeDays) {
-            const c = capturedPages.get(d.dayIndex);
-            if (!c) continue;
-            if (d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
-            if (d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true);  }
-          }
-        } else if (config.pageOrder === "deploy-first") {
-          for (const d of activeDays) {
-            const c = capturedPages.get(d.dayIndex);
-            if (c && d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
-          }
-          for (const d of activeDays) {
-            const c = capturedPages.get(d.dayIndex);
-            if (c && d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true); }
-          }
-        } else { // breaks-first
-          for (const d of activeDays) {
-            const c = capturedPages.get(d.dayIndex);
-            if (c && d.printBreaks && c.breaksHTML) { allPageHTML.push(c.breaksHTML); allPageIsBreaks.push(true);  }
-          }
-          for (const d of activeDays) {
-            const c = capturedPages.get(d.dayIndex);
-            if (c && d.printDeploy && c.deployHTML) { allPageHTML.push(c.deployHTML); allPageIsBreaks.push(false); }
-          }
-        }
-
-        appendSpecial(overviewHTML ? config.overviewPosition : null, overviewHTML, false);
-        appendSpecial(hasCover     ? config.coverPagePosition : null, coverHTML,    false);
+      if (goldenPages.length === 0) {
+        showToast(exportMode ? "Nothing to export." : "Nothing to print.", "error");
+        return;
       }
 
-      if (allPageHTML.length === 0) { showToast("Nothing to print.", "error"); return; }
-
-      setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
-      saveLastPrintConfig(config);
-
-      // Build container
-      const container = document.createElement("div");
-      container.className = "print-dual-container";
-      container.innerHTML = allPageHTML.join("");
-      document.body.appendChild(container);
-
-      // Post-process breaks artboards
-      container.querySelectorAll(".print-artboard").forEach((ab, i) => {
-        if (allPageIsBreaks[i]) postProcessBreaksArtboard(ab);
-      });
-
-      // Inject dynamic @page margin + zoom override
-      const marginValue = MARGIN_VALUES[config.margins];
-      const zoomValue = MARGIN_ZOOM[config.margins];
-      const dynamicStyle = document.createElement("style");
-      dynamicStyle.id = "__pcc-print-override";
-      dynamicStyle.textContent = `
-        @page { margin: ${marginValue} !important; }
-        @media print {
-          .print-dual-container .print-artboard { zoom: ${zoomValue} !important; }
-        }
-      `;
-      document.head.appendChild(dynamicStyle);
-
-      // Hide other body children (prevents blank first page)
-      document.body.classList.add("printing-dual-mode");
-      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
-      Array.from(document.body.children).forEach((child) => {
-        const el = child as HTMLElement;
-        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
-          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
-          el.style.display = "none";
-        }
-      });
-
-      const closePrintCenterAfterDialog = () => setIsPrintCenterOpen(false);
-      window.addEventListener("afterprint", closePrintCenterAfterDialog, { once: true });
-
-      try {
-        window.print();
-      } finally {
-        hiddenBodyChildren.forEach(({ el, prevDisplay }) => { el.style.display = prevDisplay; });
-        document.body.classList.remove("printing-dual-mode");
-        container.remove();
-        document.getElementById("__pcc-print-override")?.remove();
+      if (exportMode) {
+        setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering Golden sheets…" });
+        const result = await exportGoldenPdf({
+          pages: goldenPages,
+          config,
+          dayDefs: DAY_DEFS,
+          onProgress: (p) => setPrintProgress(p),
+        });
+        saveLastPrintConfig(config);
+        showToast(
+          result.usedZip
+            ? `ZIP downloaded (${result.filename}).`
+            : "PDF downloaded (Golden print fidelity).",
+          "success",
+        );
+        setIsPrintCenterOpen(false);
+      } else {
+        setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
+        saveLastPrintConfig(config);
+        const session = mountGoldenPrintSession(goldenPages, config, "print");
+        await waitForGoldenRenderSettled();
+        await runBrowserPrint(session);
+        setIsPrintCenterOpen(false);
       }
     } catch (e) {
       console.error("[shiftbuilder] print-with-config error", e);
-      showToast("Print failed — try again.", "error");
-      document.body.classList.remove("printing-dual-mode");
+      showToast(exportMode ? "Export failed — try again." : "Print failed — try again.", "error");
+      document.body.classList.remove("printing-dual-mode", "sb-print-export-busy");
       document.querySelector(".print-dual-container")?.remove();
       document.getElementById("__pcc-print-override")?.remove();
+      document.getElementById("__pcc-export-override")?.remove();
     } finally {
       flushSync(() => setSelectedDayIndex(originalDayIndex));
       await waitForLoad().catch(() => {});
@@ -3829,7 +3717,20 @@ function AuthedShiftBuilder() {
       setIsPrinting(false);
       setPrintProgress(null);
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, preparePrintDay, canvasMode]);
+  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, canvasMode]);
+
+  const handlePreviewSheet = React.useCallback(
+    (args: { dayIndex: number; view: "deployment" | "breaks"; label: string }) => {
+      setIsPrintCenterOpen(false);
+      flushSync(() => {
+        setCanvasMode("print-preview");
+        setSelectedDayIndex(args.dayIndex);
+        setCurrentView(args.view);
+      });
+      showToast(`Preview: ${args.label}`, "info");
+    },
+    [showToast],
+  );
 
   const handlePrintWeek = React.useCallback(async () => {
     showToast("Preparing full week print…", "info");
@@ -4140,8 +4041,23 @@ function AuthedShiftBuilder() {
     async (sourceKey: string, targetKey: string) => {
       if (!nightId) { showToast("No active night selected", "error"); return; }
 
+      const captureDate = selectedDay.date;
       const accentColor = getSlotAccentColor(sourceKey);
-      const targetLabel = getSlotCoverageLabel(targetKey);
+      let targetLabel = getSlotCoverageLabel(targetKey);
+
+      // Resolve nicer labels for special aux slots (e.g. the Z9SR aux may be keyed as AUX1 in current layout)
+      // Use the aux def's locations[0] (e.g. "Z9 Smoking Room") when available.
+      if (targetKey.startsWith("AUX") || targetKey === "Z9SR") {
+        const matchingAux = auxDefs.find(
+          (d) => d.key === targetKey || (targetKey === "Z9SR" && d.role === "z9sr")
+        );
+        if (matchingAux?.locations?.[0]) {
+          targetLabel = matchingAux.locations[0];
+        } else if (targetKey === "Z9SR") {
+          targetLabel = "Zone 9 Smoking Room";
+        }
+      }
+
       const sourceKeys = expandCoverageToKeys(sourceKey);
 
       try {
@@ -4178,13 +4094,17 @@ function AuthedShiftBuilder() {
           byKey[uiKey].push(t);
         }
         setSelectedTasks(byKey);
+        const qc = currentNight?.queryClient;
+        if (qc) {
+          patchNightSecondaryTasksCache(qc, formatLocalDateISO(captureDate), fresh);
+        }
         showToast(`Coverage added: And ${targetLabel}`, "success");
       } catch (err) {
         console.error("[SBC] coverage add failed:", err);
         showToast("Failed to add coverage bar", "error");
       }
     },
-    [nightId, showToast, logBuilderChange]
+    [nightId, showToast, logBuilderChange, auxDefs, patchNightSecondaryTasksCache, currentNight.queryClient, selectedDay]
   );
 
   // Stable computed arrays/objects for the palette — new references only when
@@ -6544,8 +6464,8 @@ function AuthedShiftBuilder() {
     logBuilderChange,
   ]);
 
-  const handlePadAddCoverage = React.useCallback((sourceKey: string, targetKey: string) => {
-    handleCmdkAddCoverage(sourceKey, targetKey);
+  const handlePadAddCoverage = React.useCallback(async (sourceKey: string, targetKey: string) => {
+    await handleCmdkAddCoverage(sourceKey, targetKey);
   }, [handleCmdkAddCoverage]);
 
   const handleBoardRemoveTask = React.useCallback((slotKey: string, taskId: string) => {
@@ -7030,7 +6950,7 @@ function AuthedShiftBuilder() {
          relative container so the canvas can take the full width. When the
          operator collapses the roster, a sphere appears in its place.
          min-h-0 is still critical for the canvas's nested scroll behavior. */}
-      <div className={`flex flex-1 overflow-hidden min-h-0 relative ${isBuilderDeployment ? 'sb-builder-main' : ''}`}>
+      <div className={`flex flex-1 relative ${isBuilderDeployment ? 'sb-builder-main overflow-y-auto' : 'overflow-hidden min-h-0'}`}>
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
@@ -7317,6 +7237,14 @@ function AuthedShiftBuilder() {
                 processedBreakCounts={processedDayData?.breakCounts}
                 selectedDay={selectedDay}
                 selectedDayIndex={selectedDayIndex}
+                // Rotation health side drawer: pass clear and run engine so the drawer contains them
+                canRunEngine={canRunEngine}
+                onRunXaiEngine={runXaiEngineFromCanvas}
+                onClearBoard={handleClearBoard}
+                engineRunning={engineRunPhase !== "idle"}
+                onApplyDraft={() => { void applyDraft(); }}
+                onDiscardDraft={discardDraft}
+                draftGrokExplanation={draftGrokExplanation}
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
@@ -7864,6 +7792,18 @@ function AuthedShiftBuilder() {
                   </div>
                 )}
               </>
+            ) : isPrintPreview ? (
+              <LivePrintPreviewArtboard
+                selectedDay={selectedDay}
+                selectedDayIndex={selectedDayIndex}
+                currentView={currentView as "deployment" | "breaks"}
+                selectedTasks={selectedTasks}
+                amOverlapDayName={amOverlapDayName}
+                amOverlapDateNum={amOverlapDateNum}
+                nextDayColor={nextDayColor}
+                breakGroup={breakGroup}
+                weekDayDefs={DAY_DEFS}
+              />
             ) : (
               <ShiftBuilderBoard
                 // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
@@ -7920,7 +7860,7 @@ function AuthedShiftBuilder() {
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
                 artboardScale={scale}
-                isPrintPreview={isPrintPreview}
+                isPrintPreview={false}
               />
             )}
             {/* End of isolated board / weekly sheet. */}
@@ -8132,10 +8072,19 @@ function AuthedShiftBuilder() {
         open={isPrintCenterOpen}
         onClose={() => setIsPrintCenterOpen(false)}
         onPrint={handlePrintWithConfig}
+        onExport={(config) => handlePrintWithConfig(config, { exportMode: true })}
+        onPreviewSheet={handlePreviewSheet}
         DAY_DEFS={DAY_DEFS}
         selectedDayIndex={selectedDayIndex}
         isPrinting={isPrinting}
         printProgress={printProgress}
+        isDark={isDark}
+      />
+
+      <PrintExportProgressOverlay
+        active={isPrinting}
+        mode={printBusyMode}
+        progress={printProgress}
         isDark={isDark}
       />
 
@@ -8259,38 +8208,10 @@ function AuthedShiftBuilder() {
       {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
       {viewMode === 'canvas' && <OpsStatusBar />}
 
-      {/* Persistent but dismissable live tracker for each day's rotation health %.
-          Shows the consistently tracked per-day health (rich when captured for that day + stable repeat-based proxies for the full week).
-          Updates live as assignments, drafts, or fit data change.
-          Click a day to switch to it. X to dismiss (preference persisted in localStorage).
-          Re-open via the small button in the health cluster when dismissed. */}
-      {viewMode === 'canvas' && deploymentRotationFitEnabled && (
-        <CanvasEngineCluster
-          visible={!(isTabletTouchDevice() && selectedSlotKey)}
-          canRunEngine={canRunEngine}
-          canEditAssignments={canEditAssignments}
-          isCurrentNightLocked={isCurrentNightLocked}
-          engineRunPhase={engineRunPhase}
-          onRunXaiEngine={runXaiEngineFromCanvas}
-          onClearBoard={handleClearBoard}
-          onApplyDraft={() => void applyDraft()}
-          onDiscardDraft={discardDraft}
-          auxDefs={auxDefsForFit}
-          assignments={storeAssignmentsForFit}
-          fitBySlot={deploymentFitBySlot}
-          isDraftMode={isDraftMode}
-          draftAssignments={draftAssignments}
-          draftGrokExplanation={draftGrokExplanation}
-          weeklyRecentHistory={plannedThisWeekRecentHistory}
-          weekDailyHealths={weekDailyHealths}
-          selectedDayDateKey={selectedDayDateKey}
-          graveWeekDateKeys={graveWeekDateKeys}
-          weekHealthLoading={weekHealthLoading}
-          onRequestRotationAdvisor={() => void handleRequestRotationAdvisor({ focusWeek: true })}
-          // Pass re-show handler so user can bring back the tracker from the health UI
-          onShowWeekHealthTracker={isWeekHealthTrackerDismissed ? showWeekHealthTracker : undefined}
-        />
-      )}
+      {/* Old CanvasEngineCluster / week rotation health box removed.
+          The rotation health is now exclusively the compact side drawer (RotationHealthFloater with side-right-collapsed)
+          rendered inside ShiftBuilderBoard. It includes the Clear and Run engine buttons (handlers passed through).
+          No more overtaking box in the surface. */}
 
     </div>
   );

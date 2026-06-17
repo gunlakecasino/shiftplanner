@@ -1,0 +1,99 @@
+/* Print Command Center — granular interaction polish */
+
+.pcc-modal {
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.35) transparent;
+}
+
+.pcc-scroll::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+}
+
+.pcc-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 128, 0.35);
+  border-radius: 99px;
+}
+
+.pcc-chip:focus-visible,
+.pcc-pill:focus-visible,
+.pcc-bulk:focus-visible,
+.pcc-seg:focus-visible,
+.pcc-margin:focus-visible,
+.pcc-extra:focus-visible,
+.pcc-queue-card:focus-visible,
+.pcc-footer-btn:focus-visible,
+.pcc-icon-btn:focus-visible,
+.pcc-saved-preset:focus-visible {
+  outline: 2px solid rgba(10, 132, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.pcc-chip:active:not(:disabled),
+.pcc-pill:active:not(:disabled),
+.pcc-bulk:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.pcc-pill:hover:not(:disabled),
+.pcc-bulk:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.pcc-day-header:hover {
+  filter: brightness(1.06);
+}
+
+.pcc-day-header:active {
+  filter: brightness(0.94);
+}
+
+.pcc-queue-card {
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.pcc-queue-card:hover {
+  border-color: rgba(10, 132, 255, 0.28) !important;
+}
+
+.pcc-queue-card:active {
+  cursor: grabbing;
+}
+
+.pcc-seg:hover:not([aria-pressed="true"]) {
+  border-color: rgba(10, 132, 255, 0.28) !important;
+}
+
+.pcc-save-input:focus {
+  border-color: rgba(10, 132, 255, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12);
+}
+
+.pcc-delete-preset {
+  opacity: 0.45;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+
+.pcc-delete-preset:hover {
+  opacity: 1;
+  color: #ff3b30 !important;
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.pcc-recommended {
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0a84ff;
+  background: rgba(10, 132, 255, 0.12);
+  border: 1px solid rgba(10, 132, 255, 0.22);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-top: 2px;
+}

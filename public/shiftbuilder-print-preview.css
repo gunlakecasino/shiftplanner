@@ -1,0 +1,103 @@
+/**
+ * Golden print renderer — supplements globals.css .print-artboard / .assignment-card.
+ * Matches ShiftBuilderBoard isPrintPreview layout (Monday 0615.pdf reference).
+ */
+
+body.printing-dual-mode .print-dual-container .print-artboard,
+body.golden-export-raster .print-dual-container .print-artboard {
+  width: 1056px;
+  height: 816px;
+  min-height: 816px;
+  max-height: 816px;
+  padding: 18px 24px 14px;
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 2px;
+  box-shadow: none;
+  box-sizing: border-box;
+  font-family: var(--font-atkinson), var(--font-geist-sans), system-ui, sans-serif;
+  contain: layout style paint;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .assignment-card,
+body.golden-export-raster .print-dual-container .print-artboard .assignment-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #d1d1d6;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  contain: layout style paint;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .assignment-card.empty,
+body.golden-export-raster .print-dual-container .print-artboard .assignment-card.empty,
+body.printing-dual-mode .print-dual-container .print-artboard .assignment-card.sb-card-empty,
+body.golden-export-raster .print-dual-container .print-artboard .assignment-card.sb-card-empty {
+  background: #f3f3f5;
+  border: 1px dashed #bdbdc4;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-header,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-header {
+  border-bottom: 1px solid #e5e5e7;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-section-header,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 5px;
+  padding: 0 2px;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-section-header .label,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-section-header .label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #3c3c43;
+  white-space: nowrap;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-section-header .divider,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-section-header .divider {
+  flex: 1;
+  height: 1px;
+  background: #e5e5e7;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-section-header .count,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-section-header .count {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #555555;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sb-unassigned-primary,
+body.golden-export-raster .print-dual-container .print-artboard .sb-unassigned-primary {
+  font-weight: 600;
+  color: #6b7280;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sb-builder-section,
+body.golden-export-raster .print-dual-container .print-artboard .sb-builder-section {
+  flex-shrink: 0;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .overlaps-section,
+body.golden-export-raster .print-dual-container .print-artboard .overlaps-section {
+  margin-top: auto;
+}

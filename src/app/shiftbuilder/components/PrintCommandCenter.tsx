@@ -14,8 +14,15 @@ import {
   Info,
   Table2,
   FileText,
+  Download,
+  GripVertical,
+  Sparkles,
+  Trash2,
+  Check,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import "./printCommandCenter.css";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import {
   defaultPrintDays,
@@ -96,12 +103,38 @@ interface PrintCommandCenterProps {
   open: boolean;
   onClose: () => void;
   onPrint: (config: PrintConfig) => void;
+  /** New: triggers PDF (or ZIP for multi-day) download using the same capture pipeline. */
+  onExport?: (config: PrintConfig) => void;
+  /** Jump to on-canvas Golden preview for a deploy/breaks sheet */
+  onPreviewSheet?: (args: { dayIndex: number; view: "deployment" | "breaks"; label: string }) => void;
   DAY_DEFS: DayDef[];
   selectedDayIndex: number;
   isPrinting: boolean;
   printProgress: PrintProgress | null;
   isDark?: boolean;
 }
+
+function formatEstTime(secs: number): string {
+  if (secs < 60) return `~${secs}s`;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+}
+
+function formatPresetSavedAt(ts: number): string {
+  try {
+    return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+const BUILTIN_PRESET_HINTS: Record<string, string> = {
+  tonight: "Tonight's deploy + breaks only",
+  "full-week": "All 7 nights, deploy + breaks + overview",
+  "deploy-book": "Deploy sheets for every night",
+  "break-book": "Break sheets for every night",
+};
 
 function detectActivePreset(
   days: PrintDayConfig[],
@@ -143,21 +176,79 @@ interface DayCardProps {
 
 const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: DayCardProps) {
   const hasAny = config.printDeploy || config.printBreaks || config.inOverview;
+  const sheetCount =
+    (config.printDeploy ? 1 : 0) + (config.printBreaks ? 1 : 0) + (config.inOverview ? 1 : 0);
+
+  const bothSheetsOn = config.printDeploy && config.printBreaks;
+  const toggleDeployBreaks = () => {
+    const next = !bothSheetsOn;
+    onChange({
+      ...config,
+      printDeploy: next,
+      printBreaks: next,
+    });
+  };
+
   return (
     <div style={{
       borderRadius: 12,
       border: `1.5px solid ${hasAny ? def.color : (isDark ? "rgba(72,72,74,0.35)" : "rgba(209,209,214,0.35)")}`,
       overflow: "hidden",
-      opacity: hasAny ? 1 : 0.42,
-      transition: "border-color 0.15s, opacity 0.15s",
-      minWidth: 72,
+      opacity: hasAny ? 1 : 0.48,
+      transition: "border-color 0.15s, opacity 0.15s, box-shadow 0.15s",
+      minWidth: 76,
       flex: "1 1 0%",
       background: isDark ? "rgba(44,44,46,0.7)" : "rgba(255,255,255,0.8)",
+      boxShadow: def.isToday && hasAny ? `0 0 0 2px ${def.color}33` : "none",
     }}>
-      {/* Color header */}
-      <div style={{ background: def.color, padding: "5px 6px 4px", textAlign: "center", position: "relative" }}>
+      {/* Color header — click toggles all sheets for this night */}
+      <button
+        type="button"
+        onClick={toggleDeployBreaks}
+        title={bothSheetsOn ? "Clear deploy + breaks" : "Select deploy + breaks"}
+        aria-label={`${def.short} ${def.dateNum}: ${bothSheetsOn ? "clear" : "select"} deploy and breaks`}
+        className="sb-interactive pcc-day-header"
+        style={{
+          width: "100%",
+          background: def.color,
+          padding: "6px 6px 5px",
+          textAlign: "center",
+          position: "relative",
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
         {def.isToday && (
-          <span style={{ position: "absolute", top: 4, right: 5, width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.9)" }} />
+          <span style={{
+            display: "block",
+            fontSize: 6.5,
+            fontWeight: 800,
+            letterSpacing: "0.1em",
+            color: "rgba(255,255,255,0.88)",
+            marginBottom: 1,
+          }}>
+            TONIGHT
+          </span>
+        )}
+        {sheetCount > 0 && (
+          <span style={{
+            position: "absolute",
+            top: 4,
+            right: 5,
+            minWidth: 14,
+            height: 14,
+            borderRadius: 7,
+            background: "rgba(255,255,255,0.95)",
+            color: def.color,
+            fontSize: 8,
+            fontWeight: 800,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 3px",
+          }}>
+            {sheetCount}
+          </span>
         )}
         <div style={{ color: "#fff", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.07em", opacity: 0.85 }}>
           {def.short.toUpperCase()}
@@ -165,12 +256,12 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
         <div style={{ color: "#fff", fontSize: 17, fontWeight: 800, lineHeight: 1.1 }}>
           {def.dateNum}
         </div>
-      </div>
+      </button>
 
       {/* Chips */}
       <div style={{ padding: "5px 5px", display: "flex", flexDirection: "column", gap: 3 }}>
         <Chip
-          label="DEP"
+          label="Deploy"
           title="Deployment sheet"
           active={config.printDeploy}
           activeColor="rgba(52,199,89,0.9)"
@@ -180,7 +271,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
           onClick={() => onChange({ ...config, printDeploy: !config.printDeploy })}
         />
         <Chip
-          label="BRK"
+          label="Breaks"
           title="Break sheet"
           active={config.printBreaks}
           activeColor="rgba(255,159,10,0.9)"
@@ -190,7 +281,7 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
           onClick={() => onChange({ ...config, printBreaks: !config.printBreaks })}
         />
         <Chip
-          label="OVW"
+          label="Overview"
           title="Include in overview table column"
           active={config.inOverview}
           activeColor="rgba(88,86,214,0.9)"
@@ -220,18 +311,20 @@ function Chip({ label, title, active, activeColor, activeBg, activeBorder, isDar
     <button
       type="button"
       onClick={onClick}
-      className="sb-interactive"
+      aria-pressed={active}
+      aria-label={`${label} — ${active ? "on" : "off"}`}
+      className="sb-interactive pcc-chip"
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 3, padding: "3px 5px", borderRadius: 5, cursor: "pointer",
+        gap: 3, padding: "4px 6px", borderRadius: 6, cursor: "pointer",
         background: active ? activeBg : (isDark ? "rgba(72,72,74,0.28)" : "rgba(209,209,214,0.25)"),
         border: `1px solid ${active ? activeBorder : "transparent"}`,
-        transition: "background 0.12s, border-color 0.12s",
+        transition: "background 0.12s, border-color 0.12s, transform 0.08s",
       }}
       title={title}
     >
       <span style={{
-        fontSize: 8.5, fontWeight: 700, letterSpacing: "0.04em",
+        fontSize: 8, fontWeight: 700, letterSpacing: "0.02em",
         color: active ? activeColor : (isDark ? "#8E8E93" : "#8E8E93"),
       }}>{label}</span>
       <CheckDot active={active} color={activeColor} />
@@ -270,7 +363,9 @@ function MarginCard({ value, label, sub, selected, onClick, isDark }: MarginCard
     <button
       type="button"
       onClick={onClick}
-      className="sb-select-card sb-interactive"
+      aria-pressed={selected}
+      aria-label={`${label} margins (${sub})`}
+      className="sb-select-card sb-interactive pcc-margin"
       style={{
         flex: "1 1 0%", display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
         padding: "8px 6px", borderRadius: 9, cursor: "pointer",
@@ -306,6 +401,7 @@ function MarginCard({ value, label, sub, selected, onClick, isDark }: MarginCard
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: selected ? "#0A84FF" : (isDark ? "#E5E5E7" : "#1C1C1E") }}>{label}</div>
         <div style={{ fontSize: 9, color: "#8E8E93", marginTop: 1 }}>{sub}</div>
+        {value === "narrow" && <span className="pcc-recommended">Default</span>}
       </div>
     </button>
   );
@@ -317,6 +413,8 @@ export function PrintCommandCenter({
   open,
   onClose,
   onPrint,
+  onExport,
+  onPreviewSheet,
   DAY_DEFS,
   selectedDayIndex,
   isPrinting,
@@ -349,6 +447,8 @@ export function PrintCommandCenter({
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [saveInputValue, setSaveInputValue] = useState("");
   const saveInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const prevBodyOverflow = useRef<string>("");
 
   // ── Queue drag-to-reorder ──────────────────────────────────────────────────
   const [dragId, setDragId] = useState<string | null>(null);
@@ -400,6 +500,18 @@ export function PrintCommandCenter({
     if (showSaveInput) setTimeout(() => saveInputRef.current?.focus(), 50);
   }, [showSaveInput]);
 
+  // Lock body scroll + focus modal when open
+  useEffect(() => {
+    if (!open) return;
+    prevBodyOverflow.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const t = window.setTimeout(() => modalRef.current?.focus(), 80);
+    return () => {
+      window.clearTimeout(t);
+      document.body.style.overflow = prevBodyOverflow.current;
+    };
+  }, [open]);
+
   // ── Derived values ────────────────────────────────────────────────────────
   const overviewNightCount = useMemo(() => days.filter((d) => d.inOverview).length, [days]);
 
@@ -438,8 +550,55 @@ export function PrintCommandCenter({
 
   const activePreset = useMemo(
     () => detectActivePreset(days, selectedDayIndex, includeOverview, includeCoverPage),
-    [days, selectedDayIndex, includeOverview, includeCoverPage]
+    [days, selectedDayIndex, includeOverview, includeCoverPage],
   );
+
+  const deployCount = useMemo(() => days.filter((d) => d.printDeploy).length, [days]);
+  const breaksCount = useMemo(() => days.filter((d) => d.printBreaks).length, [days]);
+  const activeNightCount = useMemo(
+    () => days.filter((d) => d.printDeploy || d.printBreaks).length,
+    [days],
+  );
+  const uniqueExportDays = useMemo(
+    () => new Set(days.filter((d) => d.printDeploy || d.printBreaks).map((d) => d.dayIndex)).size,
+    [days],
+  );
+  const exportDeliverable = useMemo(() => {
+    if (pageCount === 0) return null;
+    return uniqueExportDays > 1 ? "ZIP bundle" : "PDF";
+  }, [pageCount, uniqueExportDays]);
+
+  // Keep Tab focus inside the dialog
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const root = modalRef.current;
+    if (!root) return;
+
+    const getFocusables = () =>
+      Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null);
+
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const els = getFocusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    root.addEventListener("keydown", onTab);
+    return () => root.removeEventListener("keydown", onTab);
+  }, [open, mounted, showSaveInput, pageCount, isPrinting]);
 
   // ── Config snapshot (for save/apply) ──────────────────────────────────────
   const currentConfig = useCallback(
@@ -503,12 +662,6 @@ export function PrintCommandCenter({
     },
     [days],
   );
-
-  const bulkSetAll = useCallback(() => {
-    setDays((prev) => prev.map((d) => ({ ...d, printDeploy: true, printBreaks: true, inOverview: true })));
-    setIncludeOverview(true);
-    setCustomOrder(null);
-  }, []);
 
   const bulkClear = useCallback(() => {
     setDays((prev) => prev.map((d) => ({ ...d, printDeploy: false, printBreaks: false, inOverview: false })));
@@ -599,6 +752,7 @@ export function PrintCommandCenter({
   const handleSavePreset = useCallback(() => {
     const name = saveInputValue.trim();
     if (!name) return;
+    if (savedPresets.some((p) => p.name.toLowerCase() === name.toLowerCase())) return;
     const preset: SavedPreset = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name,
@@ -641,18 +795,30 @@ export function PrintCommandCenter({
     onPrint(currentConfig());
   }, [pageCount, currentConfig, onPrint]);
 
+  // ── Export PDF / ZIP ──────────────────────────────────────────────────────
+  const handleExport = useCallback(() => {
+    if (pageCount === 0 || !onExport) return;
+    onExport(currentConfig());
+  }, [pageCount, currentConfig, onExport]);
+
   // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isPrinting && !showSaveInput) { e.stopPropagation(); onClose(); }
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !isPrinting && pageCount > 0) handlePrint();
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.shiftKey && !isPrinting && pageCount > 0 && onExport) {
+        e.preventDefault();
+        handleExport();
+      } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !isPrinting && pageCount > 0) {
+        e.preventDefault();
+        handlePrint();
+      }
       if (e.key === "Escape" && showSaveInput) { e.stopPropagation(); setShowSaveInput(false); }
       if (e.key === "Enter" && showSaveInput) { e.stopPropagation(); handleSavePreset(); }
     };
     document.addEventListener("keydown", h, true);
     return () => document.removeEventListener("keydown", h, true);
-  }, [open, isPrinting, pageCount, onClose, handlePrint, showSaveInput, handleSavePreset]);
+  }, [open, isPrinting, pageCount, onClose, onExport, handlePrint, handleExport, showSaveInput, handleSavePreset]);
 
   if (!mounted) return null;
 
@@ -664,10 +830,6 @@ export function PrintCommandCenter({
   const divider = isDark ? "rgba(72,72,74,0.4)" : "rgba(209,209,214,0.5)";
   const sectionBg = isDark ? "rgba(44,44,46,0.4)" : "rgba(240,240,242,0.4)";
 
-  const pct = printProgress && printProgress.total > 0
-    ? Math.round((printProgress.current / printProgress.total) * 100)
-    : 0;
-
   return createPortal(
     <div
       className={cn(
@@ -675,17 +837,28 @@ export function PrintCommandCenter({
         "flex items-center justify-center p-5",
         visible && "sb-overlay-fade--visible"
       )}
-      style={{ background: visible ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0)" }}
+      style={{ 
+        position: 'fixed', 
+        inset: 0, 
+        zIndex: 99999, 
+        background: visible ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0)" 
+      }}
       onClick={e => { if (e.target === e.currentTarget && !isPrinting && !showSaveInput) onClose(); }}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pcc-title"
+        aria-describedby="pcc-summary"
+        tabIndex={-1}
         className={cn(
-          "sb-modal-shell flex flex-col overflow-hidden relative",
+          "sb-modal-shell pcc-modal flex flex-col overflow-hidden relative outline-none",
           visible && "sb-modal-shell--visible"
         )}
         style={{
-          width: "min(740px, 100%)",
-          maxHeight: "min(92vh, 760px)",
+          width: "min(780px, 100%)",
+          maxHeight: "min(92vh, 800px)",
           background: panelBg,
           borderRadius: 20,
           border: `1px solid ${border}`,
@@ -697,77 +870,171 @@ export function PrintCommandCenter({
       >
 
         {/* ── HEADER ────────────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px 13px", borderBottom: `1px solid ${divider}`, flexShrink: 0 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: isDark ? "rgba(10,132,255,0.2)" : "rgba(10,132,255,0.1)", border: "1px solid rgba(10,132,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Printer size={16} color="#0A84FF" strokeWidth={2} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px 14px", borderBottom: `1px solid ${divider}`, flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: isDark ? "rgba(10,132,255,0.2)" : "rgba(10,132,255,0.1)", border: "1px solid rgba(10,132,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Printer size={17} color="#0A84FF" strokeWidth={2} />
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: tx, letterSpacing: "-0.01em" }}>Print Command Center</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div id="pcc-title" style={{ fontSize: 15, fontWeight: 700, color: tx, letterSpacing: "-0.02em" }}>Print &amp; Export</div>
             {DAY_DEFS.length > 0 && (
-              <div style={{ fontSize: 10.5, color: ts, marginTop: 1 }}>
-                {DAY_DEFS[0]?.short} {DAY_DEFS[0]?.dateNum} – {DAY_DEFS[6]?.short} {DAY_DEFS[6]?.dateNum} · {DAY_DEFS[0]?.monthYear}
+              <div style={{ fontSize: 11, color: ts, marginTop: 2 }}>
+                Graves week · {DAY_DEFS[0]?.short} {DAY_DEFS[0]?.dateNum} – {DAY_DEFS[6]?.short} {DAY_DEFS[6]?.dateNum} · {DAY_DEFS[0]?.monthYear}
               </div>
             )}
           </div>
-          <button type="button" onClick={onClose} disabled={isPrinting} className="sb-interactive" style={{ width: 26, height: 26, borderRadius: 13, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", border: "none", cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: ts, opacity: isPrinting ? 0.4 : 1 }} title="Close (Esc)">
+          {isPrinting ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 600, color: ts, whiteSpace: "nowrap" }}>
+              <span className="sb-progress-pulse" style={{ width: 7, height: 7, borderRadius: 4, background: "#0A84FF", display: "inline-block" }} />
+              {printProgress?.label ?? "Working…"}
+            </div>
+          ) : pageCount > 0 ? (
+            <div style={{
+              padding: "5px 10px",
+              borderRadius: 20,
+              background: isDark ? "rgba(10,132,255,0.18)" : "rgba(10,132,255,0.1)",
+              border: "1px solid rgba(10,132,255,0.28)",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#0A84FF",
+              whiteSpace: "nowrap",
+            }}>
+              {pageCount} sheet{pageCount !== 1 ? "s" : ""}
+            </div>
+          ) : null}
+          <button type="button" onClick={onClose} disabled={isPrinting} aria-label="Close print dialog" className="sb-interactive pcc-icon-btn" style={{ width: 28, height: 28, borderRadius: 14, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", border: "none", cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: ts, opacity: isPrinting ? 0.4 : 1 }} title="Close (Esc)">
             <X size={14} strokeWidth={2} />
           </button>
         </div>
 
+        {/* ── SELECTION SUMMARY ─────────────────────────────────────────────── */}
+        <div
+          id="pcc-summary"
+          style={{
+            padding: "10px 20px",
+            borderBottom: `1px solid ${divider}`,
+            background: sectionBg,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+          }}
+        >
+          {pageCount === 0 ? (
+            <span style={{ fontSize: 11, color: ts, lineHeight: 1.45 }}>
+              Pick nights and sheet types below — your queue builds automatically.
+            </span>
+          ) : (
+            <>
+              {deployCount > 0 && <SummaryPill label={`${deployCount} deploy`} color="rgba(52,199,89,0.9)" isDark={isDark} />}
+              {breaksCount > 0 && <SummaryPill label={`${breaksCount} breaks`} color="rgba(255,159,10,0.9)" isDark={isDark} />}
+              {includeOverview && overviewNightCount > 0 && (
+                <SummaryPill label={`Overview · ${overviewNightCount} col${overviewNightCount !== 1 ? "s" : ""}`} color="#5856D6" isDark={isDark} />
+              )}
+              {includeCoverPage && <SummaryPill label="Cover" color="#0A84FF" isDark={isDark} />}
+              {customOrder && <SummaryPill label="Custom order" color="#FF9F0A" isDark={isDark} />}
+              <span style={{ fontSize: 10.5, color: ts, marginLeft: 2 }}>
+                {activeNightCount} night{activeNightCount !== 1 ? "s" : ""} · {formatEstTime(estSecs)}
+                {exportDeliverable ? ` · ${exportDeliverable}` : ""}
+              </span>
+            </>
+          )}
+        </div>
+
         {/* ── SCROLLABLE BODY ───────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <div className="pcc-scroll" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", opacity: isPrinting ? 0.45 : 1, pointerEvents: isPrinting ? "none" : "auto", transition: "opacity 0.2s" }}>
 
           {/* ── BUILT-IN PRESETS ──────────────────────────────────────────── */}
-          <div style={{ padding: "12px 18px 0" }}>
-            <SectionLabel text="PRESETS" isDark={isDark} />
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
+          <div style={{ padding: "14px 20px 0" }}>
+            <SectionLabel text="QUICK PRESETS" isDark={isDark} />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               {([
                 { id: "tonight", label: "Tonight", icon: <Moon size={12} strokeWidth={2.2} /> },
                 { id: "full-week", label: "Full Week", icon: <CalendarDays size={12} strokeWidth={2.2} /> },
                 { id: "deploy-book", label: "Deploy Book", icon: <LayoutGrid size={12} strokeWidth={2.2} /> },
                 { id: "break-book", label: "Break Book", icon: <Coffee size={12} strokeWidth={2.2} /> },
               ] as const).map(({ id, label, icon }) => (
-                <PresetPill key={id} label={label} icon={icon} active={activePreset === id} onClick={() => applyBuiltinPreset(id)} isDark={isDark} />
+                <PresetPill
+                  key={id}
+                  label={label}
+                  icon={icon}
+                  active={activePreset === id}
+                  onClick={() => applyBuiltinPreset(id)}
+                  isDark={isDark}
+                  title={BUILTIN_PRESET_HINTS[id]}
+                />
               ))}
               {activePreset === "custom" && (
-                <PresetPill label="Custom" icon={<Pencil size={12} strokeWidth={2.2} />} active onClick={() => {}} isDark={isDark} accent="#FF9F0A" />
+                <span
+                  title="Manual selection — not matching a quick preset"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "5px 10px",
+                    borderRadius: 20,
+                    border: "1.5px solid rgba(255,159,10,0.45)",
+                    background: isDark ? "rgba(255,159,10,0.14)" : "rgba(255,159,10,0.1)",
+                    color: "#FF9F0A",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  <Pencil size={12} strokeWidth={2.2} />
+                  Custom
+                </span>
               )}
             </div>
 
             {/* Saved presets row */}
             {savedPresets.length > 0 && (
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
-                {savedPresets.map(p => (
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: ts, letterSpacing: "0.06em", width: "100%", opacity: 0.7 }}>SAVED</span>
+                {savedPresets.map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 20, border: `1.5px solid ${isDark ? "rgba(72,72,74,0.45)" : "rgba(209,209,214,0.55)"}`, overflow: "hidden" }}>
-                    <button type="button" onClick={() => applySavedPreset(p)} style={{ padding: "5px 10px 5px 10px", background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: ts, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
+                    <button
+                      type="button"
+                      onClick={() => applySavedPreset(p)}
+                      title={formatPresetSavedAt(p.savedAt) ? `Saved ${formatPresetSavedAt(p.savedAt)}` : undefined}
+                      className="sb-interactive pcc-saved-preset"
+                      style={{ padding: "5px 10px", background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: ts, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}
+                    >
                       <Save size={11} strokeWidth={2} />
                       {p.name}
                     </button>
-                    <button type="button" onClick={() => handleDeletePreset(p.id)} style={{ padding: "5px 8px 5px 4px", background: "transparent", border: "none", cursor: "pointer", color: ts, fontSize: 10, opacity: 0.5, lineHeight: 1 }} title="Delete preset">×</button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePreset(p.id)}
+                      aria-label={`Delete preset ${p.name}`}
+                      className="sb-interactive pcc-delete-preset"
+                      style={{ padding: "5px 7px", background: "transparent", border: "none", cursor: "pointer", color: ts, display: "flex", alignItems: "center" }}
+                    >
+                      <Trash2 size={11} strokeWidth={2} />
+                    </button>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* ── BULK TOGGLES ──────────────────────────────────────────────── */}
-          <div style={{ padding: "10px 18px 0" }}>
-            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: ts, letterSpacing: "0.08em", marginRight: 2 }}>BULK:</span>
-              <BulkBtn label="All Nights" active={allDeploy && allBreaks} color="#0A84FF" onClick={() => { setDays(p => p.map(d => ({ ...d, printDeploy: true, printBreaks: true }))); setCustomOrder(null); }} isDark={isDark} />
-              <BulkBtn label="All Deploy" active={allDeploy} color="rgba(52,199,89,0.85)" onClick={() => bulkToggle("printDeploy")} isDark={isDark} />
-              <BulkBtn label="All Breaks" active={allBreaks} color="rgba(255,159,10,0.85)" onClick={() => bulkToggle("printBreaks")} isDark={isDark} />
-              <BulkBtn label="All Overview" active={allOverview} color="rgba(88,86,214,0.85)" onClick={() => bulkToggle("inOverview")} isDark={isDark} />
-              <div style={{ flex: 1 }} />
-              <BulkBtn label="Select All" active={false} color="#0A84FF" onClick={bulkSetAll} isDark={isDark} />
-              <BulkBtn label="Clear All" active={false} color="#FF3B30" onClick={bulkClear} isDark={isDark} />
-            </div>
-          </div>
+          <SectionDivider isDark={isDark} />
 
           {/* ── DAY CARDS ─────────────────────────────────────────────────── */}
-          <div style={{ padding: "10px 18px 0" }}>
-            <SectionLabel text="DAYS" isDark={isDark} />
-            <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
+          <div style={{ padding: "14px 20px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <SectionLabel text="NIGHTS" isDark={isDark} />
+              <div style={{ flex: 1 }} />
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <BulkBtn label="All Deploy" active={allDeploy} color="rgba(52,199,89,0.85)" onClick={() => bulkToggle("printDeploy")} isDark={isDark} />
+                <BulkBtn label="All Breaks" active={allBreaks} color="rgba(255,159,10,0.85)" onClick={() => bulkToggle("printBreaks")} isDark={isDark} />
+                <BulkBtn label="All Overview" active={allOverview} color="rgba(88,86,214,0.85)" onClick={() => bulkToggle("inOverview")} isDark={isDark} />
+                <BulkBtn label="Clear" active={false} color="#FF3B30" onClick={bulkClear} isDark={isDark} />
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: ts, marginBottom: 8, opacity: 0.85 }}>
+              Header toggles deploy + breaks · chips toggle individual sheets
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
               {DAY_DEFS.map((def, i) => (
                 <DayCard
                   key={def.index}
@@ -780,47 +1047,80 @@ export function PrintCommandCenter({
             </div>
           </div>
 
-          {/* ── SETTINGS ROW ──────────────────────────────────────────────── */}
-          <div style={{ padding: "12px 18px 0", display: "flex", gap: 10 }}>
+          <SectionDivider isDark={isDark} />
 
-            {/* Left: Page Order */}
-            <div style={{ flex: "0 0 auto", minWidth: 190 }}>
+          {/* ── SETTINGS ──────────────────────────────────────────────────── */}
+          <div style={{ padding: "14px 20px 0", display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Page Order — horizontal segmented */}
+            <div>
               <SectionLabel text="PAGE ORDER" isDark={isDark} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 6 }}>
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 {([
-                  { v: "paired", l: "Paired", d: "Deploy + Breaks per night" },
-                  { v: "deploy-first", l: "Deploy First", d: "All deployment, then breaks" },
-                  { v: "breaks-first", l: "Breaks First", d: "All breaks, then deployment" },
+                  { v: "paired", l: "Paired", d: "Deploy + Breaks each night" },
+                  { v: "deploy-first", l: "Deploy First", d: "All deploy, then breaks" },
+                  { v: "breaks-first", l: "Breaks First", d: "All breaks, then deploy" },
                 ] as const).map(({ v, l, d }) => (
-                  <button key={v} type="button" onClick={() => setPageOrder(v)} style={{
-                    display: "flex", alignItems: "center", gap: 7, padding: "6px 9px",
-                    borderRadius: 7, cursor: "pointer", textAlign: "left",
-                    border: `1.5px solid ${pageOrder === v ? "#0A84FF" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
-                    background: pageOrder === v ? (isDark ? "rgba(10,132,255,0.12)" : "rgba(10,132,255,0.07)") : (isDark ? "rgba(44,44,46,0.38)" : "rgba(255,255,255,0.5)"),
-                    transition: "all 0.12s",
-                  }}>
-                    <div style={{ width: 13, height: 13, borderRadius: 6.5, flexShrink: 0, border: `2px solid ${pageOrder === v ? "#0A84FF" : (isDark ? "rgba(120,120,128,0.45)" : "rgba(180,180,188,0.65)")}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {pageOrder === v && <div style={{ width: 5, height: 5, borderRadius: 2.5, background: "#0A84FF" }} />}
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => { setPageOrder(v); setCustomOrder(null); }}
+                    aria-pressed={pageOrder === v}
+                    className="sb-interactive pcc-seg"
+                    style={{
+                      flex: "1 1 140px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 2,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      border: `1.5px solid ${pageOrder === v ? "#0A84FF" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
+                      background: pageOrder === v ? (isDark ? "rgba(10,132,255,0.12)" : "rgba(10,132,255,0.07)") : (isDark ? "rgba(44,44,46,0.38)" : "rgba(255,255,255,0.5)"),
+                      transition: "all 0.12s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%" }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: pageOrder === v ? "#0A84FF" : tx }}>{l}</div>
+                      {pageOrder === v && <Check size={12} color="#0A84FF" strokeWidth={2.5} style={{ marginLeft: "auto" }} />}
                     </div>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: pageOrder === v ? "#0A84FF" : tx }}>{l}</div>
-                      <div style={{ fontSize: 9, color: ts }}>{d}</div>
-                    </div>
+                    <div style={{ fontSize: 9.5, color: ts }}>{d}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Divider */}
-            <div style={{ width: 1, background: divider, flexShrink: 0 }} />
+            {/* Margins */}
+            <div>
+              <SectionLabel text="MARGINS" isDark={isDark} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 8 }}>
+                {([
+                  { v: "none", l: "None", s: "0in" },
+                  { v: "narrow", l: "Narrow", s: "0.15in" },
+                  { v: "normal", l: "Normal", s: "0.5in" },
+                  { v: "wide", l: "Wide", s: "1in" },
+                ] as const).map(({ v, l, s }) => (
+                  <MarginCard key={v} value={v} label={l} sub={s} selected={margins === v} onClick={() => setMargins(v)} isDark={isDark} />
+                ))}
+              </div>
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <Info size={13} color={ts} strokeWidth={2} />
+                <span style={{ fontSize: 10, color: ts }}>
+                  Auto-scale <strong style={{ color: tx }}>{Math.round(MARGIN_ZOOM[margins] * 100)}%</strong>
+                  <span style={{ opacity: 0.55 }}> · 11×8.5″ landscape</span>
+                </span>
+              </div>
+            </div>
 
-            {/* Middle: Overview + Cover toggles */}
-            <div style={{ flex: "0 0 auto", minWidth: 170 }}>
+            {/* Extra pages */}
+            <div>
               <SectionLabel text="EXTRA PAGES" isDark={isDark} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
                 {/* Overview */}
                 <div style={{ borderRadius: 8, border: `1.5px solid ${includeOverview ? "rgba(88,86,214,0.5)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`, background: includeOverview ? (isDark ? "rgba(88,86,214,0.1)" : "rgba(88,86,214,0.06)") : "transparent", overflow: "hidden" }}>
-                  <button type="button" onClick={handleOverviewMasterToggle} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
+                  <button type="button" onClick={handleOverviewMasterToggle} aria-pressed={includeOverview} className="sb-interactive pcc-extra" style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
                     <CheckDot active={includeOverview} color="rgba(88,86,214,0.9)" />
                     <div style={{ textAlign: "left", flex: 1 }}>
                       <div style={{ fontSize: 11, fontWeight: 600, color: includeOverview ? "#5856D6" : tx, display: "flex", alignItems: "center", gap: 5 }}>
@@ -832,7 +1132,7 @@ export function PrintCommandCenter({
                           ? overviewNightCount === 1
                             ? "Daily layout · 1 night column"
                             : `Weekly layout · ${overviewNightCount} night columns`
-                          : "Slot grid — pick nights with OVW chips"}
+                          : "Slot grid — enable Overview chips on nights"}
                       </div>
                     </div>
                   </button>
@@ -846,7 +1146,7 @@ export function PrintCommandCenter({
 
                 {/* Cover page */}
                 <div style={{ borderRadius: 8, border: `1.5px solid ${includeCoverPage ? "rgba(10,132,255,0.45)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`, background: includeCoverPage ? (isDark ? "rgba(10,132,255,0.1)" : "rgba(10,132,255,0.06)") : "transparent", overflow: "hidden" }}>
-                  <button type="button" onClick={() => setIncludeCoverPage(v => !v)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
+                  <button type="button" onClick={() => setIncludeCoverPage((v) => !v)} aria-pressed={includeCoverPage} className="sb-interactive pcc-extra" style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", width: "100%", background: "transparent", border: "none", cursor: "pointer" }}>
                     <CheckDot active={includeCoverPage} color="rgba(10,132,255,0.9)" />
                     <div style={{ textAlign: "left" }}>
                       <div style={{ fontSize: 11, fontWeight: 600, color: includeCoverPage ? "#0A84FF" : tx, display: "flex", alignItems: "center", gap: 5 }}>
@@ -865,90 +1165,141 @@ export function PrintCommandCenter({
                 </div>
               </div>
             </div>
-
-            {/* Divider */}
-            <div style={{ width: 1, background: divider, flexShrink: 0 }} />
-
-            {/* Right: Margins */}
-            <div style={{ flex: 1 }}>
-              <SectionLabel text="MARGINS" isDark={isDark} />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginTop: 6 }}>
-                {([
-                  { v: "none", l: "None", s: "0in" },
-                  { v: "narrow", l: "Narrow", s: "0.15in" },
-                  { v: "normal", l: "Normal", s: "0.5in" },
-                  { v: "wide", l: "Wide", s: "1in" },
-                ] as const).map(({ v, l, s }) => (
-                  <MarginCard key={v} value={v} label={l} sub={s} selected={margins === v} onClick={() => setMargins(v)} isDark={isDark} />
-                ))}
-              </div>
-              <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 5 }}>
-                <Info size={13} color={ts} strokeWidth={2} />
-                <span style={{ fontSize: 10, color: ts }}>
-                  Auto-scale: <strong style={{ color: tx }}>{Math.round(MARGIN_ZOOM[margins] * 100)}%</strong>
-                  <span style={{ opacity: 0.55 }}> · 11×8.5in landscape</span>
-                </span>
-              </div>
-            </div>
           </div>
 
+          <SectionDivider isDark={isDark} />
+
           {/* ── PRINT QUEUE ───────────────────────────────────────────────── */}
-          <div style={{ padding: "12px 18px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
-              <SectionLabel text={`PRINT QUEUE · ${pageCount} PAGE${pageCount !== 1 ? "S" : ""}`} isDark={isDark} />
+          <div style={{ padding: "14px 20px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <SectionLabel text="SHEET QUEUE" isDark={isDark} />
+              {pageCount > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: ts }}>{pageCount} total</span>
+              )}
               {customOrder && (
-                <button type="button" onClick={() => setCustomOrder(null)} style={{ marginLeft: 4, fontSize: 9, color: "#FF9F0A", background: "rgba(255,159,10,0.12)", border: "1px solid rgba(255,159,10,0.3)", borderRadius: 4, padding: "2px 6px", cursor: "pointer", fontWeight: 600 }}>
-                  Reset order
+                <button type="button" onClick={() => setCustomOrder(null)} className="sb-interactive" style={{ marginLeft: "auto", fontSize: 9.5, color: "#FF9F0A", background: "rgba(255,159,10,0.12)", border: "1px solid rgba(255,159,10,0.3)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontWeight: 600 }}>
+                  Reset custom order
                 </button>
               )}
             </div>
 
             {queueItems.length === 0 ? (
-              <div style={{ padding: "14px", borderRadius: 9, background: sectionBg, border: `1px dashed ${divider}`, textAlign: "center", color: ts, fontSize: 11.5 }}>
-                No pages selected — enable days above
+              <div style={{ padding: "18px 14px", borderRadius: 12, background: sectionBg, border: `1px dashed ${divider}`, textAlign: "center", color: ts, fontSize: 11.5 }}>
+                <Sparkles size={16} style={{ margin: "0 auto 8px", opacity: 0.45 }} />
+                No sheets queued yet — select nights above
               </div>
             ) : (
-              <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none", alignItems: "flex-end" }}
-                onDragLeave={() => setDragOverId(null)}
-                onDragEnd={() => { setDragId(null); setDragOverId(null); }}
-              >
-                {queueItems.map((item, idx) => {
-                  const isBeingDragged = dragId === item.id;
-                  const isDropTarget = dragOverId === item.id && dragId !== item.id;
-                  const typeIcon = { deploy: "D", breaks: "B", overview: "◼", cover: "★" }[item.type];
-                  return (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={() => handleQueueDragStart(item.id)}
-                      onDragOver={(e) => { e.preventDefault(); handleQueueDragOver(item.id); }}
-                      onDrop={() => handleQueueDrop(item.id)}
-                      style={{
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                        flexShrink: 0, cursor: "grab",
-                        opacity: isBeingDragged ? 0.3 : 1,
-                        transform: isDropTarget ? "scale(1.05)" : "scale(1)",
-                        transition: "transform 0.1s, opacity 0.1s",
-                      }}
-                    >
-                      <span style={{ fontSize: 8, color: ts, fontWeight: 600 }}>{idx + 1}</span>
-                      <div style={{
-                        padding: "4px 7px", borderRadius: 6, fontSize: 9.5, fontWeight: 700,
-                        whiteSpace: "nowrap", color: "#fff", display: "flex", alignItems: "center", gap: 3,
-                        background: item.type === "deploy" ? item.color
-                          : item.type === "breaks" ? `${item.color}99`
-                          : item.type === "overview" ? "#5856D6"
-                          : "#3A3A3C",
-                        border: item.type === "breaks" ? `1.5px solid ${item.color}` : "none",
-                        boxShadow: isDropTarget ? `0 0 0 2px ${item.color}` : "none",
-                      }}>
-                        <span style={{ opacity: 0.7, fontSize: 8 }}>{typeIcon}</span>
-                        {item.label}
+              <>
+                <div style={{ fontSize: 10, color: ts, marginBottom: 8, opacity: 0.8 }}>
+                  Drag to reorder · eye icon previews deploy/breaks on canvas
+                </div>
+                <div
+                  role="list"
+                  aria-label="Sheet print order"
+                  className="pcc-scroll"
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    overflowX: "auto",
+                    paddingBottom: 6,
+                    alignItems: "stretch",
+                  }}
+                  onDragLeave={() => setDragOverId(null)}
+                  onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                >
+                  {queueItems.map((item, idx) => {
+                    const isBeingDragged = dragId === item.id;
+                    const isDropTarget = dragOverId === item.id && dragId !== item.id;
+                    const typeLabel = { deploy: "Deploy", breaks: "Breaks", overview: "Overview", cover: "Cover" }[item.type];
+                    const canPreview =
+                      onPreviewSheet &&
+                      (item.type === "deploy" || item.type === "breaks") &&
+                      item.dayIndex !== undefined;
+                    return (
+                      <div
+                        key={item.id}
+                        role="listitem"
+                        draggable
+                        tabIndex={0}
+                        aria-grabbed={isBeingDragged}
+                        aria-label={`${idx + 1}. ${item.label}, ${typeLabel}`}
+                        onDragStart={(e) => {
+                          handleQueueDragStart(item.id);
+                          if (e.dataTransfer) {
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", item.id);
+                          }
+                        }}
+                        onDragOver={(e) => { e.preventDefault(); handleQueueDragOver(item.id); }}
+                        onDrop={() => handleQueueDrop(item.id)}
+                        className="pcc-queue-card"
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                          flexShrink: 0,
+                          minWidth: 108,
+                          padding: "8px 8px 7px",
+                          borderRadius: 10,
+                          cursor: "grab",
+                          opacity: isBeingDragged ? 0.35 : 1,
+                          transform: isDropTarget ? "translateY(-2px)" : "none",
+                          transition: "transform 0.12s, opacity 0.12s, box-shadow 0.12s",
+                          background: isDark ? "rgba(44,44,46,0.55)" : "rgba(255,255,255,0.75)",
+                          border: `1.5px solid ${isDropTarget ? item.color : (isDark ? "rgba(72,72,74,0.4)" : "rgba(209,209,214,0.55)")}`,
+                          boxShadow: isDropTarget ? `0 4px 14px ${item.color}33` : "none",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                          <span style={{ fontSize: 9, color: ts, fontWeight: 700 }}>#{idx + 1}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                            {canPreview && (
+                              <button
+                                type="button"
+                                className="sb-interactive pcc-icon-btn"
+                                aria-label={`Preview ${item.label}`}
+                                title="Preview on canvas"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPreviewSheet({
+                                    dayIndex: item.dayIndex!,
+                                    view: item.type === "breaks" ? "breaks" : "deployment",
+                                    label: item.label,
+                                  });
+                                }}
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 5,
+                                  border: "none",
+                                  background: isDark ? "rgba(72,72,74,0.45)" : "rgba(209,209,214,0.45)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                  color: ts,
+                                  padding: 0,
+                                }}
+                              >
+                                <Eye size={11} strokeWidth={2.2} />
+                              </button>
+                            )}
+                            <GripVertical size={11} color={ts} strokeWidth={2.2} style={{ opacity: 0.45 }} />
+                          </div>
+                        </div>
+                        <div style={{
+                          height: 3,
+                          borderRadius: 2,
+                          background: item.type === "overview" ? "#5856D6" : item.type === "cover" ? "#3A3A3C" : item.color,
+                          opacity: item.type === "breaks" ? 0.65 : 1,
+                        }} />
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: tx, lineHeight: 1.25 }}>{item.label}</div>
+                        <div style={{ fontSize: 9, color: ts, fontWeight: 600 }}>{typeLabel}</div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -956,26 +1307,49 @@ export function PrintCommandCenter({
         {/* ── FOOTER ────────────────────────────────────────────────────────── */}
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: "11px 18px",
+          padding: "12px 20px",
           borderTop: `1px solid ${divider}`,
-          background: isDark ? "rgba(22,22,24,0.6)" : "rgba(245,245,247,0.8)",
+          background: isDark ? "rgba(22,22,24,0.75)" : "rgba(245,245,247,0.92)",
           flexShrink: 0,
         }}>
           {showSaveInput ? (
             <>
-              <input
-                ref={saveInputRef}
-                value={saveInputValue}
-                onChange={e => setSaveInputValue(e.target.value)}
-                placeholder="Name this preset…"
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input
+                  ref={saveInputRef}
+                  value={saveInputValue}
+                  onChange={(e) => setSaveInputValue(e.target.value.slice(0, 32))}
+                  onFocus={(e) => e.target.select()}
+                  maxLength={32}
+                  placeholder="Name this preset…"
+                  aria-label="Preset name"
+                  className="pcc-save-input"
+                  style={{
+                    width: "100%", padding: "6px 10px", borderRadius: 8, fontSize: 12,
+                    background: isDark ? "rgba(44,44,46,0.8)" : "rgba(255,255,255,0.9)",
+                    border: `1.5px solid ${isDark ? "rgba(72,72,74,0.7)" : "rgba(209,209,214,0.8)"}`,
+                    color: tx, outline: "none",
+                  }}
+                />
+                {saveInputValue.trim() &&
+                  savedPresets.some((p) => p.name.toLowerCase() === saveInputValue.trim().toLowerCase()) && (
+                  <div style={{ fontSize: 10, color: "#FF3B30", marginTop: 4 }}>That name is already saved</div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSavePreset}
+                disabled={
+                  !saveInputValue.trim() ||
+                  savedPresets.some((p) => p.name.toLowerCase() === saveInputValue.trim().toLowerCase())
+                }
                 style={{
-                  flex: 1, padding: "6px 10px", borderRadius: 8, fontSize: 12,
-                  background: isDark ? "rgba(44,44,46,0.8)" : "rgba(255,255,255,0.9)",
-                  border: `1.5px solid ${isDark ? "rgba(72,72,74,0.7)" : "rgba(209,209,214,0.8)"}`,
-                  color: tx, outline: "none",
+                  padding: "6px 14px", borderRadius: 8, background: "#0A84FF", color: "#fff", border: "none",
+                  cursor: saveInputValue.trim() && !savedPresets.some((p) => p.name.toLowerCase() === saveInputValue.trim().toLowerCase()) ? "pointer" : "not-allowed",
+                  fontSize: 12, fontWeight: 600,
+                  opacity: saveInputValue.trim() && !savedPresets.some((p) => p.name.toLowerCase() === saveInputValue.trim().toLowerCase()) ? 1 : 0.5,
                 }}
-              />
-              <button type="button" onClick={handleSavePreset} disabled={!saveInputValue.trim()} style={{ padding: "6px 14px", borderRadius: 8, background: "#0A84FF", color: "#fff", border: "none", cursor: saveInputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, opacity: saveInputValue.trim() ? 1 : 0.5 }}>
+              >
                 Save
               </button>
               <button type="button" onClick={() => { setShowSaveInput(false); setSaveInputValue(""); }} style={{ padding: "6px 10px", borderRadius: 8, background: "transparent", color: ts, border: `1.5px solid ${divider}`, cursor: "pointer", fontSize: 12 }}>
@@ -984,69 +1358,74 @@ export function PrintCommandCenter({
             </>
           ) : (
             <>
-              {/* Stats */}
-              <div style={{ flex: 1, fontSize: 11, color: ts }}>
+              {/* Stats + shortcuts */}
+              <div style={{ flex: 1, minWidth: 0 }}>
                 {pageCount > 0 ? (
-                  <>
-                    <span style={{ color: tx, fontWeight: 600 }}>{pageCount} page{pageCount !== 1 ? "s" : ""}</span>
-                    {" · ~"}{estSecs}s {" · "}
-                    <span style={{ opacity: 0.6 }}>⌘↩ print · ⌘⇧P quick tonight</span>
-                  </>
-                ) : <span style={{ opacity: 0.45 }}>Select days above</span>}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ fontSize: 11, color: ts }}>
+                      <span style={{ color: tx, fontWeight: 700 }}>{pageCount} sheet{pageCount !== 1 ? "s" : ""}</span>
+                      {" · "}{formatEstTime(estSecs)}
+                      {exportDeliverable && (
+                        <span style={{ opacity: 0.75 }}> · {exportDeliverable}</span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <KbdHint label="Print" keys={["⌘", "↩"]} isDark={isDark} />
+                      {onExport && <KbdHint label="Export" keys={["⌘", "⇧", "↩"]} isDark={isDark} />}
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 11, color: ts, opacity: 0.55 }}>Select nights to enable actions</span>
+                )}
               </div>
 
               {/* Save preset */}
-              <button type="button" onClick={() => setShowSaveInput(true)} style={{ padding: "7px 12px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 11.5, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }} title="Save current config as a preset">
+              <button type="button" onClick={() => setShowSaveInput(true)} disabled={pageCount === 0} className="sb-interactive pcc-footer-btn" style={{ padding: "7px 12px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 11.5, fontWeight: 500, cursor: pageCount === 0 ? "not-allowed" : "pointer", opacity: pageCount === 0 ? 0.4 : 1, display: "flex", alignItems: "center", gap: 5 }} title="Save current config as a preset">
                 <Save size={13} strokeWidth={2} />
                 Save
               </button>
 
               {/* Cancel */}
-              <button type="button" onClick={onClose} disabled={isPrinting} style={{ padding: "7px 14px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 12.5, fontWeight: 600, cursor: isPrinting ? "not-allowed" : "pointer", opacity: isPrinting ? 0.4 : 1 }}>
+              <button type="button" onClick={onClose} disabled={isPrinting} className="sb-interactive pcc-footer-btn" style={{ padding: "7px 14px", borderRadius: 9, border: `1.5px solid ${divider}`, background: "transparent", color: ts, fontSize: 12.5, fontWeight: 600, cursor: isPrinting ? "not-allowed" : "pointer", opacity: isPrinting ? 0.4 : 1 }}>
                 Cancel
               </button>
 
-              {/* Print */}
-              <button type="button" onClick={handlePrint} disabled={isPrinting || pageCount === 0} style={{
+              {/* Export PDF (single PDF or ZIP of per-day PDFs) */}
+              <button type="button" onClick={handleExport} disabled={isPrinting || pageCount === 0 || !onExport} className="sb-interactive" style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 16px", borderRadius: 9, border: "none",
+                padding: "8px 14px", borderRadius: 10,
+                border: `1.5px solid ${uniqueExportDays > 1 ? "rgba(10,132,255,0.35)" : divider}`,
+                background: uniqueExportDays > 1
+                  ? (isDark ? "rgba(10,132,255,0.12)" : "rgba(10,132,255,0.08)")
+                  : "transparent",
+                color: uniqueExportDays > 1 ? "#0A84FF" : ts,
+                fontSize: 12.5, fontWeight: 600,
+                cursor: (isPrinting || pageCount === 0 || !onExport) ? "not-allowed" : "pointer",
+                opacity: (isPrinting || !onExport) ? 0.4 : 1,
+              }} title="Download Golden PDF. Multiple nights → ZIP of per-day PDFs.">
+                <Download size={15} strokeWidth={2.2} />
+                {uniqueExportDays > 1 ? "Export ZIP" : "Export PDF"}
+              </button>
+
+              {/* Print */}
+              <button type="button" onClick={handlePrint} disabled={isPrinting || pageCount === 0} className="sb-interactive" style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 18px", borderRadius: 10, border: "none",
                 background: pageCount === 0 ? (isDark ? "rgba(72,72,74,0.4)" : "rgba(209,209,214,0.4)") : "linear-gradient(135deg,#0A84FF 0%,#0060D0 100%)",
                 color: pageCount === 0 ? ts : "#fff",
                 fontSize: 12.5, fontWeight: 700,
                 cursor: (isPrinting || pageCount === 0) ? "not-allowed" : "pointer",
                 opacity: isPrinting ? 0.6 : 1,
-                boxShadow: pageCount > 0 ? "0 2px 8px rgba(10,132,255,0.3)" : "none",
+                boxShadow: pageCount > 0 ? "0 2px 10px rgba(10,132,255,0.35)" : "none",
               }}>
                 <Printer size={15} strokeWidth={2.2} />
-                {pageCount > 0 ? `Print ${pageCount} Page${pageCount !== 1 ? "s" : ""}` : "Print"}
+                {pageCount > 0 ? `Print ${pageCount}` : "Print"}
               </button>
             </>
           )}
         </div>
 
-        {/* ── PROGRESS OVERLAY ──────────────────────────────────────────────── */}
-        {isPrinting && (
-          <div className="sb-content-enter absolute inset-0 z-10 flex flex-col items-center justify-center gap-[18px] rounded-[20px]" style={{ background: isDark ? "rgba(28,28,30,0.93)" : "rgba(250,250,252,0.93)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
-            <div className="sb-progress-pulse flex items-center justify-center" style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,#0A84FF 0%,#0060D0 100%)", boxShadow: "0 8px 24px rgba(10,132,255,0.4)" }}>
-              <Printer size={26} color="#fff" strokeWidth={2} />
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <p className="text-[14px] font-bold" style={{ color: tx, marginBottom: 3 }} aria-busy="true" aria-live="polite">
-                {printProgress?.label ?? "Preparing"}
-                <span className="sb-loading-dots" aria-hidden="true" />
-              </p>
-              {printProgress && printProgress.total > 0 && (
-                <div style={{ fontSize: 11, color: ts }}>
-                  Page {printProgress.current} of {printProgress.total}
-                </div>
-              )}
-            </div>
-            <div style={{ width: 260, height: 4, borderRadius: 2, background: isDark ? "rgba(72,72,74,0.5)" : "rgba(209,209,214,0.5)", overflow: "hidden" }}>
-              <div className="sb-progress-bar" style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg,#0A84FF,#30D158)", borderRadius: 2 }} />
-            </div>
-            <div style={{ fontSize: 10, color: ts, opacity: 0.55 }}>Please wait — do not close this window</div>
-          </div>
-        )}
+
       </div>
     </div>,
     document.body
@@ -1059,10 +1438,23 @@ function SectionLabel({ text, isDark }: { text: string; isDark: boolean }) {
   return <div style={{ fontSize: 9.5, fontWeight: 700, color: isDark ? "#8E8E93" : "#6B7280", letterSpacing: "0.08em" }}>{text}</div>;
 }
 
-function PresetPill({ label, icon, active, onClick, isDark, accent }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; isDark: boolean; accent?: string }) {
+function SectionDivider({ isDark }: { isDark: boolean }) {
+  return (
+    <div
+      style={{
+        height: 1,
+        margin: "0 20px",
+        background: isDark ? "rgba(72,72,74,0.35)" : "rgba(209,209,214,0.45)",
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+function PresetPill({ label, icon, active, onClick, isDark, accent, title }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; isDark: boolean; accent?: string; title?: string }) {
   const a = accent ?? "#0A84FF";
   return (
-    <button type="button" onClick={onClick} className="sb-interactive" style={{
+    <button type="button" onClick={onClick} aria-pressed={active} title={title} className="sb-interactive pcc-pill" style={{
       display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 20,
       border: `1.5px solid ${active ? a : (isDark ? "rgba(72,72,74,0.45)" : "rgba(209,209,214,0.55)")}`,
       background: active ? (isDark ? `${a}22` : `${a}14`) : (isDark ? "rgba(44,44,46,0.45)" : "rgba(255,255,255,0.55)"),
@@ -1078,7 +1470,7 @@ function PresetPill({ label, icon, active, onClick, isDark, accent }: { label: s
 
 function BulkBtn({ label, active, color, onClick, isDark }: { label: string; active: boolean; color: string; onClick: () => void; isDark: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="sb-interactive" style={{
+    <button type="button" onClick={onClick} aria-pressed={active} className="sb-interactive pcc-bulk" style={{
       padding: "4px 9px", borderRadius: 6, fontSize: 10, fontWeight: active ? 700 : 500, cursor: "pointer",
       border: `1px solid ${active ? color : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
       background: active ? `${color}18` : "transparent", color: active ? color : (isDark ? "#8E8E93" : "#6B7280"),
@@ -1089,11 +1481,60 @@ function BulkBtn({ label, active, color, onClick, isDark }: { label: string; act
 
 function PosBtn({ label, active, onClick, color, isDark }: { label: string; active: boolean; onClick: () => void; color: string; isDark: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="sb-interactive" style={{
+    <button type="button" onClick={onClick} aria-pressed={active} className="sb-interactive pcc-bulk" style={{
       flex: 1, padding: "3px 6px", borderRadius: 5, fontSize: 9.5, fontWeight: active ? 700 : 500,
       cursor: "pointer", border: `1px solid ${active ? color : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
       background: active ? `${color}18` : "transparent", color: active ? color : (isDark ? "#8E8E93" : "#6B7280"),
       transition: "all 0.1s",
     }}>{label}</button>
+  );
+}
+
+function SummaryPill({ label, color, isDark }: { label: string; color: string; isDark: boolean }) {
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "3px 8px",
+      borderRadius: 20,
+      fontSize: 10,
+      fontWeight: 700,
+      color,
+      background: isDark ? `${color}22` : `${color}14`,
+      border: `1px solid ${color}44`,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function KbdHint({ label, keys, isDark }: { label: string; keys: string[]; isDark: boolean }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, color: isDark ? "#8E8E93" : "#6B7280" }}>
+      <span style={{ opacity: 0.75 }}>{label}</span>
+      {keys.map((k) => (
+        <kbd
+          key={k}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: 18,
+            height: 18,
+            padding: "0 4px",
+            borderRadius: 4,
+            fontSize: 9,
+            fontWeight: 700,
+            fontFamily: "inherit",
+            color: isDark ? "#C7C7CC" : "#3C3C43",
+            background: isDark ? "rgba(72,72,74,0.55)" : "rgba(255,255,255,0.9)",
+            border: `1px solid ${isDark ? "rgba(120,120,128,0.35)" : "rgba(209,209,214,0.8)"}`,
+            boxShadow: isDark ? "none" : "0 1px 0 rgba(0,0,0,0.06)",
+          }}
+        >
+          {k}
+        </kbd>
+      ))}
+    </span>
   );
 }
