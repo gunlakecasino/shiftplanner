@@ -182,7 +182,6 @@ export function buildAuxCardModels(snapshot: PrintDaySnapshot): PrintPlanningCar
   return snapshot.auxDefs.map((def) => {
     const a = snapshot.assignments[def.key] || {};
     const taskLines = toTaskLines(snapshot.tasksBySlot[def.key]);
-    const cov = coverageFromTasks(taskLines);
     const regular = taskLines.filter((t) => !t.isCoverage);
     const isBlank = def.role === "blank" && !def.label;
     const locs = def.locations?.length ? [def.locations.join(" · ")] : [];
@@ -195,8 +194,8 @@ export function buildAuxCardModels(snapshot: PrintDaySnapshot): PrintPlanningCar
       tmName: a.tmName ?? null,
       locationLines: locs.length ? locs : [],
       tasks: regular,
-      coverageLabel: cov.label,
-      coverageColor: cov.color,
+      coverageLabel: null,
+      coverageColor: null,
       breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3,
       empty: !a.tmName && !isBlank,
       blankAux: isBlank,

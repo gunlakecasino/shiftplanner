@@ -113,6 +113,79 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-builder-sect
   flex-shrink: 0;
 }
 
+/* Deployment sheet — flex-weighted sections + taller cards so tasks stay visible */
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-deployment-body,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-deployment-body,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-deployment-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sheet-section-header,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sheet-section-header,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sheet-section-header {
+  margin: 5px 0 3px;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section {
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-zones,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones {
+  flex-grow: 5;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-rr,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr {
+  flex-grow: 4;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-aux,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-aux,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-aux {
+  flex-grow: 2;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-card-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: stretch;
+}
+
+.print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-card-grid > [data-slot-key],
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-card-grid > [data-slot-key],
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-card-grid > [data-slot-key] {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Breathing room between assignee / covered-by and task stack */
+.print-stage-inner .print-artboard .sb-golden-card-body,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-card-body,
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-card-body {
+  gap: 8px;
+}
+
+.print-stage-inner .print-artboard .sb-golden-assignee-name + .sb-golden-task-list,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-assignee-name + .sb-golden-task-list,
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-assignee-name + .sb-golden-task-list,
+.print-stage-inner .print-artboard .sb-covered-by-block + .sb-golden-task-list,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-block + .sb-golden-task-list,
+body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-block + .sb-golden-task-list {
+  margin-top: 4px;
+  padding-top: 3px;
+}
+
 body.printing-dual-mode .print-dual-container .print-artboard .overlaps-section,
 body.golden-export-raster .print-dual-container .print-artboard .overlaps-section {
   margin-top: auto;

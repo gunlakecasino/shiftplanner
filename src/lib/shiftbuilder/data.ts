@@ -3847,23 +3847,22 @@ export type CopyPriorWeekTasksResult = {
 };
 
 /**
- * Copy all slot tasks from the same grave weekday one week earlier onto `targetDate`.
- * Replace semantics: clears tonight's tasks first, then inserts the prior-week set.
+ * Copy all slot tasks from `sourceDate` onto `targetDate`.
+ * Replace semantics: clears target night's tasks first, then inserts the source set.
  * Sweeper labels are skipped (they vary night-to-night).
  */
-export async function copyNightSlotTasksFromPriorWeekSameDay(
+export async function copyNightSlotTasksFromSourceDate(
+  sourceDate: Date,
   targetDate: Date,
   targetDayName: string,
+  sourceDescription: string,
 ): Promise<CopyPriorWeekTasksResult> {
-  const priorDate = addDays(targetDate, -7);
-  const sourceDateIso = localDateIso(priorDate);
+  const sourceDateIso = localDateIso(sourceDate);
   const targetDateIso = localDateIso(targetDate);
 
-  const sourceNightId = await getNightIdForDate(priorDate);
+  const sourceNightId = await getNightIdForDate(sourceDate);
   if (!sourceNightId) {
-    throw new Error(
-      `No night found for last week's ${targetDayName} (${sourceDateIso})`,
-    );
+    throw new Error(`No night found for ${sourceDescription} (${sourceDateIso})`);
   }
 
   const sourceTasks = await getNightSlotTasks(sourceNightId);
@@ -3872,9 +3871,7 @@ export async function copyNightSlotTasksFromPriorWeekSameDay(
   const excludedSweepers = sourceTasks.length - toCopy.length;
 
   if (!toCopy.length) {
-    throw new Error(
-      `No copyable tasks on last week's ${targetDayName} (${sourceDateIso})`,
-    );
+    throw new Error(`No copyable tasks for ${sourceDescription} (${sourceDateIso})`);
   }
 
   const targetNightId = await getOrCreateNightForDate(targetDate, targetDayName);
@@ -3928,6 +3925,34 @@ export async function copyNightSlotTasksFromPriorWeekSameDay(
     excludedSweepers,
     replacedExisting: existingCount ?? 0,
   };
+}
+
+/** Copy tasks from the same grave weekday one week earlier. */
+export async function copyNightSlotTasksFromPriorWeekSameDay(
+  targetDate: Date,
+  targetDayName: string,
+): Promise<CopyPriorWeekTasksResult> {
+  const priorDate = addDays(targetDate, -7);
+  return copyNightSlotTasksFromSourceDate(
+    priorDate,
+    targetDate,
+    targetDayName,
+    `last week's ${targetDayName}`,
+  );
+}
+
+/** Copy tasks from the previous calendar day. */
+export async function copyNightSlotTasksFromYesterday(
+  targetDate: Date,
+  targetDayName: string,
+): Promise<CopyPriorWeekTasksResult> {
+  const yesterday = addDays(targetDate, -1);
+  return copyNightSlotTasksFromSourceDate(
+    yesterday,
+    targetDate,
+    targetDayName,
+    'yesterday',
+  );
 }
 
 // =============================================================================

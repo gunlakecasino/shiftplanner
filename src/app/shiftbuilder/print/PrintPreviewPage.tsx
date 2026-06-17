@@ -225,11 +225,11 @@ export function PrintPreviewPage({
         activeBreakGroup={activeBreakGroup}
       />
 
-      <div className="flex flex-col w-full flex-1 min-h-0 overflow-hidden">
-        <section className="sb-builder-section mb-1">
+      <div className="sb-print-deployment-body flex flex-col w-full flex-1 min-h-0 overflow-hidden">
+        <section className="sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-[5] flex-col">
           <GoldenSectionHeader label="ZONES" count={`${zoneFilled} / 10 FILLED`} />
           <div
-            className="grid grid-cols-5 gap-1.5 flex-1 w-full"
+            className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
             style={{ gridAutoRows: "minmax(0, 1fr)" }}
           >
             {ZONE_VISUAL_ORDER.map((zKey) => {
@@ -251,10 +251,10 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section className="sb-builder-section mb-1">
+        <section className="sb-builder-section sb-print-section sb-print-section-rr mb-1 min-h-0 flex flex-[4] flex-col">
           <GoldenSectionHeader label="RESTROOMS" count={`${rrFilled} / 10 FILLED`} />
           <div
-            className="grid grid-cols-5 gap-1.5 flex-1 w-full"
+            className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
             style={{ gridAutoRows: "minmax(0, 1fr)" }}
           >
             {RR_DEFS.map((def) => {
@@ -276,15 +276,16 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section className="sb-builder-section mb-2">
+        <section className="sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-[2] flex-col">
           <GoldenSectionHeader
             label="AUXILIARY"
             count={`${auxFilled} / ${auxTotal} FILLED`}
           />
           <div
-            className="grid gap-1.5 flex-1 w-full"
+            className="sb-print-card-grid grid gap-1.5 flex-1 min-h-0 w-full"
             style={{
               gridTemplateColumns: `repeat(${Math.max(auxDefs.length, 1)}, minmax(0, 1fr))`,
+              gridAutoRows: "minmax(0, 1fr)",
             }}
           >
             {auxDefs.map((def) => {

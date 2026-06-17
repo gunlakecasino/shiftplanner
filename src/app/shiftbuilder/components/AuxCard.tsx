@@ -56,7 +56,7 @@ export interface AuxCardProps {
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
   coveredByNames?: string[];
-  onSetAuxRole?: (slotKey: string, role: Exclude<AuxRole, "blank">) => void;
+  onSetAuxRole?: (slotKey: string, role: AuxRole) => void;
   onSetAuxLabel?: (slotKey: string, label: string) => void;
 }
 
@@ -181,6 +181,18 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     } else {
       const store = useShiftBuilderStore.getState();
       store.setAuxDefs((prev: AuxDef[]) => applyAuxRole(prev, def.key, r));
+    }
+    setShowRolePicker(false);
+    setPickerPosition(null);
+    clearLongHoverTimer();
+  };
+
+  const handleClearRole = () => {
+    if (onSetAuxRole) {
+      onSetAuxRole(def.key, "blank");
+    } else {
+      const store = useShiftBuilderStore.getState();
+      store.setAuxDefs((prev: AuxDef[]) => applyAuxRole(prev, def.key, "blank"));
     }
     setShowRolePicker(false);
     setPickerPosition(null);
@@ -347,6 +359,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           <AuxRolePicker
             onSelect={handleRoleSelect}
             onCustomLabel={handleCustomLabel}
+            onClearRole={handleClearRole}
+            showClearRole={isConfigured}
             initialCustomLabel={def.label}
             onClose={() => {
               setShowRolePicker(false);

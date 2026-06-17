@@ -131,6 +131,8 @@ export interface FloatingNavProps {
   onNextWeek?: () => void;
   /** Copy slot tasks from the same grave weekday one week earlier. */
   onCopyPriorWeekTasks?: () => void;
+  /** Copy slot tasks from the previous calendar day. */
+  onCopyYesterdayTasks?: () => void;
   /** Restore card-default break groups onto assigned slots for the selected night. */
   onRestoreDefaultBreaks?: () => void;
   restoreDefaultBreaksBusy?: boolean;
@@ -195,6 +197,7 @@ export default function FloatingNav({
   onPrevWeek,
   onNextWeek,
   onCopyPriorWeekTasks,
+  onCopyYesterdayTasks,
   onRestoreDefaultBreaks,
   restoreDefaultBreaksBusy = false,
   onToggleWeekHealth,
@@ -235,6 +238,15 @@ export default function FloatingNav({
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
 
+  const showCopyTasksMenu = !!(onCopyPriorWeekTasks || onCopyYesterdayTasks);
+  const [copyTasksOpen, setCopyTasksOpen] = useState(false);
+  const copyTasksRef = useRef<HTMLDivElement>(null);
+  const copyTasksMenuRef = useRef<HTMLDivElement>(null);
+  const [copyTasksDropdownPos, setCopyTasksDropdownPos] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
+
   // Close profile dropdown on outside click or Escape (matches existing patterns)
   useEffect(() => {
     if (!profileOpen) return;
@@ -258,6 +270,28 @@ export default function FloatingNav({
       window.removeEventListener("keydown", onKey);
     };
   }, [profileOpen]);
+
+  useEffect(() => {
+    if (!copyTasksOpen) return;
+
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const clickedTrigger = copyTasksRef.current?.contains(target);
+      const clickedMenu = copyTasksMenuRef.current?.contains(target);
+      if (!clickedTrigger && !clickedMenu) {
+        setCopyTasksOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCopyTasksOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [copyTasksOpen]);
 
   // Compute fixed position for the profile dropdown so it is never clipped by
   // ancestors (stage overflow-hidden, nav insets, transforms, or high-z overlays).
@@ -610,14 +644,82 @@ export default function FloatingNav({
             </div>
           ) : null}
 
-          {onCopyPriorWeekTasks ? (
-            <NavToolButton
-              onClick={onCopyPriorWeekTasks}
-              title="Copy prior week same-day tasks"
-              ariaLabel="Copy tasks from last week's same weekday"
-            >
-              <ClipboardCopy className={NAV_ICON} />
-            </NavToolButton>
+          {showCopyTasksMenu ? (
+            <div ref={copyTasksRef} className="relative">
+              <NavToolButton
+                onClick={() => {
+                  const willOpen = !copyTasksOpen;
+                  if (willOpen && copyTasksRef.current) {
+                    const btn = copyTasksRef.current.querySelector("button") as HTMLElement | null;
+                    if (btn) {
+                      const rect = btn.getBoundingClientRect();
+                      setCopyTasksDropdownPos({
+                        top: rect.bottom + 8,
+                        right: Math.max(8, window.innerWidth - rect.right),
+                      });
+                    }
+                  }
+                  setCopyTasksOpen(willOpen);
+                }}
+                title="Copy tasks"
+                ariaLabel="Copy tasks menu"
+                active={copyTasksOpen}
+              >
+                <ClipboardCopy className={NAV_ICON} />
+              </NavToolButton>
+
+              {copyTasksOpen && copyTasksDropdownPos &&
+                createPortal(
+                  <div
+                    ref={copyTasksMenuRef}
+                    className="fixed w-56 rounded-xl border border-zinc-200 bg-white/95 backdrop-blur-md shadow-xl shadow-black/10 overflow-hidden z-[10000] dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/60"
+                    style={{
+                      top: `${copyTasksDropdownPos.top}px`,
+                      right: `${copyTasksDropdownPos.right}px`,
+                      fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
+                    }}
+                  >
+                    <div className="px-3 py-2 border-b border-zinc-200/80 dark:border-zinc-800">
+                      <div className="text-[10px] font-bold tracking-[0.8px] uppercase text-zinc-500 dark:text-zinc-400">
+                        Copy tasks
+                      </div>
+                    </div>
+                    <div className="py-1">
+                      {onCopyPriorWeekTasks ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCopyTasksOpen(false);
+                            onCopyPriorWeekTasks();
+                          }}
+                          className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 text-left text-sm text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
+                        >
+                          <span className="font-semibold">Prior week · same day</span>
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Last week&apos;s matching weekday
+                          </span>
+                        </button>
+                      ) : null}
+                      {onCopyYesterdayTasks ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCopyTasksOpen(false);
+                            onCopyYesterdayTasks();
+                          }}
+                          className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 text-left text-sm text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
+                        >
+                          <span className="font-semibold">Yesterday</span>
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Previous calendar day
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>,
+                  document.body,
+                )}
+            </div>
           ) : null}
 
           {onRestoreDefaultBreaks ? (

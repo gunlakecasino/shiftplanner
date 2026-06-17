@@ -1322,14 +1322,20 @@ function AuthedShiftBuilder() {
   };
 
   const setAuxRole = (slotKey: string, role: AuxRole) => {
-    if (role === "blank") return;
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: `Set ${slotKey} role → ${role}`, before };
+    pendingHistoryRef.current = {
+      description:
+        role === "blank" ? `Clear ${slotKey} role` : `Set ${slotKey} role → ${role}`,
+      before,
+    };
     setAuxDefs((prev) => {
       const next = applyAuxRole(prev, slotKey, role);
       queueMicrotask(() => persistAuxLayoutNowRef.current(next));
       return next;
     });
+    if (role === "blank" && assignments[slotKey]?.tmId) {
+      handleBoardLiveUnassign(slotKey);
+    }
   };
 
   const setAuxLabel = (slotKey: string, label: string) => {
@@ -6048,38 +6054,21 @@ function AuthedShiftBuilder() {
     return tasksByUiKey;
   }, []);
 
-  const handleCopyPriorWeekSameDayTasks = React.useCallback(async () => {
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — cannot copy tasks", "error");
-      return;
-    }
-
-    const captureDate = selectedDay.date;
-    const captureDayName = selectedDay.name;
-    const priorDate = addDays(captureDate, -7);
-    const priorDateLabel = formatLocalDateISO(priorDate);
-    const existingCount = Object.values(selectedTasks).reduce(
-      (sum, rows) => sum + rows.length,
-      0,
-    );
-    const confirmMsg =
-      existingCount > 0
-        ? `Copy tasks from ${priorDateLabel} (last week's ${captureDayName})? This replaces all ${existingCount} task(s) on tonight's board.`
-        : `Copy tasks from ${priorDateLabel} (last week's ${captureDayName})?`;
-    if (!confirm(confirmMsg)) return;
-
-    try {
-      const { copyNightSlotTasksFromPriorWeekSameDay, getNightSlotTasks } =
-        await import("@/lib/shiftbuilder/data");
-      const result = await copyNightSlotTasksFromPriorWeekSameDay(
-        captureDate,
-        captureDayName,
-      );
-
+  const applyCopiedNightTasks = React.useCallback(
+    async (
+      result: {
+        targetNightId: string;
+        copied: number;
+        excludedSweepers: number;
+      },
+      captureDate: Date,
+      successLabel: string,
+    ) => {
       if (result.targetNightId && result.targetNightId !== nightId) {
         setNightId(result.targetNightId);
       }
 
+      const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
       const fresh = await getNightSlotTasks(result.targetNightId);
       const dateKey = formatLocalDateISO(captureDate);
       if (currentNight.queryClient) {
@@ -6094,24 +6083,81 @@ function AuthedShiftBuilder() {
           ? ` (${result.excludedSweepers} sweeper task${result.excludedSweepers === 1 ? "" : "s"} skipped)`
           : "";
       showToast(
-        `Copied ${result.copied} task${result.copied === 1 ? "" : "s"} from last week's ${captureDayName}${sweeperNote}`,
+        `Copied ${result.copied} task${result.copied === 1 ? "" : "s"} from ${successLabel}${sweeperNote}`,
         "success",
       );
-    } catch (e: unknown) {
-      console.error("[shiftbuilder] copy prior week tasks failed", e);
-      const msg = e instanceof Error ? e.message : "Failed to copy tasks";
-      showToast(msg, "error");
-    }
-  }, [
-    isCurrentNightLocked,
-    selectedDay.date,
-    selectedDay.name,
-    selectedTasks,
-    nightId,
-    showToast,
-    currentNight.queryClient,
-    mapNightTasksToUiKeys,
-  ]);
+    },
+    [nightId, currentNight.queryClient, mapNightTasksToUiKeys, showToast],
+  );
+
+  const handleCopyTasksFromSource = React.useCallback(
+    async (source: "prior-week" | "yesterday") => {
+      if (isCurrentNightLocked) {
+        showToast("This day is locked — cannot copy tasks", "error");
+        return;
+      }
+
+      const captureDate = selectedDay.date;
+      const captureDayName = selectedDay.name;
+      const sourceDate =
+        source === "prior-week" ? addDays(captureDate, -7) : addDays(captureDate, -1);
+      const sourceDateLabel = formatLocalDateISO(sourceDate);
+      const sourceDescription =
+        source === "prior-week"
+          ? `last week's ${captureDayName} (${sourceDateLabel})`
+          : `yesterday (${sourceDateLabel})`;
+      const existingCount = Object.values(selectedTasks).reduce(
+        (sum, rows) => sum + rows.length,
+        0,
+      );
+      const confirmMsg =
+        existingCount > 0
+          ? `Copy tasks from ${sourceDescription}? This replaces all ${existingCount} task(s) on tonight's board.`
+          : `Copy tasks from ${sourceDescription}?`;
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const {
+          copyNightSlotTasksFromPriorWeekSameDay,
+          copyNightSlotTasksFromYesterday,
+        } = await import("@/lib/shiftbuilder/data");
+        const result =
+          source === "prior-week"
+            ? await copyNightSlotTasksFromPriorWeekSameDay(captureDate, captureDayName)
+            : await copyNightSlotTasksFromYesterday(captureDate, captureDayName);
+
+        await applyCopiedNightTasks(
+          result,
+          captureDate,
+          source === "prior-week"
+            ? `last week's ${captureDayName}`
+            : `yesterday`,
+        );
+      } catch (e: unknown) {
+        console.error("[shiftbuilder] copy tasks failed", e);
+        const msg = e instanceof Error ? e.message : "Failed to copy tasks";
+        showToast(msg, "error");
+      }
+    },
+    [
+      isCurrentNightLocked,
+      selectedDay.date,
+      selectedDay.name,
+      selectedTasks,
+      showToast,
+      applyCopiedNightTasks,
+    ],
+  );
+
+  const handleCopyPriorWeekSameDayTasks = React.useCallback(
+    () => handleCopyTasksFromSource("prior-week"),
+    [handleCopyTasksFromSource],
+  );
+
+  const handleCopyYesterdayTasks = React.useCallback(
+    () => handleCopyTasksFromSource("yesterday"),
+    [handleCopyTasksFromSource],
+  );
 
   const handleRestoreDefaultBreaks = React.useCallback(async () => {
     if (isCurrentNightLocked) {
@@ -7108,6 +7154,7 @@ function AuthedShiftBuilder() {
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
         onCopyPriorWeekTasks={handleCopyPriorWeekSameDayTasks}
+        onCopyYesterdayTasks={handleCopyYesterdayTasks}
         onRestoreDefaultBreaks={
           viewMode === "canvas" ? handleRestoreDefaultBreaks : undefined
         }

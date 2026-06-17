@@ -14,6 +14,9 @@ export interface AuxRolePickerProps {
   onSelect: (role: Exclude<AuxRole, "blank">) => void;
   /** Blank-role shell with operator-entered header text (role stays blank). */
   onCustomLabel?: (label: string) => void;
+  /** Reset role + label back to unset "Set role" shell. */
+  onClearRole?: () => void;
+  showClearRole?: boolean;
   onClose?: () => void;
   className?: string;
   initialCustomLabel?: string;
@@ -22,6 +25,8 @@ export interface AuxRolePickerProps {
 const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
   onSelect,
   onCustomLabel,
+  onClearRole,
+  showClearRole = false,
   onClose,
   className = "",
   initialCustomLabel = "",
@@ -127,6 +132,18 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
           </button>
         ) : null}
       </div>
+      {showClearRole && onClearRole ? (
+        <button
+          type="button"
+          className="mt-0.5 w-full text-left px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#FEE2E2] dark:hover:bg-[#3A2020] text-[#DC2626] dark:text-[#F87171] border-t border-[#E5E7EB] dark:border-[#3A3A3C] pt-1.5"
+          onClick={() => {
+            onClearRole();
+            onClose?.();
+          }}
+        >
+          Clear role
+        </button>
+      ) : null}
     </div>
   );
 };

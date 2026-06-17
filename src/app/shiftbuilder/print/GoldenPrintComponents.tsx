@@ -130,7 +130,9 @@ export function GoldenTaskList({
   const textColor = hasTM ? "text-[#1f2937]" : "text-[#6B7280]";
   return (
     <div
-      className={`mt-auto ${dense ? "pt-0 text-[9px] leading-[1.0]" : "pt-0.5 text-[9.5px] leading-tight"} ${textColor}`}
+      className={`sb-golden-task-list min-h-0 flex-1 flex flex-col justify-start gap-[2px] ${
+        dense ? "text-[9px] leading-[1.08]" : "text-[9.5px] leading-[1.12]"
+      } ${textColor}`}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
       {tasks.map((t) => (
@@ -237,7 +239,7 @@ export function GoldenZoneCard({
         <GoldenBreakPill value={breakGroup} />
       </div>
       <div
-        className="flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-2"
+        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-3 pt-2"
         style={{ paddingBottom: coveragePad }}
       >
         {isEmpty ? (
@@ -254,7 +256,7 @@ export function GoldenZoneCard({
         ) : (
           <>
             <span
-              className="font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
+              className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
               style={{
                 fontSize: 21,
                 lineHeight: 1,
@@ -330,7 +332,10 @@ function GoldenRRSide({
         </div>
         <GoldenBreakPill value={breakGroup} />
       </div>
-      <div className="flex flex-col flex-1 px-2 pt-1" style={{ paddingBottom: coveragePad }}>
+      <div
+        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        style={{ paddingBottom: coveragePad }}
+      >
         {isEmpty ? (
           coveredByNames && coveredByNames.length > 0 ? (
             <GoldenCoveredByBlock coveredByNames={coveredByNames} scale="rr" />
@@ -344,7 +349,7 @@ function GoldenRRSide({
           )
         ) : (
           <span
-            className="font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
+            className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
             style={{
               fontSize: 18,
               lineHeight: 1.02,
@@ -438,9 +443,9 @@ export function GoldenAuxCard({
   const color = getAuxAccent(def.key, role);
   const icon = getAuxIcon(def.key, role);
   const isEmpty = (empty || !tmName?.trim()) && !isBlank;
+  // Aux cards never show coverage banners (builder AuxCard filters isCoverage out).
   const regular = tasks.filter((t) => !t.isCoverage);
-  const coverage = tasks.find((t) => t.isCoverage);
-  const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 8;
+  const bodyPadBottom = 8;
 
   return (
     <div
@@ -483,8 +488,8 @@ export function GoldenAuxCard({
         {!isBlank ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
-        className="flex flex-col flex-1 min-h-0 overflow-hidden px-2 pt-1"
-        style={{ paddingBottom: coveragePad }}
+        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        style={{ paddingBottom: bodyPadBottom }}
       >
         {isEmpty ? (
           coveredByNames && coveredByNames.length > 0 ? (
@@ -500,7 +505,7 @@ export function GoldenAuxCard({
         ) : !isBlank ? (
           <>
             <span
-              className="font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
+              className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
               style={{
                 fontSize: 18,
                 lineHeight: 1.02,
@@ -516,9 +521,6 @@ export function GoldenAuxCard({
           <GoldenTaskList tasks={regular} hasTM={false} dense />
         ) : null}
       </div>
-      {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={coverage.color || "#6B7280"} />
-      ) : null}
     </div>
   );
 }
