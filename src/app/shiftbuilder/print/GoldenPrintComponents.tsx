@@ -12,6 +12,7 @@ import {
   getRRAccent,
   getAuxAccent,
   getAuxIcon,
+  COVERAGE_BAR_FONT_SIZE,
   COVERAGE_BAR_H,
   BREAK_GROUP_FILTERS,
   breakGroupLabel,
@@ -129,7 +130,7 @@ export function GoldenCoverageBar({
     >
       <span
         className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
-        style={{ fontSize: 8, fontFamily: "var(--font-atkinson)" }}
+        style={{ fontSize: COVERAGE_BAR_FONT_SIZE, fontFamily: "var(--font-atkinson)" }}
       >
         {label}
       </span>

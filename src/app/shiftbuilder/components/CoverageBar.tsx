@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import { COVERAGE_BAR_FONT_SIZE, COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 
 /**
  * CoverageBar — rendered at the very bottom of a zone or RR card to show
@@ -35,6 +36,8 @@ const CoverageBar = React.memo(function CoverageBar({
         borderRadius: '0 0 3px 3px',
         paddingTop: 3,
         paddingBottom: 3,
+        height: COVERAGE_BAR_H,
+        minHeight: COVERAGE_BAR_H,
         zIndex: 2,
         borderTop: builderCalm
           ? '1px solid rgba(255,255,255,0.18)'
@@ -46,7 +49,7 @@ const CoverageBar = React.memo(function CoverageBar({
     >
       <span
         className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
-        style={{ fontSize: 8, fontFamily: 'var(--font-atkinson)' }}
+        style={{ fontSize: COVERAGE_BAR_FONT_SIZE, fontFamily: 'var(--font-atkinson)' }}
       >
         {task.taskLabel}
       </span>

@@ -1310,3 +1310,91 @@ button,
   z-index: 5;
   pointer-events: none;
 }
+
+/* ── iPad / coarse-pointer tablet foundation (Phase A) ───────────────────── */
+
+@media (pointer: coarse) and (min-width: 768px) {
+  /* 44px HIG minimum — backs Tailwind h-11 on nav tool buttons */
+  .sb-tablet-touch-target {
+    min-width: var(--touch-min, 44px);
+    min-height: var(--touch-min, 44px);
+  }
+
+  /* Floating nav — safe-area + horizontal breathing room on narrow portrait */
+  .sb-tablet-nav {
+    top: max(8px, env(safe-area-inset-top, 0px)) !important;
+    left: max(12px, env(safe-area-inset-left, 0px)) !important;
+    right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .sb-tablet-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Icon-only Builder/Preview when compactCanvasToggle (≤1400px tablet widths) */
+  .sb-nav-canvas-compact .sb-nav-canvas-label {
+    display: none;
+  }
+
+  .sb-nav-canvas-compact button {
+    min-width: var(--touch-min, 44px);
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  /* Stage host — merge JS insets with safe-area (inline padding overridden) */
+  .sb-stage-host {
+    padding-top: calc(var(--sb-stage-inset-top, 64px) + env(safe-area-inset-top, 0px)) !important;
+    padding-right: calc(var(--sb-stage-inset-right, 12px) + env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: calc(var(--sb-stage-inset-bottom, 20px) + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: calc(var(--sb-stage-inset-left, 12px) + env(safe-area-inset-left, 0px)) !important;
+  }
+
+  /* Placement pad bottom sheet */
+  .sb-tablet-bottom-sheet {
+    border-radius: 20px 20px 0 0 !important;
+    border-bottom: none !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -10px 40px -12px rgba(0, 0, 0, 0.22);
+  }
+
+  .sb-pad-handle {
+    flex-shrink: 0;
+    width: 40px;
+    height: 5px;
+    margin: 10px auto 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .dark .sb-pad-handle {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  /* GROUP filter pills on the deployment board header */
+  .sb-group-filter-pill {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 0 10px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+  }
+
+  .sb-group-filter-label {
+    font-size: 11px !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  .sb-group-filter-row {
+    gap: 6px !important;
+  }
+
+  /* Break badge outer tap ring */
+  .sb-break-badge-btn {
+    touch-action: manipulation;
+  }
+}

@@ -31,7 +31,7 @@ import {
   rotationHealthFloaterColors,
   rotationHealthIconColor,
 } from "./shiftRotationHealth";
-import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
+import { isTabletTouchDevice, TABLET_COMPACT_NAV_MQ } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BuilderSyncStrip } from "./builderPrimitives";
@@ -334,7 +334,7 @@ export default function FloatingNav({
 
   const [compactCanvasToggle, setCompactCanvasToggle] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px) and (max-width: 1180px)");
+    const mq = window.matchMedia(TABLET_COMPACT_NAV_MQ);
     const onMq = () => setCompactCanvasToggle(mq.matches);
     onMq();
     mq.addEventListener("change", onMq);
@@ -356,8 +356,7 @@ export default function FloatingNav({
       <nav
         className={cn(
           navVariants(),
-          "overflow-hidden",
-          isTabletTouchDevice() && "sb-tablet-nav",
+          isTabletTouchDevice() ? "sb-tablet-nav" : "overflow-hidden",
         )}
         style={{
           ...glassStyle,
@@ -415,7 +414,10 @@ export default function FloatingNav({
                 onClick={onPrevWeek}
                 {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
                 transition={isBuilderView ? premiumSpring : SPRING}
-                className="absolute left-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
+                className={cn(
+                  "absolute left-0 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full touch-manipulation",
+                  isTabletTouchDevice() ? "sb-tablet-touch-target h-11 w-11" : "h-8 w-8",
+                )}
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}
@@ -449,7 +451,8 @@ export default function FloatingNav({
                     onTouchStart={() => onDayHover?.(day.id, day.date || new Date())}
                     className={cn(
                       datePillVariants({ active: isActive }),
-                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums min-h-[36px] w-full min-w-0 transition-all touch-manipulation",
+                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums w-full min-w-0 transition-all touch-manipulation sb-tablet-day-pill",
+                      isTabletTouchDevice() ? "min-h-11" : "min-h-[36px]",
                       isActive ? "text-[13px] px-1" : "text-[12px] px-0.5",
                     )}
                     style={{
@@ -505,7 +508,10 @@ export default function FloatingNav({
                 onClick={onNextWeek}
                 {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
                 transition={isBuilderView ? premiumSpring : SPRING}
-                className="absolute right-0 top-1/2 z-20 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full touch-manipulation"
+                className={cn(
+                  "absolute right-0 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full touch-manipulation",
+                  isTabletTouchDevice() ? "sb-tablet-touch-target h-11 w-11" : "h-8 w-8",
+                )}
                 style={{
                   background: "rgba(0,0,0,0.025)",
                 }}

@@ -1,7 +1,15 @@
+/** Coarse-pointer tablet media query — iPad Safari, etc. */
+export const TABLET_TOUCH_MQ = "(pointer: coarse) and (min-width: 768px)";
+
+/** Compact nav (icon-only Builder/Preview) up through iPad Pro 13″ landscape (1376px). */
+export const TABLET_COMPACT_NAV_MAX_WIDTH_PX = 1400;
+
+export const TABLET_COMPACT_NAV_MQ = `${TABLET_TOUCH_MQ} and (max-width: ${TABLET_COMPACT_NAV_MAX_WIDTH_PX}px)`;
+
 /** iPad / touch tablet — coarse pointer at tablet widths. */
 export function isTabletTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
-  return window.matchMedia("(pointer: coarse) and (min-width: 768px)").matches;
+  return window.matchMedia(TABLET_TOUCH_MQ).matches;
 }
 
 /** Floating roster width — compact on tablet for more artboard space. */

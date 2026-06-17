@@ -2,20 +2,31 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import { premiumSpring, premiumHoverLift } from "@/lib/premiumSpring";
 import { breakGroupLabel, BREAK_GROUP_OVERLAPS } from "@/lib/shiftbuilder/constants";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 // BreakBadge: 0 = off ("–"), 1/2/3 = waves, 4 = overlaps ("OL").
 // Cycle via nextBreakGroup: 1 → 2 → 3 → OL → – → 1.
 const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" }: { value: number; onCycle: () => void; size?: "sm" | "md" }) {
+  const tablet = isTabletTouchDevice();
   const isOl = value === BREAK_GROUP_OVERLAPS;
-  const visual = isOl
-    ? size === "sm"
-      ? "w-[20px] h-[14px] text-[8px]"
-      : "w-[24px] h-[16px] text-[9px]"
-    : size === "sm"
-      ? "w-[18px] h-[14px] text-[9px]"
-      : "w-[22px] h-[16px] text-[10.5px]";
+  const visual = tablet
+    ? isOl
+      ? size === "sm"
+        ? "w-[30px] h-[22px] text-[10px]"
+        : "w-[34px] h-[24px] text-[11px]"
+      : size === "sm"
+        ? "w-[28px] h-[22px] text-[11px]"
+        : "w-[32px] h-[24px] text-[12px]"
+    : isOl
+      ? size === "sm"
+        ? "w-[20px] h-[14px] text-[8px]"
+        : "w-[24px] h-[16px] text-[9px]"
+      : size === "sm"
+        ? "w-[18px] h-[14px] text-[9px]"
+        : "w-[22px] h-[16px] text-[10.5px]";
   const display = breakGroupLabel(value);
   const label =
     value === 0
@@ -32,7 +43,10 @@ const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" 
       type="button"
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
       onPointerDown={(e) => e.stopPropagation()}
-      className="sb-interactive -m-1.5 p-1.5 inline-flex items-center justify-center shrink-0"
+      className={cn(
+        "sb-interactive sb-break-badge-btn inline-flex items-center justify-center shrink-0",
+        tablet ? "min-h-11 min-w-11 p-2" : "-m-1.5 p-1.5",
+      )}
       title={label}
       aria-label={label}
     >

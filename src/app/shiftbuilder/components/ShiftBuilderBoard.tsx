@@ -942,15 +942,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           {/* Group selector (Golden shows GROUP label + three numbered pills) */}
           {currentView === "deployment" && (
             <div className="flex items-center gap-1.5">
-              <span className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>GROUP</span>
-              <div className="flex gap-[3px]">
+              <span className="sb-group-filter-label text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>GROUP</span>
+              <div className="sb-group-filter-row flex gap-[3px]">
                 {BREAK_GROUP_FILTERS.map((g) => {
                   const isActive = breakGroup === g;
                   return (
                     <div
                       key={g}
                       onClick={() => onBreakGroupChange?.(isActive ? null : g)}
-                      className={`${g === BREAK_GROUP_OVERLAPS ? "min-w-[18px]" : "min-w-[15px]"} h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px] cursor-pointer`}
+                      className={`sb-group-filter-pill ${g === BREAK_GROUP_OVERLAPS ? "min-w-[18px]" : "min-w-[15px]"} h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px] cursor-pointer`}
                       style={{
                         background: isActive ? "#1C1C1E" : "#E5E5E7",
                         color: isActive ? "#fff" : "#6B7280",

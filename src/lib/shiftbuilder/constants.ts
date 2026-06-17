@@ -238,4 +238,7 @@ export function shouldShowSlotForBreakFilter(
 }
 
 /** Height in px of a CoverageBar row — shared between ZoneCard and CoverageBar. */
-export const COVERAGE_BAR_H = 17;
+export const COVERAGE_BAR_H = 19;
+
+/** Label text size for coverage banners (builder + print/PDF). */
+export const COVERAGE_BAR_FONT_SIZE = 10;
