@@ -112,6 +112,8 @@ export type TodayNavProps = {
   showPrint?: boolean;
   onPrint?: () => void;
   isPrinting?: boolean;
+  /** Shift-aware today (8:30am rollover) — keep calendar in sync with the nav strip. */
+  todayShiftDate?: Date;
 };
 
 export function TodayNav({
@@ -131,6 +133,7 @@ export function TodayNav({
   showPrint = false,
   onPrint,
   isPrinting = false,
+  todayShiftDate: todayShiftDateProp,
 }: TodayNavProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState(() => new Date(selectedDayDate));
@@ -210,7 +213,7 @@ export function TodayNav({
   // was removed during production cleanup to eliminate drift.
 
   const monthLabel = `${MONTH_LONG[selectedDayDate.getMonth()]} ${selectedDayDate.getFullYear()}`;
-  const todayShiftDate = React.useMemo(() => currentShiftDate(), []);
+  const todayShiftDate = todayShiftDateProp ?? currentShiftDate();
 
   const handlePickDate = (d: Date) => {
     onJumpToDate(d);

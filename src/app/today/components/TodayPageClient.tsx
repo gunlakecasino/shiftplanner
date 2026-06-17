@@ -94,6 +94,7 @@ function TodayBoardShell({
         showPrint={board.canPrint}
         onPrint={board.handlePrint}
         isPrinting={board.isPrinting}
+        todayShiftDate={nav.todayDate}
       />
 
       {board.isScheduleHidden ? (
