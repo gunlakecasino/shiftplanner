@@ -18,6 +18,7 @@ import {
   buildOverlapRows,
   slotShowsFilled,
 } from "./buildPrintDaySnapshot";
+import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import "./printPreview.css";
 
 function filledCount(
@@ -212,6 +213,7 @@ export function PrintPreviewPage({
     (d) => (d.role !== "blank" || !!d.label) && assignments[d.key]?.tmName,
   ).length;
   const auxTotal = auxDefs.filter((d) => d.role !== "blank" || !!d.label).length;
+  const coveredByIndex = buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
 
   return (
     <div className="print-artboard" data-print-view="deployment">
@@ -241,6 +243,7 @@ export function PrintPreviewPage({
                     breakGroup={a.breakGroup ?? 0}
                     tasks={tasks}
                     empty={!slotShowsFilled(zKey, assignments)}
+                    coveredByNames={coveredByIndex[zKey]}
                   />
                 </div>
               );
@@ -265,6 +268,7 @@ export function PrintPreviewPage({
                     mAssignment={assignments[mKey] || {}}
                     wTasks={toTaskLines(tasksBySlot[wKey])}
                     mTasks={toTaskLines(tasksBySlot[mKey])}
+                    coveredByIndex={coveredByIndex}
                   />
                 </div>
               );
@@ -294,6 +298,7 @@ export function PrintPreviewPage({
                     breakGroup={a.breakGroup ?? 0}
                     tasks={toTaskLines(tasksBySlot[def.key])}
                     empty={!isBlank && !slotShowsFilled(def.key, assignments)}
+                    coveredByNames={coveredByIndex[def.key]}
                   />
                 </div>
               );

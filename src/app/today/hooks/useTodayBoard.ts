@@ -27,7 +27,6 @@ import { printTodaySchedule } from "../lib/printTodaySchedule";
 import type { TodayBoardView } from "./useTodayScheduleNav";
 import { useTodayDragDrop } from "./useTodayDragDrop";
 import {
-  expandCoverageToKeys,
   getSlotAccentColor,
   getSlotCoverageLabel,
 } from "../lib/coverageHelpers";
@@ -567,32 +566,29 @@ export function useTodayBoard({
       }
       const accentColor = getSlotAccentColor(sourceKey);
       const targetLabel = getSlotCoverageLabel(targetKey);
-      const sourceKeys = expandCoverageToKeys(sourceKey);
       try {
         const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
-        for (const sk of sourceKeys) {
-          const { slot_key, slot_type, rr_side } = uiToDb(sk);
-          await addNightSlotTask({
-            nightId,
-            slotKey: slot_key,
-            slotType: slot_type,
-            rrSide: rr_side,
+        const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
+        await addNightSlotTask({
+          nightId,
+          slotKey: slot_key,
+          slotType: slot_type,
+          rrSide: rr_side,
+          taskLabel: `And ${targetLabel}`,
+          isCoverage: true,
+          color: accentColor,
+          sortOrder: 99,
+        });
+        logChange({
+          action: "coverage_add",
+          slotKey: sourceKey,
+          payload: {
             taskLabel: `And ${targetLabel}`,
-            isCoverage: true,
-            color: accentColor,
-            sortOrder: 99,
-          });
-          logChange({
-            action: "coverage_add",
-            slotKey: sk,
-            payload: {
-              taskLabel: `And ${targetLabel}`,
-              targetKey,
-              targetLabel,
-              sourceKey,
-            },
-          });
-        }
+            targetKey,
+            targetLabel,
+            sourceKey,
+          },
+        });
         await refreshTasksForNight(nightId, setSelectedTasks);
       } catch {
         showToast("Failed to add coverage", "error");

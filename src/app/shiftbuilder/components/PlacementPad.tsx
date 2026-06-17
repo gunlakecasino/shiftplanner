@@ -80,6 +80,10 @@ export interface PlacementPadProps {
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  /** Remove all non-coverage tasks on this slot. */
+  onClearSlotTasks?: (slotKey: string) => void | Promise<void>;
+  /** Copy regular tasks from the paired M/W restroom side (MRRn ↔ WRRn). */
+  onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onRequestEngineInsight?: (slotKey: string, context?: string | Record<string, unknown>) => Promise<string>;
   scheduledUnassigned?: TmEntry[];
@@ -838,6 +842,8 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   onAssign,
   onAddTask,
   onRemoveTask,
+  onClearSlotTasks,
+  onCopyRestroomPairingTasks,
   onAssignSweeper,
   onRequestEngineInsight,
   scheduledUnassigned = [],
@@ -856,6 +862,7 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
   const prov = a.provenance || {};
   const hasProv = !!(prov.rationale || (prov.fairnessSignals && Object.keys(prov.fairnessSignals).length > 0));
   const tasks = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
+  const isRestroomSide = /^[MW]RR\d+$/.test(slotKey);
 
   // This-week (planned prior days in the current grave week + current) count per slot for the viewed TM.
   // Fed from the week-planned weeklyRecentHistory (built in Client from live assignments for week days <= selected).
@@ -1889,22 +1896,48 @@ const PlacementPad: React.FC<PlacementPadProps> = ({
             {/* Tasks — visible immediately (they are current state, not dependent on xAI enrichment) */}
             {showTasksPane ? (
             <div className="px-3 pt-2.5 pb-1">
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
                 <SectionLabel large={padLarge}>
                   Tasks{tasks.length > 0 ? ` · ${tasks.length}` : ""}
                 </SectionLabel>
-                {onAssignSweeper && (
-                  <motion.button
-                    type="button"
-                    onClick={() => setSweeperOpen((v) => !v)}
-                    className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
-                    {...premiumButton}
-                    whileHover={{ scale: 1.03 }}
-                    transition={premiumSpring}
-                  >
-                    Sweeper
-                  </motion.button>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {onClearSlotTasks && tasks.length > 0 && !isCurrentNightLocked ? (
+                    <motion.button
+                      type="button"
+                      onClick={() => void onClearSlotTasks(slotKey)}
+                      className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 hover:text-red-600 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
+                      {...premiumButton}
+                      whileHover={{ scale: 1.03 }}
+                      transition={premiumSpring}
+                    >
+                      Clear tasks
+                    </motion.button>
+                  ) : null}
+                  {onCopyRestroomPairingTasks && isRestroomSide && !isCurrentNightLocked ? (
+                    <motion.button
+                      type="button"
+                      onClick={() => void onCopyRestroomPairingTasks(slotKey)}
+                      className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
+                      {...premiumButton}
+                      whileHover={{ scale: 1.03 }}
+                      transition={premiumSpring}
+                    >
+                      Copy from Restroom Pairing
+                    </motion.button>
+                  ) : null}
+                  {onAssignSweeper ? (
+                    <motion.button
+                      type="button"
+                      onClick={() => setSweeperOpen((v) => !v)}
+                      className={`rounded-md border border-black/[0.08] bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-500 hover:bg-neutral-100 ${padLarge ? "text-[12px]" : "text-[9px]"}`}
+                      {...premiumButton}
+                      whileHover={{ scale: 1.03 }}
+                      transition={premiumSpring}
+                    >
+                      Sweeper
+                    </motion.button>
+                  ) : null}
+                </div>
               </div>
 
               {sweeperOpen && onAssignSweeper && (

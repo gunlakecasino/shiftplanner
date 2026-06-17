@@ -123,6 +123,8 @@ export interface ShiftBuilderBoardProps {
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
+  onClearSlotTasks?: (slotKey: string) => void | Promise<void>;
+  onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
   /** When set by ShiftBuilderClient, avoids duplicate history fetch + powers rotation health floater. */
   fitBySlot?: Record<string, PrerenderedPlacementFit>;
   /** Stage zoom — re-equalize card rows when fit changes (see layoutHeight below). */
@@ -248,6 +250,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onAssign,
   onAssignSweeper,
   onAddTask,
+  onClearSlotTasks,
+  onCopyRestroomPairingTasks,
   members = [],
   fitBySlot: fitBySlotProp,
   artboardScale,
@@ -708,6 +712,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     onAssign,
     onAddTask,
     onRemoveTask,
+    onClearSlotTasks,
+    onCopyRestroomPairingTasks,
     onAssignSweeper,
     onRequestEngineInsight,
     scheduledUnassigned,

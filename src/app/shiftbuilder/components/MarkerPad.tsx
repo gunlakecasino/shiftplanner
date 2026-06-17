@@ -102,8 +102,7 @@ export function getSlotMeta(
   return { label: slotKey, loc: "", icon: "●", accent: "#6B7280" };
 }
 
-// Canonical key for RR slots in the picker — always MRR side so expandCoverageToKeys
-// adds the task to both M and W in the handler.
+// Canonical restroom target key in the coverage picker (maps to "Restroom N" label).
 function rrPickerKey(num: number) { return `MRR${num}`; }
 
 // ── BreakWave ─────────────────────────────────────────────────────────────────

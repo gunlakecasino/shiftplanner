@@ -303,7 +303,6 @@ import { useStagePinchPan } from "./hooks/useStagePinchPan";
 import {
   getSlotAccentColor,
   getSlotCoverageLabel,
-  expandCoverageToKeys,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
@@ -4066,34 +4065,30 @@ function AuthedShiftBuilder() {
         }
       }
 
-      const sourceKeys = expandCoverageToKeys(sourceKey);
-
       try {
         const { addNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-        for (const sk of sourceKeys) {
-          const { slot_key, slot_type, rr_side } = uiToDb(sk);
-          await addNightSlotTask({
-            nightId,
-            slotKey: slot_key,
-            slotType: slot_type,
-            rrSide: rr_side,
+        const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
+        await addNightSlotTask({
+          nightId,
+          slotKey: slot_key,
+          slotType: slot_type,
+          rrSide: rr_side,
+          taskLabel: `And ${targetLabel}`,
+          isCoverage: true,
+          color: accentColor,
+          sortOrder: 99,
+        });
+        logBuilderChange({
+          action: "coverage_add",
+          slotKey: sourceKey,
+          targetNightId: nightId,
+          payload: {
             taskLabel: `And ${targetLabel}`,
-            isCoverage: true,
-            color: accentColor,
-            sortOrder: 99,
-          });
-          logBuilderChange({
-            action: "coverage_add",
-            slotKey: sk,
-            targetNightId: nightId,
-            payload: {
-              taskLabel: `And ${targetLabel}`,
-              targetKey,
-              targetLabel,
-              sourceKey,
-            },
-          });
-        }
+            targetKey,
+            targetLabel,
+            sourceKey,
+          },
+        });
         const fresh = await getNightSlotTasks(nightId);
         const byKey: Record<string, NightSlotTask[]> = {};
         for (const t of fresh) {
@@ -6590,9 +6585,104 @@ function AuthedShiftBuilder() {
     await handleCmdkAddCoverage(sourceKey, targetKey);
   }, [handleCmdkAddCoverage]);
 
-  const handleBoardRemoveTask = React.useCallback((slotKey: string, taskId: string) => {
-    handleRemoveTask(slotKey, taskId);
+  const handleBoardRemoveTask = React.useCallback((slotKey: string, taskLabel: string) => {
+    handleRemoveTask(slotKey, taskLabel);
   }, [handleRemoveTask]);
+
+  const handleClearSlotTasks = React.useCallback(
+    async (uiKey: string) => {
+      if (isCurrentNightLocked) {
+        showToast("This day is locked — cannot clear tasks", "error");
+        return;
+      }
+      const toRemove = (selectedTasks[uiKey] || []).filter((t) => !t.isCoverage);
+      if (!toRemove.length) return;
+
+      const targetNightId = nightId;
+      const captureDate = selectedDay.date;
+      const captureDayName = selectedDay.name;
+
+      setSelectedTasks((prev) => ({
+        ...prev,
+        [uiKey]: (prev[uiKey] || []).filter((t) => t.isCoverage),
+      }));
+
+      for (const t of toRemove) {
+        persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, t.taskLabel);
+      }
+      showToast(`Cleared ${toRemove.length} task${toRemove.length === 1 ? "" : "s"}`, "success");
+    },
+    [
+      isCurrentNightLocked,
+      selectedTasks,
+      nightId,
+      selectedDay.date,
+      selectedDay.name,
+      persistRemoveTask,
+      showToast,
+    ],
+  );
+
+  const handleCopyRestroomPairingTasks = React.useCallback(
+    async (uiKey: string) => {
+      if (isCurrentNightLocked) {
+        showToast("This day is locked — cannot copy tasks", "error");
+        return;
+      }
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        return;
+      }
+      const match = uiKey.match(/^(M|W)RR(\d+)$/);
+      if (!match) return;
+
+      const partnerKey = match[1] === "M" ? `WRR${match[2]}` : `MRR${match[2]}`;
+      const partnerTasks = (selectedTasks[partnerKey] || []).filter((t) => !t.isCoverage);
+      const currentLabels = new Set((selectedTasks[uiKey] || []).map((t) => t.taskLabel));
+      const toAdd = partnerTasks.filter((t) => !currentLabels.has(t.taskLabel));
+
+      if (!toAdd.length) {
+        showToast("No new tasks to copy from restroom pairing", "info");
+        return;
+      }
+
+      try {
+        const { addNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        for (const t of toAdd) {
+          const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+          await addNightSlotTask({
+            nightId,
+            slotKey: slot_key,
+            slotType: slot_type,
+            rrSide: rr_side,
+            taskLabel: t.taskLabel,
+            catalogTaskId: t.catalogTaskId ?? null,
+            sortOrder: t.sortOrder ?? 50,
+            color: t.color ?? null,
+          });
+          logBuilderChange({
+            action: "task_add",
+            slotKey: uiKey,
+            targetNightId: nightId,
+            payload: { taskLabel: t.taskLabel, copiedFrom: partnerKey },
+          });
+        }
+        const fresh = await getNightSlotTasks(nightId);
+        const byKey: Record<string, NightSlotTask[]> = {};
+        for (const t of fresh) {
+          const key = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
+          if (!byKey[key]) byKey[key] = [];
+          byKey[key].push(t);
+        }
+        setSelectedTasks(byKey);
+        showToast(`Copied ${toAdd.length} task${toAdd.length === 1 ? "" : "s"} from pairing`, "success");
+      } catch (e) {
+        console.error("Failed to copy restroom pairing tasks", e);
+        showToast("Failed to copy tasks from pairing", "error");
+      }
+    },
+    [isCurrentNightLocked, nightId, selectedTasks, showToast, logBuilderChange],
+  );
 
   const handleBoardSetTaskColor = React.useCallback((slotKey: string, taskId: string, color: string) => {
     handleSetTaskColor(slotKey, taskId, color);
@@ -7410,6 +7500,8 @@ function AuthedShiftBuilder() {
                 onAssign={handlePadAssign}
                 onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
                 onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                onClearSlotTasks={handleClearSlotTasks}
+                onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
@@ -7765,6 +7857,8 @@ function AuthedShiftBuilder() {
                     onAssign: handlePadAssign,
                     onAddTask: (sk: string, label: string) => handleCmdkAddTask(sk, label),
                     onRemoveTask: handleBoardRemoveTask,
+                    onClearSlotTasks: handleClearSlotTasks,
+                    onCopyRestroomPairingTasks: handleCopyRestroomPairingTasks,
                     onAssignSweeper: (sk: string, label: string) => handleAssignSweeperTask(sk, label),
                     onRequestEngineInsight: handleBoardRequestEngineInsight,
                     scheduledUnassigned: selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned,
@@ -7990,6 +8084,8 @@ function AuthedShiftBuilder() {
                 onAssign={handlePadAssign}
                 onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
                 onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                onClearSlotTasks={handleClearSlotTasks}
+                onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}

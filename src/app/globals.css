@@ -1045,24 +1045,52 @@ body {
   border-left: 3px solid var(--task-color, #B89708);
 }
 
-/* Empty slots — clear drop affordance without breaking card anatomy. */
+/* Empty slots — ghosted/translucent so filled cards read clearly at a glance. */
 .builder-workspace .assignment-card.empty,
 .builder-workspace .assignment-card.sb-card-empty {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.62), rgba(248, 248, 250, 0.88));
-  border: 1.5px dashed rgba(184, 151, 8, 0.28);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.34),
+    rgba(248, 248, 250, 0.48)
+  );
+  border: 1.5px dashed rgba(184, 151, 8, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
   min-height: 84px;
 }
 
 .builder-workspace .assignment-card.empty:hover,
 .builder-workspace .assignment-card.sb-card-empty:hover {
-  border-color: rgba(184, 151, 8, 0.42);
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.78), rgba(252, 250, 245, 0.94));
+  border-color: rgba(184, 151, 8, 0.38);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.52),
+    rgba(252, 250, 245, 0.66)
+  );
 }
 
 .dark .builder-workspace .assignment-card.empty,
 .dark .builder-workspace .assignment-card.sb-card-empty {
-  background: linear-gradient(155deg, rgba(28, 28, 32, 0.72), rgba(22, 22, 26, 0.9));
-  border-color: rgba(184, 151, 8, 0.24);
+  background: linear-gradient(
+    155deg,
+    rgba(28, 28, 32, 0.38),
+    rgba(22, 22, 26, 0.52)
+  );
+  border-color: rgba(184, 151, 8, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Soften empty card chrome (stripe + header) — body text/tasks stay full strength. */
+.builder-workspace .assignment-card.empty > :nth-child(1),
+.builder-workspace .assignment-card.empty > :nth-child(2),
+.builder-workspace .assignment-card.sb-card-empty > :nth-child(1),
+.builder-workspace .assignment-card.sb-card-empty > :nth-child(2) {
+  opacity: 0.55;
 }
 
 .builder-workspace .unassigned-label {

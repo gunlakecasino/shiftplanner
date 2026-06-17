@@ -227,6 +227,21 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           {task.taskLabel}
         </span>
       </div>
+      {onRemoveTask && !isPrintPreview ? (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveTask(slotKey, task.taskLabel);
+          }}
+          className="hidden group-hover/task:flex shrink-0 items-center justify-center text-[#9CA3AF] hover:text-red-500 text-[13px] leading-none font-bold px-0.5 -mr-0.5"
+          aria-label={`Remove ${task.taskLabel}`}
+          title="Remove task"
+        >
+          ×
+        </button>
+      ) : null}
     </div>
   );
 });

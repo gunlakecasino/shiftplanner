@@ -30,15 +30,6 @@ export function expandCoverageToKeys(uiKey: string): string[] {
   return [uiKey];
 }
 
-/** Mirror restroom targets onto both M/W sides for covered-by display. */
-export function expandCoverageTargetKeys(uiKey: string): string[] {
-  if (uiKey.startsWith("MRR") || uiKey.startsWith("WRR")) {
-    const num = uiKey.replace(/^[MW]RR/, "");
-    return [`MRR${num}`, `WRR${num}`];
-  }
-  return [uiKey];
-}
-
 type CoverageTaskRow = { taskLabel: string; isCoverage?: boolean };
 type AssignmentRow = { tmName?: string; tmId?: string };
 
@@ -89,8 +80,9 @@ export function parseCoverageTargetFromTaskLabel(
 }
 
 /**
- * Inverse coverage map: target slot → TM names covering it (from source slots' isCoverage tasks).
- * Restroom targets mirror to both MRR/WRR. Names deduped and sorted for stable "A / B" display.
+ * Inverse coverage map: target slot → TM names covering it.
+ * Only includes TMs assigned to a source card that has an isCoverage banner
+ * whose parsed target matches that exact slot key (no M/W mirroring).
  */
 export function buildCoveredByIndex(
   assignments: Record<string, AssignmentRow>,
@@ -100,22 +92,16 @@ export function buildCoveredByIndex(
   const labelToKey = buildCoverageLabelIndex(auxDefs);
   const index: Record<string, Set<string>> = {};
 
-  const addCoverer = (targetKey: string, tmName: string) => {
-    if (!targetKey || !tmName.trim()) return;
-    for (const k of expandCoverageTargetKeys(targetKey)) {
-      if (!index[k]) index[k] = new Set();
-      index[k].add(tmName.trim());
-    }
-  };
-
   for (const [sourceKey, tasks] of Object.entries(selectedTasks)) {
-    const tmName = assignments[sourceKey]?.tmName;
-    if (!tmName?.trim()) continue;
+    const tmName = assignments[sourceKey]?.tmName?.trim();
+    if (!tmName) continue;
+
     for (const t of tasks) {
       if (!t.isCoverage) continue;
       const targetKey = parseCoverageTargetFromTaskLabel(t.taskLabel, labelToKey);
       if (!targetKey) continue;
-      addCoverer(targetKey, tmName);
+      if (!index[targetKey]) index[targetKey] = new Set();
+      index[targetKey].add(tmName);
     }
   }
 
