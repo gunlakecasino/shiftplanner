@@ -179,6 +179,19 @@ export function RotationHealthFloater({
 
   const colors = rotationHealthFloaterColors(dailyPercent);
   const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
+  const policyPercent = health.weekPolicyPercent ?? health.weeklyBalance;
+
+  /** Primary actions on tinted panels — never bg-current + var(--bg) (illegible white-on-white). */
+  const drawerPrimaryBtn: React.CSSProperties = {
+    background: "rgba(255,255,255,0.94)",
+    color: "#1C1C1E",
+    border: "none",
+  };
+  const drawerSecondaryBtn: React.CSSProperties = {
+    background: "rgba(255,255,255,0.1)",
+    color: colors.text,
+    border: `1px solid rgba(255,255,255,0.38)`,
+  };
 
   if (placement === "side-right-collapsed") {
     return portalToBody(
@@ -201,14 +214,14 @@ export function RotationHealthFloater({
         <motion.button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 cursor-pointer select-none shrink-0"
+          className="flex items-center gap-2 rounded-[10px] px-3 py-2 cursor-pointer select-none shrink-0"
           style={{
             background: colors.bg,
             border: `1px solid ${colors.border}`,
             color: colors.text,
             boxShadow: "0 4px 14px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.12)",
-            minHeight: 32,
-            minWidth: 72,
+            minHeight: 36,
+            minWidth: 88,
           }}
           whileHover={{ scale: 1.02 }}
           transition={premiumSpring}
@@ -216,14 +229,14 @@ export function RotationHealthFloater({
           aria-expanded={expanded}
           aria-label={`Rotation health ${display}. ${expanded ? "Collapse" : "Expand"} drawer`}
         >
-          <span className="text-[7px] font-bold uppercase tracking-[0.6px] opacity-85">ROT</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.5px] opacity-90">ROT</span>
           <span
-            className="text-[13px] font-bold tabular-nums leading-none"
+            className="text-[15px] font-bold tabular-nums leading-none"
             style={{ fontFamily: "ui-monospace, monospace" }}
           >
             {display}
           </span>
-          <span className="text-[10px] opacity-70" aria-hidden="true">
+          <span className="text-[11px] font-semibold opacity-80" aria-hidden="true">
             {expanded ? "›" : "‹"}
           </span>
         </motion.button>
@@ -232,69 +245,80 @@ export function RotationHealthFloater({
         <AnimatePresence initial={false}>
           {expanded && (
             <motion.div
-              initial={{ maxWidth: 0, opacity: 0, paddingLeft: 0, paddingRight: 0 }}
-              animate={{ maxWidth: 220, opacity: 1, paddingLeft: 0, paddingRight: 8 }}
-              exit={{ maxWidth: 0, opacity: 0, paddingLeft: 0, paddingRight: 0 }}
+              initial={{ maxWidth: 0, opacity: 0, paddingRight: 0 }}
+              animate={{ maxWidth: 304, opacity: 1, paddingRight: 8 }}
+              exit={{ maxWidth: 0, opacity: 0, paddingRight: 0 }}
               transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
-              className="overflow-hidden flex items-stretch"
+              className="overflow-hidden flex items-stretch shrink-0"
               style={{ transition: SB_DRAWER_TRANSITION }}
             >
               <div
-                className="rounded-[10px] overflow-hidden flex flex-col justify-between"
+                className="rounded-[10px] flex flex-col gap-2 shrink-0"
                 style={{
-                  width: 212,
-                  minHeight: 32,
-                  maxHeight: 148,
+                  width: 296,
+                  minHeight: 36,
                   background: colors.bg,
                   border: `1px solid ${colors.border}`,
                   color: colors.text,
                   boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
-                  padding: "6px 8px",
-                  fontSize: 9,
-                  lineHeight: 1.25,
+                  padding: "10px 12px",
+                  lineHeight: 1.35,
                 }}
               >
-                <div>
-                  <div className="text-[7px] font-semibold uppercase tracking-[0.5px] opacity-85">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.4px] opacity-95">
                     Rotation health
                   </div>
-                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <div className="flex items-baseline gap-2 mt-1">
                     <span
-                      className="text-[18px] font-bold tabular-nums leading-none"
+                      className="text-[22px] font-bold tabular-nums leading-none"
                       style={{ fontFamily: "ui-monospace, monospace" }}
                     >
                       {display}
                     </span>
-                    <span className="text-[7px] uppercase tracking-[0.04em] opacity-70">tonight</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.06em] opacity-90">
+                      tonight
+                    </span>
                   </div>
-                  <div className="text-[8px] font-semibold tabular-nums opacity-90 mt-0.5">
-                    {weekAverageDisplay} fit · {(health.weekPolicyPercent ?? health.weeklyBalance) ?? "—"}% policy
-                    {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps > 1 ? "s" : ""}` : ""}
+                  <div
+                    className="text-[11px] font-semibold tabular-nums mt-1.5 leading-snug"
+                    style={{ fontFamily: "ui-monospace, monospace" }}
+                  >
+                    {weekAverageDisplay} week fit
+                    <span className="opacity-60 mx-1">·</span>
+                    {policyPercent != null ? `${policyPercent}%` : "—%"} policy
+                    {health.openGaps > 0 ? (
+                      <>
+                        <span className="opacity-60 mx-1">·</span>
+                        {health.openGaps} gap{health.openGaps > 1 ? "s" : ""}
+                      </>
+                    ) : null}
                   </div>
-                  <div className="text-[7px] opacity-70 mt-0.5 leading-snug">
-                    pill color = tonight fit (≥{ROTATION_HEALTH_TARGET}% green) · {GRAVE_WEEK_LABEL} avg · policy
+                  <div className="text-[9px] opacity-90 mt-1.5 leading-snug">
+                    Card pills = tonight fit (≥{ROTATION_HEALTH_TARGET}% green). {GRAVE_WEEK_LABEL} avg + repeat policy below.
                   </div>
                 </div>
 
                 {isDraftMode && (
-                  <div className="mt-1 text-[7px] opacity-85 leading-snug">
+                  <div className="text-[10px] font-medium opacity-95 leading-snug">
                     Draft preview · {draftSlotCount} placement{draftSlotCount === 1 ? "" : "s"}
                     {draftGrokExplanation ? (
-                      <div className="opacity-75 mt-0.5 line-clamp-2" title={draftGrokExplanation}>
-                        {draftGrokExplanation.slice(0, 96)}{draftGrokExplanation.length > 96 ? "…" : ""}
+                      <div className="opacity-85 mt-1 line-clamp-2" title={draftGrokExplanation}>
+                        {draftGrokExplanation.slice(0, 120)}{draftGrokExplanation.length > 120 ? "…" : ""}
                       </div>
                     ) : null}
                   </div>
                 )}
 
                 {(onApplyDraft || onDiscardDraft) && isDraftMode && (
-                  <div className="mt-1.5 flex gap-1">
+                  <div className="flex gap-1.5">
                     {onDiscardDraft && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onDiscardDraft(); }}
                         disabled={!canDiscardDraft}
-                        className="flex-1 text-[7px] px-1.5 py-1 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
+                        className="flex-1 text-[10px] font-semibold px-2 py-1.5 rounded disabled:opacity-40"
+                        style={drawerSecondaryBtn}
                       >
                         Discard
                       </button>
@@ -304,7 +328,8 @@ export function RotationHealthFloater({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); void onApplyDraft(); setExpanded(false); }}
                         disabled={!canApplyDraft}
-                        className="flex-1 text-[7px] px-1.5 py-1 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
+                        className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded disabled:opacity-40"
+                        style={drawerPrimaryBtn}
                       >
                         Apply
                       </button>
@@ -313,13 +338,14 @@ export function RotationHealthFloater({
                 )}
 
                 {(onClear || onRunEngine) && (
-                  <div className="mt-1.5 pt-1 border-t border-current/30 flex gap-1">
+                  <div className="pt-1.5 border-t border-white/25 flex gap-1.5">
                     {onClear && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onClear(); setExpanded(false); }}
                         disabled={!onClear}
-                        className="flex-1 text-[7px] px-1.5 py-1 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
+                        className="flex-1 text-[10px] font-semibold px-2 py-1.5 rounded disabled:opacity-40"
+                        style={drawerSecondaryBtn}
                       >
                         Clear
                       </button>
@@ -329,8 +355,8 @@ export function RotationHealthFloater({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onRunEngine(); }}
                         disabled={!canRunEngine || running}
-                        className="flex-1 text-[7px] px-1.5 py-1 rounded bg-current text-[color:var(--bg)] font-semibold disabled:opacity-40"
-                        style={{ opacity: running ? 0.6 : 0.9 }}
+                        className="flex-1 text-[10px] font-bold px-2 py-1.5 rounded disabled:opacity-40"
+                        style={{ ...drawerPrimaryBtn, opacity: running ? 0.65 : 1 }}
                       >
                         {running ? "Running…" : "Run engine"}
                       </button>
