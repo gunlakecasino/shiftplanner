@@ -1333,7 +1333,11 @@ function AuthedShiftBuilder() {
   const setAuxLabel = (slotKey: string, label: string) => {
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     pendingHistoryRef.current = { description: `Renamed ${slotKey}`, before };
-    setAuxDefs((prev) => applyAuxLabel(prev, slotKey, label));
+    setAuxDefs((prev) => {
+      const next = applyAuxLabel(prev, slotKey, label);
+      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
+      return next;
+    });
   };
 
   // Called-off TMs should never be picked by the engine or proposed by Grok

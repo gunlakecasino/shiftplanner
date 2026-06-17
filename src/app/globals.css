@@ -897,6 +897,15 @@ body {
   border: 1px dashed #D1D5DB;
   background: #FAFAFA;
 }
+
+/* Aux cards need a touch more vertical room for TM name + tasks without clipping. */
+.sb-builder-stage .sb-aux-grid .sb-assignment-card {
+  min-height: 92px;
+}
+
+.sb-builder-stage .sb-aux-grid .sb-assignment-card .zone-task-list {
+  max-height: none;
+}
 .sb-builder-stage .sb-aux-slot-btn {
   border: 1px solid #D1D5DB;
   color: #6B7280;

@@ -6,8 +6,10 @@ import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import {
-  type BreakGroup, nextBreakGroup,
-  getAuxAccent, getAuxIcon,
+  type BreakGroup,
+  nextBreakGroup,
+  getAuxAccent,
+  getAuxIcon,
 } from "@/lib/shiftbuilder/constants";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { applyAuxRole, applyAuxLabel } from "@/lib/shiftbuilder/auxLayout";
@@ -23,8 +25,11 @@ import AuxRolePicker from "./AuxRolePicker";
 import { premiumSpring } from "@/lib/premiumSpring";
 import {
   CardAccentStripe,
+  CardSlotHeader,
   SlotAssignmentBody,
   TaskListDivider,
+  cardBodyInteriorClass,
+  cardBodyInteriorStyle,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 
@@ -41,7 +46,6 @@ export interface AuxCardProps {
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
@@ -81,6 +85,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 }) => {
   const role = def.role ?? "blank";
   const isBlank = role === "blank";
+  const isUnsetBlank = isBlank && !def.label?.trim();
+  const isConfigured = !isUnsetBlank;
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key, role);
@@ -89,7 +95,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     def.key,
     "aux",
     { tmId: a.tmId, tmName: a.tmName },
-    isLocked || isBlank,
+    isLocked || isUnsetBlank,
   );
 
   const icon = getAuxIcon(def.key, role);
@@ -99,7 +105,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
   const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
   const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
-    ? tmConflictSlots[currentTmId].filter(s => s !== def.key)
+    ? tmConflictSlots[currentTmId].filter((s) => s !== def.key)
     : [];
 
   const [showRolePicker, setShowRolePicker] = React.useState(false);
@@ -107,22 +113,21 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const [labelDraft, setLabelDraft] = React.useState(def.label);
   const labelInputRef = React.useRef<HTMLInputElement>(null);
 
-  // For custom positioned picker to avoid clipping in grids/sections
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
+  const pickerRef = React.useRef<HTMLDivElement>(null);
   const [pickerPosition, setPickerPosition] = React.useState<{ top: number; left: number } | null>(null);
 
-  // Close picker on outside click (for custom positioned portal)
   React.useEffect(() => {
     if (!showRolePicker) return;
-    const onDocClick = (e: MouseEvent) => {
+    const onDocPointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
-      if (!cardContainerRef.current?.contains(target)) {
-        setShowRolePicker(false);
-        setPickerPosition(null);
-      }
+      if (cardContainerRef.current?.contains(target)) return;
+      if (pickerRef.current?.contains(target)) return;
+      setShowRolePicker(false);
+      setPickerPosition(null);
     };
-    document.addEventListener("mousedown", onDocClick, true);
-    return () => document.removeEventListener("mousedown", onDocClick, true);
+    document.addEventListener("pointerdown", onDocPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown, true);
   }, [showRolePicker]);
 
   React.useEffect(() => {
@@ -133,41 +138,143 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     if (editingLabel) labelInputRef.current?.focus();
   }, [editingLabel]);
 
-  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
-    (el) => { if (!isLocked && !isBlank) onCardClick(def.key, el); },
-  );
-
-  const handleBlankClick = (e: React.MouseEvent, el: HTMLElement) => {
+  const openRolePicker = () => {
     if (isLocked) return;
-    e.stopPropagation();
-    computeAndSetPickerPosition();
-    setShowRolePicker((v) => !v);
-  };
-
-  const computeAndSetPickerPosition = () => {
     const rect = cardContainerRef.current?.getBoundingClientRect();
     if (rect) {
-      // Use fixed positioning with viewport coords (no scrollY needed)
-      setPickerPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-      });
+      setPickerPosition({ top: rect.bottom + 4, left: rect.left });
     }
+    setShowRolePicker(true);
   };
+
+  const toggleRolePicker = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (showRolePicker) {
+      setShowRolePicker(false);
+      setPickerPosition(null);
+      return;
+    }
+    openRolePicker();
+  };
+
+  const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
+    (el) => { if (!isLocked && isConfigured) onCardClick(def.key, el); },
+  );
 
   const commitLabel = () => {
     setEditingLabel(false);
-    const newLabel = labelDraft.trim() || def.label;
-    if (newLabel !== def.label) {
-      if (onSetAuxLabel) {
-        onSetAuxLabel(def.key, newLabel);
-      } else {
-        // fallback direct store update so custom label works even if handler prop not wired
-        const store = useShiftBuilderStore.getState();
-        store.setAuxDefs((prev: AuxDef[]) => applyAuxLabel(prev, def.key, newLabel));
-      }
+    const newLabel = labelDraft.trim();
+    if (newLabel === def.label) return;
+    if (onSetAuxLabel) {
+      onSetAuxLabel(def.key, newLabel);
+    } else {
+      const store = useShiftBuilderStore.getState();
+      store.setAuxDefs((prev: AuxDef[]) => applyAuxLabel(prev, def.key, newLabel));
     }
   };
+
+  const handleRoleSelect = (r: Exclude<AuxRole, "blank">) => {
+    if (onSetAuxRole) {
+      onSetAuxRole(def.key, r);
+    } else {
+      const store = useShiftBuilderStore.getState();
+      store.setAuxDefs((prev: AuxDef[]) => applyAuxRole(prev, def.key, r));
+    }
+    setShowRolePicker(false);
+    setPickerPosition(null);
+    clearLongHoverTimer();
+  };
+
+  const handleCustomLabel = (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    setLabelDraft(trimmed);
+    if (onSetAuxLabel) {
+      onSetAuxLabel(def.key, trimmed);
+    } else {
+      const store = useShiftBuilderStore.getState();
+      store.setAuxDefs((prev: AuxDef[]) => applyAuxLabel(prev, def.key, trimmed));
+    }
+    setShowRolePicker(false);
+    setPickerPosition(null);
+    setEditingLabel(false);
+    clearLongHoverTimer();
+  };
+
+  const headerLabel = isUnsetBlank && !editingLabel ? (
+    <button
+      type="button"
+      className="flex items-center gap-1 min-w-0 text-left text-[#9CA3AF]"
+      onClick={toggleRolePicker}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (!isLocked) {
+          setLabelDraft("");
+          setEditingLabel(true);
+        }
+      }}
+      title="Tap to set role · pick Custom for your own label"
+    >
+      <span className="text-[14px] leading-none shrink-0 font-light">+</span>
+      <span>Set role</span>
+    </button>
+  ) : editingLabel ? (
+    <input
+      ref={labelInputRef}
+      value={labelDraft}
+      onChange={(e) => setLabelDraft(e.target.value)}
+      onBlur={commitLabel}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitLabel();
+        if (e.key === "Escape") {
+          setLabelDraft(def.label);
+          setEditingLabel(false);
+        }
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="font-extrabold tracking-[0.4px] uppercase bg-transparent border-b border-current outline-none min-w-0 max-w-[88px]"
+      style={{ fontSize: 10, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+    />
+  ) : (
+    <button
+      type="button"
+      className="flex items-center gap-1 min-w-0 text-left"
+      style={{ color: isBlank && def.label ? "#9CA3AF" : color }}
+      onClick={toggleRolePicker}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (!isLocked) setEditingLabel(true);
+      }}
+      title={isBlank ? "Tap to set role · double-click to edit label" : "Tap to change role · double-click to edit label"}
+    >
+      <span className="text-[11px] leading-none shrink-0">{icon}</span>
+      <span className="truncate">{def.label || (isBlank ? "Set role" : "")}</span>
+    </button>
+  );
+
+  const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
+
+  let assignmentState: SlotAssignmentState;
+  if (loading && !hasTM) {
+    assignmentState = { kind: "loading" };
+  } else if (isDraftMode && draftInfo?.proposedTmName) {
+    assignmentState = {
+      kind: "draft",
+      proposedName: draftInfo.proposedTmName,
+      previousName: draftInfo.previousTmName,
+    };
+  } else if (hasTM) {
+    assignmentState = {
+      kind: "assigned",
+      tmName: a.tmName,
+      tmId: currentTmId,
+      isLocked: a.isLocked,
+    };
+  } else {
+    assignmentState = { kind: "unassigned" };
+  }
+
+  const headerAccent = isUnsetBlank ? "#9CA3AF" : isBlank && def.label ? "#9CA3AF" : color;
 
   return (
     <div
@@ -177,166 +284,90 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       }}
       onClick={(e) => {
         if (isLocked) return;
-        if (isBlank) handleBlankClick(e, e.currentTarget);
+        if (isUnsetBlank) toggleRolePicker(e);
         else onCardClick(def.key, e.currentTarget, e);
       }}
       onPointerMove={handleSpotlightMove}
-      {...(isBlank ? {} : penHoverHandlers)}
-      {...(hasTM && !isLocked && !isBlank ? listeners : {})}
-      {...(hasTM && !isLocked && !isBlank ? attributes : {})}
+      {...(isConfigured ? penHoverHandlers : {})}
+      {...(hasTM && !isLocked && isConfigured ? listeners : {})}
+      {...(hasTM && !isLocked && isConfigured ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isBlank ? "sb-aux-blank" : ""} ${!isBlank ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && !isBlank ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isConfigured ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <CardAccentStripe color={isBlank ? "#D1D5DB" : color} />
-      <div
-        className="flex items-start justify-between gap-1 px-2 pt-1 pb-1"
-        style={{ borderBottom: `1px solid ${isBlank ? "#E5E7EB" : `${color}33`}` }}
-      >
-        {(isBlank && !def.label && !editingLabel) ? (
-          <div 
-            className="flex items-center gap-1 leading-none min-w-0 text-[#9CA3AF]"
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              if (!isLocked) {
-                setLabelDraft("");
-                setEditingLabel(true);
-              }
-            }}
-            title="Double-click to set custom text label"
-          >
-            <span className="text-[14px] leading-none shrink-0 font-light">+</span>
-            <span
-              className="font-semibold tracking-[0.3px] uppercase truncate"
-              style={{ fontSize: 9, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-            >
-              Set role
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color: (isBlank && def.label) ? '#9CA3AF' : color }}>
-            <button
-              type="button"
-              className="flex items-center gap-1 min-w-0 text-left"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isLocked) {
-                  if (isBlank) {
-                    // for blank (custom or role) still allow opening picker to choose/ change role
-                    computeAndSetPickerPosition();
-                    setShowRolePicker((v) => !v);
-                  } else {
-                    computeAndSetPickerPosition();
-                    setShowRolePicker((v) => !v);
-                  }
-                }
-              }}
-              title={isBlank ? "Set role or double-click label for custom" : "Change role"}
-            >
-              <span className="text-[11px] leading-none shrink-0">{icon}</span>
-              {editingLabel ? (
-                <input
-                  ref={labelInputRef}
-                  value={labelDraft}
-                  onChange={(e) => setLabelDraft(e.target.value)}
-                  onBlur={commitLabel}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitLabel();
-                    if (e.key === "Escape") {
-                      setLabelDraft(def.label);
-                      setEditingLabel(false);
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="font-extrabold tracking-[0.4px] uppercase bg-transparent border-b border-current outline-none min-w-0 max-w-[72px]"
-                  style={{ fontSize: 10, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-                />
-              ) : (
-                <span
-                  className="font-extrabold tracking-[0.4px] uppercase truncate px-1 py-[1px] inline-block"
-                  style={{ fontSize: 10, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    if (!isLocked) setEditingLabel(true);
-                  }}
-                  title="Double-click to edit label (custom text for blank aux)"
-                >
-                  {def.label || (isBlank ? "Set role" : "")}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-0.5 shrink-0">
-          {!(isBlank && !def.label) && <PlacementFitChip fit={fitChip} />}
-          {!(isBlank && !def.label) && <BreakBadge value={currentBreak} onCycle={cycleBreak} />}
-        </div>
-        {hasTM && !isLocked && onLiveUnassign && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onLiveUnassign(def.key);
-            }}
-            className="ml-auto text-[#9CA3AF] hover:text-[#EF4444] leading-none"
-            aria-label="Remove TM from slot"
-            title="Clear this slot"
-          >
-            ×
-          </button>
-        )}
-      </div>
+      <CardAccentStripe color={isUnsetBlank ? "#D1D5DB" : color} />
 
-      {showRolePicker && onSetAuxRole && pickerPosition && createPortal(
+      <CardSlotHeader
+        icon={isUnsetBlank && !editingLabel ? undefined : icon}
+        label={headerLabel}
+        accentColor={headerAccent}
+        compact
+        trailing={isConfigured ? (
+          <>
+            <PlacementFitChip fit={fitChip} />
+            <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+            {hasTM && !isLocked && onLiveUnassign ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLiveUnassign(def.key);
+                }}
+                className="text-[#9CA3AF] hover:text-[#EF4444] leading-none text-[13px] px-0.5"
+                aria-label="Remove TM from slot"
+                title="Clear this slot"
+              >
+                ×
+              </button>
+            ) : null}
+          </>
+        ) : undefined}
+      />
+
+      {showRolePicker && pickerPosition && createPortal(
         <div
+          ref={pickerRef}
+          data-aux-role-picker
           className="z-[9999]"
           style={{
             position: "fixed",
             top: pickerPosition.top,
             left: pickerPosition.left,
           }}
-          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <AuxRolePicker
-            onSelect={(r) => {
-              if (onSetAuxRole) {
-                onSetAuxRole(def.key, r);
-              } else {
-                // fallback direct store update so role choice works even if handler prop not wired
-                const store = useShiftBuilderStore.getState();
-                store.setAuxDefs((prev: AuxDef[]) => applyAuxRole(prev, def.key, r));
-              }
-              setShowRolePicker(false);
-              setPickerPosition(null);
-              clearLongHoverTimer();
-            }}
+            onSelect={handleRoleSelect}
+            onCustomLabel={handleCustomLabel}
+            initialCustomLabel={def.label}
             onClose={() => {
               setShowRolePicker(false);
               setPickerPosition(null);
             }}
           />
         </div>,
-        document.body
+        document.body,
       )}
 
-      <div 
-        className={`flex flex-col flex-1 px-2 ${showDigitalAssists ? 'pt-1.5 pb-1.5' : 'px-3 pt-1.5 pb-1.5'} min-h-0 overflow-hidden`}
-        style={{ 
-          background: showDigitalAssists ? 'rgba(255,255,255,0.018)' : undefined,
-        }}
+      <div
+        className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
+        style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        {(isBlank && !def.label && !editingLabel) ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2">
-            {showDigitalAssists && (
-              <motion.div
+        {isUnsetBlank ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2 min-h-[64px]">
+            {showDigitalAssists ? (
+              <motion.button
+                type="button"
                 className="flex flex-col items-center gap-0.5"
+                onClick={toggleRolePicker}
                 whileHover={{ scale: 1.02 }}
                 transition={premiumSpring}
               >
-                <motion.span 
+                <motion.span
                   className="text-[22px] leading-none opacity-60"
                   whileHover={{ scale: 1.15, rotate: 90 }}
                   transition={{ ...premiumSpring, stiffness: 300 }}
@@ -345,57 +376,42 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 </motion.span>
                 <span className="font-semibold tracking-[0.6px] text-[10px] text-[#8a8a8f]">SET ROLE</span>
                 <span className="no-print text-[8.5px] opacity-60">Tap to choose role</span>
-                <span className="no-print text-[7.5px] opacity-50 mt-0.5">or double-click to set custom text</span>
-              </motion.div>
+                <span className="no-print text-[7.5px] opacity-50 mt-0.5">or choose Custom in the picker</span>
+              </motion.button>
+            ) : (
+              <button type="button" className="font-semibold tracking-[0.6px] uppercase" onClick={toggleRolePicker}>
+                Set role
+              </button>
             )}
           </div>
         ) : (
-          <SlotAssignmentBody
-            state={
-              loading && !hasTM
-                ? { kind: "loading" }
-                : isDraftMode && draftInfo?.proposedTmName
-                  ? {
-                      kind: "draft",
-                      proposedName: draftInfo.proposedTmName,
-                      previousName: draftInfo.previousTmName,
-                    }
-                  : hasTM
-                    ? {
-                        kind: "assigned",
-                        tmName: a.tmName,
-                        tmId: currentTmId,
-                        isLocked: a.isLocked,
-                      }
-                    : { kind: "unassigned" }
-            }
-            scale="aux"
-            showDigitalAssists={showDigitalAssists}
-            isDuplicate={isDuplicate}
-            otherSlotsForTm={otherSlotsForTm}
-            inviteSize="aux"
-            emptyPresentation="label"
-            nameSizeOverride={
-              hasTM
-                ? ((selectedTasks[def.key]?.length || 0) > 0 ? 16 : showDigitalAssists ? 20 : 18)
-                : undefined
-            }
-            onUnassignedClick={(e) => {
-              e.stopPropagation();
-              onCardClick(def.key, e.currentTarget, e);
-            }}
-          />
-        )}
-
-        {!(isBlank && !def.label) && (
           <>
-            {/* Subtle task separator for interiors hierarchy (builder only). */}
-            {(selectedTasks[def.key] || []).some((t) => !t.isCoverage) ? (
+            <SlotAssignmentBody
+              state={assignmentState}
+              scale="aux"
+              showDigitalAssists={showDigitalAssists}
+              isDuplicate={isDuplicate}
+              otherSlotsForTm={otherSlotsForTm}
+              inviteSize="aux"
+              emptyPresentation="label"
+              nameSizeOverride={
+                hasTM
+                  ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
+                  : undefined
+              }
+              onUnassignedClick={(e) => {
+                e.stopPropagation();
+                onCardClick(def.key, e.currentTarget, e);
+              }}
+            />
+
+            {regularTasks.length > 0 ? (
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
             ) : null}
-            <div className="mt-auto max-h-[26px] overflow-hidden flex-shrink-0">
+
+            <div className={`mt-auto min-h-0 overflow-hidden flex-shrink ${!hasTM && showDigitalAssists ? "bg-white/30 rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
               <ZoneTaskList
-                tasks={selectedTasks[def.key]}
+                tasks={regularTasks}
                 hasTM={hasTM}
                 slotKey={def.key}
                 onRemoveTask={onRemoveTask}
@@ -403,6 +419,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
                 dense
+                textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
                 isPrintPreview={!showDigitalAssists}
               />
             </div>
