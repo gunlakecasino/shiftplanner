@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   computeShiftRotationHealth,
@@ -34,6 +35,12 @@ const OPS_PILL_STACK_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX;
 const OPS_PILL_RIGHT_INSET = "max(10px, env(safe-area-inset-right, 0px))";
 const OPS_PILL_Z = 2147483647;
 const ROTATION_HEALTH_Z = OPS_PILL_Z - 1;
+
+/** Escape scaled canvas ancestors — fixed must mount on body to stay viewport-pinned. */
+function portalToBody(node: React.ReactNode): React.ReactNode {
+  if (typeof document === "undefined") return null;
+  return createPortal(node, document.body);
+}
 
 export type RotationHealthFloaterProps = {
   visible: boolean;
@@ -158,7 +165,7 @@ export function RotationHealthFloater({
   const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
 
   if (placement === "side-right-collapsed") {
-    return (
+    return portalToBody(
       <div
         ref={clusterRef}
         className="no-print"
@@ -318,7 +325,7 @@ export function RotationHealthFloater({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </div>,
     );
   }
 
@@ -347,7 +354,7 @@ export function RotationHealthFloater({
             zIndex: 30,
           };
 
-  return (
+  const floaterShell = (
     <div
       className="no-print sb-floater-enter"
       style={{
@@ -408,4 +415,6 @@ export function RotationHealthFloater({
       </div>
     </div>
   );
+
+  return placement === "above-ops-pill" ? portalToBody(floaterShell) : floaterShell;
 }
