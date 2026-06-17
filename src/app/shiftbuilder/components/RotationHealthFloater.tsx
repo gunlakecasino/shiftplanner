@@ -8,6 +8,7 @@ import {
   computeWeekAverageHealth,
   GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
+  normalizeRotationHealthPercent,
   rotationHealthFloaterColors,
   type ShiftRotationHealth,
 } from "./shiftRotationHealth";
@@ -53,6 +54,7 @@ export type RotationHealthFloaterProps = {
   weekDailyHealths?: Record<string, number>;
   selectedDayDateKey?: string;
   weekHealthLoading?: boolean;
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
 
   canRunEngine?: boolean;
   running?: boolean;
@@ -105,6 +107,7 @@ export function RotationHealthFloater({
   weekDailyHealths,
   selectedDayDateKey,
   weekHealthLoading,
+  weeklyRecentHistory,
   canRunEngine,
   onRunEngine,
   onClear,
@@ -120,18 +123,31 @@ export function RotationHealthFloater({
         isDraftMode,
         draftAssignments,
         weekDailyHealths,
+        weeklyRecentHistory,
       }),
-    [auxDefs, assignments, fitBySlot, isDraftMode, draftAssignments, weekDailyHealths],
+    [
+      auxDefs,
+      assignments,
+      fitBySlot,
+      isDraftMode,
+      draftAssignments,
+      weekDailyHealths,
+      weeklyRecentHistory,
+    ],
   );
 
   const trackerDaily =
     selectedDayDateKey && weekDailyHealths
       ? weekDailyHealths[selectedDayDateKey]
       : undefined;
-  const dailyPercent = weekHealthLoading ? null : (trackerDaily ?? null);
-  const weekAveragePercent = weekHealthLoading
+  // Live board fit wins for tonight; tracker is fallback while histories load.
+  const dailyPercentRaw = weekHealthLoading
     ? null
-    : computeWeekAverageHealth(weekDailyHealths);
+    : (health.dailyPercent ?? trackerDaily ?? null);
+  const dailyPercent = normalizeRotationHealthPercent(dailyPercentRaw);
+  const weekAveragePercent = normalizeRotationHealthPercent(
+    weekHealthLoading ? null : computeWeekAverageHealth(weekDailyHealths),
+  );
   const weekAverageDisplay =
     weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
   const xaiAdj = health.xaiRepeatPenaltyReduction || 0;
@@ -256,7 +272,7 @@ export function RotationHealthFloater({
                     {health.openGaps > 0 ? ` · ${health.openGaps} gap${health.openGaps > 1 ? "s" : ""}` : ""}
                   </div>
                   <div className="text-[7px] opacity-70 mt-0.5 leading-snug">
-                    tonight · {GRAVE_WEEK_LABEL} avg · policy · target {ROTATION_HEALTH_TARGET}%
+                    pill color = tonight fit (≥{ROTATION_HEALTH_TARGET}% green) · {GRAVE_WEEK_LABEL} avg · policy
                   </div>
                 </div>
 

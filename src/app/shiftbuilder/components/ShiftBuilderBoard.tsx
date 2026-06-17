@@ -1500,6 +1500,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           weekDailyHealths={weekDailyHealths}
           selectedDayDateKey={currentIso}
           weekHealthLoading={weekHealthLoading}
+          weeklyRecentHistory={weeklyRecentHistory}
           canRunEngine={canRunEngine}
           onRunEngine={onRunXaiEngine}
           onClear={onClearBoard}

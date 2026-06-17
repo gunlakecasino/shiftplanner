@@ -134,7 +134,7 @@ export function computePlacementHealthPoints(
       if (week >= 2) p -= Math.min(8, (week - 1) * 4);
       if (partialSwaps > 0) p -= 2;
       if (input.rationale) p += 1;
-      return Math.max(80, Math.min(89, p));
+      return Math.max(80, Math.min(84, p));
     }
     case "strong_fit": {
       let p = 98;

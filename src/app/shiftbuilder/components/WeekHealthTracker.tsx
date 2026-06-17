@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import {
   rotationHealthFloaterColors,
-  ROTATION_HEALTH_TARGET,
+  normalizeRotationHealthPercent,
+  rotationHealthTextColor,
 } from "./shiftRotationHealth";
 import {
   WEEK_HEALTH_TRACKER_BOTTOM_PX,
@@ -34,12 +35,6 @@ export type WeekHealthTrackerProps = {
   healthLoading?: boolean;
   isDark?: boolean;
 };
-
-function healthTone(percent: number): string {
-  if (percent >= ROTATION_HEALTH_TARGET) return "#15803d";
-  if (percent >= 70) return "#b45309";
-  return "#b91c1c";
-}
 
 /**
  * Live rotation health % for each day of the current grave week.
@@ -156,10 +151,11 @@ export function WeekHealthTracker({
       <div className={`flex flex-row flex-nowrap items-center ${isBar ? "gap-1" : "gap-0.5"}`}>
         {dayDefs.map((def, index) => {
           const dateKey = def.date ? formatLocalDateISO(def.date) : "";
-          const health =
+          const healthRaw =
             healthLoading || !dateKey
               ? null
               : (weekDailyHealths[dateKey] ?? null);
+          const health = normalizeRotationHealthPercent(healthRaw);
           const isSelected = index === selectedDayIndex;
           const dayLetter = (def.name || def.short || "?").charAt(0).toUpperCase();
           const dateNum = def.dateNum ?? index + 1;
@@ -205,7 +201,7 @@ export function WeekHealthTracker({
                     color: isSelected
                       ? "#fff"
                       : hasHealth
-                        ? healthTone(health)
+                        ? rotationHealthTextColor(health)
                         : isDark
                           ? "#52525b"
                           : "#9ca3af",

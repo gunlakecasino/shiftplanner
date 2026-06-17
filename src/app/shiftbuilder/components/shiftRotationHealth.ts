@@ -17,6 +17,61 @@ import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 /** Operator target for a healthy grave board before break. */
 export const ROTATION_HEALTH_TARGET = 85;
 
+/** Amber band floor — below target, above this is warning (not green). */
+export const ROTATION_HEALTH_AMBER_MIN = 70;
+
+export type RotationHealthTier = "unknown" | "red" | "amber" | "green";
+
+/** Whole-number % shown to operators; also drives color tiers. */
+export function normalizeRotationHealthPercent(
+  percent: number | null | undefined,
+): number | null {
+  if (percent === null || percent === undefined || !Number.isFinite(percent)) {
+    return null;
+  }
+  return Math.round(percent);
+}
+
+export function rotationHealthTier(
+  percent: number | null | undefined,
+): RotationHealthTier {
+  const n = normalizeRotationHealthPercent(percent);
+  if (n === null) return "unknown";
+  if (n >= ROTATION_HEALTH_TARGET) return "green";
+  if (n >= ROTATION_HEALTH_AMBER_MIN) return "amber";
+  return "red";
+}
+
+export function rotationHealthTextColor(
+  percent: number | null | undefined,
+): string {
+  switch (rotationHealthTier(percent)) {
+    case "green":
+      return "#15803d";
+    case "amber":
+      return "#b45309";
+    case "red":
+      return "#b91c1c";
+    default:
+      return "#9ca3af";
+  }
+}
+
+export function rotationHealthIconColor(
+  percent: number | null | undefined,
+): string | undefined {
+  switch (rotationHealthTier(percent)) {
+    case "green":
+      return "#16a34a";
+    case "amber":
+      return "#d97706";
+    case "red":
+      return "#dc2626";
+    default:
+      return undefined;
+  }
+}
+
 /** Grave schedule week label (Fri → Thu). */
 export const GRAVE_WEEK_LABEL = "Fri–Thu";
 
@@ -42,7 +97,7 @@ export function computeWeekAverageHealth(
 /** Fallback bucket points when granular healthPoints are unavailable. */
 export const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
   strong_fit: 95,
-  acceptable: 85,
+  acceptable: 84,
   questionable: 62,
   needs_swap: 45,
   poor_fit: 0,
@@ -371,7 +426,10 @@ export function computeShiftRotationHealth(
   return {
     dailyPercent: percent,
     percent: effectivePercentForDisplay,
-    meetsTarget: percent >= ROTATION_HEALTH_TARGET,
+    meetsTarget: (() => {
+      const n = normalizeRotationHealthPercent(percent);
+      return n !== null && n >= ROTATION_HEALTH_TARGET;
+    })(),
     scoredCount: scores.length,
     openGaps,
     counts,
@@ -403,34 +461,34 @@ export function getTmThisWeekRepeatForSlot(
 }
 
 export function rotationHealthFloaterColors(
-  percent: number | null,
+  percent: number | null | undefined,
 ): { bg: string; border: string; text: string } {
-  if (percent === null) {
-    return {
-      bg: "rgba(0,0,0,0.75)",
-      border: "#3a3a3c",
-      text: "#a1a1aa",
-    };
+  switch (rotationHealthTier(percent)) {
+    case "green":
+      return {
+        bg: "rgba(22,163,74,0.75)",
+        border: "rgba(34,197,94,0.35)",
+        text: "#ecfdf5",
+      };
+    case "amber":
+      return {
+        bg: "rgba(180,83,9,0.75)",
+        border: "rgba(251,191,36,0.35)",
+        text: "#fffbeb",
+      };
+    case "red":
+      return {
+        bg: "rgba(185,28,28,0.75)",
+        border: "rgba(248,113,113,0.35)",
+        text: "#fef2f2",
+      };
+    default:
+      return {
+        bg: "rgba(0,0,0,0.75)",
+        border: "#3a3a3c",
+        text: "#a1a1aa",
+      };
   }
-  if (percent >= ROTATION_HEALTH_TARGET) {
-    return {
-      bg: "rgba(22,163,74,0.75)",
-      border: "rgba(34,197,94,0.35)",
-      text: "#ecfdf5",
-    };
-  }
-  if (percent >= 70) {
-    return {
-      bg: "rgba(180,83,9,0.75)",
-      border: "rgba(251,191,36,0.35)",
-      text: "#fffbeb",
-    };
-  }
-  return {
-    bg: "rgba(185,28,28,0.75)",
-    border: "rgba(248,113,113,0.35)",
-    text: "#fef2f2",
-  };
 }
 
 /**

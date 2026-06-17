@@ -26,7 +26,10 @@ import {
   Activity,
   ScrollText,
 } from "lucide-react";
-import { rotationHealthFloaterColors } from "./shiftRotationHealth";
+import {
+  rotationHealthFloaterColors,
+  rotationHealthIconColor,
+} from "./shiftRotationHealth";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -308,14 +311,9 @@ export default function FloatingNav({
   const weekHealthColors = rotationHealthFloaterColors(
     weekHealthLoading ? null : weekHealthPercent,
   );
-  const weekHealthIconColor =
-    weekHealthLoading || weekHealthPercent === null
-      ? undefined
-      : weekHealthPercent >= 85
-        ? "#16a34a"
-        : weekHealthPercent >= 70
-          ? "#d97706"
-          : "#dc2626";
+  const weekHealthIconColor = rotationHealthIconColor(
+    weekHealthLoading ? null : weekHealthPercent,
+  );
   const weekHealthTitle = weekHealthLoading
     ? "Week rotation health — loading"
     : weekHealthPercent !== null
