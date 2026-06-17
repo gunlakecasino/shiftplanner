@@ -764,11 +764,13 @@ function AuthedShiftBuilder() {
   const isPrintPreview = canvasMode === "print-preview";
   // Dismissable week health bar — placement under nav + stage top inset (see stageTopInsetPx).
   const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") return true;
     try {
-      return localStorage.getItem("oms_week_health_tracker_dismissed") === "true";
+      const stored = localStorage.getItem("oms_week_health_tracker_dismissed");
+      if (stored === "false") return false;
+      return true;
     } catch {
-      return false;
+      return true;
     }
   });
   // Builder live canvas: deployment + breaks use the relaxed workspace (not the fixed 816px Golden frame).
@@ -4316,7 +4318,7 @@ function AuthedShiftBuilder() {
   const showWeekHealthTracker = React.useCallback(() => {
     setIsWeekHealthTrackerDismissed(false);
     try {
-      localStorage.removeItem("oms_week_health_tracker_dismissed");
+      localStorage.setItem("oms_week_health_tracker_dismissed", "false");
     } catch {}
   }, []);
 
