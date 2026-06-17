@@ -10,9 +10,10 @@ export function getSlotAccentColor(uiKey: string): string {
   return "#6B7280";
 }
 
-/** Returns a human-readable label for a slot (e.g. "Zone 3", "Restroom 7"). */
+/** Returns a human-readable label for a slot (e.g. "Zone 3", "Restroom 7", or custom text). */
 export function getSlotCoverageLabel(uiKey: string): string {
-  if (uiKey === "Z9SR") return "Zone 9SR";
+  if (uiKey.startsWith("custom:")) return uiKey.slice(7);
+  if (uiKey === "Z9SR") return "Zone 9 Smoking Room";
   if (uiKey.startsWith("Z")) return `Zone ${uiKey.slice(1)}`;
   if (uiKey.startsWith("MRR") || uiKey.startsWith("WRR")) {
     return `Restroom ${uiKey.replace(/^[MW]RR/, "")}`;

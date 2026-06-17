@@ -279,6 +279,52 @@ export function activeAuxDefs(auxDefs: AuxDef[]): AuxDef[] {
   return auxDefs.filter(isTypedAuxDef);
 }
 
+/**
+ * Ensures the "admin" aux card (if present or needed) is always the first in the list.
+ * If an admin role exists later, it is moved to front.
+ * If no admin exists, the first editable (blank) card is replaced with the admin card,
+ * keeping the total count the same (replaces first blank with admin).
+ */
+export function ensureAdminFirst(defs: AuxDef[]): AuxDef[] {
+  if (!defs || defs.length === 0) return defs;
+  const adminIndex = defs.findIndex((d) => d.role === "admin");
+  if (adminIndex === 0) return defs;
+
+  let next = [...defs];
+  let adminDef: AuxDef;
+
+  if (adminIndex > 0) {
+    adminDef = next.splice(adminIndex, 1)[0];
+  } else {
+    // No admin: replace the first card (the first editable/blank) with admin.
+    // Keep the key of the replaced slot if possible.
+    const replaceKey = next.length > 0 ? next[0].key : "AUX1";
+    adminDef = {
+      key: replaceKey,
+      role: "admin" as const,
+      label: "ADMIN",
+      locations: ["Floor Admin"],
+    };
+    if (next.length > 0) {
+      next.shift(); // remove the first editable being replaced
+    }
+  }
+
+  return [adminDef, ...next];
+}
+
 export function defaultAuxDefsForNewNight(): AuxDef[] {
-  return BLANK_AUX_DEFS.map((d) => ({ ...d }));
+  const adminDef: AuxDef = {
+    key: "AUX1",
+    role: "admin" as const,
+    label: "ADMIN",
+    locations: ["Floor Admin"],
+  };
+  const blanks = Array.from({ length: 5 }, (_, i) => ({
+    key: `AUX${i + 2}`,
+    role: "blank" as const,
+    label: "",
+    locations: [],
+  }));
+  return [adminDef, ...blanks];
 }

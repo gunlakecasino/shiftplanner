@@ -6,25 +6,32 @@ import type { AuxDef, AuxRole } from "./placement";
 
 // Zone identities — labels are rendered uppercase in the card per the Golden
 export const ZONE_DEFS = [
-  { key: "Z1",  label: "ZONE 1",  locations: ["Main Entry North"] },
-  { key: "Z2",  label: "ZONE 2",  locations: ["Main Entry South"] },
-  { key: "Z3",  label: "ZONE 3",  locations: ["Food Court North"] },
-  { key: "Z4",  label: "ZONE 4",  locations: ["Food Court South"] },
-  { key: "Z5",  label: "ZONE 5",  locations: ["Slots West"] },
-  { key: "Z6",  label: "ZONE 6",  locations: ["Slots East"] },
-  { key: "Z7",  label: "ZONE 7",  locations: ["High Limit"] },
-  { key: "Z8",  label: "ZONE 8",  locations: ["Table Games North"] },
-  { key: "Z9",  label: "ZONE 9",  locations: ["Table Games South"] },
-  { key: "Z10", label: "ZONE 10", locations: ["Poker"] },
+  { key: "Z1",  label: "ZONE 1" },
+  { key: "Z2",  label: "ZONE 2" },
+  { key: "Z3",  label: "ZONE 3" },
+  { key: "Z4",  label: "ZONE 4" },
+  { key: "Z5",  label: "ZONE 5" },
+  { key: "Z6",  label: "ZONE 6" },
+  { key: "Z7",  label: "ZONE 7" },
+  { key: "Z8",  label: "ZONE 8" },
+  { key: "Z9",  label: "ZONE 9" },
+  { key: "Z10", label: "ZONE 10" },
 ];
+
+/** Preferred visual layout order for the ZONES grid in the builder canvas (and mirrored in print book/overview for consistency).
+ *  Produces:
+ *    Row 1: Z1 | Z3 | Z4 | Z5 | Z9
+ *    Row 2: Z2 | Z6 | Z7 | Z8 | Z10
+ */
+export const ZONE_VISUAL_ORDER: string[] = ["Z1", "Z3", "Z4", "Z5", "Z9", "Z2", "Z6", "Z7", "Z8", "Z10"];
 
 // Restrooms — labels match the Golden ("RR 1+2", "RR 6", etc.)
 export const RR_DEFS = [
-  { num: 1,  label: "RR 1+2", mensLoc: "Main Entry",  womensLoc: "Main Entry"  },
-  { num: 6,  label: "RR 6",   mensLoc: "Slots",       womensLoc: "Slots"       },
-  { num: 7,  label: "RR 7",   mensLoc: "High Limit",  womensLoc: "High Limit"  },
-  { num: 8,  label: "RR 8",   mensLoc: "Table Games", womensLoc: "Table Games" },
-  { num: 10, label: "RR 10",  mensLoc: "Poker",       womensLoc: "Poker"       },
+  { num: 1,  label: "RR 1+2" },
+  { num: 6,  label: "RR 6" },
+  { num: 7,  label: "RR 7" },
+  { num: 8,  label: "RR 8" },
+  { num: 10, label: "RR 10" },
 ];
 
 // Flex aux row — per-night typed shells (see auxLayout.ts)
