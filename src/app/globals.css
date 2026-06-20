@@ -777,10 +777,15 @@ body {
   position: relative;
   width: 100%;
   overflow: visible;
+  /* Adaptive/responsive zoom foundation: sized wrappers inside control layout box precisely
+     based on window-derived fitScale. Enables intricate window following without fixed paper
+     constraints or height thrashing in builder relaxed mode. */
 }
 
 .sb-builder-scale-inner {
   will-change: transform;
+  transform-style: preserve-3d; /* smoother scaling on some browsers */
+  backface-visibility: hidden;
 }
 
 /* Builder-only compact rhythm — tighter than preview/print. */

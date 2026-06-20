@@ -173,17 +173,15 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       <CardAccentStripe color={color} />
 
       {/* Refined header matching the design: icon + label, status badge, count pill */}
-      <div className="px-3.5 pt-2.5 flex items-center gap-1.5">
+      <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap">
         <span className="text-[12px] leading-none shrink-0" style={{ color }}>◆</span>
-        <span className="text-[10px] font-bold tracking-[0.07em] uppercase" style={{ color }}>
+        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color }}>
           {def.label}
         </span>
-        <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-          {/* Status badge - using fit or strong fit. Omit for covered state. */}
+        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          {/* Status badge - dynamic fit (Strong fit, Acceptable, etc.) or omitted for covered. */}
           {assignmentState.kind !== "covered" && (
-            <span className="inline-flex items-center px-1.5 py-[2px] rounded-full text-[9.5px] font-semibold tracking-wide whitespace-nowrap bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80">
-              Strong Fit
-            </span>
+            <PlacementFitChip fit={fitChip} compact />
           )}
           {/* Count pill for break group */}
           <span className="inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-gray-900/80 text-white text-[10.5px] font-bold tabular-nums leading-none flex-shrink-0">

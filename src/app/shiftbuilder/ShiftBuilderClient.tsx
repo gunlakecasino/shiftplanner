@@ -1911,6 +1911,7 @@ function AuthedShiftBuilder() {
     !isWeekHealthTrackerDismissed;
 
   const builderContentRef = useRef<HTMLDivElement>(null);
+  const [builderContentWidth, setBuilderContentWidth] = useState(0);
   const [builderContentHeight, setBuilderContentHeight] = useState(0);
 
   const stageInsets = React.useMemo<StageInsets>(() => {
@@ -1976,10 +1977,19 @@ function AuthedShiftBuilder() {
     if (!isBuilderLiveCanvas) return;
     const el = builderContentRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setBuilderContentHeight(el.scrollHeight || el.offsetHeight || 0);
+    const measure = () => {
+      setBuilderContentWidth(el.offsetWidth || el.scrollWidth || 0);
+      setBuilderContentHeight(el.offsetHeight || el.scrollHeight || 0);
+    };
     measure();
     const ro = new ResizeObserver(() => requestAnimationFrame(measure));
     ro.observe(el);
+
+    // Extra adaptive: also measure on fonts load (text metrics can affect natural content dims)
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(measure));
+    }
+
     return () => ro.disconnect();
   }, [isBuilderLiveCanvas, selectedDayIndex, currentView]);
 
@@ -7555,18 +7565,26 @@ function AuthedShiftBuilder() {
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
               <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible">
+                {/* Sized wrapper ensures the scaled content claims exactly the right layout space.
+                    This makes zoom/scale fully adaptive to window size without "page too long" hacks
+                    or negative margins. Intricate: explicit pre-transform dimensions + scale inside. */}
                 <div
-                  ref={builderContentRef}
-                  className="sb-builder-scale-inner w-full"
                   style={{
-                    transform: `scale(${scale})`,
-                    transformOrigin: "top center",
-                    marginBottom:
-                      builderContentHeight > 0 && scale < 1
-                        ? -Math.round(builderContentHeight * (1 - scale))
-                        : undefined,
+                    width: builderContentWidth > 50 ? `${Math.round(builderContentWidth * scale)}px` : '100%',
+                    height: builderContentHeight > 50 ? `${Math.round(builderContentHeight * scale)}px` : undefined,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
                   }}
                 >
+                  <div
+                    ref={builderContentRef}
+                    className="sb-builder-scale-inner"
+                    style={{
+                      width: builderContentWidth > 50 ? `${builderContentWidth}px` : '100%',
+                      transform: `scale(${scale})`,
+                      transformOrigin: "top left",
+                    }}
+                  >
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
@@ -7639,6 +7657,7 @@ function AuthedShiftBuilder() {
                 onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
+                  </div>
                 </div>
               </div>
             </div>

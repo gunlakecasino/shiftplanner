@@ -81,6 +81,7 @@ export function useZoom({
   const builderFitEnabled = builderFit?.enabled ?? false;
   const builderChromeHeight = builderFit?.chromeHeightPx ?? 0;
 
+  // Intricate debounce to avoid thrashing on rapid window resizes while staying very responsive.
   const recomputeScale = useCallback(() => {
     const el = stageHostRef.current;
     const insets = stageInsets;
@@ -152,8 +153,16 @@ export function useZoom({
       : null;
     if (ro && stageHostRef.current) ro.observe(stageHostRef.current);
 
-    const onResize = () => recomputeScale();
+    // Intricate responsive resize: RAF for smooth, plus light debounce + orientation for mobile.
+    let resizeTimer: number | null = null;
+    const onResize = () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        requestAnimationFrame(recomputeScale);
+      }, 32); // ~2 frames - balances responsiveness with stability on rapid drags/resizes
+    };
     window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", () => requestAnimationFrame(recomputeScale));
     const vv = window.visualViewport;
     if (vv) vv.addEventListener("resize", onResize);
 
@@ -163,8 +172,10 @@ export function useZoom({
       clearTimeout(t2);
       clearTimeout(t3);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", recomputeScale);
       if (vv) vv.removeEventListener("resize", onResize);
       if (ro) ro.disconnect();
+      if (resizeTimer) window.clearTimeout(resizeTimer);
     };
   }, [recomputeScale]);
 

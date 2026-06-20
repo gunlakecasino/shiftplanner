@@ -15,10 +15,12 @@ export type PlacementFitChipProps = {
   fit?: PrerenderedPlacementFit | null;
   /** Optional xAI override from PlacementPad (magic headline + verdict) for powerful deliberate insight surface in corner (per xAI full incorporation). Shows "xAI" badge + uses xAI verdict/summary when present. */
   xaiFit?: XaiFit;
+  /** Use more compact sizing (for card headers) */
+  compact?: boolean;
 };
 
 /** Screen-only rotation fit glance — excluded from print via `no-print`. */
-export function PlacementFitChip({ fit, xaiFit }: PlacementFitChipProps) {
+export function PlacementFitChip({ fit, xaiFit, compact = false }: PlacementFitChipProps) {
   if (!fit && !xaiFit) return null;
 
   // Prefer xAI override for powerful deliberate insight in corner (magic one line surface)
@@ -38,8 +40,10 @@ export function PlacementFitChip({ fit, xaiFit }: PlacementFitChipProps) {
     : label;
 
   const chipClass = isXai 
-    ? "sb-fit-chip no-print inline-flex max-w-[118px] items-center justify-center rounded-full px-1.5 py-[2px] text-[9.5px] font-semibold tracking-wide whitespace-nowrap bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80" 
-    : "inline-flex items-center px-1.5 py-[2px] rounded-full text-[9.5px] font-semibold tracking-wide whitespace-nowrap bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80";
+    ? "sb-fit-chip no-print inline-flex max-w-[118px] items-center justify-center rounded-full px-1 py-px text-[8px] font-semibold tracking-wide whitespace-nowrap leading-none" 
+    : compact
+      ? "inline-flex items-center px-1 py-px rounded-full text-[8px] font-semibold tracking-wide whitespace-nowrap leading-none"
+      : "inline-flex items-center px-1.5 py-[2px] rounded-full text-[9.5px] font-semibold tracking-wide whitespace-nowrap leading-none";
 
   return (
     <AnimatePresence>
