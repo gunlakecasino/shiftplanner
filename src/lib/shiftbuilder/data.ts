@@ -1356,15 +1356,17 @@ export async function getSlotTaskCatalog(): Promise<CatalogTask[]> {
 export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[]> {
   if (!nightId) return [];
 
+  // Use * to be robust against column drift / partial migrations (e.g. marker_type).
+  // Server bundle also uses * for the same reason.
   const { data, error } = await supabase
     .from('night_slot_tasks')
-    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color, is_coverage, marker_type')
+    .select('*')
     .eq('night_id', nightId)
     .order('sort_order', { ascending: true })
     .order('task_label', { ascending: true });
 
   if (error) {
-    console.error('[shiftbuilder/data] getNightSlotTasks error:', error);
+    logSupabaseError('getNightSlotTasks failed', error);
     return [];
   }
 

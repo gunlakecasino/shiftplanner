@@ -2236,6 +2236,26 @@ function AuthedShiftBuilder() {
   // This removes a large amount of unification/effect boilerplate from the orchestrator.
   const shiftData = useShiftData(selectedDay);
 
+  // Force fresh data on bfcache restore (common on Safari / iPad). A pageshow with
+  // persisted=true means the page was restored from cache without a full reload,
+  // so our 'always' refetchOnMount may not have run. Invalidate to pull latest.
+  React.useEffect(() => {
+    const onPageShow = (evt: Event) => {
+      const e = evt as PageTransitionEvent;
+      if (e.persisted) {
+        const qc = shiftData.currentNight?.queryClient;
+        const dayKey = formatLocalDateISO(selectedDay.date);
+        if (qc) {
+          // Invalidate so the queries refetch fresh bundles (server reval + bust params ensure latest)
+          qc.invalidateQueries({ queryKey: ["nightCore", dayKey] }).catch(() => {});
+          qc.invalidateQueries({ queryKey: ["nightSecondary", dayKey] }).catch(() => {});
+        }
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [selectedDay.date, shiftData.currentNight?.queryClient]);
+
   // Back-compat aliases so the rest of this file (hundreds of references) continues to work
   // with minimal further edits in this slice. Over time these can be inlined to shiftData.* .
   const currentNight = shiftData.currentNight;
@@ -4151,9 +4171,15 @@ function AuthedShiftBuilder() {
             payload: { taskLabel: taskLabel.trim() },
           });
         }
-        const fresh = await getNightSlotTasks(nightId);
-        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-        setSelectedTasks(byKey);
+        // Best-effort refresh of task list (to pick up server-generated ids/sort etc).
+        // Do not treat read failure as a write failure.
+        try {
+          const fresh = await getNightSlotTasks(nightId);
+          const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+          setSelectedTasks(byKey);
+        } catch (refreshErr) {
+          console.warn('[ShiftBuilder] task list refresh after add failed (write succeeded)', refreshErr);
+        }
       } catch (e) {
         console.error("Failed to add task from palette (multi)", e);
         showToast("Failed to save task to one or more cards", "error");
@@ -4189,13 +4215,18 @@ function AuthedShiftBuilder() {
           payload: { taskLabel: sweeperLabel, sweeper: true },
         });
 
-        // Refresh tasks for the slot + keep TanStack cache in sync for reloads
-        const fresh = await getNightSlotTasks(nightId);
-        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-        setSelectedTasks(byKey);
-        const captureDateKeyForSweeper: string = formatLocalDateISO(selectedDay.date);
-        if (currentNight.queryClient) {
-          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKeyForSweeper, fresh);
+        // Refresh tasks for the slot + keep TanStack cache in sync for reloads.
+        // Best effort — write already succeeded.
+        try {
+          const fresh = await getNightSlotTasks(nightId);
+          const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+          setSelectedTasks(byKey);
+          const captureDateKeyForSweeper: string = formatLocalDateISO(selectedDay.date);
+          if (currentNight.queryClient) {
+            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKeyForSweeper, fresh);
+          }
+        } catch (refreshErr) {
+          console.warn('[ShiftBuilder] task refresh after sweeper failed (write succeeded)', refreshErr);
         }
       } catch (e) {
         console.error("Failed to assign sweeper task", e);
@@ -4286,12 +4317,17 @@ function AuthedShiftBuilder() {
             sourceKey,
           },
         });
-        const fresh = await getNightSlotTasks(nightId);
-        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-        setSelectedTasks(byKey);
-        const qc = currentNight?.queryClient;
-        if (qc) {
-          patchNightSecondaryTasksCache(qc, formatLocalDateISO(captureDate), fresh);
+        // Best-effort refresh after successful coverage write
+        try {
+          const fresh = await getNightSlotTasks(nightId);
+          const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+          setSelectedTasks(byKey);
+          const qc = currentNight?.queryClient;
+          if (qc) {
+            patchNightSecondaryTasksCache(qc, formatLocalDateISO(captureDate), fresh);
+          }
+        } catch (refreshErr) {
+          console.warn('[ShiftBuilder] coverage task refresh failed (write succeeded)', refreshErr);
         }
         showToast(`Coverage added: And ${targetLabel}`, "success");
       } catch (err) {
@@ -5581,10 +5617,14 @@ function AuthedShiftBuilder() {
               color: a.color ?? null,
               // sortOrder will default / append in add
             });
-            // Refresh the target slot's tasks so order/sort_order is correct
-            const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
-            const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-            setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
+            // Refresh the target slot's tasks so order/sort_order is correct (best effort)
+            try {
+              const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
+              const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+              setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
+            } catch (refreshErr) {
+              console.warn('[ShiftBuilder] duplicate task refresh failed (write succeeded)', refreshErr);
+            }
           } catch (e: any) {
             console.error("[shiftbuilder] task duplicate persist failed", e);
             showToast("Task duplicated in UI but failed to save — refresh may revert");
@@ -6456,9 +6496,13 @@ function AuthedShiftBuilder() {
         const dateKey = formatLocalDateISO(captureDate);
         const qc = currentNight.queryClient;
         if (qc) {
-          const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-          const fresh = await getNightSlotTasks(nid);
-          patchNightSecondaryTasksCache(qc, dateKey, fresh);
+          try {
+            const { getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+            const fresh = await getNightSlotTasks(nid);
+            patchNightSecondaryTasksCache(qc, dateKey, fresh);
+          } catch (refreshErr) {
+            console.warn('[ShiftBuilder] task remove refresh failed (write succeeded)', refreshErr);
+          }
         }
         logBuilderChange({
           action: "task_remove",
@@ -6954,9 +6998,13 @@ function AuthedShiftBuilder() {
             payload: { taskLabel: t.taskLabel, copiedFrom: partnerKey },
           });
         }
-        const fresh = await getNightSlotTasks(nightId);
-        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-        setSelectedTasks(byKey);
+        try {
+          const fresh = await getNightSlotTasks(nightId);
+          const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+          setSelectedTasks(byKey);
+        } catch (refreshErr) {
+          console.warn('[ShiftBuilder] copy pairing refresh failed (writes succeeded)', refreshErr);
+        }
         showToast(`Copied ${toAdd.length} task${toAdd.length === 1 ? "" : "s"} from pairing`, "success");
       } catch (e) {
         console.error("Failed to copy restroom pairing tasks", e);
