@@ -47,7 +47,7 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
     gcTime: 1000 * 60 * 30,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
-    enabled: coreEnabled && (!!coreQuery.data || !coreQuery.isLoading),
+    enabled: coreEnabled,
   });
 
   const combinedData = {

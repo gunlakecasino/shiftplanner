@@ -32,7 +32,9 @@ const CoverageBar = React.memo(function CoverageBar({
         bottom: 0,
         left: 0,
         right: 0,
-        background: builderCalm ? `color-mix(in srgb, ${bg} 72%, white)` : bg,
+        background: builderCalm 
+          ? `color-mix(in srgb, var(--card-accent, ${bg}) 65%, var(--ios-background-secondary))` 
+          : `var(--card-accent, ${bg})`,
         borderRadius: '0 0 3px 3px',
         paddingTop: 3,
         paddingBottom: 3,
@@ -40,7 +42,7 @@ const CoverageBar = React.memo(function CoverageBar({
         minHeight: COVERAGE_BAR_H,
         zIndex: 2,
         borderTop: builderCalm
-          ? '1px solid rgba(255,255,255,0.18)'
+          ? '1px solid color-mix(in srgb, var(--ios-background-secondary) 20%, transparent)'
           : '1px solid rgba(255,255,255,0.25)',
       }}
       onMouseEnter={() => setHovered(true)}
@@ -61,13 +63,13 @@ const CoverageBar = React.memo(function CoverageBar({
           }}
           className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all"
           style={{
-            color: 'rgba(255,255,255,0.55)',
+            color: 'color-mix(in srgb, var(--ios-white) 55%, transparent)',
             fontSize: 13,
             opacity: hovered ? 1 : 0.55,
             transform: hovered ? 'scale(1.1)' : 'scale(1)',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.55)')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ios-white)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'var(--ios-white)' : 'color-mix(in srgb, var(--ios-white) 55%, transparent)')}
           title="Remove coverage"
         >
           ×

@@ -75,7 +75,7 @@ export const DEFAULT_AUX_DEFS: AuxDef[] = [
 
 // Fallback accents for operator-added AUX slots (cycle through these so they
 // don't all collapse to the same gray).
-export const EXTRA_AUX_COLORS = ["#6B7280", "#0EA5E9", "#A855F7", "#16A34A", "#DC2626"];
+export const EXTRA_AUX_COLORS = ["#ffcc00", "#34c759", "#30b0c7", "#5ac8fa", "#5856d6", "#a2845e"]; // iOS yellow, green, teal, cyan, indigo, brown etc.
 
 // Per-zone identity glyphs — match the Golden's symbol-per-zone treatment.
 export const ZONE_ICONS: Record<string, string> = {
@@ -126,51 +126,52 @@ export const getAuxIcon = (key: string, role?: AuxRole) => {
   return AUX_ICONS[key] || "✦";
 };
 
-// Exact Golden palette (eyeballed from friday_golden_zoneCardSheet.png)
+// iOS 26 system colors for card title accents / highlights (from design tokens)
+// Yellow, red, pink, blue, brown, green etc. respectively for visual identity
 export const ZONE_COLORS: Record<string, string> = {
-  Z1:  '#B89708', // gold
-  Z2:  '#B89708', // gold — matches Z1 (Main Entry area)
-  Z3:  '#E53935', // red
-  Z4:  '#E53935', // red
-  Z5:  '#E53935', // red
-  Z6:  '#B7679A', // magenta
-  Z7:  '#1976D2', // blue
-  Z8:  '#6B5346', // brown
-  Z9:  '#E53935', // red
-  Z10: '#43A047', // green
+  Z1:  '#ffcc00', // yellow (gold/entry)
+  Z2:  '#ffcc00', // yellow — matches Z1
+  Z3:  '#ff3b30', // red
+  Z4:  '#ff3b30', // red
+  Z5:  '#ff3b30', // red
+  Z6:  '#ff2d55', // pink
+  Z7:  '#007aff', // blue
+  Z8:  '#a2845e', // brown
+  Z9:  '#ff3b30', // red
+  Z10: '#34c759', // green
 };
 
 export const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
 
-// RR accent — mirrors the zone color of the area each RR serves
+// RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)
 export const RR_COLORS: Record<number, string> = {
-  1:  '#B89708', // RR 1+2 — gold (Main Entry, paired with Z1/Z2)
-  6:  '#B7679A', // RR 6  — magenta (Slots East, matches Z6)
-  7:  '#1976D2', // RR 7  — blue (High Limit, matches Z7)
-  8:  '#6B5346', // RR 8  — brown (Table Games, paired with Z8)
-  10: '#43A047', // RR 10 — green (Poker, paired with Z10)
+  1:  '#ffcc00', // yellow (Main Entry, paired with Z1/Z2)
+  6:  '#ff2d55', // pink (Slots East, matches Z6)
+  7:  '#007aff', // blue (High Limit, matches Z7)
+  8:  '#a2845e', // brown (Table Games, paired with Z8)
+  10: '#34c759', // green (Poker, paired with Z10)
 };
 export const getRRAccent = (num: number) => RR_COLORS[num] || '#6B7280';
 
-// AUX accent palette
+// AUX accent palette — using iOS 26 colors for roles
 export const AUX_ROLE_COLORS: Record<Exclude<AuxRole, "blank">, string> = {
-  z9sr: "#E53935",
-  admin: "#B7679A",
-  trash: "#FB8C00",
-  support: "#1976D2",
+  z9sr: "#ff3b30",   // red
+  admin: "#ff2d55",  // pink
+  trash: "#a2845e",  // brown
+  support: "#007aff",// blue
 };
 
 export const AUX_COLORS: Record<string, string> = {
-  Z9SR: "#E53935",
-  ADM:  "#B7679A",
-  TR1:  "#FB8C00",
-  TR2:  "#FB8C00",
-  SP1:  "#1976D2",
-  SP2:  "#1976D2",
+  Z9SR: "#ff3b30",
+  ADM:  "#ff2d55",
+  TR1:  "#a2845e",
+  TR2:  "#a2845e",
+  SP1:  "#007aff",
+  SP2:  "#007aff",
 };
 
 export const getAuxAccentForRole = (role: AuxRole): string => {
-  if (role === "blank") return "#9CA3AF";
+  if (role === "blank") return "#d1d1d6"; // iOS gray-4 muted
   return AUX_ROLE_COLORS[role] ?? "#6B7280";
 };
 

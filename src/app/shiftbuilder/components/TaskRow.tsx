@@ -6,14 +6,16 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { premiumSpring } from "@/lib/premiumSpring";
 
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
+// Using iOS 26 system colors for accents/highlights
 export const TASK_COLOR_SPHERES = [
-  { name: 'Gold',    hex: '#B89708' },
-  { name: 'Red',     hex: '#E53935' },
-  { name: 'Magenta', hex: '#B7679A' },
-  { name: 'Blue',    hex: '#1976D2' },
-  { name: 'Brown',   hex: '#6B5346' },
-  { name: 'Green',   hex: '#43A047' },
-  { name: 'Orange',  hex: '#FB8C00' },
+  { name: 'Yellow',  hex: '#ffcc00' },
+  { name: 'Red',     hex: '#ff3b30' },
+  { name: 'Pink',    hex: '#ff2d55' },
+  { name: 'Blue',    hex: '#007aff' },
+  { name: 'Brown',   hex: '#a2845e' },
+  { name: 'Green',   hex: '#34c759' },
+  { name: 'Orange',  hex: '#ff9500' },
+  { name: 'Teal',    hex: '#30b0c7' },
 ] as const;
 
 // ============================================================================
@@ -200,7 +202,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     <div
       ref={setRowRef}
       data-task-host={taskHostId}
-      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[#B89708]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[var(--ios-yellow, #ffcc00)]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
       {...(canDrag ? dragListeners : {})}
       {...(canDrag ? taskDragAttributes : {})}
       onDoubleClick={(e) => {

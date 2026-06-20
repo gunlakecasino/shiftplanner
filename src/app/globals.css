@@ -1,5 +1,6 @@
 /* Material Symbols Rounded — self-hosted via npm, no CDN dependency */
 @import "material-symbols/rounded";
+@import "./ios26-colors.css";
 
 @import "tailwindcss";
 @import "./shiftbuilder/print/goldenPrint.css";
@@ -40,37 +41,37 @@
   --sb-text-muted: #9CA3AF;
 
   /* ── Velvet gold accent ──────────────────────────────────────────────── */
-  --sb-gold:        #B89708;
-  --sb-gold-bright: #E9B948;
-  --sb-gold-tint:   rgba(184, 151, 8, 0.14);
-  --sb-gold-border: rgba(184, 151, 8, 0.40);
+  --sb-gold:        #ffcc00; /* iOS yellow */
+  --sb-gold-bright: #ffdb4d;
+  --sb-gold-tint:   rgba(255, 204, 0, 0.14);
+  --sb-gold-border: rgba(255, 204, 0, 0.40);
 
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
-  --sb-z1:  #B89708;
-  --sb-z2:  #B89708;
-  --sb-z3:  #E53935;
-  --sb-z4:  #E53935;
-  --sb-z5:  #E53935;
-  --sb-z6:  #B7679A;
-  --sb-z7:  #1976D2;
-  --sb-z8:  #6B5346;
-  --sb-z9:  #E53935;
-  --sb-z10: #43A047;
+  --sb-z1:  #ffcc00; /* yellow */
+  --sb-z2:  #ffcc00;
+  --sb-z3:  #ff3b30; /* red */
+  --sb-z4:  #ff3b30;
+  --sb-z5:  #ff3b30;
+  --sb-z6:  #ff2d55; /* pink */
+  --sb-z7:  #007aff; /* blue */
+  --sb-z8:  #a2845e; /* brown */
+  --sb-z9:  #ff3b30;
+  --sb-z10: #34c759; /* green */
 
-  /* ── Restroom colors ─────────────────────────────────────────────────── */
-  --sb-rr1:  #B89708;
-  --sb-rr6:  #B7679A;
-  --sb-rr7:  #1976D2;
-  --sb-rr8:  #6B5346;
-  --sb-rr10: #43A047;
+  /* ── Restroom colors (iOS 26) ────────────────────────────────────────── */
+  --sb-rr1:  #ffcc00;
+  --sb-rr6:  #ff2d55;
+  --sb-rr7:  #007aff;
+  --sb-rr8:  #a2845e;
+  --sb-rr10: #34c759;
 
-  /* ── Aux slot colors ─────────────────────────────────────────────────── */
-  --sb-aux-z9sr: #E53935;
-  --sb-aux-adm:  #B7679A;
-  --sb-aux-tr1:  #FB8C00;
-  --sb-aux-tr2:  #FB8C00;
-  --sb-aux-sp1:  #1976D2;
-  --sb-aux-sp2:  #1976D2;
+  /* ── Aux slot colors (iOS 26) ────────────────────────────────────────── */
+  --sb-aux-z9sr: #ff3b30;
+  --sb-aux-adm:  #ff2d55;
+  --sb-aux-tr1:  #a2845e;
+  --sb-aux-tr2:  #a2845e;
+  --sb-aux-sp1:  #007aff;
+  --sb-aux-sp2:  #007aff;
 
   /* ── Day accent colors (index 0=Fri … 6=Thu) ────────────────────────── */
   --sb-day-0: #C13A14; /* Friday    */
@@ -582,7 +583,7 @@ body {
   box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06);
   --mouse-x: 50%;
   --mouse-y: 50%;
-  --card-accent: #6B7280;
+  --card-accent: #8e8e93; /* iOS gray fallback */
   transition:
     box-shadow 200ms ease,
     transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -651,8 +652,8 @@ body {
    This works because ZoneCard, RRCard, and AuxCard all share the same first-two-child
    layout: stripe → header → body. */
 .assignment-card.empty {
-  background: #F3F3F5;
-  border: 1px dashed #BDBDC4;
+  background: var(--ios-background-tertiary);
+  border: 1px dashed var(--ios-gray-4);
 }
 
 /* ==========================================================================
@@ -732,8 +733,8 @@ body {
 }
 
 .print-stage-inner.sb-today-board .assignment-card.empty.sb-card-empty:not(.sb-aux-blank) {
-  background: #FAFAFA;
-  border-color: #E8E8ED;
+  background: var(--ios-background-tertiary);
+  border-color: var(--ios-gray-5);
   border-style: solid;
   box-shadow: none;
 }
@@ -961,8 +962,8 @@ body {
 
 /* Flex aux row — blank shells + slot chrome */
 .sb-builder-stage .sb-assignment-card.sb-aux-blank {
-  border: 1px dashed #D1D5DB;
-  background: #FAFAFA;
+  border: 1px dashed var(--ios-gray-4);
+  background: var(--ios-background-tertiary);
 }
 
 /* Aux cards need a touch more vertical room for TM name + tasks without clipping. */
@@ -974,13 +975,13 @@ body {
   max-height: none;
 }
 .sb-builder-stage .sb-aux-slot-btn {
-  border: 1px solid #D1D5DB;
-  color: #6B7280;
-  background: #fff;
+  border: 1px solid var(--ios-gray-4);
+  color: var(--ios-label-tertiary);
+  background: var(--ios-background-secondary);
 }
 .sb-builder-stage .sb-aux-slot-btn:hover:not(:disabled) {
-  border-color: #9CA3AF;
-  color: #374151;
+  border-color: var(--ios-gray-3);
+  color: var(--ios-label-secondary);
 }
 
 @container builder (min-width: 560px) {
@@ -1083,7 +1084,7 @@ body {
 
 /* Refined card base from improved design */
 .sb-refined-card {
-  background: #FFFFFF;
+  background: var(--ios-background-secondary);
   border-radius: 16px;
   border: 1px solid rgba(0, 0, 0, 0.07);
   box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06);
@@ -1127,22 +1128,20 @@ body {
 .builder-workspace .assignment-card {
   min-width: 0;
   max-width: 100%;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--ios-background-secondary);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 10px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 10px 30px -8px rgba(0, 0, 0, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
   padding: 0;
   overflow: hidden;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .dark .builder-workspace .assignment-card {
-  background: rgba(28, 28, 32, 0.82);
+  background: var(--ios-background-secondary);
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.2),
@@ -1173,13 +1172,13 @@ body {
 .builder-workspace .assignment-card .sb-task-area {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  border-top: 1px solid color-mix(in srgb, var(--ios-background-primary) 10%, transparent);
 }
 
 .dark .builder-workspace .assignment-card .ZoneTaskList,
 .dark .builder-workspace .assignment-card .sb-task-list,
 .dark .builder-workspace .assignment-card .sb-task-area {
-  border-top-color: rgba(255, 255, 255, 0.06);
+  border-top-color: color-mix(in srgb, var(--ios-background-primary) 10%, transparent);
 }
 
 /* Task rows — refined, high-hit targets, subtle feedback. */
@@ -1203,8 +1202,8 @@ body {
 /* Subtle elegant task color marks (thin left accent, not loud boxes). Only for default highlight marker. */
 .builder-workspace .assignment-card .sb-list-row span[style*="backgroundColor"]:not([style*="border-bottom"]):not([style*="border:"]),
 .builder-workspace .assignment-card .TaskRow span[style*="backgroundColor"]:not([style*="border-bottom"]):not([style*="border:"]) {
-  background-color: color-mix(in srgb, var(--task-color, #B89708) 12%, transparent);
-  border-left: 3px solid var(--task-color, #B89708);
+  background-color: color-mix(in srgb, var(--task-color, #ffcc00) 12%, transparent);
+  border-left: 3px solid var(--task-color, #ffcc00);
 }
 
 /* Empty slots — ghosted/translucent so filled cards read clearly at a glance. */
@@ -1212,8 +1211,8 @@ body {
 .builder-workspace .assignment-card.sb-card-empty {
   background: linear-gradient(
     155deg,
-    rgba(255, 255, 255, 0.34),
-    rgba(248, 248, 250, 0.48)
+    color-mix(in srgb, var(--ios-background-secondary) 34%, transparent),
+    color-mix(in srgb, var(--ios-background-primary) 48%, transparent)
   );
   border: 1.5px dashed rgba(184, 151, 8, 0.22);
   box-shadow:
@@ -1226,11 +1225,11 @@ body {
 
 .builder-workspace .assignment-card.empty:hover,
 .builder-workspace .assignment-card.sb-card-empty:hover {
-  border-color: rgba(184, 151, 8, 0.38);
+  border-color: color-mix(in srgb, var(--card-accent, var(--ios-gray-4)) 38%, transparent);
   background: linear-gradient(
     155deg,
-    rgba(255, 255, 255, 0.52),
-    rgba(252, 250, 245, 0.66)
+    color-mix(in srgb, var(--ios-background-secondary) 52%, transparent),
+    color-mix(in srgb, var(--ios-background-primary) 66%, transparent)
   );
 }
 
@@ -1238,8 +1237,8 @@ body {
 .dark .builder-workspace .assignment-card.sb-card-empty {
   background: linear-gradient(
     155deg,
-    rgba(28, 28, 32, 0.38),
-    rgba(22, 22, 26, 0.52)
+    color-mix(in srgb, var(--ios-background-secondary) 38%, transparent),
+    color-mix(in srgb, var(--ios-background-primary) 52%, transparent)
   );
   border-color: rgba(184, 151, 8, 0.2);
   box-shadow:
@@ -1266,12 +1265,12 @@ body {
 
 .builder-workspace .sb-unassigned-primary {
   font-weight: 600;
-  color: #9CA3AF;
+  color: var(--ios-label-tertiary);
   opacity: 0.65;
 }
 
 .dark .builder-workspace .sb-unassigned-primary {
-  color: #71717A;
+  color: var(--ios-label-tertiary);
   opacity: 0.6;
 }
 
@@ -1282,7 +1281,7 @@ body {
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.15px;
-  color: #9CA3AF;
+  color: var(--ios-label-tertiary);
   opacity: 0.5;
 }
 
@@ -1294,7 +1293,7 @@ body {
 /* Builder drop targets — gold ring matches casino brand, not generic blue. */
 .builder-workspace .assignment-card.drop-target-active,
 .builder-workspace .drop-target-active {
-  border-color: var(--sb-gold, #B89708) !important;
+  border-color: var(--sb-gold, #ffcc00) !important;
   box-shadow:
     0 0 0 2px rgba(184, 151, 8, 0.3),
     0 10px 28px -8px rgba(184, 151, 8, 0.28) !important;
@@ -1326,7 +1325,7 @@ body {
   z-index: 2;
   transform: translateY(-1px);
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--card-accent, #B89708) 55%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--card-accent, #ffcc00) 55%, transparent),
     0 14px 36px -10px rgba(0, 0, 0, 0.2) !important;
 }
 
@@ -1417,6 +1416,7 @@ body {
 .sb-builder-shell {
   overflow-x: clip;
   max-width: 100%;
+  background: var(--ios-background-primary);
 }
 
 .sb-builder-stage.sb-stage-host {
@@ -1424,11 +1424,11 @@ body {
   min-width: 0 !important;
   max-width: 100% !important;
   overflow-x: clip;
-  background: linear-gradient(180deg, #F8F8FA 0%, #F0F0F4 100%) !important;
+  background: var(--ios-background-primary) !important;
 }
 
 .dark .sb-builder-stage.sb-stage-host {
-  background: linear-gradient(180deg, #0C0C0E 0%, #08080A 100%) !important;
+  background: var(--ios-background-primary) !important;
 }
 
 /* Hide the old constrained frame only while the stage host is in builder deployment mode.
@@ -1457,6 +1457,7 @@ body.sb-shiftbuilder {
   overflow: hidden !important;
   overscroll-behavior: none !important;
   -webkit-overflow-scrolling: none !important;
+  background: var(--ios-background-primary);
 }
 
 .sb-builder-shell.sb-shiftbuilder {

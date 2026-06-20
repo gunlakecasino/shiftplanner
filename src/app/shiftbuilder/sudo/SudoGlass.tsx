@@ -107,7 +107,7 @@ export function SudoTabButton({
   onClick,
   className,
 }: SudoTabButtonProps) {
-  const gold = "#B89708";
+  const gold = "#ffcc00"; // iOS yellow (was gold)
   const goldTint = isDark ? "rgba(184,151,8,0.14)" : "rgba(184,151,8,0.12)";
 
   return (
@@ -311,6 +311,6 @@ export function CenteredGlassModal({
 }
 
 // Convenience re-export of the gold constant for any tab that needs it
-export const SUDO_GOLD = "#B89708";
+export const SUDO_GOLD = "#ffcc00"; // iOS yellow
 
 export { SudoTabLoading, BuilderBusyLabel } from "../components/builderPrimitives";

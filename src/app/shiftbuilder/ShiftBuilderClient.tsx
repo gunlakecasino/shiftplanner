@@ -347,7 +347,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }>
     <div ref={wrapRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="h-7 w-7 rounded-md border border-[#E5E5E7] bg-white text-[#6B7280] hover:bg-[#F4F4F6] flex items-center justify-center"
+        className="h-7 w-7 rounded-md border border-[var(--ios-gray-4)] bg-[var(--ios-background-secondary)] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] flex items-center justify-center"
         aria-label="More actions"
         title="More actions"
         aria-expanded={open}
@@ -358,36 +358,36 @@ const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-1 w-[200px] rounded-lg border border-[#E5E5E7] bg-white shadow-lg py-1 z-[60]"
+          className="absolute right-0 mt-1 w-[200px] rounded-lg border border-[var(--ios-gray-4)] bg-[var(--ios-background-secondary)] shadow-lg py-1 z-[60]"
         >
           <button
             role="menuitem"
             onClick={() => { setOpen(false); onRunEngine(); }}
-            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
+            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
           >
             <span className="flex items-center gap-2">
               <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>bolt</span>
               Run Engine
             </span>
-            <span className="text-[11px] text-[#8E8E93] font-mono">R</span>
+            <span className="text-[11px] text-[var(--ios-label-tertiary)] font-mono">R</span>
           </button>
-          <div className="h-px bg-[#F2F2F4] mx-2 my-1" />
+          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
           <button
             role="menuitem"
             onClick={() => { setOpen(false); onPrint(); }}
-            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
+            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
           >
             <span className="flex items-center gap-2">
               <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
               Print
             </span>
-            <span className="text-[11px] text-[#8E8E93] font-mono">⌘P</span>
+            <span className="text-[11px] text-[var(--ios-label-tertiary)] font-mono">⌘P</span>
           </button>
-          <div className="h-px bg-[#F2F2F4] mx-2 my-1" />
+          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
           <button
             role="menuitem"
             onClick={() => { setOpen(false); onAddAuxSlot(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#1C1C1E] hover:bg-[#F4F4F6]"
+            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
           >
             <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>add</span>
             Add AUX Slot
@@ -398,8 +398,8 @@ const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }>
             onClick={() => { if (!onRemoveAuxSlot) return; setOpen(false); onRemoveAuxSlot(); }}
             className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] ${
               onRemoveAuxSlot
-                ? "text-[#1C1C1E] hover:bg-[#F4F4F6]"
-                : "text-[#C8C8CC] cursor-not-allowed"
+                ? "text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
+                : "text-[var(--ios-label-tertiary)] cursor-not-allowed"
             }`}
             title={onRemoveAuxSlot ? `Remove ${lastAuxSlotLabel}` : "Default AUX slots can't be removed"}
           >
@@ -408,14 +408,14 @@ const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }>
               Remove AUX Slot
             </span>
             {lastAuxSlotLabel && (
-              <span className="text-[10px] text-[#8E8E93] font-mono truncate max-w-[60px]">{lastAuxSlotLabel}</span>
+              <span className="text-[10px] text-[var(--ios-label-tertiary)] font-mono truncate max-w-[60px]">{lastAuxSlotLabel}</span>
             )}
           </button>
-          <div className="h-px bg-[#F2F2F4] mx-2 my-1" />
+          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
           <button
             role="menuitem"
             onClick={() => { setOpen(false); onLockDay?.(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#007AFF] font-semibold hover:bg-[#E5F0FF]"
+            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--ios-blue)] font-semibold hover:bg-[color-mix(in_srgb,var(--ios-blue)_10%,transparent)]"
           >
             <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>lock</span>
             Lock &amp; Finalize
@@ -439,7 +439,7 @@ const CustomTaskInput: React.FC<{ uiKey: string; onAdd: (uiKey: string, label: s
     onAdd(uiKey, v);
   };
   return (
-    <div className="px-3 py-2 border-t border-[#E5E5E7] flex items-center gap-2">
+    <div className="px-3 py-2 border-t border-[var(--ios-gray-4)] flex items-center gap-2">
       <input
         type="text"
         value={value}
@@ -451,14 +451,14 @@ const CustomTaskInput: React.FC<{ uiKey: string; onAdd: (uiKey: string, label: s
           }
         }}
         placeholder="+ Add custom task…"
-        className="flex-1 text-[12.5px] px-2 py-1.5 rounded border border-[#E5E5E7] bg-white text-[#1C1C1E] placeholder:text-[#9CA3AF] focus:outline-none focus:border-[#1D4ED8] focus:ring-1 focus:ring-[#1D4ED8]/30"
+        className="flex-1 text-[12.5px] px-2 py-1.5 rounded border border-[var(--ios-gray-4)] bg-[var(--ios-background-secondary)] text-[var(--ios-label)] placeholder:text-[var(--ios-label-tertiary)] focus:outline-none focus:border-[var(--ios-blue)] focus:ring-1 focus:ring-[var(--ios-blue)]/30"
         style={{ fontFamily: "var(--font-atkinson)" }}
       />
       <button
         type="button"
         disabled={!value.trim()}
         onClick={submit}
-        className="text-[11px] font-semibold px-3 py-1.5 rounded bg-[#1D4ED8] text-white disabled:bg-[#E5E5E7] disabled:text-[#9CA3AF] hover:bg-[#1E40AF] transition-colors"
+        className="text-[11px] font-semibold px-3 py-1.5 rounded bg-[var(--ios-blue)] text-white disabled:bg-[var(--ios-gray-6)] disabled:text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-indigo)] transition-colors"
       >
         Add
       </button>
@@ -523,12 +523,12 @@ const RosterDropZone: React.FC<{
 
       {/* Phase 2 drag feedback hint */}
       {highlight && isDraggingAssigned && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-[#B91C1C] bg-white/95 px-2 py-0.5 rounded shadow pointer-events-none">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-[var(--ios-red)] bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] px-2 py-0.5 rounded shadow pointer-events-none">
           Drop here to unassign
         </div>
       )}
       {highlight && isDraggingFromRoster && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-[#007AFF] bg-white/95 px-2 py-0.5 rounded shadow pointer-events-none">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-[var(--ios-blue)] bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] px-2 py-0.5 rounded shadow pointer-events-none">
           Drop here to return
         </div>
       )}
@@ -2022,8 +2022,10 @@ function AuthedShiftBuilder() {
     !isWeekHealthTrackerDismissed;
 
   const builderContentRef = useRef<HTMLDivElement>(null);
-  const [builderContentWidth, setBuilderContentWidth] = useState(0);
-  const [builderContentHeight, setBuilderContentHeight] = useState(0);
+  // Initialize to a wide value that forces the @container queries to use max columns (5 for zones/rr)
+  // so the first layout measures the "full natural" comfortable size instead of starting narrow and staying there.
+  const [builderContentWidth, setBuilderContentWidth] = useState(1400);
+  const [builderContentHeight, setBuilderContentHeight] = useState(900);
 
   // Guard to prevent measurement thrash / freeze during heavy ops (engine, defaults, publish)
   // Only on iPad these rapid RO + setState + scale updates were causing full UI freeze.
@@ -2084,23 +2086,30 @@ function AuthedShiftBuilder() {
       : undefined,
   });
 
+  // Stabilize recomputeScale calls so we don't put the function identity in useEffect deps.
+  // This avoids "deps array size changed" warnings during HMR / when the function is recreated.
+  const recomputeScaleRef = useRef(recomputeScale);
+  useEffect(() => {
+    recomputeScaleRef.current = recomputeScale;
+  }, [recomputeScale]);
+
   // Builder canvas: default to zoom-to-fit on load, day switches, and deployment ↔ breaks toggles.
   useEffect(() => {
     if (!isBuilderLiveCanvas) return;
     setZoomMode("fit");
-    const t1 = requestAnimationFrame(recomputeScale);
-    const t2 = window.setTimeout(recomputeScale, 200);
+    const t1 = requestAnimationFrame(recomputeScaleRef.current);
+    const t2 = window.setTimeout(recomputeScaleRef.current, 200);
     return () => {
       cancelAnimationFrame(t1);
       clearTimeout(t2);
     };
-  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, recomputeScale, setZoomMode]);
+  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, setZoomMode]);
 
   // Re-measure fit when chrome changes but preserve manual zoom if the user stepped in/out.
   useEffect(() => {
     if (!isBuilderLiveCanvas || isHeavyOperation) return;
-    recomputeScale();
-  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, recomputeScale, isHeavyOperation]);
+    recomputeScaleRef.current();
+  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, isHeavyOperation]);
 
   useEffect(() => {
     if (!isBuilderLiveCanvas) return;
@@ -2114,7 +2123,7 @@ function AuthedShiftBuilder() {
       const last = lastMeasuredRef.current;
       // Raise threshold to ~28px so adding 1-2 small task rows inside cards does not cause
       // the fitted scale + reserved wrapper to visibly shrink the whole screen.
-      if (Math.abs(w - last.w) > 28 || Math.abs(h - last.h) > 28) {
+      if (Math.abs(w - last.w) > 16 || Math.abs(h - last.h) > 16) {
         last.w = w;
         last.h = h;
         setBuilderContentWidth(w);
@@ -2144,15 +2153,39 @@ function AuthedShiftBuilder() {
       if (el) {
         const w = el.offsetWidth || el.scrollWidth || 0;
         const h = el.offsetHeight || el.scrollHeight || 0;
-        if (Math.abs(w - builderContentWidth) > 28 || Math.abs(h - builderContentHeight) > 28) {
+        if (Math.abs(w - builderContentWidth) > 16 || Math.abs(h - builderContentHeight) > 16) {
           setBuilderContentWidth(w);
           setBuilderContentHeight(h);
         }
       }
-      recomputeScale();
+      recomputeScaleRef.current();
     }, 120);
     return () => clearTimeout(t);
-  }, [isHeavyOperation, isBuilderLiveCanvas, builderContentWidth, builderContentHeight, recomputeScale]);
+  }, [isHeavyOperation, isBuilderLiveCanvas, builderContentWidth, builderContentHeight]);
+
+  // Extra safety re-fit shortly after mount / data load for the live builder to avoid
+  // initial measurement being too small (causing cut-off on right/bottom as cards populate).
+  // Also re-measure after forcing the wide initial content width (to trigger max columns).
+  useEffect(() => {
+    if (!isBuilderLiveCanvas) return;
+    const t1 = setTimeout(() => {
+      // Re-measure the now-wide content so builderContent* state adopts the full 5-col natural.
+      if (builderContentRef.current) {
+        const w = builderContentRef.current.offsetWidth || builderContentRef.current.scrollWidth || 0;
+        const h = builderContentRef.current.offsetHeight || builderContentRef.current.scrollHeight || 0;
+        if (w > builderContentWidth + 10) setBuilderContentWidth(Math.max(w, 1200));
+        if (h > builderContentHeight + 10) setBuilderContentHeight(Math.max(h, 900));
+      }
+      recomputeScaleRef.current();
+    }, 80);
+    const t2 = setTimeout(() => {
+      recomputeScaleRef.current();
+    }, 450);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isBuilderLiveCanvas, builderContentWidth, builderContentHeight]);
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
@@ -2182,7 +2215,7 @@ function AuthedShiftBuilder() {
   // Handlers for the FloatingNav zoom cluster (Fit / − / +)
   const handleZoomFit = () => {
     if (isHeavyOperation) return;
-    recomputeScale(); // ensure fresh measurement
+    recomputeScaleRef.current(); // ensure fresh measurement
     setZoomMode("fit");
   };
   const handleZoomOut = () => stepZoom(-1);
@@ -6052,7 +6085,7 @@ function AuthedShiftBuilder() {
   }, [boardColdLoading]);
 
   React.useEffect(() => {
-    requestAnimationFrame(recomputeScale);
+    requestAnimationFrame(recomputeScaleRef.current);
   }, [effectiveAssignments, selectedDay.date, boardColdLoading]);
 
   // === Persistence helpers ==================================================
@@ -7383,7 +7416,7 @@ function AuthedShiftBuilder() {
 
   return (
     <div
-      className="sb-builder-shell h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative sb-shiftbuilder"
+      className="sb-builder-shell h-screen flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder"
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,
@@ -7513,7 +7546,7 @@ function AuthedShiftBuilder() {
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid rgba(0,0,0,0.07)',
             boxShadow: '0 2px 6px rgba(0,0,0,0.06), 0 8px 24px -4px rgba(0,0,0,0.12)',
-            color: '#1C1C1E',
+            color: 'var(--ios-label)',
             fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
           }}
           title="Return to live builder view"
@@ -7521,7 +7554,7 @@ function AuthedShiftBuilder() {
           <span style={{ opacity: 0.6, letterSpacing: '0.3px' }}>PRINT PREVIEW</span>
           <span
             className="flex items-center gap-1 px-2.5 py-px rounded-full text-white text-[10px] font-bold tracking-[0.2px]"
-            style={{ background: '#1C1C1E' }}
+            style={{ background: 'var(--ios-label)' }}
           >
             EXIT <span style={{ fontSize: 13, lineHeight: 1, marginLeft: 1 }}>×</span>
           </span>
@@ -7556,7 +7589,7 @@ function AuthedShiftBuilder() {
             background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
             backdropFilter: "blur(48px) saturate(200%)",
             WebkitBackdropFilter: "blur(48px) saturate(200%)",
-            border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
+            border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid color-mix(in srgb, var(--ios-gray-4) 8%, transparent)",
             boxShadow: isDark
               ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 60px rgba(0,0,0,0.55)"
               : "inset 0 1px 0 rgba(255,255,255,0.90), 0 20px 60px rgba(0,0,0,0.10)",
@@ -7592,7 +7625,7 @@ function AuthedShiftBuilder() {
         {dayPickerOpen && !rosterOpen && (
           <div
             id="left-rail-day-picker"
-            className="fixed z-[70] flex items-center gap-1 rounded-2xl border border-white/70 bg-white/95 p-1 shadow-2xl shadow-black/10 backdrop-blur-xl"
+            className="fixed z-[70] flex items-center gap-1 rounded-2xl border border-[var(--ios-gray-4)] bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] p-1 shadow-2xl shadow-black/10 backdrop-blur-xl"
             style={{
               left: "52px",
               top: "calc(50% + 297px - 16px)",   // vertically align with the day-number sphere
@@ -7611,7 +7644,7 @@ function AuthedShiftBuilder() {
                     setSelectedDayIndex(idx);
                     setDayPickerOpen(false);
                   }}
-                  className={`sb-interactive relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[#6B7280] hover:bg-[#F3F4F6]"}`}
+                  className={`sb-interactive relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"}`}
                   style={{
                     backgroundColor: useOutline ? "#fff" : (isSelected ? day.color : "transparent"),
                     borderColor: useOutline ? day.color : "transparent",
@@ -7623,7 +7656,7 @@ function AuthedShiftBuilder() {
                   <span>{day.short}</span>
                   <span className="tabular-nums opacity-80">{day.dateNum}</span>
                   {mounted && day.isToday && !isSelected && (
-                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#007AFF]" />
+                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--ios-blue)]" />
                   )}
                 </button>
               );
@@ -7636,7 +7669,7 @@ function AuthedShiftBuilder() {
         {calendarOpen && !rosterOpen && (
           <div
             id="left-rail-calendar-popover"
-            className="fixed z-[70] w-[280px] rounded-2xl border border-white/70 bg-white/95 p-3 shadow-2xl shadow-black/10 backdrop-blur-xl text-[12px]"
+            className="fixed z-[70] w-[280px] rounded-2xl border border-white/70 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] p-3 shadow-2xl shadow-black/10 backdrop-blur-xl text-[12px]"
             style={{
               left: "52px",
               top: "calc(50% + 253px - 80px)",
@@ -7648,19 +7681,19 @@ function AuthedShiftBuilder() {
             <div className="flex items-center justify-between mb-2 px-1">
               <button
                 onClick={() => setCalendarView(addDays(calendarView, -30))}
-                className="w-6 h-6 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#6B7280]"
+                className="w-6 h-6 rounded-full hover:bg-[var(--ios-gray-6)] flex items-center justify-center text-[var(--ios-label-tertiary)]"
                 aria-label="Previous month"
               >
                 ‹
               </button>
 
-              <div className="font-semibold text-[#1C1C1E] tabular-nums">
+              <div className="font-semibold text-[var(--ios-label)] tabular-nums">
                 {MONTH_LONG[calendarView.getMonth()]} {calendarView.getFullYear()}
               </div>
 
               <button
                 onClick={() => setCalendarView(addDays(calendarView, 32))}
-                className="w-6 h-6 rounded-full hover:bg-[#F3F4F6] flex items-center justify-center text-[#6B7280]"
+                className="w-6 h-6 rounded-full hover:bg-[var(--ios-gray-6)] flex items-center justify-center text-[var(--ios-label-tertiary)]"
                 aria-label="Next month"
               >
                 ›
@@ -7668,7 +7701,7 @@ function AuthedShiftBuilder() {
             </div>
 
             {/* Day headers */}
-            <div className="grid grid-cols-7 text-center text-[#8E8E93] font-medium mb-1">
+            <div className="grid grid-cols-7 text-center text-[var(--ios-label-tertiary)] font-medium mb-1">
               {["S","M","T","W","T","F","S"].map((d, i) => (
                 <div key={i}>{d}</div>
               ))}
@@ -7700,7 +7733,7 @@ function AuthedShiftBuilder() {
                         setSelectedDayIndex(idx);
                         setCalendarOpen(false);
                       }}
-                      className="h-7 w-7 text-[11px] text-[#C8C8CC] hover:bg-[#F3F4F6] rounded-md"
+                      className="h-7 w-7 text-[11px] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] rounded-md"
                     >
                       {d.getDate()}
                     </button>
@@ -7726,7 +7759,7 @@ function AuthedShiftBuilder() {
                       className={`h-7 w-7 text-[11px] rounded-md transition-colors ${
                         isSelectedDay
                           ? "bg-[#111] text-white font-semibold"
-                          : "hover:bg-[#F3F4F6] text-[#1C1C1E]"
+                          : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label)]"
                       }`}
                     >
                       {dayNum}
@@ -7748,7 +7781,7 @@ function AuthedShiftBuilder() {
                         setSelectedDayIndex(idx);
                         setCalendarOpen(false);
                       }}
-                      className="h-7 w-7 text-[11px] text-[#C8C8CC] hover:bg-[#F3F4F6] rounded-md"
+                      className="h-7 w-7 text-[11px] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] rounded-md"
                     >
                       {d.getDate()}
                     </button>
@@ -7760,7 +7793,7 @@ function AuthedShiftBuilder() {
             </div>
 
             {/* Footer actions */}
-            <div className="mt-2 pt-2 border-t border-[#E5E5E7] flex justify-between">
+            <div className="mt-2 pt-2 border-t border-[var(--ios-gray-4)] flex justify-between">
               <button
                 onClick={() => {
                   const today = currentShiftDate();
@@ -7770,14 +7803,14 @@ function AuthedShiftBuilder() {
                   setSelectedDayIndex(Math.max(0, Math.min(6, idx)));
                   setCalendarOpen(false);
                 }}
-                className="text-[11px] px-2 py-0.5 rounded-md text-[#007AFF] hover:bg-[#E5F0FF]"
+                className="text-[11px] px-2 py-0.5 rounded-md text-[var(--ios-blue)] hover:bg-[color-mix(in_srgb,var(--ios-blue)_10%,transparent)]"
               >
                 Today
               </button>
 
               <button
                 onClick={() => setCalendarOpen(false)}
-                className="text-[11px] px-2 py-0.5 rounded-md text-[#6B7280] hover:bg-[#F3F4F6]"
+                className="text-[11px] px-2 py-0.5 rounded-md text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"
               >
                 Close
               </button>
@@ -7791,7 +7824,7 @@ function AuthedShiftBuilder() {
            scroll or page shift possible, even while dragging. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 overflow-hidden ${isBuilderLiveCanvas ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 overflow-hidden sb-builder-stage bg-[var(--ios-background-primary)] dark:bg-[var(--ios-background-primary)] flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7982,7 +8015,7 @@ function AuthedShiftBuilder() {
                         right: 0,
                         zIndex: 120,
                         height: 38,
-                        background: 'rgba(255,255,255,0.98)',
+                        background: 'color-mix(in srgb, var(--ios-background-secondary) 98%, transparent)',
                         border: '1px solid #E5E5EA',
                         borderRadius: 6,
                         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
@@ -8144,7 +8177,7 @@ function AuthedShiftBuilder() {
                         height: 16,
                         borderRadius: 2,
                         border: '1px solid #E5E5EA',
-                        background: weekLensSidebarOpen ? '#F4F4F6' : '#fff',
+                        background: weekLensSidebarOpen ? 'var(--ios-gray-6)' : 'var(--ios-background-secondary)',
                         color: '#6B7280',
                         marginLeft: 1,
                         cursor: 'pointer',
@@ -8287,7 +8320,7 @@ function AuthedShiftBuilder() {
                       zIndex: 110,
                       width: 220,
                       maxHeight: 'calc(100vh - 120px)',
-                      background: 'rgba(255,255,255,0.98)',
+                      background: 'color-mix(in srgb, var(--ios-background-secondary) 98%, transparent)',
                       border: '1px solid #E5E5EA',
                       borderRadius: 6,
                       boxShadow: '-3px 0 10px rgba(0,0,0,0.07)',
@@ -8303,7 +8336,7 @@ function AuthedShiftBuilder() {
                   >
                     <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9, padding: '0 2px' }}>
                       <span>Focus</span>
-                      <button onClick={() => setWeekLensSidebarOpen(false)} style={{ fontSize: 9, color: '#9CA3AF', lineHeight: 1, padding: '0 2px' }}>×</button>
+                      <button onClick={() => setWeekLensSidebarOpen(false)} style={{ fontSize: 9, color: 'var(--ios-label-tertiary)', lineHeight: 1, padding: '0 2px' }}>×</button>
                     </div>
 
                     {focusedWeeklyTmId ? (
@@ -8400,7 +8433,7 @@ function AuthedShiftBuilder() {
                           View full xAI plan
                         </button>
 
-                        <div style={{ fontSize: 6, color: '#9CA3AF', marginTop: 3, padding: '0 1px', lineHeight: 1.05 }}>
+                        <div style={{ fontSize: 6, color: 'var(--ios-label-tertiary)', marginTop: 3, padding: '0 1px', lineHeight: 1.05 }}>
                           Only zones / restrooms (gender) / valid aux. Never overlaps/admin.
                         </div>
                       </div>
@@ -8442,7 +8475,7 @@ function AuthedShiftBuilder() {
                         width: 1056,
                         height: 816,
                         overflow: 'hidden',
-                        border: '1px solid #E5E5E7',
+                        border: '1px solid var(--ios-gray-6)',
                         borderRadius: 2,
                         boxShadow: '0 10px 40px -10px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.6) inset',
                         background: '#fff',
@@ -8600,17 +8633,17 @@ function AuthedShiftBuilder() {
             aria-label="Select tasks"
           >
             <div
-              className="bg-white rounded-lg shadow-2xl border border-[#E5E5E7] w-[420px] max-w-[92vw] max-h-[80vh] flex flex-col"
+              className="bg-[var(--ios-background-secondary)] rounded-lg shadow-2xl border border-[var(--ios-gray-4)] w-[420px] max-w-[92vw] max-h-[80vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#E5E5E7]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ios-gray-4)]">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.5px] text-[#6B7280] font-semibold">Tasks for</div>
-                  <div className="text-[15px] font-bold text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>{title}</div>
+                  <div className="text-[11px] uppercase tracking-[0.5px] text-[var(--ios-label-tertiary)] font-semibold">Tasks for</div>
+                  <div className="text-[15px] font-bold text-[var(--ios-label)]" style={{ fontFamily: "var(--font-atkinson)" }}>{title}</div>
                 </div>
                 <button
                   type="button"
-                  className="text-[#6B7280] hover:text-[#111] text-[18px] leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-[#F4F4F5]"
+                  className="text-[var(--ios-label-tertiary)] hover:text-[var(--ios-label)] text-[18px] leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-[#F4F4F5]"
                   onClick={close}
                   aria-label="Close"
                 >
@@ -8619,9 +8652,9 @@ function AuthedShiftBuilder() {
               </div>
               <div className="flex-1 overflow-y-auto px-2 py-2">
                 {options.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-[12px] text-[#6B7280]">
+                  <div className="px-3 py-6 text-center text-[12px] text-[var(--ios-label-tertiary)]">
                     No tasks defined for this slot.<br/>
-                    <span className="text-[11px] text-[#9CA3AF]">Add catalog rows in <code>slot_task_catalog</code>.</span>
+                    <span className="text-[11px] text-[var(--ios-label-tertiary)]">Add catalog rows in <code>slot_task_catalog</code>.</span>
                   </div>
                 ) : (
                   <ul className="flex flex-col">
@@ -8632,13 +8665,13 @@ function AuthedShiftBuilder() {
                           <button
                             type="button"
                             className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                              checked ? "bg-[#EFF6FF] text-[#1E3A8A]" : "hover:bg-[#F4F4F5] text-[#1C1C1E]"
+                              checked ? "bg-[#EFF6FF] text-[#1E3A8A]" : "hover:bg-[#F4F4F5] text-[var(--ios-label)]"
                             }`}
                             onClick={() => toggleTaskForSlot(uiKey, opt)}
                           >
                             <div
                               className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center ${
-                                checked ? "bg-[#1D4ED8] border-[#1D4ED8] text-white" : "bg-white border-[#D1D5DB]"
+                                checked ? "bg-[var(--ios-blue)] border-[var(--ios-blue)] text-white" : "bg-[var(--ios-background-secondary)] border-[#D1D5DB]"
                               }`}
                               aria-hidden="true"
                             >
@@ -8658,11 +8691,11 @@ function AuthedShiftBuilder() {
                   catalog (so it's reusable) AND auto-selects for tonight. */}
               <CustomTaskInput uiKey={uiKey} onAdd={addCustomTaskForSlot} />
 
-              <div className="px-4 py-2.5 border-t border-[#E5E5E7] flex items-center justify-between text-[11px] text-[#6B7280]">
+              <div className="px-4 py-2.5 border-t border-[var(--ios-gray-4)] flex items-center justify-between text-[11px] text-[var(--ios-label-tertiary)]">
                 <span>{selected.length} selected</span>
                 <button
                   type="button"
-                  className="text-[#1D4ED8] hover:text-[#1E40AF] font-medium"
+                  className="text-[var(--ios-blue)] hover:text-[var(--ios-indigo)] font-medium"
                   onClick={close}
                 >
                   Done

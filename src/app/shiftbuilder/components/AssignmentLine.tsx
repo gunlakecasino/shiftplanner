@@ -20,15 +20,15 @@ const AssignmentLine = React.memo(function AssignmentLine({
   const text = size === "sm" ? "text-[9px]" : "text-[11px]";
   if (loading) {
     return (
-      <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight`}>
+      <div className={`border-b border-dashed border-[var(--ios-gray-4)] pb-[1px] ${text} leading-tight`}>
         <AssignmentSkeleton size="sm" />
       </div>
     );
   }
   return (
-    <div className={`border-b border-dashed border-[#B0B0B6] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[#111] dark:text-[#F2F2F4]" : "text-[#C8C8CC] dark:text-[#48484A]"}`}>
+    <div className={`border-b border-dashed border-[var(--ios-gray-4)] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[var(--ios-label)] dark:text-[#F2F2F4]" : "text-[var(--ios-gray-5)] dark:text-[#48484A]"}`}>
       {isLocked && tmName && (
-        <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: size === "sm" ? 10 : 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+        <span className="ms shrink-0 text-[var(--ios-orange)]" aria-label="Locked" style={{ fontSize: size === "sm" ? 10 : 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
       )}
       <span className="truncate">{tmName || placeholder || " "}</span>
     </div>

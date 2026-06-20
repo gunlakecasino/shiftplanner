@@ -111,7 +111,7 @@ export function DuplicateTmBadge({
   animate?: boolean;
 }) {
   const className =
-    "ml-1.5 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30";
+    "ml-1.5 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[var(--ios-yellow, #ffcc00)]/12 text-[#8B6910] dark:bg-[var(--ios-yellow, #ffcc00)]/15 dark:text-[#E9B948] border border-[var(--ios-yellow, #ffcc00)]/30";
   const title = `Duplicate assignment — also in: ${otherSlots.join(", ")}`;
 
   if (animate) {
@@ -169,7 +169,7 @@ export function UnassignedInvite({
         minHeight: cfg.minH,
         maxHeight: cfg.maxH,
         border: "1px dashed rgba(0,0,0,0.06)",
-        background: "rgba(250,250,250,0.35)",
+        background: "color-mix(in srgb, var(--ios-background-secondary) 35%, transparent)",
         boxShadow: "0 1px 1px rgba(0,0,0,0.015)",
       }}
       initial={{ opacity: 0.85, y: 1, scale: 0.99 }}
@@ -177,7 +177,7 @@ export function UnassignedInvite({
       whileHover={{
         scale: 1.01,
         borderColor: "rgba(0,0,0,0.10)",
-        background: "rgba(250,250,250,0.55)",
+        background: "color-mix(in srgb, var(--ios-background-secondary) 55%, transparent)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
       }}
       whileTap={{ scale: 0.985 }}
@@ -247,9 +247,7 @@ function CoveredByBlock({
       className={`sb-covered-by-block flex flex-col min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
     >
       <span
-        className={`sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block ${
-          showDigitalAssists ? "text-[#9CA3AF]" : "text-[#B0B0B8]"
-        }`}
+        className={`sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block text-[var(--ios-label-tertiary)]`}
         style={{
           fontSize: labelFontSize,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
@@ -259,9 +257,7 @@ function CoveredByBlock({
         Covered by
       </span>
       <span
-        className={`sb-covered-by-names font-bold tracking-[-0.35px] px-1 py-[1px] inline-block leading-tight ${
-          showDigitalAssists ? "text-[#9CA3AF]" : "text-[#9CA3AF]"
-        }`}
+        className={`sb-covered-by-names font-bold tracking-[-0.35px] px-1 py-[1px] inline-block leading-tight text-[var(--ios-label-tertiary)]`}
         style={{
           fontSize: nameFontSize,
           lineHeight: 1.08,
@@ -334,7 +330,7 @@ export function CoveredByPrintLabel({
 export function UnassignedPrintLabel({ showDigitalAssists }: { showDigitalAssists: boolean }) {
   return (
     <div
-      className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px] text-gray-400"
+      className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px] text-[var(--ios-label-tertiary)]"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
       <span className="sb-unassigned-primary">— Unassigned —</span>
@@ -559,8 +555,8 @@ export function TaskListDivider({
 }) {
   if (!showDigitalAssists) return null;
   const cls = hasTm
-    ? "bg-black/[0.04] dark:bg-white/[0.04]"
-    : "bg-black/[0.025] dark:bg-white/[0.025]";
+    ? "bg-[color-mix(in_srgb,var(--ios-label)_4%,transparent)] dark:bg-[color-mix(in_srgb,var(--ios-background-primary)_4%,transparent)]"
+    : "bg-[color-mix(in_srgb,var(--ios-label)_2.5%,transparent)] dark:bg-[color-mix(in_srgb,var(--ios-background-primary)_2.5%,transparent)]";
   return <div className={`h-px w-full my-0.5 ${cls}`} />;
 }
 
@@ -572,7 +568,7 @@ export function cardBodyInteriorClass(showDigitalAssists: boolean, extra = ""): 
 export function cardBodyInteriorStyle(showDigitalAssists: boolean, paddingBottom: number): React.CSSProperties {
   return {
     paddingBottom,
-    background: showDigitalAssists ? "rgba(255,255,255,0.022)" : undefined,
+    background: showDigitalAssists ? "color-mix(in srgb, var(--ios-background-secondary) 2.2%, transparent)" : undefined,
     backdropFilter: showDigitalAssists ? "blur(0.5px)" : undefined,
   };
 }

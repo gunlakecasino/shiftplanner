@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
+import { unstable_cache, unstable_noStore } from "next/cache";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { buildNightSecondaryBundle } from "@/lib/shiftbuilder/nightSecondaryBundle.server";
 
@@ -9,7 +9,10 @@ import { buildNightSecondaryBundle } from "@/lib/shiftbuilder/nightSecondaryBund
  * Deferred builder data — tasks, breaks, borders, notes, zone rotation history.
  * Fully server-side; zero client Supabase on the happy path.
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
+  unstable_noStore();
   const dateParam = request.nextUrl.searchParams.get("date");
   if (!dateParam) {
     return NextResponse.json({ error: "Missing ?date=YYYY-MM-DD" }, { status: 400 });

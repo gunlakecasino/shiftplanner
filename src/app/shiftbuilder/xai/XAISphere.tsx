@@ -113,7 +113,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
         }}
       >
         {/* Subtle xAI / spark visual — keep it minimal and premium */}
-        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[#007AFF] via-[#5E5CE6] to-[#AF52DE] text-white shadow-inner">
+        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[var(--ios-blue)] via-[#5E5CE6] to-[#AF52DE] text-white shadow-inner">
           <svg
             width="11"
             height="11"
@@ -152,7 +152,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
           {/* Header */}
           <div className="flex items-center justify-between px-4 h-12 border-b border-white/60 bg-white/60">
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[#007AFF] via-[#5E5CE6] to-[#AF52DE] text-white shadow-sm">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[var(--ios-blue)] via-[#5E5CE6] to-[#AF52DE] text-white shadow-sm">
                 <svg
                   width="12"
                   height="12"
@@ -174,17 +174,17 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
                   Persistent • Supabase-native
                   {/* Live persistence indicator */}
                   {isPersisting && (
-                    <span className="sb-loading-line !mt-0 inline-flex items-center text-[10px] text-[#007AFF]" aria-busy="true">
+                    <span className="sb-loading-line !mt-0 inline-flex items-center text-[10px] text-[var(--ios-blue)]" aria-busy="true">
                       Connecting<span className="sb-loading-dots" aria-hidden="true" />
                     </span>
                   )}
                   {!isPersisting && threadId && (
-                    <span className="inline-flex items-center gap-1 text-[#34C759] font-medium">
-                      <span className="w-1 h-1 rounded-full bg-[#34C759]" /> thread live
+                    <span className="inline-flex items-center gap-1 text-[var(--ios-green)] font-medium">
+                      <span className="w-1 h-1 rounded-full bg-[var(--ios-green)]" /> thread live
                     </span>
                   )}
                   {persistError && (
-                    <span className="text-[#FF9500] text-[9px]">local only</span>
+                    <span className="text-[var(--ios-orange)] text-[9px]">local only</span>
                   )}
                 </div>
               </div>
@@ -219,12 +219,12 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
             </div>
 
             {threadId && (
-              <div className="text-[11px] text-[#34C759] font-medium">
+              <div className="text-[11px] text-[var(--ios-green)] font-medium">
                 ✓ Thread persisted in Supabase for this GRAVE week.
               </div>
             )}
             {persistError && (
-              <div className="text-[11px] text-[#FF9500]">
+              <div className="text-[11px] text-[var(--ios-orange)]">
                 Persistence temporarily unavailable — running locally for now.
               </div>
             )}
@@ -241,7 +241,7 @@ export function XAISphere({ open, onToggle, weekStart }: XAISphereProps) {
               </div>
 
               <div className="text-[11px] font-medium text-[#1C1C1E] pt-1">Master Agent</div>
-              <div className="text-[12.5px] bg-[#F2F2F4] rounded-xl px-3 py-2">
+              <div className="text-[12.5px] bg-[var(--ios-background-secondary)] rounded-xl px-3 py-2">
                 Based on the current assignments and the last 9 nights of data...
               </div>
             </div>

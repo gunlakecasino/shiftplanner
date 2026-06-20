@@ -100,11 +100,13 @@ export function useZoom({
 
     if (el && el.clientWidth > 50 && el.clientHeight > 50) {
       // clientWidth/Height include padding; subtract stage chrome insets + breathing room.
-      availW = el.clientWidth - insets.left - insets.right - 12;
-      availH = el.clientHeight - insets.top - insets.bottom - 12;
+      // Extra margin for canvas padding (clamp 12-24px sides) + to avoid cut-off.
+      const canvasPad = builderFitEnabled ? 48 : 24;
+      availW = el.clientWidth - insets.left - insets.right - canvasPad;
+      availH = el.clientHeight - insets.top - insets.bottom - canvasPad;
     } else {
-      availW = vpW - insets.left - insets.right - 24;
-      availH = vpH - insets.top - insets.bottom - 24;
+      availW = vpW - insets.left - insets.right - (builderFitEnabled ? 56 : 32);
+      availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 56 : 32);
     }
 
     if (builderFitEnabled) {
@@ -121,8 +123,8 @@ export function useZoom({
         const measuredW = content.scrollWidth || content.offsetWidth;
         const measuredH = content.scrollHeight || content.offsetHeight;
         const stable = stableNaturalRef.current;
-        // Only adopt if significantly larger (ignore task-row growths ~<40px, accept aux/roster structural).
-        if (measuredW > 80 && measuredW > stable.w + 40) {
+        // Only adopt if significantly larger (ignore task-row growths ~<20px, accept aux/roster structural).
+        if (measuredW > 80 && measuredW > stable.w + 20) {
           naturalW = measuredW;
           stable.w = measuredW;
         } else if (measuredW > 80 && measuredW < stable.w) {
@@ -130,7 +132,7 @@ export function useZoom({
           naturalW = measuredW;
           stable.w = measuredW;
         }
-        if (measuredH > 80 && measuredH > stable.h + 40) {
+        if (measuredH > 80 && measuredH > stable.h + 20) {
           naturalH = measuredH;
           stable.h = measuredH;
         } else if (measuredH > 80 && measuredH < stable.h) {
@@ -149,7 +151,11 @@ export function useZoom({
     // browser window with zero scroll or page movement during any interaction.
     const next = Math.min(max, byWidth, byHeight);
 
-    const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next);
+    // Safety factor to ensure no edge cut-off (especially right/bottom of last cards
+    // or coverage bars) due to subpixel, padding, insets, or measurement timing.
+    // More aggressive for builder relaxed mode because of canvas padding + container queries.
+    const safety = builderFitEnabled ? 0.93 : 0.97;
+    const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next * safety);
     // Epsilon guard + ref check: DOM measurements, RO callbacks, and initial layout
     // thrash (content height changes as assignments/aux mount) can produce micro
     // deltas (0.000x) or same-value recomputes. Unconditional setFitScale was the

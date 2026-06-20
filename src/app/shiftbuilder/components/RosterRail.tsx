@@ -283,7 +283,7 @@ const RosterRail = React.memo(function RosterRail({
           </div>
           <div className="flex-1 h-px bg-[#E5E5E7] dark:bg-[#3A3A3C]" />
         </div>
-        <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5 tracking-[0.2px]">
+        <div className="text-[10px] text-[var(--ios-label-tertiary)] dark:text-[var(--ios-label-tertiary)] mt-0.5 tracking-[0.2px]">
           {graveOnly
             ? `11pm–6:55am eligible pool — ${graveRoster.length} TMs`
             : "All active TMs • Drag to any slot"}
@@ -298,19 +298,19 @@ const RosterRail = React.memo(function RosterRail({
             value={rosterSearch}
             onChange={(e) => setRosterSearch(e.target.value)}
             placeholder={graveOnly ? "Search GRAVE pool…" : "Search team members…"}
-            className="w-full bg-white dark:bg-[#2C2C2E] dark:text-[#F2F2F4] border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[#9CA3AF] dark:placeholder:text-[#636366] focus:outline-none focus:border-[#C7C7CC] dark:focus:border-[#636366] transition-colors"
+            className="w-full bg-[var(--ios-background-secondary)] dark:bg-[var(--ios-background-secondary)] dark:text-[var(--ios-label)] border border-[var(--ios-gray-4)] dark:border-[var(--ios-gray-3)] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[var(--ios-label-tertiary)] dark:placeholder:text-[#636366] focus:outline-none focus:border-[var(--ios-gray-4)] dark:focus:border-[var(--ios-gray-3)] transition-colors"
             style={{ fontFamily: "var(--font-geist-sans)" }}
           />
-          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
+          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ios-label-tertiary)]">
             <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
           </div>
         </div>
 
-        <div className="flex border border-[#D1D1D6] dark:border-[#3A3A3C] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-white dark:bg-[#2C2C2E]">
+        <div className="flex border border-[var(--ios-gray-4)] dark:border-[var(--ios-gray-3)] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-[var(--ios-background-secondary)] dark:bg-[var(--ios-background-secondary)]">
           <button
             onClick={() => setGraveOnly(false)}
             className={`sb-interactive flex-1 px-3 py-1.5 ${
-              !graveOnly ? "bg-[#1C1C1E] text-white shadow-inner" : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
+              !graveOnly ? "bg-[var(--ios-label)] text-[var(--ios-white)] shadow-inner" : isDark ? "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-5)]" : "text-[var(--ios-label-secondary)] hover:bg-[var(--ios-gray-6)]"
             }`}
           >
             All
@@ -318,7 +318,7 @@ const RosterRail = React.memo(function RosterRail({
           <button
             onClick={() => setGraveOnly(true)}
             className={`sb-interactive flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] ${
-              graveOnly ? "bg-[#1C1C1E] text-white shadow-inner" : isDark ? "text-[#8E8E93] hover:bg-[#3A3A3C]" : "text-[#3C3C43] hover:bg-[#F8F8F9]"
+              graveOnly ? "bg-[var(--ios-label)] text-[var(--ios-white)] shadow-inner" : isDark ? "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-5)]" : "text-[var(--ios-label-secondary)] hover:bg-[var(--ios-gray-6)]"
             }`}
             title="Only TMs with grave_pool availability for 11pm–6:55am"
           >
@@ -344,7 +344,7 @@ const RosterRail = React.memo(function RosterRail({
               type="button"
               onClick={() => setCalledOffExpanded(v => !v)}
               aria-expanded={calledOffExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#C2410C] font-semibold px-1 pt-2 pb-0.5 hover:text-[#9A3412] transition-colors"
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-orange)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-orange)] transition-colors"
             >
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: calledOffExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
@@ -433,7 +433,7 @@ const RosterRail = React.memo(function RosterRail({
           <>
             <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
             <button type="button" onClick={() => setDeployedExpanded(v => !v)} aria-expanded={deployedExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors">
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: deployedExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                 Already Deployed
@@ -452,7 +452,7 @@ const RosterRail = React.memo(function RosterRail({
           <>
             <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
             <button type="button" onClick={() => setPortersExpanded(v => !v)} aria-expanded={portersExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors">
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: portersExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                 Porters
@@ -471,7 +471,7 @@ const RosterRail = React.memo(function RosterRail({
           <>
             <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
             <button type="button" onClick={() => setAmOverlapsExpanded(v => !v)} aria-expanded={amOverlapsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors">
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: amOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                 AM Overlaps (in 5:00–5:30am)
@@ -490,7 +490,7 @@ const RosterRail = React.memo(function RosterRail({
           <>
             <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
             <button type="button" onClick={() => setPmOverlapsExpanded(v => !v)} aria-expanded={pmOverlapsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors">
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: pmOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                 PM Overlaps (out at 1:00am)
@@ -509,7 +509,7 @@ const RosterRail = React.memo(function RosterRail({
           <>
             <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
             <button type="button" onClick={() => setOtherTmsExpanded(v => !v)} aria-expanded={otherTmsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[#8E8E93] font-semibold px-1 pt-2 pb-0.5 hover:text-[#1C1C1E] transition-colors">
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
               <span className="flex items-center gap-1.5">
                 <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: otherTmsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                 Not Scheduled

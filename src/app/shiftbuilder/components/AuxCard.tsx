@@ -231,7 +231,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const headerLabel = (isUnsetBlank && !hasTM && !editingLabel) ? (
     <button
       type="button"
-      className="flex items-center gap-1 min-w-0 text-left text-[#9CA3AF]"
+      className="flex items-center gap-1 min-w-0 text-left text-[var(--ios-label-tertiary)]"
       onClick={toggleRolePicker}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -337,7 +337,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <CardAccentStripe color={(isUnsetBlank && !hasTM) ? "#D1D5DB" : color} />
+      <CardAccentStripe color={(isUnsetBlank && !hasTM) ? "#d1d1d6" : color} />
 
       <CardSlotHeader
         icon={(isUnsetBlank && !hasTM) && !editingLabel ? undefined : icon}
@@ -362,7 +362,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   e.stopPropagation();
                   onLiveUnassign(def.key);
                 }}
-                className="sb-kiosk-action text-[#9CA3AF] hover:text-[#EF4444] leading-none text-[13px] px-0.5"
+                className="sb-kiosk-action text-[var(--ios-label-tertiary)] hover:text-[var(--ios-red)] leading-none text-[13px] px-0.5"
                 aria-label="Remove TM from slot"
                 title="Clear this slot"
               >
@@ -427,7 +427,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
             ) : null}
 
-            <div className={`mt-auto min-h-0 overflow-hidden flex-shrink ${!hasTM && showDigitalAssists ? "bg-white/30 rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+            <div className={`mt-auto min-h-0 overflow-hidden flex-shrink ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
               <ZoneTaskList
                 tasks={regularTasks}
                 hasTM={hasTM}

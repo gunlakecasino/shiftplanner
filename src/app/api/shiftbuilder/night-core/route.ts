@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_noStore } from "next/cache";
 import {
   getNightCoreBundleForDate,
   isNightCoreAllowedForTodayPolicy,
@@ -11,7 +12,10 @@ import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
  * Single-hop builder critical path: night id + assignments + roster + schedule.
  * Runs parallel Supabase reads on the server (close to Postgres).
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
+  unstable_noStore();
   const dateParam = request.nextUrl.searchParams.get("date");
 
   if (!dateParam) {

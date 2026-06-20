@@ -50,8 +50,9 @@ export function stageTopInsetPx(): number {
   return FLOATING_NAV_TOP_PX + FLOATING_NAV_HEIGHT_PX;
 }
 
-/** Builder deployment uses a tighter bottom inset so the board fills the viewport. */
+/** Builder deployment uses a tighter bottom inset so the board fills the viewport.
+ *  A bit more breathing room at bottom to keep coverage bars fully visible after scaling. */
 export function builderStageBottomInsetPx(): number {
-  return 20;
+  return 32;
 }
 

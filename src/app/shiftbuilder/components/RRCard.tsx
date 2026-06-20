@@ -158,7 +158,7 @@ const RRSide: React.FC<{
           Matches uniform plain visual with text size. */}
       {tasks && tasks.length > 0 && (
         <>
-          <div className="mx-3.5 h-px bg-gray-100" />
+          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
           <div className="px-3 py-2 space-y-0.5">
             {tasks.map((t) => (
               <TaskRow
@@ -218,7 +218,6 @@ function RRSideShell({
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
-        background: showDigitalAssists ? "rgba(255,255,255,0.012)" : undefined,
       }}
     >
       <CardAccentStripe color={color} />

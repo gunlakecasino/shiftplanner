@@ -60,7 +60,10 @@ export async function fetchNightSecondaryData(selectedDay: DayDef) {
   const dateStr = formatLocalDateISO(selectedDay.date);
 
   try {
-    const res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}`, {
+    // Unique bust param for same reason as core: guarantee the request reaches a fresh server computation
+    // after a mutation + revalidate (Safari and other caches can be stubborn).
+    const bust = `&_=${Date.now()}`;
+    const res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}${bust}`, {
       credentials: "same-origin",
       cache: "no-store",
     });

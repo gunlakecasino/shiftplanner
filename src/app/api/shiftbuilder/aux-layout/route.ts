@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { revalidateNightBoardCaches } from "@/lib/shiftbuilder/revalidateOpsCache";
@@ -17,7 +18,10 @@ function getServerSupabase() {
  * POST /api/shiftbuilder/aux-layout
  * Body: { nightId: string, auxDefs: AuxDef[], date?: string }
  */
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
+  unstable_noStore();
   let body: { nightId?: string; auxDefs?: AuxDef[]; date?: string };
   try {
     body = await request.json();

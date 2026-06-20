@@ -141,7 +141,7 @@ const PAD_MAX_HEIGHT = 640;
 const TABLET_SHEET_HEIGHT_RATIO = 0.42;
 const TABLET_SHEET_MAX_HEIGHT = 460;
 const LAST5_COUNT = 5;
-const Z9_STAT_RED = "#E53935";
+const Z9_STAT_RED = "#ff3b30"; // iOS red
 
 function computeTabletBottomSheetStyle(pickerOpen = false): React.CSSProperties {
   const vv = window.visualViewport;
@@ -497,7 +497,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
 
               <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
-                <span className="font-bold" style={{ color: "#E53935" }}>RR</span><span className="font-bold text-gray-800">{rrLocs.length}</span>
+                <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span><span className="font-bold text-gray-800">{rrLocs.length}</span>
                 <span className="text-gray-300 mx-0.5">|</span>
                 <span className="text-gray-500">Zone</span><span className="font-bold text-gray-800">{ZONE_DEFS.length}</span>
                 <span className="text-gray-300 mx-0.5">|</span>

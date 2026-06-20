@@ -50,8 +50,8 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
     labelDraft.trim() !== originalLabel || colorDraft !== originalColor || markerType !== originalMarker;
 
   const getMarkerStyle = () => {
-    if (!colorDraft) return { color: isDark ? "#E5E5E7" : "#1f2937" };
-    const base = { color: isDark ? "#E5E5E7" : "#1f2937" };
+    if (!colorDraft) return { color: isDark ? "var(--ios-label)" : "var(--ios-label)" };
+    const base = { color: isDark ? "var(--ios-label)" : "var(--ios-label)" };
     if (markerType === 'highlight') {
       return {
         ...base,
@@ -126,17 +126,17 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: -2 }}
       transition={premiumSpring}
-      className="sb-task-text-pad rounded-xl border border-black/[0.08] bg-white/95 dark:bg-[#2C2C2E] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)] overflow-hidden flex flex-col"
+      className="sb-task-text-pad rounded-xl border border-[var(--ios-gray-4)]/20 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] dark:bg-[var(--ios-background-secondary)] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)] overflow-hidden flex flex-col"
       style={{
         ...(usePortal && portalStyle ? portalStyle : {}),
         fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
         backdropFilter: "blur(12px) saturate(140%)",
-        borderColor: isDark ? "rgba(255,255,255,0.08)" : undefined,
+        borderColor: isDark ? "color-mix(in srgb, var(--ios-gray-4) 8%, transparent)" : undefined,
       }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.06] bg-neutral-50/70 dark:bg-white/[0.03]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--ios-gray-4)]/15 bg-[color-mix(in_srgb,var(--ios-background-tertiary)_70%,transparent)] dark:bg-[color-mix(in_srgb,var(--ios-background-primary)_3%,transparent)]">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-neutral-500">TEXT ATTRIBUTES</span>
           <span className="text-[10px] font-mono text-neutral-400">· {slotKey}</span>
@@ -155,7 +155,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
       <div className="px-3 pt-2.5 pb-1.5">
         <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Preview</div>
         <div
-          className="rounded-md px-2.5 py-1.5 text-[13px] font-medium leading-tight border border-black/[0.06]"
+          className="rounded-md px-2.5 py-1.5 text-[13px] font-medium leading-tight border border-[var(--ios-gray-4)]/15"
           style={getMarkerStyle()}
         >
           {labelDraft.trim() || "—"}
@@ -170,14 +170,14 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
           value={labelDraft}
           onChange={(e) => setLabelDraft(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full rounded-md border border-black/[0.1] bg-white dark:bg-[#1C1C1E] px-2.5 py-1.5 text-[13px] font-medium focus:outline-none focus:border-[#007AFF]/60"
+          className="w-full rounded-md border border-[var(--ios-gray-4)]/20 bg-[var(--ios-background-secondary)] dark:bg-[var(--ios-background-primary)] px-2.5 py-1.5 text-[13px] font-medium focus:outline-none focus:border-[var(--ios-blue)]/60"
           placeholder="Task description"
           autoFocus
         />
       </div>
 
       {/* Color palette (font/text highlight) */}
-      <div className="px-3 pt-1 pb-2.5 border-t border-black/[0.05]">
+      <div className="px-3 pt-1 pb-2.5 border-t border-[var(--ios-gray-4)]/15">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400">Color &amp; marker</span>
           {colorDraft && (
@@ -199,7 +199,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
                 key={c.hex}
                 type="button"
                 onClick={() => setColorDraft(c.hex)}
-                className={`w-7 h-7 rounded-full ring-1 transition-all ${active ? "ring-[#007AFF] scale-110" : "ring-black/15 hover:ring-black/30"}`}
+                className={`w-7 h-7 rounded-full ring-1 transition-all ${active ? "ring-[var(--ios-blue)] scale-110" : "ring-black/15 hover:ring-black/30"}`}
                 style={{ backgroundColor: c.hex }}
                 title={c.name}
               />
@@ -210,7 +210,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
           <button
             type="button"
             onClick={() => setColorDraft(null)}
-            className={`w-7 h-7 rounded-full bg-white ring-1 text-[10px] flex items-center justify-center ${!colorDraft ? "ring-[#007AFF] scale-110" : "ring-black/15 hover:ring-black/30 text-neutral-400"}`}
+            className={`w-7 h-7 rounded-full bg-[var(--ios-background-secondary)] ring-1 text-[10px] flex items-center justify-center ${!colorDraft ? "ring-[var(--ios-blue)] scale-110" : "ring-[var(--ios-gray-4)]/30 hover:ring-[var(--ios-gray-3)]/50 text-[var(--ios-label-tertiary)]"}`}
             title="No color"
           >
             ×
@@ -229,7 +229,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
                   key={m}
                   type="button"
                   onClick={() => setMarkerType(m)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${active ? 'bg-[#007AFF]/10 border-[#007AFF] text-[#007AFF]' : 'border-black/15 hover:bg-neutral-100 dark:hover:bg-white/5'}`}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${active ? 'bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)]' : 'border-black/15 hover:bg-[var(--ios-gray-6)] dark:hover:bg-[color-mix(in_srgb,var(--ios-background-primary)_5%,transparent)]'}`}
                 >
                   {label}
                 </button>
@@ -240,7 +240,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
       </div>
 
       {/* Actions */}
-      <div className="mt-auto border-t border-black/[0.06] bg-neutral-50/60 dark:bg-white/[0.02] px-3 py-2 flex items-center gap-2">
+      <div className="mt-auto border-t border-[var(--ios-gray-4)]/15 bg-[color-mix(in_srgb,var(--ios-background-tertiary)_60%,transparent)] dark:bg-[color-mix(in_srgb,var(--ios-background-primary)_2%,transparent)] px-3 py-2 flex items-center gap-2">
         {onRemoveTask && (
           <button
             type="button"
@@ -256,7 +256,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="text-[11px] px-3 py-1 rounded border border-black/[0.08] hover:bg-white dark:hover:bg-white/5"
+          className="text-[11px] px-3 py-1 rounded border border-[var(--ios-gray-4)]/20 hover:bg-[var(--ios-gray-6)] dark:hover:bg-[color-mix(in_srgb,var(--ios-background-primary)_5%,transparent)]"
         >
           Cancel
         </button>
@@ -267,7 +267,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
           disabled={!hasChanges}
           whileHover={hasChanges ? { scale: 1.01 } : {}}
           whileTap={hasChanges ? premiumTap : {}}
-          className={`text-[11px] px-3 py-1 rounded font-semibold ${hasChanges ? "bg-[#007AFF] text-white" : "bg-neutral-200 text-neutral-400 cursor-default"}`}
+          className={`text-[11px] px-3 py-1 rounded font-semibold ${hasChanges ? "bg-[var(--ios-blue)] text-white" : "bg-neutral-200 text-neutral-400 cursor-default"}`}
         >
           Save
         </motion.button>

@@ -202,7 +202,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           Covered names are now rendered in the name row above (matching the reference image). */}
       {assignmentState.kind === "unassigned" ? (
         <>
-          <div className="mx-3.5 h-px bg-gray-100" />
+          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
           <div className="px-3.5 py-2.5">
             <UnassignedInvite
               size="zone"
@@ -213,7 +213,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         </>
       ) : regularTasks.length > 0 && (
         <>
-          <div className="mx-3.5 h-px bg-gray-100" />
+          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
           <div className="px-3 py-2.5 space-y-0.5">
             {regularTasks.map((t) => (
               <TaskRow

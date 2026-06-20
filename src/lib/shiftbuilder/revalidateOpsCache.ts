@@ -40,6 +40,8 @@ export async function revalidateNightBoardCaches(isoDate?: string): Promise<void
   revalidateTag('night-core', { expire: 0 });
   revalidateTag('night-secondary', { expire: 0 });
   revalidateTag('night-lookup', { expire: 0 });
+  revalidateTag('scheduled-roster', { expire: 0 });
+  revalidateTag('graves-default', { expire: 0 });
   if (isoDate) {
     revalidateTag(`night-${isoDate}`, { expire: 0 });
   }

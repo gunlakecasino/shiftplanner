@@ -82,7 +82,10 @@ export type FetchNightCoreOptions = {
 /** Primary path: one browser → Next server hop with parallel Supabase on the server. */
 async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOptions) {
   const policyQs = options?.todayPolicy ? "&policy=today" : "";
-  const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}`, {
+  // Add unique bust param to ensure browser / any intermediate layers don't serve a stale response
+  // even with cache: "no-store". Server still keys on date only.
+  const bust = `&_=${Date.now()}`;
+  const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}${bust}`, {
     credentials: "same-origin",
     cache: "no-store",
   });
@@ -109,7 +112,7 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
     getCachedGraveAvailableTeamMembers(),
     getCachedSlotDefaults(),
     getCachedActiveTeamMembers(),
-    fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`).catch(() => null),
+    fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}&_=${Date.now()}`).catch(() => null),
   ]);
 
   const [dbAssignments, weekOnScheduleSet] = await Promise.all([

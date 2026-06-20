@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
+import { unstable_cache, unstable_noStore } from "next/cache";
 import { getScheduledTmsFromGravesDefault } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
@@ -33,6 +33,8 @@ async function loadScheduledRoster(dateParam: string, nightId: string | null) {
  * Canonical scheduled roster — graves_default_schedule + night_on_call.
  * Short edge cache so week prefetch does not hammer Postgres.
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get("date");
@@ -49,6 +51,8 @@ export async function GET(request: NextRequest) {
 
   const nightId = await resolveNightId(nightDate, nightIdParam);
   const cacheKey = nightId ?? "auto";
+
+  unstable_noStore();
 
   try {
     const cachedLoad = unstable_cache(
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(body, {
       headers: {
-        "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=120",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {

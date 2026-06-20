@@ -304,7 +304,7 @@ export function CommandPalette({
               {/* Contextual actions when opened with a specific slot/person context */}
               {initialContext?.type === 'person' && initialContext.value && (
                 <div className="mb-3">
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#007AFF] dark:text-[#0A84FF]">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[var(--ios-blue)] dark:text-[var(--ios-blue)]">
                     About {initialContext.value}
                   </div>
                   <div className="px-3 py-2 text-sm text-[#6B7280] dark:text-[#8E8E93]">
@@ -315,7 +315,7 @@ export function CommandPalette({
 
               {initialContext?.type === 'slot' && initialContext.value && (
                 <div className="mb-3">
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[#007AFF] dark:text-[#0A84FF]">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-[1px] text-[var(--ios-blue)] dark:text-[var(--ios-blue)]">
                     For {initialContext.value}
                     {selectedSlotAssignment?.tmName && ` · ${selectedSlotAssignment.tmName}`}
                   </div>
@@ -409,7 +409,7 @@ export function CommandPalette({
                           }}
                           className={`sb-list-row sb-interactive w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl text-sm ${
                             isSelected
-                              ? 'bg-[#007AFF15] dark:bg-[#0A84FF30] ring-1 ring-[#007AFF40] dark:ring-[#0A84FF50]'
+                              ? 'bg-[var(--ios-blue)15] dark:bg-[var(--ios-blue)30] ring-1 ring-[var(--ios-blue)40] dark:ring-[var(--ios-blue)50]'
                               : 'hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10'
                           }`}
                         >
@@ -464,7 +464,7 @@ export function CommandPalette({
               )}
             </div>
 
-            <div className="border-t px-3 py-1.5 text-[10px] text-[#9CA3AF] dark:text-[#636366] flex items-center justify-between" style={{ borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))" }}>
+            <div className="border-t px-3 py-1.5 text-[10px] text-[var(--ios-label-tertiary)] dark:text-[var(--ios-label-tertiary)] flex items-center justify-between" style={{ borderColor: "var(--sb-glass-border, rgba(0,0,0,0.08))" }}>
               <div>⌘K • ShiftBuilder</div>
               <div className="opacity-60">Esc to close</div>
             </div>
