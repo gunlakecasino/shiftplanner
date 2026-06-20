@@ -2678,7 +2678,7 @@ function AuthedShiftBuilder() {
     if (boardColdLoading || currentNight.isCoreFetching) return;
 
     const fromQuery = currentNight.auxDefs;
-    if (!fromQuery?.length) return;
+    if (fromQuery == null) return;
 
     hydratedAuxDayRef.current = dayKey;
     const normalized = fromQuery.map((d) => ({
@@ -4189,16 +4189,20 @@ function AuthedShiftBuilder() {
           payload: { taskLabel: sweeperLabel, sweeper: true },
         });
 
-        // Refresh tasks for the slot
+        // Refresh tasks for the slot + keep TanStack cache in sync for reloads
         const fresh = await getNightSlotTasks(nightId);
         const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
         setSelectedTasks(byKey);
+        const captureDateKeyForSweeper: string = formatLocalDateISO(selectedDay.date);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKeyForSweeper, fresh);
+        }
       } catch (e) {
         console.error("Failed to assign sweeper task", e);
         showToast("Failed to assign sweeper task", "error");
       }
     },
-    [nightId, showToast, logBuilderChange]
+    [nightId, showToast, logBuilderChange, selectedDay.date, currentNight.queryClient, auxDefs]
   );
 
   const handleCmdkCycleBreak = React.useCallback(
@@ -6534,6 +6538,7 @@ function AuthedShiftBuilder() {
       const targetNightId = nightId;
       const captureDate = selectedDay.date;
       const captureDayName = selectedDay.name;
+      const captureDateKey: string = formatLocalDateISO(captureDate);
 
       const { slot_key, rr_side } = uiToDb(uiKey);
 
@@ -6553,14 +6558,21 @@ function AuthedShiftBuilder() {
         payload: { taskLabel, color },
       });
 
-      // Persist to Supabase (use normalized db keys)
-      import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskColor }) =>
-        (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side, undefined).catch((err: unknown) => {
+      // Persist + patch TanStack so reloads see marker/color without extra refreshes
+      (async () => {
+        try {
+          const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+          await (updateNightSlotTaskColor as any)(targetNightId!, slot_key, taskLabel, color, rr_side, undefined);
+          const fresh = await getNightSlotTasks(targetNightId!);
+          if (currentNight.queryClient) {
+            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+          }
+        } catch (err) {
           console.error('[ShiftBuilder] Failed to set task color:', err);
-        })
-      );
+        }
+      })();
     },
-    [nightId, selectedDay.date, selectedDay.name, logBuilderChange]
+    [nightId, selectedDay.date, selectedDay.name, logBuilderChange, currentNight.queryClient]
   );
 
   // Per-task marker style (underline / circle / highlight / none)
@@ -6568,6 +6580,7 @@ function AuthedShiftBuilder() {
     (uiKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
       const targetNightId = nightId;
       const captureDate = selectedDay.date;
+      const captureDateKey: string = formatLocalDateISO(captureDate);
 
       const { slot_key, rr_side } = uiToDb(uiKey);
 
@@ -6587,14 +6600,21 @@ function AuthedShiftBuilder() {
         payload: { taskLabel, markerType },
       });
 
-      // Persist (pass undefined for color to not clobber, marker is set)
-      import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskColor }) =>
-        (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, undefined, rr_side, markerType).catch((err: unknown) => {
+      // Persist + patch TanStack cache so reloads see the marker without multiple refreshes
+      (async () => {
+        try {
+          const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+          await (updateNightSlotTaskColor as any)(targetNightId!, slot_key, taskLabel, undefined, rr_side, markerType);
+          const fresh = await getNightSlotTasks(targetNightId!);
+          if (currentNight.queryClient) {
+            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+          }
+        } catch (err) {
           console.error('[ShiftBuilder] Failed to set task marker:', err);
-        })
-      );
+        }
+      })();
     },
-    [nightId, selectedDay.date, logBuilderChange]
+    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient]
   );
 
   // Edit / rename an existing task label (inline edit)

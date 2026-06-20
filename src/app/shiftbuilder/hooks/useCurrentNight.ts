@@ -30,11 +30,12 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
     queryFn: () =>
       fetchNightCoreData(selectedDay, { todayPolicy: options?.todayPolicy }),
     enabled: coreEnabled,
-    // Long stale window — optimistic patches + realtime own same-session freshness.
-    // Short stale + refetch was overwriting edits with cached bundle API responses.
+    // Long stale window keeps UI stable during live session; we rely on patches + server busts.
+    // refetchOnMount: 'always' ensures hard refresh / remount sees latest server data
+    // immediately (paired with { expire: 0 } revalidates after edits).
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
@@ -44,7 +45,7 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
     queryFn: () => fetchNightSecondaryData(selectedDay),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     enabled: coreEnabled && (!!coreQuery.data || !coreQuery.isLoading),
   });

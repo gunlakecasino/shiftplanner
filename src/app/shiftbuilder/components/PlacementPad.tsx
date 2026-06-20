@@ -281,6 +281,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     weeklyRecentHistory,
   }), [slotKey, assignments, isDraftMode, draftAssignments, members, auxDefs, currentIso, padHistory, a.tmId, padHistoryLoading, weeklyRecentHistory]);
 
+  const sweeperOptions = [
+    { label: 'Sweep 5/8/HL', full: 'Sweep 5/8/HL' },
+    { label: 'Sweep 9/10/SR', full: 'Sweep 9/10/SR' },
+  ];
+
   const rrCount = rrLocs.length;
   const zoneCount = ZONE_DEFS.length;
   const z9Days = getDaysSinceForKey(padHistory, "Z9", currentIso);
@@ -435,6 +440,51 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                     {taskInput.trim() && <button onClick={handleAddTask} className="text-[#007AFF] flex-shrink-0"><Plus className="w-3.5 h-3.5" /></button>}
                   </div>
                 )}
+
+                {onAssignSweeper && (() => {
+                  const hasSweeper = tasks.some((t: any) => t.taskLabel?.toLowerCase().includes('sweep'));
+                  return (
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSweeperOpen(!sweeperOpen); }}
+                        disabled={hasSweeper || isCurrentNightLocked}
+                        className="w-full text-[11px] py-[5px] rounded-xl flex items-center justify-center gap-1.5 font-semibold"
+                        style={{
+                          background: hasSweeper ? '#f3f4f6' : '#fef3c7',
+                          color: hasSweeper ? '#9ca3af' : '#b45309',
+                          border: hasSweeper ? '1px solid #e5e7eb' : '1px solid #fcd34d',
+                          cursor: hasSweeper ? 'default' : 'pointer',
+                        }}
+                      >
+                        <span style={{ fontSize: 13 }}>🧹</span>
+                        <span>Assign Sweeper</span>
+                        {hasSweeper && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 2 }}>(assigned)</span>}
+                      </button>
+
+                      {sweeperOpen && !hasSweeper && (
+                        <div
+                          className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow text-[12px] z-10 py-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {sweeperOptions.map((opt) => (
+                            <button
+                              key={opt.label}
+                              type="button"
+                              onClick={() => {
+                                void onAssignSweeper(slotKey, opt.full);
+                                setSweeperOpen(false);
+                              }}
+                              className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-amber-700"
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

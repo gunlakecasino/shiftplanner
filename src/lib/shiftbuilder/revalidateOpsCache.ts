@@ -16,29 +16,31 @@ export async function revalidateSlotDefaultsCache(): Promise<void> {
 export async function revalidateScheduledRosterCache(): Promise<void> {
   revalidateTag('scheduled-roster', 'max');
   revalidateTag('graves-default', 'max');
-  revalidateTag('night-core', 'max');
+  revalidateTag('night-core', { expire: 0 });
 }
 
 /** Bust assignment-heavy night-core bundles after board mutations. */
 export async function revalidateNightCoreCache(): Promise<void> {
-  revalidateTag('night-core', 'max');
-  revalidateTag('night-lookup', 'max');
+  revalidateTag('night-core', { expire: 0 });
+  revalidateTag('night-lookup', { expire: 0 });
 }
 
 /** Bust deferred night-secondary bundles (tasks, breaks, borders, notes). */
 export async function revalidateNightSecondaryCache(): Promise<void> {
-  revalidateTag('night-secondary', 'max');
+  revalidateTag('night-secondary', { expire: 0 });
 }
 
 /**
  * Bust all ShiftBuilder per-night read caches after placement or task edits.
  * Pass isoDate (YYYY-MM-DD) when known so date-scoped tags are cleared too.
+ * Use { expire: 0 } (read-your-own-writes) so hard refresh immediately sees the change
+ * instead of serving stale-while-revalidate content.
  */
 export async function revalidateNightBoardCaches(isoDate?: string): Promise<void> {
-  revalidateTag('night-core', 'max');
-  revalidateTag('night-secondary', 'max');
-  revalidateTag('night-lookup', 'max');
+  revalidateTag('night-core', { expire: 0 });
+  revalidateTag('night-secondary', { expire: 0 });
+  revalidateTag('night-lookup', { expire: 0 });
   if (isoDate) {
-    revalidateTag(`night-${isoDate}`, 'max');
+    revalidateTag(`night-${isoDate}`, { expire: 0 });
   }
 }
