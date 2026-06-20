@@ -782,6 +782,88 @@ function AuthedShiftBuilder() {
     (currentView === "deployment" || currentView === "breaks") && !isPrintPreview;
   const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
   const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
+
+  // Lock entire web app exactly to browser window size (100vh/100vw).
+  // Eliminates ALL scroll and page movement — even during dnd, pinch, or long content.
+  // Paired with global CSS + useZoom adaptive fit/scale.
+  // Safari-specific: use window.innerHeight to defeat 100vh + address bar bugs.
+  React.useEffect(() => {
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+
+    htmlEl.classList.add('sb-shiftbuilder');
+    bodyEl.classList.add('sb-shiftbuilder');
+
+    const prev = {
+      htmlOverflow: htmlEl.style.overflow,
+      bodyOverflow: bodyEl.style.overflow,
+      htmlHeight: htmlEl.style.height,
+      bodyHeight: bodyEl.style.height,
+    };
+
+    const setFixedHeight = () => {
+      const h = `${window.innerHeight}px`;
+      htmlEl.style.height = h;
+      bodyEl.style.height = h;
+
+      // Clamp the shell directly — this is the most reliable for Safari
+      // (takes the app out of normal document flow so no page can "scroll")
+      const shell = document.querySelector('.sb-builder-shell') as HTMLElement | null;
+      if (shell) {
+        shell.style.height = h;
+        shell.style.position = 'fixed';
+        shell.style.top = '0';
+        shell.style.left = '0';
+        shell.style.right = '0';
+        shell.style.bottom = '0';
+        shell.style.overflow = 'hidden';
+        shell.style.width = '100%';
+      }
+    };
+
+    htmlEl.style.overflow = 'hidden';
+    bodyEl.style.overflow = 'hidden';
+    setFixedHeight();
+
+    // Safari-specific: block wheel (macOS Safari) at document level to kill page scroll.
+    // (We do NOT block touchmove globally to avoid breaking dnd-kit TouchSensor on iPad.)
+    const blockWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+
+    htmlEl.addEventListener('wheel', blockWheel, { passive: false });
+    bodyEl.addEventListener('wheel', blockWheel, { passive: false });
+
+    const onResize = () => setFixedHeight();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+
+      htmlEl.removeEventListener('wheel', blockWheel as any);
+      bodyEl.removeEventListener('wheel', blockWheel as any);
+
+      htmlEl.classList.remove('sb-shiftbuilder');
+      bodyEl.classList.remove('sb-shiftbuilder');
+      htmlEl.style.overflow = prev.htmlOverflow;
+      bodyEl.style.overflow = prev.bodyOverflow;
+      htmlEl.style.height = prev.htmlHeight;
+      bodyEl.style.height = prev.bodyHeight;
+
+      const shell = document.querySelector('.sb-builder-shell') as HTMLElement | null;
+      if (shell) {
+        shell.style.position = '';
+        shell.style.top = '';
+        shell.style.left = '';
+        shell.style.right = '';
+        shell.style.bottom = '';
+        shell.style.height = '';
+        shell.style.overflow = '';
+      }
+    };
+  }, []);
   // Persist
   React.useEffect(() => {
     try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
@@ -7217,7 +7299,7 @@ function AuthedShiftBuilder() {
 
   return (
     <div
-      className="sb-builder-shell h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative"
+      className="sb-builder-shell h-screen flex flex-col text-[#1C1C1E] dark:text-[#F2F2F4] overflow-hidden relative sb-shiftbuilder"
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,
@@ -7381,7 +7463,7 @@ function AuthedShiftBuilder() {
          relative container so the canvas can take the full width. When the
          operator collapses the roster, a sphere appears in its place.
          min-h-0 is still critical for the canvas's nested scroll behavior. */}
-      <div className={`flex flex-1 relative ${isBuilderLiveCanvas ? 'sb-builder-main overflow-y-auto' : 'overflow-hidden min-h-0'}`}>
+      <div className={`flex flex-1 relative overflow-hidden min-h-0 ${isBuilderLiveCanvas ? 'sb-builder-main' : ''}`}>
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
@@ -7620,13 +7702,12 @@ function AuthedShiftBuilder() {
         )}
 
         {/* RIGHT: Scaled, centered artboard stage.
-           stageHostRef is the gray scroll area; we measure its clientWidth /
-           clientHeight here to compute the "Fit" scale. The print-stage wrapper
-           is sized to the *scaled* dimensions so flex centers based on what's
-           actually painted, not the un-scaled layout box. */}
+           Fixed viewport: stageHost is overflow-hidden. We measure available
+           space and scale the content (via useZoom) to fit *exactly* with no
+           scroll or page shift possible, even while dragging. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 ${isBuilderLiveCanvas ? "overflow-y-auto overflow-x-visible" : "overflow-auto"} ${isBuilderLiveCanvas ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 overflow-hidden ${isBuilderLiveCanvas ? "sb-builder-stage bg-[#F8F8FA] dark:bg-[#0C0C0E]" : "bg-[#F2F2F4] dark:bg-[#0D0D0F]"} flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7643,10 +7724,10 @@ function AuthedShiftBuilder() {
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderLiveCanvas && (
             <div
-              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
+              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
-              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible">
+              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-hidden">
                 {/* Sized wrapper ensures the scaled content claims exactly the right layout space.
                     This makes zoom/scale fully adaptive to window size without "page too long" hacks
                     or negative margins. Intricate: explicit pre-transform dimensions + scale inside. */}

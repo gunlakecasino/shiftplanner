@@ -1440,6 +1440,43 @@ body {
   overflow-x: clip;
 }
 
+/* Fix the entire web app (when in builder) exactly to browser window/viewport size.
+   No scrollbars anywhere. No page movement or elastic scroll on drag/interaction.
+   The useZoom adaptive scale + explicit sized wrappers keep the board fully visible inside. */
+html.sb-shiftbuilder,
+body.sb-shiftbuilder {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: none !important;
+}
+
+.sb-builder-shell.sb-shiftbuilder {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: none !important;
+  /* Safari fix: clamp the root shell to actual window + take out of flow */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  /* Extra for when 100vh lies in Safari with dynamic bars */
+  min-height: -webkit-fill-available;
+}
+
+.sb-builder-main,
+.sb-stage-host,
+.sb-builder-scale-viewport,
+.sb-builder-canvas {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
 /* During active dnd gestures, block browser pinch/elastic zoom on scaled artboard + touch devices */
 html.sb-is-dragging,
 body.sb-is-dragging,
@@ -1451,6 +1488,7 @@ body.sb-is-dragging,
   -webkit-user-select: none !important;
   overscroll-behavior: none !important;
   cursor: default !important;
+  overflow: hidden !important;
 }
 
 /* Modern cursor model — no grab/hand pointers on draggable surfaces.

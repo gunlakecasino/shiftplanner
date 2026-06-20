@@ -99,7 +99,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const role = def.role ?? "blank";
   const isBlank = role === "blank";
   const isUnsetBlank = isBlank && !def.label?.trim();
-  const isConfigured = !isUnsetBlank;
+
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key, role);
@@ -108,8 +108,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     def.key,
     "aux",
     { tmId: a.tmId, tmName: a.tmName },
-    isLocked || isUnsetBlank,
+    isLocked || (isUnsetBlank && !a.tmName),  // use a.tmName (same as hook will compute) to avoid TDZ
   );
+
+  // Relax configured if we have an assignment/draft/covered, so assigned TMs always show
+  // even on cards that haven't had a role/label explicitly set yet.
+  const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear) || coveredByNames.length > 0 || !isUnsetBlank;
 
   const icon = getAuxIcon(def.key, role);
   const isEmpty = !hasTM && !loading;
@@ -224,7 +228,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     setEditingLabel(false);
   };
 
-  const headerLabel = isUnsetBlank && !editingLabel ? (
+  const headerLabel = (isUnsetBlank && !hasTM && !editingLabel) ? (
     <button
       type="button"
       className="flex items-center gap-1 min-w-0 text-left text-[#9CA3AF]"
@@ -299,7 +303,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     assignmentState = { kind: "unassigned" };
   }
 
-  const headerAccent = isUnsetBlank ? "#9CA3AF" : isBlank && def.label ? "#9CA3AF" : color;
+  const headerAccent = (isUnsetBlank && !hasTM) ? "#9CA3AF" : color;
 
   return (
     <div
@@ -309,7 +313,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       }}
       onClick={(e) => {
         if (isLocked) return;
-        if (isUnsetBlank) toggleRolePicker(e);
+        if (isUnsetBlank && !hasTM) toggleRolePicker(e);
         else onCardClick(def.key, e.currentTarget, e);
       }}
       onPointerMove={(e) => {
@@ -323,20 +327,20 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             onPointerCancel: longPress.onPointerCancel,
           }
         : {})}
-      {...(hasTM && !isLocked && isConfigured ? listeners : {})}
-      {...(hasTM && !isLocked && isConfigured ? attributes : {})}
+      {...(hasTM && !isLocked && ! (isUnsetBlank && !hasTM) ? listeners : {})}
+      {...(hasTM && !isLocked && ! (isUnsetBlank && !hasTM) ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <CardAccentStripe color={isUnsetBlank ? "#D1D5DB" : color} />
+      <CardAccentStripe color={(isUnsetBlank && !hasTM) ? "#D1D5DB" : color} />
 
       <CardSlotHeader
-        icon={isUnsetBlank && !editingLabel ? undefined : icon}
+        icon={(isUnsetBlank && !hasTM) && !editingLabel ? undefined : icon}
         label={headerLabel}
         accentColor={headerAccent}
         compact
@@ -400,7 +404,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        {isUnsetBlank ? (
+        {(isUnsetBlank && !hasTM && !(isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear)) ? (
           <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2 min-h-[64px]">
             {showDigitalAssists ? (
               <motion.button

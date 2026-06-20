@@ -124,11 +124,11 @@ export function useZoom({
     const byWidth = availW / naturalW;
     const byHeight = availH / naturalH;
 
-    // Builder: fit width only so cards stay readable; the stage scrolls vertically.
-    // Preview/Golden: fit both axes to keep the sacred 1056×816 paper on screen.
-    const next = builderFitEnabled
-      ? Math.min(max, byWidth, 1)
-      : Math.min(max, byWidth, byHeight);
+    // Fit the (measured) builder content exactly into the available stage area
+    // (both width and height). Combined with overflow:hidden everywhere + the
+    // pre-scaled size wrappers, this guarantees the whole UI is locked to the
+    // browser window with zero scroll or page movement during any interaction.
+    const next = Math.min(max, byWidth, byHeight);
 
     const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next);
     // Epsilon guard + ref check: DOM measurements, RO callbacks, and initial layout
