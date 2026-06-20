@@ -34,6 +34,7 @@ export interface RRCardProps {
   draftInfoM?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
@@ -62,6 +63,7 @@ const RRSide: React.FC<{
   loading?: boolean;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   isLocked?: boolean;
@@ -80,6 +82,7 @@ const RRSide: React.FC<{
   loading = false,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
   isLocked = false,
@@ -164,6 +167,7 @@ const RRSide: React.FC<{
                 slotKey={slotKey}
                 onRemoveTask={onRemoveTask}
                 onSetTaskColor={onSetTaskColor}
+                onSetTaskMarker={onSetTaskMarker}
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
                 textSize="text-[12px]"
@@ -267,6 +271,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   draftInfoM,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
   isLocked = false,

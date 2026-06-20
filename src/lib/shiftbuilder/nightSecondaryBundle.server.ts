@@ -27,6 +27,8 @@ type NightSlotTaskRow = {
   catalog_task_id: string | null;
   sort_order: number;
   color: string | null;
+  marker_type?: string | null;
+  markerType?: string | null;
   is_coverage: boolean;
 };
 
@@ -49,6 +51,7 @@ function mapNightSlotTask(r: NightSlotTaskRow) {
     catalogTaskId: r.catalog_task_id,
     sortOrder: r.sort_order ?? 0,
     color: r.color ?? null,
+    markerType: (r.marker_type ?? r.markerType ?? null) as any,
     isCoverage: r.is_coverage ?? false,
   };
 }

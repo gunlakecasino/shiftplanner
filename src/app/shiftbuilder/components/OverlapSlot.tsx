@@ -27,6 +27,7 @@ export interface OverlapSlotProps {
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
@@ -68,6 +69,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   draftInfo,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
   onLiveAssign,
@@ -167,6 +169,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               slotKey={slotKey}
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
+              onSetTaskMarker={onSetTaskMarker}
               onEditTask={onEditTask}
               onOpenTaskTextEdit={onOpenTaskTextEdit}
               textSize="text-[9.5px]"

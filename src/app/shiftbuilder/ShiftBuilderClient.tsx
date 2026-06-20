@@ -6473,12 +6473,46 @@ function AuthedShiftBuilder() {
 
       // Persist to Supabase (use normalized db keys)
       import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskColor }) =>
-        (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side).catch((err: unknown) => {
+        (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, color, rr_side, undefined).catch((err: unknown) => {
           console.error('[ShiftBuilder] Failed to set task color:', err);
         })
       );
     },
     [nightId, selectedDay.date, selectedDay.name, logBuilderChange]
+  );
+
+  // Per-task marker style (underline / circle / highlight / none)
+  const handleSetTaskMarker = React.useCallback(
+    (uiKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
+      const targetNightId = nightId;
+      const captureDate = selectedDay.date;
+
+      const { slot_key, rr_side } = uiToDb(uiKey);
+
+      // Optimistic update
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.map((t) =>
+          t.taskLabel === taskLabel ? { ...t, markerType } : t
+        );
+        return { ...prev, [uiKey]: next };
+      });
+
+      logBuilderChange({
+        action: "task_color", // reuse for now (or could be task_marker)
+        slotKey: uiKey,
+        targetNightId,
+        payload: { taskLabel, markerType },
+      });
+
+      // Persist (pass undefined for color to not clobber, marker is set)
+      import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskColor }) =>
+        (updateNightSlotTaskColor as any)(targetNightId, slot_key, taskLabel, undefined, rr_side, markerType).catch((err: unknown) => {
+          console.error('[ShiftBuilder] Failed to set task marker:', err);
+        })
+      );
+    },
+    [nightId, selectedDay.date, logBuilderChange]
   );
 
   // Edit / rename an existing task label (inline edit)
@@ -6833,6 +6867,10 @@ function AuthedShiftBuilder() {
   const handleBoardSetTaskColor = React.useCallback((slotKey: string, taskId: string, color: string) => {
     handleSetTaskColor(slotKey, taskId, color);
   }, [handleSetTaskColor]);
+
+  const handleBoardSetTaskMarker = React.useCallback((slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
+    handleSetTaskMarker(slotKey, taskLabel, markerType);
+  }, [handleSetTaskMarker]);
 
   const handleBoardEditTask = React.useCallback((slotKey: string, taskId: string, newLabel: string) => {
     handleEditTask(slotKey, taskId, newLabel);
@@ -7657,6 +7695,7 @@ function AuthedShiftBuilder() {
                 onBreakGroupChange={handleBoardBreakGroupChange}
                 onRemoveTask={handleBoardRemoveTask}
                 onSetTaskColor={handleBoardSetTaskColor}
+                onSetTaskMarker={handleBoardSetTaskMarker}
                 onEditTask={handleBoardEditTask}
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
@@ -8284,6 +8323,7 @@ function AuthedShiftBuilder() {
                 onBreakGroupChange={handleBoardBreakGroupChange}
                 onRemoveTask={handleBoardRemoveTask}
                 onSetTaskColor={handleBoardSetTaskColor}
+                onSetTaskMarker={handleBoardSetTaskMarker}
                 onEditTask={handleBoardEditTask}
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}

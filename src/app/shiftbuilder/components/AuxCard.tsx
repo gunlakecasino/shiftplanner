@@ -43,6 +43,7 @@ export interface AuxCardProps {
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
@@ -76,6 +77,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   draftInfo,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
   onLiveUnassign,
@@ -457,6 +459,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 slotKey={def.key}
                 onRemoveTask={onRemoveTask}
                 onSetTaskColor={onSetTaskColor}
+                onSetTaskMarker={onSetTaskMarker}
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
                 dense

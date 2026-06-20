@@ -1307,6 +1307,7 @@ export interface NightSlotTask {
   catalogTaskId: string | null;
   sortOrder: number;
   color: string | null; // per-task highlight color (hex) for the colored sphere
+  markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null; // text marker style for the task label
   isCoverage: boolean;  // true for "Add Coverage" bars — distinct from regular tasks
 }
 
@@ -1377,6 +1378,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     catalogTaskId: r.catalog_task_id,
     sortOrder: r.sort_order ?? 0,
     color: r.color ?? null,
+    markerType: (r.marker_type ?? r.markerType ?? null) as any,
     isCoverage: r.is_coverage ?? false,
   }));
 }
@@ -1561,15 +1563,20 @@ export async function updateNightSlotTaskColor(
   slotKey: string,
   taskLabel: string,
   color: string | null,
-  rrSide: 'mens' | 'womens' | null = null
+  rrSide: 'mens' | 'womens' | null = null,
+  markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null
 ): Promise<void> {
   if (!nightId || !slotKey || !taskLabel) {
     throw new Error('setNightSlotTaskColor requires nightId, slotKey, taskLabel');
   }
 
+  const update: any = {};
+  if (color !== undefined) update.color = color;
+  if (markerType !== undefined) update.marker_type = markerType;
+
   let q = supabase
     .from('night_slot_tasks')
-    .update({ color })
+    .update(update)
     .eq('night_id', nightId)
     .eq('slot_key', slotKey)
     .eq('task_label', taskLabel);

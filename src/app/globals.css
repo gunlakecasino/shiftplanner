@@ -1193,10 +1193,10 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
-/* Subtle elegant task color marks (thin left accent, not loud boxes). */
-.builder-workspace .assignment-card .sb-list-row span[style*="backgroundColor"],
-.builder-workspace .assignment-card .TaskRow span[style*="backgroundColor"] {
-  background-color: color-mix(in srgb, var(--task-color, #B89708) 12%, transparent) !important;
+/* Subtle elegant task color marks (thin left accent, not loud boxes). Only for default highlight marker. */
+.builder-workspace .assignment-card .sb-list-row span[style*="backgroundColor"]:not([style*="border-bottom"]):not([style*="border:"]),
+.builder-workspace .assignment-card .TaskRow span[style*="backgroundColor"]:not([style*="border-bottom"]):not([style*="border:"]) {
+  background-color: color-mix(in srgb, var(--task-color, #B89708) 12%, transparent);
   border-left: 3px solid var(--task-color, #B89708);
 }
 

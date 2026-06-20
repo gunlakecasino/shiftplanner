@@ -15,6 +15,7 @@ const ZoneTaskList: React.FC<{
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   /** Double-click a task row to open the text/font attributes pad. */
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
@@ -26,7 +27,7 @@ const ZoneTaskList: React.FC<{
   textSize?: string;
   /** Accepted for call-site compatibility; ZoneTaskList computes its own textColor. */
   textColorClass?: string;
-}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onEditTask, onOpenTaskTextEdit, dense = false, isPrintPreview = false }) => {
+}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onSetTaskMarker, onEditTask, onOpenTaskTextEdit, dense = false, isPrintPreview = false }) => {
   if (!tasks || tasks.length === 0) return null;
   const textColor = hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
 
@@ -65,6 +66,7 @@ const ZoneTaskList: React.FC<{
               slotKey={slotKey}
               onRemoveTask={onRemoveTask}
               onSetTaskColor={onSetTaskColor}
+              onSetTaskMarker={onSetTaskMarker}
               onEditTask={onEditTask}
               onOpenTaskTextEdit={onOpenTaskTextEdit}
               textSize={textSize}

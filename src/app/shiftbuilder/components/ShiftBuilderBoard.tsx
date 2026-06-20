@@ -104,6 +104,7 @@ export interface ShiftBuilderBoardProps {
   onGenderClick?: (k: string, el?: HTMLElement, e?: React.MouseEvent) => void;
   onRemoveTask?: any;
   onSetTaskColor?: any;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: any;
   setBreakGroupForSlot?: any;
   onLiveAssign?: any;
@@ -250,6 +251,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onGenderClick,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   setBreakGroupForSlot,
   onLiveAssign,
@@ -606,6 +608,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         onClose={closeTaskTextEditPad}
         onEditTask={onEditTask}
         onSetTaskColor={onSetTaskColor}
+        onSetTaskMarker={onSetTaskMarker}
         onRemoveTask={onRemoveTask}
         isDark={isDark}
       />
@@ -1122,6 +1125,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         draftInfo={draftAssignments[key]}
                         onRemoveTask={onRemoveTask}
                         onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                         onEditTask={onEditTask}
                         onOpenTaskTextEdit={handleOpenTaskTextEdit}
                         isLocked={isCurrentNightLocked}
@@ -1215,6 +1219,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         draftInfoM={draftAssignments[mKey]}
                         onRemoveTask={onRemoveTask}
                         onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                         onEditTask={onEditTask}
                         onOpenTaskTextEdit={handleOpenTaskTextEdit}
                         isLocked={isCurrentNightLocked}
@@ -1373,6 +1378,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             draftInfo={draftAssignments[key]}
                             onRemoveTask={onRemoveTask}
                             onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                             onEditTask={onEditTask}
                             onOpenTaskTextEdit={handleOpenTaskTextEdit}
                             isLocked={isCurrentNightLocked}
@@ -1459,6 +1465,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           draftInfo={draftAssignments[key]}
                           onRemoveTask={onRemoveTask}
                           onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                           onEditTask={onEditTask}
                           onOpenTaskTextEdit={handleOpenTaskTextEdit}
                           isLocked={isCurrentNightLocked}
@@ -1555,6 +1562,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                   draftInfo={draftAssignments[slotKey]}
                                   onRemoveTask={onRemoveTask}
                                   onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                                   onEditTask={onEditTask}
                                   onOpenTaskTextEdit={handleOpenTaskTextEdit}
                                   isLocked={isCurrentNightLocked}
@@ -1771,6 +1779,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 draftInfo={draftAssignments[slotKey]}
                                 onRemoveTask={onRemoveTask}
                                 onSetTaskColor={onSetTaskColor}
+                        onSetTaskMarker={onSetTaskMarker}
                                 onEditTask={onEditTask}
                                 onOpenTaskTextEdit={handleOpenTaskTextEdit}
                                 isLocked={isCurrentNightLocked}

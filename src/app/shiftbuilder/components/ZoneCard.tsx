@@ -40,6 +40,7 @@ export interface ZoneCardProps {
   draftInfo?: { proposedTmName: string; previousTmName?: string };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
@@ -73,6 +74,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   draftInfo,
   onRemoveTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
   isLocked = false,
@@ -220,6 +222,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
                 slotKey={def.key}
                 onRemoveTask={onRemoveTask}
                 onSetTaskColor={onSetTaskColor}
+                onSetTaskMarker={onSetTaskMarker}
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
                 textSize="text-[12px]"

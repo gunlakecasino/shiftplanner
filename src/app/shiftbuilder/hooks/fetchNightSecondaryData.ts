@@ -24,6 +24,7 @@ function mapNightSlotTaskRow(row: Record<string, unknown>): NightSlotTask {
     catalogTaskId: (row.catalogTaskId ?? row.catalog_task_id ?? null) as string | null,
     sortOrder: Number(row.sortOrder ?? row.sort_order ?? 0),
     color: (row.color ?? null) as string | null,
+    markerType: (row.markerType ?? row.marker_type ?? null) as NightSlotTask['markerType'],
     isCoverage: Boolean(row.isCoverage ?? row.is_coverage ?? false),
   };
 }

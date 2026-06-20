@@ -27,6 +27,7 @@ export interface TaskRowProps {
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   /** Double-click opens the pop-up font/text attributes pad (like PlacementPad). Provided only in builder (not print). */
   onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
@@ -53,12 +54,14 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   isPrintPreview = false,
 }) => {
   const hasColor = !!task.color;
+  const markerType = (task as any).markerType || 'highlight';
+  const usesLeftAccent = hasColor && markerType === 'highlight';
 
   const labelRef = React.useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = React.useState(isPrintPreview ? '9.5px' : '13px');
   const [hanging, setHanging] = React.useState<{ textIndent: string; paddingLeft: string }>({
     textIndent: '0',
-    paddingLeft: hasColor ? (isPrintPreview ? '6px' : '9px') : '0'
+    paddingLeft: usesLeftAccent ? (isPrintPreview ? '6px' : '9px') : '0'
   });
 
   // Responsive task label: base 13px consistent across all cards.
@@ -75,7 +78,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       // or measurement differences never add a second line in any browser's print engine.
       const staticSize = textSize?.match(/\[([\d.]+)px\]/)?.[1] ? textSize.match(/\[([\d.]+)px\]/)![1] + 'px' : '9.5px';
       setFontSize(staticSize);
-      setHanging({ textIndent: '0', paddingLeft: hasColor ? '6px' : '0' });
+      setHanging({ textIndent: '0', paddingLeft: usesLeftAccent ? '6px' : '0' });
       return;
     }
 
@@ -88,7 +91,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       // measure at base
       el.style.fontSize = '13px';
       el.style.textIndent = '0';
-      el.style.paddingLeft = hasColor ? '9px' : '0';
+      el.style.paddingLeft = usesLeftAccent ? '9px' : '0';
       el.style.whiteSpace = 'nowrap';
 
       const needed = el.scrollWidth;
@@ -96,7 +99,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
       let fs = '13px';
       let ti = '0';
-      let pl = hasColor ? '9px' : '0';
+      let pl = usesLeftAccent ? '9px' : '0';
 
       if (needed > avail) {
         el.style.fontSize = '10px';
@@ -104,7 +107,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
         if (needed10 > avail) {
           fs = '10px';
           ti = '-1.15em';
-          pl = hasColor ? 'calc(9px + 1.15em)' : '1.15em';
+          pl = usesLeftAccent ? 'calc(9px + 1.15em)' : '1.15em';
         } else {
           fs = '10px';
         }
@@ -120,7 +123,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     const ro = new ResizeObserver(compute);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [task.taskLabel, hasColor, isPrintPreview, textSize]);
+  }, [task.taskLabel, hasColor, markerType, isPrintPreview, textSize]);
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
   // The Sudo Tasks tab writes to the same localStorage key.
   const effectiveDraggable = React.useMemo(() => {
@@ -211,18 +214,47 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
         <span
           ref={labelRef}
           className="block rounded-sm transition-colors font-medium py-px"
-          style={hasColor ? {
-            backgroundColor: `${task.color}15`,
-            borderLeft: `3px solid ${task.color}`,
-            fontSize,
-            textIndent: hanging.textIndent,
-            paddingLeft: hanging.paddingLeft,
-            marginLeft: '-1px',
-            ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
-          } : {
-            fontSize,
-            ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
-          }}
+          style={
+            hasColor && markerType !== 'none' ? (() => {
+              const base: React.CSSProperties = {
+                fontSize,
+                textIndent: hanging.textIndent,
+                paddingLeft: hanging.paddingLeft,
+                marginLeft: '-1px',
+                ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
+              };
+              if (markerType === 'underline') {
+                return {
+                  ...base,
+                  borderBottom: `3px solid ${task.color}`,
+                  paddingBottom: '2px',
+                  backgroundColor: 'transparent',
+                  borderLeft: 'none',
+                };
+              }
+              if (markerType === 'circle') {
+                return {
+                  ...base,
+                  border: `2px solid ${task.color}`,
+                  borderRadius: '9999px',
+                  padding: '1px 6px',
+                  backgroundColor: 'transparent',
+                  borderLeft: 'none',
+                  display: 'inline-block',
+                  marginLeft: '2px',
+                };
+              }
+              // default highlight
+              return {
+                ...base,
+                backgroundColor: `${task.color}15`,
+                borderLeft: `3px solid ${task.color}`,
+              };
+            })() : {
+              fontSize,
+              ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
+            }
+          }
         >
           {task.taskLabel}
         </span>

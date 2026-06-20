@@ -16,6 +16,7 @@ export interface TaskTextEditPadProps {
   onClose: () => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   isDark?: boolean;
 }
@@ -29,22 +30,24 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
   onClose,
   onEditTask,
   onSetTaskColor,
+  onSetTaskMarker,
   onRemoveTask,
   isDark = false,
 }) => {
   const originalLabel = task.taskLabel;
   const originalColor = task.color ?? null;
+  const originalMarker = (task as any).markerType || 'highlight';
 
   const [labelDraft, setLabelDraft] = useState(originalLabel);
   const [colorDraft, setColorDraft] = useState<string | null>(originalColor);
-  const [markerType, setMarkerType] = useState<'highlight' | 'underline' | 'circle' | 'none'>('highlight');
+  const [markerType, setMarkerType] = useState<'highlight' | 'underline' | 'circle' | 'none'>(originalMarker);
 
   const reducedMotion = useReducedMotion();
   const portalStyle = usePortalPlacementStyle(hostId, "right");
   const usePortal = !!hostId && !!portalStyle;
 
   const hasChanges =
-    labelDraft.trim() !== originalLabel || colorDraft !== originalColor || markerType !== 'highlight';
+    labelDraft.trim() !== originalLabel || colorDraft !== originalColor || markerType !== originalMarker;
 
   const getMarkerStyle = () => {
     if (!colorDraft) return { color: isDark ? "#E5E5E7" : "#1f2937" };
@@ -89,6 +92,11 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
     const labelForColor = newLabel !== originalLabel ? newLabel : originalLabel;
     if (colorDraft !== originalColor && onSetTaskColor) {
       onSetTaskColor(slotKey, labelForColor, colorDraft);
+    }
+
+    // Apply marker style if changed
+    if (markerType !== originalMarker && onSetTaskMarker) {
+      onSetTaskMarker(slotKey, labelForColor, markerType);
     }
 
     onClose();
