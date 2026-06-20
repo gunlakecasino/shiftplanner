@@ -15,6 +15,7 @@ import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { applyAuxRole, applyAuxLabel } from "@/lib/shiftbuilder/auxLayout";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
+import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
@@ -58,6 +59,12 @@ export interface AuxCardProps {
   coveredByNames?: string[];
   onSetAuxRole?: (slotKey: string, role: AuxRole) => void;
   onSetAuxLabel?: (slotKey: string, label: string) => void;
+  isTodayKiosk?: boolean;
+  isPeerDimmed?: boolean;
+  isCardSelected?: boolean;
+  isAssignPulse?: boolean;
+  isViewOnly?: boolean;
+  onKioskLongPress?: (anchor: { x: number; y: number }) => void;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -84,6 +91,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   coveredByNames = [],
   onSetAuxRole,
   onSetAuxLabel,
+  isTodayKiosk = false,
+  isPeerDimmed = false,
+  isCardSelected = false,
+  isAssignPulse = false,
+  isViewOnly = false,
+  onKioskLongPress,
 }) => {
   const role = def.role ?? "blank";
   const isBlank = role === "blank";
@@ -161,6 +174,11 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
   const { isPenHovering, penHoverHandlers, clearLongHoverTimer } = usePencilHover(
     (el) => { if (!isLocked && isConfigured) onCardClick(def.key, el); },
+  );
+
+  const longPress = useCardLongPress(
+    isTodayKiosk && !isViewOnly && isConfigured && !!onKioskLongPress,
+    (anchor) => onKioskLongPress?.(anchor),
   );
 
   const commitLabel = () => {
@@ -303,13 +321,26 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         if (isUnsetBlank) toggleRolePicker(e);
         else onCardClick(def.key, e.currentTarget, e);
       }}
-      onPointerMove={handleSpotlightMove}
+      onPointerMove={(e) => {
+        handleSpotlightMove(e);
+        if (isTodayKiosk && isConfigured) longPress.onPointerMove(e);
+      }}
       {...(isConfigured ? penHoverHandlers : {})}
+      {...(isTodayKiosk && isConfigured
+        ? {
+            onPointerDown: longPress.onPointerDown,
+            onPointerUp: longPress.onPointerUp,
+            onPointerCancel: (e: React.PointerEvent) => {
+              penHoverHandlers.onPointerCancel?.(e);
+              longPress.onPointerCancel(e);
+            },
+          }
+        : {})}
       {...(hasTM && !isLocked && isConfigured ? listeners : {})}
       {...(hasTM && !isLocked && isConfigured ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isConfigured ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isConfigured ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -322,10 +353,18 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         label={headerLabel}
         accentColor={headerAccent}
         compact
+        titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
             <PlacementFitChip fit={fitChip} />
-            <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+            <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
+              <BreakBadge
+                value={currentBreak}
+                onCycle={cycleBreak}
+                accentColor={isTodayKiosk ? color : undefined}
+                kioskSize={isTodayKiosk}
+              />
+            </span>
             {hasTM && !isLocked && onLiveUnassign ? (
               <button
                 type="button"
@@ -333,7 +372,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   e.stopPropagation();
                   onLiveUnassign(def.key);
                 }}
-                className="text-[#9CA3AF] hover:text-[#EF4444] leading-none text-[13px] px-0.5"
+                className="sb-kiosk-action text-[#9CA3AF] hover:text-[#EF4444] leading-none text-[13px] px-0.5"
                 aria-label="Remove TM from slot"
                 title="Clear this slot"
               >

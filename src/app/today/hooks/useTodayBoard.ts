@@ -10,9 +10,10 @@ import {
   NATURAL_HEIGHT,
 } from "@/app/shiftbuilder/hooks/useZoom";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
-import { initLiveCacheForNight, teardownAllLiveCache } from "@/lib/shiftbuilder/liveCache";
+import { initLiveCacheForNight, retainLiveCacheMount } from "@/lib/shiftbuilder/liveCache";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import type { ExportProgress } from "@/app/shiftbuilder/print/exportPdf";
 import { uiToDb, dbToUi } from "@/lib/shiftbuilder/slot-keys";
 import { BLANK_AUX_DEFS, type BreakGroup, type ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
@@ -22,7 +23,8 @@ import {
   logDeploymentChange,
   type DeploymentChangeAction,
 } from "../lib/todayChangeLog";
-import { TODAY_STAGE_INSETS } from "../lib/constants";
+import { TODAY_STAGE_INSETS, TODAY_ZEN_STAGE_INSETS } from "../lib/constants";
+import { exportTodaySchedulePdf } from "../lib/exportTodaySchedulePdf";
 import { printTodaySchedule } from "../lib/printTodaySchedule";
 import type { TodayBoardView } from "./useTodayScheduleNav";
 import { useTodayDragDrop } from "./useTodayDragDrop";
@@ -31,13 +33,31 @@ import {
   getSlotCoverageLabel,
 } from "../lib/coverageHelpers";
 
+type TodayPrintBusyMode = "print" | "export" | null;
+
 type UseTodayBoardParams = {
   selectedDay: DayDef;
   selectedDayIndex: number;
+  dayDefs: DayDef[];
   operatorName: string;
   currentView: TodayBoardView;
   setCurrentView: (view: TodayBoardView) => void;
+  /** Strip/calendar publish cache — optimistic board while meta loads. */
+  publishedStripDates?: Set<string>;
+  /** /today kiosk: card assign-success pulse */
+  onAssignPulse?: (slotKey: string) => void;
+  /** Zen mode — reclaim viewport for fit-to-screen scaling */
+  zenActive?: boolean;
 };
+
+async function resolveTodayNightId(
+  nightId: string | null,
+  selectedDay: DayDef,
+): Promise<string | null> {
+  if (nightId) return nightId;
+  const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+  return getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+}
 
 async function refreshTasksForNight(
   nightId: string,
@@ -57,38 +77,32 @@ async function refreshTasksForNight(
 export function useTodayBoard({
   selectedDay,
   selectedDayIndex,
+  dayDefs,
   operatorName,
   currentView,
   setCurrentView,
+  publishedStripDates,
+  onAssignPulse,
+  zenActive = false,
 }: UseTodayBoardParams) {
   const { showToast } = useToast();
-  const shiftData = useShiftData(selectedDay);
-  const {
-    currentNight,
-    storeAssignments,
-    effectiveAssignments,
-    effectiveRealRoster,
-    effectiveScheduledTmIdsTonight,
-    effectiveCardBorders,
-    boardColdLoading,
-  } = shiftData;
-
-  const nightId = currentNight.nightId ?? null;
-  const queryNightId = nightId;
-  const live = useLiveAssignments(selectedDay);
 
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
   const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
   const [nightStatus, setNightStatus] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [statusError, setStatusError] = useState(false);
+  const [printBusyMode, setPrintBusyMode] = useState<TodayPrintBusyMode>(null);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, NightSlotTask[]>>({});
   const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(null);
   const positioningRef = useRef<HTMLDivElement>(null);
 
+  const stageInsets = zenActive ? TODAY_ZEN_STAGE_INSETS : TODAY_STAGE_INSETS;
+
   const { stageHostRef, scale, recomputeScale } = useZoom({
     rosterOpen: false,
-    stageInsets: TODAY_STAGE_INSETS,
+    stageInsets,
   });
 
   useEffect(() => {
@@ -96,11 +110,22 @@ export function useTodayBoard({
   }, [recomputeScale]);
 
   useEffect(() => {
+    recomputeScale();
+    const t1 = requestAnimationFrame(recomputeScale);
+    const t2 = window.setTimeout(recomputeScale, 400);
+    return () => {
+      cancelAnimationFrame(t1);
+      clearTimeout(t2);
+    };
+  }, [zenActive, recomputeScale]);
+
+  useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     setSelectedSlotKey(null);
     setNightStatus(null);
     setIsCurrentNightLocked(false);
     setStatusLoading(true);
+    setStatusError(false);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [selectedDay.date]); // Day-change resets: intentional synchronous UI clear (linter advisory for reset-on-dep-change)
 
@@ -114,14 +139,17 @@ export function useTodayBoard({
       if (!id) {
         setNightStatus(null);
         setIsCurrentNightLocked(false);
+        setStatusError(false);
         return;
       }
       const meta = await getNightMeta(id);
       setIsCurrentNightLocked(!!meta.isLocked);
       setNightStatus(meta.status);
+      setStatusError(false);
     } catch {
       setNightStatus(null);
       setIsCurrentNightLocked(false);
+      setStatusError(true);
     } finally {
       if (opts?.showLoading) setStatusLoading(false);
     }
@@ -138,17 +166,42 @@ export function useTodayBoard({
     const onVisible = () => {
       if (document.visibilityState === "visible") sync();
     };
+    const onPublishRealtime = () => void refreshPublishMeta(selectedDay.date);
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("today-publish-meta-changed", onPublishRealtime);
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("today-publish-meta-changed", onPublishRealtime);
     };
   }, [selectedDay.date, refreshPublishMeta]);
 
+  const selectedDateKey = formatLocalDateISO(selectedDay.date);
+  const stripSaysPublished = publishedStripDates?.has(selectedDateKey) ?? false;
   const isPublished = nightStatus === "published";
+  const treatAsPublished =
+    selectedDay.isToday || isPublished || (statusLoading && stripSaysPublished);
+
   /** /today only surfaces published history; tonight stays available for quick edits. */
-  const isScheduleHidden =
-    !selectedDay.isToday && (statusLoading || !isPublished);
+  const isScheduleHidden = !selectedDay.isToday && !treatAsPublished;
+
+  /** Align data plane with UI publish policy — skip night-core for hidden history. */
+  const nightCoreEnabled = treatAsPublished;
+
+  const shiftData = useShiftData(selectedDay, { nightCoreEnabled, todayPolicy: true });
+  const {
+    currentNight,
+    storeAssignments,
+    effectiveAssignments,
+    effectiveRealRoster,
+    effectiveScheduledTmIdsTonight,
+    effectiveCardBorders,
+    boardColdLoading,
+  } = shiftData;
+
+  const nightId = currentNight.nightId ?? null;
+  const queryNightId = nightId;
+  const live = useLiveAssignments(selectedDay);
 
   /**
    * PRODUCTION POLICY:
@@ -157,19 +210,20 @@ export function useTodayBoard({
    * audit logs only (TodayNameGate → sessionStorage).
    */
   const isScheduleReadOnly = false;
-  const canPrint = !statusLoading && (selectedDay.isToday || isPublished);
-  // scheduleBanner: reserved for future status / realtime / notice banners.
-  // Currently always null; the UI conditional in TodayPageClient documents this.
-  const scheduleBanner: string | null = null;
+  const canPrint =
+    treatAsPublished && (selectedDay.isToday || !statusLoading || stripSaysPublished);
+  const scheduleBanner: string | null = isCurrentNightLocked
+    ? "Supervisor locked this night in Shift Builder — floor edits on /today remain enabled"
+    : null;
 
   useEffect(() => {
-    if (!queryNightId || !currentNight.queryClient) return;
+    if (!nightCoreEnabled || !queryNightId || !currentNight.queryClient) return;
     const dateKey = formatLocalDateISO(selectedDay.date);
     const cleanup = initLiveCacheForNight(queryNightId, dateKey, currentNight.queryClient);
     return () => cleanup?.();
-  }, [queryNightId, selectedDay.date, currentNight.queryClient]);
+  }, [nightCoreEnabled, queryNightId, selectedDay.date, currentNight.queryClient]);
 
-  useEffect(() => () => teardownAllLiveCache(), []);
+  useEffect(() => retainLiveCacheMount(), []);
 
   // Force the canonical aux list into the shared Zustand store.
   // This is a cross-cutting side effect: /today does not own custom aux defs.
@@ -257,16 +311,29 @@ export function useTodayBoard({
       newTmName?: string | null;
       payload?: Record<string, unknown>;
     }) => {
-      if (!nightId) return;
-      logDeploymentChange({
-        nightId,
-        nightDate: formatLocalDateISO(selectedDay.date),
-        operatorName,
-        ...params,
-        payload: { source: "today_deployment_board", ...params.payload },
-      });
+      void (async () => {
+        const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+        if (!effectiveNightId) return;
+        logDeploymentChange(
+          {
+            nightId: effectiveNightId,
+            nightDate: formatLocalDateISO(selectedDay.date),
+            operatorName,
+            ...params,
+            payload: { source: "today_deployment_board", ...params.payload },
+          },
+          {
+            onFailure: (message) => showToast(message, "error"),
+          },
+        );
+      })();
     },
-    [nightId, selectedDay.date, operatorName],
+    [nightId, selectedDay, operatorName, showToast],
+  );
+
+  const isSlotLocked = useCallback(
+    (slotKey: string) => !!(padAssignments[slotKey] as { isLocked?: boolean } | undefined)?.isLocked,
+    [padAssignments],
   );
 
   const handleSlotToggle = useCallback(
@@ -292,6 +359,10 @@ export function useTodayBoard({
         showToast("This night is locked — editing disabled", "error");
         return;
       }
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
+        return;
+      }
       if (/^RR\d+$/.test(slotKey)) {
         showToast("Select a specific M or W side on the RR card", "error");
         return;
@@ -303,6 +374,7 @@ export function useTodayBoard({
         targetNightId: nightId,
         isDraftMode: false,
         onPersisted: () => {
+          onAssignPulse?.(slotKey);
           logChange({
             action: "assign",
             slotKey,
@@ -323,6 +395,8 @@ export function useTodayBoard({
       live,
       logChange,
       showToast,
+      isSlotLocked,
+      onAssignPulse,
     ],
   );
 
@@ -330,6 +404,10 @@ export function useTodayBoard({
     (slotKey: string) => {
       if (isScheduleReadOnly) {
         showToast("This night is locked — editing disabled", "error");
+        return;
+      }
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
         return;
       }
       const prev = padAssignments[slotKey];
@@ -358,6 +436,7 @@ export function useTodayBoard({
       live,
       logChange,
       showToast,
+      isSlotLocked,
     ],
   );
 
@@ -367,14 +446,15 @@ export function useTodayBoard({
         showToast("You don't have permission to lock slots", "error");
         return;
       }
-      if (!nightId) return;
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId) return;
       const current = !!padAssignments[slotKey]?.isLocked;
       const nextLocked = !current;
       const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
       try {
         const { toggleAssignmentLock } = await import("@/lib/shiftbuilder/data");
         await toggleAssignmentLock({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
@@ -396,7 +476,7 @@ export function useTodayBoard({
         showToast(msg, "error");
       }
     },
-    [isScheduleReadOnly, nightId, padAssignments, logChange, showToast],
+    [isScheduleReadOnly, nightId, selectedDay, padAssignments, logChange, showToast],
   );
 
   const setBreakGroupForSlot = useCallback(
@@ -405,12 +485,33 @@ export function useTodayBoard({
         showToast("You don't have permission to change break groups", "error");
         return;
       }
-      if (!nightId) return;
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
+        return;
+      }
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId) return;
       try {
-        const { updateSlotBreakGroup } = await import("@/lib/shiftbuilder/data");
+        const { updateSlotBreakGroup, deleteBreakAssignment, upsertBreakAssignment } =
+          await import("@/lib/shiftbuilder/data");
         const { slot_key, rr_side } = uiToDb(slotKey);
         const tmId = padAssignments[slotKey]?.tmId ?? null;
-        await updateSlotBreakGroup(nightId, slot_key, rr_side, group, tmId);
+        await updateSlotBreakGroup(effectiveNightId, slot_key, rr_side, group, tmId);
+
+        // Keep break_assignments in sync for the break-sheet / print path (Builder parity).
+        if (tmId) {
+          if (group === 0) {
+            await deleteBreakAssignment(effectiveNightId, tmId);
+          } else {
+            await upsertBreakAssignment({
+              nightId: effectiveNightId,
+              tmId,
+              groupNum: group,
+              slotRef: slotKey,
+            });
+          }
+        }
+
         useShiftBuilderStore.getState().setAssignments((prev: Record<string, unknown>) => ({
           ...prev,
           [slotKey]: { ...(prev[slotKey] as object), breakGroup: group },
@@ -425,7 +526,7 @@ export function useTodayBoard({
         showToast(msg, "error");
       }
     },
-    [nightId, isScheduleReadOnly, padAssignments, showToast, logChange],
+    [nightId, selectedDay, isScheduleReadOnly, isSlotLocked, padAssignments, showToast, logChange],
   );
 
   const handleAddTask = useCallback(
@@ -434,13 +535,35 @@ export function useTodayBoard({
         showToast("This night is locked — cannot add tasks", "error");
         return;
       }
-      if (!nightId || !taskLabel.trim()) return;
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
+        return;
+      }
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId || !taskLabel.trim()) return;
+      const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
+      const label = taskLabel.trim();
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticTask: NightSlotTask = {
+        id: optimisticId,
+        nightId: effectiveNightId,
+        slotKey: slot_key,
+        slotType: slot_type,
+        rrSide: rr_side,
+        taskLabel: label,
+        catalogTaskId: null,
+        sortOrder: 50,
+        color: null,
+        isCoverage: false,
+      };
+      setSelectedTasks((prev) => ({
+        ...prev,
+        [slotKey]: [...(prev[slotKey] ?? []), optimisticTask],
+      }));
       try {
         const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
-        const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
-        const label = taskLabel.trim();
         await addNightSlotTask({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
@@ -452,12 +575,26 @@ export function useTodayBoard({
           slotKey,
           payload: { taskLabel: label },
         });
-        await refreshTasksForNight(nightId, setSelectedTasks);
+        await refreshTasksForNight(effectiveNightId, setSelectedTasks);
       } catch {
+        setSelectedTasks((prev) => ({
+          ...prev,
+          [slotKey]: (prev[slotKey] ?? []).filter((t) => t.id !== optimisticId),
+        }));
         showToast("Failed to save task", "error");
       }
     },
-    [isScheduleReadOnly, nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, selectedDay, isSlotLocked, showToast, logChange],
+  );
+
+  const captureOptions = useCallback(
+    () => ({
+      currentView,
+      setCurrentView,
+      onSlotClose: () => setSelectedSlotKey(null),
+      dayIndex: selectedDayIndex,
+    }),
+    [currentView, setCurrentView, selectedDayIndex],
   );
 
   const handlePrint = useCallback(async () => {
@@ -469,20 +606,67 @@ export function useTodayBoard({
       showToast("Still loading — try again in a moment", "error");
       return;
     }
-    setIsPrinting(true);
+    if (printBusyMode) return;
+    setPrintBusyMode("print");
     try {
-      const result = await printTodaySchedule({
-        currentView,
-        setCurrentView,
-        onSlotClose: () => setSelectedSlotKey(null),
+      const result = await printTodaySchedule(captureOptions());
+      if (!result.ok) {
+        showToast(result.reason, "error");
+      } else {
+        logChange({
+          action: "print",
+          payload: { view: currentView, format: "browser" },
+        });
+        showToast("Print ready — deployment + breaks", "success");
+      }
+    } finally {
+      setPrintBusyMode(null);
+    }
+  }, [canPrint, boardColdLoading, captureOptions, currentView, showToast, logChange, printBusyMode]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!canPrint) {
+      showToast("Export is only available for tonight or published schedules", "error");
+      return;
+    }
+    if (boardColdLoading) {
+      showToast("Still loading — try again in a moment", "error");
+      return;
+    }
+    if (printBusyMode) return;
+    setPrintBusyMode("export");
+    setExportProgress({ current: 0, total: 2, label: "Capturing sheets…" });
+    try {
+      const result = await exportTodaySchedulePdf({
+        ...captureOptions(),
+        selectedDayIndex,
+        dayDefs,
+        onProgress: setExportProgress,
       });
       if (!result.ok) {
         showToast(result.reason, "error");
+      } else {
+        logChange({
+          action: "print",
+          payload: { view: currentView, format: "pdf", filename: result.filename },
+        });
+        showToast(`PDF downloaded — ${result.filename}`, "success");
       }
     } finally {
-      setIsPrinting(false);
+      setPrintBusyMode(null);
+      setExportProgress(null);
     }
-  }, [canPrint, boardColdLoading, currentView, setCurrentView, showToast]);
+  }, [
+    canPrint,
+    boardColdLoading,
+    captureOptions,
+    currentView,
+    selectedDayIndex,
+    dayDefs,
+    showToast,
+    logChange,
+    printBusyMode,
+  ]);
 
   const handleRemoveTask = useCallback(
     async (slotKey: string, taskLabel: string) => {
@@ -490,7 +674,12 @@ export function useTodayBoard({
         showToast("You don't have permission to remove tasks", "error");
         return;
       }
-      if (!nightId) return;
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
+        return;
+      }
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId) return;
       setSelectedTasks((prev) => {
         const existing = prev[slotKey] || [];
         return { ...prev, [slotKey]: existing.filter((t) => t.taskLabel !== taskLabel) };
@@ -499,7 +688,7 @@ export function useTodayBoard({
         const { removeNightSlotTask } = await import("@/lib/shiftbuilder/data");
         const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
         await removeNightSlotTask({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
@@ -512,10 +701,10 @@ export function useTodayBoard({
         });
       } catch {
         showToast("Failed to remove task", "error");
-        await refreshTasksForNight(nightId, setSelectedTasks);
+        await refreshTasksForNight(effectiveNightId, setSelectedTasks);
       }
     },
-    [isScheduleReadOnly, nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, selectedDay, isSlotLocked, showToast, logChange],
   );
 
   const handleAssignSweeper = useCallback(
@@ -524,15 +713,37 @@ export function useTodayBoard({
         showToast("You don't have permission to assign sweepers", "error");
         return;
       }
-      if (!nightId) {
+      if (isSlotLocked(slotKey)) {
+        showToast(`${slotKey} is locked`, "error");
+        return;
+      }
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId) {
         showToast("No active night selected", "error");
         return;
       }
+      const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
+      const optimisticId = `optimistic-sweeper-${Date.now()}`;
+      const optimisticTask: NightSlotTask = {
+        id: optimisticId,
+        nightId: effectiveNightId,
+        slotKey: slot_key,
+        slotType: slot_type,
+        rrSide: rr_side,
+        taskLabel: sweeperLabel,
+        catalogTaskId: null,
+        sortOrder: 60,
+        color: "#FF9F0A",
+        isCoverage: false,
+      };
+      setSelectedTasks((prev) => ({
+        ...prev,
+        [slotKey]: [...(prev[slotKey] ?? []), optimisticTask],
+      }));
       try {
         const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
-        const { slot_key, slot_type, rr_side } = uiToDb(slotKey);
         await addNightSlotTask({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
@@ -545,12 +756,16 @@ export function useTodayBoard({
           slotKey,
           payload: { taskLabel: sweeperLabel, sweeper: true },
         });
-        await refreshTasksForNight(nightId, setSelectedTasks);
+        await refreshTasksForNight(effectiveNightId, setSelectedTasks);
       } catch {
+        setSelectedTasks((prev) => ({
+          ...prev,
+          [slotKey]: (prev[slotKey] ?? []).filter((t) => t.id !== optimisticId),
+        }));
         showToast("Failed to assign sweeper", "error");
       }
     },
-    [isScheduleReadOnly, nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, selectedDay, isSlotLocked, showToast, logChange],
   );
 
   const handleAddCoverage = useCallback(
@@ -559,21 +774,44 @@ export function useTodayBoard({
         showToast("You don't have permission to add coverage", "error");
         return;
       }
-      if (!nightId) {
+      if (isSlotLocked(sourceKey)) {
+        showToast(`${sourceKey} is locked`, "error");
+        return;
+      }
+      const effectiveNightId = await resolveTodayNightId(nightId, selectedDay);
+      if (!effectiveNightId) {
         showToast("No active night selected", "error");
         return;
       }
       const accentColor = getSlotAccentColor(sourceKey);
       const targetLabel = getSlotCoverageLabel(targetKey);
+      const coverageLabel = `And ${targetLabel}`;
+      const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
+      const optimisticId = `optimistic-coverage-${Date.now()}`;
+      const optimisticTask: NightSlotTask = {
+        id: optimisticId,
+        nightId: effectiveNightId,
+        slotKey: slot_key,
+        slotType: slot_type,
+        rrSide: rr_side,
+        taskLabel: coverageLabel,
+        catalogTaskId: null,
+        sortOrder: 99,
+        color: accentColor,
+        isCoverage: true,
+      };
+      setSelectedTasks((prev) => ({
+        ...prev,
+        [sourceKey]: [...(prev[sourceKey] ?? []), optimisticTask],
+      }));
       try {
         const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
-        const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
         await addNightSlotTask({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
-          taskLabel: `And ${targetLabel}`,
+          taskLabel: coverageLabel,
           isCoverage: true,
           color: accentColor,
           sortOrder: 99,
@@ -582,24 +820,29 @@ export function useTodayBoard({
           action: "coverage_add",
           slotKey: sourceKey,
           payload: {
-            taskLabel: `And ${targetLabel}`,
+            taskLabel: coverageLabel,
             targetKey,
             targetLabel,
             sourceKey,
           },
         });
-        await refreshTasksForNight(nightId, setSelectedTasks);
+        await refreshTasksForNight(effectiveNightId, setSelectedTasks);
       } catch {
+        setSelectedTasks((prev) => ({
+          ...prev,
+          [sourceKey]: (prev[sourceKey] ?? []).filter((t) => t.id !== optimisticId),
+        }));
         showToast("Failed to add coverage", "error");
       }
     },
-    [isScheduleReadOnly, nightId, showToast, logChange],
+    [isScheduleReadOnly, nightId, selectedDay, isSlotLocked, showToast, logChange],
   );
 
   const drag = useTodayDragDrop({
     nightId,
     selectedDay,
     isScheduleReadOnly,
+    isSlotLocked,
     onAssign: handleAssign,
     onClearSlot: handleClearSlot,
     setSelectedTasks,
@@ -619,12 +862,17 @@ export function useTodayBoard({
     isCurrentNightLocked,
     isScheduleHidden,
     statusLoading,
+    statusError,
+    retryPublishMeta: () => void refreshPublishMeta(selectedDay.date, { showLoading: true }),
     isScheduleReadOnly,
     nightStatus,
     canPrint,
-    scheduleBanner, // always null in current /today (see comment above)
-    isPrinting,
+    scheduleBanner,
+    isPrinting: printBusyMode === "print",
+    isExporting: printBusyMode === "export",
+    exportProgress,
     handlePrint,
+    handleExportPdf,
     boardColdLoading,
     effectiveCardBorders,
     effectiveRealRoster,

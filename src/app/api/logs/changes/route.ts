@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/today/_lib/rateLimit";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DeploymentLogEntry, DeploymentLogsResponse } from "@/app/logs/lib/types";
 
@@ -26,6 +28,19 @@ function mapRow(row: Record<string, unknown>): DeploymentLogEntry {
  * GET /api/logs/changes?nightDate=YYYY-MM-DD&operator=Name&limit=200
  */
 export async function GET(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rateKey = `logs-changes:${clientIpFromRequest(request)}`;
+  const rateCheck = checkOpsApiRateLimit(rateKey, 90);
+  if (!rateCheck.ok) {
+    return NextResponse.json(
+      { error: "Too many requests — try again shortly" },
+      { status: 429, headers: { "Retry-After": String(rateCheck.retryAfterSec) } },
+    );
+  }
+
   const nightDate = request.nextUrl.searchParams.get("nightDate");
   const operator = request.nextUrl.searchParams.get("operator")?.trim() || null;
   const limitRaw = request.nextUrl.searchParams.get("limit");

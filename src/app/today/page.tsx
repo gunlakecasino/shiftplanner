@@ -1,5 +1,6 @@
 "use client";
 
+import "./styles/todayKiosk.css";
 import dynamic from "next/dynamic";
 import { QueryProvider } from "@/app/shiftbuilder/providers";
 import { TodayLoadingShell } from "./components/TodayLoadingShell";

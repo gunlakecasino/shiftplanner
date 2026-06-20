@@ -110,7 +110,10 @@ export function mountGoldenPrintSession(
   const artboards = Array.from(container.querySelectorAll(".print-artboard"));
   artboards.forEach((ab, i) => {
     const page = pages[i];
-    if (page) applyGoldenArtboardContract(ab as HTMLElement, page, config, mode);
+    if (!page) return;
+    const el = ab as HTMLElement;
+    el.setAttribute("data-print-view", page.kind === "breaks" ? "breaks" : "deployment");
+    applyGoldenArtboardContract(el, page, config, mode);
   });
 
   const styleEl = injectSessionStyles(config, mode);

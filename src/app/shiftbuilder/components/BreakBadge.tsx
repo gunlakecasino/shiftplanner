@@ -9,7 +9,20 @@ import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 // BreakBadge: 0 = off ("–"), 1/2/3 = waves, 4 = overlaps ("OL").
 // Cycle via nextBreakGroup: 1 → 2 → 3 → OL → – → 1.
-const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" }: { value: number; onCycle: () => void; size?: "sm" | "md" }) {
+const BreakBadge = React.memo(function BreakBadge({
+  value,
+  onCycle,
+  size = "md",
+  accentColor,
+  kioskSize = false,
+}: {
+  value: number;
+  onCycle: () => void;
+  size?: "sm" | "md";
+  /** Zone accent tint for /today kiosk break dots */
+  accentColor?: string;
+  kioskSize?: boolean;
+}) {
   const tablet = isTabletTouchDevice();
   const isOl = value === BREAK_GROUP_OVERLAPS;
   const visual = tablet
@@ -36,7 +49,18 @@ const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" 
         : `Break Group ${value} — tap to cycle`;
   const isOff = value === 0;
 
-  const spanClass = `${visual} ${isOff ? "bg-[#9CA3AF] dark:bg-[#48484A]" : "bg-[#1C1C1E] dark:bg-[#E5E5E7] dark:text-[#1C1C1E]"} text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none`;
+  const spanClass = cn(
+    "sb-break-badge-visual",
+    visual,
+    isOff ? "bg-[#9CA3AF] dark:bg-[#48484A]" : "bg-[#1C1C1E] dark:bg-[#E5E5E7] dark:text-[#1C1C1E]",
+    "text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none",
+    kioskSize && "sb-break-badge-kiosk-pill",
+  );
+
+  const pillStyle =
+    !isOff && accentColor
+      ? { background: accentColor, color: "#fff" }
+      : undefined;
 
   return (
     <button
@@ -44,15 +68,16 @@ const BreakBadge = React.memo(function BreakBadge({ value, onCycle, size = "md" 
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
       onPointerDown={(e) => e.stopPropagation()}
       className={cn(
-        "sb-interactive sb-break-badge-btn inline-flex items-center justify-center shrink-0",
-        tablet ? "min-h-11 min-w-11 p-2" : "-m-1.5 p-1.5",
+        "sb-interactive sb-break-badge-btn sb-kiosk-action inline-flex items-center justify-center shrink-0",
+        kioskSize && "sb-break-badge-kiosk",
+        tablet || kioskSize ? "min-h-11 min-w-11 p-2" : "-m-1.5 p-1.5",
       )}
       title={label}
       aria-label={label}
     >
       <motion.span
         className={spanClass}
-        style={{ fontFamily: 'var(--font-ui, var(--font-inter-tight), system-ui)' }}
+        style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)", ...pillStyle }}
         {...premiumHoverLift}
         transition={premiumSpring}
         whileTap={{ scale: 0.92, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}

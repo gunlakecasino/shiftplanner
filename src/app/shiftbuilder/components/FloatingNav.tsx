@@ -4,111 +4,30 @@ import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { premiumSpring, premiumButton, premiumChevronShift } from "@/lib/premiumSpring";
-import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
-  Rocket,
-  Maximize2,
-  ZoomIn,
-  ZoomOut,
-  Sun,
-  Moon,
-  Printer,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   LayoutGrid,
   Coffee,
+  Sparkles,
+  MoreHorizontal,
   Users,
-  PenLine,
-  ScanEye,
-  Table2,
-  ClipboardCopy,
-  RotateCcw,
-  Activity,
-  ScrollText,
+  Rocket,
+  Printer,
+  UserRound,
+  Eye,
+  X,
 } from "lucide-react";
-import {
-  rotationHealthFloaterColors,
-  rotationHealthIconColor,
-} from "./shiftRotationHealth";
-import { isTabletTouchDevice, TABLET_COMPACT_NAV_MQ } from "@/lib/shiftbuilder/tabletDevice";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { BuilderSyncStrip } from "./builderPrimitives";
 
-// ==================== CVA VARIANTS ====================
-const NAV_ICON = "h-3.5 w-3.5 shrink-0 opacity-80";
-
-function NavToolButton({
-  onClick,
-  title,
-  ariaLabel,
-  active = false,
-  disabled = false,
-  children,
-  className,
-}: {
-  onClick?: () => void;
-  title: string;
-  ariaLabel?: string;
-  active?: boolean;
-  disabled?: boolean;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={ariaLabel ?? title}
-      className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/5",
-        isTabletTouchDevice() && "sb-tablet-touch-target h-11 w-11",
-        active && "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100",
-        disabled && "pointer-events-none opacity-40",
-        className,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-const navVariants = cva(
-  "sb-floating-nav-pill z-40 h-14 rounded-3xl px-3 sm:px-4 transition-all duration-200",
-  {
-    variants: {
-      glass: {
-        true: "bg-white/85 dark:bg-zinc-950/85 backdrop-blur-[32px] border border-white/35 dark:border-white/12 shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.05),_0_2px_4px_-2px_rgb(0_0_0_/_0.03),_0_25px_50px_-12px_rgb(0_0_0_/_0.25),_inset_0_1px_0_rgba(255,255,255,0.98)]",
-      },
-    },
-    defaultVariants: { glass: true },
-  }
-);
-
-const datePillVariants = cva(
-  "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#C13A14]/40",
-  {
-    variants: {
-      active: {
-        true: "text-white",
-        false: "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100",
-      },
-    },
-    defaultVariants: { active: false },
-  }
-);
-
-// ==================== TYPES ====================
+// Types kept for compatibility with ShiftBuilderClient
 export interface DayItem {
   id: number;
   label: string;
   shortLabel?: string;
-  /** F/S/S/M/T/W/T — shown on inactive pills in the 9-day strip. */
   dayLetter?: string;
-  /** True for Thu-before / Fri-after bridge pills (adjacent week boundaries). */
   isBridge?: boolean;
   dateNum?: number;
   isToday?: boolean;
@@ -119,24 +38,17 @@ export interface FloatingNavProps {
   days: DayItem[];
   selectedDayId: number;
   onDaySelect: (id: number, date: Date) => void;
-  /** Called on hover for aggressive prefetch — makes day switching feel instant */
   onDayHover?: (id: number, date: Date) => void;
   currentView: "deployment" | "breaks" | "weekly";
-  onViewChange: (view: "deployment" | "breaks" | "weekly") => void;
-  placedCount?: { current: number; total: number }; // kept for compatibility, no longer rendered
+  onViewChange?: (view: "deployment" | "breaks" | "weekly") => void;
   onToday: () => void;
-  /** Return to ShiftBuilder launchpad (canvas mode only). */
   onLaunchpad?: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
-  /** Copy slot tasks from the same grave weekday one week earlier. */
   onCopyPriorWeekTasks?: () => void;
-  /** Copy slot tasks from the previous calendar day. */
   onCopyYesterdayTasks?: () => void;
-  /** Restore card-default break groups onto assigned slots for the selected night. */
   onRestoreDefaultBreaks?: () => void;
   restoreDefaultBreaksBusy?: boolean;
-  /** Toggle the dismissable week rotation health tracker bar. */
   onToggleWeekHealth?: () => void;
   weekHealthVisible?: boolean;
   weekHealthPercent?: number | null;
@@ -144,783 +56,455 @@ export interface FloatingNavProps {
   onZoomFit?: () => void;
   onZoomOut?: () => void;
   onZoomIn?: () => void;
-  /** e.g. "108%" when zoomed; omit or "Fit" when at fit scale */
   zoomLabel?: string;
   isZoomed?: boolean;
   onThemeToggle?: () => void;
   onPrint?: () => void;
   isDark?: boolean;
-  /** When set, nav pill is centered and capped to match the builder canvas column. */
   contentMaxWidth?: number;
   userInitials?: string;
-
-  /** Full authenticated operator for the profile dropdown */
-  currentUser?: {
-    full_name: string;
-    username: string;
-    role: string;
-  };
-  /** Sign out handler (from useOpsAuth) */
+  currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
-  /** Open Sudo (only shown for privileged roles). Fulfills the post-PIN auth UX request. */
   onOpenSudo?: () => void;
   isSyncing?: boolean;
-  /** Floating roster panel — critical on iPad where roster defaults collapsed. */
   rosterOpen?: boolean;
   onRosterToggle?: () => void;
-  /** Builder vs print-preview — lives in nav so it never covers zone cards. */
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
-  /** Selected night is officially published — shown as a read-only status pill. */
   isDayPublished?: boolean;
-  /** Operator may publish or unpublish the selected day. */
   canPublishDay?: boolean;
   onToggleDayPublished?: () => void;
   publishDayBusy?: boolean;
+
+  /** Stripped variant for the /today kiosk page (minimal right side + restricted more menu). */
+  variant?: 'full' | 'today';
+  /** Top offset for fixed positioning (today uses 8, builder uses 0). */
+  top?: number;
+  /** Exit action for today kiosk (change operator / leave view). */
+  onExit?: () => void;
+  exitLabel?: string;
+  /** For today variant name display in the pill. */
+  operatorName?: string;
 }
 
-// ==================== SPRING ====================
-// Local SPRING kept for the active pill layoutId (subtle slide). New premium interactions now use shared premium* helpers (builder view only).
-const SPRING = { type: "spring" as const, stiffness: 400, damping: 25 };
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const SHORT_MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-// ==================== COMPONENT ====================
-export default function FloatingNav({
-  days,
-  selectedDayId,
-  onDaySelect,
-  onDayHover,
-  currentView,
-  onViewChange,
-  placedCount,
-  onToday,
-  onLaunchpad,
-  onPrevWeek,
-  onNextWeek,
-  onCopyPriorWeekTasks,
-  onCopyYesterdayTasks,
-  onRestoreDefaultBreaks,
-  restoreDefaultBreaksBusy = false,
-  onToggleWeekHealth,
-  weekHealthVisible = false,
-  weekHealthPercent = null,
-  weekHealthLoading = false,
-  onZoomFit,
-  onZoomOut,
-  onZoomIn,
-  zoomLabel,
-  isZoomed = false,
-  onThemeToggle,
-  onPrint,
-  isDark = false,
-  contentMaxWidth,
-  userInitials = "BC",
-  currentUser,
-  onLogout,
-  onOpenSudo,
-  isSyncing = false,
-  rosterOpen = false,
-  onRosterToggle,
-  canvasMode = "builder",
-  onCanvasModeChange,
-  isDayPublished = false,
-  canPublishDay = false,
-  onToggleDayPublished,
-  publishDayBusy = false,
-}: FloatingNavProps) {
-  const queryClient = useQueryClient();
+export default function FloatingNav(props: FloatingNavProps) {
+  const {
+    days,
+    selectedDayId,
+    onDaySelect,
+    onDayHover,
+    currentView,
+    onViewChange,
+    onToday,
+    onLaunchpad,
+    onPrevWeek,
+    onNextWeek,
+    onCopyPriorWeekTasks,
+    onCopyYesterdayTasks,
+    onRestoreDefaultBreaks,
+    onPrint,
+    isDark = false,
+    contentMaxWidth,
+    currentUser,
+    onLogout,
+    onOpenSudo,
+    rosterOpen = false,
+    onRosterToggle,
+    canvasMode = 'builder',
+    onCanvasModeChange,
+    isDayPublished = false,
+    canPublishDay = false,
+    onToggleDayPublished,
+    onToggleWeekHealth,
+    weekHealthVisible = false,
+    variant = 'full',
+    top = 0,
+    onExit,
+    exitLabel = 'Exit',
+    operatorName,
+  } = props;
 
-  // Builder-only premium motion guard (never in print-preview / golden)
-  const isBuilderView = canvasMode === "builder";
+  const isTodayVariant = variant === 'today';
 
-  // Profile avatar dropdown state
+  // Internal states for dropdowns
+  const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLButtonElement>(null);
 
-  const showCopyTasksMenu = !!(onCopyPriorWeekTasks || onCopyYesterdayTasks);
-  const [copyTasksOpen, setCopyTasksOpen] = useState(false);
-  const copyTasksRef = useRef<HTMLDivElement>(null);
-  const copyTasksMenuRef = useRef<HTMLDivElement>(null);
-  const [copyTasksDropdownPos, setCopyTasksDropdownPos] = useState<{
-    top: number;
-    right: number;
-  } | null>(null);
-
-  // Close profile dropdown on outside click or Escape (matches existing patterns)
+  // Close dropdowns on outside click / escape
   useEffect(() => {
-    if (!profileOpen) return;
-
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const clickedTrigger = profileRef.current && profileRef.current.contains(target);
-      const clickedMenu = profileMenuRef.current && profileMenuRef.current.contains(target);
-      if (!clickedTrigger && !clickedMenu) {
+    const handleClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMoreOpen(false);
         setProfileOpen(false);
       }
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setProfileOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-
+    document.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleKey);
     };
-  }, [profileOpen]);
-
-  useEffect(() => {
-    if (!copyTasksOpen) return;
-
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const clickedTrigger = copyTasksRef.current?.contains(target);
-      const clickedMenu = copyTasksMenuRef.current?.contains(target);
-      if (!clickedTrigger && !clickedMenu) {
-        setCopyTasksOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCopyTasksOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [copyTasksOpen]);
-
-  // Compute fixed position for the profile dropdown so it is never clipped by
-  // ancestors (stage overflow-hidden, nav insets, transforms, or high-z overlays).
-  // Using fixed + getBoundingClientRect guarantees it's always fully visible
-  // and correctly right-aligned to the avatar, regardless of the floating nav's
-  // complex calc'd width/positioning.
-  useEffect(() => {
-    if (!profileOpen) {
-      setDropdownPos(null);
-      return;
-    }
-
-    const computePos = () => {
-      const container = profileRef.current;
-      if (!container) return;
-      const btn = container.querySelector("button") as HTMLElement | null;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      setDropdownPos({
-        top: rect.bottom + 8, // matches mt-2 visually
-        right: Math.max(8, window.innerWidth - rect.right),
-      });
-    };
-
-    // Run after paint so rects are accurate
-    const raf = requestAnimationFrame(computePos);
-
-    // Recompute on resize (nav can reflow)
-    window.addEventListener("resize", computePos);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", computePos);
-    };
-  }, [profileOpen]);
-
-  // TanStack Query for day switching with optimistic updates + instant feel
-  const { data: currentDayData } = useQuery({
-    queryKey: ["currentDay", selectedDayId],
-    queryFn: async () => ({
-      id: selectedDayId,
-      date: days.find((d) => d.id === selectedDayId)?.date,
-    }),
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const handleDaySelect = (id: number, date: Date) => {
-    // Optimistic update — the UI updates immediately
-    queryClient.setQueryData(["currentDay", id], { id, date });
-
-    onDaySelect(id, date);
-
-    // In a real app you would do:
-    // await updateDayMutation.mutateAsync({ dayId: id });
-    // queryClient.invalidateQueries({ queryKey: ["schedule", id] });
-  };
-
-  // Note: placedCount prop is kept for API compatibility but no longer used in the nav UI.
-
-  const ACCENT = "#C13A14";
-  const weekHealthColors = rotationHealthFloaterColors(
-    weekHealthLoading ? null : weekHealthPercent,
-  );
-  const weekHealthIconColor = rotationHealthIconColor(
-    weekHealthLoading ? null : weekHealthPercent,
-  );
-  const weekHealthTitle = weekHealthLoading
-    ? "Week rotation health — loading"
-    : weekHealthPercent !== null
-      ? `Week rotation health — ${weekHealthPercent}% avg (${weekHealthVisible ? "hide tracker" : "show tracker"})`
-      : weekHealthVisible
-        ? "Hide week rotation health tracker"
-        : "Show week rotation health tracker";
-
-  const [compactCanvasToggle, setCompactCanvasToggle] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(TABLET_COMPACT_NAV_MQ);
-    const onMq = () => setCompactCanvasToggle(mq.matches);
-    onMq();
-    mq.addEventListener("change", onMq);
-    return () => mq.removeEventListener("change", onMq);
   }, []);
 
-  const tabletNav = isTabletTouchDevice();
-  const navCentered = contentMaxWidth != null && contentMaxWidth > 0;
+  // Month label
+  const firstDay = days[0]?.date || new Date();
+  const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
 
-  const glassStyle = {
-    background: isDark ? "rgba(9,9,11,0.85)" : "rgba(255,255,255,0.85)",
-    backdropFilter: "blur(32px) saturate(180%)",
-    WebkitBackdropFilter: "blur(32px) saturate(180%)",
-    border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(255,255,255,0.35)",
-    boxShadow: isDark
-      ? "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 25px 50px -12px rgb(0 0 0 / 0.35), inset 0 1px 0 rgba(255,255,255,0.12)"
-      : "0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03), 0 25px 50px -12px rgb(0 0 0 / 0.25), inset 0 1px 0 rgba(255,255,255,0.98)",
+  // Simple "run engine" placeholder (parent can provide via other means or we call a global if needed)
+  const handleRunEngine = () => {
+    // In full integration this would be passed as prop. For now trigger a toast or parent action if available.
+    console.log("[FloatingNav] Run Engine requested");
+  };
+
+  const handleDefaultTasks = () => {
+    // Default Tasks often lives in Sudo or command palette.
+    // Open Sudo as a reasonable fallback (user can go to Tasks tab).
+    onOpenSudo?.();
+    setMoreOpen(false);
   };
 
   return (
     <>
+      <style>{`
+        .icon-btn { transition: background 0.12s ease; }
+        .icon-btn:hover { background: rgba(0,0,0,0.06); }
+        .icon-btn:active { background: rgba(0,0,0,0.11); }
+        @keyframes live-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+          70% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+          100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+        }
+        .live-dot { animation: live-pulse 2s ease-out infinite; }
+      `}</style>
+
       <nav
-        className={cn(
-          navVariants(),
-          tabletNav ? "sb-tablet-nav" : "overflow-hidden",
-          tabletNav && navCentered && "sb-tablet-nav--centered",
-        )}
         style={{
-          ...glassStyle,
           position: "fixed",
-          ...(tabletNav
-            ? {
-                ...(navCentered
-                  ? { ["--sb-nav-max-width" as string]: `${contentMaxWidth}px` }
-                  : {}),
-              }
-            : {
-                top: 8,
-                ...(navCentered
-                  ? {
-                      left: "50%",
-                      right: "auto",
-                      width: `min(calc(100vw - 48px), ${contentMaxWidth}px)`,
-                      maxWidth: contentMaxWidth,
-                      transform: "translateX(-50%)",
-                    }
-                  : {
-                      left: 24,
-                      right: 24,
-                      width: "auto",
-                      maxWidth: "none",
-                      transform: "none",
-                    }),
-              }),
-          boxSizing: "border-box",
+          top: top,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: contentMaxWidth ? `min(calc(100vw - 48px), ${contentMaxWidth}px)` : "min(100vw - 48px, 900px)",
+          background: isDark ? "rgba(9,9,11,0.97)" : "rgba(249, 247, 244, 0.97)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          borderRadius: 9999,
+          border: "1px solid rgba(0,0,0,0.075)",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.06)",
+          padding: "9px 16px",
+          fontFamily: "'Inter', system-ui, sans-serif",
+          userSelect: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: 0,
           zIndex: 40,
         }}
       >
-        <BuilderSyncStrip active={isSyncing} />
-        <div className="sb-tablet-nav-grid grid h-full w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)] items-center gap-1.5">
-        {/* LEFT: Launchpad + Today */}
-        <div className="flex shrink-0 items-center gap-0.5">
-          {onLaunchpad ? (
-            <NavToolButton onClick={onLaunchpad} title="Return to Launchpad">
-              <Rocket className={NAV_ICON} />
-            </NavToolButton>
-          ) : null}
-          <NavToolButton onClick={onToday} title="Jump to today">
-            <Calendar className={NAV_ICON} />
-          </NavToolButton>
-          {onRosterToggle ? (
-            <NavToolButton
-              onClick={onRosterToggle}
-              title={rosterOpen ? "Hide roster" : "Show roster"}
-              ariaLabel={rosterOpen ? "Hide team roster panel" : "Show team roster panel"}
-              active={rosterOpen}
-            >
-              <Users className={NAV_ICON} />
-            </NavToolButton>
-          ) : null}
+        {/* LEFT — month + calendar */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
+            style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
+            onClick={onToday}
+            title="Jump to today"
+          >
+            {monthLabel}
+            <ChevronDown size={12} strokeWidth={2.8} style={{ color: "#999", marginTop: 1 }} />
+          </button>
+          <button
+            className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+            style={{ color: "#666" }}
+            onClick={onToday}
+            title="Today"
+          >
+            <Calendar size={14} strokeWidth={1.8} />
+          </button>
         </div>
 
-        {/* CENTER: 9-day strip */}
-        <div className="min-w-0 px-0.5">
-          <div className="relative flex min-w-0 items-stretch justify-center">
-            {/* Left seamless half-circle cap — previous GRAVE week */}
-            {onPrevWeek && (
-              <motion.button
-                onClick={onPrevWeek}
-                {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
-                transition={isBuilderView ? premiumSpring : SPRING}
-                className={cn(
-                  "absolute left-0 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full touch-manipulation",
-                  isTabletTouchDevice() ? "sb-tablet-touch-target h-11 w-11" : "h-8 w-8",
-                )}
-                style={{
-                  background: "rgba(0,0,0,0.025)",
-                }}
-                title="Previous GRAVE week (Friday)"
-                aria-label="Previous GRAVE week — jump to Friday"
-              >
-                <motion.span
-                  {...(isBuilderView ? premiumChevronShift(-1) : { whileHover: { x: -1 } })}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
-                </motion.span>
-              </motion.button>
-            )}
+        {/* DIVIDER */}
+        <div className="shrink-0 mx-2.5" style={{ width: 1, height: 18, background: "rgba(0,0,0,0.12)" }} />
 
-            <div
-              className="relative grid min-h-[40px] w-full min-w-0 grid-cols-9 gap-1 rounded-2xl px-7 py-1.5 sm:px-8"
-              style={{
-                background: "rgba(0,0,0,0.025)",
-                border: "1px solid var(--sb-glass-border)",
-              }}
-            >
-              {days.map((day) => {
-                const isActive = day.id === selectedDayId;
-                const isBridge = !!day.isBridge;
+        {/* CENTER — day scroller */}
+        <div className="flex items-center flex-1 min-w-0 gap-0.5">
+          <button
+            onClick={onPrevWeek}
+            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            style={{ color: "#aaa" }}
+            title="Previous GRAVE week"
+          >
+            <ChevronLeft size={14} strokeWidth={2.8} />
+          </button>
 
+          <div className="flex items-center justify-around flex-1 px-1">
+            {days.map((day, i) => {
+              const isSelected = day.id === selectedDayId;
+              const isToday = !!day.isToday;
+              const letter = day.dayLetter || DAY_LETTERS[(day.date?.getDay() ?? i) % 7];
+              const dateNum = day.dateNum || day.label;
+
+              if (isSelected) {
                 return (
                   <button
-                    key={day.id}
-                    onClick={() => handleDaySelect(day.id, day.date || new Date())}
-                    onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
-                    onTouchStart={() => onDayHover?.(day.id, day.date || new Date())}
-                    className={cn(
-                      datePillVariants({ active: isActive }),
-                      "relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums w-full min-w-0 transition-all touch-manipulation sb-tablet-day-pill",
-                      isTabletTouchDevice() ? "min-h-11" : "min-h-[36px]",
-                      isActive ? "text-[13px] px-1" : "text-[12px] px-0.5",
-                    )}
+                    key={i}
+                    onClick={() => onDaySelect(day.id, day.date || new Date())}
+                    className="flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
                     style={{
-                      background: isActive ? ACCENT : "transparent",
-                      color: isActive ? "#fff" : isDark ? "#A1A1AA" : "#52525B",
-                      border: isActive
-                        ? `1px solid ${ACCENT}`
-                        : isBridge
-                          ? `1px dashed ${isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"}`
-                          : "1px solid transparent",
-                      fontWeight: isActive ? 700 : 600,
-                      opacity: isBridge && !isActive ? 0.85 : 1,
+                      background: "#7B3226",
+                      borderRadius: 11,
+                      width: 42,
+                      height: 48,
+                      gap: 0,
+                      boxShadow: "0 2px 8px rgba(123,50,38,0.35)",
                     }}
-                    title={
-                      isBridge
-                        ? day.id === 0
-                          ? "Last day of previous GRAVE week (Thursday)"
-                          : "First day of next GRAVE week (Friday)"
-                        : undefined
-                    }
                   >
-                    {/* The sliding active highlight - pure layout animation */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="active-date-pill"
-                        className="absolute inset-0 rounded-full -z-10"
-                        style={{ background: ACCENT }}
-                        transition={SPRING}
-                      />
-                    )}
-
-                    <span className="leading-none tabular-nums flex flex-col items-center justify-center gap-0 min-w-0 w-full truncate">
-                      {isActive && day.shortLabel ? (
-                        <span
-                          className="text-[9px] font-bold tracking-[0.4px] opacity-90 leading-none"
-                          style={{ color: "#fff" }}
-                        >
-                          {day.shortLabel}
-                        </span>
-                      ) : null}
-                      <span className="leading-none">
-                        {isActive ? day.label : day.dayLetter ?? day.label}
-                      </span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "rgba(255,255,255,0.6)",
+                        letterSpacing: "0.12em",
+                        lineHeight: 1,
+                        marginBottom: 2,
+                      }}
+                    >
+                      {day.shortLabel || SHORT_MONTHS[(day.date?.getMonth() ?? 5)]}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 22,
+                        fontWeight: 800,
+                        color: "#fff",
+                        lineHeight: 1,
+                        letterSpacing: "-0.04em",
+                      }}
+                    >
+                      {dateNum}
                     </span>
                   </button>
                 );
-              })}
-            </div>
+              }
 
-            {/* Right seamless half-circle cap — next GRAVE week */}
-            {onNextWeek && (
-              <motion.button
-                onClick={onNextWeek}
-                {...(isBuilderView ? premiumButton : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
-                transition={isBuilderView ? premiumSpring : SPRING}
-                className={cn(
-                  "absolute right-0 top-1/2 z-20 -translate-y-1/2 flex items-center justify-center rounded-full touch-manipulation",
-                  isTabletTouchDevice() ? "sb-tablet-touch-target h-11 w-11" : "h-8 w-8",
-                )}
-                style={{
-                  background: "rgba(0,0,0,0.025)",
-                }}
-                title="Next GRAVE week (Friday)"
-                aria-label="Next GRAVE week — jump to Friday"
-              >
-                <motion.span
-                  {...(isBuilderView ? premiumChevronShift(1) : { whileHover: { x: 1 } })}
-                >
-                  <ChevronRight className="h-3.5 w-3.5 text-[#6B7280] dark:text-[#8E8E93]" />
-                </motion.span>
-              </motion.button>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: compact icon toolbar */}
-        <div className="sb-tablet-nav-toolbar flex min-w-0 max-w-full shrink items-center gap-0.5 border-l border-white/20 pl-1.5 dark:border-white/10">
-          <div
-            className="flex shrink-0 items-center rounded-lg p-0.5"
-            style={{ background: "rgba(0,0,0,0.04)" }}
-          >
-            <NavToolButton
-              onClick={() => onViewChange("deployment")}
-              title="Deployment board"
-              ariaLabel="Deployment board"
-              active={currentView === "deployment"}
-            >
-              <LayoutGrid className={NAV_ICON} />
-            </NavToolButton>
-            <NavToolButton
-              onClick={() => onViewChange("breaks")}
-              title="Break sheet"
-              ariaLabel="Break sheet"
-              active={currentView === "breaks"}
-            >
-              <Coffee className={NAV_ICON} />
-            </NavToolButton>
-            <NavToolButton
-              onClick={() => onViewChange("weekly")}
-              title="Week overview"
-              ariaLabel="Week overview"
-              active={currentView === "weekly"}
-            >
-              <Table2 className={NAV_ICON} />
-            </NavToolButton>
-          </div>
-
-          {onCanvasModeChange ? (
-            <div
-              className={cn(
-                "sb-nav-canvas-mode-toggle flex shrink-0 items-center rounded-lg p-0.5",
-                compactCanvasToggle && "sb-nav-canvas-compact",
-              )}
-              style={{
-                background: "rgba(0,0,0,0.04)",
-                fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => onCanvasModeChange("builder")}
-                className={`sb-interactive inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 font-semibold tracking-[0.2px] ${
-                  isTabletTouchDevice() ? "min-h-11 text-[14px]" : "min-h-8 text-[10px]"
-                } ${canvasMode === "builder" ? "bg-[#0A84FF] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
-                title="Builder — digital authoring veil with xAI assists"
-                aria-label="Builder mode"
-              >
-                {compactCanvasToggle ? <PenLine className="h-4 w-4 shrink-0" /> : null}
-                <span className="sb-nav-canvas-label">Builder</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onCanvasModeChange("print-preview")}
-                className={`sb-interactive inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 font-semibold tracking-[0.2px] ${
-                  isTabletTouchDevice() ? "min-h-11 text-[14px]" : "min-h-8 text-[10px]"
-                } ${canvasMode === "print-preview" ? "bg-[#C13A14] text-white shadow-sm" : "text-zinc-500 hover:bg-white/60 dark:text-zinc-400 dark:hover:bg-white/5"}`}
-                title="Preview — exact Golden sheet for PDF/print"
-                aria-label="Print preview mode"
-              >
-                {compactCanvasToggle ? <ScanEye className="h-4 w-4 shrink-0" /> : null}
-                <span className="sb-nav-canvas-label">Preview</span>
-              </button>
-            </div>
-          ) : null}
-
-          {showCopyTasksMenu ? (
-            <div ref={copyTasksRef} className="relative">
-              <NavToolButton
-                onClick={() => {
-                  const willOpen = !copyTasksOpen;
-                  if (willOpen && copyTasksRef.current) {
-                    const btn = copyTasksRef.current.querySelector("button") as HTMLElement | null;
-                    if (btn) {
-                      const rect = btn.getBoundingClientRect();
-                      setCopyTasksDropdownPos({
-                        top: rect.bottom + 8,
-                        right: Math.max(8, window.innerWidth - rect.right),
-                      });
-                    }
-                  }
-                  setCopyTasksOpen(willOpen);
-                }}
-                title="Copy tasks"
-                ariaLabel="Copy tasks menu"
-                active={copyTasksOpen}
-              >
-                <ClipboardCopy className={NAV_ICON} />
-              </NavToolButton>
-
-              {copyTasksOpen && copyTasksDropdownPos &&
-                createPortal(
-                  <div
-                    ref={copyTasksMenuRef}
-                    className="fixed w-56 rounded-xl border border-zinc-200 bg-white/95 backdrop-blur-md shadow-xl shadow-black/10 overflow-hidden z-[10000] dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/60"
-                    style={{
-                      top: `${copyTasksDropdownPos.top}px`,
-                      right: `${copyTasksDropdownPos.right}px`,
-                      fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
-                    }}
-                  >
-                    <div className="px-3 py-2 border-b border-zinc-200/80 dark:border-zinc-800">
-                      <div className="text-[10px] font-bold tracking-[0.8px] uppercase text-zinc-500 dark:text-zinc-400">
-                        Copy tasks
-                      </div>
-                    </div>
-                    <div className="py-1">
-                      {onCopyPriorWeekTasks ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCopyTasksOpen(false);
-                            onCopyPriorWeekTasks();
-                          }}
-                          className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 text-left text-sm text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
-                        >
-                          <span className="font-semibold">Prior week · same day</span>
-                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                            Last week&apos;s matching weekday
-                          </span>
-                        </button>
-                      ) : null}
-                      {onCopyYesterdayTasks ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCopyTasksOpen(false);
-                            onCopyYesterdayTasks();
-                          }}
-                          className="w-full flex flex-col items-start gap-0.5 px-4 py-2.5 text-left text-sm text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80 transition-colors"
-                        >
-                          <span className="font-semibold">Yesterday</span>
-                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                            Previous calendar day
-                          </span>
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>,
-                  document.body,
-                )}
-            </div>
-          ) : null}
-
-          {onRestoreDefaultBreaks ? (
-            <NavToolButton
-              onClick={onRestoreDefaultBreaks}
-              title="Restore default break groups"
-              ariaLabel="Restore card-default break groups for assigned slots tonight"
-              disabled={restoreDefaultBreaksBusy}
-            >
-              {restoreDefaultBreaksBusy ? (
-                <span className="text-[10px] font-bold tabular-nums text-zinc-500">…</span>
-              ) : (
-                <RotateCcw className={NAV_ICON} />
-              )}
-            </NavToolButton>
-          ) : null}
-
-          {isDayPublished ? (
-            <span
-              className="inline-flex h-8 shrink-0 items-center rounded-lg bg-emerald-600/10 px-2 text-[10px] font-bold tracking-[0.3px] text-emerald-700 dark:text-emerald-400"
-              aria-label="This day is published"
-            >
-              Published
-            </span>
-          ) : null}
-
-          {canPublishDay && onToggleDayPublished ? (
-            <button
-              type="button"
-              onClick={onToggleDayPublished}
-              disabled={publishDayBusy}
-              className={cn(
-                "sb-interactive inline-flex h-8 shrink-0 items-center rounded-lg px-2.5 text-[10px] font-semibold tracking-[0.2px] transition-all active:scale-[0.97] disabled:opacity-50",
-                isTabletTouchDevice() && "min-h-11 px-3 text-[12px]",
-                isDayPublished
-                  ? "border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
-                  : "bg-emerald-600 text-white shadow-sm hover:bg-emerald-500",
-              )}
-              title={isDayPublished ? "Unpublish this day" : "Publish this day"}
-              aria-label={isDayPublished ? "Unpublish this day" : "Publish this day"}
-            >
-              {publishDayBusy ? "…" : isDayPublished ? "Unpublish" : "Publish"}
-            </button>
-          ) : null}
-
-          {onToggleWeekHealth ? (
-            <NavToolButton
-              onClick={onToggleWeekHealth}
-              title={weekHealthTitle}
-              ariaLabel={weekHealthVisible ? "Hide week health tracker" : "Show week health tracker"}
-              active={weekHealthVisible}
-              className="relative"
-            >
-              <Activity
-                className={NAV_ICON}
-                style={{ color: weekHealthIconColor }}
-              />
-              {!weekHealthLoading && weekHealthPercent !== null ? (
-                <span
-                  className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full ring-1 ring-white/80 dark:ring-zinc-900/80"
-                  style={{ background: weekHealthColors.border }}
-                  aria-hidden
-                />
-              ) : null}
-            </NavToolButton>
-          ) : null}
-
-          <div
-            className="flex shrink-0 items-center overflow-hidden rounded-lg border"
-            style={{ borderColor: "var(--sb-glass-border)" }}
-          >
-            <NavToolButton onClick={onZoomFit} title="Fit artboard" className="rounded-none">
-              <Maximize2 className={NAV_ICON} />
-            </NavToolButton>
-            <NavToolButton onClick={onZoomOut} title="Zoom out" className="rounded-none">
-              <ZoomOut className={NAV_ICON} />
-            </NavToolButton>
-            {isZoomed && zoomLabel ? (
-              <button
-                type="button"
-                onClick={onZoomFit}  // quick way back to adaptable fit; could also jump to 1.0
-                className="min-w-[2.75rem] px-1 text-center text-[10px] font-bold tabular-nums text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-                aria-live="polite"
-                title="Click to fit (or use Fit button)"
-              >
-                {zoomLabel}
-              </button>
-            ) : null}
-            <NavToolButton onClick={onZoomIn} title="Zoom in" className="rounded-none">
-              <ZoomIn className={NAV_ICON} />
-            </NavToolButton>
-          </div>
-
-          <a
-            href="/logs"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-600 transition-all hover:bg-black/5 active:scale-95 dark:text-zinc-400 dark:hover:bg-white/5"
-            title="Change log"
-            aria-label="Open deployment change log"
-          >
-            <ScrollText className={NAV_ICON} />
-          </a>
-
-          <NavToolButton onClick={onPrint} title="Print Command Center (⌘P)" ariaLabel="Open print command center">
-            <Printer className={NAV_ICON} />
-          </NavToolButton>
-
-          <NavToolButton onClick={onThemeToggle} title="Toggle theme">
-            {isDark ? <Sun className={NAV_ICON} /> : <Moon className={NAV_ICON} />}
-          </NavToolButton>
-
-          <div ref={profileRef} className="relative">
-            <button
-              onClick={() => {
-                const willOpen = !profileOpen;
-                if (willOpen) {
-                  // Compute synchronously so the menu renders in the correct place immediately
-                  const container = profileRef.current;
-                  if (container) {
-                    const btn = container.querySelector("button") as HTMLElement | null;
-                    if (btn) {
-                      const rect = btn.getBoundingClientRect();
-                      setDropdownPos({
-                        top: rect.bottom + 8,
-                        right: Math.max(8, window.innerWidth - rect.right),
-                      });
-                    }
-                  }
-                }
-                setProfileOpen(willOpen);
-              }}
-              className="sb-interactive flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#C5A26F] to-[#8B5CF6] text-[10px] font-bold text-white ring-1 ring-white/20 transition-all hover:ring-white/40 active:scale-95"
-              title={currentUser ? `${currentUser.full_name} — ${currentUser.role}` : "Account"}
-              aria-expanded={profileOpen}
-            >
-              {userInitials}
-            </button>
-
-            {/* Profile Dropdown
-                - Uses React Portal to document.body so it completely escapes
-                  the nav's stacking context, any ancestor transforms (canvas zoom/pan),
-                  overflow-hidden on the stage, and inset calculations.
-                - Positioned with fixed + rect from the avatar so it is always
-                  fully on-screen and right-aligned under the button.
-                - High z ensures it appears above the nav, roster, cards, etc.
-            */}
-            {profileOpen && currentUser && dropdownPos &&
-              createPortal(
-                <div
-                  ref={profileMenuRef}
-                  className="fixed w-56 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl shadow-black/60 overflow-hidden z-[10000]"
+              return (
+                <button
+                  key={i}
+                  onClick={() => onDaySelect(day.id, day.date || new Date())}
+                  onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
+                  className="icon-btn flex flex-col items-center justify-center shrink-0 rounded-full"
                   style={{
-                    top: `${dropdownPos.top}px`,
-                    right: `${dropdownPos.right}px`,
-                    fontFamily: "var(--font-atkinson), var(--font-geist-sans)",
+                    width: 34,
+                    height: 44,
+                    gap: 4,
+                    border: isToday ? "1.5px dashed rgba(0,0,0,0.22)" : "1px solid transparent",
                   }}
                 >
-                {/* User header */}
-                <div className="px-4 py-3 border-b border-zinc-800">
-                  <div className="font-semibold text-zinc-100 tracking-tight">
-                    {currentUser.full_name}
-                  </div>
-                  <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                    {currentUser.username} · {currentUser.role}
-                  </div>
-                </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#a1a1aa" : "#444", lineHeight: 1 }}>
+                    {letter}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-                {/* Actions */}
-                <div className="py-1">
-                  {onOpenSudo && currentUser && (
+          <button
+            onClick={onNextWeek}
+            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            style={{ color: "#aaa" }}
+            title="Next GRAVE week"
+          >
+            <ChevronRight size={14} strokeWidth={2.8} />
+          </button>
+        </div>
+
+        {/* DIVIDER */}
+        <div className="shrink-0 mx-2.5" style={{ width: 1, height: 18, background: "rgba(0,0,0,0.12)" }} />
+
+        {/* RIGHT — actions + user + more dropdown */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* Builder-only controls (hidden in today kiosk stripped variant) */}
+          {!isTodayVariant && (
+            <button
+              className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+              style={{ color: "#666" }}
+              onClick={onRosterToggle}
+              title={rosterOpen ? "Hide roster" : "Show roster"}
+            >
+              <LayoutGrid size={15} strokeWidth={1.8} />
+            </button>
+          )}
+
+          {/* View toggle — keep for today to allow breaks view if wired */}
+          {onViewChange && (
+            <button
+              className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+              style={{ color: "#666" }}
+              onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
+              title="Breaks view"
+            >
+              <Coffee size={15} strokeWidth={1.8} />
+            </button>
+          )}
+
+          {!isTodayVariant && (
+            <>
+              {/* LIVE / Publish status */}
+              <button
+                className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                style={{ fontSize: 11, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
+                onClick={onToggleDayPublished}
+                disabled={!canPublishDay}
+                title={isDayPublished ? "Unpublish this day" : "Publish this day"}
+              >
+                <span
+                  className="live-dot shrink-0"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: isDayPublished ? "#22c55e" : "#f59e0b",
+                    display: "inline-block",
+                  }}
+                />
+                {isDayPublished ? "LIVE" : "DRAFT"}
+              </button>
+
+              <button
+                className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+                style={{ color: "#666" }}
+                onClick={handleRunEngine}
+                title="Run Engine / AI"
+              >
+                <Sparkles size={15} strokeWidth={1.8} />
+              </button>
+            </>
+          )}
+
+          {/* User / operator name */}
+          <button
+            className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
+            style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
+            onClick={() => {
+              if (isTodayVariant && onExit) {
+                onExit();
+              } else {
+                setProfileOpen((v) => !v);
+              }
+            }}
+            title={isTodayVariant ? (exitLabel || "Exit") : "Account"}
+            ref={profileRef as any}
+          >
+            {isTodayVariant
+              ? (currentUser?.full_name || operatorName || "Operator")
+              : (currentUser?.full_name || "Brian Killian")}
+          </button>
+
+          {/* Basic profile menu (today variant uses direct exit on name click) */}
+          {!isTodayVariant && profileOpen && currentUser && (
+            <div className="absolute right-0 mt-10 w-44 rounded-xl border bg-white shadow-lg py-1 z-[80] text-[13px]" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+              <div className="px-3 py-2 text-[12px] text-gray-500 border-b">{currentUser.username} · {currentUser.role}</div>
+              <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onLogout}>Sign out</button>
+              <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onOpenSudo}>Open Sudo</button>
+            </div>
+          )}
+
+          {/* More / Dropdown */}
+          <div className="relative" ref={moreRef}>
+            <button
+              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+              style={{ color: "#aaa" }}
+              onClick={() => setMoreOpen((v) => !v)}
+              title="More actions"
+            >
+              <MoreHorizontal size={15} strokeWidth={2} />
+            </button>
+
+            {moreOpen && (
+              <div
+                className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-xl py-1 z-[70] text-[13px]"
+                style={{ borderColor: "rgba(0,0,0,0.08)" }}
+                onClick={() => setMoreOpen(false)}
+              >
+                {isTodayVariant ? (
+                  <>
+                    {onPrint && (
+                      <button
+                        className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2"
+                        onClick={() => { onPrint?.(); }}
+                      >
+                        <Printer size={14} /> Print sheet
+                      </button>
+                    )}
+                    {onExit && (
+                      <button
+                        className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2"
+                        onClick={() => { onExit?.(); }}
+                      >
+                        <UserRound size={14} /> {exitLabel}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2" onClick={() => { onRestoreDefaultBreaks?.(); }}>
+                      <Coffee size={14} /> Default Breaks
+                    </button>
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2" onClick={handleDefaultTasks}>
+                      <LayoutGrid size={14} /> Default Tasks
+                    </button>
+                    <div className="h-px bg-gray-100 my-1 mx-2" />
                     <button
-                      onClick={() => {
-                        setProfileOpen(false);
-                        onOpenSudo();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm text-[#8B6910] hover:bg-[#B89708]/10 hover:text-[#B89708] dark:text-[#E9B948] dark:hover:bg-[#B89708]/10 transition-colors"
+                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100"
+                      onClick={onToggleDayPublished}
+                      disabled={!canPublishDay}
                     >
-                      <span className="ms text-base" style={{ fontSize: 16 }}>shield</span>
+                      {isDayPublished ? "Unpublish Day" : "Publish Day"}
+                    </button>
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onPrint}>
+                      Print
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2"
+                      onClick={() => onCanvasModeChange?.(canvasMode === 'print-preview' ? 'builder' : 'print-preview')}
+                    >
+                      {canvasMode === 'print-preview' ? (
+                        <><X size={14} /> Exit print preview</>
+                      ) : (
+                        <><Eye size={14} /> View print preview</>
+                      )}
+                    </button>
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onCopyPriorWeekTasks}>
+                      Copy Prior Week Tasks
+                    </button>
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onCopyYesterdayTasks}>
+                      Copy Yesterday Tasks
+                    </button>
+                    <div className="h-px bg-gray-100 my-1 mx-2" />
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onOpenSudo}>
                       Open Sudo
                     </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      setProfileOpen(false);
-                      onLogout?.();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors"
-                  >
-                    <span className="ms text-base" style={{ fontSize: 16 }}>logout</span>
-                    Sign out
-                  </button>
-                </div>
-              </div>,
-              document.body
+                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onLaunchpad}>
+                      Back to Launchpad
+                    </button>
+                    {onToggleWeekHealth && (
+                      <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onToggleWeekHealth}>
+                        {weekHealthVisible ? "Hide" : "Show"} Week Health
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
-        </div>
       </nav>
-
     </>
   );
 }

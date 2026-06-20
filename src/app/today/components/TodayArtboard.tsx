@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import ShiftBuilderBoard from "@/app/shiftbuilder/components/ShiftBuilderBoard";
 import InteractiveStage from "@/app/shiftbuilder/components/InteractiveStage";
 import { TodayLoadingShell } from "./TodayLoadingShell";
@@ -9,7 +10,7 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
 import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
-import { TODAY_STAGE_INSETS } from "../lib/constants";
+import { TODAY_STAGE_INSETS, TODAY_ZEN_STAGE_INSETS } from "../lib/constants";
 import type { TodayBoardView } from "../hooks/useTodayScheduleNav";
 
 type TodayArtboardProps = {
@@ -47,6 +48,14 @@ type TodayArtboardProps = {
   activeDrag: TodayActiveDrag | null;
   onDragStart: (event: DragStartEvent) => void;
   onDragEnd: (event: DragEndEvent) => void;
+  kioskAssignPulseKey?: string | null;
+  isViewOnly?: boolean;
+  onKioskLongPress?: (
+    slotKey: string,
+    anchor: { x: number; y: number },
+    accentColor: string,
+  ) => void;
+  zenActive?: boolean;
 };
 
 export function TodayArtboard(props: TodayArtboardProps) {
@@ -85,17 +94,26 @@ export function TodayArtboard(props: TodayArtboardProps) {
     activeDrag,
     onDragStart,
     onDragEnd,
+    kioskAssignPulseKey = null,
+    isViewOnly = false,
+    onKioskLongPress,
+    zenActive = false,
   } = props;
+
+  const stageInsets = zenActive ? TODAY_ZEN_STAGE_INSETS : TODAY_STAGE_INSETS;
 
   return (
     <div
       ref={stageHostRef}
-      className="flex-1 min-h-0 flex items-center justify-center overflow-hidden"
+      className={cn(
+        "flex-1 min-h-0 flex items-center justify-center overflow-hidden",
+        zenActive && "sb-today-zen-stage",
+      )}
       style={{
-        paddingTop: TODAY_STAGE_INSETS.top,
-        paddingRight: TODAY_STAGE_INSETS.right,
-        paddingBottom: TODAY_STAGE_INSETS.bottom,
-        paddingLeft: TODAY_STAGE_INSETS.left,
+        paddingTop: stageInsets.top,
+        paddingRight: stageInsets.right,
+        paddingBottom: stageInsets.bottom,
+        paddingLeft: stageInsets.left,
       }}
     >
       {boardColdLoading ? (
@@ -117,7 +135,7 @@ export function TodayArtboard(props: TodayArtboardProps) {
           >
             <div
               ref={positioningRef}
-              className="print-stage-inner relative overflow-hidden"
+              className="print-stage-inner sb-today-board relative overflow-hidden"
               style={{
                 width: naturalWidth,
                 height: naturalHeight,
@@ -154,6 +172,11 @@ export function TodayArtboard(props: TodayArtboardProps) {
               onAddCoverage={onAddCoverage}
               members={effectiveRealRoster}
               isPrintPreview
+              isTodayBoard
+              kioskAssignPulseKey={kioskAssignPulseKey}
+              isViewOnly={isViewOnly}
+              onKioskLongPress={onKioskLongPress}
+              enableBreakGroupFilter
               sheetBrandTitle="Graves Deployment Board"
               placementPadInsightsEnabled={false}
               enableTmDragAssign

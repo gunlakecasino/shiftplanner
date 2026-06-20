@@ -13,13 +13,23 @@ import { fetchNightSecondaryData } from "./fetchNightSecondaryData";
  * Replaces the manual useEffect + many setState calls with proper caching,
  * optimistic updates, and background refetching.
  */
-export function useCurrentNight(selectedDay: DayDef) {
+export type UseCurrentNightOptions = {
+  /** When false, skips night-core + secondary fetches (e.g. unpublished history on /today). */
+  enabled?: boolean;
+  /** When true, night-core API enforces /today publish policy server-side. */
+  todayPolicy?: boolean;
+};
+
+export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOptions) {
   const queryClient = useQueryClient();
   const dateKey = formatLocalDateISO(selectedDay.date);
+  const coreEnabled = options?.enabled !== false;
 
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
-    queryFn: () => fetchNightCoreData(selectedDay),
+    queryFn: () =>
+      fetchNightCoreData(selectedDay, { todayPolicy: options?.todayPolicy }),
+    enabled: coreEnabled,
     // Long stale window — optimistic patches + realtime own same-session freshness.
     // Short stale + refetch was overwriting edits with cached bundle API responses.
     staleTime: 1000 * 60 * 10,
@@ -36,7 +46,7 @@ export function useCurrentNight(selectedDay: DayDef) {
     gcTime: 1000 * 60 * 30,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    enabled: !!coreQuery.data || !coreQuery.isLoading,
+    enabled: coreEnabled && (!!coreQuery.data || !coreQuery.isLoading),
   });
 
   const combinedData = {

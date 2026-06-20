@@ -124,7 +124,7 @@ import { useShiftData } from "./hooks/useShiftData";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
   initLiveCacheForNight,
-  teardownAllLiveCache,
+  retainLiveCacheMount,
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
   getBoardAssignmentsDayKey,
@@ -2659,27 +2659,36 @@ function AuthedShiftBuilder() {
       // measure can throw if no start mark — that's expected on first load
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Perf] Night data ready: ${duration ? duration.toFixed(1) + 'ms' : 'initial/other path'}`, {
-        nightId: currentNight.nightId,
-        fromWorker: !!processedDayData,
-      });
+    // IMPORTANT: Do NOT reference `process` (or process.env) in client components.
+    // Doing so pulls in Next's process polyfill, which can trigger "module factory is not available"
+    // errors in Turbopack dev (especially on iOS simulators / WebKit after HMR or reloads).
+    // We use a hostname/port heuristic instead for dev-only perf logging.
+    if (typeof window !== 'undefined') {
+      const { hostname, port } = window.location;
+      const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1' || port === '3000';
 
-      (window as any).__lastDaySwitchMs = duration || (now - (window as any).__nightDataArrivalTs || 120);
-      (window as any).__lastDaySwitch = {
-        totalMs: duration || 0,
-        source: processedDayData ? 'worker+store' : 'store',
-        hasWorker: !!processedDayData,
-        nightId: currentNight.nightId,
-        ts: now,
-      };
-      (window as any).__nightDataArrivalTs = now;
-      (window as any).__lastDataReadyTs = performance.now();  // for paint delta calculation in Board
+      if (isLocalDev) {
+        console.log(`[Perf] Night data ready: ${duration ? duration.toFixed(1) + 'ms' : 'initial/other path'}`, {
+          nightId: currentNight.nightId,
+          fromWorker: !!processedDayData,
+        });
 
-      // Server latency signal for the permanent OpsStatusBar (v1 approximation:
-      // time from day-switch start mark to core data ready is dominated by the
-      // Supabase roundtrip + processing). A true lightweight ping can be added later.
-      (window as any).__lastServerLatencyMs = Math.round(duration || 40);
+        (window as any).__lastDaySwitchMs = duration || (now - (window as any).__nightDataArrivalTs || 120);
+        (window as any).__lastDaySwitch = {
+          totalMs: duration || 0,
+          source: processedDayData ? 'worker+store' : 'store',
+          hasWorker: !!processedDayData,
+          nightId: currentNight.nightId,
+          ts: now,
+        };
+        (window as any).__nightDataArrivalTs = now;
+        (window as any).__lastDataReadyTs = performance.now();  // for paint delta calculation in Board
+
+        // Server latency signal for the permanent OpsStatusBar (v1 approximation:
+        // time from day-switch start mark to core data ready is dominated by the
+        // Supabase roundtrip + processing). A true lightweight ping can be added later.
+        (window as any).__lastServerLatencyMs = Math.round(duration || 40);
+      }
     }
   }, [currentNight?.assignments, currentNight?.nightId, processedDayData]);
 
@@ -2787,12 +2796,8 @@ function AuthedShiftBuilder() {
     [builderOperatorName, nightId, queryNightId, selectedDay.date],
   );
 
-  // Global teardown safety on component unmount
-  React.useEffect(() => {
-    return () => {
-      teardownAllLiveCache();
-    };
-  }, []);
+  // Release live cache only when the last Builder/today surface unmounts
+  React.useEffect(() => retainLiveCacheMount(), []);
 
   // === Realtime for night_tm_status + call_offs (TM schedule changes) ===
   // When operator (or another user) marks LOA, PTO, changes a shift, or adds call-off,
@@ -7237,6 +7242,35 @@ function AuthedShiftBuilder() {
         publishDayBusy={publishDayBusy}
       />
 
+      {/* Beautiful seamless exit pill for print preview mode */}
+      {isPrintPreview && (
+        <div
+          onClick={() => setCanvasMode('builder')}
+          className="fixed z-[65] flex items-center gap-2.5 px-4 py-1.5 rounded-3xl text-[12px] font-semibold cursor-pointer select-none no-print"
+          style={{
+            top: 62,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(249, 247, 244, 0.96)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(0,0,0,0.07)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.06), 0 8px 24px -4px rgba(0,0,0,0.12)',
+            color: '#1C1C1E',
+            fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+          }}
+          title="Return to live builder view"
+        >
+          <span style={{ opacity: 0.6, letterSpacing: '0.3px' }}>PRINT PREVIEW</span>
+          <span
+            className="flex items-center gap-1 px-2.5 py-px rounded-full text-white text-[10px] font-bold tracking-[0.2px]"
+            style={{ background: '#1C1C1E' }}
+          >
+            EXIT <span style={{ fontSize: 13, lineHeight: 1, marginLeft: 1 }}>×</span>
+          </span>
+        </div>
+      )}
+
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
           Only the actual droppable artboard + roster participate in the drag context.
           This is the major INP win for iPad drags + Pencil. */}
@@ -7540,6 +7574,7 @@ function AuthedShiftBuilder() {
                 focusedTmId={focusedWeeklyTmId}
                 processedWaves={processedDayData?.waves}
                 processedBreakCounts={processedDayData?.breakCounts}
+                hideDateHeader={isBuilderLiveCanvas}
                 selectedDay={selectedDay}
                 selectedDayIndex={selectedDayIndex}
                 // Rotation health side drawer: pass clear and run engine so the drawer contains them
@@ -8110,17 +8145,58 @@ function AuthedShiftBuilder() {
                 )}
               </>
             ) : isPrintPreview ? (
-              <LivePrintPreviewArtboard
-                selectedDay={selectedDay}
-                selectedDayIndex={selectedDayIndex}
-                currentView={currentView as "deployment" | "breaks"}
-                selectedTasks={selectedTasks}
-                amOverlapDayName={amOverlapDayName}
-                amOverlapDateNum={amOverlapDateNum}
-                nextDayColor={nextDayColor}
-                breakGroup={breakGroup}
-                weekDayDefs={DAY_DEFS}
-              />
+              // Seamlessly beautiful dual front+back print preview — shows both pages side-by-side like the PDF
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 20,
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  paddingTop: 8,
+                }}
+              >
+                {(['deployment', 'breaks'] as const).map((view, i) => (
+                  <div key={view} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: '1.5px',
+                        color: '#6B7280',
+                        marginBottom: 4,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {i === 0 ? 'FRONT — DEPLOYMENT' : 'BACK — BREAKS'} 
+                    </div>
+                    <div
+                      style={{
+                        width: 1056,
+                        height: 816,
+                        overflow: 'hidden',
+                        border: '1px solid #E5E5E7',
+                        borderRadius: 2,
+                        boxShadow: '0 10px 40px -10px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.6) inset',
+                        background: '#fff',
+                        transform: 'scale(0.46)',
+                        transformOrigin: 'top center',
+                      }}
+                    >
+                      <LivePrintPreviewArtboard
+                        selectedDay={selectedDay}
+                        selectedDayIndex={selectedDayIndex}
+                        currentView={view}
+                        selectedTasks={selectedTasks}
+                        amOverlapDayName={amOverlapDayName}
+                        amOverlapDateNum={amOverlapDateNum}
+                        nextDayColor={nextDayColor}
+                        breakGroup={breakGroup}
+                        weekDayDefs={DAY_DEFS}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <ShiftBuilderBoard
                 // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)
@@ -8129,6 +8205,7 @@ function AuthedShiftBuilder() {
                 selectedTasks={selectedTasks}  // still legacy during 3.1 transition
                 cardBorders={effectiveCardBorders}
                 focusedTmId={focusedWeeklyTmId}
+                hideDateHeader={isBuilderLiveCanvas}
                 processedWaves={processedDayData?.waves}
                 processedBreakCounts={processedDayData?.breakCounts}
                 selectedDay={selectedDay}

@@ -15,3 +15,11 @@ export const TODAY_STAGE_INSETS: StageInsets = {
   bottom: 12,
   left: 12,
 };
+
+/** Zen mode — full-bleed canvas; nav is fixed/hidden so top clearance is not needed. */
+export const TODAY_ZEN_STAGE_INSETS: StageInsets = {
+  top: 8,
+  right: 8,
+  bottom: 8,
+  left: 8,
+};

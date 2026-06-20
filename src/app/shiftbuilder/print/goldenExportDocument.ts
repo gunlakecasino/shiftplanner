@@ -9,7 +9,9 @@ import {
 import {
   centerGoldenRasterContent,
   flattenGoldenRasterStageBleed,
+  inlineLiveDomForRaster,
   mountGoldenRasterCaptureShell,
+  prepareArtboardForRaster,
   stripGoldenRasterChrome,
   withWhiteDocumentBackground,
 } from "./rasterPrep";
@@ -199,7 +201,12 @@ export async function rasterizeGoldenArtboardElement(args: {
   if (args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
   }
+  prepareArtboardForRaster(args.artboard);
   applyArtboardContract(args.artboard);
+  if (args.kind === "breaks") {
+    postProcessBreaksArtboard(args.artboard);
+  }
+  inlineLiveDomForRaster(args.artboard);
   args.artboard.getBoundingClientRect();
 
   await waitForGoldenRenderSettled();
@@ -270,8 +277,9 @@ export async function rasterizeGoldenPageHtml(args: {
     }
     applyArtboardContract(artboard);
     artboard.getBoundingClientRect();
+    await waitForGoldenRenderSettled();
     await new Promise<void>((r) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => r()));
+      requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     });
 
     return withWhiteDocumentBackground(() =>

@@ -70,6 +70,7 @@ export function middleware(request: NextRequest) {
   // Minimal security headers (internal ops tool)
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-Frame-Options", "SAMEORIGIN");
 
   const pathname = url.pathname;
 

@@ -38,6 +38,13 @@ export default function RootPage() {
           description="Build zone assignments, manage breaks, RR rows, and print the shift deployment book."
         />
         <AppCard
+          href="/today"
+          accent="#C13A14"
+          eyebrow="Floor Tablet"
+          title="Zone Deployment Board"
+          description="Quick pre-shift edits on the grave floor — tonight plus published history, assign, audit log, and print."
+        />
+        <AppCard
           href="/nightwatch"
           accent="#e0cbb6"
           eyebrow="Grave Shift Journal"

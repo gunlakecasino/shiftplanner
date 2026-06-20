@@ -2,6 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import {
@@ -17,6 +18,7 @@ import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
+import { premiumSpring } from "@/lib/premiumSpring";
 
 export interface AuxCardProps {
   def: AuxDef;
@@ -282,72 +284,182 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
       <div className="flex flex-col flex-1 px-2 pt-1.5 pb-1.5 min-h-0">
         {isBlank ? (
-          <div className="flex-1 flex items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px]">
+          <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2">
             {showDigitalAssists && (
-              <span className="no-print opacity-70">Tap to choose role</span>
-            )}
-          </div>
-        ) : loading && !hasTM ? (
-          <AssignmentSkeleton size="lg" />
-        ) : isDraftMode && draftInfo ? (
-          <div className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
-            >
-              {draftInfo.proposedTmName}
-            </span>
-            {isDuplicate && showDigitalAssists && (
-              <span
-                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
-                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+              <motion.div
+                className="flex flex-col items-center gap-0.5"
+                whileHover={{ scale: 1.02 }}
+                transition={premiumSpring}
               >
-                2×
-              </span>
-            )}
-            {draftInfo.previousTmName && (
-              <span
-                className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
-                style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-              >
-                was: {draftInfo.previousTmName}
-              </span>
-            )}
-          </div>
-        ) : hasTM ? (
-          <div className="flex items-center gap-1 min-w-0">
-            {a.isLocked && (
-              <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
-            )}
-            <span
-              className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
-              style={{
-                fontSize: (selectedTasks[def.key]?.length || 0) > 0 ? 16 : 20,
-                lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {a.tmName}
-            </span>
-            {isDuplicate && showDigitalAssists && (
-              <span
-                className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
-                title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
-              >
-                2×
-              </span>
+                <motion.span 
+                  className="text-[22px] leading-none opacity-60"
+                  whileHover={{ scale: 1.15, rotate: 90 }}
+                  transition={{ ...premiumSpring, stiffness: 300 }}
+                >
+                  +
+                </motion.span>
+                <span className="font-semibold tracking-[0.6px] text-[10px] text-[#8a8a8f]">SET ROLE</span>
+                <span className="no-print text-[8.5px] opacity-60">Tap to choose role</span>
+              </motion.div>
             )}
           </div>
         ) : (
-          <div className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
-            <span className="sb-unassigned-primary">— Unassigned —</span>
-            {showDigitalAssists && (
-              <span className="sb-unassigned-hint no-print">
-                <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
-                Drop to assign
-              </span>
+          <AnimatePresence mode="wait" initial={false}>
+            {loading && !hasTM ? (
+              <div key="loading">
+                <AssignmentSkeleton size="lg" />
+              </div>
+            ) : isDraftMode && draftInfo ? (
+              showDigitalAssists ? (
+                <motion.div
+                  key={`draft-${def.key}`}
+                  className="flex flex-col min-w-0"
+                  initial={{ opacity: 0, y: 3, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -2, scale: 0.985 }}
+                  transition={premiumSpring}
+                >
+                  <span
+                    className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+                    style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                  >
+                    {draftInfo.proposedTmName}
+                  </span>
+                  {isDuplicate && showDigitalAssists && (
+                    <motion.span
+                      initial={{ scale: 0.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ ...premiumSpring, stiffness: 520, damping: 18 }}
+                      className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                      title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+                    >
+                      2×
+                    </motion.span>
+                  )}
+                  {draftInfo.previousTmName && (
+                    <span
+                      className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
+                      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+                    >
+                      was: {draftInfo.previousTmName}
+                    </span>
+                  )}
+                </motion.div>
+              ) : (
+                <div key={`draft-${def.key}`} className="flex flex-col min-w-0">
+                  <span
+                    className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+                    style={{ fontSize: 18, lineHeight: 1.02, fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                  >
+                    {draftInfo.proposedTmName}
+                  </span>
+                  {isDuplicate && showDigitalAssists && (
+                    <span
+                      className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                      title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+                    >
+                      2×
+                    </span>
+                  )}
+                  {draftInfo.previousTmName && (
+                    <span
+                      className="text-[9px] text-[#9CA3AF] line-through opacity-55 mt-px tracking-[0.2px]"
+                      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+                    >
+                      was: {draftInfo.previousTmName}
+                    </span>
+                  )}
+                </div>
+              )
+            ) : hasTM ? (
+              showDigitalAssists ? (
+                <motion.div
+                  key={`assigned-${currentTmId}`}
+                  className="flex items-center gap-1 min-w-0"
+                  initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -2, scale: 0.96 }}
+                  transition={{ ...premiumSpring, stiffness: 410, damping: 25 }}
+                >
+                  {a.isLocked && (
+                    <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+                  )}
+                  <span
+                    className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+                    style={{
+                      fontSize: (selectedTasks[def.key]?.length || 0) > 0 ? 16 : 20,
+                      lineHeight: 1.02,
+                      fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                    }}
+                  >
+                    {a.tmName}
+                  </span>
+                  {isDuplicate && showDigitalAssists && (
+                    <motion.span
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ ...premiumSpring, stiffness: 550, damping: 16, delay: 0.02 }}
+                      className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                      title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+                    >
+                      2×
+                    </motion.span>
+                  )}
+                </motion.div>
+              ) : (
+                <div key={`assigned-${currentTmId}`} className="flex items-center gap-1 min-w-0">
+                  {a.isLocked && (
+                    <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+                  )}
+                  <span
+                    className="font-bold tracking-[-0.3px] text-[#111] dark:text-[#F2F2F4] truncate"
+                    style={{
+                      fontSize: (selectedTasks[def.key]?.length || 0) > 0 ? 16 : 20,
+                      lineHeight: 1.02,
+                      fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                    }}
+                  >
+                    {a.tmName}
+                  </span>
+                  {isDuplicate && showDigitalAssists && (
+                    <span
+                      className="ml-1 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[#B89708]/12 text-[#8B6910] dark:bg-[#B89708]/15 dark:text-[#E9B948] border border-[#B89708]/30"
+                      title={`Duplicate assignment — also in: ${otherSlotsForTm.join(', ')}`}
+                    >
+                      2×
+                    </span>
+                  )}
+                </div>
+              )
+            ) : (
+              showDigitalAssists ? (
+                <motion.div
+                  key="unassigned"
+                  className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]"
+                  style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+                  initial={{ opacity: 0.65, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={premiumSpring}
+                >
+                  <span className="sb-unassigned-primary">— Unassigned —</span>
+                  <span className="sb-unassigned-hint no-print">
+                    <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+                    Drop to assign
+                  </span>
+                </motion.div>
+              ) : (
+                <div key="unassigned" className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}>
+                  <span className="sb-unassigned-primary">— Unassigned —</span>
+                  {showDigitalAssists && (
+                    <span className="sb-unassigned-hint no-print">
+                      <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}>south</span>
+                      Drop to assign
+                    </span>
+                  )}
+                </div>
+              )
             )}
-          </div>
+          </AnimatePresence>
         )}
 
         {!isBlank && (

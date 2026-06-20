@@ -58,8 +58,11 @@ body.golden-export-raster .print-dual-container .print-artboard .sheet-header,
 
 /* Break sheet — four wave columns fill width + height between header and overlaps */
 .print-stage-inner .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid,
+.print-stage-inner .print-artboard[data-print-view="breaks"] .grid.grid-cols-4,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid,
-body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid {
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .grid.grid-cols-4,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .grid.grid-cols-4 {
   width: 100%;
   max-width: 100%;
   flex: 1 1 auto;
@@ -69,8 +72,11 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-view=
 }
 
 .print-stage-inner .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div,
+.print-stage-inner .print-artboard[data-print-view="breaks"] .grid.grid-cols-4 > div,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div,
-body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div {
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .grid.grid-cols-4 > div,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-breaks-wave-grid > div,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .grid.grid-cols-4 > div {
   min-height: 0;
   height: 100%;
   display: flex;

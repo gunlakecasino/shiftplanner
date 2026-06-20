@@ -6,7 +6,19 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { cva } from "class-variance-authority";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coffee, LayoutGrid, Printer } from "lucide-react";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
+  Download,
+  LayoutGrid,
+  MoreHorizontal,
+  Printer,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import {
@@ -16,6 +28,8 @@ import {
   sameDay,
 } from "@/lib/shiftbuilder/dateUtils"; // addDays removed after calendar month nav simplification
 import { DEPLOYMENT_CANVAS_MAX_WIDTH_PX } from "@/lib/shiftbuilder/canvasLayout";
+import { shiftBuilderVersionLabel } from "@/app/shiftbuilder/version";
+import { TodayConnectionPill } from "./TodayConnectionPill";
 import { clearTodayOperatorName } from "../lib/todayChangeLog";
 import { fetchPublishedDates } from "../lib/publishedDates";
 import type { NavDayStripItem, TodayBoardView } from "../hooks/useTodayScheduleNav";
@@ -54,6 +68,7 @@ function NavToolButton({
   title,
   ariaLabel,
   active = false,
+  disabled = false,
   children,
   className,
 }: {
@@ -61,6 +76,7 @@ function NavToolButton({
   title: string;
   ariaLabel?: string;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -68,6 +84,7 @@ function NavToolButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={title}
       aria-label={ariaLabel ?? title}
       className={cn(
@@ -75,6 +92,7 @@ function NavToolButton({
         isTabletTouchDevice() && "sb-tablet-touch-target h-11 min-w-11",
         !className?.includes("px-") && "w-8",
         active && "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100",
+        disabled && "pointer-events-none opacity-50",
         className,
       )}
     >
@@ -100,12 +118,17 @@ export type TodayNavProps = {
   /** Show print for tonight or published schedules only. */
   showPrint?: boolean;
   onPrint?: () => void;
+  onExportPdf?: () => void;
   isPrinting?: boolean;
+  isExporting?: boolean;
+  exportProgressLabel?: string;
   /** Shift-aware today (8:30am rollover) — keep calendar in sync with the nav strip. */
   todayShiftDate?: Date;
   /** Published dates for the visible 9-day strip (grey out unpublished history). */
   publishedStripDates?: Set<string>;
   publishedStripDatesLoading?: boolean;
+  zenActive?: boolean;
+  onToggleZen?: () => void;
 };
 
 export function TodayNav({
@@ -124,10 +147,15 @@ export function TodayNav({
   onViewChange,
   showPrint = false,
   onPrint,
+  onExportPdf,
   isPrinting = false,
+  isExporting = false,
+  exportProgressLabel,
   todayShiftDate: todayShiftDateProp,
   publishedStripDates,
   publishedStripDatesLoading = false,
+  zenActive = false,
+  onToggleZen,
 }: TodayNavProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState(() => new Date(selectedDayDate));
@@ -229,6 +257,7 @@ export function TodayNav({
       <nav
         className={cn(
           navVariants(),
+          "sb-today-nav-chrome",
           isTabletTouchDevice() ? "sb-tablet-nav sb-tablet-nav--centered" : "overflow-hidden",
         )}
         style={{
@@ -351,36 +380,34 @@ export function TodayNav({
               <Coffee className={NAV_ICON} />
             </NavToolButton>
           </div>
-          {showPrint && onPrint ? (
+          <TodayConnectionPill date={selectedDayDate} />
+          {onToggleZen ? (
             <NavToolButton
-              onClick={onPrint}
-              title="Print deployment + breaks"
-              ariaLabel={
-                isPrinting
-                  ? "Printing deployment and break sheets"
-                  : "Print deployment and break sheets"
-              }
-              active={isPrinting}
-              className={isPrinting ? "opacity-60" : undefined}
+              onClick={onToggleZen}
+              title={zenActive ? "Exit zen mode" : "Zen mode — hide chrome"}
+              ariaLabel={zenActive ? "Exit zen mode" : "Enter zen mode"}
+              active={zenActive}
+              className="sb-kiosk-tap-target"
             >
-              <Printer className={NAV_ICON} />
+              <Sparkles className={NAV_ICON} />
             </NavToolButton>
           ) : null}
-          <span className="hidden text-[#6C6C72] sm:inline">Logged as</span>
-          <span className="max-w-[7rem] truncate font-semibold text-[#1C1C1E]">
+          <span
+            className="hidden max-w-[6.5rem] truncate font-semibold text-[#1C1C1E] sm:inline"
+            title={operatorName ? `Logged as ${operatorName}` : undefined}
+          >
             {operatorName}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              clearTodayOperatorName();
-              onChangeOperator?.();
-            }}
-            className="rounded-lg border border-black/10 px-2 py-1 font-medium text-[#1C1C1E] transition-colors hover:bg-black/5"
-            title="Change operator name for change logs"
-          >
-            Change name
-          </button>
+          <TodayNavOverflowMenu
+            showPrint={showPrint}
+            onPrint={onPrint}
+            onExportPdf={onExportPdf}
+            isPrinting={isPrinting}
+            isExporting={isExporting}
+            exportProgressLabel={exportProgressLabel}
+            onChangeOperator={onChangeOperator}
+            versionLabel={shiftBuilderVersionLabel()}
+          />
         </div>
       </nav>
 
@@ -526,6 +553,158 @@ export function TodayNav({
   );
 }
 
+function TodayNavOverflowMenu({
+  showPrint,
+  onPrint,
+  onExportPdf,
+  isPrinting,
+  isExporting,
+  exportProgressLabel,
+  onChangeOperator,
+  versionLabel,
+}: {
+  showPrint: boolean;
+  onPrint?: () => void;
+  onExportPdf?: () => void;
+  isPrinting: boolean;
+  isExporting: boolean;
+  exportProgressLabel?: string;
+  onChangeOperator?: () => void;
+  versionLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setPos(null);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const compute = () => {
+      const btn = btnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: Math.max(8, rect.right - 200) });
+    };
+    const raf = requestAnimationFrame(compute);
+    window.addEventListener("resize", compute);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", compute);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target)) return;
+      const pop = document.getElementById("today-nav-overflow-menu");
+      if (pop?.contains(target)) return;
+      close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
+
+  const busy = isPrinting || isExporting;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => (open ? close() : setOpen(true))}
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/5",
+          isTabletTouchDevice() && "sb-tablet-touch-target h-11 min-w-11",
+          open && "bg-white shadow-sm dark:bg-zinc-800",
+        )}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="More actions"
+        title="More actions"
+      >
+        <MoreHorizontal className={NAV_ICON} />
+      </button>
+
+      {open && pos
+        ? createPortal(
+            <div
+              id="today-nav-overflow-menu"
+              role="menu"
+              className="fixed z-[70] w-[200px] rounded-xl border border-white/70 bg-white/95 py-1 text-[12px] shadow-2xl shadow-black/10 backdrop-blur-xl"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              {showPrint && onPrint ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={busy}
+                  onClick={() => {
+                    close();
+                    onPrint();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium text-[#1C1C1E] transition-colors hover:bg-black/[0.04] disabled:opacity-50"
+                >
+                  <Printer className="h-3.5 w-3.5 opacity-70" />
+                  {isPrinting ? "Printing…" : "Print sheets"}
+                </button>
+              ) : null}
+              {showPrint && onExportPdf ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={busy}
+                  onClick={() => {
+                    close();
+                    onExportPdf();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium text-[#1C1C1E] transition-colors hover:bg-black/[0.04] disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5 opacity-70" />
+                  {isExporting ? exportProgressLabel ?? "Exporting…" : "Download PDF"}
+                </button>
+              ) : null}
+              {(showPrint && (onPrint || onExportPdf)) && onChangeOperator ? (
+                <div className="my-1 border-t border-[#E5E5E7]" />
+              ) : null}
+              {onChangeOperator ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    clearTodayOperatorName();
+                    onChangeOperator();
+                    close();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium text-[#1C1C1E] transition-colors hover:bg-black/[0.04]"
+                >
+                  <UserRound className="h-3.5 w-3.5 opacity-70" />
+                  Change name
+                </button>
+              ) : null}
+              <div className="mt-1 border-t border-[#E5E5E7] px-3 py-2 font-mono text-[10px] tabular-nums text-[#AEAEB2]">
+                {versionLabel}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 function NavStripDayPill({
   day,
   isActive,
@@ -552,11 +731,10 @@ function NavStripDayPill({
       <span
         className={cn(
           datePillVariants({ active: false }),
-          "relative z-10 flex min-h-[36px] w-full min-w-0 cursor-default items-center justify-center rounded-full px-0.5 text-[12px] font-semibold tabular-nums select-none",
+          "sb-today-unpublished-pill relative z-10 flex min-h-[36px] w-full min-w-0 cursor-default items-center justify-center rounded-full px-0.5 text-[12px] font-semibold tabular-nums select-none",
         )}
         style={{
-          color: "#D1D5DB",
-          opacity: 0.55,
+          color: "#C7C7CC",
           border: isBridge ? "1px dashed rgba(0,0,0,0.08)" : "1px solid transparent",
         }}
         title="Not published — no schedule on /today"

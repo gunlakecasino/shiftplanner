@@ -124,6 +124,11 @@ export function useTodayScheduleNav() {
   const prefetchNight = useCallback(
     (date: Date) => {
       const dateKey = formatLocalDateISO(date);
+      const isTonight = sameDay(date, todayDate);
+      if (!isTonight) {
+        if (!publishedStripDates) return;
+        if (!publishedStripDates.has(dateKey)) return;
+      }
       const dayDef = dayDefFromDate(date, todayDate);
       void queryClient.prefetchQuery({
         queryKey: ["nightCore", dateKey],
@@ -131,7 +136,7 @@ export function useTodayScheduleNav() {
         staleTime: 1000 * 60 * 5,
       });
     },
-    [queryClient, todayDate],
+    [queryClient, todayDate, publishedStripDates],
   );
 
   const goToday = useCallback(() => {

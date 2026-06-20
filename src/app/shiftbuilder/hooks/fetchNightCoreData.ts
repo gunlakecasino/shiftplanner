@@ -56,12 +56,39 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
   };
 }
 
+function emptyNightCoreResult() {
+  return {
+    nightId: null,
+    assignments: {} as Record<string, unknown>,
+    auxDefs: defaultAuxDefsForNewNight(),
+    members: [] as unknown[],
+    scheduledTmIdsTonight: new Set<string>(),
+    realRoster: [] as unknown[],
+    graveRoster: [] as unknown[],
+    fullGraveScheduledTonight: new Set<string>(),
+    pmOverlapScheduledTonight: new Set<string>(),
+    amOverlapScheduledTonight: new Set<string>(),
+    rawDbAssignments: [] as unknown[],
+    rawBreakRows: [] as unknown[],
+    slotDefaultBreaks: {} as Record<string, number>,
+  };
+}
+
+export type FetchNightCoreOptions = {
+  /** When true, server rejects unpublished historical nights (403). */
+  todayPolicy?: boolean;
+};
+
 /** Primary path: one browser → Next server hop with parallel Supabase on the server. */
-async function fetchNightCoreViaApi(dateStr: string) {
-  const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}`, {
+async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOptions) {
+  const policyQs = options?.todayPolicy ? "&policy=today" : "";
+  const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}`, {
     credentials: "same-origin",
     cache: "no-store",
   });
+  if (res.status === 403 && options?.todayPolicy) {
+    return emptyNightCoreResult();
+  }
   if (!res.ok) return null;
   const raw = (await res.json()) as NightCoreApiPayload;
   return hydrateNightCoreFromBundle(raw);
@@ -173,14 +200,21 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
 }
 
 /** Shared nightCore queryFn — used by useCurrentNight, print hydration, and week prefetch. */
-export async function fetchNightCoreData(selectedDay: DayDef) {
+export async function fetchNightCoreData(
+  selectedDay: DayDef,
+  options?: FetchNightCoreOptions,
+) {
   const dateStr = formatLocalDateISO(selectedDay.date);
 
   try {
-    const viaApi = await fetchNightCoreViaApi(dateStr);
+    const viaApi = await fetchNightCoreViaApi(dateStr, options);
     if (viaApi) return viaApi;
   } catch (e) {
     console.warn("[fetchNightCoreData] API path failed, using fallback", e);
+  }
+
+  if (options?.todayPolicy) {
+    return emptyNightCoreResult();
   }
 
   return fetchNightCoreClientFallback(selectedDay);

@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { premiumSpring, premiumEntrance, premiumHoverLift, premiumStagger } from "@/lib/premiumSpring";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { premiumSpring, premiumEntrance, premiumHoverLift, premiumStagger, premiumButton, premiumEntranceReduced, premiumPresenceReduced } from "@/lib/premiumSpring";
 import ZoneCard from "./ZoneCard";
 import RRCard from "./RRCard";
 import AuxCard from "./AuxCard";
@@ -21,6 +21,7 @@ import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore }
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
+import { RotationHealthFloater } from "./RotationHealthFloater";
 import type { TmEntry } from "./MarkerPad";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
@@ -151,6 +152,12 @@ export interface ShiftBuilderBoardProps {
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
+  /** Rotation health side drawer engine controls (clear + run xAI/rotation engine). Passed from orchestrator / cluster. */
+  canRunEngine?: boolean;
+  onRunXaiEngine?: () => void;
+  onClearBoard?: () => void;
+  engineRunning?: boolean;
+
 }
 
 /** Layout height in artboard coordinates (immune to ancestor CSS transform: scale). */
@@ -242,7 +249,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   weekHealthLoading = false,
   onWeekHealthSelectDay,
   onWeekHealthDismiss,
+
+  canRunEngine,
+  onRunXaiEngine,
+  onClearBoard,
+  engineRunning,
 }: ShiftBuilderBoardProps) {
+  const reducedMotion = useReducedMotion();
+
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
   const assignments = useAssignments() ?? assignmentsProp ?? {};
@@ -1063,7 +1077,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* AUXILIARY */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}>
+            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`} style={{ position: 'relative' }}>
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
@@ -1074,26 +1088,30 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 </span>
                 {!isPrintPreview && !isCurrentNightLocked && (
                   <div className="flex items-center gap-1 ml-1 no-print">
-                    <button
+                    <motion.button
                       type="button"
                       className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
                       onClick={onAddAuxSlot}
                       disabled={!canAddAux}
                       title="Add blank aux slot"
                       aria-label="Add aux slot"
+                      {...premiumButton}
+                      transition={premiumSpring}
                     >
                       +
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
                       type="button"
                       className="sb-aux-slot-btn w-5 h-5 flex items-center justify-center rounded text-[12px] font-bold leading-none disabled:opacity-30"
                       onClick={onRemoveAuxSlot}
                       disabled={!canRemoveAux}
                       title="Remove last empty aux slot"
                       aria-label="Remove empty aux slot"
+                      {...premiumButton}
+                      transition={premiumSpring}
                     >
                       −
-                    </button>
+                    </motion.button>
                   </div>
                 )}
               </div>
@@ -1107,64 +1125,145 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   gridAutoRows: isPrintPreview ? "minmax(0, 1fr)" : "auto",
                 }}
               >
-                {auxDefs.map((def, idx) => {
-                  const key = def.key;
-                  const accent = getAuxAccent(key, def.role);
-                  const a = displayAssignments[key] || {};
-                  const prov = a.provenance || {};
-                  const hasProv = prov.rationale || prov.fairnessSignals;
+                {!isPrintPreview ? (
+                  <AnimatePresence>
+                    {auxDefs.map((def, idx) => {
+                      const key = def.key;
+                      const accent = getAuxAccent(key, def.role);
+                      const a = displayAssignments[key] || {};
+                      const prov = a.provenance || {};
+                      const hasProv = prov.rationale || prov.fairnessSignals;
 
-                  const cardContent = (
-                    <>
-                      <AuxCard
-                        def={def}
-                        assignments={displayAssignments}
-                        selectedTasks={selectedTasks}
-                        setBreakGroupForSlot={setBreakGroupForSlot}
-                        onCardClick={handleCardClickForPad}
-                        loading={loadingAssignments}
-                        borderColor={cardBorders[key]}
-                        isDraftMode={isDraftMode}
-                        draftInfo={draftAssignments[key]}
-                        onRemoveTask={onRemoveTask}
-                        onSetTaskColor={onSetTaskColor}
-                        onEditTask={onEditTask}
-                        isLocked={isCurrentNightLocked}
-                        onLiveAssign={onLiveAssign}
-                        onLiveUnassign={onLiveUnassign}
-                        fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
-                        showDigitalAssists={showDigitalAssists}
-                        focusedTmId={focusedTmId}
-                        conflictingTms={conflictingTms}
-                        tmConflictSlots={tmConflictSlots}
-                        onSetAuxRole={onSetAuxRole}
-                        onSetAuxLabel={onSetAuxLabel}
-                      />
-                      {activePlacementPad?.hostId === key &&
-                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
-                    </>
-                  );
+                      const cardContent = (
+                        <>
+                          <AuxCard
+                            def={def}
+                            assignments={displayAssignments}
+                            selectedTasks={selectedTasks}
+                            setBreakGroupForSlot={setBreakGroupForSlot}
+                            onCardClick={handleCardClickForPad}
+                            loading={loadingAssignments}
+                            borderColor={cardBorders[key]}
+                            isDraftMode={isDraftMode}
+                            draftInfo={draftAssignments[key]}
+                            onRemoveTask={onRemoveTask}
+                            onSetTaskColor={onSetTaskColor}
+                            onEditTask={onEditTask}
+                            isLocked={isCurrentNightLocked}
+                            onLiveAssign={onLiveAssign}
+                            onLiveUnassign={onLiveUnassign}
+                            fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                            showDigitalAssists={showDigitalAssists}
+                            focusedTmId={focusedTmId}
+                            conflictingTms={conflictingTms}
+                            tmConflictSlots={tmConflictSlots}
+                            onSetAuxRole={onSetAuxRole}
+                            onSetAuxLabel={onSetAuxLabel}
+                          />
+                          {activePlacementPad?.hostId === key &&
+                            renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
+                        </>
+                      );
 
-                  return isPrintPreview ? (
-                    <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
-                      {cardContent}
-                    </div>
-                  ) : (
-                    <motion.div
-                      key={key}
-                      className="relative h-full"
-                      data-slot-key={key}
-                      data-placement-host={key}
-                      {...premiumEntrance}
-                      {...premiumHoverLift}
-                      custom={idx}
-                      transition={premiumStagger(idx)}
-                    >
-                      {cardContent}
-                    </motion.div>
-                  );
-                })}
+                      const entrance = reducedMotion ? premiumEntranceReduced : premiumEntrance;
+                      const exitTrans = reducedMotion 
+                        ? { ...premiumSpringReduced } 
+                        : { ...premiumSpring, stiffness: 300, damping: 22 };
+
+                      return (
+                        <motion.div
+                          key={key}
+                          layout  // smooth reflow of siblings when aux count changes (add/remove)
+                          className="relative h-full"
+                          data-slot-key={key}
+                          data-placement-host={key}
+                          {...entrance}
+                          {...premiumHoverLift}
+                          custom={idx}
+                          transition={premiumStagger(idx)}
+                          exit={{
+                            opacity: 0,
+                            scale: 0.92,
+                            y: 8,
+                            transition: exitTrans
+                          }}
+                        >
+                          {cardContent}
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                ) : (
+                  auxDefs.map((def, idx) => {
+                    const key = def.key;
+                    const accent = getAuxAccent(key, def.role);
+                    const a = displayAssignments[key] || {};
+                    const prov = a.provenance || {};
+                    const hasProv = prov.rationale || prov.fairnessSignals;
+
+                    const cardContent = (
+                      <>
+                        <AuxCard
+                          def={def}
+                          assignments={displayAssignments}
+                          selectedTasks={selectedTasks}
+                          setBreakGroupForSlot={setBreakGroupForSlot}
+                          onCardClick={handleCardClickForPad}
+                          loading={loadingAssignments}
+                          borderColor={cardBorders[key]}
+                          isDraftMode={isDraftMode}
+                          draftInfo={draftAssignments[key]}
+                          onRemoveTask={onRemoveTask}
+                          onSetTaskColor={onSetTaskColor}
+                          onEditTask={onEditTask}
+                          isLocked={isCurrentNightLocked}
+                          onLiveAssign={onLiveAssign}
+                          onLiveUnassign={onLiveUnassign}
+                          fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                          showDigitalAssists={showDigitalAssists}
+                          focusedTmId={focusedTmId}
+                          conflictingTms={conflictingTms}
+                          tmConflictSlots={tmConflictSlots}
+                          onSetAuxRole={onSetAuxRole}
+                          onSetAuxLabel={onSetAuxLabel}
+                        />
+                        {activePlacementPad?.hostId === key &&
+                          renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
+                      </>
+                    );
+
+                    return (
+                      <div key={key} className="relative h-full" data-slot-key={key} data-placement-host={key}>
+                        {cardContent}
+                      </div>
+                    );
+                  })
+                )}
               </div>
+
+              {/* Rotation health as compact side drawer/indicator (small section of right edge, not full height).
+                  Click to expand drawer with full details + Clear / Run engine buttons.
+                  Positioned off to the side (right margin), small height so it doesn't overtake/overlap the grid or empty states.
+                  Builder-only via !isPrintPreview. */}
+              {!isPrintPreview && (
+                <RotationHealthFloater
+                  visible
+                  auxDefs={auxDefs}
+                  assignments={displayAssignments}
+                  fitBySlot={fitBySlot || {}}
+                  isDraftMode={isDraftMode}
+                  draftAssignments={draftAssignments}
+                  placement="side-right-collapsed"
+                  weekDailyHealths={weekDailyHealths}
+                  selectedDayDateKey={currentIso}
+                  weekHealthLoading={false}
+                  // Engine controls for the drawer (clear board + run xAI engine for rotation health)
+                  canRunEngine={canRunEngine}
+                  onRunEngine={onRunXaiEngine}
+                  onClear={onClearBoard}
+                  running={engineRunning}
+                />
+              )}
             </section>
           </>
         ) : (

@@ -14,6 +14,7 @@ const ACTION_LABEL: Record<DeploymentLogEntry["action"], string> = {
   coverage_add: "Coverage",
   break_change: "Break group",
   task_color: "Task color",
+  print: "Printed",
 };
 
 const ACTION_COLOR: Record<DeploymentLogEntry["action"], string> = {
@@ -30,6 +31,7 @@ const ACTION_COLOR: Record<DeploymentLogEntry["action"], string> = {
   coverage_add: "#db2777",
   break_change: "#0891b2",
   task_color: "#a855f7",
+  print: "#4f46e5",
 };
 
 export function logActionLabel(action: DeploymentLogEntry["action"]): string {
@@ -40,14 +42,18 @@ export function logActionColor(action: DeploymentLogEntry["action"]): string {
   return ACTION_COLOR[action];
 }
 
+export function logSourceLabel(entry: DeploymentLogEntry): string | null {
+  const source = entry.payload?.source;
+  if (source === "shiftbuilder") return "Shift Builder";
+  if (source === "today_deployment_board" || source === "today_marker_pad") {
+    return "Deployment Board";
+  }
+  return null;
+}
+
 export function describeLogEntry(entry: DeploymentLogEntry): string {
   const slot = entry.slotKey;
-  const source =
-    entry.payload?.source === "shiftbuilder"
-      ? "Shift Builder"
-      : entry.payload?.source === "today_marker_pad"
-        ? "Zone Deployment Board"
-        : null;
+  const source = logSourceLabel(entry);
 
   switch (entry.action) {
     case "assign":
@@ -88,6 +94,11 @@ export function describeLogEntry(entry: DeploymentLogEntry): string {
       const label = String(entry.payload?.taskLabel ?? "task");
       const color = entry.payload?.color ? ` → ${entry.payload.color}` : "";
       return `${label} on ${slot}${color}`;
+    }
+    case "print": {
+      const view = entry.payload?.view ? String(entry.payload.view) : "schedule";
+      const format = entry.payload?.format === "pdf" ? "PDF" : "print";
+      return `Deployment board (${view}, ${format})`;
     }
     default:
       return slot;

@@ -8,6 +8,13 @@ import RRCard from "./RRCard";
 import AuxCard from "./AuxCard";
 import OverlapSlot from "./OverlapSlot";
 import {
+  GoldenZoneCard,
+  GoldenRRColumn,
+  GoldenAuxCard,
+  GoldenSectionHeader,
+  toTaskLines,
+} from "../print/GoldenPrintComponents";
+import {
   ZONE_DEFS,
   RR_DEFS,
   getZoneColor,
@@ -86,6 +93,10 @@ export interface ShiftBuilderBoardProps {
   loadingAssignments?: boolean;
   auxDefs?: AuxDef[]; // optional — prefer store selector (3.4)
 
+  /** Builder view only: hide the redundant large in-artboard date + "Day X of 7" header
+      because the floating pill navbar already provides clean date navigation. */
+  hideDateHeader?: boolean;
+
   // Stable callbacks (memoized in parent) — loose to match the many call sites
   onDayPillClick?: (idx: number) => void;
   onBreakGroupChange?: (g: ActiveBreakGroupFilter) => void;
@@ -131,6 +142,8 @@ export interface ShiftBuilderBoardProps {
   artboardScale?: number;
   /** When true (print-preview mode), suppress digital-only assists (xAI chips/lines, fit chips, HUDs) so the live canvas matches the exact Golden that will be cloned for PDF/print. Core content (names, badges that print, tasks, etc.) unchanged. */
   isPrintPreview?: boolean;
+  /** When true, GROUP break filter pills dim non-matching cards on deployment view (independent of print capture styling). */
+  enableBreakGroupFilter?: boolean;
 
   /** When true, suppress card-attached PlacementPad — parent renders an external pad. */
   useExternalPad?: boolean;
@@ -147,6 +160,18 @@ export interface ShiftBuilderBoardProps {
 
   /** Footer brand line (default: Weekly Zone Deployment Book). */
   sheetBrandTitle?: string;
+
+  /** /today kiosk: hide in-artboard week pills, larger date, slim footer, compact empty aux. */
+  isTodayBoard?: boolean;
+
+  /** /today: brief assign-success pulse on this slot key. */
+  kioskAssignPulseKey?: string | null;
+
+  /** /today: view-only — dim action chrome, keep card colors vibrant. */
+  isViewOnly?: boolean;
+
+  /** /today: long-press radial menu anchor. */
+  onKioskLongPress?: (slotKey: string, anchor: { x: number; y: number }, accentColor: string) => void;
 
   /** When true, TM picker rows are draggable onto slots (requires parent DndContext). */
   enableTmDragAssign?: boolean;
@@ -218,6 +243,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   isCurrentNightLocked,
   loadingAssignments,
   auxDefs: auxDefsProp,
+  hideDateHeader = false,
   onDayPillClick,
   onBreakGroupChange,
   onCardClick,
@@ -256,6 +282,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   fitBySlot: fitBySlotProp,
   artboardScale,
   isPrintPreview = false,
+  enableBreakGroupFilter,
   useExternalPad = false,
   onAddAuxSlot,
   onRemoveAuxSlot,
@@ -265,6 +292,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onSetAuxLabel,
   placementPadInsightsEnabled = true,
   sheetBrandTitle = "Weekly Zone Deployment Book",
+  isTodayBoard = false,
+  kioskAssignPulseKey = null,
+  isViewOnly = false,
+  onKioskLongPress,
   enableTmDragAssign = false,
   focusedTmId,
   showWeekHealthBar = false,
@@ -389,8 +420,18 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [assignments]);
 
   const breakCounts = processedBreakCounts ?? computedBreakCounts;
+  const breakGroupsWithCounts = ([1, 2, 3, 4] as const).filter((g) => breakCounts[g] > 0);
 
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
+
+  const todayOpenAuxCount = React.useMemo(() => {
+    if (!isTodayBoard) return 0;
+    return auxDefs.filter((d) => {
+      const isUnsetBlank = d.role === "blank" && !d.label;
+      if (!isUnsetBlank) return false;
+      return !slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments);
+    }).length;
+  }, [isTodayBoard, auxDefs, assignments, isDraftMode, draftAssignments]);
 
   const padDisplayAssignments = padAssignments ?? displayAssignments;
 
@@ -414,16 +455,43 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     allEligibleTms,
   });
   const fitBySlot = fitBySlotProp ?? internalFitMap.fitBySlot;
-  // In print-preview mode the live canvas must match the exact Golden that print capture will clone (no digital chips/lines at all).
-  const showDigitalAssists = !isPrintPreview;
+  // /today kiosk: print-faithful layout + interactive floor assists (no fit/xAI chips).
+  const showDigitalAssists = !isPrintPreview || isTodayBoard;
+  const showFitChips = showDigitalAssists && !isTodayBoard;
+  const kioskPeerDimActive = isTodayBoard && !!selectedSlotKey;
+
+  const kioskCardFlags = React.useCallback(
+    (slotKey: string, accentColor: string) => ({
+      isTodayKiosk: isTodayBoard,
+      isPeerDimmed: kioskPeerDimActive && selectedSlotKey !== slotKey,
+      isCardSelected: kioskPeerDimActive && selectedSlotKey === slotKey,
+      isAssignPulse: isTodayBoard && kioskAssignPulseKey === slotKey,
+      isViewOnly,
+      onKioskLongPress:
+        isTodayBoard && onKioskLongPress
+          ? (anchor: { x: number; y: number }) =>
+              onKioskLongPress(slotKey, anchor, accentColor)
+          : undefined,
+    }),
+    [
+      isTodayBoard,
+      kioskPeerDimActive,
+      selectedSlotKey,
+      kioskAssignPulseKey,
+      isViewOnly,
+      onKioskLongPress,
+    ],
+  );
+  const printDateSize = isTodayBoard ? 72 : 58;
+  const printDayNameSize = isTodayBoard ? 28 : 26;
   const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
   /** Grid cell host — stretches to row height so cards align across columns. */
   const gridHostClass = isPrintPreview ? "relative h-full" : "relative h-full min-h-0 flex flex-col";
   const zoneGridClass = isPrintPreview
-    ? `grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
+    ? `sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
     : `sb-zone-grid flex-1 w-full${builderCardGridClass}`;
   const rrGridClass = isPrintPreview
-    ? `grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
+    ? `sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
     : `sb-rr-grid flex-1 w-full${builderCardGridClass}`;
   const auxGridClass = isPrintPreview
     ? `grid gap-1.5 flex-1 w-full${builderCardGridClass}`
@@ -678,7 +746,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   };
 
   const breakFilterActive =
-    !isPrintPreview && currentView === "deployment" && breakGroup != null;
+    (enableBreakGroupFilter ?? !isPrintPreview) &&
+    currentView === "deployment" &&
+    breakGroup != null;
 
   // Wrapped handlers so clicks on cards (or card sub-parts) set the unilateral marker pad.
   // IMPORTANT: We no longer auto-delegate to the parent onCardClick/onGenderClick here.
@@ -831,101 +901,71 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [nightId]);
 
   return (
-    <div className={isPrintPreview ? "print-artboard" : "builder-workspace sb-builder-compact"}>
+    <div
+      className={isPrintPreview ? "print-artboard" : "builder-workspace sb-builder-compact"}
+      {...(isPrintPreview ? { "data-print-view": currentView } : {})}
+    >
       {/* Golden header: BIG 15 + day name + month/day-of-week + BREAKS dots
          on the left; GRAVE meta + week pills + GROUP selector on the right. */}
       <div
-        className={`sheet-header flex-shrink-0 ${isPrintPreview ? "pb-1 mb-1" : "pb-1 mb-0.5"} ${
+        className={`sheet-header flex-shrink-0 ${isPrintPreview ? "pb-1 mb-1" : "pb-1 mb-0.5"} ${hideDateHeader ? 'hide-date-header' : ''} ${
           !isPrintPreview && showWeekHealthBar && weekHealthDayDefs?.length
             ? "sb-sheet-header-with-health grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-x-3"
-            : "flex items-end justify-between"
+            : "flex items-end justify-end"
         }`}
       >
-        {/* LEFT */}
+        {/* LEFT date block — content hidden via style on builder (floating pill navbar owns the date UX).
+            The header height collapses and the grids below shift up. */}
         <div className={`flex items-end ${isPrintPreview ? "gap-3" : "gap-2"}`}>
-          <div
-            className="font-black tabular-nums leading-[0.78]"
-            style={{
-              fontSize: isPrintPreview ? 58 : 44,
-              letterSpacing: "-3px",
-              fontFamily: "var(--font-atkinson)",
-              ...(currentView === "deployment"
-                ? { color: isDark ? "#E5E5E7" : "#1C1C1E" }
-                : {
-                    color: "transparent",
-                    WebkitTextStroke: `1.5px ${isDark ? "#9CA3AF" : "#1C1C1E"}`,
-                    textShadow: "none",
-                  }),
-            }}
-          >
-            {selectedDay.dateNum}
-          </div>
-          <div className="-mb-0.5 flex flex-col">
             <div
-              className="font-bold leading-none flex items-center gap-2"
-              style={{ color: selectedDay.color, fontSize: isPrintPreview ? 26 : 22, letterSpacing: "-0.8px", fontFamily: "var(--font-atkinson)" }}
+              className="font-black tabular-nums leading-[0.78]"
+              style={{
+                fontSize: isPrintPreview ? printDateSize : 44,
+                letterSpacing: isPrintPreview && isTodayBoard ? "-4px" : "-3px",
+                fontFamily: "var(--font-atkinson)",
+                ...(currentView === "deployment"
+                  ? { color: isDark ? "#E5E5E7" : "#1C1C1E" }
+                  : {
+                      color: "transparent",
+                      WebkitTextStroke: `1.5px ${isDark ? "#9CA3AF" : "#1C1C1E"}`,
+                      textShadow: "none",
+                    }),
+                ...(hideDateHeader ? { display: "none" } : {}),
+              }}
             >
-              {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
-              {isCurrentNightLocked && (
-                <span
-                  className="no-print inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full border"
-                  style={{
-                    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                    borderColor: isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.15)",
-                    color: isDark ? "#F2F2F4" : "#1C1C1E",
-                    fontSize: 11,
-                    fontFamily: "var(--font-atkinson)",
-                    letterSpacing: "0.5px",
-                  }}
-                  title="This day is locked — no changes allowed"
-                >
-                  <span className="ms" style={{ fontSize: 13 }}>lock</span>
-                  LOCKED
-                </span>
-              )}
+              {selectedDay.dateNum}
             </div>
-            <div className="text-[11px] mt-0.5 leading-none" style={{ color: isDark ? "#9CA3AF" : "#4B5563" }}>
-              {currentView === "deployment"
-                ? `${selectedDay.monthYear} · Day ${selectedDayIndex + 1} of 7`
-                : `${selectedDay.name} · ${selectedDay.monthYear}`}
+            <div className="-mb-0.5 flex flex-col" style={hideDateHeader ? { display: 'none' } : undefined}>
+              <div
+                className="font-bold leading-none flex items-center gap-2"
+                style={{ color: selectedDay.color, fontSize: isPrintPreview ? printDayNameSize : 22, letterSpacing: "-0.8px", fontFamily: "var(--font-atkinson)" }}
+              >
+                {currentView === "deployment" ? selectedDay.name : "Break Sheet"}
+                {isCurrentNightLocked && (
+                  <span
+                    className="no-print inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full border"
+                    style={{
+                      background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                      borderColor: isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.15)",
+                      color: isDark ? "#F2F2F4" : "#1C1C1E",
+                      fontSize: 11,
+                      fontFamily: "var(--font-atkinson)",
+                      letterSpacing: "0.5px",
+                    }}
+                    title="This day is locked — no changes allowed"
+                  >
+                    <span className="ms" style={{ fontSize: 13 }}>lock</span>
+                    LOCKED
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] mt-0.5 leading-none" style={{ color: isDark ? "#9CA3AF" : "#4B5563", ...(hideDateHeader ? { display: 'none' } : {}) }}>
+                {currentView === "deployment"
+                  ? `${selectedDay.monthYear} · Day ${selectedDayIndex + 1} of 7`
+                  : `${selectedDay.name} · ${selectedDay.monthYear}`}
+              </div>
             </div>
-            {currentView === "deployment" ? (
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>BREAKS</span>
-                <div className="flex gap-[2px]">
-                  {([1, 2, 3, 4] as const).map((g) => (
-                    <div
-                      key={g}
-                      className={`${breakCounts[g] >= 10 ? "min-w-[18px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums`}
-                      style={{ background: isDark ? "#E5E5E7" : "#1C1C1E", color: isDark ? "#1C1C1E" : "#fff", fontFamily: "var(--font-atkinson)" }}
-                      title={`Break ${breakGroupLabel(g)}: ${breakCounts[g]} TM${breakCounts[g] === 1 ? "" : "s"}`}
-                    >
-                      {breakCounts[g] > 0 ? breakCounts[g] : ""}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="text-[10px] font-bold tabular-nums" style={{ color: isDark ? "#F2F2F4" : "#111" }}>{inRotationCount}</span>
-                <span className="text-[8.5px] font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>IN ROTATION</span>
-                <span className="text-[8.5px] font-bold tracking-[1px] ml-1.5" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}>BREAKS</span>
-                <div className="flex gap-[2px]">
-                  {([1, 2, 3, 4] as const).map((g) => (
-                    <div
-                      key={g}
-                      className={`${breakCounts[g] >= 10 ? "min-w-[18px] px-0.5" : "w-[14px]"} h-[14px] rounded-full text-[8px] font-bold leading-none flex items-center justify-center tabular-nums`}
-                      style={{ background: isDark ? "#E5E5E7" : "#1C1C1E", color: isDark ? "#1C1C1E" : "#fff", fontFamily: "var(--font-atkinson)" }}
-                      title={`Break ${breakGroupLabel(g)}: ${breakCounts[g]} TM${breakCounts[g] === 1 ? "" : "s"}`}
-                    >
-                      {breakCounts[g] > 0 ? breakCounts[g] : ""}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
 
         {/* CENTER — compact week health floater (builder only) */}
         {!isPrintPreview && showWeekHealthBar && weekHealthDayDefs && weekHealthDayDefs.length > 0 ? (
@@ -956,35 +996,32 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </div>
           )}
 
-          {/* Week pills (internal nav — uses callback so board stays isolated) */}
-          <div className="flex gap-[2px]">
-            {Array.from({ length: 7 }).map((_, i) => {
-              // We don't have the full DAY_DEFS here; the parent passes the visual state via selectedDayIndex.
-              // For the tiny pills we reconstruct minimal visual from the active day color + index.
-              // To keep exact fidelity we accept the 7 tiny pills as a presentational row driven by index.
-              const isActive = i === selectedDayIndex;
-              // Color is only accurate for the active day; others are neutral (matches original behavior in this context).
-              const color = isActive ? selectedDay.color : undefined;
-              return (
-                <div
-                  key={i}
-                  onClick={() => onDayPillClick?.(i)}
-                  className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px]"
-                  style={{
-                    background: isActive && color ? color : "transparent",
-                    color: isActive ? "#fff" : (isDark ? "#9CA3AF" : "#6B7280"),
-                    fontFamily: "var(--font-atkinson)",
-                  }}
-                  title={`Day ${i + 1}`}
-                >
-                  {["F","S","S","M","T","W","T"][i]}
-                </div>
-              );
-            })}
-          </div>
+          {!hideDateHeader && !isTodayBoard ? (
+            <div className="flex gap-[2px]">
+              {Array.from({ length: 7 }).map((_, i) => {
+                const isActive = i === selectedDayIndex;
+                const color = isActive ? selectedDay.color : undefined;
+                return (
+                  <div
+                    key={i}
+                    onClick={() => onDayPillClick?.(i)}
+                    className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px]"
+                    style={{
+                      background: isActive && color ? color : "transparent",
+                      color: isActive ? "#fff" : (isDark ? "#9CA3AF" : "#6B7280"),
+                      fontFamily: "var(--font-atkinson)",
+                    }}
+                    title={`Day ${i + 1}`}
+                  >
+                    {["F","S","S","M","T","W","T"][i]}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
 
           {/* Group selector (Golden shows GROUP label + three numbered pills) */}
-          {currentView === "deployment" && (
+          {!hideDateHeader && currentView === "deployment" && (
             <div className="flex items-center gap-1.5">
               <span className="sb-group-filter-label text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>GROUP</span>
               <div className="sb-group-filter-row flex gap-[3px]">
@@ -1014,8 +1051,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           {/* The original had them here; if they must live visually inside the artboard header they can be passed as slots later. */}
         </div>
       </div>
+      {/* /sheet-header */}
 
-      <div className={`flex flex-col w-full ${isPrintPreview ? 'flex-1 min-h-0 overflow-hidden' : 'overflow-y-auto pb-8'}`}>
+      <div className={`flex flex-col w-full ${isPrintPreview ? 'flex-1 min-h-0 overflow-hidden' : 'overflow-hidden'}`}>
         {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
         {renderTaskTextEditPad()}
         {renderPlacementDock()}
@@ -1025,11 +1063,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                  Row 1: Z1 | Z3 | Z4 | Z5 | Z9
                  Row 2: Z2 | Z6 | Z7 | Z8 | Z10
                  (5-col CSS grid; child order = visual positions. Mirrored in print overview for PDF consistency.) */}
+            <div className="sb-with-aux-sidebar">
             <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <div className="divider" />
-                <span className="count">
+                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
                   {ZONE_DEFS.filter((d) =>
                     slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
                   ).length} / 10 FILLED
@@ -1059,7 +1098,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   const prov = a.provenance || {};
                   const hasProv = prov.rationale || prov.fairnessSignals;
 
-                  const cardContent = (
+                  const useGoldenCard = isPrintPreview;
+                  const cardContent = useGoldenCard ? (
+                    <GoldenZoneCard
+                      slotKey={key}
+                      tmName={a.tmName}
+                      breakGroup={a.breakGroup ?? 0}
+                      tasks={toTaskLines(selectedTasks[key])}
+                      empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
+                      coveredByNames={coveredByIndex[key]}
+                    />
+                  ) : (
                     <>
                       <ZoneCard
                         def={def}
@@ -1078,12 +1127,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
-                        fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                        fitChip={showFitChips ? fitBySlot[key] : undefined}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
                         coveredByNames={coveredByIndex[key]}
+                        {...kioskCardFlags(key, accent)}
                       />
                       {activePlacementPad?.hostId === key &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1117,7 +1167,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
                 <div className="divider" />
-                <span className="count">
+                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
                   {RR_DEFS.reduce((acc, d) => {
                     const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
                     const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
@@ -1140,7 +1190,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     return null;
                   }
 
-                  const cardContent = (
+                  const useGoldenCard = isPrintPreview;
+                  const cardContent = useGoldenCard ? (
+                    <GoldenRRColumn
+                      rrNum={def.num}
+                      wAssignment={displayAssignments[wKey] || {}}
+                      mAssignment={displayAssignments[mKey] || {}}
+                      wTasks={toTaskLines(selectedTasks[wKey])}
+                      mTasks={toTaskLines(selectedTasks[mKey])}
+                      coveredByIndex={coveredByIndex}
+                    />
+                  ) : (
                     <>
                       <RRCard
                         def={def}
@@ -1160,13 +1220,33 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         isLocked={isCurrentNightLocked}
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
-                        fitChipW={showDigitalAssists ? fitBySlot[wKey] : undefined}
-                        fitChipM={showDigitalAssists ? fitBySlot[mKey] : undefined}
+                        fitChipW={showFitChips ? fitBySlot[wKey] : undefined}
+                        fitChipM={showFitChips ? fitBySlot[mKey] : undefined}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
                         coveredByIndex={coveredByIndex}
+                        isTodayKiosk={isTodayBoard}
+                        isPeerDimmed={
+                          kioskPeerDimActive &&
+                          selectedSlotKey !== mKey &&
+                          selectedSlotKey !== wKey
+                        }
+                        isCardSelected={
+                          kioskPeerDimActive &&
+                          (selectedSlotKey === mKey || selectedSlotKey === wKey)
+                        }
+                        isAssignPulse={
+                          isTodayBoard &&
+                          (kioskAssignPulseKey === mKey || kioskAssignPulseKey === wKey)
+                        }
+                        isViewOnly={isViewOnly}
+                        onKioskLongPress={
+                          isTodayBoard && onKioskLongPress
+                            ? (anchor) => onKioskLongPress(mKey, anchor, accent)
+                            : undefined
+                        }
                       />
                       {activePlacementPad?.hostId === rrHostId &&
                         renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
@@ -1207,10 +1287,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
-                <span className="count">
+                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
                   {auxDefs.filter((d) =>
                     (d.role !== "blank" || !!d.label) && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
                   ).length} / {auxDefs.filter((d) => d.role !== "blank" || !!d.label).length} FILLED
+                  {isTodayBoard && todayOpenAuxCount > 0 ? (
+                    <span className="ml-1 font-medium text-[#AEAEB2]">· {todayOpenAuxCount} open</span>
+                  ) : null}
                 </span>
                 {!isPrintPreview && !isCurrentNightLocked && (
                   <div className="flex items-center gap-1 ml-1 no-print">
@@ -1243,7 +1326,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
               <div
                 ref={auxGridRef}
-                className={auxGridClass}
+                className={`${auxGridClass}${isTodayBoard ? " sb-today-aux-grid" : ""}`}
                 style={{
                   ...(isPrintPreview
                     ? { gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))` }
@@ -1266,7 +1349,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       const prov = a.provenance || {};
                       const hasProv = prov.rationale || prov.fairnessSignals;
 
-                      const cardContent = (
+                      const useGoldenCard = isPrintPreview;
+                      const cardContent = useGoldenCard ? (
+                        <GoldenAuxCard
+                          def={def}
+                          tmName={a.tmName}
+                          breakGroup={a.breakGroup ?? 0}
+                          tasks={toTaskLines(selectedTasks[key])}
+                          empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
+                          coveredByNames={coveredByIndex[key]}
+                        />
+                      ) : (
                         <>
                           <AuxCard
                             def={def}
@@ -1285,7 +1378,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             isLocked={isCurrentNightLocked}
                             onLiveAssign={onLiveAssign}
                             onLiveUnassign={onLiveUnassign}
-                            fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                            fitChip={showFitChips ? fitBySlot[key] : undefined}
                             showDigitalAssists={showDigitalAssists}
                             focusedTmId={focusedTmId}
                             conflictingTms={conflictingTms}
@@ -1293,6 +1386,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             coveredByNames={coveredByIndex[key]}
                             onSetAuxRole={onSetAuxRole}
                             onSetAuxLabel={onSetAuxLabel}
+                            {...kioskCardFlags(key, accent)}
                           />
                           {activePlacementPad?.hostId === key &&
                             renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1341,7 +1435,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     const prov = a.provenance || {};
                     const hasProv = prov.rationale || prov.fairnessSignals;
 
-                    const cardContent = (
+                    const useGoldenCard = isPrintPreview;
+                    const cardContent = useGoldenCard ? (
+                      <GoldenAuxCard
+                        def={def}
+                        tmName={a.tmName}
+                        breakGroup={a.breakGroup ?? 0}
+                        tasks={toTaskLines(selectedTasks[key])}
+                        empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
+                        coveredByNames={coveredByIndex[key]}
+                      />
+                    ) : (
                       <>
                         <AuxCard
                           def={def}
@@ -1360,7 +1464,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           isLocked={isCurrentNightLocked}
                           onLiveAssign={onLiveAssign}
                           onLiveUnassign={onLiveUnassign}
-                          fitChip={showDigitalAssists ? fitBySlot[key] : undefined}
+                          fitChip={showFitChips ? fitBySlot[key] : undefined}
                           showDigitalAssists={showDigitalAssists}
                           focusedTmId={focusedTmId}
                           conflictingTms={conflictingTms}
@@ -1368,6 +1472,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           coveredByNames={coveredByIndex[key]}
                           onSetAuxRole={onSetAuxRole}
                           onSetAuxLabel={onSetAuxLabel}
+                          {...kioskCardFlags(key, accent)}
                         />
                         {activePlacementPad?.hostId === key &&
                           renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
@@ -1384,6 +1489,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
 
             </section>
+            </div>
 
             {/* OVERLAPS — visible on deployment when GROUP filter is OL */}
             {breakGroup === BREAK_GROUP_OVERLAPS && !isPrintPreview ? (
@@ -1454,7 +1560,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                   isLocked={isCurrentNightLocked}
                                   onLiveAssign={onLiveAssign}
                                   onLiveUnassign={onLiveUnassign}
-                                  fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
+                                  fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
                                   showDigitalAssists={showDigitalAssists}
                                   focusedTmId={focusedTmId}
                                   conflictingTms={conflictingTms}
@@ -1474,7 +1580,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         ) : (
           <>
             {/* 4 Break Wave Columns — waves 1–3 + OL */}
-            <div className="grid grid-cols-4 gap-1 mb-1.5">
+            <div
+              className={
+                isPrintPreview
+                  ? "sb-breaks-wave-grid grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full"
+                  : "grid grid-cols-4 gap-1 mb-1.5"
+              }
+            >
               {([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
                 // Always derive wave membership from the live Zustand assignments.
                 // This is the exact same data source the BreakBadge pills read on the
@@ -1664,7 +1776,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 isLocked={isCurrentNightLocked}
                                 onLiveAssign={onLiveAssign}
                                 onLiveUnassign={onLiveUnassign}
-                                fitChip={showDigitalAssists ? fitBySlot[slotKey] : undefined}
+                                fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
                                 showDigitalAssists={showDigitalAssists}
                                 focusedTmId={focusedTmId}
                                 conflictingTms={conflictingTms}
@@ -1717,6 +1829,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       {/* Sheet footer — single aligned row (brand · version · page) */}
       <div
         className={`sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] ${
+          isTodayBoard ? "sb-today-footer-chrome" : ""
+        } ${
           isPrintPreview
             ? "pt-1 border-t border-[#E5E5E7]"
             : "pt-2 mt-3 border-t border-black/5 dark:border-white/[0.07]"
@@ -1738,12 +1852,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           </span>
         </div>
         <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
-        <div
-          className="shrink-0 tabular-nums text-right"
-          style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}
-        >
-          — {currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2} of 14 —
-        </div>
+        {!isTodayBoard ? (
+          <div
+            className="shrink-0 tabular-nums text-right"
+            style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}
+          >
+            — {currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2} of 14 —
+          </div>
+        ) : null}
       </div>
 
     </div>

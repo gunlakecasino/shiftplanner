@@ -20,6 +20,7 @@ export function postProcessBreaksArtboard(artboard: Element): void {
     ".sb-breaks-wave-grid, .grid.grid-cols-4",
   ) as HTMLElement | null;
   if (waveGrid) {
+    waveGrid.classList.add("sb-breaks-wave-grid");
     waveGrid.style.display = "grid";
     waveGrid.style.width = "100%";
     waveGrid.style.maxWidth = "100%";

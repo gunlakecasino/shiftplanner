@@ -7,7 +7,9 @@ import { formatLocalDateISO, type DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
+import { mirrorMainAssignmentsToLiveStore } from "@/lib/shiftbuilder/liveCache";
 import { patchNightCoreAssignmentsCache } from "@/lib/shiftbuilder/scheduleCacheSync";
+import type { BreakGroup } from "@/lib/shiftbuilder/constants";
 import type { DeploymentChangeAction } from "../lib/todayChangeLog";
 
 export type TodayActiveDrag = {
@@ -20,6 +22,7 @@ type UseTodayDragDropParams = {
   nightId: string | null;
   selectedDay: DayDef;
   isScheduleReadOnly: boolean;
+  isSlotLocked: (slotKey: string) => boolean;
   onAssign: (slotKey: string, tmId: string, tmName: string) => void;
   onClearSlot: (slotKey: string) => void;
   setSelectedTasks: React.Dispatch<React.SetStateAction<Record<string, NightSlotTask[]>>>;
@@ -97,10 +100,30 @@ async function resolveNightIdForDrag(
   return getOrCreateNightForDate(selectedDay.date, selectedDay.name);
 }
 
+async function syncBreakAfterDrag(
+  nightId: string,
+  uiKey: string,
+  tmId: string | null,
+  breakGroup: number | null | undefined,
+): Promise<void> {
+  if (!tmId) return;
+  const { updateSlotBreakGroup, deleteBreakAssignment, upsertBreakAssignment } =
+    await import("@/lib/shiftbuilder/data");
+  const { slot_key, rr_side } = uiToDb(uiKey);
+  const group = (breakGroup ?? 0) as BreakGroup;
+  await updateSlotBreakGroup(nightId, slot_key, rr_side, group, tmId);
+  if (group === 0) {
+    await deleteBreakAssignment(nightId, tmId);
+  } else {
+    await upsertBreakAssignment({ nightId, tmId, groupNum: group, slotRef: uiKey });
+  }
+}
+
 export function useTodayDragDrop({
   nightId,
   selectedDay,
   isScheduleReadOnly,
+  isSlotLocked,
   onAssign,
   onClearSlot,
   setSelectedTasks,
@@ -154,6 +177,10 @@ export function useTodayDragDrop({
       if (a.type === "tm" && a.tmId && a.tmName) {
         if (over?.data.current?.type === "slot") {
           const slotKey = safeNormalizeSlotKey((over.data.current as { slotKey: string }).slotKey);
+          if (isSlotLocked(slotKey)) {
+            showToast(`${slotKey} is locked`, "error");
+            return;
+          }
           onAssign(slotKey, a.tmId, a.tmName);
         }
         return;
@@ -164,6 +191,10 @@ export function useTodayDragDrop({
         const toUiKey = safeNormalizeSlotKey((over.data.current as { slotKey: string }).slotKey);
         const fromUiKey = safeNormalizeSlotKey(a.fromSlot);
         if (toUiKey === fromUiKey) return;
+        if (isSlotLocked(fromUiKey) || isSlotLocked(toUiKey)) {
+          showToast("Locked slots can't receive task moves", "error");
+          return;
+        }
 
         const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKey);
         const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } =
@@ -216,6 +247,7 @@ export function useTodayDragDrop({
               slotKey: toUiKey,
               payload: { taskLabel: a.taskLabel, movedFrom: fromUiKey },
             });
+            showToast(`Moved task → ${toUiKey}`, "success");
           } catch (e) {
             console.error("[today] task move persist failed", e);
             if (tasksSnapshot) setSelectedTasks(tasksSnapshot);
@@ -242,6 +274,10 @@ export function useTodayDragDrop({
         if (over?.data.current?.type === "slot") {
           const toKey = safeNormalizeSlotKey((over.data.current as { slotKey: string }).slotKey);
           if (toKey === fromKey) return;
+          if (isSlotLocked(fromKey) || isSlotLocked(toKey)) {
+            showToast("Locked slots can't be moved or swapped", "error");
+            return;
+          }
 
           const assignmentsSnapshot = {
             ...(useShiftBuilderStore.getState().assignments || {}),
@@ -281,6 +317,7 @@ export function useTodayDragDrop({
           };
 
           applyOptimisticAssignments();
+          mirrorMainAssignmentsToLiveStore(selectedDay.date);
 
           void (async () => {
             const nid = await resolveNightIdForDrag(nightId, selectedDay);
@@ -313,6 +350,16 @@ export function useTodayDragDrop({
                 await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
               }
 
+              await syncBreakAfterDrag(nid, toKey, movingTmId, movingFromMain?.breakGroup);
+              if (displacedTmId) {
+                await syncBreakAfterDrag(
+                  nid,
+                  fromKey,
+                  displacedTmId,
+                  displacedFromMain?.breakGroup,
+                );
+              }
+
               logChange({
                 action: "assign",
                 slotKey: toKey,
@@ -332,6 +379,7 @@ export function useTodayDragDrop({
                   newTmName: displacedTmName,
                   payload: { dragSwap: true, dragFrom: toKey },
                 });
+                showToast(`Swapped ${movingTmName} ↔ ${displacedTmName}`, "success");
               } else {
                 logChange({
                   action: "unassign",
@@ -340,6 +388,7 @@ export function useTodayDragDrop({
                   previousTmName: movingTmName,
                   payload: { dragMove: true, dragTo: toKey },
                 });
+                showToast(`Moved ${movingTmName} → ${toKey}`, "success");
               }
             } catch (e) {
               console.error("[today] assignment drag persist failed", e);
@@ -357,6 +406,7 @@ export function useTodayDragDrop({
     },
     [
       isScheduleReadOnly,
+      isSlotLocked,
       nightId,
       selectedDay,
       onAssign,

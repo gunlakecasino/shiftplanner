@@ -166,11 +166,8 @@ import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrim
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
-import {
-  CanvasEngineCluster,
-  type CoverageEngineRunOptions,
-  type EngineRunPhase,
-} from "./components/CanvasEngineCluster";
+// CanvasEngineCluster removed (its week/rotation health box + pill was the "old" one overtaking the surface).
+// Rotation health is now the compact side drawer in RotationHealthFloater (with Clear/Run engine inside).
 import { WeekHealthTracker } from "./components/WeekHealthTracker";
 import {
   stageTopInsetPx,
@@ -4141,7 +4138,21 @@ function AuthedShiftBuilder() {
       if (!nightId) { showToast("No active night selected", "error"); return; }
 
       const accentColor = getSlotAccentColor(sourceKey);
-      const targetLabel = getSlotCoverageLabel(targetKey);
+      let targetLabel = getSlotCoverageLabel(targetKey);
+
+      // Resolve nicer labels for special aux slots (e.g. the Z9SR aux may be keyed as AUX1 in current layout)
+      // Use the aux def's locations[0] (e.g. "Z9 Smoking Room") when available.
+      if (targetKey.startsWith("AUX") || targetKey === "Z9SR") {
+        const matchingAux = auxDefs.find(
+          (d) => d.key === targetKey || (targetKey === "Z9SR" && d.role === "z9sr")
+        );
+        if (matchingAux?.locations?.[0]) {
+          targetLabel = matchingAux.locations[0];
+        } else if (targetKey === "Z9SR") {
+          targetLabel = "Zone 9 Smoking Room";
+        }
+      }
+
       const sourceKeys = expandCoverageToKeys(sourceKey);
 
       try {
@@ -4184,7 +4195,7 @@ function AuthedShiftBuilder() {
         showToast("Failed to add coverage bar", "error");
       }
     },
-    [nightId, showToast, logBuilderChange]
+    [nightId, showToast, logBuilderChange, auxDefs]
   );
 
   // Stable computed arrays/objects for the palette — new references only when
@@ -7317,6 +7328,11 @@ function AuthedShiftBuilder() {
                 processedBreakCounts={processedDayData?.breakCounts}
                 selectedDay={selectedDay}
                 selectedDayIndex={selectedDayIndex}
+                // Rotation health side drawer: pass clear and run engine so the drawer contains them
+                canRunEngine={canRunEngine}
+                onRunXaiEngine={runXaiEngineFromCanvas}
+                onClearBoard={handleClearBoard}
+                engineRunning={engineRunPhase === 'running'}
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
@@ -8259,38 +8275,10 @@ function AuthedShiftBuilder() {
       {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
       {viewMode === 'canvas' && <OpsStatusBar />}
 
-      {/* Persistent but dismissable live tracker for each day's rotation health %.
-          Shows the consistently tracked per-day health (rich when captured for that day + stable repeat-based proxies for the full week).
-          Updates live as assignments, drafts, or fit data change.
-          Click a day to switch to it. X to dismiss (preference persisted in localStorage).
-          Re-open via the small button in the health cluster when dismissed. */}
-      {viewMode === 'canvas' && deploymentRotationFitEnabled && (
-        <CanvasEngineCluster
-          visible={!(isTabletTouchDevice() && selectedSlotKey)}
-          canRunEngine={canRunEngine}
-          canEditAssignments={canEditAssignments}
-          isCurrentNightLocked={isCurrentNightLocked}
-          engineRunPhase={engineRunPhase}
-          onRunXaiEngine={runXaiEngineFromCanvas}
-          onClearBoard={handleClearBoard}
-          onApplyDraft={() => void applyDraft()}
-          onDiscardDraft={discardDraft}
-          auxDefs={auxDefsForFit}
-          assignments={storeAssignmentsForFit}
-          fitBySlot={deploymentFitBySlot}
-          isDraftMode={isDraftMode}
-          draftAssignments={draftAssignments}
-          draftGrokExplanation={draftGrokExplanation}
-          weeklyRecentHistory={plannedThisWeekRecentHistory}
-          weekDailyHealths={weekDailyHealths}
-          selectedDayDateKey={selectedDayDateKey}
-          graveWeekDateKeys={graveWeekDateKeys}
-          weekHealthLoading={weekHealthLoading}
-          onRequestRotationAdvisor={() => void handleRequestRotationAdvisor({ focusWeek: true })}
-          // Pass re-show handler so user can bring back the tracker from the health UI
-          onShowWeekHealthTracker={isWeekHealthTrackerDismissed ? showWeekHealthTracker : undefined}
-        />
-      )}
+      {/* Old CanvasEngineCluster / week rotation health box removed.
+          The rotation health is now exclusively the compact side drawer (RotationHealthFloater with side-right-collapsed)
+          rendered inside ShiftBuilderBoard. It includes the Clear and Run engine buttons (handlers passed through).
+          No more overtaking box in the surface. */}
 
     </div>
   );

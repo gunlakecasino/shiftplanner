@@ -11,7 +11,8 @@ export type DeploymentLogAction =
   | "task_remove"
   | "coverage_add"
   | "break_change"
-  | "task_color";
+  | "task_color"
+  | "print";
 
 export type DeploymentLogEntry = {
   id: string;

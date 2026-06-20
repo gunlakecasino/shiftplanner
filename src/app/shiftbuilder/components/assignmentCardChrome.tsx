@@ -66,6 +66,7 @@ export function CardSlotHeader({
   accentColor,
   trailing,
   compact = false,
+  titleClassName,
 }: {
   icon?: React.ReactNode;
   label: React.ReactNode;
@@ -73,6 +74,7 @@ export function CardSlotHeader({
   trailing?: React.ReactNode;
   /** RR stacked sides use slightly tighter header padding. */
   compact?: boolean;
+  titleClassName?: string;
 }) {
   return (
     <div
@@ -84,10 +86,10 @@ export function CardSlotHeader({
           <span className="text-[12px] leading-none drop-shadow-sm shrink-0">{icon}</span>
         ) : null}
         <span
-          className="font-extrabold uppercase truncate"
+          className={`font-extrabold uppercase truncate ${titleClassName ?? ""}`}
           style={{
             fontSize: 10.5,
-            fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+            fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
             letterSpacing: "0.4px",
           }}
         >

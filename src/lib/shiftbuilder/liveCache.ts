@@ -226,6 +226,20 @@ export const liveAssignmentsStore = create<LiveAssignmentsState>()(
 
 const activeChannels: Record<string, RealtimeChannel> = {};
 
+/** Routes that mount live cache (/today + ShiftBuilder). Global teardown only when last unmounts. */
+let liveCacheMountCount = 0;
+
+/** Call once per surface mount; returned release only tears down all channels when count hits 0. */
+export function retainLiveCacheMount(): () => void {
+  liveCacheMountCount += 1;
+  return () => {
+    liveCacheMountCount = Math.max(0, liveCacheMountCount - 1);
+    if (liveCacheMountCount === 0) {
+      teardownAllLiveCache();
+    }
+  };
+}
+
 /**
  * Initialize (or re-use) a Supabase Realtime subscription for a specific night.
  * Idempotent – safe to call multiple times for the same night.
@@ -272,10 +286,67 @@ export function initLiveCacheForNight(
       },
       (payload: any) => {
         handleAssignmentChange(payload, dateKey, queryClient);
-      }
+      },
     )
-    // Future: add listeners for break_assignments, night_slot_tasks, night_card_borders
-    // when we migrate those mutations too.
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "night_slot_tasks",
+        filter: `night_id=eq.${nightId}`,
+      },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "break_assignments",
+        filter: `night_id=eq.${nightId}`,
+      },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+        void queryClient.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "night_card_borders",
+        filter: `night_id=eq.${nightId}`,
+      },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "nights",
+        filter: `id=eq.${nightId}`,
+      },
+      (payload: { old?: { status?: string }; new?: { status?: string } }) => {
+        const prev = payload.old?.status;
+        const next = payload.new?.status;
+        if (prev === next) return;
+        void queryClient.invalidateQueries({ queryKey: ["todayPublishedDates"] });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("today-publish-meta-changed", {
+              detail: { nightId, dateKey, status: next },
+            }),
+          );
+        }
+      },
+    )
     .subscribe((status: any) => {
       if (status === "SUBSCRIBED") {
         liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connected");
@@ -361,7 +432,29 @@ function handleAssignmentChange(
     return;
   }
 
+  if (eventType === "UPDATE" && newRow && !newRow.tm_id) {
+    // Break-group-only or lock-only updates without a TM assignment row.
+    if (newRow.break_group !== undefined && newRow.break_group !== null) {
+      const breakGroup = Number(newRow.break_group);
+      try {
+        useShiftBuilderStore.getState().setAssignments((prev: any) => ({
+          ...prev,
+          [uiKey]: {
+            ...prev[uiKey],
+            slotKey: uiKey,
+            breakGroup,
+          },
+        }));
+      } catch {}
+    }
+    return;
+  }
+
   if ((eventType === "INSERT" || eventType === "UPDATE") && newRow?.tm_id) {
+    const breakGroup =
+      newRow.break_group !== undefined && newRow.break_group !== null
+        ? Number(newRow.break_group)
+        : undefined;
     const liveAssignment: LiveAssignment = {
       tmId: newRow.tm_id,
       tmName: newRow.tm_name || newRow.tm_id,
@@ -374,6 +467,7 @@ function handleAssignmentChange(
     // Patch both legacy and the real core key used by the board
     const patchCache = (old: any) => {
       if (!old) return old;
+      const existing = (old.assignments || {})[uiKey] ?? {};
       return {
         ...old,
         assignments: {
@@ -382,6 +476,10 @@ function handleAssignmentChange(
             tmId: liveAssignment.tmId,
             tmName: liveAssignment.tmName,
             isLocked: liveAssignment.isLocked,
+            ...(breakGroup !== undefined ? { breakGroup } : {}),
+            ...(existing.breakGroup !== undefined && breakGroup === undefined
+              ? { breakGroup: existing.breakGroup }
+              : {}),
           },
         },
       };
@@ -399,8 +497,8 @@ function handleAssignmentChange(
           tmName: liveAssignment.tmName,
           isLocked: liveAssignment.isLocked,
           slotKey: uiKey,
-          // Preserve breakGroup from previous state (realtime updates don't carry break info)
-          breakGroup: prev[uiKey]?.breakGroup,
+          breakGroup:
+            breakGroup !== undefined ? breakGroup : prev[uiKey]?.breakGroup,
         },
       }));
     } catch {}

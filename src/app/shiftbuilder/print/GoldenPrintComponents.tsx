@@ -195,6 +195,10 @@ export function GoldenZoneCard({
   tasks,
   empty,
   coveredByNames,
+  onClick,
+  onMouseDown,
+  onContextMenu,
+  ...rest
 }: {
   slotKey: string;
   tmName?: string | null;
@@ -202,7 +206,7 @@ export function GoldenZoneCard({
   tasks: PrintTaskLine[];
   empty?: boolean;
   coveredByNames?: string[];
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   const def = ZONE_DEFS.find((d) => d.key === slotKey)!;
   const color = getZoneColor(slotKey);
   const icon = ZONE_ICONS[slotKey] ?? "●";
@@ -218,6 +222,10 @@ export function GoldenZoneCard({
       }`}
       style={{ ["--card-accent" as string]: color }}
       data-slot-key={slotKey}
+      onClick={onClick}
+      onMouseDown={onMouseDown}
+      onContextMenu={onContextMenu}
+      {...rest}
     >
       <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
       <div

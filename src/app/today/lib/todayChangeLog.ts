@@ -11,7 +11,8 @@ export type DeploymentChangeAction =
   | "task_remove"
   | "coverage_add"
   | "break_change"
-  | "task_color";
+  | "task_color"
+  | "print";
 
 /** @deprecated Use DeploymentChangeAction */
 export type TodayChangeAction = DeploymentChangeAction;
@@ -38,17 +39,56 @@ export type TodayAssignmentChangeInput = DeploymentChangeInput;
 
 const META_SLOT_KEY = "__meta__";
 
-/** Fire-and-forget audit log for deployment board edits. Never blocks the UI. */
-export function logDeploymentChange(input: DeploymentChangeInput): void {
-  const slotKey = input.slotKey?.trim() || META_SLOT_KEY;
-  void fetch("/api/today/log-change", {
+export type LogDeploymentChangeOptions = {
+  /** Non-blocking feedback when the audit POST fails (network or non-2xx). */
+  onFailure?: (message: string) => void;
+};
+
+async function postDeploymentChangeLog(
+  body: string,
+  attempt = 0,
+): Promise<Response> {
+  const res = await fetch("/api/today/log-change", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ ...input, slotKey }),
-  }).catch((e) => {
-    console.warn("[deployment] change log failed (non-fatal)", e);
+    body,
   });
+  if (res.ok || attempt >= 1) return res;
+  if (res.status === 429 || res.status >= 500) {
+    await new Promise((r) => setTimeout(r, 450));
+    return postDeploymentChangeLog(body, attempt + 1);
+  }
+  return res;
+}
+
+/** Fire-and-forget audit log for deployment board edits. Never blocks the UI. */
+export function logDeploymentChange(
+  input: DeploymentChangeInput,
+  options?: LogDeploymentChangeOptions,
+): void {
+  const slotKey = input.slotKey?.trim() || META_SLOT_KEY;
+  const body = JSON.stringify({ ...input, slotKey });
+  void postDeploymentChangeLog(body)
+    .then(async (res) => {
+      if (res.ok) return;
+      let detail = "";
+      try {
+        const parsed = (await res.json()) as { error?: string };
+        detail = parsed.error?.trim() ?? "";
+      } catch {
+        /* ignore */
+      }
+      const msg = detail
+        ? `Change saved but audit log failed: ${detail}`
+        : "Change saved but audit log failed — check /logs later";
+      console.warn("[deployment] change log rejected", res.status, detail);
+      options?.onFailure?.(msg);
+    })
+    .catch((e) => {
+      console.warn("[deployment] change log failed (non-fatal)", e);
+      options?.onFailure?.("Change saved but audit log couldn't be recorded");
+    });
 }
 
 /** @deprecated Use logDeploymentChange */

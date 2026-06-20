@@ -4,9 +4,9 @@ export async function fetchPublishedDates(from: string, to: string): Promise<Set
     `/api/today/published-dates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     { credentials: "same-origin", cache: "no-store" },
   );
-  if (!res.ok) {
-    throw new Error(`Published dates unavailable (${res.status})`);
+  const json = (await res.json()) as { dates?: string[]; error?: string };
+  if (!res.ok || json.error) {
+    throw new Error(json.error ?? `Published dates unavailable (${res.status})`);
   }
-  const json = (await res.json()) as { dates?: string[] };
   return new Set(json.dates ?? []);
 }

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNightCoreBundleForDate } from "@/lib/shiftbuilder/nightCoreBundle.server";
+import {
+  getNightCoreBundleForDate,
+  isNightCoreAllowedForTodayPolicy,
+} from "@/lib/shiftbuilder/nightCoreBundle.server";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 /**
@@ -21,6 +24,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const policy = request.nextUrl.searchParams.get("policy");
+    if (policy === "today") {
+      const allowed = await isNightCoreAllowedForTodayPolicy(dateParam);
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "Schedule not available for this date on /today" },
+          { status: 403 },
+        );
+      }
+    }
+
     const payload = await getNightCoreBundleForDate(dateParam);
 
     return NextResponse.json(payload, {

@@ -6,6 +6,7 @@ import {
   formatLogTimestamp,
   logActionColor,
   logActionLabel,
+  logSourceLabel,
 } from "../lib/formatLogEntry";
 
 type LogsTimelineProps = {
@@ -73,6 +74,11 @@ export function LogsTimeline({
                   <span className="truncate text-sm font-semibold text-[#1C1C1E]">
                     {entry.operatorName}
                   </span>
+                  {logSourceLabel(entry) ? (
+                    <span className="rounded-md bg-[#F2F2F7] px-1.5 py-0.5 text-[10px] font-medium text-[#6C6C72]">
+                      {logSourceLabel(entry)}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-1 text-sm text-[#3C3C43]">{describeLogEntry(entry)}</p>
                 {entry.slotKey !== "__meta__" ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import TaskRow from "./TaskRow";
 
@@ -49,20 +50,30 @@ const ZoneTaskList: React.FC<{
       className={containerClass}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
-      {visibleTasks.map((t, i) => (
-        <TaskRow
-          key={t.id}
-          task={t}
-          slotKey={slotKey}
-          onRemoveTask={onRemoveTask}
-          onSetTaskColor={onSetTaskColor}
-          onEditTask={onEditTask}
-          onOpenTaskTextEdit={onOpenTaskTextEdit}
-          textSize={textSize}
-          textColorClass={textColor}
-          isPrintPreview={isPrintPreview}
-        />
-      ))}
+      <AnimatePresence initial={false} mode="popLayout">
+        {visibleTasks.map((t) => (
+          <motion.div
+            key={t.id}
+            layout
+            initial={isPrint ? undefined : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={isPrint ? undefined : { opacity: 0, x: 12, scale: 0.92 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <TaskRow
+              task={t}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              onSetTaskColor={onSetTaskColor}
+              onEditTask={onEditTask}
+              onOpenTaskTextEdit={onOpenTaskTextEdit}
+              textSize={textSize}
+              textColorClass={textColor}
+              isPrintPreview={isPrintPreview}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
       {extra > 0 && dense && (
         <div 
           className="text-[7.5px] opacity-75 pl-0.5 tabular-nums tracking-[0.2px]" 

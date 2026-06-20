@@ -31,6 +31,33 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_ATTEMPTS = 20;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function clientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return req.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+function checkPinRateLimit(ip: string): { ok: true } | { ok: false; retryAfterSec: number } {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    rateBuckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return { ok: true };
+  }
+  if (bucket.count >= RATE_MAX_ATTEMPTS) {
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
+  }
+  bucket.count += 1;
+  return { ok: true };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -40,6 +67,18 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const rateCheck = checkPinRateLimit(clientIp(req));
+  if (!rateCheck.ok) {
+    return new Response(JSON.stringify({ error: "Too many PIN attempts — try again shortly" }), {
+      status: 429,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Retry-After": String(rateCheck.retryAfterSec),
+      },
     });
   }
 
@@ -82,18 +121,10 @@ serve(async (req) => {
     // (pgcrypto often emits $2a$, while the library prefers $2b$ behavior)
     const normalizeBcrypt = (h: string) => h.replace(/^\$2a\$/, '$2b$');
 
-    console.log(`[verify-pin] Found ${candidates.length} active user(s) with PIN hash`);
-
     for (const u of candidates) {
       try {
         const hashToTest = normalizeBcrypt(u.pin_hash);
-        const prefix = hashToTest.substring(0, 7);
-        console.log(`[verify-pin] Testing user ${u.username} (${u.full_name}) — hash prefix: ${prefix}`);
-
         const ok = await bcrypt.compare(pin, hashToTest);
-
-        console.log(`[verify-pin] compare result for ${u.username}: ${ok}`);
-
         if (ok) {
           matchedUser = u;
           break;
@@ -104,14 +135,13 @@ serve(async (req) => {
     }
 
     if (!matchedUser) {
-      console.log(`[verify-pin] No user matched the provided PIN`);
       return new Response(JSON.stringify({ error: "Invalid credentials" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[verify-pin] SUCCESS — authenticated as ${matchedUser.username} (${matchedUser.role})`);
+    console.log(`[verify-pin] authenticated (${matchedUser.role})`);
 
     // Success — return only the safe profile. Never return pin_hash or any secrets.
     const safeUser = {

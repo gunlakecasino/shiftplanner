@@ -42,43 +42,13 @@ export default function PlacementDock(props: PlacementDockProps) {
       exit={reducedMotion ? undefined : { x: 24, opacity: 0 }}
       transition={reducedMotion ? premiumSpringReduced : premiumSpring}
     >
-      <div className="placement-dock-header flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-3">
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[17px] font-bold text-white"
-          style={{ background: a.tmName ? accent : "rgba(0,0,0,0.08)", color: a.tmName ? "#fff" : "#999" }}
-        >
-          {a.tmName ? a.tmName[0].toUpperCase() : "–"}
-        </div>
+      {/* Dock header kept minimal; refined inner card in PlacementPad provides the beautiful visual */}
+      <div className="placement-dock-header flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-3 bg-white/95">
         <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-[11px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: accent, fontFamily: "var(--font-atkinson)" }}
-          >
-            {label}
-          </div>
-          <div className="truncate text-[22px] font-bold tracking-tight text-neutral-900">
-            {a.tmName || "Unassigned"}
-          </div>
+          <div className="truncate text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: accent }}>{label}</div>
+          <div className="truncate text-[20px] font-bold tracking-tight text-neutral-900">{a.tmName || "Unassigned"}</div>
         </div>
-        {a.breakGroup != null && a.breakGroup > 0 ? (
-          <div className="shrink-0 text-center">
-            <div className="text-[8px] font-bold uppercase tracking-widest text-neutral-400">Brk</div>
-            <div
-              className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-white"
-              style={{ background: accent, border: `1px solid ${accent}` }}
-            >
-              {a.breakGroup}
-            </div>
-          </div>
-        ) : null}
-        <button
-          type="button"
-          onClick={onClose}
-          className="sb-interactive flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100/90 text-lg text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700"
-          aria-label="Close placement dock"
-        >
-          ×
-        </button>
+        <button type="button" onClick={onClose} className="sb-interactive flex h-10 w-10 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100 text-lg text-neutral-500">×</button>
       </div>
 
       <PlacementDockTabs active={tab} onChange={setTab} />

@@ -15,6 +15,7 @@ import CoverageBar from "./CoverageBar";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
   CardAccentStripe,
   CardSlotHeader,
@@ -49,6 +50,12 @@ export interface RRCardProps {
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
   coveredByIndex?: Record<string, string[]>;
+  isTodayKiosk?: boolean;
+  isPeerDimmed?: boolean;
+  isCardSelected?: boolean;
+  isAssignPulse?: boolean;
+  isViewOnly?: boolean;
+  onKioskLongPress?: (anchor: { x: number; y: number }) => void;
 }
 
 const RRSide: React.FC<{
@@ -278,6 +285,12 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   conflictingTms,
   tmConflictSlots,
   coveredByIndex = {},
+  isTodayKiosk = false,
+  isPeerDimmed = false,
+  isCardSelected = false,
+  isAssignPulse = false,
+  isViewOnly = false,
+  onKioskLongPress,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -310,6 +323,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wCoverageTasks = wTasks.filter((t) => t.isCoverage);
   const mCoverageTasks = mTasks.filter((t) => t.isCoverage);
 
+  const longPress = useCardLongPress(
+    isTodayKiosk && !isViewOnly && !!onKioskLongPress,
+    (anchor) => onKioskLongPress?.(anchor),
+  );
+
   const sideProps = {
     setBreakGroupForSlot,
     onClick: onGenderClick,
@@ -328,8 +346,18 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
 
   return (
     <div
-      onPointerMove={handleSpotlightMove}
-      className={`relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${bothEmpty ? "empty" : ""}`}
+      onPointerMove={(e) => {
+        handleSpotlightMove(e);
+        if (isTodayKiosk) longPress.onPointerMove(e);
+      }}
+      {...(isTodayKiosk
+        ? {
+            onPointerDown: longPress.onPointerDown,
+            onPointerUp: longPress.onPointerUp,
+            onPointerCancel: longPress.onPointerCancel,
+          }
+        : {})}
+      className={`relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{ ["--card-accent" as string]: color }}
     >
       <RRSideShell

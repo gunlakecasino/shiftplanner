@@ -719,6 +719,41 @@ body {
   box-sizing: border-box;
 }
 
+/* /today kiosk — paper hero, calmer empty slots, compact open aux ghosts. */
+.print-stage-inner.sb-today-board .print-artboard {
+  box-shadow:
+    0 0 0 1px #B8B8BE,
+    0 14px 36px -10px rgba(0, 0, 0, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.07);
+}
+
+.print-stage-inner.sb-today-board .assignment-card.empty.sb-card-empty:not(.sb-aux-blank) {
+  background: #FAFAFA;
+  border-color: #E8E8ED;
+  border-style: solid;
+  box-shadow: none;
+}
+
+.print-stage-inner.sb-today-board .sheet-section-header .sb-today-muted-count {
+  color: #AEAEB2;
+  font-weight: 500;
+}
+
+.print-stage-inner.sb-today-board .sb-today-aux-grid {
+  grid-auto-rows: auto;
+  align-items: start;
+}
+
+.print-stage-inner.sb-today-board .assignment-card.sb-aux-blank {
+  max-height: 38px;
+  flex: 0 0 38px;
+  align-self: start;
+}
+
+.print-stage-inner.sb-today-board .assignment-card.sb-aux-blank > div:nth-child(n + 3) {
+  display: none;
+}
+
 /* Week health floats in the sheet-header center band (beside the date block). */
 .sb-sheet-header-with-health {
   width: 100%;
@@ -747,6 +782,14 @@ body {
 /* Builder-only compact rhythm — tighter than preview/print. */
 .sb-builder-stage .builder-workspace.sb-builder-compact {
   padding: 4px 8px 10px;
+}
+
+/* Builder view only: hide the underlying large date page header (the tall "17 Wednesday..." block + BREAKS row).
+   The floating pill navbar (top: 0) is now the sole header. The ZONES/RESTROOMS grids shift up so the whole board fits on screen. */
+.sheet-header.hide-date-header .font-black.tabular-nums,
+.sheet-header.hide-date-header > div > div.-mb-0\.5,
+.sheet-header.hide-date-header .mt-1\.5 {
+  display: none !important;
 }
 
 .sb-builder-stage .builder-workspace.sb-builder-compact .sheet-header {
@@ -956,6 +999,69 @@ body {
   .sb-builder-stage .sb-aux-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
+}
+
+/* Builder view only: Aux cards moved to right sidebar column beside ZONES + RESTROOMS.
+   Default 4 cards (first Admin), vertical stack matching height of left content.
+   Extra aux shrink to fit without causing scroll. Whole centered.
+   All cards (zone/rr + aux) now consistently wider by 25px each for better proportions. */
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 183px;
+  gap: 10px;
+  align-items: stretch;
+  max-width: 1130px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Turn the aux cards container into vertical stack filling the sidebar height */
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-aux-grid {
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-aux-grid > * {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Make aux cards in the sidebar fill their allocated flex space and shrink gracefully when more added */
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card {
+  height: 100%;
+  min-height: 68px; /* better min now that wider */
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card .sb-golden-assignee-name,
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card .assignment-name {
+  font-size: 15px;
+}
+
+/* Compact header for aux in the narrow right column */
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header {
+  padding: 2px 4px;
+  font-size: 10px;
+}
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header .label {
+  font-size: 10px;
+  letter-spacing: 0.5px;
 }
 
 /* Sophisticated Apple-grade assignment cards.

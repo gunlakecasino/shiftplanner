@@ -77,8 +77,22 @@ export interface UseShiftDataReturn {
   patchCurrentNightCache: (assignments: Record<string, any>) => void;
 }
 
-export function useShiftData(selectedDay: DayDef): UseShiftDataReturn {
-  const currentNight = useCurrentNight(selectedDay);
+export type UseShiftDataOptions = {
+  /** When false, skips night-core fetch (unpublished non-tonight on /today). */
+  nightCoreEnabled?: boolean;
+  /** Server-side publish gate for /today night-core requests. */
+  todayPolicy?: boolean;
+};
+
+export function useShiftData(
+  selectedDay: DayDef,
+  options?: UseShiftDataOptions,
+): UseShiftDataReturn {
+  const nightCoreEnabled = options?.nightCoreEnabled !== false;
+  const currentNight = useCurrentNight(selectedDay, {
+    enabled: nightCoreEnabled,
+    todayPolicy: options?.todayPolicy,
+  });
 
   const storeAssignments = useAssignments();
   const storeDraftAssignments = useDraftAssignments();

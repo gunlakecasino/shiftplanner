@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/today/_lib/rateLimit";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";
 import type { DeploymentChangeInput } from "@/lib/shiftbuilder/todayChangeLog";
 
-const META_ACTIONS = new Set(["publish", "unpublish", "night_lock", "night_unlock"]);
+const META_ACTIONS = new Set(["publish", "unpublish", "night_lock", "night_unlock", "print"]);
 const META_SLOT_KEY = "__meta__";
 
 function canonicalOperatorName(user: {
@@ -46,6 +48,22 @@ async function validateOpsOperator(
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rateKey = `log-change:${clientIpFromRequest(request)}`;
+  const rateCheck = checkOpsApiRateLimit(rateKey);
+  if (!rateCheck.ok) {
+    return NextResponse.json(
+      { error: "Too many audit log requests — try again shortly" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateCheck.retryAfterSec) },
+      },
+    );
+  }
+
   let body: DeploymentChangeInput;
   try {
     body = await request.json();

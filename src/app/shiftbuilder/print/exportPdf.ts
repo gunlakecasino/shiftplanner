@@ -18,10 +18,10 @@ export type ExportProgress = {
   label: string;
 };
 
-type RasterPage = { dataUrl: string; format: "PNG" | "JPEG" };
+export type GoldenRasterPage = { dataUrl: string; format: "PNG" | "JPEG" };
 
 /** Match browser print: margin inset + uniform zoom on the full Golden page. */
-function getPdfImagePlacement(config: PrintConfig): {
+export function getGoldenPdfPlacement(config: PrintConfig): {
   x: number;
   y: number;
   width: number;
@@ -39,7 +39,7 @@ function getPdfImagePlacement(config: PrintConfig): {
   };
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function triggerPdfDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -56,11 +56,34 @@ function dayFilename(dayIndex: number, dayDefs: DayDef[]): string {
   return `Graves-${def.short}-${String(def.dateNum).padStart(2, "0")}.pdf`;
 }
 
-async function rasterizeGoldenPages(
+/** Build a landscape-letter PDF from pre-rasterized Golden pages (exact page count). */
+export async function buildPdfBlobFromRasterPages(
+  rasterPages: GoldenRasterPage[],
+  config: PrintConfig,
+): Promise<Blob> {
+  const placement = getGoldenPdfPlacement(config);
+  const { default: jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+  rasterPages.forEach((page, idx) => {
+    if (idx > 0) pdf.addPage();
+    pdf.addImage(
+      page.dataUrl,
+      page.format,
+      placement.x,
+      placement.y,
+      placement.width,
+      placement.height,
+    );
+  });
+  return pdf.output("blob");
+}
+
+/** Mount captured Golden HTML in the live app DOM and rasterize one sheet at a time. */
+export async function rasterizeGoldenPrintPages(
   pages: GoldenPrintPage[],
   config: PrintConfig,
   onProgress?: (p: ExportProgress) => void,
-): Promise<RasterPage[]> {
+): Promise<GoldenRasterPage[]> {
   const session = mountGoldenPrintSession(pages, config, "export");
 
   try {
@@ -79,7 +102,7 @@ async function rasterizeGoldenPages(
 
     const pixelRatio = goldenRasterScale(pages.length);
     const usePng = pages.length <= 8;
-    const out: RasterPage[] = [];
+    const out: GoldenRasterPage[] = [];
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
@@ -143,25 +166,9 @@ export async function exportGoldenPdf(args: {
     throw new Error("Nothing to export");
   }
 
-  const rasterPages = await rasterizeGoldenPages(pages, args.config, args.onProgress);
-  const placement = getPdfImagePlacement(args.config);
-
-  const { default: jsPDF } = await import("jspdf");
-  const buildBlob = (slices: RasterPage[]) => {
-    const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
-    slices.forEach((page, idx) => {
-      if (idx > 0) pdf.addPage();
-      pdf.addImage(
-        page.dataUrl,
-        page.format,
-        placement.x,
-        placement.y,
-        placement.width,
-        placement.height,
-      );
-    });
-    return pdf.output("blob");
-  };
+  const rasterPages = await rasterizeGoldenPrintPages(pages, args.config, args.onProgress);
+  const buildBlob = (slices: GoldenRasterPage[]) =>
+    buildPdfBlobFromRasterPages(slices, args.config);
 
   const activeDayConfigs = args.config.days.filter((d) => d.printDeploy || d.printBreaks);
   const uniqueDayIndices = [...new Set(activeDayConfigs.map((d) => d.dayIndex))];
@@ -179,27 +186,30 @@ export async function exportGoldenPdf(args: {
         .filter(({ p }) => p.key === `${dayIdx}-d` || p.key === `${dayIdx}-b`)
         .map(({ idx }) => idx);
       if (indices.length === 0) continue;
-      zip.file(dayFilename(dayIdx, args.dayDefs), buildBlob(indices.map((i) => rasterPages[i])));
+      zip.file(
+        dayFilename(dayIdx, args.dayDefs),
+        await buildBlob(indices.map((i) => rasterPages[i])),
+      );
     }
     if (coverIdx >= 0) {
-      zip.file("Graves-Cover.pdf", buildBlob([rasterPages[coverIdx]]));
+      zip.file("Graves-Cover.pdf", await buildBlob([rasterPages[coverIdx]]));
     }
     if (overviewIdx >= 0) {
-      zip.file("Graves-Overview.pdf", buildBlob([rasterPages[overviewIdx]]));
+      zip.file("Graves-Overview.pdf", await buildBlob([rasterPages[overviewIdx]]));
     }
 
     const zipBlob = await zip.generateAsync({ type: "blob" });
-    triggerDownload(zipBlob, "Graves-Schedule-Export.zip");
+    triggerPdfDownload(zipBlob, "Graves-Schedule-Export.zip");
     return { filename: "Graves-Schedule-Export.zip", usedZip: true };
   }
 
-  const blob = buildBlob(rasterPages);
+  const blob = await buildBlob(rasterPages);
   let filename = "Graves-Export.pdf";
   if (uniqueDayIndices.length === 1) {
     filename = dayFilename(uniqueDayIndices[0], args.dayDefs);
   } else if (coverIdx >= 0 || overviewIdx >= 0) {
     filename = "Graves-Schedule-Export.pdf";
   }
-  triggerDownload(blob, filename);
+  triggerPdfDownload(blob, filename);
   return { filename, usedZip: false };
 }

@@ -5,6 +5,7 @@
 
 import { unstable_cache } from "next/cache";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { currentShiftDate, parseLocalDateISO, sameDay } from "./dateUtils";
 import {
   buildSlotDefaultBreakMap,
   enrichAssignmentsWithBreakGroups,
@@ -245,6 +246,25 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
     rawBreakRows: [],
     slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
   };
+}
+
+/** /today policy: tonight always allowed; historical nights require published status. */
+export async function isNightCoreAllowedForTodayPolicy(isoDate: string): Promise<boolean> {
+  const target = parseLocalDateISO(isoDate);
+  if (sameDay(target, currentShiftDate())) return true;
+
+  const supabase = getBundleSupabase();
+  const { data, error } = await supabase
+    .from("nights")
+    .select("status")
+    .eq("night_date", isoDate)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[night-core] today policy status check failed", error);
+    return false;
+  }
+  return data?.status === "published";
 }
 
 /** Edge-cached full night-core payload for the builder critical path. */

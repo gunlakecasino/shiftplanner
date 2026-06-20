@@ -25,6 +25,7 @@ import {
   coverageBodyPadding,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
+import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 
 export interface ZoneCardProps {
   def: any;
@@ -50,6 +51,13 @@ export interface ZoneCardProps {
   tmConflictSlots?: Record<string, string[]>;
   /** TM names covering this slot via coverage tasks on other placements. */
   coveredByNames?: string[];
+  /** /today kiosk UX */
+  isTodayKiosk?: boolean;
+  isPeerDimmed?: boolean;
+  isCardSelected?: boolean;
+  isAssignPulse?: boolean;
+  isViewOnly?: boolean;
+  onKioskLongPress?: (anchor: { x: number; y: number }) => void;
 }
 
 const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
@@ -73,6 +81,12 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   conflictingTms,
   tmConflictSlots,
   coveredByNames = [],
+  isTodayKiosk = false,
+  isPeerDimmed = false,
+  isCardSelected = false,
+  isAssignPulse = false,
+  isViewOnly = false,
+  onKioskLongPress,
 }) => {
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
@@ -94,6 +108,11 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
 
   const { isPenHovering, penHoverHandlers } = usePencilHover(
     (el) => { if (!isLocked) onCardClick(def.key, el); },
+  );
+
+  const longPress = useCardLongPress(
+    isTodayKiosk && !isViewOnly && !!onKioskLongPress,
+    (anchor) => onKioskLongPress?.(anchor),
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter((t) => t.isCoverage);
@@ -126,12 +145,25 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     <div
       ref={setRef}
       onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
-      onPointerMove={handleSpotlightMove}
+      onPointerMove={(e) => {
+        handleSpotlightMove(e);
+        if (isTodayKiosk) longPress.onPointerMove(e);
+      }}
       {...penHoverHandlers}
+      {...(isTodayKiosk
+        ? {
+            onPointerDown: longPress.onPointerDown,
+            onPointerUp: longPress.onPointerUp,
+            onPointerCancel: (e: React.PointerEvent) => {
+              penHoverHandlers.onPointerCancel(e);
+              longPress.onPointerCancel(e);
+            },
+          }
+        : {})}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={def.key}
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -146,9 +178,17 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         trailing={(
           <>
             <PlacementFitChip fit={fitChip} />
-            <BreakBadge value={currentBreak} onCycle={cycleBreak} />
+            <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
+              <BreakBadge
+                value={currentBreak}
+                onCycle={cycleBreak}
+                accentColor={isTodayKiosk ? color : undefined}
+                kioskSize={isTodayKiosk}
+              />
+            </span>
           </>
         )}
+        titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
       />
 
       <div
