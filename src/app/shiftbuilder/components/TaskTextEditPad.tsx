@@ -36,7 +36,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
 }) => {
   const originalLabel = task.taskLabel;
   const originalColor = task.color ?? null;
-  const originalMarker = (task as any).markerType || 'highlight';
+  const originalMarker = task.markerType || 'highlight';
 
   const [labelDraft, setLabelDraft] = useState(originalLabel);
   const [colorDraft, setColorDraft] = useState<string | null>(originalColor);

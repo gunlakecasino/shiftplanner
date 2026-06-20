@@ -1358,7 +1358,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
 
   const { data, error } = await supabase
     .from('night_slot_tasks')
-    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color, is_coverage')
+    .select('id, night_id, slot_key, slot_type, rr_side, task_label, catalog_task_id, sort_order, color, is_coverage, marker_type')
     .eq('night_id', nightId)
     .order('sort_order', { ascending: true })
     .order('task_label', { ascending: true });

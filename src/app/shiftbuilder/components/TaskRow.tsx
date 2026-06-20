@@ -54,7 +54,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   isPrintPreview = false,
 }) => {
   const hasColor = !!task.color;
-  const markerType = (task as any).markerType || 'highlight';
+  const markerType = task.markerType || 'highlight';
   const usesLeftAccent = hasColor && markerType === 'highlight';
 
   const labelRef = React.useRef<HTMLSpanElement>(null);
