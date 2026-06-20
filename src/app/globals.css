@@ -1,5 +1,25 @@
 /* Material Symbols Rounded — self-hosted via npm, no CDN dependency */
 @import "material-symbols/rounded";
+
+/* Velvet shorthand — app-wide icon spans use class="ms" (Sudo, Settings, tabs, toasts) */
+.ms {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
+}
+
 @import "./ios26-colors.css";
 
 @import "tailwindcss";
