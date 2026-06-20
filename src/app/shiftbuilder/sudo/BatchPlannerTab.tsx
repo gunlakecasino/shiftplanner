@@ -19,6 +19,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
+import { sudoIosClasses } from "./sudoIosTheme";
 import {
   listWeeksWithNights,
   listNightsForWeek,
@@ -53,13 +54,15 @@ type NightRunState =
 
 export interface BatchPlannerTabProps {
   onDataChanged?: () => void;
+  isDark?: boolean;
 }
 
 // -----------------------------------------------------------------------
 // Component
 // -----------------------------------------------------------------------
 
-export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
+export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerTabProps) {
+  const ios = sudoIosClasses(isDark);
   const [weeks, setWeeks] = React.useState<WeekOption[]>([]);
   const [weeksLoading, setWeeksLoading] = React.useState(true);
   const [weeksError, setWeeksError] = React.useState<string | null>(null);
@@ -211,12 +214,12 @@ export function BatchPlannerTab({ onDataChanged }: BatchPlannerTabProps) {
   const anyRunning = batchRunning || Object.values(nightStates).some((s) => s.phase === "running");
 
   return (
-    <div className="h-full flex flex-col overflow-hidden text-zinc-100">
+    <div className={cn("h-full flex flex-col overflow-hidden", ios.page)}>
       {/* Header bar */}
-      <div className="px-5 py-3 border-b border-zinc-800 bg-zinc-950/60 flex items-center justify-between">
+      <div className={cn(ios.actionBar, "flex items-center justify-between")}>
         <div className="flex items-center gap-2">
           <span className="ms text-amber-400" style={{ fontSize: 16 }}>bolt</span>
-          <span className="font-semibold text-[13px] text-zinc-100">Batch Planner</span>
+          <span className={cn("text-[13px] font-semibold", ios.actionTitle)}>Batch Planner</span>
           <span className="text-zinc-500 text-[11px] font-mono">· weighted engine · no Grok</span>
         </div>
         {batchSummary && (

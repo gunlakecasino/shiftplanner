@@ -20,12 +20,14 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { SudoTabLoading } from "./SudoGlass";
+import { sudoIosClasses } from "./sudoIosTheme";
 // All catalog/task functions dynamically imported inside handlers (full aggressive sweep for Turbopack HMR stability)
 import type { CatalogTask } from "@/lib/shiftbuilder/data";
 
 export interface TasksTabProps {
   onDataChanged?: () => void;
   currentNightId?: string | null;   // optional — enables "Apply defaults to this night" button
+  isDark?: boolean;
 }
 
 type TaskType = "zone" | "rr" | "aux" | "overlap";
@@ -58,7 +60,8 @@ const TYPE_COLORS: Record<TaskType, string> = {
   aux: "bg-sky-500/10 text-sky-400",
 };
 
-export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
+export function TasksTab({ onDataChanged, currentNightId, isDark = false }: TasksTabProps) {
+  const ios = sudoIosClasses(isDark);
   const [catalog, setCatalog] = React.useState<CatalogTask[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -264,7 +267,7 @@ export function TasksTab({ onDataChanged, currentNightId }: TasksTabProps) {
   }
 
   return (
-    <div className="h-full overflow-auto p-6 text-zinc-200" style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+    <div className={cn("h-full overflow-auto p-6", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
       <div className="max-w-5xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

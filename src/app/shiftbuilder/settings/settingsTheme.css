@@ -1,0 +1,142 @@
+/**
+ * Settings shell — remaps legacy sudo tab zinc styling to iOS 26 tokens on light paper.
+ * Scoped to .sb-settings-panel so SudoWindow modal (if ever used) stays unchanged.
+ */
+
+.sb-settings-panel[data-theme="light"] {
+  color: var(--ios-label);
+  --sb-settings-surface: var(--ios-background-secondary);
+  --sb-settings-surface-2: var(--ios-background-tertiary);
+  --sb-settings-border: var(--ios-gray-5);
+  --sb-settings-muted: var(--ios-label-tertiary);
+}
+
+.sb-settings-panel[data-theme="dark"] {
+  color: var(--ios-label);
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="bg-zinc-950"] {
+  background-color: var(--ios-background-tertiary) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="bg-zinc-900"] {
+  background-color: var(--ios-background-secondary) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="bg-zinc-800"] {
+  background-color: var(--ios-background-tertiary) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="bg-zinc-700"] {
+  background-color: var(--ios-gray-6) !important;
+}
+
+/* ── Borders ──────────────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="border-zinc-800"],
+.sb-settings-panel[data-theme="light"] [class*="border-zinc-700"],
+.sb-settings-panel[data-theme="light"] [class*="border-zinc-600"] {
+  border-color: var(--ios-gray-5) !important;
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-100"],
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-200"],
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-300"] {
+  color: var(--ios-label) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-400"],
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-500"],
+.sb-settings-panel[data-theme="light"] [class*="text-zinc-600"] {
+  color: var(--ios-label-tertiary) !important;
+}
+
+/* Semantic accent text on light */
+.sb-settings-panel[data-theme="light"] [class*="text-red-300"],
+.sb-settings-panel[data-theme="light"] [class*="text-red-200"] {
+  color: var(--ios-red) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="text-blue-300"] {
+  color: var(--ios-blue) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="text-emerald-200"],
+.sb-settings-panel[data-theme="light"] [class*="text-emerald-400"] {
+  color: var(--ios-green) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="text-amber-300"],
+.sb-settings-panel[data-theme="light"] [class*="text-amber-400"] {
+  color: var(--ios-orange) !important;
+}
+
+/* ── Hovers ───────────────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="hover:bg-zinc-800"]:hover,
+.sb-settings-panel[data-theme="light"] [class*="hover:bg-zinc-900"]:hover {
+  background-color: var(--ios-gray-6) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="hover:text-zinc-100"]:hover,
+.sb-settings-panel[data-theme="light"] [class*="hover:text-zinc-200"]:hover,
+.sb-settings-panel[data-theme="light"] [class*="hover:text-zinc-300"]:hover {
+  color: var(--ios-label) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="hover:border-zinc-700"]:hover,
+.sb-settings-panel[data-theme="light"] [class*="hover:border-zinc-600"]:hover,
+.sb-settings-panel[data-theme="light"] [class*="hover:border-zinc-500"]:hover {
+  border-color: var(--ios-gray-4) !important;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] input,
+.sb-settings-panel[data-theme="light"] select,
+.sb-settings-panel[data-theme="light"] textarea {
+  background-color: var(--ios-background-secondary);
+  border-color: var(--ios-gray-4);
+  color: var(--ios-label);
+}
+
+.sb-settings-panel[data-theme="light"] input::placeholder,
+.sb-settings-panel[data-theme="light"] textarea::placeholder {
+  color: var(--ios-label-quaternary);
+}
+
+.sb-settings-panel[data-theme="light"] input:focus,
+.sb-settings-panel[data-theme="light"] select:focus,
+.sb-settings-panel[data-theme="light"] textarea:focus {
+  border-color: var(--ios-blue);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ios-blue) 22%, transparent);
+}
+
+/* ── Alerts / toasts ──────────────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="bg-red-950"],
+.sb-settings-panel[data-theme="light"] [class*="bg-red-900"] {
+  background-color: color-mix(in srgb, var(--ios-red) 10%, var(--ios-background-secondary)) !important;
+  border-color: color-mix(in srgb, var(--ios-red) 28%, var(--ios-gray-5)) !important;
+}
+
+.sb-settings-panel[data-theme="light"] [class*="bg-emerald-950"],
+.sb-settings-panel[data-theme="light"] [class*="bg-green-900"] {
+  background-color: color-mix(in srgb, var(--ios-green) 10%, var(--ios-background-secondary)) !important;
+  border-color: color-mix(in srgb, var(--ios-green) 28%, var(--ios-gray-5)) !important;
+}
+
+/* ── Select cards (engine config etc.) ────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] .sb-select-card:not([class*="border-red-500"]) {
+  background-color: var(--ios-background-secondary) !important;
+  border-color: var(--ios-gray-5) !important;
+}
+
+.sb-settings-panel[data-theme="light"] .sb-select-card[class*="border-red-500"] {
+  background-color: color-mix(in srgb, var(--ios-blue) 10%, var(--ios-background-secondary)) !important;
+  border-color: color-mix(in srgb, var(--ios-blue) 40%, var(--ios-gray-5)) !important;
+}
+
+/* ── Progress bars (reports) ──────────────────────────────────────────────── */
+.sb-settings-panel[data-theme="light"] [class*="rounded-full"][class*="bg-zinc-800"] {
+  background-color: var(--ios-gray-6) !important;
+}

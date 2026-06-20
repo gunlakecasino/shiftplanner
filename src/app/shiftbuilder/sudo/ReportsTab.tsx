@@ -15,6 +15,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { SudoTabLoading } from "./SudoGlass";
+import { sudoIosClasses } from "./sudoIosTheme";
 import {
   ZONE_DEFS, RR_DEFS, MAX_AUX_SLOTS,
   ZONE_ICONS, RR_ICONS, AUX_ICONS,
@@ -637,7 +638,12 @@ const WINDOW_OPTS: { label: string; value: ReportWindow }[] = [
   { label: "Last 4 Wks", value: "last-4-weeks" },
 ];
 
-export function ReportsTab() {
+export interface ReportsTabProps {
+  isDark?: boolean;
+}
+
+export function ReportsTab({ isDark = false }: ReportsTabProps = {}) {
+  const ios = sudoIosClasses(isDark);
   const [reportView,   setReportView]   = React.useState<ReportView>("tm");
   const [reportWin,    setReportWin]    = React.useState<ReportWindow>(30);
   const [report,       setReport]       = React.useState<ZoneDetailReport | null>(null);
@@ -683,10 +689,10 @@ export function ReportsTab() {
   }, [report]);
 
   return (
-    <div className="flex flex-col h-full min-h-0 text-zinc-100">
+    <div className={cn("flex h-full min-h-0 flex-col", ios.page)}>
 
       {/* ── Control bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-zinc-800 flex-shrink-0 flex-wrap">
+      <div className={cn(ios.actionBar, "flex flex-shrink-0 flex-wrap items-center gap-3")}>
         {/* View */}
         <div className="flex rounded-md border border-zinc-700 overflow-hidden text-[11px] font-semibold">
           {VIEW_OPTS.map((v) => (

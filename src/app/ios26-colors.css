@@ -108,3 +108,31 @@
     --ios-background-tertiary-elevated: #48484a;
   }
 }
+
+/* Manual theme toggle (ShiftBuilder useTheme → html.dark) — mirrors prefers-color-scheme dark */
+.dark {
+  --ios-button-inactive: #48484a;
+  --ios-bg-inactive: #3a3a3c;
+
+  --ios-black: #000000;
+  --ios-white: #ffffff;
+  --ios-gray: #8e8e93;
+  --ios-gray-2: #636366;
+  --ios-gray-3: #48484a;
+  --ios-gray-4: #3a3a3c;
+  --ios-gray-5: #2c2c2e;
+  --ios-gray-6: #1c1c1e;
+
+  --ios-label: #f2f2f7;
+  --ios-label-secondary: #e5e5ea;
+  --ios-label-tertiary: #aeaeb2;
+  --ios-label-quaternary: #8e8e93;
+
+  --ios-background-primary: #1c1c1e;
+  --ios-background-secondary: #2c2c2e;
+  --ios-background-tertiary: #3a3a3c;
+
+  --ios-background-primary-elevated: #2c2c2e;
+  --ios-background-secondary-elevated: #3a3a3c;
+  --ios-background-tertiary-elevated: #48484a;
+}

@@ -48,6 +48,7 @@ import {
   sectionForTab,
   tabMeta,
 } from "./settingsConfig";
+import "./settingsTheme.css";
 
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
@@ -136,14 +137,8 @@ function SettingsTabPanel({
   onDataChanged: () => void;
   onNavigate: (tab: SettingsTab) => void;
 }) {
-  const legibility = cn(
-    isDark
-      ? "[&_.bg-zinc-950]:bg-[#1C1C1E] [&_.bg-zinc-900]:bg-[#171719] [&_.text-zinc-100]:text-[#F2F2F4] [&_.text-zinc-400]:text-[#A1A1AA] [&_.border-zinc-800]:border-[#3A3A3C]"
-      : "[&_.bg-zinc-950]:bg-white [&_.bg-zinc-900]:bg-[#F2F2F0] [&_.text-zinc-100]:text-[#1C1C1E] [&_.text-zinc-400]:text-[#6C6C72] [&_.border-zinc-800]:border-[#E5E5E7] [&_.text-zinc-200]:text-[#2C2C2E]",
-  );
-
   return (
-    <div className={legibility}>
+    <div className="sb-settings-panel" data-theme={isDark ? "dark" : "light"}>
       {activeTab === "dashboard" && (
         <DashboardTab
           onDataChanged={onDataChanged}
@@ -178,18 +173,18 @@ function SettingsTabPanel({
         </div>
       )}
       {activeTab === "tasks" && (
-        <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />
+        <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} isDark={isDark} />
       )}
-      {activeTab === "reports" && <ReportsTab />}
+      {activeTab === "reports" && <ReportsTab isDark={isDark} />}
       {activeTab === "engine" &&
         (canRunEngine ? (
-          <EngineConfigTab onDataChanged={onDataChanged} />
+          <EngineConfigTab onDataChanged={onDataChanged} isDark={isDark} />
         ) : (
           <InsufficientPermNotice feature="Engine Config" isDark={isDark} />
         ))}
       {activeTab === "planner" &&
         (canRunEngine ? (
-          <BatchPlannerTab onDataChanged={onDataChanged} />
+          <BatchPlannerTab onDataChanged={onDataChanged} isDark={isDark} />
         ) : (
           <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
         ))}
@@ -198,6 +193,7 @@ function SettingsTabPanel({
           onDataChanged={onDataChanged}
           currentNightId={currentNightId}
           weekStart={weekStart}
+          isDark={isDark}
         />
       )}
       {activeTab === "weeklyRoster" && (

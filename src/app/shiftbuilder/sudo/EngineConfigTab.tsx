@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
+import { sudoIosClasses } from "./sudoIosTheme";
 import {
   getActiveEngineConfig,
   type EngineConfig,
@@ -19,6 +20,7 @@ import { getFullyResolvedEngineConfig } from "@/lib/shiftbuilder/engineOverrides
 
 interface EngineConfigTabProps {
   onDataChanged?: () => void;
+  isDark?: boolean;
 }
 
 const PLACEMENT_OPTIONS: Array<{
@@ -75,7 +77,8 @@ const REASONING_OPTIONS: Array<{
   },
 ];
 
-export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
+export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigTabProps) {
+  const ios = sudoIosClasses(isDark);
   const [config, setConfig] = React.useState<EngineConfig | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -146,7 +149,7 @@ export function EngineConfigTab({ onDataChanged }: EngineConfigTabProps) {
   }
 
   return (
-    <div className="h-full overflow-auto p-6 text-zinc-200" style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+    <div className={cn("h-full overflow-auto p-6", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
       <div className="max-w-3xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

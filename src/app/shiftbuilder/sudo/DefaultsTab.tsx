@@ -35,6 +35,7 @@ import {
   graveBreakGroupForCompositeKey,
   graveBreakGroupSlotDefaults,
 } from "@/lib/shiftbuilder/graveBreakGroupDefaults";
+import { sudoIosClasses, sudoPushButtonClasses } from "./sudoIosTheme";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slot descriptor — flattened list of all manageable slots
@@ -135,6 +136,7 @@ export interface DefaultsTabProps {
   currentNightId?: string | null;
   /** The Friday that starts the current GRAVE week (Fri–Thu). */
   weekStart?: Date | null;
+  isDark?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,7 +152,8 @@ let _toastId = 0;
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: DefaultsTabProps) {
+export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark = false }: DefaultsTabProps) {
+  const ios = sudoIosClasses(isDark);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<LocalToast[]>([]);
 
@@ -409,12 +412,12 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
       style={atkinsonStyle}
     >
       {/* ── Action bar ─────────────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md px-5 py-3">
+      <div className={ios.actionBar}>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Title */}
           <div className="flex items-center gap-2 mr-2">
-            <span className="ms text-red-400" style={{ fontSize: 16 }}>layers</span>
-            <span className="text-[13px] font-semibold text-zinc-200 tracking-wide">
+            <span className="ms" style={{ fontSize: 16, color: isDark ? "#f87171" : "var(--ios-red)" }}>layers</span>
+            <span className={cn("text-[13px] font-semibold tracking-wide", ios.actionTitle)}>
               Card Defaults
             </span>
           </div>
@@ -427,6 +430,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               loading={pushing === "breaks-today"}
               disabled={!currentNightId || pushing !== null}
               onClick={() => handlePush("breaks-today")}
+              isDark={isDark}
             />
             <PushButton
               label="Breaks → Week"
@@ -434,6 +438,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               loading={pushing === "breaks-week"}
               disabled={!weekStart || pushing !== null}
               onClick={() => handlePush("breaks-week")}
+              isDark={isDark}
             />
             <PushButton
               label="Save GRAVE break map"
@@ -441,6 +446,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               loading={seedingGrave}
               disabled={seedingGrave || pushing !== null}
               onClick={handleSaveGraveBreakMap}
+              isDark={isDark}
             />
             <PushButton
               label="Tasks → Today"
@@ -449,6 +455,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               disabled={!currentNightId || pushing !== null}
               variant="tasks"
               onClick={() => handlePush("tasks-today")}
+              isDark={isDark}
             />
             <PushButton
               label="Tasks → Week"
@@ -457,6 +464,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               disabled={!weekStart || pushing !== null}
               variant="tasks"
               onClick={() => handlePush("tasks-week")}
+              isDark={isDark}
             />
           </div>
 
@@ -464,7 +472,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
           <button
             onClick={load}
             disabled={loading}
-            className="sb-interactive ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            className={cn("ml-auto", ios.ghostBtn)}
           >
             {loading ? (
               <BuilderBusyLabel className="text-[11px]">Reloading</BuilderBusyLabel>
@@ -478,7 +486,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
         </div>
 
         {/* Legend */}
-        <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-500">
+        <div className={cn("mt-2 flex items-center gap-4", ios.legend)}>
           <span className="flex items-center gap-1">
             <span className="w-[18px] h-[12px] bg-[#1C1C1E] text-white text-[8px] font-bold rounded-[2px] flex items-center justify-center">1</span>
             Break group default (click to cycle: 1 → 2 → 3 → OL → –)
@@ -500,10 +508,10 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
               <section key={sec.id}>
                 {/* Section header */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+                  <span className={ios.sectionLabel}>
                     {sec.label}
                   </span>
-                  <div className="flex-1 h-px bg-zinc-800" />
+                  <div className={cn("flex-1 h-px", ios.divider)} />
                 </div>
 
                 {/* Slot rows */}
@@ -531,6 +539,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart }: Defaul
                       onAddInputChange={setAddInput}
                       onAddSubmit={() => handleAddTask(def)}
                       onRemoveTask={(t) => handleRemoveTask(def, t)}
+                      isDark={isDark}
                     />
                   ))}
                 </div>
@@ -580,14 +589,18 @@ interface SlotRowProps {
   onAddInputChange: (v: string) => void;
   onAddSubmit: () => void;
   onRemoveTask: (t: SlotDefaultTask) => void;
+  isDark?: boolean;
 }
 
 function SlotRow({
   def, breakGroup, tasks, isAdding, addInput, addInputRef,
   onCycleBreak, onStartAdd, onCancelAdd, onAddInputChange, onAddSubmit, onRemoveTask,
+  isDark = false,
 }: SlotRowProps) {
+  const ios = sudoIosClasses(isDark);
+
   return (
-    <div className="flex items-start gap-3 rounded-lg bg-zinc-900/50 border border-zinc-800/60 hover:border-zinc-700/60 transition-colors px-3 py-2">
+    <div className={ios.row}>
       {/* Accent strip */}
       <div
         className="mt-0.5 w-[3px] rounded-full shrink-0 self-stretch min-h-[20px]"
@@ -603,12 +616,12 @@ function SlotRow({
           >
             {def.icon}
           </span>
-          <span className="text-[12px] font-semibold text-zinc-200 tracking-wide">
+          <span className={ios.rowLabel}>
             {def.label}
           </span>
         </div>
         {def.sublabel && (
-          <div className="mt-0.5 text-[9px] text-zinc-600 truncate pl-[18px]">
+          <div className={cn("mt-0.5 truncate pl-[18px] text-[9px]", ios.legend)}>
             {def.sublabel}
           </div>
         )}
@@ -617,20 +630,18 @@ function SlotRow({
       {/* Break badge */}
       <div className="shrink-0 mt-0.5 flex flex-col items-center gap-0.5">
         <BreakBadge value={breakGroup} onCycle={onCycleBreak} size="sm" />
-        <span className="text-[8px] text-zinc-600">break</span>
+        <span className={cn("text-[8px]", ios.legend)}>break</span>
       </div>
 
       {/* Task chips + add input */}
       <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0 mt-0.5">
         {tasks.map((t) => (
-          <span
-            key={t.id}
-            className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-[10px] text-zinc-300"
-          >
+          <span key={t.id} className={ios.chip}>
             {t.taskLabel}
             <button
               onClick={() => onRemoveTask(t)}
-              className="ml-0.5 text-zinc-500 hover:text-red-400 transition-colors"
+              className="ml-0.5 transition-colors"
+              style={{ color: "var(--ios-label-quaternary)" }}
               title="Remove default task"
             >
               <span className="ms" style={{ fontSize: 10 }}>close</span>
@@ -649,18 +660,23 @@ function SlotRow({
                 if (e.key === "Escape") onCancelAdd();
               }}
               placeholder="Task label…"
-              className="h-[22px] px-2 rounded text-[10px] bg-zinc-800 border border-zinc-600 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-red-500/60 w-[120px]"
+              className={cn("h-[22px] w-[120px] px-2", ios.input)}
             />
             <button
               onClick={onAddSubmit}
               disabled={!addInput.trim()}
-              className="h-[22px] px-2 rounded bg-red-500/20 text-red-300 text-[10px] border border-red-500/30 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+              className={cn(
+                "h-[22px] rounded border px-2 text-[10px] transition-colors disabled:opacity-40",
+                isDark
+                  ? "border-red-500/30 bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                  : "border-[color-mix(in_srgb,var(--ios-red)_30%,transparent)] bg-[color-mix(in_srgb,var(--ios-red)_10%,var(--ios-background-secondary))] text-[var(--ios-red)] hover:bg-[color-mix(in_srgb,var(--ios-red)_16%,var(--ios-background-secondary))]",
+              )}
             >
               Add
             </button>
             <button
               onClick={onCancelAdd}
-              className="h-[22px] px-1.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors"
+              className={cn("h-[22px] rounded px-1.5 transition-colors", ios.ghostBtn)}
             >
               <span className="ms" style={{ fontSize: 12 }}>close</span>
             </button>
@@ -668,7 +684,7 @@ function SlotRow({
         ) : (
           <button
             onClick={onStartAdd}
-            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-dashed border-zinc-700 text-[10px] text-zinc-600 hover:border-zinc-500 hover:text-zinc-400 transition-colors"
+            className={ios.dashedAdd}
           >
             <span className="ms" style={{ fontSize: 10 }}>add</span> task
           </button>
@@ -683,7 +699,7 @@ function SlotRow({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PushButton({
-  label, icon, loading, disabled, onClick, variant = "breaks",
+  label, icon, loading, disabled, onClick, variant = "breaks", isDark = false,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -691,19 +707,13 @@ function PushButton({
   disabled: boolean;
   onClick: () => void;
   variant?: "breaks" | "tasks";
+  isDark?: boolean;
 }) {
-  const base =
-    "sb-interactive flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium border";
-  const colors =
-    variant === "tasks"
-      ? "border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 disabled:opacity-40"
-      : "border-red-500/30 text-red-300 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-40";
-
   return (
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className={cn(base, colors)}
+      className={sudoPushButtonClasses(variant, isDark)}
     >
       {loading ? <BuilderBusyLabel className="text-[11px]">{label}</BuilderBusyLabel> : (
         <>
