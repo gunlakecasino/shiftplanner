@@ -267,7 +267,7 @@ export function TasksTab({ onDataChanged, currentNightId, isDark = false }: Task
   }
 
   return (
-    <div className={cn("h-full overflow-auto p-6", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+    <div className={cn("h-full overflow-auto py-4", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
       <div className="max-w-5xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

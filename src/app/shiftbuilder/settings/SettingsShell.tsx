@@ -8,10 +8,9 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
-  ChevronRight,
   LogOut,
   Moon,
   Sun,
@@ -47,8 +46,10 @@ import {
   resolveSettingsTab,
   sectionForTab,
   tabMeta,
+  TALL_SETTINGS_TABS,
 } from "./settingsConfig";
 import "./settingsTheme.css";
+import "./settingsShell.css";
 
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
@@ -105,7 +106,7 @@ function InsufficientPermNotice({
       <p
         className={cn(
           "max-w-sm text-[13px] leading-relaxed",
-          isDark ? "text-zinc-400" : "text-[#6C6C72]",
+          isDark ? "text-zinc-400" : "text-[var(--ios-label-tertiary)]",
         )}
       >
         Your role does not include this tool. Contact a sudo_admin if you need access.
@@ -168,7 +169,7 @@ function SettingsTabPanel({
         <UsersTab onDataChanged={onDataChanged} isDark={isDark} />
       )}
       {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
-        <div className="py-16 text-center text-[13px] text-[#6C6C72]">
+        <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
           Only sudo_admins can manage user privileges.
         </div>
       )}
@@ -207,6 +208,7 @@ export function SettingsShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
 
   const canRunEngine = permissions?.canRunEngine ?? false;
@@ -294,85 +296,37 @@ export function SettingsShell() {
 
   const formattedDate = `${MONTH_LONG[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
   const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-  const substrate = isDark ? "#0F0F12" : "#F8F8F9";
-  const paperBg = isDark ? "#16161A" : "#FFFFFF";
-  const paperBorder = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
-  const muted = isDark ? "#8E8E93" : "#6B7280";
+  const tabMotion = reduceMotion
+    ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 1 } }
+    : {
+        initial: { opacity: 0, y: 6 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -4 },
+        transition: { duration: 0.18, ease: [0.23, 1, 0.32, 1] as const },
+      };
 
   return (
-    <div
-      className="sb-content-enter min-h-screen w-full"
-      style={{
-        background: substrate,
-        color: isDark ? "#F2F2F4" : "#1C1C1E",
-        fontFamily: "var(--font-atkinson, system-ui, -apple-system, sans-serif)",
-      }}
-    >
-      {/* Floor grid — same language as PinGate / launchpad */}
-      <div
-        className="pointer-events-none fixed inset-0 opacity-[0.028]"
-        style={{
-          backgroundImage: isDark
-            ? "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)"
-            : "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      />
+    <div className="sb-settings-shell sb-content-enter">
+      <div className="sb-settings-grid" aria-hidden />
 
-      {/* Quiet status bar */}
-      <div
-        className="relative z-10 flex h-11 items-center justify-between border-b px-6 text-[11px] tracking-[0.4px]"
-        style={{
-          borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
-          color: muted,
-          background: isDark ? "rgba(15,15,18,0.82)" : "rgba(248,248,249,0.82)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
+      <header className="sb-settings-status">
         <div className="flex items-center gap-3">
-          <span style={{ fontSize: 10, letterSpacing: "1.5px", fontWeight: 600 }}>GLCR</span>
-          <span style={{ width: 1, height: 12, background: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)" }} />
-          <span>BACKEND CONFIGURATION</span>
+          <span className="sb-settings-status-brand">GLCR</span>
+          <span className="sb-settings-status-divider" aria-hidden />
+          <span>BEHIND THE CANVAS</span>
         </div>
         <div className="flex items-center gap-4 tabular-nums">
           <span>{formattedDate}</span>
           <span>{timeString}</span>
         </div>
-      </div>
+      </header>
 
       <div className="relative z-10 mx-auto w-full max-w-[1120px] px-6 pb-14 pt-10">
-        {/* Hero — succinct */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: "2.8px",
-                fontWeight: 600,
-                color: muted,
-                marginBottom: 8,
-              }}
-            >
-              BEHIND THE CANVAS
-            </div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "clamp(36px, 4.5vw, 52px)",
-                fontWeight: 800,
-                letterSpacing: "-2px",
-                lineHeight: 0.92,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson), system-ui)",
-                color: isDark ? "#F2F2F4" : "#111",
-              }}
-            >
-              Settings
-            </h1>
-            <p
-              className="mt-2 max-w-md text-[14px] leading-snug"
-              style={{ color: isDark ? "#A1A1AA" : "#4B5563" }}
-            >
+            <p className="sb-settings-eyebrow">OMS BACKEND</p>
+            <h1 className="sb-settings-hero-title">Settings</h1>
+            <p className="sb-settings-hero-sub">
               Team, tasks, engine, and roster — the quiet machinery behind every grave deployment.
             </p>
           </div>
@@ -380,32 +334,14 @@ export function SettingsShell() {
           <button
             type="button"
             onClick={() => router.push("/shiftbuilder")}
-            className="sb-interactive inline-flex items-center gap-2 self-start rounded-2xl border px-4 py-2.5 text-[13px] font-semibold sm:self-auto"
-            style={{
-              borderColor: paperBorder,
-              background: isDark ? "rgba(255,255,255,0.04)" : "#fff",
-              color: isDark ? "#E5E5E7" : "#1C1C1E",
-              boxShadow: isDark
-                ? "inset 0 1px 0 rgba(255,255,255,0.05)"
-                : "0 4px 14px -8px rgba(0,0,0,0.12)",
-            }}
+            className="sb-settings-back-btn sb-interactive"
           >
             <ArrowLeft size={15} strokeWidth={2.25} />
             Shift Builder
           </button>
         </div>
 
-        {/* Sticky glass control cluster */}
-        <div
-          className="sticky top-3 z-30 mb-5 rounded-full border px-3 py-2"
-          style={{
-            background: isDark ? "rgba(9,9,11,0.94)" : "rgba(249,247,244,0.94)",
-            backdropFilter: "blur(22px)",
-            WebkitBackdropFilter: "blur(22px)",
-            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.075)",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -10px rgba(0,0,0,0.14)",
-          }}
-        >
+        <nav className="sb-settings-glass-pill" aria-label="Settings sections">
           <div className="flex flex-wrap items-center gap-2">
             {SETTINGS_SECTIONS.map((section) => {
               const isActive = activeSection === section.id;
@@ -413,17 +349,14 @@ export function SettingsShell() {
                 <button
                   key={section.id}
                   type="button"
+                  data-active={isActive ? "true" : "false"}
+                  aria-current={isActive ? "true" : undefined}
                   onClick={() => handleSectionSelect(section.id)}
-                  className="sb-interactive rounded-full px-3.5 py-1.5 text-[12px] font-semibold tracking-[-0.01em] transition-colors"
+                  className="sb-settings-section-btn sb-interactive"
                   style={{
                     background: isActive
                       ? `${section.accent}${isDark ? "22" : "18"}`
                       : "transparent",
-                    color: isActive
-                      ? isDark
-                        ? "#F2F2F4"
-                        : "#111"
-                      : muted,
                     boxShadow: isActive ? `inset 0 0 0 1px ${section.accent}44` : undefined,
                   }}
                 >
@@ -432,14 +365,14 @@ export function SettingsShell() {
               );
             })}
 
-            <div className="mx-1 hidden h-5 w-px sm:block" style={{ background: paperBorder }} />
+            <div className="sb-settings-glass-divider" aria-hidden />
 
             <button
               type="button"
               onClick={toggleTheme}
-              className="icon-btn sb-interactive ml-auto flex h-8 w-8 items-center justify-center rounded-full"
+              className="sb-settings-theme-btn icon-btn sb-interactive"
               title={isDark ? "Light mode" : "Dark mode"}
-              style={{ color: muted }}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
               {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
@@ -453,21 +386,20 @@ export function SettingsShell() {
                     router.push("/shiftbuilder");
                   }
                 }}
-                className="sb-interactive flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium"
-                style={{
-                  borderColor: paperBorder,
-                  color: muted,
-                }}
+                className="sb-settings-user-btn sb-interactive"
               >
                 <span className="max-w-[120px] truncate">{currentOperator.username}</span>
                 <LogOut size={13} />
               </button>
             )}
           </div>
-        </div>
+        </nav>
 
-        {/* Section tab chips */}
-        <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          className="mb-5 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label={`${sectionMeta.label} tools`}
+        >
           {sectionTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -476,16 +408,16 @@ export function SettingsShell() {
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-disabled={disabled || undefined}
+                data-active={isActive ? "true" : "false"}
                 disabled={disabled}
                 onClick={() => !disabled && handleTabSelect(tab.id)}
                 title={disabled ? "Insufficient privileges" : tab.description}
-                className={cn(
-                  "sb-interactive flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-left transition-all",
-                  disabled && "cursor-not-allowed opacity-45",
-                )}
+                className="sb-settings-tab-chip sb-interactive"
                 style={{
-                  background: isActive ? paperBg : isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.65)",
-                  borderColor: isActive ? `${sectionMeta.accent}66` : paperBorder,
+                  borderColor: isActive ? `${sectionMeta.accent}66` : undefined,
                   boxShadow: isActive
                     ? `0 0 0 1px ${sectionMeta.accent}22, 0 6px 18px -12px rgba(0,0,0,0.25)`
                     : undefined,
@@ -494,12 +426,9 @@ export function SettingsShell() {
                 <Icon
                   size={15}
                   strokeWidth={2.1}
-                  style={{ color: isActive ? sectionMeta.accent : muted }}
+                  style={{ color: isActive ? sectionMeta.accent : "var(--ios-label-tertiary)" }}
                 />
-                <span
-                  className="text-[13px] font-semibold tracking-[-0.02em]"
-                  style={{ color: isActive ? (isDark ? "#F2F2F4" : "#111") : muted }}
-                >
+                <span className="sb-settings-tab-chip-label" data-active={isActive ? "true" : "false"}>
                   {tab.label}
                 </span>
               </button>
@@ -507,66 +436,20 @@ export function SettingsShell() {
           })}
         </div>
 
-        {/* Paper artboard */}
-        <motion.div
-          layout
-          className="overflow-hidden rounded-[20px] border"
-          style={{
-            background: paperBg,
-            borderColor: paperBorder,
-            boxShadow: isDark
-              ? "0 24px 60px -28px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.05)"
-              : "0 20px 50px -24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.9)",
-          }}
-        >
+        <motion.div layout className="sb-settings-paper">
           <GoldHairline isDark={isDark} />
 
-          {/* Panel header */}
-          <div
-            className="flex items-center justify-between gap-4 border-b px-6 py-4"
-            style={{ borderColor: paperBorder }}
-          >
-            <div className="min-w-0">
-              <div
-                className="text-[10px] font-mono uppercase tracking-[1.6px]"
-                style={{ color: sectionMeta.accent }}
-              >
-                {sectionMeta.label}
-              </div>
-              <div className="mt-0.5 flex items-center gap-2">
-                <h2
-                  className="truncate text-[18px] font-bold tracking-[-0.4px]"
-                  style={{ fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
-                >
-                  {activeMeta.label}
-                </h2>
-                <ChevronRight size={14} style={{ color: muted, flexShrink: 0 }} />
-              </div>
-              <p className="mt-1 text-[12px]" style={{ color: muted }}>
-                {activeMeta.description}
-              </p>
-            </div>
-            <div
-              className="hidden shrink-0 rounded-full px-3 py-1 text-[10px] font-mono tracking-wider sm:block"
-              style={{
-                background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-                color: muted,
-              }}
-            >
-              PIN-GATED · AUDITED
-            </div>
-          </div>
+          <header className="sb-settings-panel-header">
+            <h2 className="sb-settings-panel-title">{activeMeta.label}</h2>
+          </header>
 
-          {/* Tab body */}
-          <div className="min-h-[min(68vh,720px)] px-6 py-5 text-[13.5px] leading-snug">
+          <div
+            className="sb-settings-body"
+            data-tall={TALL_SETTINGS_TABS.has(activeTab) ? "true" : undefined}
+            role="tabpanel"
+          >
             <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-              >
+              <motion.div key={activeTab} className="sb-settings-tab-motion" {...tabMotion}>
                 <SettingsTabPanel
                   activeTab={activeTab}
                   isDark={isDark}
@@ -583,28 +466,17 @@ export function SettingsShell() {
             </AnimatePresence>
           </div>
 
-          {/* Sheet footer */}
-          <div
-            className="flex items-center justify-between gap-3 border-t px-6 py-2.5 text-[9pt] leading-none tracking-[0.1px]"
-            style={{
-              borderColor: paperBorder,
-              color: muted,
-              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-            }}
-          >
+          <footer className="sb-settings-footer">
             <div className="min-w-0 truncate">
-              <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
-                SBS
-              </span>
+              <strong>SBS</strong>
               <span className="mx-1 opacity-60">©</span>
               <span>OMS Settings</span>
-              <span className="mx-1 opacity-40">—</span>
-              <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
-                {currentOperator?.full_name ?? "operator"}
-              </span>
+              <span className="mx-1 opacity-40">·</span>
+              <strong>{currentOperator?.full_name ?? "operator"}</strong>
+              <span className="mx-1.5 hidden opacity-50 sm:inline">PIN-GATED</span>
             </div>
             <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
-          </div>
+          </footer>
         </motion.div>
       </div>
     </div>

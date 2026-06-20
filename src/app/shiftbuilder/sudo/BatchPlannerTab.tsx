@@ -233,7 +233,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+      <div className="flex-1 overflow-y-auto py-4 space-y-5">
         {/* Week picker */}
         <div className="space-y-1.5">
           <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Week</label>

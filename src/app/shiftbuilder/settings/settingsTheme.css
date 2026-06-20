@@ -140,3 +140,15 @@
 .sb-settings-panel[data-theme="light"] [class*="rounded-full"][class*="bg-zinc-800"] {
   background-color: var(--ios-gray-6) !important;
 }
+
+/* ── Full-bleed action bars (edge-to-edge within paper artboard) ─────────── */
+.sb-settings-body .sb-settings-bleed-bar {
+  margin-inline: -1.5rem;
+  padding-inline: 1.5rem;
+}
+
+.sb-settings-body .sb-settings-bleed-bar + .sb-settings-bleed-content,
+.sb-settings-body .sb-settings-bleed-content {
+  margin-inline: -1.5rem;
+  padding-inline: 1.5rem;
+}

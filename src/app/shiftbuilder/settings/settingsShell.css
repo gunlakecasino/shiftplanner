@@ -1,0 +1,297 @@
+/**
+ * OMS Settings shell — iOS 26 tokens for substrate, glass chrome, and paper artboard.
+ * Relies on ios26-colors.css (light :root + html.dark overrides).
+ */
+
+.sb-settings-shell {
+  min-height: 100vh;
+  width: 100%;
+  color: var(--ios-label);
+  font-family: var(--font-atkinson, system-ui, -apple-system, sans-serif);
+  background: var(--sb-settings-substrate, var(--ios-background-primary));
+}
+
+.sb-settings-shell {
+  --sb-settings-glass: rgba(249, 247, 244, 0.94);
+  --sb-settings-status-bg: color-mix(in srgb, var(--ios-background-primary) 82%, transparent);
+  --sb-settings-chip-idle: rgba(255, 255, 255, 0.65);
+  --sb-settings-paper-shadow:
+    0 20px 50px -24px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --sb-settings-back-btn-bg: var(--ios-background-secondary);
+  --sb-settings-back-btn-shadow: 0 4px 14px -8px rgba(0, 0, 0, 0.12);
+  --sb-settings-grid-line: rgba(0, 0, 0, 0.06);
+  --sb-settings-divider: rgba(0, 0, 0, 0.14);
+  --sb-settings-border-subtle: rgba(0, 0, 0, 0.06);
+  --sb-settings-border-paper: rgba(0, 0, 0, 0.07);
+}
+
+html.dark .sb-settings-shell {
+  --sb-settings-substrate: #0f0f12;
+  --sb-settings-glass: rgba(9, 9, 11, 0.94);
+  --sb-settings-status-bg: rgba(15, 15, 18, 0.82);
+  --sb-settings-chip-idle: rgba(255, 255, 255, 0.03);
+  --sb-settings-paper-shadow:
+    0 24px 60px -28px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --sb-settings-back-btn-bg: rgba(255, 255, 255, 0.04);
+  --sb-settings-back-btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --sb-settings-grid-line: rgba(255, 255, 255, 0.5);
+  --sb-settings-divider: rgba(255, 255, 255, 0.14);
+  --sb-settings-border-subtle: rgba(255, 255, 255, 0.06);
+  --sb-settings-border-paper: rgba(255, 255, 255, 0.08);
+}
+
+.sb-settings-grid {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.028;
+  background-size: 24px 24px;
+  background-image:
+    linear-gradient(var(--sb-settings-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sb-settings-grid-line) 1px, transparent 1px);
+}
+
+.sb-settings-status {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sb-settings-border-subtle);
+  padding-inline: 1.5rem;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: var(--ios-label-tertiary);
+  background: var(--sb-settings-status-bg);
+  backdrop-filter: blur(12px);
+}
+
+.sb-settings-status-brand {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+.sb-settings-status-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--sb-settings-divider);
+}
+
+.sb-settings-eyebrow {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.8px;
+  color: var(--ios-label-tertiary);
+}
+
+.sb-settings-hero-title {
+  margin: 0;
+  font-size: clamp(36px, 4.5vw, 52px);
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 0.92;
+  font-family: var(--font-bricolage, var(--font-atkinson), system-ui);
+  color: var(--ios-label);
+}
+
+.sb-settings-hero-sub {
+  margin-top: 0.5rem;
+  max-width: 28rem;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ios-label-secondary);
+}
+
+.sb-settings-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  border-radius: 1rem;
+  border: 1px solid var(--sb-settings-border-paper);
+  padding: 0.625rem 1rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ios-label);
+  background: var(--sb-settings-back-btn-bg);
+  box-shadow: var(--sb-settings-back-btn-shadow);
+}
+
+@media (min-width: 640px) {
+  .sb-settings-back-btn {
+    align-self: auto;
+  }
+}
+
+.sb-settings-glass-pill {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 30;
+  margin-bottom: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--sb-settings-border-paper);
+  padding: 0.5rem 0.75rem;
+  background: var(--sb-settings-glass);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -10px rgba(0, 0, 0, 0.14);
+}
+
+.sb-settings-section-btn {
+  border-radius: 9999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: color 0.15s, background 0.15s;
+  color: var(--ios-label-tertiary);
+  background: transparent;
+}
+
+.sb-settings-section-btn[data-active="true"] {
+  color: var(--ios-label);
+}
+
+.sb-settings-glass-divider {
+  margin-inline: 0.25rem;
+  display: none;
+  height: 1.25rem;
+  width: 1px;
+  background: var(--sb-settings-border-paper);
+}
+
+@media (min-width: 640px) {
+  .sb-settings-glass-divider {
+    display: block;
+  }
+}
+
+.sb-settings-theme-btn {
+  margin-left: auto;
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--ios-label-tertiary);
+}
+
+.sb-settings-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  border: 1px solid var(--sb-settings-border-paper);
+  padding: 0.375rem 0.75rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ios-label-tertiary);
+}
+
+.sb-settings-tab-chip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--sb-settings-border-paper);
+  padding: 0.625rem 1rem;
+  text-align: left;
+  background: var(--sb-settings-chip-idle);
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.sb-settings-tab-chip[data-active="true"] {
+  background: var(--ios-background-secondary);
+}
+
+.sb-settings-tab-chip[data-active="false"] {
+  background: var(--sb-settings-chip-idle);
+}
+
+.sb-settings-tab-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.sb-settings-tab-chip-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.sb-settings-tab-chip-label[data-active="true"] {
+  color: var(--ios-label);
+}
+
+.sb-settings-tab-chip-label[data-active="false"] {
+  color: var(--ios-label-tertiary);
+}
+
+.sb-settings-paper {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--sb-settings-border-paper);
+  background: var(--ios-background-secondary);
+  box-shadow: var(--sb-settings-paper-shadow);
+}
+
+.sb-settings-panel-header {
+  border-bottom: 1px solid var(--sb-settings-border-paper);
+  padding: 0.75rem 1.5rem;
+}
+
+.sb-settings-panel-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.35px;
+  font-family: var(--font-bricolage, var(--font-atkinson), system-ui);
+  color: var(--ios-label);
+}
+
+.sb-settings-body {
+  padding: 1.25rem 1.5rem;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.sb-settings-body[data-tall="true"] {
+  min-height: min(68vh, 720px);
+}
+
+.sb-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--sb-settings-border-paper);
+  padding: 0.625rem 1.5rem;
+  font-size: 9pt;
+  line-height: 1;
+  letter-spacing: 0.1px;
+  color: var(--ios-label-tertiary);
+  font-family: var(--font-atkinson, var(--font-ui, system-ui));
+}
+
+.sb-settings-footer strong {
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--ios-label);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-settings-tab-motion {
+    animation: none !important;
+    transition: none !important;
+  }
+}

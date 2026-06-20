@@ -129,6 +129,19 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
   },
 ];
 
+/** Tabs that need a tall scroll region inside the paper artboard */
+export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
+  "defaults",
+  "tasks",
+  "team",
+  "weeklyRoster",
+  "users",
+  "reports",
+  "engine",
+  "planner",
+  "tmDefaults",
+]);
+
 export const VALID_SETTINGS_TABS = new Set<string>(SETTINGS_TABS.map((t) => t.id));
 
 export function isSettingsTab(tab: string): tab is SettingsTab {

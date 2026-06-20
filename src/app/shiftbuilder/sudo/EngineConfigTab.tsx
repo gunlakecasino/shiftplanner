@@ -149,7 +149,7 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
   }
 
   return (
-    <div className={cn("h-full overflow-auto p-6", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
+    <div className={cn("h-full overflow-auto py-4", ios.page)} style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}>
       <div className="max-w-3xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

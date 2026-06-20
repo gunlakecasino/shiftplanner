@@ -496,7 +496,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
       </div>
 
       {/* ── Slot list ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+      <div className="flex-1 overflow-y-auto py-4 space-y-6">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <SudoTabLoading>Loading defaults</SudoTabLoading>

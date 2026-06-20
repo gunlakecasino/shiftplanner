@@ -9,7 +9,7 @@ export function sudoIosClasses(isDark: boolean) {
     page: isDark ? "text-[var(--ios-label)]" : "text-[var(--ios-label)]",
 
     actionBar: cn(
-      "shrink-0 border-b px-5 py-3 backdrop-blur-md",
+      "sb-settings-bleed-bar shrink-0 border-b py-3 backdrop-blur-md",
       isDark
         ? "border-white/10 bg-zinc-950/80"
         : "border-[var(--ios-gray-5)] bg-[var(--ios-background-tertiary)]",
