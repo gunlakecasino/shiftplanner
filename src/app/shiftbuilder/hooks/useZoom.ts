@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type RefObject } from "react";
-import { DEPLOYMENT_CANVAS_MAX_WIDTH_PX } from "@/lib/shiftbuilder/canvasLayout";
+import {
+  DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
+  FLOATING_NAV_HEIGHT_PX,
+} from "@/lib/shiftbuilder/canvasLayout";
+import { builderStageBottomInsetPx } from "../components/canvasPillGlass";
 import { isTabletTouchDevice, rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 
 export type ZoomMode = "fit" | number;
@@ -11,7 +15,15 @@ export const NATURAL_WIDTH = 1056;
 export const NATURAL_HEIGHT = 816;
 
 /** Representative builder workspace height before live DOM measurement settles. */
-export const BUILDER_NATURAL_HEIGHT = 1080;
+export const BUILDER_NATURAL_HEIGHT = 1000;
+
+/** Builder fit tuning — balance "see everything" vs feeling too zoomed out on load. */
+const BUILDER_CANVAS_PAD_DESKTOP = 44;
+const BUILDER_CANVAS_PAD_TABLET = 56;
+const BUILDER_FIT_SAFETY_DESKTOP = 0.97;
+const BUILDER_FIT_SAFETY_TABLET = 0.93;
+/** When height binds, allow a hair more zoom-in (bottom chrome can clip slightly). */
+const BUILDER_HEIGHT_RELAX_DESKTOP = 1.12;
 
 export { isTabletTouchDevice };
 
@@ -72,14 +84,16 @@ export function useZoom({
 
     // Mirror stage chrome so the very first paint is already close to the final fit.
     const rosterInset = rosterOpen ? rosterPanelWidth() + 12 : 0;
-    const canvasPad = useBuilderNatural ? 68 : 40;
+    const canvasPad = useBuilderNatural ? BUILDER_CANVAS_PAD_DESKTOP : 40;
     const availW =
       window.innerWidth -
       rosterInset -
       (useBuilderNatural ? 16 + 24 + canvasPad : 80);
     const availH =
       window.innerHeight -
-      (useBuilderNatural ? 56 + 48 + canvasPad : 90);
+      (useBuilderNatural
+        ? FLOATING_NAV_HEIGHT_PX + builderStageBottomInsetPx() + canvasPad
+        : 90);
 
     const natW = useBuilderNatural ? DEPLOYMENT_CANVAS_MAX_WIDTH_PX : NATURAL_WIDTH;
     const natH = useBuilderNatural ? BUILDER_NATURAL_HEIGHT : NATURAL_HEIGHT;
@@ -89,7 +103,8 @@ export function useZoom({
 
     let fit: number;
     if (useBuilderNatural) {
-      fit = Math.min(fitCap, byW, byH) * 0.9;
+      const relaxedH = byH * BUILDER_HEIGHT_RELAX_DESKTOP;
+      fit = Math.min(fitCap, byW, relaxedH) * BUILDER_FIT_SAFETY_DESKTOP;
     } else {
       fit = isTabletTouchDevice()
         ? Math.min(max, byW, byH)
@@ -132,7 +147,7 @@ export function useZoom({
     if (el && el.clientWidth > 50 && el.clientHeight > 50) {
       const isTablet = isTabletTouchDevice();
       const canvasPad = builderFitEnabled
-        ? (isTablet ? 60 : 68)
+        ? (isTablet ? BUILDER_CANVAS_PAD_TABLET : BUILDER_CANVAS_PAD_DESKTOP)
         : 24;
       // clientWidth/Height include padding — subtract it to get the content box.
       const contentBox = stageContentBox(el);
@@ -181,19 +196,19 @@ export function useZoom({
     const byWidth = availW / naturalW;
     const byHeight = availH / naturalH;
 
-    // Fit the (measured) builder content exactly into the available stage area
-    // (both width and height). Combined with overflow:hidden everywhere + the
-    // pre-scaled size wrappers, this guarantees the whole UI is locked to the
-    // browser window with zero scroll or page movement during any interaction.
-    const next = Math.min(fitCap, max, byWidth, byHeight);
+    const isTablet = isTabletTouchDevice();
+    const heightBinder =
+      builderFitEnabled && !isTablet
+        ? byHeight * BUILDER_HEIGHT_RELAX_DESKTOP
+        : byHeight;
 
-    // Safety factor to ensure no edge cut-off (especially right/bottom of last cards
-    // or coverage bars, or right edge of aux sidebar) due to subpixel, padding, insets, or measurement timing.
-    // More aggressive for builder relaxed mode because of canvas padding + container queries.
-    // Safety factor. On builder we use a bit of conservatism to tolerate late layout / measurement noise on load.
-    // Desktop can be a hair more aggressive since we have a good initial natural guess now.
+    // Fit the measured builder workspace into the stage. Width usually drives;
+    // height relaxation keeps load zoom closer to "comfortable" (~85–88%) instead
+    // of over-shrinking when the measured scroll height includes bottom chrome.
+    const next = Math.min(fitCap, max, byWidth, heightBinder);
+
     const safety = builderFitEnabled
-      ? (isTabletTouchDevice() ? 0.91 : 0.90)
+      ? (isTablet ? BUILDER_FIT_SAFETY_TABLET : BUILDER_FIT_SAFETY_DESKTOP)
       : 0.97;
     const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next * safety);
     // Epsilon guard + ref check: DOM measurements, RO callbacks, and initial layout

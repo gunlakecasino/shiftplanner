@@ -3,11 +3,16 @@ import {
   BUILDER_CANVAS_MAX_WIDTH_PX,
   DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
   FLOATING_NAV_HEIGHT_PX,
+  FLOATING_NAV_MAX_WIDTH_PX,
   FLOATING_NAV_TOP_PX,
 } from "@/lib/shiftbuilder/canvasLayout";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
-export { BUILDER_CANVAS_MAX_WIDTH_PX, DEPLOYMENT_CANVAS_MAX_WIDTH_PX };
+export {
+  BUILDER_CANVAS_MAX_WIDTH_PX,
+  DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
+  FLOATING_NAV_MAX_WIDTH_PX,
+};
 
 /** Velvet glass shell — matches MarkerPad / command palette (--sb-glass*). */
 export function velvetGlassPillStyle(extra?: CSSProperties): CSSProperties {

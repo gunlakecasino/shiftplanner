@@ -1,7 +1,7 @@
 import type { StageInsets } from "@/app/shiftbuilder/hooks/useZoom";
 
-/** Matches FloatingNav h-14 + top-2 offset. */
-export const TODAY_NAV_HEIGHT = 56;
+/** Matches FloatingNav shell + top-2 offset. */
+export const TODAY_NAV_HEIGHT = 50;
 export const TODAY_NAV_TOP_OFFSET = 8;
 export const TODAY_NAV_CLEARANCE = TODAY_NAV_TOP_OFFSET + TODAY_NAV_HEIGHT + 8;
 

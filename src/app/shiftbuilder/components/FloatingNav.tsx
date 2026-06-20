@@ -6,6 +6,11 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
+  FLOATING_NAV_FALLBACK_MAX_WIDTH_PX,
+  FLOATING_NAV_MAX_WIDTH_PX,
+  floatingNavWidthCss,
+} from "@/lib/shiftbuilder/canvasLayout";
+import {
   Calendar,
   ChevronDown,
   ChevronLeft,
@@ -193,14 +198,16 @@ export default function FloatingNav(props: FloatingNavProps) {
           top: top,
           left: "50%",
           transform: "translateX(-50%)",
-          width: contentMaxWidth ? `min(calc(100vw - 48px), ${contentMaxWidth}px)` : "min(100vw - 48px, 900px)",
+          width: floatingNavWidthCss(
+            contentMaxWidth ? FLOATING_NAV_MAX_WIDTH_PX : FLOATING_NAV_FALLBACK_MAX_WIDTH_PX,
+          ),
           background: isDark ? "rgba(9,9,11,0.97)" : "rgba(249, 247, 244, 0.97)",
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
           borderRadius: 9999,
           border: "1px solid rgba(0,0,0,0.075)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.06)",
-          padding: "9px 16px",
+          padding: "8px 14px",
           fontFamily: "'Inter', system-ui, sans-serif",
           userSelect: "none",
           display: "flex",
@@ -213,35 +220,35 @@ export default function FloatingNav(props: FloatingNavProps) {
         <div className="flex items-center gap-1 shrink-0">
           <button
             className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
-            style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
+            style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
             onClick={onToday}
             title="Jump to today"
           >
             {monthLabel}
-            <ChevronDown size={12} strokeWidth={2.8} style={{ color: "#999", marginTop: 1 }} />
+            <ChevronDown size={11} strokeWidth={2.8} style={{ color: "#999", marginTop: 1 }} />
           </button>
           <button
-            className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
             style={{ color: "#666" }}
             onClick={onToday}
             title="Today"
           >
-            <Calendar size={14} strokeWidth={1.8} />
+            <Calendar size={13} strokeWidth={1.8} />
           </button>
         </div>
 
         {/* DIVIDER */}
-        <div className="shrink-0 mx-2.5" style={{ width: 1, height: 18, background: "rgba(0,0,0,0.12)" }} />
+        <div className="shrink-0 mx-2" style={{ width: 1, height: 16, background: "rgba(0,0,0,0.12)" }} />
 
         {/* CENTER — day scroller */}
         <div className="flex items-center flex-1 min-w-0 gap-0.5">
           <button
             onClick={onPrevWeek}
-            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            className="icon-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
             style={{ color: "#aaa" }}
             title="Previous GRAVE week"
           >
-            <ChevronLeft size={14} strokeWidth={2.8} />
+            <ChevronLeft size={13} strokeWidth={2.8} />
           </button>
 
           <div className="flex items-center justify-around flex-1 px-1">
@@ -259,16 +266,16 @@ export default function FloatingNav(props: FloatingNavProps) {
                     className="flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
                     style={{
                       background: "#7B3226",
-                      borderRadius: 11,
-                      width: 42,
-                      height: 48,
+                      borderRadius: 10,
+                      width: 38,
+                      height: 43,
                       gap: 0,
                       boxShadow: "0 2px 8px rgba(123,50,38,0.35)",
                     }}
                   >
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 8,
                         fontWeight: 700,
                         color: "rgba(255,255,255,0.6)",
                         letterSpacing: "0.12em",
@@ -280,7 +287,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     </span>
                     <span
                       style={{
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: 800,
                         color: "#fff",
                         lineHeight: 1,
@@ -300,13 +307,13 @@ export default function FloatingNav(props: FloatingNavProps) {
                   onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
                   className="icon-btn flex flex-col items-center justify-center shrink-0 rounded-full"
                   style={{
-                    width: 34,
-                    height: 44,
+                    width: 31,
+                    height: 40,
                     gap: 4,
                     border: isToday ? "1.5px dashed rgba(0,0,0,0.22)" : "1px solid transparent",
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#a1a1aa" : "#444", lineHeight: 1 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#a1a1aa" : "#444", lineHeight: 1 }}>
                     {letter}
                   </span>
                 </button>
@@ -316,40 +323,40 @@ export default function FloatingNav(props: FloatingNavProps) {
 
           <button
             onClick={onNextWeek}
-            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            className="icon-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
             style={{ color: "#aaa" }}
             title="Next GRAVE week"
           >
-            <ChevronRight size={14} strokeWidth={2.8} />
+            <ChevronRight size={13} strokeWidth={2.8} />
           </button>
         </div>
 
         {/* DIVIDER */}
-        <div className="shrink-0 mx-2.5" style={{ width: 1, height: 18, background: "rgba(0,0,0,0.12)" }} />
+        <div className="shrink-0 mx-2" style={{ width: 1, height: 16, background: "rgba(0,0,0,0.12)" }} />
 
         {/* RIGHT — actions + user + more dropdown */}
         <div className="flex items-center gap-0.5 shrink-0">
           {/* Builder-only controls (hidden in today kiosk stripped variant) */}
           {!isTodayVariant && (
             <button
-              className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
               style={{ color: "#666" }}
               onClick={onRosterToggle}
               title={rosterOpen ? "Hide roster" : "Show roster"}
             >
-              <LayoutGrid size={15} strokeWidth={1.8} />
+              <LayoutGrid size={14} strokeWidth={1.8} />
             </button>
           )}
 
           {/* View toggle — keep for today to allow breaks view if wired */}
           {onViewChange && (
             <button
-              className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
               style={{ color: "#666" }}
               onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
               title="Breaks view"
             >
-              <Coffee size={15} strokeWidth={1.8} />
+              <Coffee size={14} strokeWidth={1.8} />
             </button>
           )}
 
@@ -358,7 +365,7 @@ export default function FloatingNav(props: FloatingNavProps) {
               {/* LIVE / Publish status */}
               <button
                 className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
-                style={{ fontSize: 11, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
+                style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
                 onClick={onToggleDayPublished}
                 disabled={!canPublishDay}
                 title={isDayPublished ? "Unpublish this day" : "Publish this day"}
@@ -366,8 +373,8 @@ export default function FloatingNav(props: FloatingNavProps) {
                 <span
                   className="live-dot shrink-0"
                   style={{
-                    width: 7,
-                    height: 7,
+                    width: 6,
+                    height: 6,
                     borderRadius: "50%",
                     background: isDayPublished ? "#22c55e" : "#f59e0b",
                     display: "inline-block",
@@ -377,12 +384,12 @@ export default function FloatingNav(props: FloatingNavProps) {
               </button>
 
               <button
-                className="icon-btn flex items-center justify-center w-8 h-8 rounded-full"
+                className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
                 style={{ color: "#666" }}
                 onClick={handleRunEngine}
                 title="Run Engine / AI"
               >
-                <Sparkles size={15} strokeWidth={1.8} />
+                <Sparkles size={14} strokeWidth={1.8} />
               </button>
             </>
           )}
@@ -390,7 +397,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           {/* User / operator name */}
           <button
             className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
-            style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
+            style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
             onClick={() => {
               if (isTodayVariant && onExit) {
                 onExit();
@@ -418,12 +425,12 @@ export default function FloatingNav(props: FloatingNavProps) {
           {/* More / Dropdown */}
           <div className="relative" ref={moreRef}>
             <button
-              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+              className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
               style={{ color: "#aaa" }}
               onClick={() => setMoreOpen((v) => !v)}
               title="More actions"
             >
-              <MoreHorizontal size={15} strokeWidth={2} />
+              <MoreHorizontal size={14} strokeWidth={2} />
             </button>
 
             {moreOpen && (
