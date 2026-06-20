@@ -996,7 +996,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </div>
           )}
 
-          {!hideDateHeader && !isTodayBoard ? (
+          {isPrintPreview && !isTodayBoard ? (
             <div className="flex gap-[2px]">
               {Array.from({ length: 7 }).map((_, i) => {
                 const isActive = i === selectedDayIndex;
@@ -1021,7 +1021,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           ) : null}
 
           {/* Group selector (Golden shows GROUP label + three numbered pills) */}
-          {!hideDateHeader && currentView === "deployment" && (
+          {isPrintPreview && currentView === "deployment" && (
             <div className="flex items-center gap-1.5">
               <span className="sb-group-filter-label text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>GROUP</span>
               <div className="sb-group-filter-row flex gap-[3px]">
@@ -1053,7 +1053,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       </div>
       {/* /sheet-header */}
 
-      <div className={`flex flex-col w-full ${isPrintPreview ? 'flex-1 min-h-0 overflow-hidden' : 'overflow-hidden'}`}>
+      <div className={`flex flex-col w-full flex-1 min-h-0 overflow-hidden`}>
         {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
         {renderTaskTextEditPad()}
         {renderPlacementDock()}

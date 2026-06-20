@@ -571,23 +571,27 @@ body {
 .assignment-card {
   position: relative;
   background: #FFFFFF;
-  border: 1px solid #D1D1D6;
-  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 16px; /* refined 2xl */
   overflow: hidden;
   display: flex;
   flex-direction: column;
   cursor: pointer;
   user-select: none;
   -webkit-touch-callout: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06);
   --mouse-x: 50%;
   --mouse-y: 50%;
   --card-accent: #6B7280;
   transition:
+    box-shadow 200ms ease,
     transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
-    box-shadow 220ms cubic-bezier(0.23, 1, 0.32, 1),
     border-color 120ms ease;
   contain: layout style paint;
+}
+
+.assignment-card:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.09);
 }
 
 /* Spotlight layer — radial gradient using the card's own accent color,
@@ -871,6 +875,12 @@ body {
   margin-top: 6px;
 }
 
+.builder-workspace .sb-builder-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* Generous, modern grid breathing so every card and every task row is comfortable and scannable.
    No cramped 1fr squeeze — natural heights + good gaps let you see *all* the cards. */
 .builder-workspace .grid {
@@ -888,6 +898,8 @@ body {
   max-width: 100%;
   min-width: 0;
   gap: var(--sb-grid-gap, clamp(8px, 1vw, 14px));
+  flex: 1;
+  min-height: 0;
 }
 
 .sb-builder-stage .sb-zone-grid,
@@ -1004,15 +1016,22 @@ body {
 /* Builder view only: Aux cards moved to right sidebar column beside ZONES + RESTROOMS.
    Default 4 cards (first Admin), vertical stack matching height of left content.
    Extra aux shrink to fit without causing scroll. Whole centered.
-   All cards (zone/rr + aux) now consistently wider by 25px each for better proportions. */
+   Sidebar widened to 165px (+25px for aux cards); main 5-col area previously widened +50px/card. Height:100% + 1fr rows to fill to bottom. */
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
   display: grid;
-  grid-template-columns: 1fr 183px;
-  gap: 10px;
+  grid-template-columns: 1fr 165px;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
   align-items: stretch;
-  max-width: 1130px;
+  max-width: 1581px;
   margin-left: auto;
   margin-right: auto;
+  height: 100%;
+}
+
+/* Ensure main cards have room; aux sidebar cards also benefit */
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card {
+  min-width: 0;
 }
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
   grid-column: 1;
@@ -1049,6 +1068,20 @@ body {
   height: 100%;
   min-height: 68px; /* better min now that wider */
 }
+
+/* Refined card base from improved design */
+.sb-refined-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06);
+  transition: box-shadow 200ms ease;
+  overflow: hidden;
+  width: 100%;
+}
+.sb-refined-card:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.09);
+}
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card .sb-golden-assignee-name,
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-assignment-card .assignment-name {
   font-size: 15px;
@@ -1062,6 +1095,17 @@ body {
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header .label {
   font-size: 10px;
   letter-spacing: 0.5px;
+}
+
+/* Make the workspace fill the full artboard height in builder (relaxed) so grids reach the footer */
+.sb-builder-stage .builder-workspace {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.sb-builder-stage .builder-workspace > .flex.flex-col.w-full {
+  flex: 1;
+  min-height: 0;
 }
 
 /* Sophisticated Apple-grade assignment cards.

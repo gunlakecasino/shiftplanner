@@ -4,23 +4,18 @@ import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   type BreakGroup, nextBreakGroup,
-  getRRAccent, RR_ICONS,
+  getRRAccent,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
-import BreakBadge from "./BreakBadge";
-import TaskRow from "./TaskRow";
 import CoverageBar from "./CoverageBar";
-import { PlacementFitChip } from "./PlacementFitChip";
 import { penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
   CardAccentStripe,
-  CardSlotHeader,
   SlotAssignmentBody,
-  TaskListDivider,
   coverageBodyPadding,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
@@ -143,9 +138,9 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 min-h-0 rounded-[2px] sb-assignment-card touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
-      <div className={`min-w-0 ${showDigitalAssists ? "" : "pt-1 pb-0.5"}`}>
+      <div className={`min-w-0 pb-2 ${showDigitalAssists ? "" : "pt-1"}`}>
         <SlotAssignmentBody
           state={assignmentState}
           scale="rr"
@@ -160,32 +155,23 @@ const RRSide: React.FC<{
         />
       </div>
 
-      {tasks && tasks.length > 0 ? (
+      {/* Uniform task list to match ZoneCard (plain text, no colored indents/tints, consistent 12px gray).
+          Note: for covered sides, the covered names are rendered via SlotAssignmentBody above (as "Covered by"). */}
+      {tasks && tasks.length > 0 && (
         <>
-          <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
-          <div className={`mt-auto ${!hasTM && showDigitalAssists ? "bg-white/25 rounded-b-[2px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
-            <div
-              className={`text-[8.5px] leading-[1.1] overflow-hidden ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF] opacity-75"}`}
-              style={{ fontFamily: "var(--font-atkinson)" }}
-            >
-              {tasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  slotKey={slotKey}
-                  onRemoveTask={onRemoveTask}
-                  onSetTaskColor={onSetTaskColor}
-                  onEditTask={onEditTask}
-                  onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  textSize="text-[8px]"
-                  textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
-                  isPrintPreview={!showDigitalAssists}
-                />
-              ))}
-            </div>
+          <div className="mx-3.5 h-px bg-gray-100" />
+          <div className="px-3 py-2 space-y-0.5">
+            {tasks.map((t) => t.taskLabel).map((loc, i) => (
+              <div
+                key={i}
+                className="px-2.5 py-[5px] text-[12px] leading-snug text-gray-600"
+              >
+                {loc}
+              </div>
+            ))}
           </div>
         </>
-      ) : null}
+      )}
     </div>
   );
 };
@@ -193,13 +179,11 @@ const RRSide: React.FC<{
 function RRSideShell({
   sideLabel,
   color,
-  icon,
   borderColor,
   showDigitalAssists,
   isEmpty,
-  fitChip,
+  isCovered = false,
   breakNum,
-  onCycleBreak,
   coverageTasks,
   slotKey,
   onRemoveTask,
@@ -207,13 +191,11 @@ function RRSideShell({
 }: {
   sideLabel: string;
   color: string;
-  icon: string;
   borderColor?: string;
   showDigitalAssists: boolean;
   isEmpty: boolean;
-  fitChip?: PrerenderedPlacementFit | null;
+  isCovered?: boolean;
   breakNum: BreakGroup;
-  onCycleBreak: () => void;
   coverageTasks: NightSlotTask[];
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
@@ -223,7 +205,7 @@ function RRSideShell({
 
   return (
     <div
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col rounded-2xl flex-1 min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -231,20 +213,29 @@ function RRSideShell({
       }}
     >
       <CardAccentStripe color={color} />
-      <CardSlotHeader
-        icon={icon}
-        label={sideLabel}
-        accentColor={color}
-        compact
-        trailing={(
-          <>
-            <PlacementFitChip fit={fitChip} />
-            <BreakBadge value={breakNum} onCycle={onCycleBreak} size="sm" />
-          </>
-        )}
-      />
+
+      {/* Refined header to match ZoneCard exactly for visual uniformity */}
+      <div className="px-3.5 pt-2.5 flex items-center gap-1.5">
+        <span className="text-[12px] leading-none shrink-0" style={{ color }}>◆</span>
+        <span className="text-[10px] font-bold tracking-[0.07em] uppercase" style={{ color }}>
+          {sideLabel}
+        </span>
+        <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+          {/* Status badge - match zone style. Omit for covered state. */}
+          {!isCovered && (
+            <span className="inline-flex items-center px-1.5 py-[2px] rounded-full text-[9.5px] font-semibold tracking-wide whitespace-nowrap bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80">
+              Strong Fit
+            </span>
+          )}
+          {/* Count pill for break group */}
+          <span className="inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-gray-900/80 text-white text-[10.5px] font-bold tabular-nums leading-none flex-shrink-0">
+            {breakNum || 1}
+          </span>
+        </div>
+      </div>
+
       <div
-        className="flex flex-col flex-1 min-h-0 px-2 pt-1"
+        className="flex flex-col flex-1 min-h-0 px-3 pt-1"
         style={{ paddingBottom: coveragePb }}
       >
         {body}
@@ -295,7 +286,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
   const color = getRRAccent(def.num);
-  const icon = RR_ICONS[def.num] ?? "●";
 
   const wDraftName =
     isDraftMode && draftInfoW?.proposedTmName && !draftInfoW.proposedClear
@@ -322,6 +312,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wRegular = wTasks.filter((t) => !t.isCoverage);
   const wCoverageTasks = wTasks.filter((t) => t.isCoverage);
   const mCoverageTasks = mTasks.filter((t) => t.isCoverage);
+
+  const wCoveredBy = coveredByIndex[wKey] || [];
+  const mCoveredBy = coveredByIndex[mKey] || [];
+  const wIsCovered = wCoveredBy.length > 0;
+  const mIsCovered = mCoveredBy.length > 0;
 
   const longPress = useCardLongPress(
     isTodayKiosk && !isViewOnly && !!onKioskLongPress,
@@ -363,13 +358,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       <RRSideShell
         sideLabel={`${def.label} WOMEN'S`}
         color={color}
-        icon={icon}
         borderColor={borderColor}
         showDigitalAssists={showDigitalAssists}
         isEmpty={wEmpty && !loading}
-        fitChip={fitChipW}
+        isCovered={wIsCovered}
         breakNum={wBreak}
-        onCycleBreak={cycleW}
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={onRemoveTask}
@@ -379,7 +372,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[wKey]}
             tasks={wRegular}
             draftInfo={draftInfoW}
-            coveredByNames={coveredByIndex[wKey]}
+            coveredByNames={wCoveredBy}
             {...sideProps}
           />
         )}
@@ -388,13 +381,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       <RRSideShell
         sideLabel={`${def.label} MEN'S`}
         color={color}
-        icon={icon}
         borderColor={borderColor}
         showDigitalAssists={showDigitalAssists}
         isEmpty={mEmpty && !loading}
-        fitChip={fitChipM}
+        isCovered={mIsCovered}
         breakNum={mBreak}
-        onCycleBreak={cycleM}
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={onRemoveTask}
@@ -404,7 +395,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[mKey]}
             tasks={mRegular}
             draftInfo={draftInfoM}
-            coveredByNames={coveredByIndex[mKey]}
+            coveredByNames={mCoveredBy}
             {...sideProps}
           />
         )}

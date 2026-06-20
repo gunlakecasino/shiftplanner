@@ -11,9 +11,9 @@ import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 export type CardNameScale = "zone" | "rr" | "aux";
 
 const NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
-  zone: 22,
-  rr: 18,
-  aux: 18,
+  zone: 24, /* refined larger for better readability, less cutoff */
+  rr: 24,
+  aux: 20,
 };
 
 const NAME_SIZE_PRINT: Record<CardNameScale, number> = {
@@ -49,12 +49,12 @@ export function coverageBodyPadding(
   return showDigitalAssists ? 10 : 12;
 }
 
-/** 3px accent stripe — identical on Zone / RR / Aux shells. */
+/** 3px accent stripe — matching refined design. */
 export function CardAccentStripe({ color }: { color: string }) {
   return (
     <div
       className="h-[3px] w-full shrink-0"
-      style={{ background: color, boxShadow: "0 1px 0 rgba(255,255,255,0.4) inset" }}
+      style={{ backgroundColor: color }}
     />
   );
 }
@@ -78,26 +78,26 @@ export function CardSlotHeader({
 }) {
   return (
     <div
-      className={`flex items-center justify-between gap-1 px-2 leading-none ${compact ? "pt-1 pb-1" : "pt-1.5 pb-1.5"}`}
-      style={{ borderBottom: `1px solid ${accentColor}22`, color: accentColor }}
+      className={`flex items-center justify-between gap-1.5 px-3.5 ${compact ? "pt-2 pb-1.5" : "pt-2.5 pb-2"} leading-none`}
+      style={{ color: accentColor }}
     >
       <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: accentColor }}>
         {icon != null ? (
           <span className="text-[12px] leading-none drop-shadow-sm shrink-0">{icon}</span>
         ) : null}
         <span
-          className={`font-extrabold uppercase truncate ${titleClassName ?? ""}`}
+          className={`font-bold tracking-[0.07em] uppercase truncate ${titleClassName ?? ""}`}
           style={{
-            fontSize: 10.5,
+            fontSize: 10,
             fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
-            letterSpacing: "0.4px",
+            letterSpacing: "0.07em",
           }}
         >
           {label}
         </span>
       </div>
       {trailing ? (
-        <div className="flex items-center gap-0.5 shrink-0">{trailing}</div>
+        <div className="flex items-center gap-1.5 shrink-0">{trailing}</div>
       ) : null}
     </div>
   );

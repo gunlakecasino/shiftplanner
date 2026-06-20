@@ -19,7 +19,6 @@ import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import ZoneTaskList from "./ZoneTaskList";
-import { PlacementFitChip } from "./PlacementFitChip";
 import { penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -83,7 +82,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onOpenTaskTextEdit,
   onLiveUnassign,
   isLocked = false,
-  fitChip,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -340,7 +338,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(hasTM && !isLocked && isConfigured ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-[3px] touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isConfigured ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${isUnsetBlank ? "sb-aux-blank" : ""} ${isConfigured ? penHoverClass(isPenHovering) : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -356,7 +354,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
-            <PlacementFitChip fit={fitChip} />
             <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
               <BreakBadge
                 value={currentBreak}
