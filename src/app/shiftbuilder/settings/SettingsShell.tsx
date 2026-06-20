@@ -1,13 +1,21 @@
 "use client";
 
 /**
- * OMS Settings — full-page admin surface (replaces the Sudo modal).
- * Hidden entry: long-press the version label on the shift builder footer.
+ * OMS Settings — Velvet / ShiftBuilder-native backend surface.
+ * Hidden entry: long-press the sheet footer version label on the builder.
  */
 
 import React from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowLeft,
+  ChevronRight,
+  LogOut,
+  Moon,
+  Sun,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { useTheme } from "../hooks/useTheme";
@@ -19,7 +27,9 @@ import {
   buildDayDefs,
   parseLocalDateISO,
   formatLocalDateISO,
+  MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
+import { shiftBuilderVersionLabel } from "../version";
 import { GoldHairline } from "../sudo/SudoGlass";
 import { TeamTab } from "../sudo/TeamTab";
 import { TasksTab } from "../sudo/TasksTab";
@@ -29,6 +39,15 @@ import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
 import { TMDefaultsTab } from "../sudo/TMDefaultsTab";
 import { WeeklyRosterTab } from "../sudo/WeeklyRosterTab";
+import {
+  SETTINGS_SECTIONS,
+  SETTINGS_TABS,
+  type SettingsSection,
+  type SettingsTab,
+  resolveSettingsTab,
+  sectionForTab,
+  tabMeta,
+} from "./settingsConfig";
 
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
@@ -38,52 +57,6 @@ const BatchPlannerTab = dynamic(
   () => import("../sudo/BatchPlannerTab").then((m) => ({ default: m.BatchPlannerTab })),
   { ssr: false },
 );
-
-type SettingsTab =
-  | "dashboard"
-  | "tmDefaults"
-  | "tasks"
-  | "defaults"
-  | "team"
-  | "weeklyRoster"
-  | "users"
-  | "engine"
-  | "planner"
-  | "reports";
-
-type TabDef = {
-  id: SettingsTab;
-  label: string;
-  msIcon: string;
-  section: "operations" | "people" | "engine" | "insights";
-};
-
-const TABS: TabDef[] = [
-  { id: "tmDefaults", label: "TM Defaults", section: "operations", msIcon: "event_repeat" },
-  { id: "tasks", label: "Tasks", section: "operations", msIcon: "checklist" },
-  { id: "defaults", label: "Card Defaults", section: "operations", msIcon: "layers" },
-  { id: "team", label: "Team", section: "people", msIcon: "group" },
-  { id: "weeklyRoster", label: "Weekly Roster", section: "people", msIcon: "table_chart" },
-  { id: "users", label: "Users", section: "people", msIcon: "manage_accounts" },
-  { id: "engine", label: "Engine Config", section: "engine", msIcon: "tune" },
-  { id: "planner", label: "Batch Planner", section: "engine", msIcon: "bolt" },
-  { id: "reports", label: "Reports", section: "insights", msIcon: "bar_chart" },
-  { id: "dashboard", label: "Dashboard", section: "insights", msIcon: "dashboard" },
-];
-
-const SECTION_LABELS: Record<TabDef["section"], string> = {
-  operations: "Operations",
-  people: "People",
-  engine: "Engine",
-  insights: "Insights",
-};
-
-const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
-
-function resolveInitialTab(param: string | null): SettingsTab {
-  if (param && VALID_TABS.has(param)) return param as SettingsTab;
-  return "dashboard";
-}
 
 function resolveWeekContext() {
   const today = currentShiftDate();
@@ -108,21 +81,128 @@ function resolveWeekContext() {
   return { weekStart, selectedDay };
 }
 
-function InsufficientPermNotice({ feature, isDark = false }: { feature: string; isDark?: boolean }) {
+function InsufficientPermNotice({
+  feature,
+  isDark = false,
+}: {
+  feature: string;
+  isDark?: boolean;
+}) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-6">
+    <div className="flex min-h-[320px] flex-col items-center justify-center px-8 text-center">
       <div
         className={cn(
-          "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-mono tracking-[1px] mb-4 border border-amber-500/40",
-          isDark ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-700",
+          "mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-mono tracking-[1px]",
+          isDark
+            ? "border-amber-500/35 bg-amber-500/10 text-amber-300"
+            : "border-amber-500/40 bg-amber-50 text-amber-800",
         )}
       >
         PRIVILEGE REQUIRED
       </div>
-      <div className="text-xl font-semibold tracking-[-0.3px] mb-2">{feature}</div>
-      <div className={cn("max-w-sm text-[13px] leading-snug", isDark ? "text-zinc-400" : "text-[#5A5A5F]")}>
-        Your current role does not grant access to this tool. Contact a sudo_admin to request the necessary privilege.
-      </div>
+      <div className="mb-2 text-xl font-semibold tracking-[-0.3px]">{feature}</div>
+      <p
+        className={cn(
+          "max-w-sm text-[13px] leading-relaxed",
+          isDark ? "text-zinc-400" : "text-[#6C6C72]",
+        )}
+      >
+        Your role does not include this tool. Contact a sudo_admin if you need access.
+      </p>
+    </div>
+  );
+}
+
+function SettingsTabPanel({
+  activeTab,
+  isDark,
+  canRunEngine,
+  canManageTeam,
+  currentOperator,
+  currentNightId,
+  weekStart,
+  permissions,
+  onDataChanged,
+  onNavigate,
+}: {
+  activeTab: SettingsTab;
+  isDark: boolean;
+  canRunEngine: boolean;
+  canManageTeam: boolean;
+  currentOperator: ReturnType<typeof useOpsAuth>["user"];
+  currentNightId: string | null;
+  weekStart: Date;
+  permissions: ReturnType<typeof useOpsAuth>["permissions"];
+  onDataChanged: () => void;
+  onNavigate: (tab: SettingsTab) => void;
+}) {
+  const legibility = cn(
+    isDark
+      ? "[&_.bg-zinc-950]:bg-[#1C1C1E] [&_.bg-zinc-900]:bg-[#171719] [&_.text-zinc-100]:text-[#F2F2F4] [&_.text-zinc-400]:text-[#A1A1AA] [&_.border-zinc-800]:border-[#3A3A3C]"
+      : "[&_.bg-zinc-950]:bg-white [&_.bg-zinc-900]:bg-[#F2F2F0] [&_.text-zinc-100]:text-[#1C1C1E] [&_.text-zinc-400]:text-[#6C6C72] [&_.border-zinc-800]:border-[#E5E5E7] [&_.text-zinc-200]:text-[#2C2C2E]",
+  );
+
+  return (
+    <div className={legibility}>
+      {activeTab === "dashboard" && (
+        <DashboardTab
+          onDataChanged={onDataChanged}
+          isDark={isDark}
+          currentOperator={currentOperator}
+          currentNightId={currentNightId}
+          weekStart={weekStart}
+          onNavigate={(tab) => onNavigate(tab as SettingsTab)}
+          permissions={permissions}
+        />
+      )}
+      {activeTab === "tmDefaults" && (
+        <TMDefaultsTab
+          onDataChanged={onDataChanged}
+          isDark={isDark}
+          currentOperator={currentOperator}
+          weekStart={weekStart}
+        />
+      )}
+      {activeTab === "team" &&
+        (canManageTeam ? (
+          <TeamTab onDataChanged={onDataChanged} isDark={isDark} />
+        ) : (
+          <InsufficientPermNotice feature="Team Management" isDark={isDark} />
+        ))}
+      {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
+        <UsersTab onDataChanged={onDataChanged} isDark={isDark} />
+      )}
+      {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
+        <div className="py-16 text-center text-[13px] text-[#6C6C72]">
+          Only sudo_admins can manage user privileges.
+        </div>
+      )}
+      {activeTab === "tasks" && (
+        <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />
+      )}
+      {activeTab === "reports" && <ReportsTab />}
+      {activeTab === "engine" &&
+        (canRunEngine ? (
+          <EngineConfigTab onDataChanged={onDataChanged} />
+        ) : (
+          <InsufficientPermNotice feature="Engine Config" isDark={isDark} />
+        ))}
+      {activeTab === "planner" &&
+        (canRunEngine ? (
+          <BatchPlannerTab onDataChanged={onDataChanged} />
+        ) : (
+          <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
+        ))}
+      {activeTab === "defaults" && (
+        <DefaultsTab
+          onDataChanged={onDataChanged}
+          currentNightId={currentNightId}
+          weekStart={weekStart}
+        />
+      )}
+      {activeTab === "weeklyRoster" && (
+        <WeeklyRosterTab onDataChanged={onDataChanged} isDark={isDark} weekStart={weekStart} />
+      )}
     </div>
   );
 }
@@ -130,16 +210,25 @@ function InsufficientPermNotice({ feature, isDark = false }: { feature: string; 
 export function SettingsShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
 
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canManageTeam = permissions?.canManageTeam ?? false;
 
   const [activeTab, setActiveTab] = React.useState<SettingsTab>(() =>
-    resolveInitialTab(searchParams.get("tab")),
+    resolveSettingsTab(searchParams.get("tab")),
+  );
+  const [activeSection, setActiveSection] = React.useState<SettingsSection>(() =>
+    sectionForTab(resolveSettingsTab(searchParams.get("tab"))),
   );
   const [dataEpoch, setDataEpoch] = React.useState(0);
+  const [now, setNow] = React.useState(() => new Date());
+
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const { weekStart, selectedDay } = React.useMemo(() => resolveWeekContext(), [dataEpoch]);
   const currentNight = useCurrentNight(selectedDay);
@@ -157,223 +246,364 @@ export function SettingsShell() {
     }
   }, [selectedDay.date, currentNight.queryClient]);
 
-  const handleTabSelect = (tab: SettingsTab) => {
-    setActiveTab(tab);
-    router.replace(`/shiftbuilder/settings?tab=${tab}`, { scroll: false });
-  };
+  const visibleTabs = React.useMemo(
+    () =>
+      SETTINGS_TABS.filter(
+        (t) => t.id !== "users" || currentOperator?.role === "sudo_admin",
+      ),
+    [currentOperator?.role],
+  );
 
-  const visibleTabs = TABS.filter((t) => t.id !== "users" || currentOperator?.role === "sudo_admin");
+  const sectionTabs = React.useMemo(
+    () => visibleTabs.filter((t) => t.section === activeSection),
+    [visibleTabs, activeSection],
+  );
 
-  const sections = (["operations", "people", "engine", "insights"] as const).map((section) => ({
-    id: section,
-    label: SECTION_LABELS[section],
-    tabs: visibleTabs.filter((t) => t.section === section),
-  }));
+  const activeMeta = tabMeta(activeTab);
+  const sectionMeta = SETTINGS_SECTIONS.find((s) => s.id === activeSection)!;
+
+  const handleTabSelect = React.useCallback(
+    (tab: SettingsTab) => {
+      setActiveTab(tab);
+      setActiveSection(sectionForTab(tab));
+      router.replace(`/shiftbuilder/settings?tab=${tab}`, { scroll: false });
+    },
+    [router],
+  );
+
+  const handleSectionSelect = React.useCallback(
+    (section: SettingsSection) => {
+      setActiveSection(section);
+      const first = visibleTabs.find((t) => t.section === section);
+      if (first) handleTabSelect(first.id);
+    },
+    [visibleTabs, handleTabSelect],
+  );
+
+  const isTabDisabled = React.useCallback(
+    (tab: SettingsTab) => {
+      if (tab === "planner" || tab === "engine") return !canRunEngine;
+      if (tab === "team") return !canManageTeam;
+      return false;
+    },
+    [canRunEngine, canManageTeam],
+  );
+
+  const formattedDate = `${MONTH_LONG[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+  const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const substrate = isDark ? "#0F0F12" : "#F8F8F9";
+  const paperBg = isDark ? "#16161A" : "#FFFFFF";
+  const paperBorder = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+  const muted = isDark ? "#8E8E93" : "#6B7280";
 
   return (
     <div
-      className={cn(
-        "min-h-screen flex flex-col",
-        isDark ? "bg-[#0A0A0B] text-zinc-100" : "bg-[#F2F2F0] text-[#1C1C1E]",
-      )}
+      className="sb-content-enter min-h-screen w-full"
+      style={{
+        background: substrate,
+        color: isDark ? "#F2F2F4" : "#1C1C1E",
+        fontFamily: "var(--font-atkinson, system-ui, -apple-system, sans-serif)",
+      }}
     >
-      <GoldHairline isDark={isDark} />
+      {/* Floor grid — same language as PinGate / launchpad */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.028]"
+        style={{
+          backgroundImage: isDark
+            ? "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)"
+            : "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
 
-      <header
-        className={cn(
-          "flex items-center justify-between px-6 py-3.5 border-b shrink-0",
-          isDark ? "border-white/10 bg-[#111113]" : "border-black/10 bg-[#F8F8F6]",
-        )}
+      {/* Quiet status bar */}
+      <div
+        className="relative z-10 flex h-11 items-center justify-between border-b px-6 text-[11px] tracking-[0.4px]"
+        style={{
+          borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+          color: muted,
+          background: isDark ? "rgba(15,15,18,0.82)" : "rgba(248,248,249,0.82)",
+          backdropFilter: "blur(12px)",
+        }}
       >
-        <div className="flex items-center gap-4 min-w-0">
+        <div className="flex items-center gap-3">
+          <span style={{ fontSize: 10, letterSpacing: "1.5px", fontWeight: 600 }}>GLCR</span>
+          <span style={{ width: 1, height: 12, background: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)" }} />
+          <span>BACKEND CONFIGURATION</span>
+        </div>
+        <div className="flex items-center gap-4 tabular-nums">
+          <span>{formattedDate}</span>
+          <span>{timeString}</span>
+        </div>
+      </div>
+
+      <div className="relative z-10 mx-auto w-full max-w-[1120px] px-6 pb-14 pt-10">
+        {/* Hero — succinct */}
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "2.8px",
+                fontWeight: 600,
+                color: muted,
+                marginBottom: 8,
+              }}
+            >
+              BEHIND THE CANVAS
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "clamp(36px, 4.5vw, 52px)",
+                fontWeight: 800,
+                letterSpacing: "-2px",
+                lineHeight: 0.92,
+                fontFamily: "var(--font-bricolage, var(--font-atkinson), system-ui)",
+                color: isDark ? "#F2F2F4" : "#111",
+              }}
+            >
+              Settings
+            </h1>
+            <p
+              className="mt-2 max-w-md text-[14px] leading-snug"
+              style={{ color: isDark ? "#A1A1AA" : "#4B5563" }}
+            >
+              Team, tasks, engine, and roster — the quiet machinery behind every grave deployment.
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={() => router.push("/shiftbuilder")}
-            className={cn(
-              "sb-interactive flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium border",
-              isDark
-                ? "border-white/10 text-zinc-300 hover:bg-white/5"
-                : "border-black/10 text-[#3C3C43] hover:bg-black/5",
-            )}
+            className="sb-interactive inline-flex items-center gap-2 self-start rounded-2xl border px-4 py-2.5 text-[13px] font-semibold sm:self-auto"
+            style={{
+              borderColor: paperBorder,
+              background: isDark ? "rgba(255,255,255,0.04)" : "#fff",
+              color: isDark ? "#E5E5E7" : "#1C1C1E",
+              boxShadow: isDark
+                ? "inset 0 1px 0 rgba(255,255,255,0.05)"
+                : "0 4px 14px -8px rgba(0,0,0,0.12)",
+            }}
           >
-            <span className="ms" style={{ fontSize: 16 }}>arrow_back</span>
+            <ArrowLeft size={15} strokeWidth={2.25} />
             Shift Builder
           </button>
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="ms text-[#B89708]" style={{ fontSize: 20 }}>settings</span>
-            <span className="font-mono font-semibold text-[15px] tracking-[1.2px] truncate">OMS Settings</span>
-            <span className="text-[11px] opacity-50 hidden sm:inline">·</span>
-            <span className="font-mono text-[12px] opacity-70 truncate hidden sm:inline">
-              {currentOperator?.username ?? "operator"}
-            </span>
-          </div>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] shrink-0">
-          {currentOperator && (
+        {/* Sticky glass control cluster */}
+        <div
+          className="sticky top-3 z-30 mb-5 rounded-full border px-3 py-2"
+          style={{
+            background: isDark ? "rgba(9,9,11,0.94)" : "rgba(249,247,244,0.94)",
+            backdropFilter: "blur(22px)",
+            WebkitBackdropFilter: "blur(22px)",
+            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.075)",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -10px rgba(0,0,0,0.14)",
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {SETTINGS_SECTIONS.map((section) => {
+              const isActive = activeSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => handleSectionSelect(section.id)}
+                  className="sb-interactive rounded-full px-3.5 py-1.5 text-[12px] font-semibold tracking-[-0.01em] transition-colors"
+                  style={{
+                    background: isActive
+                      ? `${section.accent}${isDark ? "22" : "18"}`
+                      : "transparent",
+                    color: isActive
+                      ? isDark
+                        ? "#F2F2F4"
+                        : "#111"
+                      : muted,
+                    boxShadow: isActive ? `inset 0 0 0 1px ${section.accent}44` : undefined,
+                  }}
+                >
+                  {section.label}
+                </button>
+              );
+            })}
+
+            <div className="mx-1 hidden h-5 w-px sm:block" style={{ background: paperBorder }} />
+
             <button
               type="button"
-              onClick={() => {
-                if (confirm(`Sign out ${currentOperator.full_name}?`)) {
-                  logoutOperator();
-                  router.push("/shiftbuilder");
-                }
-              }}
-              className={cn(
-                "sb-interactive px-3 py-1 rounded-full text-[10px] font-mono tracking-wider border",
-                isDark
-                  ? "border-white/10 text-zinc-400 hover:text-zinc-100 hover:bg-white/5"
-                  : "border-black/10 text-[#6C6C72] hover:text-[#111] hover:bg-black/5",
-              )}
+              onClick={toggleTheme}
+              className="icon-btn sb-interactive ml-auto flex h-8 w-8 items-center justify-center rounded-full"
+              title={isDark ? "Light mode" : "Dark mode"}
+              style={{ color: muted }}
             >
-              SIGN OUT
+              {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
-          )}
-        </div>
-      </header>
 
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        <nav
-          className={cn(
-            "w-[220px] shrink-0 border-r overflow-y-auto py-4 px-3",
-            isDark ? "border-white/10 bg-[#0A0A0B]" : "border-black/10 bg-[#F2F2F0]",
-          )}
-        >
-          {sections.map((section) => (
-            <div key={section.id} className="mb-5 last:mb-0">
-              <div
-                className={cn(
-                  "px-3 mb-1.5 text-[10px] font-mono tracking-[1.4px] uppercase",
-                  isDark ? "text-zinc-500" : "text-[#9CA3AF]",
-                )}
+            {currentOperator && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Sign out ${currentOperator.full_name}?`)) {
+                    logoutOperator();
+                    router.push("/shiftbuilder");
+                  }
+                }}
+                className="sb-interactive flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium"
+                style={{
+                  borderColor: paperBorder,
+                  color: muted,
+                }}
               >
-                {section.label}
-              </div>
-              <div className="space-y-0.5">
-                {section.tabs.map((t) => {
-                  const isActive = activeTab === t.id;
-                  let insufficientPerm = false;
-                  if (t.id === "planner" || t.id === "engine") insufficientPerm = !canRunEngine;
-                  if (t.id === "team") insufficientPerm = !canManageTeam;
-                  const isDisabled = insufficientPerm;
-
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => !isDisabled && handleTabSelect(t.id)}
-                      disabled={isDisabled}
-                      title={insufficientPerm ? "Insufficient privileges for this tool" : undefined}
-                      className={cn(
-                        "sb-list-row sb-interactive w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-[13px] font-medium tracking-[0.2px] text-left",
-                        isActive
-                          ? isDark
-                            ? "bg-[#B89708]/18 text-[#F5D78A] shadow-sm font-semibold"
-                            : "bg-[#B89708]/14 text-[#6B4E00] shadow-sm font-semibold"
-                          : isDisabled
-                            ? isDark
-                              ? "text-zinc-600 cursor-not-allowed opacity-60"
-                              : "text-[#9CA3AF] cursor-not-allowed opacity-60"
-                            : isDark
-                              ? "text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-                              : "text-[#2C2C2E] hover:bg-black/5 hover:text-[#111111]",
-                      )}
-                    >
-                      <span className="ms" style={{ fontSize: 17, opacity: isActive ? 1 : 0.7 }}>
-                        {t.msIcon}
-                      </span>
-                      <span className="flex-1 truncate">{t.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <main
-          className={cn(
-            "flex-1 min-h-0 overflow-auto p-6 text-[13.5px] leading-snug",
-            isDark ? "bg-[#111113] text-[#F2F2F4]" : "bg-[#F8F8F6] text-[#1C1C1E]",
-          )}
-        >
-          <div
-            className={cn(
-              isDark
-                ? "[&_.bg-zinc-950]:bg-[#1C1C1E] [&_.bg-zinc-900]:bg-[#171719] [&_.text-zinc-100]:text-[#F2F2F4] [&_.text-zinc-400]:text-[#A1A1AA] [&_.border-zinc-800]:border-[#3A3A3C]"
-                : "[&_.bg-zinc-950]:bg-white [&_.bg-zinc-900]:bg-[#F2F2F0] [&_.text-zinc-100]:text-[#1C1C1E] [&_.text-zinc-400]:text-[#6C6C72] [&_.border-zinc-800]:border-[#E5E5E7] [&_.text-zinc-200]:text-[#2C2C2E]",
-            )}
-          >
-            {activeTab === "dashboard" && (
-              <DashboardTab
-                onDataChanged={onDataChanged}
-                isDark={isDark}
-                currentOperator={currentOperator}
-                currentNightId={currentNightId}
-                weekStart={weekStart}
-                onNavigate={(tab) => handleTabSelect(tab as SettingsTab)}
-                permissions={permissions}
-              />
-            )}
-            {activeTab === "tmDefaults" && (
-              <TMDefaultsTab
-                onDataChanged={onDataChanged}
-                isDark={isDark}
-                currentOperator={currentOperator}
-                weekStart={weekStart}
-              />
-            )}
-            {activeTab === "team" &&
-              (canManageTeam ? (
-                <TeamTab onDataChanged={onDataChanged} isDark={isDark} />
-              ) : (
-                <InsufficientPermNotice feature="Team Management" isDark={isDark} />
-              ))}
-            {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
-              <UsersTab onDataChanged={onDataChanged} isDark={isDark} />
-            )}
-            {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
-              <div className="p-8 text-center text-[#6C6C72]">Only sudo_admins can manage user privileges.</div>
-            )}
-            {activeTab === "tasks" && <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} />}
-            {activeTab === "reports" && <ReportsTab />}
-            {activeTab === "engine" &&
-              (canRunEngine ? (
-                <EngineConfigTab onDataChanged={onDataChanged} />
-              ) : (
-                <InsufficientPermNotice feature="Engine Config" isDark={isDark} />
-              ))}
-            {activeTab === "planner" &&
-              (canRunEngine ? (
-                <BatchPlannerTab onDataChanged={onDataChanged} />
-              ) : (
-                <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
-              ))}
-            {activeTab === "defaults" && (
-              <DefaultsTab
-                onDataChanged={onDataChanged}
-                currentNightId={currentNightId}
-                weekStart={weekStart}
-              />
-            )}
-            {activeTab === "weeklyRoster" && (
-              <WeeklyRosterTab onDataChanged={onDataChanged} isDark={isDark} weekStart={weekStart} />
+                <span className="max-w-[120px] truncate">{currentOperator.username}</span>
+                <LogOut size={13} />
+              </button>
             )}
           </div>
-        </main>
-      </div>
+        </div>
 
-      <footer
-        className={cn(
-          "border-t px-6 py-2 text-[10px] font-mono flex items-center justify-between shrink-0",
-          isDark ? "border-white/10 text-zinc-500 bg-[#0A0A0B]" : "border-black/10 text-[#6C6C72] bg-[#F2F2F0]",
-        )}
-      >
-        <span>
-          OMS Settings · {currentOperator?.full_name ?? "operator"} · all writes audited
-        </span>
-        <span>pin-gated</span>
-      </footer>
+        {/* Section tab chips */}
+        <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {sectionTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const disabled = isTabDisabled(tab.id);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => !disabled && handleTabSelect(tab.id)}
+                title={disabled ? "Insufficient privileges" : tab.description}
+                className={cn(
+                  "sb-interactive flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-left transition-all",
+                  disabled && "cursor-not-allowed opacity-45",
+                )}
+                style={{
+                  background: isActive ? paperBg : isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.65)",
+                  borderColor: isActive ? `${sectionMeta.accent}66` : paperBorder,
+                  boxShadow: isActive
+                    ? `0 0 0 1px ${sectionMeta.accent}22, 0 6px 18px -12px rgba(0,0,0,0.25)`
+                    : undefined,
+                }}
+              >
+                <Icon
+                  size={15}
+                  strokeWidth={2.1}
+                  style={{ color: isActive ? sectionMeta.accent : muted }}
+                />
+                <span
+                  className="text-[13px] font-semibold tracking-[-0.02em]"
+                  style={{ color: isActive ? (isDark ? "#F2F2F4" : "#111") : muted }}
+                >
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Paper artboard */}
+        <motion.div
+          layout
+          className="overflow-hidden rounded-[20px] border"
+          style={{
+            background: paperBg,
+            borderColor: paperBorder,
+            boxShadow: isDark
+              ? "0 24px 60px -28px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.05)"
+              : "0 20px 50px -24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.9)",
+          }}
+        >
+          <GoldHairline isDark={isDark} />
+
+          {/* Panel header */}
+          <div
+            className="flex items-center justify-between gap-4 border-b px-6 py-4"
+            style={{ borderColor: paperBorder }}
+          >
+            <div className="min-w-0">
+              <div
+                className="text-[10px] font-mono uppercase tracking-[1.6px]"
+                style={{ color: sectionMeta.accent }}
+              >
+                {sectionMeta.label}
+              </div>
+              <div className="mt-0.5 flex items-center gap-2">
+                <h2
+                  className="truncate text-[18px] font-bold tracking-[-0.4px]"
+                  style={{ fontFamily: "var(--font-bricolage, var(--font-atkinson))" }}
+                >
+                  {activeMeta.label}
+                </h2>
+                <ChevronRight size={14} style={{ color: muted, flexShrink: 0 }} />
+              </div>
+              <p className="mt-1 text-[12px]" style={{ color: muted }}>
+                {activeMeta.description}
+              </p>
+            </div>
+            <div
+              className="hidden shrink-0 rounded-full px-3 py-1 text-[10px] font-mono tracking-wider sm:block"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                color: muted,
+              }}
+            >
+              PIN-GATED · AUDITED
+            </div>
+          </div>
+
+          {/* Tab body */}
+          <div className="min-h-[min(68vh,720px)] px-6 py-5 text-[13.5px] leading-snug">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+              >
+                <SettingsTabPanel
+                  activeTab={activeTab}
+                  isDark={isDark}
+                  canRunEngine={canRunEngine}
+                  canManageTeam={canManageTeam}
+                  currentOperator={currentOperator}
+                  currentNightId={currentNightId}
+                  weekStart={weekStart}
+                  permissions={permissions}
+                  onDataChanged={onDataChanged}
+                  onNavigate={handleTabSelect}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Sheet footer */}
+          <div
+            className="flex items-center justify-between gap-3 border-t px-6 py-2.5 text-[9pt] leading-none tracking-[0.1px]"
+            style={{
+              borderColor: paperBorder,
+              color: muted,
+              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+            }}
+          >
+            <div className="min-w-0 truncate">
+              <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+                SBS
+              </span>
+              <span className="mx-1 opacity-60">©</span>
+              <span>OMS Settings</span>
+              <span className="mx-1 opacity-40">—</span>
+              <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+                {currentOperator?.full_name ?? "operator"}
+              </span>
+            </div>
+            <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
