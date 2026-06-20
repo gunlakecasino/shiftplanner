@@ -70,7 +70,8 @@ export interface FloatingNavProps {
   userInitials?: string;
   currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
-  onOpenSudo?: () => void;
+  /** Opens OMS Settings (optional tab id, e.g. "tasks"). */
+  onOpenSettings?: (tab?: string) => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
   onRosterToggle?: () => void;
@@ -116,7 +117,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     contentMaxWidth,
     currentUser,
     onLogout,
-    onOpenSudo,
+    onOpenSettings,
     rosterOpen = false,
     onRosterToggle,
     canvasMode = 'builder',
@@ -172,9 +173,7 @@ export default function FloatingNav(props: FloatingNavProps) {
   };
 
   const handleDefaultTasks = () => {
-    // Default Tasks often lives in Sudo or command palette.
-    // Open Sudo as a reasonable fallback (user can go to Tasks tab).
-    onOpenSudo?.();
+    onOpenSettings?.("tasks");
     setMoreOpen(false);
   };
 
@@ -418,7 +417,6 @@ export default function FloatingNav(props: FloatingNavProps) {
             <div className="absolute right-0 mt-10 w-44 rounded-xl border bg-white shadow-lg py-1 z-[80] text-[13px]" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               <div className="px-3 py-2 text-[12px] text-gray-500 border-b">{currentUser.username} · {currentUser.role}</div>
               <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onLogout}>Sign out</button>
-              <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onOpenSudo}>Open Sudo</button>
             </div>
           )}
 
@@ -494,9 +492,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                       Copy Yesterday Tasks
                     </button>
                     <div className="h-px bg-gray-100 my-1 mx-2" />
-                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onOpenSudo}>
-                      Open Sudo
-                    </button>
                     <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onLaunchpad}>
                       Back to Launchpad
                     </button>

@@ -5,7 +5,7 @@ import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 /**
  * Bundles all pure-UI expand/collapse panel state for the floating Roster rail,
- * plus the GRAVE-only filter, roster search, and command-palette open state.
+ * plus the GRAVE-only filter, and roster search.
  *
  * Nothing in here touches Supabase — all state is either ephemeral or
  * persisted to localStorage.
@@ -44,7 +44,6 @@ export function useRosterPanels() {
   const [calledOffExpanded, setCalledOffExpanded] = useState(true);
 
   // Modal / flyout toggles.
-  const [sudoOpen, setSudoOpen] = useState(false);
   const [xaiSphereOpen, setXaiSphereOpen] = useState(false);
 
   // Roster rail group expand/collapse defaults.
@@ -75,13 +74,6 @@ export function useRosterPanels() {
     }
   }, [graveOnly]);
 
-  // Command palette open/close + optional slot/person context.
-  const [cmdkOpen, setCmdkOpen] = useState(false);
-  const [cmdkInitialContext, setCmdkInitialContext] = useState<{
-    type: "slot" | "person";
-    value: string;
-  } | null>(null);
-
   // Weekly Overview panel (live table). Persisted like roster (tablet/desktop split).
   const [weeklyOverviewOpen, setWeeklyOverviewOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -104,7 +96,6 @@ export function useRosterPanels() {
     otherTmsExpanded, setOtherTmsExpanded,
     rosterOpen, setRosterOpen,
     calledOffExpanded, setCalledOffExpanded,
-    sudoOpen, setSudoOpen,
     xaiSphereOpen, setXaiSphereOpen,
     deployedExpanded, setDeployedExpanded,
     pmOverlapsExpanded, setPmOverlapsExpanded,
@@ -115,8 +106,6 @@ export function useRosterPanels() {
     scheduledAMExpanded, setScheduledAMExpanded,
     rosterSearch, setRosterSearch,
     graveOnly, setGraveOnly,
-    cmdkOpen, setCmdkOpen,
-    cmdkInitialContext, setCmdkInitialContext,
     weeklyOverviewOpen, setWeeklyOverviewOpen,
   };
 }

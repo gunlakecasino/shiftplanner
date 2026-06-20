@@ -1134,7 +1134,6 @@ function AuthedShiftBuilder() {
     otherTmsExpanded, setOtherTmsExpanded,
     rosterOpen, setRosterOpen,
     calledOffExpanded, setCalledOffExpanded,
-    sudoOpen, setSudoOpen,
     xaiSphereOpen, setXaiSphereOpen,
     deployedExpanded, setDeployedExpanded,
     pmOverlapsExpanded, setPmOverlapsExpanded,
@@ -1146,16 +1145,9 @@ function AuthedShiftBuilder() {
     rosterSearch,
     setRosterSearch: _setRosterSearch, // eslint-disable-line @typescript-eslint/no-unused-vars -- provided by hook for rail internals; not called from Client scope
     graveOnly, setGraveOnly,
-    cmdkOpen, setCmdkOpen,
-    cmdkInitialContext, setCmdkInitialContext,
   } = useRosterPanels();
 
-  // Loader components for heavy surfaces, dynamically imported at runtime (see effects below).
-  // Declared here (after useRosterPanels) so hook call order is stable.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic loader from import(); any is the pragmatic type for lazy component factories in this Turbopack-safe pattern (documented)
-  const [CommandPaletteLoader, setCommandPaletteLoader] = useState<React.ComponentType<any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic loader from import(); any is the pragmatic type for lazy component factories in this Turbopack-safe pattern (documented)
-  const [SudoWindowLoader, setSudoWindowLoader] = useState<React.ComponentType<any> | null>(null);
+  const router = useRouter();
 
   // Weekly Overview focus state (TM tap in the live table fades other rows + dims non-matching cards on current day's canvas;
   // detail shows the TM's full week placements + "where they are"). Cleared on close/day change.
@@ -1182,46 +1174,14 @@ function AuthedShiftBuilder() {
     canLockUnlock = false,
   } = permissions || {};
 
-  // Load the heavy admin surfaces (CommandPalette + SudoWindow) via their thin
-  // wrapper modules ONLY when first opened. The wrappers themselves do a second
-  // dynamic import of the real heavy component. This double-indirect + effect-driven
-  // pattern keeps the import() expressions and the useCommandActions / Sudo dep
-  // graphs completely out of the top-level static module evaluation of this giant
-  // Client file. This is required to avoid repeated Turbopack "module factory is not
-  // available" and follow-on ReferenceErrors (e.g. bare LazySudoWindow) after HMR
-  // or hard refresh. The canvas (and OpsStatusBar with ai session tokens pill) can
-  // only mount if Client itself evaluates cleanly.
-  React.useEffect(() => {
-    if (cmdkOpen && !CommandPaletteLoader) {
-      import("./components/LazyCommandPalette").then((mod) => {
-        if (mod.LazyCommandPalette) {
-          setCommandPaletteLoader(() => mod.LazyCommandPalette);
-        }
-      });
-    }
-  }, [cmdkOpen, CommandPaletteLoader]);
-
-  React.useEffect(() => {
-    if (sudoOpen && !SudoWindowLoader) {
-      import("./components/LazySudoWindow").then((mod) => {
-        if (mod.LazySudoWindow) {
-          setSudoWindowLoader(() => mod.LazySudoWindow);
-        }
-      });
-    }
-  }, [sudoOpen, SudoWindowLoader]);
-
-  const handleOpenSudo = useCallback(() => {
-    // Prefer the new granular permission system. Just flip the flag; the effect
-    // above will perform the dynamic import of the thin loader if not already
-    // present (matching the cmdkOpen pattern exactly).
-    if (permissions?.canAccessSudo) {
-      setSudoOpen(true);
-    } else {
-      console.warn("[shiftbuilder] Sudo access denied — role:", currentOperator?.role);
-      // Future: surface a nice toast "Insufficient privileges for Sudo"
-    }
-  }, [permissions?.canAccessSudo, currentOperator?.role, setSudoOpen]);
+  const handleOpenSettings = useCallback(
+    (tab?: string) => {
+      if (!permissions?.canAccessSudo) return;
+      const path = tab ? `/shiftbuilder/settings?tab=${tab}` : "/shiftbuilder/settings";
+      router.push(path);
+    },
+    [permissions?.canAccessSudo, router],
+  );
 
   // Persist the exact selected GRAVE day (calendar date) so refresh restores
   // both the correct weekStart and the day index within that week.
@@ -1264,10 +1224,6 @@ function AuthedShiftBuilder() {
   const [draftEngineWarnings, setDraftEngineWarnings] = useState<string[]>([]);
   // Bumps when a `make`/`remove` command lands so the load effect refetches.
   const [tmCommandEpoch, setTMCommandEpoch] = useState(0);
-
-  // Bumps when Sudo mutates per-night operational data (breaks, tasks, assignments, etc.)
-  // so the current night's UI (including break sheet) refreshes without the user having to switch days.
-  const [sudoDataEpoch, setSudoDataEpoch] = useState(0);
 
   // === Print Command Center ===
   const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
@@ -1858,15 +1814,6 @@ function AuthedShiftBuilder() {
     return result;
   };
 
-  const triggerGrokBoardAnalysis = () => {
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — analysis disabled", "error");
-      return;
-    }
-    // Opens the palette (if not already) and the palette's global board button will be visible and prominent
-    setCmdkOpen(true);
-    // The prominent "Grok: Analyze Full Board" button is always at the top of the palette now
-  };
   // Pop the most recently added AUX slot. Defaults are protected so the
   // operator can't accidentally remove SUPPORT 1 / TRASH 1 / etc. Any TM
   // assigned to the popped slot is automatically freed (their assignment
@@ -1937,7 +1884,6 @@ function AuthedShiftBuilder() {
     const handler = (e: KeyboardEvent) => {
       const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
       const isRedo = (e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y");
-      const isCommandPalette = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
       if (isUndo) {
         e.preventDefault();
         const prev = shiftHistory.undo();
@@ -1947,10 +1893,6 @@ function AuthedShiftBuilder() {
         e.preventDefault();
         const next = shiftHistory.redo();
         if (next) applySnapshot(next);
-      }
-      if (isCommandPalette) {
-        e.preventDefault();
-        setCmdkOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
@@ -1981,29 +1923,6 @@ function AuthedShiftBuilder() {
   const handleSlotClose = React.useCallback(() => {
     setSelectedSlotKey(null);
   }, []);
-
-  const openPaletteForPerson = React.useCallback((tm: any) => {
-    // Use id when available for stability; fall back to name
-    const value = tm?.id || tm?.fullName || tm?.name || '';
-    setCmdkInitialContext({ type: 'person', value });
-    setCmdkOpen(true);
-  }, []);
-
-  // When palette closes, clear the one-time context so next manual ⌘K is clean.
-  // Focus management now lives entirely inside CommandPalette (more reliable single source of truth).
-  React.useEffect(() => {
-    if (!cmdkOpen) {
-      const t = setTimeout(() => setCmdkInitialContext(null), 50);
-      return () => clearTimeout(t);
-    }
-  }, [cmdkOpen]);
-
-  // When the main palette opens, close the placement pad (focus conflict on iPad)
-  React.useEffect(() => {
-    if (cmdkOpen && selectedSlotKey) {
-      setSelectedSlotKey(null);
-    }
-  }, [cmdkOpen, selectedSlotKey]);
 
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
 
@@ -4018,62 +3937,6 @@ function AuthedShiftBuilder() {
     return () => window.removeEventListener("keydown", handler);
   }, [handleQuickPrintTonight]);
 
-  // === Master Command Palette (Phase 2 core) ===
-  // Stable callbacks for useCommandActions — keeping these out of the call-site
-  // so useCommandActions can detect actual changes (not new references every render).
-  const cmdActionRunEngine = React.useCallback(() => {
-    if (!canRunEngine) {
-      showToast("Insufficient privileges — you cannot run the engine", "error");
-      return;
-    }
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — engine cannot run", "error");
-      return;
-    }
-    if (isDraftMode) applyDraft(); else enterDraftMode();
-  }, [canRunEngine, isDraftMode, applyDraft, enterDraftMode, isCurrentNightLocked]);
-
-  // Print button opens Command Center; direct "print tonight" shortcut still available via palette
-  const cmdActionPrint = React.useCallback(() => { void handleQuickPrintTonight(); }, [handleQuickPrintTonight]);
-  const cmdActionPrintWeek = React.useCallback(() => handlePrintWeek(), [handlePrintWeek]);
-  const cmdActionOpenPrintCenter = React.useCallback(() => setIsPrintCenterOpen(true), []);
-
-  const cmdActionLockDay = React.useCallback(async () => {
-    if (!requireLock()) return;
-    if (!nightId) {
-      showToast("No active night selected", "error");
-      return;
-    }
-    try {
-      const { setNightLocked } = await import("@/lib/shiftbuilder/data");
-      await setNightLocked(nightId, true);
-      setIsCurrentNightLocked(true);
-      logBuilderChange({ action: "night_lock", targetNightId: nightId });
-      showToast(`Day locked`, "success");
-    } catch (e: any) {
-      console.error("Failed to lock day", e);
-      showToast(`Failed to lock day: ${e?.message ?? "unknown"}`, "error");
-    }
-  }, [nightId, requireLock, logBuilderChange]);
-
-  const cmdActionUnlockDay = React.useCallback(async () => {
-    if (!requireLock()) return;
-    if (!nightId) {
-      showToast("No active night selected", "error");
-      return;
-    }
-    try {
-      const { setNightLocked } = await import("@/lib/shiftbuilder/data");
-      await setNightLocked(nightId, false);
-      setIsCurrentNightLocked(false);
-      logBuilderChange({ action: "night_unlock", targetNightId: nightId });
-      showToast(`Day unlocked`, "success");
-    } catch (e: any) {
-      console.error("Failed to unlock day", e);
-      showToast(`Failed to unlock day: ${e?.message ?? "unknown"}`, "error");
-    }
-  }, [nightId, requireLock, logBuilderChange]);
-
   const handleToggleDayPublished = React.useCallback(async () => {
     if (!canPublish) {
       showToast("You don't have permission to publish schedules", "error");
@@ -4131,41 +3994,6 @@ function AuthedShiftBuilder() {
     currentNight.queryClient,
     logBuilderChange,
   ]);
-
-  const cmdActionUndo = React.useCallback(() => {
-    const prev = shiftHistory.undo();
-    if (prev) applySnapshot(prev);
-  }, [shiftHistory, applySnapshot]);
-
-  const cmdActionRedo = React.useCallback(() => {
-    const next = shiftHistory.redo();
-    if (next) applySnapshot(next);
-  }, [shiftHistory, applySnapshot]);
-
-  const cmdActionCycleBreak = React.useCallback(
-    (slotKey: string) => {
-      const current = (assignments[slotKey]?.breakGroup ?? 0) as BreakGroup;
-      setBreakGroupForSlot(slotKey, nextBreakGroup(current));
-    },
-    [assignments, setBreakGroupForSlot]
-  );
-
-  const cmdActionClearBorders = React.useCallback(() => setCardBorders({}), []);
-
-  // Temporarily disabled during aggressive dynamic import sweep to eliminate
-  // the static import of useCommandActions (a major contributor to repeated
-  // "module factory is not available" errors from this giant file).
-  // Rich command palette actions will be restored once the core HMR stability is solid.
-  // Command palette actions temporarily stubbed during the aggressive dynamic import
-  // sweep to eliminate static imports of useCommandActions (a frequent source of
-  // "module factory is not available" errors).
-  // Rich functionality will be restored after HMR stability is solid.
-  const commandActions: any[] = [];
-
-  // handleCardClick and dismissQuickFan removed in Phase 1 (Command Palette Upgrade).
-  // Card taps now use openPaletteForSlot / openPaletteForPerson directly.
-
-  // CommandPalette callbacks section removed along with the hook call (part of the sweep).
 
   // Map DB task rows to UI keys, with special remapping for aux cards so that
   // tasks added/persisted under canonical DB keys (admin/trash_N/...) land on the
@@ -4402,13 +4230,6 @@ function AuthedShiftBuilder() {
       }
     },
     [nightId, showToast, logBuilderChange, auxDefs, patchNightSecondaryTasksCache, currentNight.queryClient, selectedDay]
-  );
-
-  // Stable computed arrays/objects for the palette — new references only when
-  // the underlying data actually changes, not on every SBC render.
-  const cmdkWeekDays = React.useMemo(
-    () => DAY_DEFS.map((d) => ({ date: d.date, name: d.name, short: d.short })),
-    [DAY_DEFS]
   );
 
   // Single source of truth for "which TMs are already placed this night (committed + draft + live optimistic)".
@@ -5413,36 +5234,6 @@ function AuthedShiftBuilder() {
     [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
   );
 
-  const cmdkCompletionUnplaced = React.useMemo(() => {
-    return Array.from(effectiveScheduledTmIdsTonight)
-      .filter((id) => !alreadyAssignedThisNight.has(id))
-      .map((id) => {
-        const tm = effectiveRealRoster.find((t: any) => t.id === id);
-        return tm?.name || tm?.fullName || id;
-      })
-      .filter(Boolean)
-      .slice(0, 12) as string[];
-  }, [effectiveScheduledTmIdsTonight, alreadyAssignedThisNight, effectiveRealRoster]);
-
-  const cmdkCompletionAssignments = React.useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(assignments).map(([k, v]: [string, any]) => [
-          k,
-          { tmId: v?.tmId, tmName: v?.tmName },
-        ])
-      ),
-    [assignments]
-  );
-
-  const cmdkSelectedSlotAssignment = React.useMemo(
-    () =>
-      cmdkInitialContext?.type === "slot"
-        ? assignments[cmdkInitialContext.value]
-        : null,
-    [cmdkInitialContext, assignments]
-  );
-
   const handleGenderClick = (slotKey: string) => {
     handleSlotToggle(slotKey);
   };
@@ -6089,7 +5880,7 @@ function AuthedShiftBuilder() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDay.date, sudoDataEpoch]);
+  }, [selectedDay.date, tmCommandEpoch]);
 
   React.useEffect(() => {
     setLoadingAssignments(boardColdLoading);
@@ -7523,7 +7314,7 @@ function AuthedShiftBuilder() {
           role: currentOperator.role,
         } : undefined}
         onLogout={logoutOperator}
-        onOpenSudo={handleOpenSudo}
+        onOpenSettings={canAccessSudo ? handleOpenSettings : undefined}
         // Zoom cluster (Fit / − / +)
         onZoomFit={handleZoomFit}
         onZoomOut={handleZoomOut}
@@ -7900,6 +7691,7 @@ function AuthedShiftBuilder() {
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
+                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={isCurrentNightLocked}
                 loadingAssignments={boardColdLoading}
@@ -8527,6 +8319,7 @@ function AuthedShiftBuilder() {
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
+                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={isCurrentNightLocked}
                 loadingAssignments={boardColdLoading}
@@ -8753,29 +8546,6 @@ function AuthedShiftBuilder() {
         ))}
       </div>
 
-      {/* Command Palette — loaded via thin LazyCommandPalette wrapper.
-          The wrapper isolates the dynamic import("./CommandPalette") (and its dep on
-          useCommandActions) into a tiny file. This prevents the giant Client.tsx from
-          having the import() expression in its source, which was a major source of
-          Turbopack "module factory is not available" errors during HMR/eval (the error
-          would claim useCommandActions was "required from" the Client).
-          The canvas (and thus OpsStatusBar) can now evaluate and mount reliably. */}
-      {cmdkOpen && CommandPaletteLoader && (
-        <CommandPaletteLoader
-          open={cmdkOpen}
-          onOpenChange={setCmdkOpen}
-          initialContext={cmdkInitialContext}
-          onAddTask={handleCmdkAddTask}
-          onCycleBreak={handleCmdkCycleBreak}
-          onSetGravePool={handleCmdkSetGravePool}
-          onSetDisplayName={handleCmdkSetDisplayName}
-          onRemoveFromSchedule={handleCmdkRemoveFromSchedule}
-          onAddCoverage={handleCmdkAddCoverage}
-          // Pass through any other context the palette needs
-          selectedSlotAssignment={selectedSlotKey ? padAssignments[selectedSlotKey] : null}
-        />
-      )}
-
       {/* Night picker edge arrows removed — navigation lives in the bottom dock ← / → buttons */}
 
       {/* Print Command Center — full overlay with day selection, page order, margins */}
@@ -8812,116 +8582,6 @@ function AuthedShiftBuilder() {
             try { (window as any).__lastWeekAdvisorText = null; } catch {}
           }}
           advisorText={provenanceKey && /advisor/i.test(provenanceKey) ? weekAdvisorText : undefined}
-        />
-      )}
-
-      {/* Sudo admin window — loaded via runtime dynamic import of the thin loader. */}
-      {sudoOpen && SudoWindowLoader && (
-        <SudoWindowLoader
-          open={sudoOpen}
-          onClose={() => setSudoOpen(false)}
-          currentNightId={nightId}
-          weekStart={weekStart}
-          currentOperator={currentOperator ? {
-            id: currentOperator.id,
-            full_name: currentOperator.full_name,
-            username: currentOperator.username,
-            role: currentOperator.role,
-          } : null}
-          onSignOut={logoutOperator}
-          isDark={isDark}
-          permissions={permissions}
-          onDataChanged={async () => {
-            // Refresh anything the sudo window might have mutated
-            setTMCommandEpoch((e) => e + 1);
-            setSudoDataEpoch((e) => e + 1);
-
-            const dateKey = formatLocalDateISO(selectedDay.date);
-            try {
-              currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-              currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-              currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
-            } catch {
-              /* ignore */
-            }
-
-            const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
-            await yieldToMain();
-
-            if (nightId) {
-              try {
-                await refreshNightTasksFromServer(nightId, selectedDay.date);
-              } catch (e) {
-                console.warn("[sudo] failed to refresh tasks after Sudo change", e);
-              }
-            }
-
-            // Force-refresh the current night's break data (and other day-specific data)
-            // so the break sheet group columns immediately reflect pushes from Sudo Defaults.
-            if (nightId) {
-              try {
-                const { getNightBreakAssignments } = await import("@/lib/shiftbuilder/data");
-                const freshBreaks = await getNightBreakAssignments(nightId);
-                const breakByTm: Record<string, any> = {};
-                freshBreaks.forEach((r: any) => {
-                  if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
-                });
-
-                startHeavyTransition(() => {
-                  setAssignments((prev: any) => {
-                    const next = { ...prev };
-                    Object.keys(next).forEach(k => {
-                      const a = next[k];
-                      if (a.tmId && breakByTm[a.tmId] !== undefined) {
-                        next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
-                      }
-                    });
-                    return next;
-                  });
-
-                  try {
-                    useShiftBuilderStore.getState().setAssignments((prev: any) => {
-                      const next = { ...prev };
-                      Object.keys(next).forEach(k => {
-                        const a = next[k];
-                        if (a?.tmId && breakByTm[a.tmId] !== undefined) {
-                          next[k] = { ...a, breakGroup: breakByTm[a.tmId] };
-                        }
-                      });
-                      return next;
-                    });
-                  } catch (e) {
-                    console.warn('[sudo] failed to patch store with breakGroups after Sudo change', e);
-                  }
-                });
-
-                // Per operator rule: after Sudo changes (e.g. Defaults push), only keep
-                // break rows for TMs who are actually placed on the current deployment.
-                // Scheduled-but-not-placed TMs must not appear on the break sheet.
-                const currentPlaced = new Set(
-                  Object.values(assignments || {})
-                    .map((a: any) => a?.tmId)
-                    .filter((id: any): id is string => !!id)
-                );
-                setNightBreakRows(
-                  freshBreaks
-                    .filter((r: any) => r.groupNum && r.groupNum > 0 &&
-                      (currentPlaced.size === 0 || currentPlaced.has(r.tmId)))
-                    .map((r: any) => ({ tmId: r.tmId, groupNum: r.groupNum, slotRef: r.slotRef ?? null }))
-                );
-              } catch (e) {
-                console.warn("[sudo] failed to refresh break data after Sudo change", e);
-              }
-            }
-
-            // Also refresh the live engine config
-            try {
-              const fresh = await (await import("@/lib/shiftbuilder/engineConfig")).getActiveEngineConfig();
-              setEngineConfig(fresh);
-            } catch (e) {
-              console.warn("[sudo] failed to refresh engineConfig after change", e);
-            }
-          }}
         />
       )}
 

@@ -162,6 +162,9 @@ export interface ShiftBuilderBoardProps {
   /** Footer brand line (default: Weekly Zone Deployment Book). */
   sheetBrandTitle?: string;
 
+  /** Long-press the version label to open OMS Settings (hidden admin entry). */
+  onOpenSettings?: () => void;
+
   /** /today kiosk: hide in-artboard week pills, larger date, slim footer, compact empty aux. */
   isTodayBoard?: boolean;
 
@@ -294,6 +297,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onSetAuxLabel,
   placementPadInsightsEnabled = true,
   sheetBrandTitle = "Weekly Zone Deployment Book",
+  onOpenSettings,
   isTodayBoard = false,
   kioskAssignPulseKey = null,
   isViewOnly = false,
@@ -317,6 +321,24 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   draftGrokExplanation,
 }: ShiftBuilderBoardProps) {
   const reducedMotion = useReducedMotion();
+
+  const versionLongPressRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearVersionLongPress = React.useCallback(() => {
+    if (versionLongPressRef.current) {
+      clearTimeout(versionLongPressRef.current);
+      versionLongPressRef.current = null;
+    }
+  }, []);
+
+  const handleVersionPointerDown = React.useCallback(() => {
+    if (!onOpenSettings) return;
+    clearVersionLongPress();
+    versionLongPressRef.current = setTimeout(() => {
+      versionLongPressRef.current = null;
+      onOpenSettings();
+    }, 600);
+  }, [onOpenSettings, clearVersionLongPress]);
 
   // 3.4 — Narrow Zustand subscriptions (primary source). Only re-renders this island
   // when the selected slice actually mutates. Falls back to props during transition.
@@ -1860,7 +1882,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             GRAVES
           </span>
         </div>
-        <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
+        <div
+          className="shrink-0 tabular-nums select-none"
+          onPointerDown={handleVersionPointerDown}
+          onPointerUp={clearVersionLongPress}
+          onPointerLeave={clearVersionLongPress}
+          onPointerCancel={clearVersionLongPress}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {shiftBuilderVersionLabel()}
+        </div>
         {!isTodayBoard ? (
           <div
             className="shrink-0 tabular-nums text-right"
