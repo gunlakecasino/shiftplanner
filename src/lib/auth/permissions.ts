@@ -1,0 +1,100 @@
+import type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
+
+export type { OpsRole, ShiftBuilderPermissions };
+
+export function getEffectivePermissions(user: Pick<OpsUser, "role" | "permissions">): ShiftBuilderPermissions {
+  const base = getPermissionsForRole(user.role);
+  let effective = mergePermissions(base, user.permissions);
+  if (!["sudo_admin", "graves_ops_super"].includes(user.role)) {
+    effective = { ...effective, canSeeDraftData: false };
+  }
+  return effective;
+}
+
+export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
+  switch (role) {
+    case "sudo_admin":
+    case "admin":
+    case "ops_director":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: true,
+        canApplySchedules: true,
+        canPublish: true,
+        canSeeDraftData: true,
+        canAccessSudo: true,
+        canRunEngine: true,
+        canManageTeam: true,
+      };
+
+    case "ops_manager":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: true,
+        canApplySchedules: true,
+        canPublish: true,
+        canSeeDraftData: true,
+        canAccessSudo: true,
+        canRunEngine: true,
+        canManageTeam: true,
+      };
+
+    case "graves_ops_super":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: true,
+        canApplySchedules: false,
+        canPublish: false,
+        canSeeDraftData: false,
+        canAccessSudo: false,
+        canRunEngine: false,
+        canManageTeam: false,
+      };
+
+    case "days_ops_super":
+    case "swings_ops_super":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: true,
+        canApplySchedules: false,
+        canPublish: false,
+        canSeeDraftData: false,
+        canAccessSudo: false,
+        canRunEngine: false,
+        canManageTeam: false,
+      };
+
+    case "utility_ops_super":
+    case "ops_super":
+    default:
+      return {
+        canEditAssignments: true,
+        canLockUnlock: true,
+        canApplySchedules: false,
+        canPublish: false,
+        canSeeDraftData: false,
+        canAccessSudo: false,
+        canRunEngine: false,
+        canManageTeam: false,
+      };
+  }
+}
+
+export function mergePermissions(
+  base: ShiftBuilderPermissions,
+  overrides?: Partial<ShiftBuilderPermissions> | null,
+): ShiftBuilderPermissions {
+  if (!overrides) return { ...base };
+
+  const sanitized: Partial<ShiftBuilderPermissions> = {};
+  if (typeof overrides.canEditAssignments === "boolean") sanitized.canEditAssignments = overrides.canEditAssignments;
+  if (typeof overrides.canLockUnlock === "boolean") sanitized.canLockUnlock = overrides.canLockUnlock;
+  if (typeof overrides.canApplySchedules === "boolean") sanitized.canApplySchedules = overrides.canApplySchedules;
+  if (typeof overrides.canPublish === "boolean") sanitized.canPublish = overrides.canPublish;
+  if (typeof overrides.canSeeDraftData === "boolean") sanitized.canSeeDraftData = overrides.canSeeDraftData;
+  if (typeof overrides.canAccessSudo === "boolean") sanitized.canAccessSudo = overrides.canAccessSudo;
+  if (typeof overrides.canRunEngine === "boolean") sanitized.canRunEngine = overrides.canRunEngine;
+  if (typeof overrides.canManageTeam === "boolean") sanitized.canManageTeam = overrides.canManageTeam;
+
+  return { ...base, ...sanitized };
+}

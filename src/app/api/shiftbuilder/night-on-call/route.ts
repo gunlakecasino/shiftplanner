@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 async function resolveNightId(
@@ -55,6 +57,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canEditAssignments");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ error: "Service role not configured" }, { status: 503 });
@@ -91,6 +101,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canEditAssignments");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ error: "Service role not configured" }, { status: 503 });

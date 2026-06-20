@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import {
   addGravesDefaultScheduleMember,
   getGravesDefaultScheduleGrid,
@@ -30,6 +32,14 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canApplySchedules");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   try {
     const body = await request.json();
     const updates = Array.isArray(body?.updates) ? body.updates : [];
@@ -50,6 +60,14 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canApplySchedules");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   try {
     const body = await request.json();
     const tmId = typeof body?.tmId === "string" ? body.tmId : "";
@@ -70,6 +88,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canApplySchedules");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const tmId = searchParams.get("tmId") || "";

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSameOriginOpsRequest } from '@/app/api/_lib/sameOrigin';
+import { requireOpsPermission } from '@/lib/auth/requireOpsSession.server';
 import type { UpsertTMOnCallScheduleInput } from '@/lib/shiftbuilder/types/schedules';
 import { createAdminClientSafe } from '../_lib/createAdminClient';
 
@@ -26,6 +28,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(request, "canAccessSudo");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ error: "Service role key not configured" }, { status: 503 });

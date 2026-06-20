@@ -629,60 +629,59 @@ export interface SudoUser {
   role: string;
   is_active: boolean;
   permissions: Record<string, any> | null;
+  must_change_pin?: boolean;
+  pin_issued_at?: string | null;
+  last_pin_change_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
 
-export async function listAllUsers(): Promise<SudoUser[]> {
-  // We try to include the permissions column, but fall back gracefully
-  // if the migration hasn't been applied yet (common during development).
-  const baseSelect = "id, email, full_name, username, role, is_active, created_at, updated_at";
-
-  // First attempt: include permissions
-  let { data, error } = await supabase
-    .from("users")
-    .select(`${baseSelect}, permissions`)
-    .order("full_name", { ascending: true });
-
-  if (error && error.message.includes("permissions")) {
-    // Column doesn't exist yet — fetch without it and default permissions to null
-    console.warn("[listAllUsers] 'permissions' column not found yet. Falling back to null permissions.");
-    const fallback = await supabase
-      .from("users")
-      .select(baseSelect)
-      .order("full_name", { ascending: true });
-
-    if (fallback.error) throw new Error(`listAllUsers failed: ${fallback.error.message}`);
-
-    return (fallback.data ?? []).map((u: any) => ({
-      ...u,
-      permissions: null,
-    })) as SudoUser[];
+async function adminUsersPost(body: Record<string, unknown>) {
+  const res = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Request failed (HTTP ${res.status})`);
   }
+  return json;
+}
 
-  if (error) throw new Error(`listAllUsers failed: ${error.message}`);
-  return (data as SudoUser[]) ?? [];
+export async function listAllUsers(): Promise<SudoUser[]> {
+  const res = await fetch("/api/admin/users", { credentials: "include" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `listAllUsers failed (HTTP ${res.status})`);
+  return (json.users ?? []) as SudoUser[];
 }
 
 export async function updateUserPermissions(
   userId: string,
-  permissions: Record<string, any> | null
-): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ permissions, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  if (error) throw new Error(`updateUserPermissions failed: ${error.message}`);
+  permissions: Record<string, any> | null,
+): Promise<SudoUser | null> {
+  const json = await adminUsersPost({ action: "update", userId, permissions });
+  return (json.user as SudoUser) ?? null;
 }
 
-export async function updateUserRole(userId: string, role: string): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ role, updated_at: new Date().toISOString() })
-    .eq("id", userId);
+export async function updateUserRole(userId: string, role: string): Promise<SudoUser | null> {
+  const json = await adminUsersPost({ action: "update", userId, role });
+  return (json.user as SudoUser) ?? null;
+}
 
-  if (error) throw new Error(`updateUserRole failed: ${error.message}`);
+export async function updateUserProfile(
+  userId: string,
+  patch: { role?: string; permissions?: Record<string, any> | null },
+  options?: { adminPin?: string },
+): Promise<SudoUser | null> {
+  const json = await adminUsersPost({
+    action: "update",
+    userId,
+    ...patch,
+    ...(options?.adminPin ? { adminPin: options.adminPin } : {}),
+  });
+  return (json.user as SudoUser) ?? null;
 }
 
 // =====================================================================
@@ -694,48 +693,43 @@ export interface CreateUserInput {
   username: string;
   email?: string | null;
   role?: string;
-  pin: string; // raw PIN, will be hashed server-side
+  permissions?: Record<string, any> | null;
 }
 
-export async function createUser(input: CreateUserInput): Promise<string> {
-  const { data, error } = await supabase.functions.invoke('create-user', {
-    body: {
-      full_name: input.full_name,
-      username: input.username,
-      email: input.email || null,
-      role: input.role || 'utility_ops_super',
-      pin: input.pin,
-    },
+export interface CreateUserResult {
+  userId: string;
+  temporaryPin: string;
+  user: SudoUser | null;
+}
+
+export async function createUser(input: CreateUserInput): Promise<CreateUserResult> {
+  const json = await adminUsersPost({
+    action: "create",
+    full_name: input.full_name,
+    username: input.username,
+    email: input.email || null,
+    role: input.role || "utility_ops_super",
+    permissions: input.permissions ?? null,
   });
 
-  if (error) {
-    throw new Error(`Failed to create user: ${error.message}`);
-  }
+  return {
+    userId: json.userId as string,
+    temporaryPin: json.temporaryPin as string,
+    user: (json.user as SudoUser) ?? null,
+  };
+}
 
-  // The edge function should return { success: true, userId }
-  if (!data?.success) {
-    throw new Error(data?.error || 'Unknown error creating user');
-  }
-
-  return data.userId;
+export async function issueTemporaryPin(userId: string, adminPin: string): Promise<string> {
+  const json = await adminUsersPost({ action: "issue_temp_pin", userId, adminPin });
+  return json.temporaryPin as string;
 }
 
 export async function deactivateUser(userId: string): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  if (error) throw new Error(`deactivateUser failed: ${error.message}`);
+  await adminUsersPost({ action: "deactivate", userId });
 }
 
 export async function reactivateUser(userId: string): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ is_active: true, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  if (error) throw new Error(`reactivateUser failed: ${error.message}`);
+  await adminUsersPost({ action: "reactivate", userId });
 }
 
 /**

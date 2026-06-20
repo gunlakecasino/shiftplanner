@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DeploymentLogEntry, DeploymentLogsResponse } from "@/lib/shiftbuilder/deploymentLogTypes";
 
@@ -25,11 +26,16 @@ function mapRow(row: Record<string, unknown>): DeploymentLogEntry {
 }
 
 /**
- * GET /api/logs/changes?nightDate=YYYY-MM-DD&operator=Name&limit=200
+ * GET /api/logs/changes?nightDate=YYYY-MM-DD&operator=Name&action=assign&slotKey=Z1&limit=200
  */
 export async function GET(request: NextRequest) {
   if (!isSameOriginOpsRequest(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const session = await requireOpsPermission(request, "canAccessSudo");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
   const rateKey = `logs-changes:${clientIpFromRequest(request)}`;
@@ -43,6 +49,8 @@ export async function GET(request: NextRequest) {
 
   const nightDate = request.nextUrl.searchParams.get("nightDate");
   const operator = request.nextUrl.searchParams.get("operator")?.trim() || null;
+  const actionFilter = request.nextUrl.searchParams.get("action")?.trim() || null;
+  const slotKeyFilter = request.nextUrl.searchParams.get("slotKey")?.trim() || null;
   const limitRaw = request.nextUrl.searchParams.get("limit");
   const limit = Math.min(500, Math.max(1, Number(limitRaw) || 200));
 
@@ -70,6 +78,14 @@ export async function GET(request: NextRequest) {
 
   if (operator) {
     entriesQuery = entriesQuery.eq("operator_name", operator);
+  }
+
+  if (actionFilter) {
+    entriesQuery = entriesQuery.eq("action", actionFilter);
+  }
+
+  if (slotKeyFilter) {
+    entriesQuery = entriesQuery.eq("slot_key", slotKeyFilter);
   }
 
   const operatorsQuery = client

@@ -6,6 +6,7 @@ import {
   Layers,
   LayoutDashboard,
   ListChecks,
+  ScrollText,
   SlidersHorizontal,
   Table2,
   UserCog,
@@ -22,7 +23,8 @@ export type SettingsTab =
   | "users"
   | "engine"
   | "planner"
-  | "reports";
+  | "reports"
+  | "auditLog";
 
 export type SettingsSection = "operations" | "people" | "engine" | "insights";
 
@@ -127,6 +129,14 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     icon: BarChart3,
     description: "Zone frequency and placement analytics",
   },
+  {
+    id: "auditLog",
+    label: "Audit Log",
+    shortLabel: "Audit",
+    section: "insights",
+    icon: ScrollText,
+    description: "Filtered timeline of every operator action",
+  },
 ];
 
 /** Tabs that need a tall scroll region inside the paper artboard */
@@ -137,6 +147,7 @@ export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "weeklyRoster",
   "users",
   "reports",
+  "auditLog",
   "engine",
   "planner",
   "tmDefaults",

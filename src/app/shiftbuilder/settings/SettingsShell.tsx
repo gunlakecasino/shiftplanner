@@ -33,6 +33,8 @@ import { GoldHairline } from "../sudo/SudoGlass";
 import { TeamTab } from "../sudo/TeamTab";
 import { TasksTab } from "../sudo/TasksTab";
 import { ReportsTab } from "../sudo/ReportsTab";
+import { AuditLogTab } from "../sudo/AuditLogTab";
+import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
 import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
@@ -135,14 +137,14 @@ function SettingsTabPanel({
   currentNightId: string | null;
   weekStart: Date;
   permissions: ReturnType<typeof useOpsAuth>["permissions"];
-  onDataChanged: () => void;
+  onDataChanged: (tab: SettingsTab, details?: Record<string, unknown>) => void;
   onNavigate: (tab: SettingsTab) => void;
 }) {
   return (
     <div className="sb-settings-panel" data-theme={isDark ? "dark" : "light"}>
       {activeTab === "dashboard" && (
         <DashboardTab
-          onDataChanged={onDataChanged}
+          onDataChanged={() => onDataChanged("dashboard")}
           isDark={isDark}
           currentOperator={currentOperator}
           currentNightId={currentNightId}
@@ -153,7 +155,7 @@ function SettingsTabPanel({
       )}
       {activeTab === "tmDefaults" && (
         <TMDefaultsTab
-          onDataChanged={onDataChanged}
+          onDataChanged={() => onDataChanged("tmDefaults", { area: "tm_defaults" })}
           isDark={isDark}
           currentOperator={currentOperator}
           weekStart={weekStart}
@@ -161,12 +163,18 @@ function SettingsTabPanel({
       )}
       {activeTab === "team" &&
         (canManageTeam ? (
-          <TeamTab onDataChanged={onDataChanged} isDark={isDark} />
+          <TeamTab
+            onDataChanged={() => onDataChanged("team", { area: "team_update" })}
+            isDark={isDark}
+          />
         ) : (
           <InsufficientPermNotice feature="Team Management" isDark={isDark} />
         ))}
       {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
-        <UsersTab onDataChanged={onDataChanged} isDark={isDark} />
+        <UsersTab
+          onDataChanged={() => onDataChanged("users", { area: "user_update" })}
+          isDark={isDark}
+        />
       )}
       {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
         <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
@@ -174,31 +182,46 @@ function SettingsTabPanel({
         </div>
       )}
       {activeTab === "tasks" && (
-        <TasksTab onDataChanged={onDataChanged} currentNightId={currentNightId} isDark={isDark} />
+        <TasksTab
+          onDataChanged={() => onDataChanged("tasks", { area: "task_catalog" })}
+          currentNightId={currentNightId}
+          isDark={isDark}
+        />
       )}
       {activeTab === "reports" && <ReportsTab isDark={isDark} />}
+      {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}
       {activeTab === "engine" &&
         (canRunEngine ? (
-          <EngineConfigTab onDataChanged={onDataChanged} isDark={isDark} />
+          <EngineConfigTab
+            onDataChanged={() => onDataChanged("engine", { area: "engine_config" })}
+            isDark={isDark}
+          />
         ) : (
           <InsufficientPermNotice feature="Engine Config" isDark={isDark} />
         ))}
       {activeTab === "planner" &&
         (canRunEngine ? (
-          <BatchPlannerTab onDataChanged={onDataChanged} isDark={isDark} />
+          <BatchPlannerTab
+            onDataChanged={() => onDataChanged("planner", { area: "engine_run" })}
+            isDark={isDark}
+          />
         ) : (
           <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
         ))}
       {activeTab === "defaults" && (
         <DefaultsTab
-          onDataChanged={onDataChanged}
+          onDataChanged={() => onDataChanged("defaults", { area: "defaults_push" })}
           currentNightId={currentNightId}
           weekStart={weekStart}
           isDark={isDark}
         />
       )}
       {activeTab === "weeklyRoster" && (
-        <WeeklyRosterTab onDataChanged={onDataChanged} isDark={isDark} weekStart={weekStart} />
+        <WeeklyRosterTab
+          onDataChanged={() => onDataChanged("weeklyRoster", { area: "roster_update" })}
+          isDark={isDark}
+          weekStart={weekStart}
+        />
       )}
     </div>
   );
@@ -269,11 +292,34 @@ export function SettingsShell() {
 
   const handleTabSelect = React.useCallback(
     (tab: SettingsTab) => {
+      if (tab !== activeTab) {
+        logSettingsAudit({
+          tab,
+          action: "settings_nav",
+          operator: currentOperator,
+          nightId: currentNightId,
+          details: { from: activeTab, to: tab },
+        });
+      }
       setActiveTab(tab);
       setActiveSection(sectionForTab(tab));
       router.replace(`/shiftbuilder/settings?tab=${tab}`, { scroll: false });
     },
-    [router],
+    [router, activeTab, currentOperator, currentNightId],
+  );
+
+  const auditedDataChanged = React.useCallback(
+    (tab: SettingsTab, details?: Record<string, unknown>) => {
+      logSettingsAudit({
+        tab,
+        action: "settings_update",
+        operator: currentOperator,
+        nightId: currentNightId,
+        details,
+      });
+      onDataChanged();
+    },
+    [currentOperator, currentNightId, onDataChanged],
   );
 
   const handleSectionSelect = React.useCallback(
@@ -459,7 +505,7 @@ export function SettingsShell() {
                   currentNightId={currentNightId}
                   weekStart={weekStart}
                   permissions={permissions}
-                  onDataChanged={onDataChanged}
+                  onDataChanged={auditedDataChanged}
                   onNavigate={handleTabSelect}
                 />
               </motion.div>

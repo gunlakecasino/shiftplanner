@@ -28,8 +28,11 @@
  *   }
  */
 
+import { NextRequest } from "next/server";
 import { streamText } from "ai";
 import { createXai } from "@ai-sdk/xai";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
+import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 
 // Note: runtime = "nodejs" removed for cacheComponents compatibility (Next 16).
 // This route will use the default Node.js runtime, which is what we want for xAI streaming.
@@ -138,9 +141,24 @@ const SURFACE_CONFIGS: Record<Surface, SurfaceConfig> = {
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ surface: string }> }
 ) {
+  if (!isSameOriginOpsRequest(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const session = await requireOpsSession(req);
+  if (!session.ok) {
+    return new Response(JSON.stringify({ error: session.error }), {
+      status: session.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Validate API key early — fail fast with a clear message.
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {

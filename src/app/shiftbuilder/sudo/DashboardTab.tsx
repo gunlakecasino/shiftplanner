@@ -4,6 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { getActiveEngineConfig, type EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 import { listSchedules, setWeekPublished, type ScheduleRecord } from "@/lib/shiftbuilder/sudoActions";
+import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import type { SettingsTab } from "../settings/settingsConfig";
 
 
@@ -62,6 +63,12 @@ export function DashboardTab({
   const handleQuickPublish = async (schedule: ScheduleRecord) => {
     try {
       await setWeekPublished(schedule.weekId, true);
+      logSettingsAudit({
+        tab: "dashboard",
+        action: "publish",
+        operator: currentOperator ?? null,
+        details: { weekId: schedule.weekId, weekLabel: schedule.weekLabel },
+      });
       // Refresh local list
       const fresh = await listSchedules();
       const drafts = fresh.filter(s => s.status !== "published");
@@ -170,10 +177,8 @@ export function DashboardTab({
           <QuickAction
             isDark={isDark}
             icon="receipt_long"
-            label="Audit Logs"
-            disabled
-            hint="Coming soon"
-            onClick={() => {}}
+            label="Audit Log"
+            onClick={() => handleNav("auditLog")}
           />
         </div>
       </div>

@@ -1,11 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import {
   runPlacementPadAnalyst,
   runPlacementBasicsNarrative,
   type EngineInsightContext,
 } from "@/lib/shiftbuilder/engineInsightForPlacement";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!isSameOriginOpsRequest(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsPermission(req, "canEditAssignments");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   try {
     const body = await req.json();
     const ctx = body as EngineInsightContext;

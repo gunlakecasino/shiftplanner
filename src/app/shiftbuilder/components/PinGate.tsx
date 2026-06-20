@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
+import { usePathname, useRouter } from "next/navigation";
+import { getEffectivePermissions, useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
+import { postPinDestination } from "@/lib/auth/postPinRoute";
+
 import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "./builderPrimitives";
 
@@ -20,6 +23,8 @@ interface PinGateProps {
 
 export function PinGate({ onAuthenticated }: PinGateProps) {
   const { login, isLoading: authLoading } = useOpsAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,11 +53,18 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
     console.log("Login result:", result);
     console.groupEnd();
 
-    if (result.success) {
-      // Parent will pick up the new user from context
-      // We still call the callback for any immediate side effects
-      // (the context already updated synchronously inside login)
-      onAuthenticated?.(null as any); // parent reads from useOpsAuth()
+    if (result.success && result.user) {
+      if (result.requiresPinChange) {
+        onAuthenticated?.(result.user);
+        return;
+      }
+
+      const permissions = getEffectivePermissions(result.user);
+      const destination = postPinDestination(pathname, permissions);
+      if (destination !== pathname) {
+        router.replace(destination);
+      }
+      onAuthenticated?.(result.user);
     } else {
       setError(result.error || "Invalid PIN");
       // Shake the input on error for tactile feedback

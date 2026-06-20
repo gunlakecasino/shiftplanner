@@ -63,7 +63,8 @@ import {
   logDeploymentChange,
   type DeploymentChangeAction,
 } from "@/lib/shiftbuilder/deploymentChangeLog";
-import { PinGate } from "./components/PinGate";
+import { OpsAuthGate } from "./components/OpsAuthGate";
+import { PostPinRouteGuard } from "./components/PostPinRouteGuard";
 import {
   PrintCommandCenter,
   type PrintConfig,
@@ -8612,25 +8613,11 @@ export default function ShiftBuilder() {
 }
 
 function ShiftBuilderGate() {
-  const { isAuthenticated, isLoading, hasRole } = useOpsAuth();
-  const router = useRouter();
-
-  // While hydrating from localStorage, show nothing (prevents flash).
-  if (isLoading) {
-    return (
-      <BuilderLoadingShell
-        label="LOADING OPS SESSION"
-        sublabel="Preparing computer context"
-      />
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <PinGate />;
-  }
-
-  // Granular permissions (canEdit, canPublish, etc.) via useOpsAuth.
-
-  // Full privileged experience
-  return <AuthedShiftBuilder />;
+  return (
+    <OpsAuthGate loadingSublabel="Preparing computer context">
+      <PostPinRouteGuard>
+        <AuthedShiftBuilder />
+      </PostPinRouteGuard>
+    </OpsAuthGate>
+  );
 }

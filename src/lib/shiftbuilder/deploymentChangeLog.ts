@@ -12,10 +12,20 @@ export type DeploymentChangeAction =
   | "coverage_add"
   | "break_change"
   | "task_color"
-  | "print";
-
-/** @deprecated Use DeploymentChangeAction */
-export type TodayChangeAction = DeploymentChangeAction;
+  | "print"
+  | "settings_update"
+  | "team_update"
+  | "user_update"
+  | "roster_update"
+  | "schedule_apply"
+  | "defaults_push"
+  | "engine_config"
+  | "engine_run"
+  | "task_catalog"
+  | "tm_defaults"
+  | "session_start"
+  | "session_end"
+  | "settings_nav";
 
 export type DeploymentChangeInput = {
   nightId: string;
@@ -33,9 +43,6 @@ export type DeploymentChangeInput = {
   newTmName?: string | null;
   payload?: Record<string, unknown>;
 };
-
-/** @deprecated Use DeploymentChangeInput */
-export type TodayAssignmentChangeInput = DeploymentChangeInput;
 
 const META_SLOT_KEY = "__meta__";
 
@@ -91,13 +98,7 @@ export function logDeploymentChange(
     });
 }
 
-/** @deprecated Use logDeploymentChange */
-export const logTodayAssignmentChange = logDeploymentChange;
-
 export const DEPLOYMENT_OPERATOR_NAME_KEY = "shiftbuilder_operator_name";
-
-/** @deprecated Use DEPLOYMENT_OPERATOR_NAME_KEY */
-export const TODAY_OPERATOR_NAME_KEY = DEPLOYMENT_OPERATOR_NAME_KEY;
 
 export function readDeploymentOperatorName(): string | null {
   if (typeof window === "undefined") return null;
@@ -109,18 +110,12 @@ export function readDeploymentOperatorName(): string | null {
   }
 }
 
-/** @deprecated Use readDeploymentOperatorName */
-export const readTodayOperatorName = readDeploymentOperatorName;
-
 export function writeDeploymentOperatorName(name: string): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(DEPLOYMENT_OPERATOR_NAME_KEY, name.trim());
   } catch {}
 }
-
-/** @deprecated Use writeDeploymentOperatorName */
-export const writeTodayOperatorName = writeDeploymentOperatorName;
 
 export function clearDeploymentOperatorName(): void {
   if (typeof window === "undefined") return;
@@ -129,5 +124,3 @@ export function clearDeploymentOperatorName(): void {
   } catch {}
 }
 
-/** @deprecated Use clearDeploymentOperatorName */
-export const clearTodayOperatorName = clearDeploymentOperatorName;

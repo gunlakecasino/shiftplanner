@@ -32,7 +32,7 @@ const corsHeaders = {
 };
 
 const RATE_WINDOW_MS = 60_000;
-const RATE_MAX_ATTEMPTS = 20;
+const RATE_MAX_ATTEMPTS = 12;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function clientIp(req: Request): string {
@@ -102,7 +102,7 @@ serve(async (req) => {
     // (The set is tiny — internal ops tool. This is safe and simple.)
     const { data: candidates, error: lookupErr } = await supabase
       .from("users")
-      .select("id, email, full_name, username, role, is_active, pin_hash, permissions")
+      .select("id, email, full_name, username, role, is_active, pin_hash, permissions, must_change_pin, pin_issued_at, locked_until")
       .eq("is_active", true)
       .not("pin_hash", "is", null);
 
@@ -123,6 +123,21 @@ serve(async (req) => {
 
     for (const u of candidates) {
       try {
+        if (u.locked_until) {
+          const lockedUntil = new Date(u.locked_until).getTime();
+          if (!Number.isNaN(lockedUntil) && lockedUntil > Date.now()) {
+            continue;
+          }
+        }
+
+        if (u.must_change_pin && u.pin_issued_at) {
+          const issued = new Date(u.pin_issued_at).getTime();
+          const expired = !Number.isNaN(issued) && issued < Date.now() - 72 * 60 * 60 * 1000;
+          if (expired) {
+            continue;
+          }
+        }
+
         const hashToTest = normalizeBcrypt(u.pin_hash);
         const ok = await bcrypt.compare(pin, hashToTest);
         if (ok) {
@@ -151,6 +166,7 @@ serve(async (req) => {
       username: matchedUser.username,
       role: matchedUser.role,
       permissions: matchedUser.permissions ?? null,
+      must_change_pin: Boolean(matchedUser.must_change_pin),
     };
 
     return new Response(JSON.stringify({ success: true, user: safeUser }), {

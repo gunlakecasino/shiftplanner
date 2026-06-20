@@ -22,7 +22,7 @@ import {
   Users,
   Rocket,
   Printer,
-  UserRound,
+
   Eye,
   X,
 } from "lucide-react";
@@ -82,15 +82,8 @@ export interface FloatingNavProps {
   onToggleDayPublished?: () => void;
   publishDayBusy?: boolean;
 
-  /** Stripped variant for the /today kiosk page (minimal right side + restricted more menu). */
-  variant?: 'full' | 'today';
-  /** Top offset for fixed positioning (today uses 8, builder uses 0). */
+  /** Top offset for fixed positioning. */
   top?: number;
-  /** Exit action for today kiosk (change operator / leave view). */
-  onExit?: () => void;
-  exitLabel?: string;
-  /** For today variant name display in the pill. */
-  operatorName?: string;
 }
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -127,14 +120,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     onToggleDayPublished,
     onToggleWeekHealth,
     weekHealthVisible = false,
-    variant = 'full',
     top = 0,
-    onExit,
-    exitLabel = 'Exit',
-    operatorName,
   } = props;
-
-  const isTodayVariant = variant === 'today';
 
   // Internal states for dropdowns
   const [moreOpen, setMoreOpen] = useState(false);
@@ -335,17 +322,14 @@ export default function FloatingNav(props: FloatingNavProps) {
 
         {/* RIGHT — actions + user + more dropdown */}
         <div className="flex items-center gap-0.5 shrink-0">
-          {/* Builder-only controls (hidden in today kiosk stripped variant) */}
-          {!isTodayVariant && (
-            <button
-              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
-              style={{ color: "#666" }}
-              onClick={onRosterToggle}
-              title={rosterOpen ? "Hide roster" : "Show roster"}
-            >
-              <LayoutGrid size={14} strokeWidth={1.8} />
-            </button>
-          )}
+          <button
+            className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+            style={{ color: "#666" }}
+            onClick={onRosterToggle}
+            title={rosterOpen ? "Hide roster" : "Show roster"}
+          >
+            <LayoutGrid size={14} strokeWidth={1.8} />
+          </button>
 
           {/* View toggle — keep for today to allow breaks view if wired */}
           {onViewChange && (
@@ -359,61 +343,47 @@ export default function FloatingNav(props: FloatingNavProps) {
             </button>
           )}
 
-          {!isTodayVariant && (
-            <>
-              {/* LIVE / Publish status */}
-              <button
-                className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
-                style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
-                onClick={onToggleDayPublished}
-                disabled={!canPublishDay}
-                title={isDayPublished ? "Unpublish this day" : "Publish this day"}
-              >
-                <span
-                  className="live-dot shrink-0"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: isDayPublished ? "#22c55e" : "#f59e0b",
-                    display: "inline-block",
-                  }}
-                />
-                {isDayPublished ? "LIVE" : "DRAFT"}
-              </button>
+          <button
+            className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
+            style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
+            onClick={onToggleDayPublished}
+            disabled={!canPublishDay}
+            title={isDayPublished ? "Unpublish this day" : "Publish this day"}
+          >
+            <span
+              className="live-dot shrink-0"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: isDayPublished ? "#22c55e" : "#f59e0b",
+                display: "inline-block",
+              }}
+            />
+            {isDayPublished ? "LIVE" : "DRAFT"}
+          </button>
 
-              <button
-                className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
-                style={{ color: "#666" }}
-                onClick={handleRunEngine}
-                title="Run Engine / AI"
-              >
-                <Sparkles size={14} strokeWidth={1.8} />
-              </button>
-            </>
-          )}
+          <button
+            className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+            style={{ color: "#666" }}
+            onClick={handleRunEngine}
+            title="Run Engine / AI"
+          >
+            <Sparkles size={14} strokeWidth={1.8} />
+          </button>
 
           {/* User / operator name */}
           <button
             className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
             style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "-0.015em" }}
-            onClick={() => {
-              if (isTodayVariant && onExit) {
-                onExit();
-              } else {
-                setProfileOpen((v) => !v);
-              }
-            }}
-            title={isTodayVariant ? (exitLabel || "Exit") : "Account"}
+            onClick={() => setProfileOpen((v) => !v)}
+            title="Account"
             ref={profileRef as any}
           >
-            {isTodayVariant
-              ? (currentUser?.full_name || operatorName || "Operator")
-              : (currentUser?.full_name || "Brian Killian")}
+            {currentUser?.full_name || "Brian Killian"}
           </button>
 
-          {/* Basic profile menu (today variant uses direct exit on name click) */}
-          {!isTodayVariant && profileOpen && currentUser && (
+          {profileOpen && currentUser && (
             <div className="absolute right-0 mt-10 w-44 rounded-xl border bg-white shadow-lg py-1 z-[80] text-[13px]" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               <div className="px-3 py-2 text-[12px] text-gray-500 border-b">{currentUser.username} · {currentUser.role}</div>
               <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100" onClick={onLogout}>Sign out</button>
@@ -437,27 +407,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: "rgba(0,0,0,0.08)" }}
                 onClick={() => setMoreOpen(false)}
               >
-                {isTodayVariant ? (
-                  <>
-                    {onPrint && (
-                      <button
-                        className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2"
-                        onClick={() => { onPrint?.(); }}
-                      >
-                        <Printer size={14} /> Print sheet
-                      </button>
-                    )}
-                    {onExit && (
-                      <button
-                        className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2"
-                        onClick={() => { onExit?.(); }}
-                      >
-                        <UserRound size={14} /> {exitLabel}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
+                <>
                     <button className="w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2" onClick={() => { onRestoreDefaultBreaks?.(); }}>
                       <Coffee size={14} /> Default Breaks
                     </button>
@@ -500,8 +450,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                         {weekHealthVisible ? "Hide" : "Show"} Week Health
                       </button>
                     )}
-                  </>
-                )}
+                </>
               </div>
             )}
           </div>

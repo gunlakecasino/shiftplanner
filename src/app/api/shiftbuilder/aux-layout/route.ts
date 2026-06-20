@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { revalidateNightBoardCaches } from "@/lib/shiftbuilder/revalidateOpsCache";
 
@@ -22,6 +24,16 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   unstable_noStore();
+
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const session = await requireOpsPermission(request, "canEditAssignments");
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   let body: { nightId?: string; auxDefs?: AuxDef[]; date?: string };
   try {
     body = await request.json();
