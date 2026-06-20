@@ -786,6 +786,13 @@ body {
   will-change: transform;
   transform-style: preserve-3d; /* smoother scaling on some browsers */
   backface-visibility: hidden;
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.sb-scale-reservation {
+  /* Smooth any reservation box size changes (from content growth). Layout transitions are
+     not perfect but reduce the jarring "pop" when scale/content dims settle after place. */
+  transition: width 160ms cubic-bezier(0.2, 0, 0, 1), height 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Builder-only compact rhythm — tighter than preview/print. */
@@ -1479,16 +1486,30 @@ body.sb-shiftbuilder {
 
 /* During active dnd gestures, block browser pinch/elastic zoom on scaled artboard + touch devices */
 html.sb-is-dragging,
-body.sb-is-dragging,
-.sb-is-dragging,
-.sb-is-dragging * {
+body.sb-is-dragging {
   touch-action: none !important;
   -webkit-touch-action: none !important;
   user-select: none !important;
   -webkit-user-select: none !important;
   overscroll-behavior: none !important;
-  cursor: default !important;
   overflow: hidden !important;
+}
+
+/* Targeted drag guards (avoid blanket * which can affect height measurements and layout during drag) */
+.sb-is-dragging,
+.sb-is-dragging * {
+  cursor: default !important;
+}
+.sb-is-dragging .sb-builder-scale-viewport,
+.sb-is-dragging .sb-builder-canvas,
+.sb-is-dragging .builder-workspace,
+.sb-is-dragging .sb-roster-rail,
+.sb-is-dragging [data-droppable] {
+  touch-action: none !important;
+  -webkit-touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  overscroll-behavior: none !important;
 }
 
 /* Modern cursor model — no grab/hand pointers on draggable surfaces.

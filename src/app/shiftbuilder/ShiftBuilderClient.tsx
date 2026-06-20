@@ -511,6 +511,9 @@ const RosterDropZone: React.FC<{
   const isDraggingFromRoster = active?.data.current?.type === "tm";
   const highlight = isOver && (isDraggingAssigned || isDraggingFromRoster);
 
+  // Note: activeDrag / setActiveDrag is declared early (near other UI state) to allow
+  // safe reference from the scale/measurement setup code above.
+
   return (
     <div
       ref={setNodeRef}
@@ -1048,6 +1051,15 @@ function AuthedShiftBuilder() {
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
+
+  // Active drag state declared early so it can be safely read in measurement/zoom setup
+  // (before the onDrag* handler definitions later in the file).
+  const [activeDrag, setActiveDrag] = useState<{
+    kind: "tm" | "assigned" | "task";
+    label: string;
+    fromSlot?: string;
+    isDuplicate?: boolean;
+  } | null>(null);
 
   // Track Alt/Option key for cross-platform task duplicate on drag (Safari/iPad often needs this)
   const [altPressed, setAltPressed] = useState(false);
@@ -2021,6 +2033,13 @@ function AuthedShiftBuilder() {
     isHeavyOpRef.current = isHeavyOperation;
   }, [isHeavyOperation]);
 
+  // Pause scale/content measurements + fit recomputes during active drag or place
+  // to prevent the fitted viewport + reserved wrapper from visibly shrinking/in-out.
+  const isDraggingRef = useRef(!!activeDrag);
+  useEffect(() => {
+    isDraggingRef.current = !!activeDrag;
+  }, [activeDrag]);
+
   const lastMeasuredRef = useRef({ w: 0, h: 0 });
 
   const stageInsets = React.useMemo<StageInsets>(() => {
@@ -2060,7 +2079,7 @@ function AuthedShiftBuilder() {
           enabled: true,
           contentRef: builderContentRef,
           chromeHeightPx: 0,
-          pause: isHeavyOperation,
+          pause: isHeavyOperation || !!activeDrag,
         }
       : undefined,
   });
@@ -2089,12 +2108,13 @@ function AuthedShiftBuilder() {
     if (!el || typeof ResizeObserver === "undefined") return;
 
     const measure = () => {
-      if (isHeavyOpRef.current) return; // pause during engine/defaults/publish to avoid iPad freeze
+      if (isHeavyOpRef.current || isDraggingRef.current) return; // pause during heavy ops or drag/place to avoid visible scale jank
       const w = el.offsetWidth || el.scrollWidth || 0;
       const h = el.offsetHeight || el.scrollHeight || 0;
       const last = lastMeasuredRef.current;
-      // only update state on meaningful change (>8px) to reduce re-render spam + layout thrash
-      if (Math.abs(w - last.w) > 8 || Math.abs(h - last.h) > 8) {
+      // Raise threshold to ~28px so adding 1-2 small task rows inside cards does not cause
+      // the fitted scale + reserved wrapper to visibly shrink the whole screen.
+      if (Math.abs(w - last.w) > 28 || Math.abs(h - last.h) > 28) {
         last.w = w;
         last.h = h;
         setBuilderContentWidth(w);
@@ -2119,11 +2139,12 @@ function AuthedShiftBuilder() {
     if (!isBuilderLiveCanvas) return;
     if (isHeavyOperation) return;
     const t = setTimeout(() => {
+      if (isDraggingRef.current) return;
       const el = builderContentRef.current;
       if (el) {
         const w = el.offsetWidth || el.scrollWidth || 0;
         const h = el.offsetHeight || el.scrollHeight || 0;
-        if (Math.abs(w - builderContentWidth) > 4 || Math.abs(h - builderContentHeight) > 4) {
+        if (Math.abs(w - builderContentWidth) > 28 || Math.abs(h - builderContentHeight) > 28) {
           setBuilderContentWidth(w);
           setBuilderContentHeight(h);
         }
@@ -5435,12 +5456,7 @@ function AuthedShiftBuilder() {
       return map[key] || key;
     }
   };
-  const [activeDrag, setActiveDrag] = useState<{
-    kind: "tm" | "assigned" | "task";
-    label: string;
-    fromSlot?: string;
-    isDuplicate?: boolean;
-  } | null>(null);
+  // (activeDrag state is declared early near other state, before measurement/zoom setup)
 
   const onDragStart = (event: DragStartEvent) => {
     const d = event.active.data.current as any;
@@ -7800,6 +7816,7 @@ function AuthedShiftBuilder() {
                     This makes zoom/scale fully adaptive to window size without "page too long" hacks
                     or negative margins. Intricate: explicit pre-transform dimensions + scale inside. */}
                 <div
+                  className="sb-scale-reservation"
                   style={{
                     width: builderContentWidth > 50 ? `${Math.round(builderContentWidth * scale)}px` : '100%',
                     height: builderContentHeight > 50 ? `${Math.round(builderContentHeight * scale)}px` : undefined,

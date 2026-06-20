@@ -83,6 +83,10 @@ export function useZoom({
   const builderFitEnabled = builderFit?.enabled ?? false;
   const builderChromeHeight = builderFit?.chromeHeightPx ?? 0;
 
+  // Stable naturals to avoid tiny content deltas (single task add, etc) causing
+  // visible fitScale "shrink the whole screen" jitter. Only adopt meaningfully larger.
+  const stableNaturalRef = useRef({ w: NATURAL_WIDTH, h: NATURAL_HEIGHT });
+
   // Intricate debounce to avoid thrashing on rapid window resizes while staying very responsive.
   const recomputeScale = useCallback(() => {
     if (builderFit?.pause) return; // don't thrash scale during heavy updates (iPad freeze fix)
@@ -116,8 +120,23 @@ export function useZoom({
       if (content) {
         const measuredW = content.scrollWidth || content.offsetWidth;
         const measuredH = content.scrollHeight || content.offsetHeight;
-        if (measuredW > 80) naturalW = measuredW;
-        if (measuredH > 80) naturalH = measuredH;
+        const stable = stableNaturalRef.current;
+        // Only adopt if significantly larger (ignore task-row growths ~<40px, accept aux/roster structural).
+        if (measuredW > 80 && measuredW > stable.w + 40) {
+          naturalW = measuredW;
+          stable.w = measuredW;
+        } else if (measuredW > 80 && measuredW < stable.w) {
+          // allow shrink only on major reductions
+          naturalW = measuredW;
+          stable.w = measuredW;
+        }
+        if (measuredH > 80 && measuredH > stable.h + 40) {
+          naturalH = measuredH;
+          stable.h = measuredH;
+        } else if (measuredH > 80 && measuredH < stable.h) {
+          naturalH = measuredH;
+          stable.h = measuredH;
+        }
       }
     }
 
