@@ -1,11 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireOpsSession } from '@/lib/auth/requireOpsSession.server';
 import { createAdminClientSafe } from '../_lib/createAdminClient';
 
 /**
  * Lightweight roster for Sudo TM Defaults admin.
  * Returns active TMs with grave_pool or all active for picker use.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ data: [], note: "Service role key not available on this environment" });

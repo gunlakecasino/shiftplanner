@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
-import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
+import { requireOpsPermission, requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import {
   addGravesDefaultScheduleMember,
   getGravesDefaultScheduleGrid,
@@ -18,7 +18,12 @@ function parseBand(raw: unknown): GravesBand | null {
     : null;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   try {
     const grid = await getGravesDefaultScheduleGrid();
     return NextResponse.json(grid);

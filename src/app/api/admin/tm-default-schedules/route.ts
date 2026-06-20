@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSameOriginOpsRequest } from '@/app/api/_lib/sameOrigin';
-import { requireOpsPermission } from '@/lib/auth/requireOpsSession.server';
+import { requireOpsPermission, requireOpsSession } from '@/lib/auth/requireOpsSession.server';
 import type { UpsertTMDefaultScheduleInput } from '@/lib/shiftbuilder/types/schedules';
 import { createAdminClientSafe } from '../_lib/createAdminClient';
 
@@ -9,6 +9,11 @@ import { createAdminClientSafe } from '../_lib/createAdminClient';
  * Returns all (or filtered) TM default schedules.
  */
 export async function GET(request: NextRequest) {
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ data: [] });

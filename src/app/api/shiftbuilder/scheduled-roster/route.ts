@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache, unstable_noStore } from "next/cache";
+import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import { getScheduledTmsFromGravesDefault } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
@@ -36,6 +37,11 @@ async function loadScheduledRoster(dateParam: string, nightId: string | null) {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get("date");
   const nightIdParam = searchParams.get("night_id");

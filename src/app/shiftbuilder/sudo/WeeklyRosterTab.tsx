@@ -68,11 +68,12 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
   const load = async () => {
     setLoading(true);
     try {
+      const fetchOpts = { credentials: "same-origin" as const };
       const [rosterRes, defRes, specialRes, groupsRes] = await Promise.all([
-        fetch("/api/admin/tm-roster").then(r => r.json()),
-        fetch("/api/admin/tm-default-schedules").then(r => r.json()),
-        fetch(`/api/admin/tm-on-call-schedules?week_start=${weekStart}`).then(r => r.json()),
-        fetch("/api/admin/tm-groups").then(r => r.json()),
+        fetch("/api/admin/tm-roster", fetchOpts).then(r => r.json()),
+        fetch("/api/admin/tm-default-schedules", fetchOpts).then(r => r.json()),
+        fetch(`/api/admin/tm-on-call-schedules?week_start=${weekStart}`, fetchOpts).then(r => r.json()),
+        fetch("/api/admin/tm-groups", fetchOpts).then(r => r.json()),
       ]);
 
       setRoster(rosterRes.data || []);
@@ -329,7 +330,11 @@ export function WeeklyRosterTab({ onDataChanged, isDark = false, weekStart: week
       const dates = Array.from({ length: 7 }, (_, i) =>
         formatLocalDateISO(addDays(rosterThursday, i))
       );
-      await Promise.all(dates.map(d => fetch(`/api/shiftbuilder/scheduled-roster?date=${d}`).catch(() => {})));
+      await Promise.all(
+        dates.map((d) =>
+          fetch(`/api/shiftbuilder/scheduled-roster?date=${d}`, { credentials: "same-origin" }).catch(() => {}),
+        ),
+      );
 
       alert("Roster applied. The TM Picker should now reflect the weekly roster for scheduled but unassigned TMs.");
     } finally {

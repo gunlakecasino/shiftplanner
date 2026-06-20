@@ -2988,7 +2988,9 @@ function AuthedShiftBuilder() {
       const statusChannel = createNightScheduleStatusChannel(nightId, async () => {
         try {
           const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
+            credentials: "same-origin",
+          });
           if (res.ok) {
             const data = await res.json();
             setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
@@ -3009,7 +3011,9 @@ function AuthedShiftBuilder() {
       const defaultSchedulesChannel = createTMDefaultSchedulesChannel(async () => {
         try {
           const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
+            credentials: "same-origin",
+          });
           if (res.ok) {
             const data = await res.json();
             setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
@@ -3022,7 +3026,9 @@ function AuthedShiftBuilder() {
       const onCallSchedulesChannel = createTMOnCallSchedulesChannel(async () => {
         try {
           const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`);
+          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
+            credentials: "same-origin",
+          });
           if (res.ok) {
             const data = await res.json();
             setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));

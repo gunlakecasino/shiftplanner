@@ -112,7 +112,9 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
     getCachedGraveAvailableTeamMembers(),
     getCachedSlotDefaults(),
     getCachedActiveTeamMembers(),
-    fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}&_=${Date.now()}`).catch(() => null),
+    fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}&_=${Date.now()}`, {
+      credentials: "same-origin",
+    }).catch(() => null),
   ]);
 
   const [dbAssignments, weekOnScheduleSet] = await Promise.all([

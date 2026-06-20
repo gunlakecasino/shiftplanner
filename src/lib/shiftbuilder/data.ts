@@ -39,6 +39,23 @@ async function bustNightBoardServerCache(isoDate?: string): Promise<void> {
   }
 }
 
+/** Session-gated mutations in browser; service role on server. */
+async function runBoardMutation<T>(
+  action: string,
+  payload: Record<string, unknown>,
+  serverFallback: () => Promise<T>,
+): Promise<T> {
+  if (typeof window !== 'undefined') {
+    const { postOpsMutation } = await import('./opsMutationClient');
+    const result = await postOpsMutation<T>(action, payload);
+    await bustNightBoardServerCache(payload.date as string | undefined);
+    return result;
+  }
+  const result = await serverFallback();
+  await bustNightBoardServerCache(payload.date as string | undefined);
+  return result;
+}
+
 /**
  * Logs Supabase errors in a structured way that survives serialization
  * across React Server Components, edge runtimes, and production logging pipelines.
@@ -839,82 +856,14 @@ export interface UpsertAssignmentParams {
  * This is the single source of truth for manual write-back.
  */
 export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
-  const client = getSupabaseClient();
-
-  const {
-    nightId,
-    slotKey,
-    tmId,
-    slotType = 'zone',
-    rrSide = null,
-    isLocked = false,
-  } = params;
-
-  if (!nightId || !slotKey) {
-    throw new Error('nightId and slotKey are required for upsertZoneAssignment');
-  }
-
-  // Defensive normalization: if someone passes a UI key by mistake,
-  // convert it to the canonical DB key. This prevents future drift.
-  //
-  // CRITICAL for RR sides (MRR/WRR): the live optimistic layer (useLiveAssignments)
-  // and drag persist do `const {slot_key, rr_side} = uiToDb(uiKey)` first (getting
-  // correct "womens" for WRR1), then pass the DB form slotKey="rr_1_2" + explicit rrSide.
-  // uiToDb("rr_1_2") matches /^rr_\d+(_\d+)?$/ and returns rr_side:null, which would
-  // previously overwrite and cause womens assignments to be written with null side
-  // (loading as MRR on refresh via dbToUi). Only remap when the incoming value does
-  // NOT look like a DB key form.
-  let finalSlotKey = slotKey;
-  let finalSlotType = slotType;
-  let finalRrSide = rrSide;
-  const isDbForm = /^(zone_|rr_|aux_|support_|trash_|overlap_|admin$|z9_sr$)/.test(slotKey);
-  if (!isDbForm) {
-    try {
-      const mapped = uiToDb(slotKey);
-      finalSlotKey = mapped.slot_key;
-      finalSlotType = mapped.slot_type;
-      finalRrSide = mapped.rr_side;
-    } catch {
-      // already a DB key or unknown — leave as-is
-    }
-  }
-
-  if (!tmId) {
-    // Unassign / clear the slot — use the robust helper that also cleans legacy keys
-    return deleteZoneAssignment({
-      nightId,
-      uiKey: slotKey, // the robust function will handle normalization + legacy cleanup
-      slotType: finalSlotType,
-      rrSide: finalRrSide,
-    });
-  }
-
-  // Assign or re-assign — always use normalized keys
-  const row: Record<string, any> = {
-    night_id: nightId,
-    slot_key: finalSlotKey,
-    slot_type: finalSlotType,
-    tm_id: tmId,
-    rr_side: finalRrSide,
-    is_filled: true,
-    is_locked: isLocked,
-    updated_at: new Date().toISOString(),
-  };
-
-  // Use upsert with the actual unique columns (night_id, slot_type, slot_key, rr_side)
-  const { error } = await client
-    .from('zone_assignments')
-    .upsert(row, {
-      onConflict: 'night_id,slot_type,slot_key,rr_side',
-    });
-
-  if (error) {
-    logSupabaseError('upsert assignment failed', error);
-    throw new Error(`Failed to save assignment: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
-  return { success: true, action: 'upserted' as const };
+  return runBoardMutation(
+    'upsert_zone_assignment',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { upsertZoneAssignmentServer } = await import('./opsMutations.server');
+      return upsertZoneAssignmentServer(params);
+    },
+  );
 }
 
 /**
@@ -933,76 +882,14 @@ export async function deleteZoneAssignment(params: {
   slotType?: string;
   rrSide?: string | null;
 }) {
-  const client = getSupabaseClient();
-  const { nightId, uiKey, slotType = 'zone', rrSide = null } = params;
-
-  if (!nightId || !uiKey) {
-    throw new Error('nightId and uiKey are required for deleteZoneAssignment');
-  }
-
-  // Always compute the canonical DB key
-  // (mirrors the fix in upsert: if a DB-form key + explicit rrSide is passed,
-  // trust it instead of letting uiToDb on "rr_xx" force null side for womens RR.)
-  let canonical: { slot_key: string; slot_type: string; rr_side: string | null };
-  const isDbForm = /^(zone_|rr_|aux_|support_|trash_|overlap_|admin$|z9_sr$)/.test(uiKey);
-  if (isDbForm) {
-    canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
-  } else {
-    try {
-      canonical = uiToDb(uiKey) as any;
-    } catch {
-      canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
-    }
-  }
-
-  // IMPORTANT for per-side RR (MRR/WRR clears via focusedSk in unilateral dash):
-  // Never use a variant that omits rr_side filter entirely — that would match+delete
-  // the sibling side (e.g. clearing mens would also nuke womens for the same rr_1_2).
-  // Instead: exact side (from UI key or explicit), plus explicit IS NULL for legacy
-  // null-side rows (which dbToUi treats as MRR by default). This keeps clears precise.
-  const variants = [
-    canonical, // preferred (with side if the uiKey encoded one, e.g. MRR -> mens)
-    // Legacy null-side row cleanup for the *same physical RR slot* (safe: only nulls).
-    { slot_key: canonical.slot_key, slot_type: canonical.slot_type, rr_side: null },
-    // Legacy UI key variants (for old data that might have UI keys in the table)
-    { slot_key: uiKey, slot_type: slotType, rr_side: rrSide },
-    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: rrSide },
-    // Also try legacy UI key + explicit null (covers old null rows under UI key form)
-    { slot_key: uiKey, slot_type: slotType, rr_side: null },
-    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: null },
-  ];
-
-  let totalDeleted = 0;
-
-  for (const v of variants) {
-    let q = client
-      .from('zone_assignments')
-      .delete()
-      .eq('night_id', nightId)
-      .eq('slot_key', v.slot_key)
-      .eq('slot_type', v.slot_type);
-
-    if (v.rr_side != null) {
-      q = q.eq('rr_side', v.rr_side);
-    } else if (v.rr_side === null) {
-      q = q.is('rr_side', null);
-    }
-    // No "else" broad case — we always constrain to a side or to nulls only.
-    // This fixes cross-side clear on mens/womens RR and ensures legacy nulls for the
-    // targeted side (MRR defaults) get cleaned without touching the other gender.
-
-    const { error, count } = await q;
-
-    if (error) {
-      logSupabaseError('robust delete failed on variant', error);
-      continue;
-    }
-
-    if (count) totalDeleted += count;
-  }
-
-  await bustNightBoardServerCache();
-  return { success: true, rowsDeleted: totalDeleted };
+  return runBoardMutation(
+    'delete_zone_assignment',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { deleteZoneAssignmentServer } = await import('./opsMutations.server');
+      return deleteZoneAssignmentServer(params);
+    },
+  );
 }
 
 /**
@@ -1023,56 +910,15 @@ export async function batchApplyDraftAssignments(
     tmId: string | null; // null → clear the slot
   }>
 ): Promise<void> {
-  const client = getSupabaseClient();
-  const now = new Date().toISOString();
-
-  const toUpsert = slots.filter((s) => s.tmId !== null);
-  const toDelete = slots.filter((s) => s.tmId === null);
-  const errors: string[] = [];
-
-  // Single batch upsert for all assignments
-  if (toUpsert.length > 0) {
-    const rows = toUpsert.map((s) => ({
-      night_id: nightId,
-      slot_key: s.slotKey,
-      slot_type: s.slotType,
-      rr_side: s.rrSide,
-      tm_id: s.tmId,
-      is_filled: true,
-      is_locked: false,
-      updated_at: now,
-    }));
-
-    const { error } = await client
-      .from('zone_assignments')
-      .upsert(rows, { onConflict: 'night_id,slot_type,slot_key,rr_side' });
-
-    if (error) errors.push(`batch upsert failed: ${error.message}`);
-  }
-
-  // Parallel deletes for cleared slots
-  if (toDelete.length > 0) {
-    const results = await Promise.allSettled(
-      toDelete.map(async (s) => {
-        let q = client
-          .from('zone_assignments')
-          .delete()
-          .eq('night_id', nightId)
-          .eq('slot_key', s.slotKey)
-          .eq('slot_type', s.slotType);
-        if (s.rrSide) q = q.eq('rr_side', s.rrSide);
-        const { error } = await q;
-        if (error) throw new Error(`delete ${s.slotKey}: ${error.message}`);
-      })
-    );
-    results.forEach((r) => {
-      if (r.status === 'rejected') errors.push(r.reason?.message ?? 'delete failed');
-    });
-  }
-
-  if (errors.length > 0) throw new Error(`batchApplyDraftAssignments: ${errors.join('; ')}`);
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'batch_apply_draft',
+    { nightId, slots },
+    async () => {
+      const { batchApplyDraftAssignmentsServer } = await import('./opsMutations.server');
+      await batchApplyDraftAssignmentsServer(nightId, slots);
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1086,32 +932,14 @@ export async function toggleAssignmentLock(params: {
   rrSide?: string | null;
   currentLocked: boolean;
 }) {
-  const client = getSupabaseClient();
-
-  const { nightId, slotKey, slotType, rrSide = null, currentLocked } = params;
-
-  // We update directly (more efficient than full upsert when we know tm_id exists)
-  let q = client
-    .from('zone_assignments')
-    .update({
-      is_locked: !currentLocked,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('night_id', nightId)
-    .eq('slot_key', slotKey)
-    .eq('slot_type', slotType);
-
-  if (rrSide) q = q.eq('rr_side', rrSide);
-
-  const { error } = await q;
-
-  if (error) {
-    logSupabaseError('toggle lock failed', error);
-    throw new Error(`Failed to toggle lock: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
-  return { success: true, newLocked: !currentLocked };
+  return runBoardMutation(
+    'toggle_assignment_lock',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { toggleAssignmentLockServer } = await import('./opsMutations.server');
+      return toggleAssignmentLockServer(params);
+    },
+  );
 }
 
 /**
@@ -1123,20 +951,15 @@ export async function setNightLocked(nightId: string, locked: boolean): Promise<
     throw new Error('setNightLocked requires a nightId');
   }
 
-  const client = getSupabaseClient();
-
-  const { error } = await client
-    .from('nights')
-    .update({
-      is_locked: locked,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', nightId);
-
-  if (error) {
-    logSupabaseError('setNightLocked failed', error);
-    throw new Error(`Failed to ${locked ? 'lock' : 'unlock'} day: ${error.message || 'unknown'}`);
-  }
+  await runBoardMutation(
+    'set_night_locked',
+    { nightId, locked },
+    async () => {
+      const { setNightLockedServer } = await import('./opsMutations.server');
+      await setNightLockedServer(nightId, locked);
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1148,23 +971,15 @@ export async function setNightPublished(nightId: string, published: boolean): Pr
     throw new Error('setNightPublished requires a nightId');
   }
 
-  const client = getSupabaseClient();
-  const status = published ? 'published' : 'draft';
-
-  const { error } = await client
-    .from('nights')
-    .update({
-      status,
-      // Publishing is visibility-only; clear legacy publish→lock flags.
-      ...(published ? { is_locked: false } : {}),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', nightId);
-
-  if (error) {
-    logSupabaseError('setNightPublished failed', error);
-    throw new Error(`Failed to ${published ? 'publish' : 'unpublish'} day: ${error.message || 'unknown'}`);
-  }
+  await runBoardMutation(
+    'set_night_published',
+    { nightId, published },
+    async () => {
+      const { setNightPublishedServer } = await import('./opsMutations.server');
+      await setNightPublishedServer(nightId, published);
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1415,33 +1230,15 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     throw new Error('addNightSlotTask requires nightId, slotKey, taskLabel');
   }
 
-  // Insert; rely on the unique index to dedupe. We can't easily use upsert
-  // here because the unique key includes COALESCE(rr_side, '_none_') which
-  // PostgREST doesn't expose as an onConflict target. Insert + swallow
-  // duplicate-key errors is the simplest path.
-  const { error } = await supabase
-    .from('night_slot_tasks')
-    .insert({
-      night_id: nightId,
-      slot_key: slotKey,
-      slot_type: slotType,
-      rr_side: rrSide,
-      task_label: taskLabel,
-      catalog_task_id: catalogTaskId,
-      sort_order: sortOrder,
-      color,
-      is_coverage: isCoverage,
-    });
-
-  if (error) {
-    // 23505 = unique_violation; treat as no-op since the task is already
-    // selected. Anything else is a real error.
-    if ((error as any).code === '23505') return;
-    logSupabaseError('addNightSlotTask failed', error);
-    throw new Error(`Failed to add task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'add_night_slot_task',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { addNightSlotTaskServer } = await import('./opsMutations.server');
+      await addNightSlotTaskServer(params);
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1534,26 +1331,15 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
     throw new Error('removeNightSlotTask requires nightId, slotKey, taskLabel');
   }
 
-  let q = supabase
-    .from('night_slot_tasks')
-    .delete()
-    .eq('night_id', nightId)
-    .eq('slot_key', slotKey)
-    .eq('slot_type', slotType)
-    .eq('task_label', taskLabel);
-
-  // The unique index treats NULL rr_side as a sentinel; the delete predicate
-  // has to match the same shape.
-  if (rrSide) q = q.eq('rr_side', rrSide);
-  else q = q.is('rr_side', null);
-
-  const { error } = await q;
-  if (error) {
-    logSupabaseError('removeNightSlotTask failed', error);
-    throw new Error(`Failed to remove task: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'remove_night_slot_task',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { removeNightSlotTaskServer } = await import('./opsMutations.server');
+      await removeNightSlotTaskServer(params);
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1572,28 +1358,23 @@ export async function updateNightSlotTaskColor(
     throw new Error('setNightSlotTaskColor requires nightId, slotKey, taskLabel');
   }
 
-  const update: any = {};
-  if (color !== undefined) update.color = color;
-  if (markerType !== undefined) update.marker_type = markerType;
-
-  let q = supabase
-    .from('night_slot_tasks')
-    .update(update)
-    .eq('night_id', nightId)
-    .eq('slot_key', slotKey)
-    .eq('task_label', taskLabel);
-
-  if (rrSide) q = q.eq('rr_side', rrSide);
-  else q = q.is('rr_side', null);
-
-  const { error } = await q;
-
-  if (error) {
-    logSupabaseError('updateNightSlotTaskColor failed', error);
-    throw new Error(`Failed to set task color: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
+  const payload = { nightId, slotKey, taskLabel, color, rrSide, markerType };
+  await runBoardMutation(
+    'update_night_slot_task_color',
+    payload,
+    async () => {
+      const { updateNightSlotTaskColorServer } = await import('./opsMutations.server');
+      await updateNightSlotTaskColorServer(
+        nightId,
+        slotKey,
+        taskLabel,
+        color,
+        rrSide,
+        markerType,
+      );
+      return { ok: true };
+    },
+  );
 }
 
 /**
@@ -1616,24 +1397,16 @@ export async function updateNightSlotTaskLabel(
     throw new Error('Task label cannot be empty');
   }
 
-  let q = supabase
-    .from('night_slot_tasks')
-    .update({ task_label: trimmed })
-    .eq('night_id', nightId)
-    .eq('slot_key', slotKey)
-    .eq('task_label', oldLabel);
-
-  if (rrSide) q = q.eq('rr_side', rrSide);
-  else q = q.is('rr_side', null);
-
-  const { error } = await q;
-
-  if (error) {
-    logSupabaseError('updateNightSlotTaskLabel failed', error);
-    throw new Error(`Failed to update task label: ${error.message || 'unknown'} (code: ${error.code || 'unknown'})`);
-  }
-
-  await bustNightBoardServerCache();
+  const payload = { nightId, slotKey, oldLabel, newLabel: trimmed, rrSide };
+  await runBoardMutation(
+    'update_night_slot_task_label',
+    payload,
+    async () => {
+      const { updateNightSlotTaskLabelServer } = await import('./opsMutations.server');
+      await updateNightSlotTaskLabelServer(nightId, slotKey, oldLabel, trimmed, rrSide);
+      return { ok: true };
+    },
+  );
 }
 
 // ============================================================================
@@ -1990,51 +1763,29 @@ export async function setNightCardBorder(
 ): Promise<void> {
   if (!nightId || !slotKey || !color) return;
 
-  const { error } = await supabase
-    .from('night_card_borders')
-    .upsert(
-      {
-        night_id: nightId,
-        slot_key: slotKey,
-        color,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'night_id,slot_key' }
-    );
-
-  if (error) {
-    console.error('[shiftbuilder/data] setNightCardBorder failed:', {
-      message: error.message,
-      code: (error as any).code,
-      details: (error as any).details,
-      hint: (error as any).hint,
-    });
-    throw new Error(`Failed to save card border: ${error.message}`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'set_night_card_border',
+    { nightId, slotKey, color },
+    async () => {
+      const { setNightCardBorderServer } = await import('./opsMutations.server');
+      await setNightCardBorderServer(nightId, slotKey, color);
+      return { ok: true };
+    },
+  );
 }
 
 export async function removeNightCardBorder(nightId: string, slotKey: string): Promise<void> {
   if (!nightId || !slotKey) return;
 
-  const { error } = await supabase
-    .from('night_card_borders')
-    .delete()
-    .eq('night_id', nightId)
-    .eq('slot_key', slotKey);
-
-  if (error) {
-    console.error('[shiftbuilder/data] removeNightCardBorder failed:', {
-      message: error.message,
-      code: (error as any).code,
-      details: (error as any).details,
-      hint: (error as any).hint,
-    });
-    throw new Error(`Failed to remove card border: ${error.message}`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'remove_night_card_border',
+    { nightId, slotKey },
+    async () => {
+      const { removeNightCardBorderServer } = await import('./opsMutations.server');
+      await removeNightCardBorderServer(nightId, slotKey);
+      return { ok: true };
+    },
+  );
 }
 
 // ============================================================================
@@ -2099,48 +1850,29 @@ export async function upsertBreakAssignment(params: UpsertBreakParams): Promise<
   const { nightId, tmId, groupNum, slotRef = null, breakWave = 1 } = params;
   if (!nightId || !tmId) throw new Error('upsertBreakAssignment requires nightId + tmId');
 
-  // (night_id, tm_id) is unique — onConflict picks that up so updates land
-  // cleanly without needing a separate path for "row exists".
-  const { error } = await supabase
-    .from('break_assignments')
-    .upsert(
-      {
-        night_id: nightId,
-        tm_id: tmId,
-        group_num: groupNum,
-        break_wave: breakWave,
-        slot_ref: slotRef,
-        sort_order: groupNum, // not user-facing for now; mirrors group_num so ordering is stable
-        is_wave_locked: false,
-      },
-      { onConflict: 'night_id,tm_id' }
-    );
-  if (error) {
-    console.error('[shiftbuilder/data] upsertBreakAssignment failed:', {
-      message: (error as any).message,
-      details: (error as any).details,
-      hint: (error as any).hint,
-      code: (error as any).code,
-    });
-    throw new Error(`Failed to save break group: ${(error as any).message ?? 'unknown'}`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'upsert_break_assignment',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { upsertBreakAssignmentServer } = await import('./opsMutations.server');
+      await upsertBreakAssignmentServer(params);
+      return { ok: true };
+    },
+  );
 }
 
 export async function deleteBreakAssignment(nightId: string, tmId: string): Promise<void> {
   if (!nightId || !tmId) return;
-  const { error } = await supabase
-    .from('break_assignments')
-    .delete()
-    .eq('night_id', nightId)
-    .eq('tm_id', tmId);
-  if (error) {
-    console.error('[shiftbuilder/data] deleteBreakAssignment failed:', error);
-    throw new Error(`Failed to clear break assignment: ${(error as any).message ?? 'unknown'}`);
-  }
 
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'delete_break_assignment',
+    { nightId, tmId },
+    async () => {
+      const { deleteBreakAssignmentServer } = await import('./opsMutations.server');
+      await deleteBreakAssignmentServer(nightId, tmId);
+      return { ok: true };
+    },
+  );
 }
 
 // ============================================================================
@@ -3786,41 +3518,40 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
   const replaceSlotTasks = async (compositeKey: string, tasks: SlotDefaultTask[]) => {
     const [slotKey, rrSide] = compositeKey.split('|');
     const slotType = tasks[0].slotType;
-
-    const deleteQuery = supabase
-      .from('night_slot_tasks')
-      .delete()
-      .eq('night_id', nightId)
-      .eq('slot_key', slotKey);
-
-    const delResult = rrSide
-      ? await deleteQuery.eq('rr_side', rrSide)
-      : await deleteQuery;
-
-    if (delResult.error) {
-      console.error('[shiftbuilder/data] pushTaskDefaultsToNight delete error:', delResult.error);
-      return 0;
-    }
-
-    const inserts = tasks.map((t, idx) => ({
-      night_id: nightId,
-      slot_key: slotKey,
-      slot_type: slotType,
-      rr_side: rrSide || null,
-      task_label: t.taskLabel,
-      catalog_task_id: null,
-      sort_order: t.sortOrder ?? idx,
-      color: t.taskColor ?? null,
-      is_coverage: t.isCoverage,
+    const mappedTasks = tasks.map((t, idx) => ({
+      taskLabel: t.taskLabel,
+      sortOrder: t.sortOrder ?? idx,
+      taskColor: t.taskColor ?? null,
+      isCoverage: t.isCoverage,
     }));
 
-    const { error: insErr } = await supabase.from('night_slot_tasks').insert(inserts);
-    if (insErr) {
-      console.error('[shiftbuilder/data] pushTaskDefaultsToNight insert error:', insErr);
+    try {
+      const result = await runBoardMutation(
+        'replace_night_slot_tasks_for_slot',
+        {
+          nightId,
+          slotKey,
+          rrSide: rrSide || null,
+          slotType,
+          tasks: mappedTasks,
+        },
+        async () => {
+          const { replaceNightSlotTasksForSlotServer } = await import('./opsMutations.server');
+          const count = await replaceNightSlotTasksForSlotServer({
+            nightId,
+            slotKey,
+            rrSide: rrSide || null,
+            slotType,
+            tasks: mappedTasks,
+          });
+          return { ok: true, applied: count };
+        },
+      );
+      return (result as { applied?: number }).applied ?? mappedTasks.length;
+    } catch (err) {
+      console.error('[shiftbuilder/data] pushTaskDefaultsToNight replace error:', err);
       return 0;
     }
-
-    return tasks.length;
   };
 
   for (let i = 0; i < slotEntries.length; i += CHUNK) {
@@ -3832,7 +3563,6 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
     if (i + CHUNK < slotEntries.length) await yieldToMain();
   }
 
-  await bustNightBoardServerCache();
   return { applied };
 }
 
@@ -3899,46 +3629,29 @@ export async function copyNightSlotTasksFromSourceDate(
 
   const targetNightId = await getOrCreateNightForDate(targetDate, targetDayName);
 
-  const { count: existingCount, error: countErr } = await supabase
-    .from('night_slot_tasks')
-    .select('id', { count: 'exact', head: true })
-    .eq('night_id', targetNightId);
+  const existingTasks = await getNightSlotTasks(targetNightId);
+  const existingCount = existingTasks.length;
 
-  if (countErr) {
-    console.error('[shiftbuilder/data] copyNightSlotTasks count error:', countErr);
-    throw new Error(`Failed to read tonight's tasks: ${countErr.message}`);
-  }
-
-  const { error: delErr } = await supabase
-    .from('night_slot_tasks')
-    .delete()
-    .eq('night_id', targetNightId);
-
-  if (delErr) {
-    console.error('[shiftbuilder/data] copyNightSlotTasks delete error:', delErr);
-    throw new Error(`Failed to clear tonight's tasks: ${delErr.message}`);
-  }
-
-  const inserts = toCopy.map((t) => ({
-    night_id: targetNightId,
-    slot_key: t.slotKey,
-    slot_type: t.slotType,
-    rr_side: t.rrSide,
-    task_label: t.taskLabel,
-    catalog_task_id: t.catalogTaskId,
-    sort_order: t.sortOrder,
+  const tasks = toCopy.map((t) => ({
+    slotKey: t.slotKey,
+    slotType: t.slotType,
+    rrSide: t.rrSide,
+    taskLabel: t.taskLabel,
+    catalogTaskId: t.catalogTaskId,
+    sortOrder: t.sortOrder,
     color: t.color,
-    is_coverage: t.isCoverage,
+    isCoverage: t.isCoverage,
   }));
 
-  const { error: insErr } = await supabase.from('night_slot_tasks').insert(inserts);
-
-  if (insErr) {
-    console.error('[shiftbuilder/data] copyNightSlotTasks insert error:', insErr);
-    throw new Error(`Failed to copy tasks: ${insErr.message}`);
-  }
-
-  await bustNightBoardServerCache(targetDateIso);
+  await runBoardMutation(
+    'replace_all_night_slot_tasks',
+    { nightId: targetNightId, tasks, date: targetDateIso },
+    async () => {
+      const { replaceAllNightSlotTasksServer } = await import('./opsMutations.server');
+      await replaceAllNightSlotTasksServer(targetNightId, tasks);
+      return { ok: true };
+    },
+  );
 
   return {
     sourceNightId,

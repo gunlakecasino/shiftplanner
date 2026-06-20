@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache, unstable_noStore } from "next/cache";
+import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { buildNightSecondaryBundle } from "@/lib/shiftbuilder/nightSecondaryBundle.server";
 
@@ -13,6 +14,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   unstable_noStore();
+
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const dateParam = request.nextUrl.searchParams.get("date");
   if (!dateParam) {
     return NextResponse.json({ error: "Missing ?date=YYYY-MM-DD" }, { status: 400 });

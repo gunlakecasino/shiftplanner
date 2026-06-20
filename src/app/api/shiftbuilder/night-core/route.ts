@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
+import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import {
   getNightCoreBundleForDate,
   isNightCoreAllowedForTodayPolicy,
@@ -16,6 +17,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   unstable_noStore();
+
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const dateParam = request.nextUrl.searchParams.get("date");
 
   if (!dateParam) {

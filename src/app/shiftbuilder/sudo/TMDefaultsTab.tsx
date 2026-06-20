@@ -152,11 +152,12 @@ export function TMDefaultsTab({ onDataChanged, isDark = false, currentOperator, 
     setLoading(true);
     setError(null);
     try {
+      const fetchOpts = { credentials: "same-origin" as const };
       const [defRes, groupRes, onCallRes, rosterRes] = await Promise.all([
-        fetch("/api/admin/tm-default-schedules").then(r => r.json()),
-        fetch("/api/admin/tm-groups").then(r => r.json()),
-        fetch("/api/admin/tm-on-call-schedules").then(r => r.json()),
-        fetch("/api/admin/tm-roster").then(r => r.json()),
+        fetch("/api/admin/tm-default-schedules", fetchOpts).then(r => r.json()),
+        fetch("/api/admin/tm-groups", fetchOpts).then(r => r.json()),
+        fetch("/api/admin/tm-on-call-schedules", fetchOpts).then(r => r.json()),
+        fetch("/api/admin/tm-roster", fetchOpts).then(r => r.json()),
       ]);
 
       if (defRes.error) throw new Error(defRes.error);
