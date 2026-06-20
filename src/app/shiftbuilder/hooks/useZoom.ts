@@ -100,13 +100,13 @@ export function useZoom({
 
     if (el && el.clientWidth > 50 && el.clientHeight > 50) {
       // clientWidth/Height include padding; subtract stage chrome insets + breathing room.
-      // Extra margin for canvas padding (clamp 12-24px sides) + to avoid cut-off.
-      const canvasPad = builderFitEnabled ? 48 : 24;
+      // Extra margin for canvas padding + to avoid cut-off on bottom of last row + right of aux sidebar.
+      const canvasPad = builderFitEnabled ? 60 : 28;
       availW = el.clientWidth - insets.left - insets.right - canvasPad;
       availH = el.clientHeight - insets.top - insets.bottom - canvasPad;
     } else {
-      availW = vpW - insets.left - insets.right - (builderFitEnabled ? 56 : 32);
-      availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 56 : 32);
+      availW = vpW - insets.left - insets.right - (builderFitEnabled ? 64 : 36);
+      availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 64 : 36);
     }
 
     if (builderFitEnabled) {
@@ -152,9 +152,9 @@ export function useZoom({
     const next = Math.min(max, byWidth, byHeight);
 
     // Safety factor to ensure no edge cut-off (especially right/bottom of last cards
-    // or coverage bars) due to subpixel, padding, insets, or measurement timing.
+    // or coverage bars, or right edge of aux sidebar) due to subpixel, padding, insets, or measurement timing.
     // More aggressive for builder relaxed mode because of canvas padding + container queries.
-    const safety = builderFitEnabled ? 0.93 : 0.97;
+    const safety = builderFitEnabled ? 0.91 : 0.97;
     const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next * safety);
     // Epsilon guard + ref check: DOM measurements, RO callbacks, and initial layout
     // thrash (content height changes as assignments/aux mount) can produce micro

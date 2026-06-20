@@ -2050,7 +2050,7 @@ function AuthedShiftBuilder() {
     if (isBuilderLiveCanvas) {
       return {
         top: stageTopInsetPx(),
-        right: (tablet ? 12 : 16) + dockInset,
+        right: (tablet ? 16 : 22) + dockInset,
         bottom: builderStageBottomInsetPx(),
         left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 12 : 16,
       };
@@ -7851,8 +7851,9 @@ function AuthedShiftBuilder() {
                 <div
                   className="sb-scale-reservation"
                   style={{
-                    width: builderContentWidth > 50 ? `${Math.round(builderContentWidth * scale)}px` : '100%',
-                    height: builderContentHeight > 50 ? `${Math.round(builderContentHeight * scale)}px` : undefined,
+                    // Small buffer + ceil to avoid subpixel clipping on right/bottom edges (aux cards, last row coverage)
+                    width: builderContentWidth > 50 ? `${Math.ceil(builderContentWidth * scale) + 2}px` : '100%',
+                    height: builderContentHeight > 50 ? `${Math.ceil(builderContentHeight * scale) + 2}px` : undefined,
                     marginLeft: 'auto',
                     marginRight: 'auto',
                   }}
