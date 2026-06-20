@@ -162,7 +162,6 @@ export default function InteractiveStage({
           // on Safari/iPad. Cached rects would be from the "natural" layout and not match current visual
           // positions / pointer coordinates after adaptive scaling.
           droppable: { strategy: MeasuringStrategy.Always },
-          draggable: { strategy: MeasuringStrategy.Always },
         }}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}

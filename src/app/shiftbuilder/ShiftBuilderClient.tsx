@@ -5294,6 +5294,7 @@ function AuthedShiftBuilder() {
     kind: "tm" | "assigned" | "task";
     label: string;
     fromSlot?: string;
+    isDuplicate?: boolean;
   } | null>(null);
 
   const onDragStart = (event: DragStartEvent) => {

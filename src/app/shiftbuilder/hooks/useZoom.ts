@@ -36,6 +36,8 @@ export type BuilderFitOptions = {
   contentRef: RefObject<HTMLDivElement | null>;
   /** Extra vertical chrome inside stageHost (e.g. week health bar slot). */
   chromeHeightPx?: number;
+  /** When true, pause recomputeScale and ResizeObserver-driven refits (prevents iPad freeze during engine/publish/defaults). */
+  pause?: boolean;
 };
 
 /**

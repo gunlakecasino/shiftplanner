@@ -194,7 +194,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     }
     setShowRolePicker(false);
     setPickerPosition(null);
-    clearLongHoverTimer();
   };
 
   const handleClearRole = () => {
@@ -206,7 +205,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     }
     setShowRolePicker(false);
     setPickerPosition(null);
-    clearLongHoverTimer();
   };
 
   const handleCustomLabel = (label: string) => {
@@ -222,7 +220,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     setShowRolePicker(false);
     setPickerPosition(null);
     setEditingLabel(false);
-    clearLongHoverTimer();
   };
 
   const headerLabel = isUnsetBlank && !editingLabel ? (
