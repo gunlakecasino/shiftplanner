@@ -54,16 +54,123 @@ function LegendDot({ color }: { color: string }) {
 }
 
 function InlineCoverage({ sourceKey, auxDefs, onPick, onCancel }: { sourceKey: string; auxDefs: AuxDef[]; onPick: (target: string) => void; onCancel: () => void }) {
+  const handleCustomSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const input = form.elements.namedItem("customCoverage") as HTMLInputElement | null;
+    const val = input?.value.trim();
+    if (val) {
+      onPick(`custom:${val}`);
+      if (input) input.value = "";
+    }
+  };
+
+  const isSelfCoverage = (key: string) => {
+    if (key === sourceKey) return true;
+    // RR sides: if source is one side, other side of same RR is also "self" for coverage logic? (rare)
+    if (sourceKey.startsWith("MRR") || sourceKey.startsWith("WRR")) {
+      const num = sourceKey.replace(/^[MW]RR/, "");
+      if (key === `MRR${num}` || key === `WRR${num}`) return true;
+    }
+    return false;
+  };
+
   return (
     <div className="border-t border-black/[0.06] bg-neutral-50/80 px-3 py-2.5 flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold text-neutral-700">Add coverage</span>
         <button onClick={onCancel} className="text-neutral-400 hover:text-neutral-600 text-xs px-1">✕</button>
       </div>
-      <div className="grid grid-cols-5 gap-1 text-[9px]">
-        {ZONE_DEFS.map(z => <button key={z.key} onClick={() => onPick(z.key)} className="h-[22px] rounded-md border text-center" style={{ borderColor: getZoneColor(z.key) + "66", color: getZoneColor(z.key) }}>{z.key}</button>)}
+
+      {/* Zones */}
+      <div>
+        <div className="text-[8px] font-bold tracking-[0.8px] uppercase text-neutral-500 mb-0.5">Zones</div>
+        <div className="grid grid-cols-5 gap-1 text-[9px]">
+          {ZONE_DEFS.map(z => {
+            const self = isSelfCoverage(z.key);
+            return (
+              <button
+                key={z.key}
+                disabled={self}
+                onClick={() => onPick(z.key)}
+                className="h-[22px] rounded-md border text-center disabled:opacity-30"
+                style={{ borderColor: getZoneColor(z.key) + (self ? "22" : "66"), color: self ? "#aaa" : getZoneColor(z.key) }}
+              >
+                {z.key}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="pt-2 border-t text-[10px] text-neutral-600">Custom coverage coming from parent wiring.</div>
+
+      {/* Restrooms */}
+      <div>
+        <div className="text-[8px] font-bold tracking-[0.8px] uppercase text-neutral-500 mb-0.5">Restrooms</div>
+        <div className="grid grid-cols-5 gap-1 text-[8px]">
+          {RR_DEFS.map(rr => {
+            const mKey = `MRR${rr.num}`;
+            const wKey = `WRR${rr.num}`;
+            const self = isSelfCoverage(mKey) || isSelfCoverage(wKey);
+            const color = getRRAccent(rr.num);
+            return (
+              <button
+                key={rr.num}
+                disabled={self}
+                onClick={() => onPick(mKey)}  // pick MRR side as canonical for coverage
+                className="h-[22px] rounded-md border text-center disabled:opacity-30"
+                style={{ borderColor: color + (self ? "22" : "66"), color: self ? "#aaa" : color, fontSize: "8px" }}
+              >
+                {rr.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Aux / Support */}
+      {auxDefs.length > 0 && (
+        <div>
+          <div className="text-[8px] font-bold tracking-[0.8px] uppercase text-neutral-500 mb-0.5">Aux / Support</div>
+          <div className="grid grid-cols-4 gap-1 text-[8px]">
+            {auxDefs.filter(d => !d.key.startsWith("SP")).map(aux => {
+              const self = isSelfCoverage(aux.key);
+              const color = getAuxAccent(aux.key);
+              const display = (aux.label || aux.key).replace(/ .*/, "").slice(0, 6);
+              return (
+                <button
+                  key={aux.key}
+                  disabled={self}
+                  onClick={() => onPick(aux.key)}
+                  className="h-[22px] rounded-md border text-center disabled:opacity-30"
+                  style={{ borderColor: color + (self ? "22" : "66"), color: self ? "#aaa" : color }}
+                >
+                  {display}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Custom coverage text input (pinned bottom as "And ..." coverage task) */}
+      <div className="border-t border-black/[0.06] pt-2 mt-1">
+        <div className="text-[10px] text-neutral-600 mb-1">Custom text (pinned bottom)</div>
+        <form className="flex gap-1" onSubmit={handleCustomSubmit}>
+          <input
+            name="customCoverage"
+            type="text"
+            placeholder="e.g. High Limit Slots"
+            className="flex-1 text-[10px] border border-black/[0.1] px-1 py-0.5 rounded bg-white"
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          <button
+            type="submit"
+            className="text-[10px] px-2 py-0.5 rounded border border-black/[0.1] bg-white hover:bg-neutral-50"
+          >
+            Add
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -2024,8 +2024,10 @@ function AuthedShiftBuilder() {
   const builderContentRef = useRef<HTMLDivElement>(null);
   // Initialize to a wide value that forces the @container queries to use max columns (5 for zones/rr)
   // so the first layout measures the "full natural" comfortable size instead of starting narrow and staying there.
-  const [builderContentWidth, setBuilderContentWidth] = useState(1400);
-  const [builderContentHeight, setBuilderContentHeight] = useState(900);
+  // Start with a generous wide layout size so @container "builder" picks the 5-col + aux sidebar
+  // grid immediately on first render. Measurement will refine the exact natural size.
+  const [builderContentWidth, setBuilderContentWidth] = useState(1580);
+  const [builderContentHeight, setBuilderContentHeight] = useState(1050);
 
   // Guard to prevent measurement thrash / freeze during heavy ops (engine, defaults, publish)
   // Only on iPad these rapid RO + setState + scale updates were causing full UI freeze.
@@ -2050,7 +2052,7 @@ function AuthedShiftBuilder() {
     if (isBuilderLiveCanvas) {
       return {
         top: stageTopInsetPx(),
-        right: (tablet ? 16 : 22) + dockInset,
+        right: (tablet ? 18 : 24) + dockInset,
         bottom: builderStageBottomInsetPx(),
         left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 12 : 16,
       };
@@ -2128,6 +2130,9 @@ function AuthedShiftBuilder() {
         last.h = h;
         setBuilderContentWidth(w);
         setBuilderContentHeight(h);
+        // Immediately ask for a fresh scale computation using the new natural size.
+        // This helps "zoom to fit on load" settle faster instead of waiting for next effect/RO.
+        requestAnimationFrame(() => recomputeScaleRef.current());
       }
     };
     measure();
@@ -2166,24 +2171,31 @@ function AuthedShiftBuilder() {
   // Extra safety re-fit shortly after mount / data load for the live builder to avoid
   // initial measurement being too small (causing cut-off on right/bottom as cards populate).
   // Also re-measure after forcing the wide initial content width (to trigger max columns).
+  // Multiple passes help "zoom to fit on load" on Safari/iPad where layout settles late.
   useEffect(() => {
     if (!isBuilderLiveCanvas) return;
-    const t1 = setTimeout(() => {
-      // Re-measure the now-wide content so builderContent* state adopts the full 5-col natural.
+
+    const doMeasureAndFit = () => {
       if (builderContentRef.current) {
         const w = builderContentRef.current.offsetWidth || builderContentRef.current.scrollWidth || 0;
         const h = builderContentRef.current.offsetHeight || builderContentRef.current.scrollHeight || 0;
-        if (w > builderContentWidth + 10) setBuilderContentWidth(Math.max(w, 1200));
-        if (h > builderContentHeight + 10) setBuilderContentHeight(Math.max(h, 900));
+        if (w > builderContentWidth + 10) setBuilderContentWidth(Math.max(w, 1580));
+        if (h > builderContentHeight + 10) setBuilderContentHeight(Math.max(h, 1050));
       }
       recomputeScaleRef.current();
-    }, 80);
-    const t2 = setTimeout(() => {
-      recomputeScaleRef.current();
-    }, 450);
+    };
+
+    // Very early pass (before paint where possible)
+    const raf1 = requestAnimationFrame(doMeasureAndFit);
+    const t1 = setTimeout(doMeasureAndFit, 60);
+    const t2 = setTimeout(doMeasureAndFit, 180);
+    const t3 = setTimeout(doMeasureAndFit, 420);
+
     return () => {
+      cancelAnimationFrame(raf1);
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, [isBuilderLiveCanvas, builderContentWidth, builderContentHeight]);
 

@@ -5,6 +5,7 @@ import {
   FLOATING_NAV_HEIGHT_PX,
   FLOATING_NAV_TOP_PX,
 } from "@/lib/shiftbuilder/canvasLayout";
+import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 export { BUILDER_CANVAS_MAX_WIDTH_PX, DEPLOYMENT_CANVAS_MAX_WIDTH_PX };
 
@@ -53,6 +54,8 @@ export function stageTopInsetPx(): number {
 /** Builder deployment uses a tighter bottom inset so the board fills the viewport.
  *  More breathing room at bottom to keep coverage bars + bottom row fully visible after scaling. */
 export function builderStageBottomInsetPx(): number {
-  return 40;
+  // More breathing on load to prevent over-zoom/cutoff on bottom row + aux right edge.
+  // Especially important until full layout (cards, tasks, aux) has settled.
+  return isTabletTouchDevice() ? 56 : 48;
 }
 

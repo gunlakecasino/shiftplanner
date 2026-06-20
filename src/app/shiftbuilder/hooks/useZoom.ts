@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, type RefObject } from "react";
+import { DEPLOYMENT_CANVAS_MAX_WIDTH_PX } from "@/lib/shiftbuilder/canvasLayout";
 import { isTabletTouchDevice, rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 
 export type ZoomMode = "fit" | number;
@@ -8,6 +9,9 @@ export type ZoomMode = "fit" | number;
 // The artboard is locked at 1056×816 (the print contract).
 export const NATURAL_WIDTH = 1056;
 export const NATURAL_HEIGHT = 816;
+
+/** Representative builder workspace height before live DOM measurement settles. */
+export const BUILDER_NATURAL_HEIGHT = 1080;
 
 export { isTabletTouchDevice };
 
@@ -61,15 +65,37 @@ export function useZoom({
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(() => {
     if (typeof window === "undefined") return 0.85;
-    const w = window.innerWidth - rosterPanelWidth() - 80;
-    const h = window.innerHeight - 90;
+
+    const useBuilderNatural = builderFit?.enabled ?? false;
     const max = maxArtboardScale();
-    const byW = w / NATURAL_WIDTH;
-    const byH = h / NATURAL_HEIGHT;
-    const fit = isTabletTouchDevice()
-      ? Math.min(max, byW, byH)
-      : Math.min(1, byW, byH);
-    return Math.max(0.35, fit);
+    const fitCap = useBuilderNatural ? 1 : max;
+
+    // Mirror stage chrome so the very first paint is already close to the final fit.
+    const rosterInset = rosterOpen ? rosterPanelWidth() + 12 : 0;
+    const canvasPad = useBuilderNatural ? 68 : 40;
+    const availW =
+      window.innerWidth -
+      rosterInset -
+      (useBuilderNatural ? 16 + 24 + canvasPad : 80);
+    const availH =
+      window.innerHeight -
+      (useBuilderNatural ? 56 + 48 + canvasPad : 90);
+
+    const natW = useBuilderNatural ? DEPLOYMENT_CANVAS_MAX_WIDTH_PX : NATURAL_WIDTH;
+    const natH = useBuilderNatural ? BUILDER_NATURAL_HEIGHT : NATURAL_HEIGHT;
+
+    const byW = availW / natW;
+    const byH = availH / natH;
+
+    let fit: number;
+    if (useBuilderNatural) {
+      fit = Math.min(fitCap, byW, byH) * 0.9;
+    } else {
+      fit = isTabletTouchDevice()
+        ? Math.min(max, byW, byH)
+        : Math.min(1, byW, byH);
+    }
+    return Math.max(useBuilderNatural ? 0.45 : 0.35, fit);
   });
   const stageHostRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +111,11 @@ export function useZoom({
 
   // Stable naturals to avoid tiny content deltas (single task add, etc) causing
   // visible fitScale "shrink the whole screen" jitter. Only adopt meaningfully larger.
-  const stableNaturalRef = useRef({ w: NATURAL_WIDTH, h: NATURAL_HEIGHT });
+  // Seed with builder wide size on mount so early scales aren't based on too-small initial measurement.
+  const initialNat = builderFitEnabled
+    ? { w: DEPLOYMENT_CANVAS_MAX_WIDTH_PX, h: BUILDER_NATURAL_HEIGHT }
+    : { w: NATURAL_WIDTH, h: NATURAL_HEIGHT };
+  const stableNaturalRef = useRef(initialNat);
 
   // Intricate debounce to avoid thrashing on rapid window resizes while staying very responsive.
   const recomputeScale = useCallback(() => {
@@ -93,20 +123,25 @@ export function useZoom({
     const el = stageHostRef.current;
     const insets = stageInsets;
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    const vpW = vv?.width ?? window.innerWidth;
-    const vpH = vv?.height ?? window.innerHeight;
+    // Prefer visualViewport on iPad/Safari — it correctly reports the visible area excluding dynamic toolbars.
+    const vpW = (vv && vv.width > 50) ? vv.width : window.innerWidth;
+    const vpH = (vv && vv.height > 50) ? vv.height : window.innerHeight;
     let availW = 0;
     let availH = 0;
 
     if (el && el.clientWidth > 50 && el.clientHeight > 50) {
-      // clientWidth/Height include padding; subtract stage chrome insets + breathing room.
-      // Extra margin for canvas padding + to avoid cut-off on bottom of last row + right of aux sidebar.
-      const canvasPad = builderFitEnabled ? 60 : 28;
-      availW = el.clientWidth - insets.left - insets.right - canvasPad;
-      availH = el.clientHeight - insets.top - insets.bottom - canvasPad;
+      const isTablet = isTabletTouchDevice();
+      const canvasPad = builderFitEnabled
+        ? (isTablet ? 60 : 68)
+        : 24;
+      // clientWidth/Height include padding — subtract it to get the content box.
+      const contentBox = stageContentBox(el);
+      availW = contentBox.w - canvasPad;
+      availH = contentBox.h - canvasPad;
     } else {
-      availW = vpW - insets.left - insets.right - (builderFitEnabled ? 64 : 36);
-      availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 64 : 36);
+      // Fallback (early mount etc). Full calculation using visualViewport + insets.
+      availW = vpW - insets.left - insets.right - (builderFitEnabled ? 72 : 40);
+      availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 72 : 40);
     }
 
     if (builderFitEnabled) {
@@ -114,32 +149,33 @@ export function useZoom({
     }
 
     const max = maxArtboardScale();
-    let naturalW = NATURAL_WIDTH;
-    let naturalH = NATURAL_HEIGHT;
+    const fitCap = builderFitEnabled ? 1 : max;
+    const stable = stableNaturalRef.current;
+    let naturalW = builderFitEnabled ? stable.w : NATURAL_WIDTH;
+    let naturalH = builderFitEnabled ? stable.h : NATURAL_HEIGHT;
 
     if (builderFitEnabled) {
       const content = builderFit?.contentRef.current;
       if (content) {
-        const measuredW = content.scrollWidth || content.offsetWidth;
+        let measuredW = content.scrollWidth || content.offsetWidth;
         const measuredH = content.scrollHeight || content.offsetHeight;
-        const stable = stableNaturalRef.current;
-        // Only adopt if significantly larger (ignore task-row growths ~<20px, accept aux/roster structural).
+
+        // Width floor only — early narrow layout must not shrink the fit divisor.
+        measuredW = Math.max(measuredW, DEPLOYMENT_CANVAS_MAX_WIDTH_PX);
+
         if (measuredW > 80 && measuredW > stable.w + 20) {
-          naturalW = measuredW;
           stable.w = measuredW;
         } else if (measuredW > 80 && measuredW < stable.w) {
-          // allow shrink only on major reductions
-          naturalW = measuredW;
           stable.w = measuredW;
         }
         if (measuredH > 80 && measuredH > stable.h + 20) {
-          naturalH = measuredH;
           stable.h = measuredH;
         } else if (measuredH > 80 && measuredH < stable.h) {
-          naturalH = measuredH;
           stable.h = measuredH;
         }
       }
+      naturalW = stable.w;
+      naturalH = stable.h;
     }
 
     const byWidth = availW / naturalW;
@@ -149,12 +185,16 @@ export function useZoom({
     // (both width and height). Combined with overflow:hidden everywhere + the
     // pre-scaled size wrappers, this guarantees the whole UI is locked to the
     // browser window with zero scroll or page movement during any interaction.
-    const next = Math.min(max, byWidth, byHeight);
+    const next = Math.min(fitCap, max, byWidth, byHeight);
 
     // Safety factor to ensure no edge cut-off (especially right/bottom of last cards
     // or coverage bars, or right edge of aux sidebar) due to subpixel, padding, insets, or measurement timing.
     // More aggressive for builder relaxed mode because of canvas padding + container queries.
-    const safety = builderFitEnabled ? 0.91 : 0.97;
+    // Safety factor. On builder we use a bit of conservatism to tolerate late layout / measurement noise on load.
+    // Desktop can be a hair more aggressive since we have a good initial natural guess now.
+    const safety = builderFitEnabled
+      ? (isTabletTouchDevice() ? 0.91 : 0.90)
+      : 0.97;
     const proposed = Math.max(builderFitEnabled ? 0.55 : 0.25, next * safety);
     // Epsilon guard + ref check: DOM measurements, RO callbacks, and initial layout
     // thrash (content height changes as assignments/aux mount) can produce micro
@@ -182,17 +222,23 @@ export function useZoom({
     if (ro && stageHostRef.current) ro.observe(stageHostRef.current);
 
     // Intricate responsive resize: RAF for smooth, plus light debounce + orientation for mobile.
+    // Especially important on iPad/Safari where visualViewport changes with toolbars, split-view, keyboard.
     let resizeTimer: number | null = null;
     const onResize = () => {
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         requestAnimationFrame(recomputeScale);
-      }, 32); // ~2 frames - balances responsiveness with stability on rapid drags/resizes
+      }, 32);
     };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", () => requestAnimationFrame(recomputeScale));
+
     const vv = window.visualViewport;
-    if (vv) vv.addEventListener("resize", onResize);
+    if (vv) {
+      vv.addEventListener("resize", onResize);
+      // Some Safari versions also need this for iPad toolbar collapse
+      vv.addEventListener("scroll", () => requestAnimationFrame(recomputeScale));
+    }
 
     return () => {
       mq.removeEventListener("change", onMq);
@@ -201,7 +247,10 @@ export function useZoom({
       clearTimeout(t3);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", recomputeScale);
-      if (vv) vv.removeEventListener("resize", onResize);
+      if (vv) {
+        vv.removeEventListener("resize", onResize);
+        vv.removeEventListener("scroll", recomputeScale);  // note: recomputeScale is stable via ref in practice
+      }
       if (ro) ro.disconnect();
       if (resizeTimer) window.clearTimeout(resizeTimer);
     };
@@ -299,4 +348,17 @@ export function useZoom({
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
+}
+
+/** Content box inside a padded stage host (client* includes padding). */
+function stageContentBox(el: HTMLElement): { w: number; h: number } {
+  const cs = getComputedStyle(el);
+  const padL = parseFloat(cs.paddingLeft) || 0;
+  const padR = parseFloat(cs.paddingRight) || 0;
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const padB = parseFloat(cs.paddingBottom) || 0;
+  return {
+    w: Math.max(0, el.clientWidth - padL - padR),
+    h: Math.max(0, el.clientHeight - padT - padB),
+  };
 }

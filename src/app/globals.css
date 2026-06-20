@@ -799,7 +799,8 @@ body {
 /* Builder-only compact rhythm — tighter than preview/print.
    Extra bottom + side breathing to prevent clipping of bottom row cards and right edge of aux sidebar. */
 .sb-builder-stage .builder-workspace.sb-builder-compact {
-  padding: 4px 10px 16px;
+  /* Extra internal breathing on right (aux sidebar) and bottom (last row + coverage) */
+  padding: 4px 12px 20px;
 }
 
 /* Builder view only: hide the underlying large date page header (the tall "17 Wednesday..." block + BREAKS row).
