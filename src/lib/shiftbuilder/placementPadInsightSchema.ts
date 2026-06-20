@@ -90,17 +90,16 @@ export type XaiFit = {
 export function fitVerdictLabel(verdict: PlacementFitVerdict): string {
   switch (verdict) {
     case "strong_fit":
-      return "Strong fit";
+      return "Best";
     case "acceptable":
-      return "Acceptable";
+      return "Okay";
     case "questionable":
-      return "Questionable";
+      return "Check";
     case "poor_fit":
-      return "Poor fit";
     case "needs_swap":
-      return "Consider swap";
+      return "Invalid";
     case "open_gap":
-      return "Open";
+      return "—";
     default:
       return "Fit";
   }
@@ -115,32 +114,32 @@ export function fitVerdictStyles(verdict: PlacementFitVerdict): {
   switch (verdict) {
     case "strong_fit":
       return {
-        border: "rgba(22,163,74,0.35)",
-        bg: "rgba(22,163,74,0.08)",
-        text: "rgb(21,128,61)",
-        badge: "bg-emerald-100 text-emerald-800",
+        border: "transparent",
+        bg: "#34C759",
+        text: "#FFFFFF",
+        badge: "bg-[#34C759] text-white",
       };
     case "acceptable":
       return {
-        border: "rgba(37,99,235,0.3)",
-        bg: "rgba(37,99,235,0.06)",
-        text: "rgb(29,78,216)",
-        badge: "bg-blue-100 text-blue-800",
+        border: "transparent",
+        bg: "#00C0E8",
+        text: "#FFFFFF",
+        badge: "bg-[#00C0E8] text-white",
       };
     case "questionable":
       return {
-        border: "rgba(217,119,6,0.35)",
-        bg: "rgba(251,191,36,0.1)",
-        text: "rgb(180,83,9)",
-        badge: "bg-amber-100 text-amber-900",
+        border: "transparent",
+        bg: "#FF8D28",
+        text: "#FFFFFF",
+        badge: "bg-[#FF8D28] text-white",
       };
     case "poor_fit":
     case "needs_swap":
       return {
-        border: "rgba(220,38,38,0.35)",
-        bg: "rgba(254,226,226,0.5)",
-        text: "rgb(185,28,28)",
-        badge: "bg-red-100 text-red-800",
+        border: "transparent",
+        bg: "#FF383C",
+        text: "#FFFFFF",
+        badge: "bg-[#FF383C] text-white",
       };
     case "open_gap":
       return {
