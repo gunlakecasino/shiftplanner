@@ -4,6 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { getActiveEngineConfig, type EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 import { listSchedules, setWeekPublished, type ScheduleRecord } from "@/lib/shiftbuilder/sudoActions";
+import type { SettingsTab } from "../settings/settingsConfig";
 
 
 export interface DashboardTabProps {
@@ -12,8 +13,8 @@ export interface DashboardTabProps {
   currentOperator?: { id: string; full_name: string; username: string; role: string } | null;
   currentNightId?: string | null;
   weekStart?: Date | null;
-  /** Allows the dashboard to navigate the operator to other Sudo tabs */
-  onNavigate?: (tab: string) => void;
+  /** Navigate to another settings tab */
+  onNavigate?: (tab: SettingsTab) => void;
   /** Granular permissions — used to gate "Ready to Publish" widget etc. */
   permissions?: import("@/lib/auth/opsAuth").ShiftBuilderPermissions;
 }
@@ -54,7 +55,7 @@ export function DashboardTab({
 
   const greetingName = currentOperator?.full_name?.split(" ")[0] || currentOperator?.username || "Operator";
 
-  const handleNav = (tab: string) => {
+  const handleNav = (tab: SettingsTab) => {
     onNavigate?.(tab);
   };
 
@@ -145,8 +146,8 @@ export function DashboardTab({
           <QuickAction
             isDark={isDark}
             icon="table_chart"
-            label="Upload & Apply ADP"
-            onClick={() => handleNav("schedules")}
+            label="TM Weekly Defaults"
+            onClick={() => handleNav("tmDefaults")}
           />
           <QuickAction
             isDark={isDark}
@@ -170,7 +171,9 @@ export function DashboardTab({
             isDark={isDark}
             icon="receipt_long"
             label="Audit Logs"
-            onClick={() => handleNav("logs")}
+            disabled
+            hint="Coming soon"
+            onClick={() => {}}
           />
         </div>
       </div>
@@ -209,7 +212,7 @@ export function DashboardTab({
             ))}
             {unpublished.length > 4 && (
               <button
-                onClick={() => handleNav("schedules")}
+                onClick={() => handleNav("tmDefaults")}
                 className={cn(
                   "flex items-center justify-center rounded-2xl border text-sm font-medium",
                   isDark ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-[#F8F8F6]"
@@ -229,7 +232,7 @@ export function DashboardTab({
           <span className="font-medium">Sudo Home</span>
         </div>
         <p className={cn("leading-relaxed", isDark ? "text-zinc-400" : "text-[#5A5A5F]")}>
-          This dashboard is your calm command post. Use the left rail for deep tools. 
+          Your calm command post. Use the section chips above the artboard for deep tools.
           All changes here are audited and immediately available to the live floor.
         </p>
       </div>
@@ -283,20 +286,28 @@ function QuickAction({
   icon,
   label,
   onClick,
+  disabled = false,
+  hint,
 }: {
   isDark: boolean;
   icon: string;
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      disabled={disabled}
+      title={hint}
       className={cn(
         "sb-list-row sb-interactive group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left",
+        disabled && "cursor-not-allowed opacity-45",
         isDark
           ? "border-white/10 bg-white/4 hover:bg-white/8 hover:border-white/20"
-          : "border-black/10 bg-white hover:bg-[#F8F8F6] hover:border-black/15"
+          : "border-black/10 bg-white hover:bg-[#F8F8F6] hover:border-black/15",
       )}
     >
       <span className="ms text-[#B89708] group-hover:scale-110 transition-transform" style={{ fontSize: 20 }}>{icon}</span>

@@ -112,14 +112,6 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     description: "Run weighted planner across nights",
   },
   {
-    id: "reports",
-    label: "Reports",
-    shortLabel: "Reports",
-    section: "insights",
-    icon: BarChart3,
-    description: "Zone frequency and placement analytics",
-  },
-  {
     id: "dashboard",
     label: "Dashboard",
     shortLabel: "Home",
@@ -127,12 +119,24 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     icon: LayoutDashboard,
     description: "Ops overview and quick actions",
   },
+  {
+    id: "reports",
+    label: "Reports",
+    shortLabel: "Reports",
+    section: "insights",
+    icon: BarChart3,
+    description: "Zone frequency and placement analytics",
+  },
 ];
 
 export const VALID_SETTINGS_TABS = new Set<string>(SETTINGS_TABS.map((t) => t.id));
 
+export function isSettingsTab(tab: string): tab is SettingsTab {
+  return VALID_SETTINGS_TABS.has(tab);
+}
+
 export function resolveSettingsTab(param: string | null): SettingsTab {
-  if (param && VALID_SETTINGS_TABS.has(param)) return param as SettingsTab;
+  if (param && isSettingsTab(param)) return param;
   return "dashboard";
 }
 

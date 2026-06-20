@@ -146,7 +146,7 @@ function SettingsTabPanel({
           currentOperator={currentOperator}
           currentNightId={currentNightId}
           weekStart={weekStart}
-          onNavigate={(tab) => onNavigate(tab as SettingsTab)}
+          onNavigate={onNavigate}
           permissions={permissions}
         />
       )}
@@ -225,6 +225,13 @@ export function SettingsShell() {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // Keep tab state in sync with ?tab= (back/forward, deep links)
+  React.useEffect(() => {
+    const tab = resolveSettingsTab(searchParams.get("tab"));
+    setActiveTab(tab);
+    setActiveSection(sectionForTab(tab));
+  }, [searchParams]);
 
   const { weekStart, selectedDay } = React.useMemo(() => resolveWeekContext(), [dataEpoch]);
   const currentNight = useCurrentNight(selectedDay);
