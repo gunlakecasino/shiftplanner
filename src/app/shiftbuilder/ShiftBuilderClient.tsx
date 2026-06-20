@@ -3999,6 +3999,44 @@ function AuthedShiftBuilder() {
 
   // CommandPalette callbacks section removed along with the hook call (part of the sweep).
 
+  // Map DB task rows to UI keys, with special remapping for aux cards so that
+  // tasks added/persisted under canonical DB keys (admin/trash_N/...) land on the
+  // current AUXn keys from auxDefs (role-based layout).
+  const mapNightTasksToUiKeys = React.useCallback((rows: NightSlotTask[], currentAuxDefs: AuxDef[] = []) => {
+    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
+    rows.forEach((row) => {
+      let uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
+      if (uiKey.startsWith("UNK:")) {
+        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
+          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
+          for (let i = 0; i < 6; i++) {
+            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
+          }
+        }
+        return;
+      }
+      if (currentAuxDefs.length > 0) {
+        if (uiKey === "ADM" || uiKey === "Z9SR" || /^TR\d+$/.test(uiKey) || /^SP\d+$/.test(uiKey)) {
+          let match: AuxDef | undefined;
+          if (uiKey === "ADM") {
+            match = currentAuxDefs.find(d => d.role === "admin");
+          } else if (uiKey === "Z9SR") {
+            match = currentAuxDefs.find(d => d.role === "z9sr");
+          } else if (/^TR(\d+)$/.test(uiKey)) {
+            const n = parseInt(RegExp.$1, 10);
+            match = currentAuxDefs.filter(d => d.role === "trash")[n - 1];
+          } else if (/^SP(\d+)$/.test(uiKey)) {
+            const n = parseInt(RegExp.$1, 10);
+            match = currentAuxDefs.filter(d => d.role === "support")[n - 1];
+          }
+          if (match?.key) uiKey = match.key;
+        }
+      }
+      (tasksByUiKey[uiKey] ??= []).push(row);
+    });
+    return tasksByUiKey;
+  }, []);
+
   const handleCmdkAddTask = React.useCallback(
     async (uiKeys: string | string[], taskLabel: string) => {
       if (isCurrentNightLocked) {
@@ -4032,19 +4070,14 @@ function AuthedShiftBuilder() {
           });
         }
         const fresh = await getNightSlotTasks(nightId);
-        const byKey: Record<string, NightSlotTask[]> = {};
-        for (const t of fresh) {
-          const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-          if (!byKey[uiKey]) byKey[uiKey] = [];
-          byKey[uiKey].push(t);
-        }
+        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
         setSelectedTasks(byKey);
       } catch (e) {
         console.error("Failed to add task from palette (multi)", e);
         showToast("Failed to save task to one or more cards", "error");
       }
     },
-    [nightId, showToast, logBuilderChange, isCurrentNightLocked]
+    [nightId, showToast, logBuilderChange, isCurrentNightLocked, mapNightTasksToUiKeys, auxDefs]
   );
 
   // Dedicated handler for the new "Assign Sweeper" quick action from MarkerPad.
@@ -4076,12 +4109,7 @@ function AuthedShiftBuilder() {
 
         // Refresh tasks for the slot
         const fresh = await getNightSlotTasks(nightId);
-        const byKey: Record<string, NightSlotTask[]> = {};
-        for (const t of fresh) {
-          const key = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-          if (!byKey[key]) byKey[key] = [];
-          byKey[key].push(t);
-        }
+        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
         setSelectedTasks(byKey);
       } catch (e) {
         console.error("Failed to assign sweeper task", e);
@@ -4173,12 +4201,7 @@ function AuthedShiftBuilder() {
           },
         });
         const fresh = await getNightSlotTasks(nightId);
-        const byKey: Record<string, NightSlotTask[]> = {};
-        for (const t of fresh) {
-          const uiKey = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-          if (!byKey[uiKey]) byKey[uiKey] = [];
-          byKey[uiKey].push(t);
-        }
+        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
         setSelectedTasks(byKey);
         const qc = currentNight?.queryClient;
         if (qc) {
@@ -5474,12 +5497,7 @@ function AuthedShiftBuilder() {
             });
             // Refresh the target slot's tasks so order/sort_order is correct
             const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
-            const byKey: Record<string, any[]> = {};
-            for (const t of fresh) {
-              const uiKey = t.slotKey; // already camelCase from the mapper in getNightSlotTasks
-              if (!byKey[uiKey]) byKey[uiKey] = [];
-              byKey[uiKey].push(t);
-            }
+            const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
             setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
           } catch (e: any) {
             console.error("[shiftbuilder] task duplicate persist failed", e);
@@ -5841,23 +5859,9 @@ function AuthedShiftBuilder() {
       startHeavyTransition(() => setSelectedTasks({}));
       return;
     }
-    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
-    nightTaskRows.forEach((row) => {
-      const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-      if (uiKey.startsWith("UNK:")) {
-        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
-          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
-          for (let i = 0; i < 6; i++) {
-            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
-          }
-          return;
-        }
-        return;
-      }
-      (tasksByUiKey[uiKey] ??= []).push(row);
-    });
+    const tasksByUiKey = mapNightTasksToUiKeys(nightTaskRows, auxDefs);
     startHeavyTransition(() => setSelectedTasks(tasksByUiKey));
-  }, [currentNight.isSecondaryLoading, nightTasksSig, currentNight.tasks, startHeavyTransition]);
+  }, [currentNight.isSecondaryLoading, nightTasksSig, currentNight.tasks, startHeavyTransition, mapNightTasksToUiKeys, auxDefs]);
 
   React.useEffect(() => {
     const next = effectiveCardBorders;
@@ -6131,24 +6135,6 @@ function AuthedShiftBuilder() {
     [resolveNightIdForDate, showToast, currentNight.queryClient, logBuilderChange]
   );
 
-  const mapNightTasksToUiKeys = React.useCallback((rows: NightSlotTask[]) => {
-    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
-    rows.forEach((row) => {
-      const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-      if (uiKey.startsWith("UNK:")) {
-        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
-          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
-          for (let i = 0; i < 6; i++) {
-            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
-          }
-        }
-        return;
-      }
-      (tasksByUiKey[uiKey] ??= []).push(row);
-    });
-    return tasksByUiKey;
-  }, []);
-
   const applyCopiedNightTasks = React.useCallback(
     async (
       result: {
@@ -6170,7 +6156,7 @@ function AuthedShiftBuilder() {
         patchNightSecondaryTasksCache(currentNight.queryClient, dateKey, fresh);
       }
 
-      const mapped = mapNightTasksToUiKeys(fresh);
+      const mapped = mapNightTasksToUiKeys(fresh, auxDefs);
       startHeavyTransition(() => setSelectedTasks(mapped));
       lastHydratedTasksSigRef.current = `${dateKey}:${fresh.length}:${fresh.map((r) => r.id).join(",")}`;
 
@@ -6183,7 +6169,7 @@ function AuthedShiftBuilder() {
         "success",
       );
     },
-    [nightId, currentNight.queryClient, mapNightTasksToUiKeys, showToast, startHeavyTransition],
+    [nightId, currentNight.queryClient, mapNightTasksToUiKeys, showToast, startHeavyTransition, auxDefs],
   );
 
   const refreshNightTasksFromServer = React.useCallback(
@@ -6195,11 +6181,11 @@ function AuthedShiftBuilder() {
       if (currentNight.queryClient) {
         patchNightSecondaryTasksCache(currentNight.queryClient, dateKey, fresh);
       }
-      const mapped = mapNightTasksToUiKeys(fresh);
+      const mapped = mapNightTasksToUiKeys(fresh, auxDefs);
       startHeavyTransition(() => setSelectedTasks(mapped));
       lastHydratedTasksSigRef.current = `${dateKey}:${fresh.length}:${fresh.map((r) => r.id).join(",")}`;
     },
-    [currentNight.queryClient, mapNightTasksToUiKeys, startHeavyTransition],
+    [currentNight.queryClient, mapNightTasksToUiKeys, startHeavyTransition, auxDefs],
   );
 
   const handleCopyTasksFromSource = React.useCallback(
@@ -6833,12 +6819,7 @@ function AuthedShiftBuilder() {
           });
         }
         const fresh = await getNightSlotTasks(nightId);
-        const byKey: Record<string, NightSlotTask[]> = {};
-        for (const t of fresh) {
-          const key = dbToUi(t.slotKey, t.slotType, t.rrSide ?? null);
-          if (!byKey[key]) byKey[key] = [];
-          byKey[key].push(t);
-        }
+        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
         setSelectedTasks(byKey);
         showToast(`Copied ${toAdd.length} task${toAdd.length === 1 ? "" : "s"} from pairing`, "success");
       } catch (e) {
@@ -6846,7 +6827,7 @@ function AuthedShiftBuilder() {
         showToast("Failed to copy tasks from pairing", "error");
       }
     },
-    [isCurrentNightLocked, nightId, selectedTasks, showToast, logBuilderChange],
+    [isCurrentNightLocked, nightId, selectedTasks, showToast, logBuilderChange, mapNightTasksToUiKeys, auxDefs],
   );
 
   const handleBoardSetTaskColor = React.useCallback((slotKey: string, taskId: string, color: string) => {
