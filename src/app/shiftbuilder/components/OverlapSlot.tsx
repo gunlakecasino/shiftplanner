@@ -4,11 +4,10 @@ import React from "react";
 import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
-import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import TaskRow from "./TaskRow";
 import BreakBadge from "./BreakBadge";
 import { PlacementFitChip } from "./PlacementFitChip";
-import { AssignmentSkeleton, penHoverClass, UnassignedDropHint } from "./builderPrimitives";
+import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { premiumSpring } from "@/lib/premiumSpring";
 import {
@@ -101,9 +100,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
     ? tmConflictSlots[currentTmId].filter(s => s !== slotKey)
     : [];
-  const { isPenHovering, penHoverHandlers } = usePencilHover(
-    (el) => { if (!isLocked && onCardClick) onCardClick(slotKey, el); },
-  );
 
   return (
     <div
@@ -111,13 +107,12 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       onClick={(e) => {
         if (!isLocked && onCardClick) onCardClick(slotKey, e.currentTarget, e);
       }}
-      {...penHoverHandlers}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
       className={`assignment-card sb-assignment-card relative h-full min-h-[48px] flex flex-col border border-[#E5E5E7] rounded-[3px] bg-white px-2.5 py-1.5 touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
     >
       <div className="flex items-center justify-between gap-1 min-h-[16px]">
         {showDigitalAssists && setBreakGroupForSlot ? (

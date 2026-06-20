@@ -7,11 +7,11 @@ import {
   getRRAccent,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
-import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import CoverageBar from "./CoverageBar";
+import BreakBadge from "./BreakBadge";
+import TaskRow from "./TaskRow";
 import { PlacementFitChip } from "./PlacementFitChip";
-import { penHoverClass } from "./builderPrimitives";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
@@ -105,10 +105,6 @@ const RRSide: React.FC<{
     ? tmConflictSlots[currentTmId].filter((s) => s !== slotKey)
     : [];
 
-  const { isPenHovering, penHoverHandlers } = usePencilHover(
-    (el) => onClick(slotKey, el),
-  );
-
   let assignmentState: SlotAssignmentState;
   if (loading && !hasTM && !(isDraftMode && draftInfo?.proposedTmName)) {
     assignmentState = { kind: "loading" };
@@ -135,11 +131,10 @@ const RRSide: React.FC<{
     <div
       ref={setRef}
       onClick={(e) => { if (!isLocked) onClick(slotKey, e.currentTarget, e); }}
-      {...penHoverHandlers}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 min-h-0 touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${penHoverClass(isPenHovering)} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       <div className={`min-w-0 pb-2 ${showDigitalAssists ? "" : "pt-1"}`}>
         <SlotAssignmentBody
@@ -156,19 +151,24 @@ const RRSide: React.FC<{
         />
       </div>
 
-      {/* Uniform task list to match ZoneCard (plain text, no colored indents/tints, consistent 12px gray).
-          Note: for covered sides, the covered names are rendered via SlotAssignmentBody above (as "Covered by"). */}
+      {/* Task list using TaskRow to restore drag/reorder/duplicate and color highlights (e.g. sweeper orange).
+          Matches uniform plain visual with text size. */}
       {tasks && tasks.length > 0 && (
         <>
           <div className="mx-3.5 h-px bg-gray-100" />
           <div className="px-3 py-2 space-y-0.5">
-            {tasks.map((t) => t.taskLabel).map((loc, i) => (
-              <div
-                key={i}
-                className="px-2.5 py-[5px] text-[12px] leading-snug text-gray-600"
-              >
-                {loc}
-              </div>
+            {tasks.map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                slotKey={slotKey}
+                onRemoveTask={onRemoveTask}
+                onSetTaskColor={onSetTaskColor}
+                onEditTask={onEditTask}
+                onOpenTaskTextEdit={onOpenTaskTextEdit}
+                textSize="text-[12px]"
+                textColorClass="text-gray-600"
+              />
             ))}
           </div>
         </>
@@ -186,6 +186,7 @@ function RRSideShell({
   isCovered = false,
   fitChip,
   breakNum,
+  onCycle,
   coverageTasks,
   slotKey,
   onRemoveTask,
@@ -199,6 +200,7 @@ function RRSideShell({
   isCovered?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
   breakNum: BreakGroup;
+  onCycle?: () => void;
   coverageTasks: NightSlotTask[];
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
@@ -224,14 +226,12 @@ function RRSideShell({
           {sideLabel}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-          {/* Status badge - dynamic (via PlacementFitChip). Omit for covered state. */}
-          {!isCovered && (
+          {/* Status badge - dynamic (via PlacementFitChip). Omit for covered + unassigned. */}
+          {!isCovered && !isEmpty && (
             <PlacementFitChip fit={fitChip} compact />
           )}
-          {/* Count pill for break group */}
-          <span className="inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-gray-900/80 text-white text-[10.5px] font-bold tabular-nums leading-none flex-shrink-0">
-            {breakNum || 1}
-          </span>
+          {/* Functional break group pill */}
+          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" />
         </div>
       </div>
 
@@ -365,6 +365,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={wIsCovered}
         fitChip={fitChipW}
         breakNum={wBreak}
+        onCycle={cycleW}
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={onRemoveTask}
@@ -389,6 +390,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={mIsCovered}
         fitChip={fitChipM}
         breakNum={mBreak}
+        onCycle={cycleM}
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={onRemoveTask}

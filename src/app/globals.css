@@ -1254,15 +1254,18 @@ body {
   align-items: flex-start;
   gap: 3px;
   line-height: 1.25;
+  opacity: 0.55;
 }
 
 .builder-workspace .sb-unassigned-primary {
   font-weight: 600;
-  color: #6B7280;
+  color: #9CA3AF;
+  opacity: 0.65;
 }
 
 .dark .builder-workspace .sb-unassigned-primary {
-  color: #98989D;
+  color: #71717A;
+  opacity: 0.6;
 }
 
 .builder-workspace .sb-unassigned-hint {
@@ -1272,11 +1275,13 @@ body {
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.15px;
-  color: rgba(139, 105, 16, 0.72);
+  color: #9CA3AF;
+  opacity: 0.5;
 }
 
 .dark .builder-workspace .sb-unassigned-hint {
-  color: rgba(233, 185, 72, 0.72);
+  color: #71717A;
+  opacity: 0.5;
 }
 
 /* Builder drop targets — gold ring matches casino brand, not generic blue. */

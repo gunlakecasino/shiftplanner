@@ -163,21 +163,22 @@ export function UnassignedInvite({
   return (
     <motion.div
       key="unassigned-invite"
-      className={`flex flex-col items-center justify-center text-[#8a8a8f] tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
+      className={`flex flex-col items-center justify-center text-[#9CA3AF] tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
         minHeight: cfg.minH,
         maxHeight: cfg.maxH,
-        border: "1px solid rgba(0,0,0,0.05)",
-        background: "rgba(255,255,255,0.8)",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.95)",
+        border: "1px dashed rgba(0,0,0,0.06)",
+        background: "rgba(250,250,250,0.35)",
+        boxShadow: "0 1px 1px rgba(0,0,0,0.015)",
       }}
-      initial={{ opacity: 0.9, y: 1, scale: 0.99 }}
+      initial={{ opacity: 0.85, y: 1, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       whileHover={{
         scale: 1.01,
-        borderColor: "rgba(0,0,0,0.08)",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.98)",
+        borderColor: "rgba(0,0,0,0.10)",
+        background: "rgba(250,250,250,0.55)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
       }}
       whileTap={{ scale: 0.985 }}
       transition={premiumSpring}
@@ -185,7 +186,7 @@ export function UnassignedInvite({
       title={title}
     >
       <motion.span
-        className="leading-none opacity-40"
+        className="leading-none opacity-25"
         style={{ fontSize: cfg.plusSize }}
         whileHover={reducedMotion ? {} : { scale: 1.15, rotate: 90 }}
         transition={{ ...premiumSpring, stiffness: 250 }}
@@ -193,15 +194,15 @@ export function UnassignedInvite({
         +
       </motion.span>
       <span
-        className="font-semibold tracking-[0.35px] text-[#5a5a60] mt-1"
-        style={{ fontSize: cfg.labelSize }}
+        className="font-semibold tracking-[0.35px] text-[#9CA3AF] mt-1"
+        style={{ fontSize: cfg.labelSize, opacity: 0.85 }}
       >
         ASSIGN TM
       </span>
       {size === "zone" ? (
         <>
-          <span className="no-print text-[7.5px] opacity-55 mt-0.5">Tap to assign</span>
-          <span className="no-print text-[6.5px] opacity-40 mt-0.5">or drop to assign</span>
+          <span className="no-print text-[7.5px] text-[#9CA3AF] opacity-45 mt-0.5">Tap to assign</span>
+          <span className="no-print text-[6.5px] text-[#9CA3AF] opacity-35 mt-0.5">or drop to assign</span>
         </>
       ) : (
         <UnassignedDropHint className="mt-0.5" />
@@ -259,7 +260,7 @@ function CoveredByBlock({
       </span>
       <span
         className={`sb-covered-by-names font-bold tracking-[-0.35px] px-1 py-[1px] inline-block leading-tight ${
-          showDigitalAssists ? "text-[#6B7280]" : "text-[#9CA3AF]"
+          showDigitalAssists ? "text-[#9CA3AF]" : "text-[#9CA3AF]"
         }`}
         style={{
           fontSize: nameFontSize,
@@ -333,7 +334,7 @@ export function CoveredByPrintLabel({
 export function UnassignedPrintLabel({ showDigitalAssists }: { showDigitalAssists: boolean }) {
   return (
     <div
-      className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
+      className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px] text-gray-400"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
       <span className="sb-unassigned-primary">— Unassigned —</span>
@@ -530,11 +531,11 @@ export function SlotAssignmentBody({
       ) : showDigitalAssists && emptyPresentation === "label" ? (
         <motion.div
           key="unassigned-label"
-          className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px]"
+          className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] text-[#9CA3AF]"
           style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-          initial={{ opacity: 0.65, y: 2, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          whileHover={{ scale: 1.01 }}
+          initial={{ opacity: 0.5, y: 2, scale: 0.985 }}
+          animate={{ opacity: 0.75, y: 0, scale: 1 }}
+          whileHover={{ scale: 1.01, opacity: 0.9 }}
           transition={premiumSpring}
           onClick={onUnassignedClick}
         >

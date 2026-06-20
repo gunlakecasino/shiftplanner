@@ -109,7 +109,6 @@ import {
   COVERAGE_BAR_H,
 } from "@/lib/shiftbuilder/constants";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
-import { usePencilHover } from "@/lib/shiftbuilder/usePencilHover";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
@@ -967,6 +966,24 @@ function AuthedShiftBuilder() {
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
+
+  // Track Alt/Option key for cross-platform task duplicate on drag (Safari/iPad often needs this)
+  const [altPressed, setAltPressed] = useState(false);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey || e.getModifierState?.('Alt')) setAltPressed(true);
+    };
+    const handleKeyUp = () => setAltPressed(false);
+    const reset = () => setAltPressed(false);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', reset);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   // Tracks loadingAssignments inside async callbacks (state can't be read stably from closures).
   const loadingAssignmentsRef = useRef<boolean>(false);
@@ -1914,6 +1931,16 @@ function AuthedShiftBuilder() {
   const [builderContentWidth, setBuilderContentWidth] = useState(0);
   const [builderContentHeight, setBuilderContentHeight] = useState(0);
 
+  // Guard to prevent measurement thrash / freeze during heavy ops (engine, defaults, publish)
+  // Only on iPad these rapid RO + setState + scale updates were causing full UI freeze.
+  const isHeavyOperation = engineRunPhase !== "idle" || publishDayBusy || restoreDefaultBreaksBusy;
+  const isHeavyOpRef = useRef(false);
+  useEffect(() => {
+    isHeavyOpRef.current = isHeavyOperation;
+  }, [isHeavyOperation]);
+
+  const lastMeasuredRef = useRef({ w: 0, h: 0 });
+
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
     const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
@@ -1951,6 +1978,7 @@ function AuthedShiftBuilder() {
           enabled: true,
           contentRef: builderContentRef,
           chromeHeightPx: 0,
+          pause: isHeavyOperation,
         }
       : undefined,
   });
@@ -1969,17 +1997,27 @@ function AuthedShiftBuilder() {
 
   // Re-measure fit when chrome changes but preserve manual zoom if the user stepped in/out.
   useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
+    if (!isBuilderLiveCanvas || isHeavyOperation) return;
     recomputeScale();
-  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, recomputeScale]);
+  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, recomputeScale, isHeavyOperation]);
 
   useEffect(() => {
     if (!isBuilderLiveCanvas) return;
     const el = builderContentRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
+
     const measure = () => {
-      setBuilderContentWidth(el.offsetWidth || el.scrollWidth || 0);
-      setBuilderContentHeight(el.offsetHeight || el.scrollHeight || 0);
+      if (isHeavyOpRef.current) return; // pause during engine/defaults/publish to avoid iPad freeze
+      const w = el.offsetWidth || el.scrollWidth || 0;
+      const h = el.offsetHeight || el.scrollHeight || 0;
+      const last = lastMeasuredRef.current;
+      // only update state on meaningful change (>8px) to reduce re-render spam + layout thrash
+      if (Math.abs(w - last.w) > 8 || Math.abs(h - last.h) > 8) {
+        last.w = w;
+        last.h = h;
+        setBuilderContentWidth(w);
+        setBuilderContentHeight(h);
+      }
     };
     measure();
     const ro = new ResizeObserver(() => requestAnimationFrame(measure));
@@ -1991,7 +2029,27 @@ function AuthedShiftBuilder() {
     }
 
     return () => ro.disconnect();
-  }, [isBuilderLiveCanvas, selectedDayIndex, currentView]);
+  }, [isBuilderLiveCanvas, selectedDayIndex, currentView]); // measurement uses ref for last + heavy guard; no state deps needed
+
+  // After any heavy operation ends, do a final settle + re-measure + fit.
+  // Prevents stale scale/wrapper after bulk data changes (engine, defaults, publish).
+  useEffect(() => {
+    if (!isBuilderLiveCanvas) return;
+    if (isHeavyOperation) return;
+    const t = setTimeout(() => {
+      const el = builderContentRef.current;
+      if (el) {
+        const w = el.offsetWidth || el.scrollWidth || 0;
+        const h = el.offsetHeight || el.scrollHeight || 0;
+        if (Math.abs(w - builderContentWidth) > 4 || Math.abs(h - builderContentHeight) > 4) {
+          setBuilderContentWidth(w);
+          setBuilderContentHeight(h);
+        }
+      }
+      recomputeScale();
+    }, 120);
+    return () => clearTimeout(t);
+  }, [isHeavyOperation, isBuilderLiveCanvas, builderContentWidth, builderContentHeight, recomputeScale]);
 
   const stepZoom = (dir: -1 | 1) => {
     if (zoomMode === "fit") {
@@ -2020,6 +2078,7 @@ function AuthedShiftBuilder() {
 
   // Handlers for the FloatingNav zoom cluster (Fit / − / +)
   const handleZoomFit = () => {
+    if (isHeavyOperation) return;
     recomputeScale(); // ensure fresh measurement
     setZoomMode("fit");
   };
@@ -5268,7 +5327,8 @@ function AuthedShiftBuilder() {
       }
     } 
     else if (d.type === "task") {
-      setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot });
+      const isAltAtStart = altPressed || (typeof window !== 'undefined' && (window as any).event?.altKey);
+      setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot, isDuplicate: isAltAtStart });
     }
   };
 
@@ -5322,7 +5382,8 @@ function AuthedShiftBuilder() {
     // nesting this check inside the assigned block made it unreachable.
     if (a.type === "task") {
       const activatorEvent = event.activatorEvent as any;
-      const isDuplicateDrag = !!(activatorEvent && (activatorEvent.altKey || activatorEvent.optionKey));
+      const fromActive = (active.data.current as any)?.isDuplicate;
+      const isDuplicateDrag = fromActive || altPressed || !!(activatorEvent && (activatorEvent.altKey || activatorEvent.optionKey || (activatorEvent as any).getModifierState?.('Alt')));
 
       const overData = over?.data.current as any;
       let toUiKey: string | null = null;
@@ -7290,6 +7351,7 @@ function AuthedShiftBuilder() {
         onDragOver={onDragOver}
         activeDrag={activeDrag}
         isDark={isDark}
+        scale={scale}
       >
         {/* (Floating Placed pill removed from bottom-right per request — single instance now lives in top nav right section with visual progress) */}
         {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our

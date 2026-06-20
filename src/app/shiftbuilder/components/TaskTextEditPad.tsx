@@ -5,11 +5,8 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { premiumSpring, premiumButton, premiumTap } from "@/lib/premiumSpring";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import { usePortalPlacementStyle, type PlacementPadAnchor } from "./PlacementPad";
+import { usePortalPlacementStyle } from "./PlacementPad";
 import { TASK_COLOR_SPHERES } from "./TaskRow";
-
-const PAD_W = 268;
-const PAD_MAX_HEIGHT = 320;
 
 export interface TaskTextEditPadProps {
   slotKey: string;
@@ -23,77 +20,7 @@ export interface TaskTextEditPadProps {
   isDark?: boolean;
 }
 
-function computeTaskPadStyle(hostId: string, anchor: PlacementPadAnchor): React.CSSProperties | null {
-  const host = document.querySelector(`[data-task-host="${hostId}"]`) as HTMLElement | null;
-  if (!host) return null;
 
-  const rect = host.getBoundingClientRect();
-  const gap = 8;
-  const padW = PAD_W;
-  const maxH = Math.min(280, PAD_MAX_HEIGHT);
-
-  let left = rect.right + gap;
-  let top = Math.max(8, rect.top - 4);
-
-  if (anchor === "left") {
-    left = rect.left - padW - gap;
-  }
-
-  // Keep on screen
-  if (left + padW > window.innerWidth - 8) {
-    left = Math.max(8, rect.left - padW - gap);
-  }
-  if (left < 8) left = 8;
-
-  if (top + maxH > window.innerHeight - 8) {
-    top = Math.max(8, window.innerHeight - maxH - 8);
-  }
-
-  return {
-    position: "fixed",
-    left,
-    top,
-    width: padW,
-    zIndex: 210,
-    maxHeight: maxH,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  };
-}
-
-function useTaskPadStyle(hostId: string | undefined, anchor: PlacementPadAnchor) {
-  const [style, setStyle] = useState<React.CSSProperties | null>(null);
-  const rafRef = React.useRef<number | null>(null);
-
-  const update = React.useCallback(() => {
-    if (!hostId) {
-      setStyle(null);
-      return;
-    }
-    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null;
-      setStyle(computeTaskPadStyle(hostId, anchor));
-    });
-  }, [hostId, anchor]);
-
-  React.useLayoutEffect(() => {
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    const vv = window.visualViewport;
-    if (vv) vv.addEventListener("resize", update);
-    return () => {
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      if (vv) vv.removeEventListener("resize", update);
-    };
-  }, [update]);
-
-  return style;
-}
 
 const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
   slotKey,
@@ -110,13 +37,41 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
 
   const [labelDraft, setLabelDraft] = useState(originalLabel);
   const [colorDraft, setColorDraft] = useState<string | null>(originalColor);
+  const [markerType, setMarkerType] = useState<'highlight' | 'underline' | 'circle' | 'none'>('highlight');
 
   const reducedMotion = useReducedMotion();
-  const portalStyle = useTaskPadStyle(hostId, "right");
+  const portalStyle = usePortalPlacementStyle(hostId, "right");
   const usePortal = !!hostId && !!portalStyle;
 
   const hasChanges =
-    labelDraft.trim() !== originalLabel || colorDraft !== originalColor;
+    labelDraft.trim() !== originalLabel || colorDraft !== originalColor || markerType !== 'highlight';
+
+  const getMarkerStyle = () => {
+    if (!colorDraft) return { color: isDark ? "#E5E5E7" : "#1f2937" };
+    const base = { color: isDark ? "#E5E5E7" : "#1f2937" };
+    if (markerType === 'highlight') {
+      return {
+        ...base,
+        backgroundColor: `${colorDraft}14`,
+        borderLeft: `4px solid ${colorDraft}`,
+      };
+    } else if (markerType === 'underline') {
+      return {
+        ...base,
+        borderBottom: `3px solid ${colorDraft}`,
+        paddingBottom: '2px',
+      };
+    } else if (markerType === 'circle') {
+      return {
+        ...base,
+        border: `2px solid ${colorDraft}`,
+        borderRadius: '9999px',
+        padding: '2px 8px',
+        display: 'inline-block',
+      };
+    }
+    return base;
+  };
 
   const handleSave = () => {
     const newLabel = labelDraft.trim();
@@ -158,12 +113,14 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
 
   const content = (
     <motion.div
+      key="task-edit-pad"
       initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: -2 }}
       transition={premiumSpring}
       className="sb-task-text-pad rounded-xl border border-black/[0.08] bg-white/95 dark:bg-[#2C2C2E] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)] overflow-hidden flex flex-col"
       style={{
+        ...(usePortal && portalStyle ? portalStyle : {}),
         fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
         backdropFilter: "blur(12px) saturate(140%)",
         borderColor: isDark ? "rgba(255,255,255,0.08)" : undefined,
@@ -186,16 +143,12 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
         </button>
       </div>
 
-      {/* Live preview with current draft color */}
+      {/* Live preview with current draft color + chosen marker style */}
       <div className="px-3 pt-2.5 pb-1.5">
         <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Preview</div>
         <div
           className="rounded-md px-2.5 py-1.5 text-[13px] font-medium leading-tight border border-black/[0.06]"
-          style={colorDraft ? {
-            backgroundColor: `${colorDraft}14`,
-            borderLeft: `4px solid ${colorDraft}`,
-            color: isDark ? "#E5E5E7" : "#1f2937",
-          } : { color: isDark ? "#E5E5E7" : "#1f2937" }}
+          style={getMarkerStyle()}
         >
           {labelDraft.trim() || "—"}
         </div>
@@ -218,7 +171,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
       {/* Color palette (font/text highlight) */}
       <div className="px-3 pt-1 pb-2.5 border-t border-black/[0.05]">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400">Highlight color</span>
+          <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400">Color &amp; marker</span>
           {colorDraft && (
             <button
               type="button"
@@ -254,6 +207,27 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
           >
             ×
           </button>
+        </div>
+
+        {/* Marker style options: colored marker underline, circle text, etc. */}
+        <div className="mt-2">
+          <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Marker style</div>
+          <div className="flex flex-wrap gap-1">
+            {(['highlight', 'underline', 'circle', 'none'] as const).map((m) => {
+              const active = markerType === m;
+              const label = m === 'highlight' ? 'Highlight' : m === 'underline' ? 'Underline' : m === 'circle' ? 'Circle' : 'None';
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMarkerType(m)}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${active ? 'bg-[#007AFF]/10 border-[#007AFF] text-[#007AFF]' : 'border-black/15 hover:bg-neutral-100 dark:hover:bg-white/5'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -297,7 +271,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
     // Fallback (should not happen in normal builder flow)
     return (
       <AnimatePresence>
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20" onClick={onClose}>
+        <div key="overlay" className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20" onClick={onClose}>
           {content}
         </div>
       </AnimatePresence>
@@ -306,7 +280,7 @@ const TaskTextEditPad: React.FC<TaskTextEditPadProps> = ({
 
   return createPortal(
     <AnimatePresence>
-      <div onClick={onClose} className="fixed inset-0 z-[205]" />
+      <div key="overlay" onClick={onClose} className="fixed inset-0 z-[205]" />
       {content}
     </AnimatePresence>,
     document.body

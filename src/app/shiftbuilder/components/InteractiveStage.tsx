@@ -13,6 +13,7 @@ import {
   closestCenter,
   pointerWithin,
   rectIntersection,
+  MeasuringStrategy,
   type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
@@ -83,6 +84,7 @@ interface InteractiveStageProps {
   onDragOver?: (event: any) => void; // for intra-list task reordering preview
   activeDrag: any; // the ghost data
   isDark: boolean;
+  scale?: number; // for adjusted positioning/overlay in scaled relaxed builder (Safari/iPad fix)
   // Future: we will pass only the minimal droppable-related props
 }
 
@@ -93,10 +95,13 @@ export default function InteractiveStage({
   onDragOver,
   activeDrag,
   isDark,
+  scale = 1,
 }: InteractiveStageProps) {
   const reducedMotion = useReducedMotion();
 
-  // Sensors tuned for iPad + Pencil (same logic as before, now co-located)
+  // Sensors tuned for iPad + Pencil + Safari compatibility.
+  // Pointer for mouse/pencil, Touch for finger (with hold to distinguish from scroll).
+  // MeasuringStrategy.Always below helps with ancestor CSS scale(transform) rect accuracy.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
@@ -129,12 +134,8 @@ export default function InteractiveStage({
     root.classList.add('sb-is-dragging');
     body.classList.add('sb-is-dragging');
 
-    // Extra safety: if any touchmove sneaks through during active drag, kill the zoom gesture.
-    const prevent = (e: TouchEvent) => {
-      if (activeDrag) e.preventDefault();
-    };
-    // Use capture to be early.
-    document.addEventListener('touchmove', prevent, { passive: false, capture: true });
+    // Note: touchmove prevent was removed to avoid interfering with dnd-kit's own touch handling on iPad/Safari.
+    // The CSS .sb-is-dragging * { touch-action: none } + styles on root/body handle preventing unwanted zoom/gestures.
 
     return () => {
       root.style.touchAction = prevRootTouch;
@@ -144,7 +145,6 @@ export default function InteractiveStage({
       body.style.overscrollBehavior = prevOverscroll;
       root.classList.remove('sb-is-dragging');
       body.classList.remove('sb-is-dragging');
-      document.removeEventListener('touchmove', prevent, { capture: true } as any);
     };
   }, [activeDrag]);
 
@@ -157,6 +157,13 @@ export default function InteractiveStage({
       <DndContext
         sensors={sensors}
         collisionDetection={shiftBuilderCollisionDetection}
+        measuring={{
+          // Always re-measure rects. Critical for ancestor CSS scale(transform) + relaxed builder content
+          // on Safari/iPad. Cached rects would be from the "natural" layout and not match current visual
+          // positions / pointer coordinates after adaptive scaling.
+          droppable: { strategy: MeasuringStrategy.Always },
+          draggable: { strategy: MeasuringStrategy.Always },
+        }}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragOver={onDragOver}

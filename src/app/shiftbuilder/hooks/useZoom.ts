@@ -83,6 +83,7 @@ export function useZoom({
 
   // Intricate debounce to avoid thrashing on rapid window resizes while staying very responsive.
   const recomputeScale = useCallback(() => {
+    if (builderFit?.pause) return; // don't thrash scale during heavy updates (iPad freeze fix)
     const el = stageHostRef.current;
     const insets = stageInsets;
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
@@ -136,7 +137,7 @@ export function useZoom({
     if (current == null || Math.abs(current - proposed) > 0.001) {
       setFitScale(proposed);
     }
-  }, [stageInsets, builderFitEnabled, builderChromeHeight, builderFit?.contentRef]);
+  }, [stageInsets, builderFitEnabled, builderChromeHeight, builderFit?.contentRef, builderFit?.pause]);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px)");
@@ -195,7 +196,9 @@ export function useZoom({
     if (!content || typeof ResizeObserver === "undefined") return;
 
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(recomputeScale);
+      if (!builderFit?.pause) {
+        requestAnimationFrame(recomputeScale);
+      }
     });
     ro.observe(content);
 
@@ -204,7 +207,7 @@ export function useZoom({
       ro.disconnect();
       clearTimeout(t);
     };
-  }, [builderFitEnabled, builderFit?.contentRef, recomputeScale]);
+  }, [builderFitEnabled, builderFit?.contentRef, recomputeScale, builderFit?.pause]);
 
   const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
   const scale = Math.min(rawScale, maxArtboardScale());
