@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
-import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/today/_lib/rateLimit";
+import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
-import type { DeploymentLogEntry, DeploymentLogsResponse } from "@/app/logs/lib/types";
+import type { DeploymentLogEntry, DeploymentLogsResponse } from "@/lib/shiftbuilder/deploymentLogTypes";
 
 function mapRow(row: Record<string, unknown>): DeploymentLogEntry {
   return {

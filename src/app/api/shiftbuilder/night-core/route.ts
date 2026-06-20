@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       const allowed = await isNightCoreAllowedForTodayPolicy(dateParam);
       if (!allowed) {
         return NextResponse.json(
-          { error: "Schedule not available for this date on /today" },
+          { error: "Schedule not available for this date" },
           { status: 403 },
         );
       }

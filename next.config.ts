@@ -18,12 +18,22 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   // === VELVET PERFORMANCE 2026 ===
-  // cacheComponents (PPR) temporarily disabled in Phase 0 because Nightwatch/Today
-  // have top-level Date / browser APIs that break prerender. We will re-enable
-  // in Phase 1 after proper dynamic boundaries + streaming skeletons on secondary routes.
-  // The other massive wins (SW, headers, web-vitals, loading shells, memoization) land now.
   // experimental: { cacheComponents: true },
 
+  async redirects() {
+    return [
+      { source: "/today", destination: "/shiftbuilder", permanent: false },
+      { source: "/today/:path*", destination: "/shiftbuilder", permanent: false },
+      { source: "/nightwatch", destination: "/shiftbuilder", permanent: false },
+      { source: "/nightwatch/:path*", destination: "/shiftbuilder", permanent: false },
+      { source: "/people", destination: "/shiftbuilder", permanent: false },
+      { source: "/people/:path*", destination: "/shiftbuilder", permanent: false },
+      { source: "/mail", destination: "/shiftbuilder", permanent: false },
+      { source: "/mail/:path*", destination: "/shiftbuilder", permanent: false },
+      { source: "/logs", destination: "/shiftbuilder", permanent: false },
+      { source: "/logs/:path*", destination: "/shiftbuilder", permanent: false },
+    ];
+  },
 
   // === Aggressive immutable caching for all fingerprinted assets ===
   // These are served with content hashes by Next — safe for 1 year.

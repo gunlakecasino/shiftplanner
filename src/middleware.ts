@@ -22,7 +22,6 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl;
 
   // === NEVER touch HMR / Turbopack chunk requests ===
-  // These are the #1 cause of "module factory is not available" during dev.
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.includes("hot-update") ||
@@ -33,15 +32,6 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Safety net: Frontman paths must be handled exclusively by root `proxy.ts`
-  // (which uses the Next.js 16 "proxy" + runtime: "nodejs" convention so that
-  // @frontman-ai/nextjs can use fs, process.cwd(), source editing, etc.).
-  //
-  // If a /frontman request reaches this file, either:
-  //   - the proxy.ts matcher/config isn't being picked up, or
-  //   - the matcher below was changed to let it through.
-  // In either case we return a clear error instead of letting it 404 silently
-  // or (worse) trying to run Node-only code under Edge.
   if (url.pathname.startsWith("/frontman")) {
     return new NextResponse(
       "Frontman path reached src/middleware.ts (Edge runtime).\n" +
@@ -52,8 +42,6 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  // PWA / Safari homescreen icon fallbacks.
-  // Keeps real assets under /public/icons/ without polluting the root.
   const iconRewrites: Record<string, string> = {
     "/apple-touch-icon.png": "/icons/apple-touch-icon.png",
     "/apple-touch-icon-precomposed.png": "/icons/apple-touch-icon.png",
@@ -67,7 +55,6 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next();
 
-  // Minimal security headers (internal ops tool)
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-Frame-Options", "SAMEORIGIN");
@@ -75,27 +62,14 @@ export function middleware(request: NextRequest) {
   const pathname = url.pathname;
 
   if (process.env.NODE_ENV === "production") {
-    if (pathname.startsWith("/shiftbuilder") || pathname.startsWith("/today")) {
+    if (pathname.startsWith("/shiftbuilder")) {
       response.headers.set(
         "Cache-Control",
         "public, max-age=30, s-maxage=60, stale-while-revalidate=300"
       );
     }
-    if (pathname.startsWith("/nightwatch")) {
-      response.headers.set(
-        "Cache-Control",
-        "public, max-age=60, s-maxage=120, stale-while-revalidate=600"
-      );
-    }
   } else {
-    // DEV: Strongest possible no-cache on the main app documents.
-    // This forces the browser to always revalidate the shell that owns the HMR runtime.
-    if (
-      pathname.startsWith("/shiftbuilder") ||
-      pathname.startsWith("/today") ||
-      pathname.startsWith("/nightwatch") ||
-      pathname === "/"
-    ) {
+    if (pathname.startsWith("/shiftbuilder") || pathname === "/") {
       response.headers.set(
         "Cache-Control",
         "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
@@ -110,9 +84,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Strongly exclude /frontman (and all HMR/static noise).
-  // Frontman is handled only by the root `proxy.ts` (Next 16 proxy convention + Node runtime).
-  // Including frontman here would cause this Edge middleware to run for it, which is wrong.
   matcher: [
     "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|hot-update|frontman).*)",
   ],

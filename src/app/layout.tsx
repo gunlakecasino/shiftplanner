@@ -50,8 +50,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OMS — Operations Management System",
-  description: "ZDS Forge • Shift Builder — Operational planning for ZDS.",
+  title: "Shift Builder — GLCR Grave Deployment",
+  description: "Shift Builder — grave shift zone deployment, assignments, and print for Gun Lake Casino Resort operations.",
   icons: {
     icon: "/favicon.ico",
     apple: "/icons/apple-touch-icon.png",

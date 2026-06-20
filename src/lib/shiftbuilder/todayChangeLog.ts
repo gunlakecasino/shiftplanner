@@ -1,13 +1,17 @@
-/** @deprecated Import from `@/app/today/lib/todayChangeLog` instead. */
+/** @deprecated Import from `@/lib/shiftbuilder/deploymentChangeLog` instead. */
 export {
   logDeploymentChange,
   logTodayAssignmentChange,
   readTodayOperatorName,
+  readDeploymentOperatorName,
   writeTodayOperatorName,
+  writeDeploymentOperatorName,
   clearTodayOperatorName,
+  clearDeploymentOperatorName,
   TODAY_OPERATOR_NAME_KEY,
+  DEPLOYMENT_OPERATOR_NAME_KEY,
   type DeploymentChangeAction,
   type DeploymentChangeInput,
   type TodayChangeAction,
   type TodayAssignmentChangeInput,
-} from "@/app/today/lib/todayChangeLog";
+} from "@/lib/shiftbuilder/deploymentChangeLog";

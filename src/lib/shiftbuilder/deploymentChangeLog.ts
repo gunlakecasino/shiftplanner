@@ -21,7 +21,7 @@ export type DeploymentChangeInput = {
   nightId: string;
   nightDate: string;
   operatorName: string;
-  /** Ops user id when PIN-authenticated (ShiftBuilder). /today is name-only — omit. */
+  /** Ops user id when PIN-authenticated in ShiftBuilder */
   opsUserId?: string;
   action: DeploymentChangeAction;
   slotKey?: string;
@@ -48,7 +48,7 @@ async function postDeploymentChangeLog(
   body: string,
   attempt = 0,
 ): Promise<Response> {
-  const res = await fetch("/api/today/log-change", {
+  const res = await fetch("/api/shiftbuilder/log-change", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
@@ -62,7 +62,7 @@ async function postDeploymentChangeLog(
   return res;
 }
 
-/** Fire-and-forget audit log for deployment board edits. Never blocks the UI. */
+/** Fire-and-forget audit log for deployment edits. Never blocks the UI. */
 export function logDeploymentChange(
   input: DeploymentChangeInput,
   options?: LogDeploymentChangeOptions,
@@ -81,7 +81,7 @@ export function logDeploymentChange(
       }
       const msg = detail
         ? `Change saved but audit log failed: ${detail}`
-        : "Change saved but audit log failed — check /logs later";
+        : "Change saved but audit log could not be recorded";
       console.warn("[deployment] change log rejected", res.status, detail);
       options?.onFailure?.(msg);
     })
@@ -94,28 +94,40 @@ export function logDeploymentChange(
 /** @deprecated Use logDeploymentChange */
 export const logTodayAssignmentChange = logDeploymentChange;
 
-export const TODAY_OPERATOR_NAME_KEY = "today_operator_name";
+export const DEPLOYMENT_OPERATOR_NAME_KEY = "shiftbuilder_operator_name";
 
-export function readTodayOperatorName(): string | null {
+/** @deprecated Use DEPLOYMENT_OPERATOR_NAME_KEY */
+export const TODAY_OPERATOR_NAME_KEY = DEPLOYMENT_OPERATOR_NAME_KEY;
+
+export function readDeploymentOperatorName(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    const v = sessionStorage.getItem(TODAY_OPERATOR_NAME_KEY);
+    const v = sessionStorage.getItem(DEPLOYMENT_OPERATOR_NAME_KEY);
     return v?.trim() || null;
   } catch {
     return null;
   }
 }
 
-export function writeTodayOperatorName(name: string): void {
+/** @deprecated Use readDeploymentOperatorName */
+export const readTodayOperatorName = readDeploymentOperatorName;
+
+export function writeDeploymentOperatorName(name: string): void {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(TODAY_OPERATOR_NAME_KEY, name.trim());
+    sessionStorage.setItem(DEPLOYMENT_OPERATOR_NAME_KEY, name.trim());
   } catch {}
 }
 
-export function clearTodayOperatorName(): void {
+/** @deprecated Use writeDeploymentOperatorName */
+export const writeTodayOperatorName = writeDeploymentOperatorName;
+
+export function clearDeploymentOperatorName(): void {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.removeItem(TODAY_OPERATOR_NAME_KEY);
+    sessionStorage.removeItem(DEPLOYMENT_OPERATOR_NAME_KEY);
   } catch {}
 }
+
+/** @deprecated Use clearDeploymentOperatorName */
+export const clearTodayOperatorName = clearDeploymentOperatorName;

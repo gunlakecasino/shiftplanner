@@ -62,7 +62,7 @@ import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
 import {
   logDeploymentChange,
   type DeploymentChangeAction,
-} from "@/app/today/lib/todayChangeLog";
+} from "@/lib/shiftbuilder/deploymentChangeLog";
 import { PinGate } from "./components/PinGate";
 import {
   PrintCommandCenter,
@@ -2940,6 +2940,7 @@ function AuthedShiftBuilder() {
         nightId: activeNightId,
         nightDate: formatLocalDateISO(selectedDay.date),
         operatorName: builderOperatorName,
+        opsUserId: currentOperator?.id,
         action: params.action,
         slotKey: params.slotKey,
         previousTmId: params.previousTmId ?? null,
@@ -2949,10 +2950,10 @@ function AuthedShiftBuilder() {
         payload: { source: "shiftbuilder", ...params.payload },
       });
     },
-    [builderOperatorName, nightId, queryNightId, selectedDay.date],
+    [builderOperatorName, currentOperator?.id, nightId, queryNightId, selectedDay.date],
   );
 
-  // Release live cache only when the last Builder/today surface unmounts
+  // Release live cache when ShiftBuilder unmounts
   React.useEffect(() => retainLiveCacheMount(), []);
 
   // === Realtime for night_tm_status + call_offs (TM schedule changes) ===
@@ -3952,8 +3953,8 @@ function AuthedShiftBuilder() {
       !window.confirm(
         `${willPublish ? "Publish" : "Unpublish"} ${dayLabel} (${dateIso})?` +
           (willPublish
-            ? " This makes the schedule visible on /today."
-            : " This hides the schedule from /today for most operators."),
+            ? " Published nights are marked official for ops handoff."
+            : " Unpublished nights return to draft status."),
       )
     ) {
       return;
@@ -8628,10 +8629,7 @@ function ShiftBuilderGate() {
     return <PinGate />;
   }
 
-  // Note: We are moving away from a separate /today page.
-  // Granular permissions (canEdit, canPublish, etc.) are now
-  // handled via usePermissions() from @/lib/auth/opsAuth.
-  // The old hard redirect has been removed.
+  // Granular permissions (canEdit, canPublish, etc.) via useOpsAuth.
 
   // Full privileged experience
   return <AuthedShiftBuilder />;

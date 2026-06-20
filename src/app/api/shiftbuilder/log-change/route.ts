@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
-import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/today/_lib/rateLimit";
+import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";
-import type { DeploymentChangeInput } from "@/lib/shiftbuilder/todayChangeLog";
+import type { DeploymentChangeInput } from "@/lib/shiftbuilder/deploymentChangeLog";
 
 const META_ACTIONS = new Set(["publish", "unpublish", "night_lock", "night_unlock", "print"]);
 const META_SLOT_KEY = "__meta__";
@@ -17,13 +17,9 @@ function canonicalOperatorName(user: {
 
 async function validateOpsOperator(
   client: NonNullable<ReturnType<typeof createAdminClientSafe>>,
-  opsUserId: string | undefined,
+  opsUserId: string,
   operatorName: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  if (!opsUserId?.trim()) {
-    return { ok: false, status: 400, error: "opsUserId is required" };
-  }
-
   const { data: user, error } = await client
     .from("users")
     .select("id, full_name, username, is_active")
@@ -31,7 +27,7 @@ async function validateOpsOperator(
     .maybeSingle();
 
   if (error) {
-    console.warn("[today/log-change] user lookup failed", error);
+    console.warn("[shiftbuilder/log-change] user lookup failed", error);
     return { ok: false, status: 500, error: "Could not verify operator" };
   }
 
@@ -100,17 +96,11 @@ export async function POST(request: NextRequest) {
 
   const client = createAdminClientSafe();
   if (!client) {
-    console.warn("[today/log-change] service role unavailable — skipping persist");
+    console.warn("[shiftbuilder/log-change] service role unavailable — skipping persist");
     return NextResponse.json({ ok: true, persisted: false });
   }
 
-  const source = typeof payload?.source === "string" ? payload.source : "";
-  const fromTodayBoard =
-    source === "today_deployment_board" || source === "today_marker_pad";
-
-  // /today uses a name gate only — opsUserId is optional. When present (e.g. ShiftBuilder),
-  // validate it matches operatorName; otherwise accept the self-reported name for audit.
-  if (fromTodayBoard && opsUserId?.trim()) {
+  if (opsUserId?.trim()) {
     const authCheck = await validateOpsOperator(client, opsUserId, operatorName);
     if (!authCheck.ok) {
       return NextResponse.json({ error: authCheck.error }, { status: authCheck.status });
@@ -150,7 +140,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    console.error("[today/log-change] insert failed", error);
+    console.error("[shiftbuilder/log-change] insert failed", error);
     return NextResponse.json(
       { error: error.message, code: error.code },
       { status: 500 },

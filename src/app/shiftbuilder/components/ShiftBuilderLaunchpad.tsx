@@ -364,8 +364,7 @@ export function ShiftBuilderLaunchpad({ onEnterCanvas }: { onEnterCanvas: (targe
               {[
                 { label: "Run Coverage Planner (Draft Mode)", action: () => onEnterCanvas(tonightIndex) },
                 { label: "View Last Printed Book", action: () => {} },
-                { label: "Open Sudo • ADP & Overrides", action: () => {} },
-                { label: "Nightwatch (live floor log)", action: () => window.location.href = '/nightwatch' },
+                { label: "Open Settings", action: () => { window.location.href = "/shiftbuilder/settings"; } },
               ].map((item, idx) => (
                 <button
                   key={idx}
