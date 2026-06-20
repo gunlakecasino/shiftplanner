@@ -40,7 +40,7 @@ export interface AuxCardProps {
   loading?: boolean;
   borderColor?: string;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
+  draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
@@ -113,7 +113,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
   // Relax configured if we have an assignment/draft/covered, so assigned TMs always show
   // even on cards that haven't had a role/label explicitly set yet.
-  const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear) || coveredByNames.length > 0 || !isUnsetBlank;
+  const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) || coveredByNames.length > 0 || !isUnsetBlank;
 
   const icon = getAuxIcon(def.key, role);
   const isEmpty = !hasTM && !loading;
@@ -284,7 +284,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   let assignmentState: SlotAssignmentState;
   if (loading && !hasTM) {
     assignmentState = { kind: "loading" };
-  } else if (isDraftMode && draftInfo?.proposedTmName) {
+  } else if (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) {
     assignmentState = {
       kind: "draft",
       proposedName: draftInfo.proposedTmName,
@@ -404,36 +404,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        {(isUnsetBlank && !hasTM && !(isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear)) ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] text-[10px] tracking-[0.2px] py-2 min-h-[64px]">
-            {showDigitalAssists ? (
-              <motion.button
-                type="button"
-                className="flex flex-col items-center gap-0.5"
-                onClick={toggleRolePicker}
-                whileHover={{ scale: 1.02 }}
-                transition={premiumSpring}
-              >
-                <motion.span
-                  className="text-[22px] leading-none opacity-60"
-                  whileHover={{ scale: 1.15, rotate: 90 }}
-                  transition={{ ...premiumSpring, stiffness: 300 }}
-                >
-                  +
-                </motion.span>
-                <span className="font-semibold tracking-[0.6px] text-[10px] text-[#8a8a8f]">SET ROLE</span>
-                <span className="no-print text-[8.5px] opacity-60">Tap to choose role</span>
-                <span className="no-print text-[7.5px] opacity-50 mt-0.5">or choose Custom in the picker</span>
-              </motion.button>
-            ) : (
-              <button type="button" className="font-semibold tracking-[0.6px] uppercase" onClick={toggleRolePicker}>
-                Set role
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <SlotAssignmentBody
+        <SlotAssignmentBody
               state={assignmentState}
               scale="aux"
               showDigitalAssists={showDigitalAssists}
@@ -471,8 +442,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 isPrintPreview={!showDigitalAssists}
               />
             </div>
-          </>
-        )}
       </div>
     </div>
   );
