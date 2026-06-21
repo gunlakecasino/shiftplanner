@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
+import { cardAccentInk } from "@/lib/shiftbuilder/constants";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 
 /** Shared typography scale for assignment card name rows. */
@@ -76,12 +77,14 @@ export function CardSlotHeader({
   compact?: boolean;
   titleClassName?: string;
 }) {
+  const ink = cardAccentInk(accentColor);
+
   return (
     <div
       className={`flex items-center justify-between gap-1.5 px-3.5 ${compact ? "pt-2 pb-1.5" : "pt-2.5 pb-2"} leading-none`}
-      style={{ color: accentColor }}
+      style={{ color: ink }}
     >
-      <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: accentColor }}>
+      <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: ink }}>
         {icon != null ? (
           <span className="text-[12px] leading-none drop-shadow-sm shrink-0">{icon}</span>
         ) : null}
@@ -115,7 +118,7 @@ export function DuplicateTmBadge({
   animate?: boolean;
 }) {
   const className =
-    "ml-1.5 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] bg-[var(--ios-yellow, #ffcc00)]/12 text-[#8B6910] dark:bg-[var(--ios-yellow, #ffcc00)]/15 dark:text-[#E9B948] border border-[var(--ios-yellow, #ffcc00)]/30";
+    "sb-gold-chip ml-1.5 inline-flex items-center rounded px-1 py-px text-[9px] font-mono tracking-[0.6px] font-semibold";
   const title = `Duplicate assignment — also in: ${otherSlots.join(", ")}`;
 
   if (animate) {

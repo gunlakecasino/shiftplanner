@@ -1156,7 +1156,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 </span>
                 {conflictingTms.size > 0 && showDigitalAssists && (
                   <span
-                    className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-mono tracking-[0.5px] bg-[var(--ios-yellow, #ffcc00)]/12 text-[#8B6910] dark:bg-[var(--ios-yellow, #ffcc00)]/15 dark:text-[#E9B948] border border-[var(--ios-yellow, #ffcc00)]/30"
+                    className="sb-gold-chip ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-mono tracking-[0.5px] font-semibold"
                     title={`${conflictingTms.size} team member${conflictingTms.size > 1 ? 's' : ''} assigned to multiple slots this night`}
                   >
                     {conflictingTms.size} dup{conflictingTms.size > 1 ? 's' : ''}

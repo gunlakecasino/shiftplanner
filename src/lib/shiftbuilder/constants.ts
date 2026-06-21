@@ -143,6 +143,16 @@ export const ZONE_COLORS: Record<string, string> = {
 
 export const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
 
+/** Readable header ink for bright display accents (e.g. iOS yellow on white cards). */
+const CARD_ACCENT_INK: Record<string, string> = {
+  "#ffcc00": "#7a6200",
+  "#ffdb4d": "#7a6200",
+};
+
+export function cardAccentInk(displayColor: string): string {
+  return CARD_ACCENT_INK[displayColor.trim().toLowerCase()] ?? displayColor;
+}
+
 // RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)
 export const RR_COLORS: Record<number, string> = {
   1:  '#ffcc00', // yellow (Main Entry, paired with Z1/Z2)

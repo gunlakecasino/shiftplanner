@@ -4,6 +4,7 @@ import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   type BreakGroup, nextBreakGroup,
+  cardAccentInk,
   getZoneColor, ZONE_ICONS,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
@@ -167,8 +168,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
 
       {/* Refined header matching the design: icon + label, status badge, count pill */}
       <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap shrink-0">
-        <span className="text-[12px] leading-none shrink-0" style={{ color }}>{icon}</span>
-        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color }}>
+        <span className="text-[12px] leading-none shrink-0" style={{ color: cardAccentInk(color) }}>{icon}</span>
+        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color: cardAccentInk(color) }}>
           {def.label}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">

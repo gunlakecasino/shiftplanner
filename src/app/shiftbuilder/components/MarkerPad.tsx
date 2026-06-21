@@ -556,7 +556,7 @@ const MiniHistorySection: React.FC<{
           }}
           onMouseEnter={(e) => { 
             e.currentTarget.style.background = "rgba(184,151,8,0.14)"; 
-            e.currentTarget.style.color = "#E9B948"; 
+            e.currentTarget.style.color = "var(--sb-gold-ink, #7a6200)"; 
             e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
             e.currentTarget.style.transform = "translateY(-0.5px)";
           }}

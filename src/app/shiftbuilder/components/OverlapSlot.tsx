@@ -142,7 +142,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           </motion.span>
           {isDuplicate && showDigitalAssists && (
             <span
-              className="ml-1 inline-flex items-center rounded px-0.5 py-px text-[8px] font-mono tracking-[0.5px] bg-[var(--ios-yellow, #ffcc00)]/12 text-[#8B6910] dark:bg-[var(--ios-yellow, #ffcc00)]/15 dark:text-[#E9B948] border border-[var(--ios-yellow, #ffcc00)]/30"
+              className="sb-gold-chip ml-1 inline-flex items-center rounded px-0.5 py-px text-[8px] font-mono tracking-[0.5px] font-semibold"
               title={`Duplicate — also in: ${otherSlotsForTm.join(', ')}`}
             >
               2×

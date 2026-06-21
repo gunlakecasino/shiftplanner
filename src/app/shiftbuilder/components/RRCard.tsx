@@ -4,6 +4,7 @@ import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   type BreakGroup, nextBreakGroup,
+  cardAccentInk,
   getRRAccent,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
@@ -221,8 +222,8 @@ function RRSideShell({
 
       {/* Refined header to match ZoneCard exactly for visual uniformity */}
       <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap">
-        <span className="text-[12px] leading-none shrink-0" style={{ color }}>◆</span>
-        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color }}>
+        <span className="text-[12px] leading-none shrink-0" style={{ color: cardAccentInk(color) }}>◆</span>
+        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color: cardAccentInk(color) }}>
           {sideLabel}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">

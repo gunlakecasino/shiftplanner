@@ -61,10 +61,11 @@
   --sb-text-muted: #9CA3AF;
 
   /* ── Velvet gold accent ──────────────────────────────────────────────── */
-  --sb-gold:        #ffcc00; /* iOS yellow */
-  --sb-gold-bright: #ffdb4d;
-  --sb-gold-tint:   rgba(255, 204, 0, 0.14);
-  --sb-gold-border: rgba(255, 204, 0, 0.40);
+  --sb-gold:        #ffcc00; /* stripe / swatch only — use --sb-gold-ink for text */
+  --sb-gold-ink:    #7a6200;
+  --sb-gold-bright: #9a7b0a;
+  --sb-gold-tint:   rgba(122, 98, 0, 0.1);
+  --sb-gold-border: rgba(122, 98, 0, 0.32);
 
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
   --sb-z1:  #ffcc00; /* yellow */
@@ -898,17 +899,17 @@ body {
 .builder-workspace .sheet-section-header .count {
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(184, 151, 8, 0.1);
-  color: #8B6910;
+  background: var(--sb-gold-tint);
+  color: var(--sb-gold-ink);
   font-size: 9.5px;
   font-weight: 700;
-  border: 1px solid rgba(184, 151, 8, 0.16);
+  border: 1px solid var(--sb-gold-border);
 }
 
 .dark .builder-workspace .sheet-section-header .count {
-  background: rgba(184, 151, 8, 0.14);
-  color: #E9B948;
-  border-color: rgba(184, 151, 8, 0.22);
+  background: rgba(212, 175, 55, 0.14);
+  color: #e8d48b;
+  border-color: rgba(212, 175, 55, 0.28);
 }
 
 .builder-workspace .sb-builder-section + .sb-builder-section {
@@ -1371,14 +1372,14 @@ body {
   opacity: 0.5;
 }
 
-/* Builder drop targets — gold ring matches casino brand, not generic blue. */
+/* Builder drop targets — readable gold ring, not neon yellow. */
 .builder-workspace .assignment-card.drop-target-active,
 .builder-workspace .drop-target-active {
-  border-color: var(--sb-gold, #ffcc00) !important;
+  border-color: color-mix(in srgb, var(--sb-gold-ink) 72%, #b89708) !important;
   box-shadow:
-    0 0 0 2px rgba(184, 151, 8, 0.3),
-    0 10px 28px -8px rgba(184, 151, 8, 0.28) !important;
-  background: rgba(255, 252, 244, 0.96) !important;
+    0 0 0 2px color-mix(in srgb, var(--sb-gold-ink) 28%, transparent),
+    0 10px 28px -8px rgba(122, 98, 0, 0.22) !important;
+  background: rgba(255, 253, 248, 0.96) !important;
   transform: translateY(-2px) scale(1.008);
 }
 
@@ -2032,4 +2033,17 @@ button,
 
 .dark .sb-break-imprint--off .sb-break-imprint-face {
   color: #48484a;
+}
+
+/* Gold warning chips — duplicate TM, section counts, etc. */
+.sb-gold-chip {
+  background: var(--sb-gold-tint);
+  color: var(--sb-gold-ink);
+  border: 1px solid var(--sb-gold-border);
+}
+
+.dark .sb-gold-chip {
+  background: rgba(212, 175, 55, 0.14);
+  color: #e8d48b;
+  border-color: rgba(212, 175, 55, 0.28);
 }
