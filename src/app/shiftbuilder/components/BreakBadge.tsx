@@ -14,44 +14,20 @@ function BreakImprintMark({ value }: { value: number }) {
   if (value === BREAK_GROUP_OVERLAPS) {
     return <span className="sb-break-imprint-ol" aria-hidden>OL</span>;
   }
-  if (value === 1) {
-    return (
-      <span className="sb-break-imprint-dots sb-break-imprint-dots--1" aria-hidden>
-        <span className="sb-break-imprint-dot" />
-      </span>
-    );
-  }
-  if (value === 2) {
-    return (
-      <span className="sb-break-imprint-dots sb-break-imprint-dots--2" aria-hidden>
-        <span className="sb-break-imprint-dot" />
-        <span className="sb-break-imprint-dot" />
-      </span>
-    );
-  }
-  return (
-    <span className="sb-break-imprint-dots sb-break-imprint-dots--3" aria-hidden>
-      <span className="sb-break-imprint-dot" />
-      <span className="sb-break-imprint-dot" />
-      <span className="sb-break-imprint-dot" />
-    </span>
-  );
+  return <span className="sb-break-imprint-num" aria-hidden>{value}</span>;
 }
 
-// BreakBadge: 0 = off ("–"), 1/2/3 = dotted wave imprint, 4 = overlaps ("OL").
+// BreakBadge: 0 = off ("–"), 1/2/3 = grey glassy imprint, 4 = overlaps ("OL").
 // Cycle via nextBreakGroup: 1 → 2 → 3 → OL → – → 1.
 const BreakBadge = React.memo(function BreakBadge({
   value,
   onCycle,
   size = "md",
-  accentColor,
   kioskSize = false,
 }: {
   value: number;
   onCycle: () => void;
   size?: "sm" | "md";
-  /** Zone accent tint for debossed imprint ring + dots */
-  accentColor?: string;
   kioskSize?: boolean;
 }) {
   const tablet = isTabletTouchDevice();
@@ -71,12 +47,6 @@ const BreakBadge = React.memo(function BreakBadge({
         ? "Overlaps break group — tap to cycle"
         : `Break Group ${value} — tap to cycle`;
   const isOff = value === 0;
-
-  const imprintStyle = accentColor
-    ? ({
-        ["--break-imprint-accent" as string]: accentColor,
-      } as React.CSSProperties)
-    : undefined;
 
   return (
     <button
@@ -101,7 +71,6 @@ const BreakBadge = React.memo(function BreakBadge({
           isOff ? "sb-break-imprint--off" : "sb-break-imprint--active",
           kioskSize && "sb-break-imprint--kiosk",
         )}
-        style={imprintStyle}
         transition={premiumSpring}
         whileHover={{ scale: 1.06, transition: premiumSpring }}
         whileTap={{ scale: 0.94, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}

@@ -364,7 +364,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               <BreakBadge
                 value={currentBreak}
                 onCycle={cycleBreak}
-                accentColor={color}
                 kioskSize={isTodayKiosk}
               />
             </span>

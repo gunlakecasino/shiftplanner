@@ -231,7 +231,7 @@ function RRSideShell({
             <PlacementFitChip fit={fitChip} compact />
           )}
           {/* Functional break group pill */}
-          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" accentColor={color} />
+          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" />
         </div>
       </div>
 
