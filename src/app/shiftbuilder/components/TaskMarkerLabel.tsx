@@ -12,18 +12,41 @@ import {
 } from "@/lib/shiftbuilder/taskMarkerStyle";
 import { taskLevelCss } from "@/lib/shiftbuilder/taskTextStyle";
 
+function MarkerInkLayer({
+  children,
+  className = "absolute inset-0 z-0 pointer-events-none",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <span aria-hidden className={className}>{children}</span>;
+}
+
+function MarkerTextLayer({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span className="relative z-[1]" style={style}>
+      {children}
+    </span>
+  );
+}
+
 function FeltHighlight({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
-  const wash = taskMarkerWash(ink, isPrint ? 0.34 : 0.38);
-  const washSoft = taskMarkerWash(ink, isPrint ? 0.16 : 0.2);
-  const washEdge = taskMarkerWash(ink, isPrint ? 0.48 : 0.52);
+  const wash = taskMarkerWash(ink, isPrint ? 0.3 : 0.34);
+  const washSoft = taskMarkerWash(ink, isPrint ? 0.14 : 0.18);
+  const washEdge = taskMarkerWash(ink, isPrint ? 0.42 : 0.46);
 
   return (
     <svg
-      aria-hidden
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="h-full w-full"
       viewBox="0 0 120 28"
       preserveAspectRatio="none"
-      style={{ overflow: "visible" }}
+      style={{ overflow: "visible", display: "block" }}
     >
       {/* Main chisel-tip wash */}
       <path
@@ -77,12 +100,15 @@ function FeltUnderline({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
   const h = isPrint ? 7 : 9;
   return (
     <svg
-      aria-hidden
-      className="pointer-events-none absolute left-0 w-full"
+      className="w-full"
       style={{
-        bottom: isPrint ? -1 : -2,
         height: h,
         overflow: "visible",
+        display: "block",
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: isPrint ? -1 : -2,
       }}
       viewBox="0 0 120 10"
       preserveAspectRatio="none"
@@ -118,11 +144,10 @@ function FeltUnderline({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
 function FeltRing({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
   return (
     <svg
-      aria-hidden
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="h-full w-full"
       viewBox="0 0 100 36"
       preserveAspectRatio="none"
-      style={{ overflow: "visible" }}
+      style={{ overflow: "visible", display: "block" }}
     >
       <path
         d="M 8 20 C 10 8, 32 4, 50 5 C 72 6, 92 10, 94 22 C 95 30, 78 34, 50 33 C 24 32, 6 28, 8 20 Z"
@@ -212,14 +237,18 @@ export function TaskMarkerLabel({
         }}
       >
         <span
-          className="relative inline"
+          className="relative isolate inline"
           style={{
             padding: isPrintPreview ? "0 4px 1px" : "1px 6px 2px",
             transform: isPrintPreview ? "rotate(-0.15deg)" : "rotate(-0.25deg)",
           }}
         >
-          <FeltHighlight ink={ink} isPrint={isPrintPreview} />
-          <FormattedTaskLabel label={label} textStyle={textStyle} />
+          <MarkerInkLayer>
+            <FeltHighlight ink={ink} isPrint={isPrintPreview} />
+          </MarkerInkLayer>
+          <MarkerTextLayer>
+            <FormattedTaskLabel label={label} textStyle={textStyle} />
+          </MarkerTextLayer>
         </span>
       </span>
     );
@@ -236,13 +265,17 @@ export function TaskMarkerLabel({
         }}
       >
         <span
-          className="relative inline"
+          className="relative isolate inline"
           style={{
             padding: isPrintPreview ? "0 2px 1px" : "0 4px 2px",
           }}
         >
-          <FeltUnderline ink={ink} isPrint={isPrintPreview} />
-          <FormattedTaskLabel label={label} textStyle={textStyle} />
+          <MarkerInkLayer className="absolute left-0 right-0 bottom-0 z-0 pointer-events-none">
+            <FeltUnderline ink={ink} isPrint={isPrintPreview} />
+          </MarkerInkLayer>
+          <MarkerTextLayer>
+            <FormattedTaskLabel label={label} textStyle={textStyle} />
+          </MarkerTextLayer>
         </span>
       </span>
     );
@@ -260,14 +293,18 @@ export function TaskMarkerLabel({
         }}
       >
         <span
-          className="relative inline-block"
+          className="relative isolate inline-block"
           style={{
             padding: isPrintPreview ? "1px 7px 2px" : "2px 10px 3px",
             transform: isPrintPreview ? "rotate(-0.35deg)" : "rotate(-0.55deg)",
           }}
         >
-          <FeltRing ink={ink} isPrint={isPrintPreview} />
-          <FormattedTaskLabel label={label} textStyle={textStyle} />
+          <MarkerInkLayer>
+            <FeltRing ink={ink} isPrint={isPrintPreview} />
+          </MarkerInkLayer>
+          <MarkerTextLayer>
+            <FormattedTaskLabel label={label} textStyle={textStyle} />
+          </MarkerTextLayer>
         </span>
       </span>
     );
