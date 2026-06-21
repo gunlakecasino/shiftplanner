@@ -62,10 +62,10 @@
 
   /* ── Velvet gold accent ──────────────────────────────────────────────── */
   --sb-gold:        #ffcc00; /* stripe / swatch only — use --sb-gold-ink for text */
-  --sb-gold-ink:    #7a6200;
-  --sb-gold-bright: #9a7b0a;
-  --sb-gold-tint:   rgba(122, 98, 0, 0.1);
-  --sb-gold-border: rgba(122, 98, 0, 0.32);
+  --sb-gold-ink:    #b89708;
+  --sb-gold-bright: #c9a83a;
+  --sb-gold-tint:   rgba(184, 151, 8, 0.12);
+  --sb-gold-border: rgba(184, 151, 8, 0.28);
 
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
   --sb-z1:  #ffcc00; /* yellow */
@@ -2046,4 +2046,18 @@ button,
   background: rgba(212, 175, 55, 0.14);
   color: #e8d48b;
   border-color: rgba(212, 175, 55, 0.28);
+}
+
+/* Gold coverage banners — match header chips (soft tint + warm ink, not white on neon). */
+.builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent {
+  background: var(--sb-gold-tint) !important;
+  border-top: 1px solid var(--sb-gold-border) !important;
+}
+
+.builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent .sb-coverage-bar-label {
+  color: var(--sb-gold-ink) !important;
+}
+
+.dark .builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent .sb-coverage-bar-label {
+  color: #e8d48b !important;
 }

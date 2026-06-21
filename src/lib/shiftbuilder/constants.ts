@@ -143,14 +143,22 @@ export const ZONE_COLORS: Record<string, string> = {
 
 export const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
 
+/** Warm gold ink — lighter than brown, readable on white (pairs with #ffcc00 stripe). */
+export const SB_GOLD_INK = "#b89708";
+
 /** Readable header ink for bright display accents (e.g. iOS yellow on white cards). */
 const CARD_ACCENT_INK: Record<string, string> = {
-  "#ffcc00": "#7a6200",
-  "#ffdb4d": "#7a6200",
+  "#ffcc00": SB_GOLD_INK,
+  "#ffdb4d": SB_GOLD_INK,
 };
 
 export function cardAccentInk(displayColor: string): string {
   return CARD_ACCENT_INK[displayColor.trim().toLowerCase()] ?? displayColor;
+}
+
+export function isGoldAccent(displayColor: string): boolean {
+  const key = displayColor.trim().toLowerCase();
+  return key === "#ffcc00" || key === "#ffdb4d";
 }
 
 // RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)

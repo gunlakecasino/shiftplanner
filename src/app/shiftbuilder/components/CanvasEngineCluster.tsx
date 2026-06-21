@@ -251,7 +251,7 @@ export function CanvasEngineCluster({
                 fontSize: 8,
                 background: "var(--sb-gold-tint, rgba(122, 98, 0, 0.1))",
                 border: "1px solid var(--sb-gold-border, rgba(122, 98, 0, 0.32))",
-                color: "var(--sb-gold-ink, #7a6200)",
+                color: "var(--sb-gold-ink, #b89708)",
               }}
             >
               Draft
