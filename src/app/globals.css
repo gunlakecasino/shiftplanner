@@ -751,18 +751,21 @@ body {
   box-sizing: border-box;
 }
 
-/* Live builder: center the deployment column on the viewport (same axis as FloatingNav).
-   Stage horizontal padding is 0 — roster is a fixed overlay and must not carve layout. */
-.sb-builder-stage.sb-stage-host > .sb-builder-canvas {
+/* Live builder — roster is portaled/fixed; stage is a single full-width column. */
+.sb-builder-stage.sb-stage-host.sb-builder-live {
+  align-items: center !important;
+  overflow-x: hidden !important;
+}
+
+.sb-builder-stage.sb-stage-host.sb-builder-live > .sb-builder-canvas {
   align-self: center !important;
-  width: min(
-    calc(100vw - 48px),
-    var(--sb-builder-canvas-max, 1581px)
-  ) !important;
+  width: 100% !important;
   max-width: var(--sb-builder-canvas-max, 1581px) !important;
   margin-inline: auto !important;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* /today kiosk — paper hero, calmer empty slots, compact open aux ghosts. */
@@ -838,10 +841,9 @@ body {
 }
 
 /* Builder-only compact rhythm — tighter than preview/print.
-   Extra bottom + side breathing to prevent clipping of bottom row cards and right edge of aux sidebar. */
+   Symmetric horizontal padding so aux sidebar stays inside the centered column. */
 .sb-builder-stage .builder-workspace.sb-builder-compact {
-  /* Extra internal breathing on right (aux sidebar) and bottom (last row + coverage) */
-  padding: 4px 12px 20px;
+  padding: 4px 8px 20px;
 }
 
 /* Builder view only: hide the underlying large date page header (the tall "17 Wednesday..." block + BREAKS row).
@@ -955,8 +957,8 @@ body {
 
 /* ── TM Roster rail — premium liquid-glass chrome ─────────────────────── */
 .sb-roster-shell {
-  /* fixed — out of flex flow (relative here overrode Tailwind .fixed and pushed the board right) */
-  position: fixed;
+  position: fixed !important;
+  z-index: 30;
   --sb-roster-accent: var(--sb-gold);
   background: color-mix(in srgb, var(--sb-paper, #fcfcfa) 88%, transparent);
   backdrop-filter: var(--sb-glass-blur);
@@ -2258,11 +2260,12 @@ body {
 
 /* Main canvas fills available width but must be allowed to shrink (min-width:0). */
 .sb-builder-main {
+  display: block !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
   flex: 1 1 auto !important;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 /* Fix the entire web app (when in builder) exactly to browser window/viewport size.

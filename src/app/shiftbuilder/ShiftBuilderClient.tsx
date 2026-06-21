@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useTransition, useDeferredValue } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   useDroppable,
@@ -1969,13 +1969,12 @@ function AuthedShiftBuilder() {
     const tablet = isTabletTouchDevice();
     const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
+      const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: dockInset,
+        right: hGutter + dockInset,
         bottom: builderStageBottomInsetPx(),
-        // Roster is position:fixed — no horizontal stage inset (was carving ~280px and
-        // shifting the board right). Canvas self-centers like the floating nav pill.
-        left: 0,
+        left: hGutter,
       };
     }
     return {
@@ -7079,44 +7078,45 @@ function AuthedShiftBuilder() {
         {/* (Floating Placed pill removed from bottom-right per request — single instance now lives in top nav right section with visual progress) */}
         {/* autoScroll={false}: prevents dnd-kit's built-in scroll fighting with our
             fixed scroll container on iPad — we handle scroll ourselves via touch gestures. */}
-      {/* The roster used to be a 268px flex sibling. It's now a floating
-         Liquid Glass panel anchored to the left, position:fixed inside this
-         relative container so the canvas can take the full width. When the
-         operator collapses the roster, a sphere appears in its place.
-         min-h-0 is still critical for the canvas's nested scroll behavior. */}
-      <div className={`flex flex-1 relative overflow-hidden min-h-0 ${isBuilderLiveCanvas ? 'sb-builder-main' : ''}`}>
-        {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
-        <div
-          aria-hidden={!rosterOpen}
-          className={`sb-roster-shell fixed z-30 rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
-          style={{
-            width: rosterPanelWidth(),
-            top: stageTopInsetPx() + 8,
-            left: 12,
-            maxHeight: `calc(100vh - ${stageTopInsetPx() + 20}px)`,
-            transformOrigin: "0% 50%",
-            transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
-            opacity: rosterOpen ? 1 : 0,
-            pointerEvents: rosterOpen ? "auto" : "none",
-            transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease",
-          }}
-        >
-          <RosterRail
-            scheduleRoster={effectiveGravesScheduleRoster}
-            placedTmIds={alreadyAssignedThisNight}
-            profileRoster={effectiveRealRoster}
-            scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
-            calledOffIds={calledOffIds}
-            isDark={isDark}
-            isCurrentNightLocked={isCurrentNightLocked}
-            canEditAssignments={canEditAssignments}
-            amOverlapDayName={amOverlapDayName}
-            amOverlapDateNum={amOverlapDateNum}
-            selectedDay={selectedDay}
-            isRosterLoading={boardColdLoading}
-          />
-        </div>
-        {/* Duplicate old roster glass + inline filter UI fully excised (replaced by isolated <RosterRail /> in the thin chrome wrapper above). Day picker / calendar popovers and stage remain as siblings inside the main flex row. */}
+      {/* Canvas column only — roster is portaled to body so it never participates in flex layout. */}
+      <div
+        className={`flex-1 relative overflow-hidden min-h-0 w-full ${isBuilderLiveCanvas ? "sb-builder-main" : "flex"}`}
+      >
+        {mounted &&
+          isBuilderLiveCanvas &&
+          createPortal(
+            <div
+              aria-hidden={!rosterOpen}
+              className={`sb-roster-shell z-30 rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
+              style={{
+                width: rosterPanelWidth(),
+                top: stageTopInsetPx() + 8,
+                left: 12,
+                maxHeight: `calc(100vh - ${stageTopInsetPx() + 20}px)`,
+                transformOrigin: "0% 50%",
+                transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
+                opacity: rosterOpen ? 1 : 0,
+                pointerEvents: rosterOpen ? "auto" : "none",
+                transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease",
+              }}
+            >
+              <RosterRail
+                scheduleRoster={effectiveGravesScheduleRoster}
+                placedTmIds={alreadyAssignedThisNight}
+                profileRoster={effectiveRealRoster}
+                scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
+                calledOffIds={calledOffIds}
+                isDark={isDark}
+                isCurrentNightLocked={isCurrentNightLocked}
+                canEditAssignments={canEditAssignments}
+                amOverlapDayName={amOverlapDayName}
+                amOverlapDateNum={amOverlapDateNum}
+                selectedDay={selectedDay}
+                isRosterLoading={boardColdLoading}
+              />
+            </div>,
+            document.body,
+          )}
         {/* Floating day-of-week picker (appears to the right of the left rail
            when the colored day number is clicked). Glass panel, 7 day choices
            laid out horizontally so the "week of days" expands next to the
@@ -7320,7 +7320,7 @@ function AuthedShiftBuilder() {
         {/* RIGHT: Builder stage — fluid width, scrollable body, pinned footer. Print preview still scales via useZoom. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 ${isPrintPreview ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"} sb-builder-stage bg-[var(--ios-background-primary)] dark:bg-[var(--ios-background-primary)] flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 w-full ${isPrintPreview ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"} sb-builder-stage bg-[var(--ios-background-primary)] dark:bg-[var(--ios-background-primary)] flex ${isBuilderLiveCanvas ? "sb-builder-live flex-col items-stretch justify-start" : "items-center justify-center"} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7337,7 +7337,7 @@ function AuthedShiftBuilder() {
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderLiveCanvas && (
             <div
-              className="sb-builder-canvas mx-auto flex min-h-0 max-w-full flex-1 flex-col"
+              className="sb-builder-canvas mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
               <div
@@ -8036,7 +8036,7 @@ function AuthedShiftBuilder() {
           ) : null}
 
       </div> {/* /stageHostRef content area */}
-    </div> {/* /main flex row (roster chrome wrapper + stageHost) */}
+    </div> {/* /sb-builder-main — canvas column only */}
 
       </InteractiveStage>
 
