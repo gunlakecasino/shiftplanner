@@ -141,6 +141,7 @@ import {
   patchNightSecondaryTasksCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
 import { generatePrintPreviewGoldenPages } from "./print/printPreviewPipeline";
+import type { LiveBoardOverlay } from "./print/mergePrintSnapshot";
 import { exportGoldenPdf } from "./print/exportPdf";
 import {
   mountGoldenPrintSession,
@@ -784,6 +785,8 @@ function AuthedShiftBuilder() {
   const [printPreviewQueueContext, setPrintPreviewQueueContext] = useState<{
     queueIds: string[];
     queuePageId: string;
+    printVariant?: import("./components/PrintCommandCenter").PrintVariant;
+    includeShiftNotes?: boolean;
   } | null>(null);
   const printPreviewSheetCount = printPreviewFocus === "duplex" ? 2 : 1;
   const printPreviewContentWidth = printPreviewStageWidth(
@@ -3532,6 +3535,7 @@ function AuthedShiftBuilder() {
         config.overviewPosition,
         config.includeCoverPage,
         config.coverPagePosition,
+        config.printVariant ?? "official",
       ),
       customQueueOrder,
     );
@@ -3607,19 +3611,13 @@ function AuthedShiftBuilder() {
       // Persist aux layout so print capture sees custom slots; overlay live board for active night.
       await flushAuxLayoutSave().catch(() => {});
 
-      const liveOverlaysByDay = new Map<
-        number,
-        {
-          assignments: Record<string, { tmId?: string; tmName?: string; breakGroup?: number; isLocked?: boolean }>;
-          auxDefs: AuxDef[];
-          tasksBySlot: Record<string, NightSlotTask[]>;
-        }
-      >();
+      const liveOverlaysByDay = new Map<number, LiveBoardOverlay>();
       if (dayIndices.includes(originalDayIndex)) {
         liveOverlaysByDay.set(originalDayIndex, {
           assignments: useShiftBuilderStore.getState().assignments ?? {},
           auxDefs: auxDefsLatestRef.current,
           tasksBySlot: selectedTasksLatestRef.current,
+          notes: notesRef.current?.innerText ?? currentNight.notes ?? "",
         });
       }
 
@@ -3713,9 +3711,17 @@ function AuthedShiftBuilder() {
   );
 
   const handlePreviewSheet = React.useCallback(
-    (args: { dayIndex: number; view: "deployment" | "breaks"; label: string }) => {
+    (args: {
+      dayIndex: number;
+      view: "deployment" | "breaks";
+      label: string;
+      printVariant: import("./components/PrintCommandCenter").PrintVariant;
+      includeShiftNotes: boolean;
+    }) => {
       const lastConfig = loadLastPrintConfig(args.dayIndex);
       const config = lastConfig ?? tonightPrintConfig(args.dayIndex);
+      const printVariant = args.printVariant ?? config.printVariant ?? "official";
+      const includeShiftNotes = args.includeShiftNotes ?? config.includeShiftNotes !== false;
       const queueIds = applyCustomQueueOrder(
         buildPrintQueue(
           config.days,
@@ -3725,6 +3731,7 @@ function AuthedShiftBuilder() {
           config.overviewPosition,
           config.includeCoverPage,
           config.coverPagePosition,
+          printVariant,
         ),
         config.customQueueOrder ?? null,
       ).map((item) => item.id);
@@ -3734,14 +3741,19 @@ function AuthedShiftBuilder() {
       setIsPrintCenterOpen(false);
       flushSync(() => {
         setPrintPreviewFocus(args.view);
-        setPrintPreviewQueueContext({ queueIds, queuePageId });
+        setPrintPreviewQueueContext({
+          queueIds,
+          queuePageId,
+          printVariant,
+          includeShiftNotes,
+        });
         setCanvasMode("print-preview");
         setSelectedDayIndex(args.dayIndex);
         setCurrentView(args.view);
       });
       showToast(`Preview: ${args.label}`, "info");
     },
-    [DAY_DEFS, selectedDayIndex, showToast],
+    [DAY_DEFS, showToast],
   );
 
   const handlePrintWeek = React.useCallback(async () => {
@@ -8044,6 +8056,12 @@ function AuthedShiftBuilder() {
                 liveTasksBySlot={selectedTasks}
                 queuePageId={printPreviewQueueContext?.queuePageId ?? null}
                 queueIds={printPreviewQueueContext?.queueIds ?? null}
+                printVariant={
+                  printPreviewQueueContext?.printVariant ??
+                  (currentNightStatus !== "published" ? "planning" : "official")
+                }
+                includeShiftNotes={printPreviewQueueContext?.includeShiftNotes !== false}
+                liveNotes={notesRef.current?.innerText ?? currentNight.notes ?? ""}
               />
             ) : (
               <ShiftBuilderBoard
@@ -8303,6 +8321,7 @@ function AuthedShiftBuilder() {
         isPrinting={isPrinting}
         printProgress={printProgress}
         isDark={isDark}
+        currentNightStatus={currentNightStatus}
       />
 
       <PrintExportProgressOverlay

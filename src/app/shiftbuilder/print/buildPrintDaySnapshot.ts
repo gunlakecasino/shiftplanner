@@ -17,6 +17,7 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "@/app/shiftbuilder/hooks/fetchNightSecondaryData";
+import { getNightMeta } from "@/lib/shiftbuilder/data";
 import type {
   PrintDaySnapshot,
   PrintPlanningCardModel,
@@ -106,6 +107,13 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
 
   const amDate = addDays(day.date, 1);
   const assignments = core.assignments ?? {};
+
+  let nightStatus: "published" | "draft" = "draft";
+  if (core.nightId) {
+    const meta = await getNightMeta(core.nightId);
+    nightStatus = meta.status === "published" ? "published" : "draft";
+  }
+
   return {
     dayIndex,
     day,
@@ -116,6 +124,8 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
     amOverlapDateNum: amDate.getDate(),
     nextDayColor: SHIFT_DAY_COLORS[(dayIndex + 1) % 7],
     breakCounts: computeBreakCounts(assignments),
+    notes: secondary.notes ?? "",
+    nightStatus,
   };
 }
 

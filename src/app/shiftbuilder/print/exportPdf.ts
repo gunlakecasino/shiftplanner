@@ -50,10 +50,15 @@ export function triggerPdfDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-function dayFilename(dayIndex: number, dayDefs: DayDef[]): string {
+function dayFilename(
+  dayIndex: number,
+  dayDefs: DayDef[],
+  printVariant: PrintConfig["printVariant"] = "official",
+): string {
   const def = dayDefs[dayIndex];
   if (!def) return `Graves-Day-${dayIndex}.pdf`;
-  return `Graves-${def.short}-${String(def.dateNum).padStart(2, "0")}.pdf`;
+  const base = `Graves-${def.short}-${String(def.dateNum).padStart(2, "0")}`;
+  return printVariant === "planning" ? `${base}-Planning.pdf` : `${base}.pdf`;
 }
 
 /** Build a landscape-letter PDF from pre-rasterized Golden pages (exact page count). */
@@ -189,7 +194,7 @@ export async function exportGoldenPdf(args: {
         .map(({ idx }) => idx);
       if (indices.length === 0) continue;
       zip.file(
-        dayFilename(dayIdx, args.dayDefs),
+        dayFilename(dayIdx, args.dayDefs, args.config.printVariant),
         await buildBlob(indices.map((i) => rasterPages[i])),
       );
     }
@@ -208,7 +213,7 @@ export async function exportGoldenPdf(args: {
   const blob = await buildBlob(rasterPages);
   let filename = "Graves-Export.pdf";
   if (uniqueDayIndices.length === 1) {
-    filename = dayFilename(uniqueDayIndices[0], args.dayDefs);
+    filename = dayFilename(uniqueDayIndices[0], args.dayDefs, args.config.printVariant);
   } else if (coverIdx >= 0 || overviewIdx >= 0) {
     filename = "Graves-Schedule-Export.pdf";
   }

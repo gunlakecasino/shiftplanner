@@ -6,7 +6,7 @@ import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { shiftBuilderVersionLabel } from "../version";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { PrintPreviewPage } from "./PrintPreviewPage";
-import type { PrintDaySnapshot, PrintPreviewView } from "./printPreviewTypes";
+import type { PrintDaySnapshot, PrintPreviewView, PrintVariant } from "./printPreviewTypes";
 
 export type PrintPreviewFocus = "duplex" | "deployment" | "breaks";
 
@@ -16,6 +16,8 @@ export type LivePrintPreviewArtboardProps = {
   breakGroup: ActiveBreakGroupFilter;
   weekDayDefs: DayDef[];
   pageLabel: string;
+  printVariant?: PrintVariant;
+  includeShiftNotes?: boolean;
 };
 
 /**
@@ -28,6 +30,8 @@ export function LivePrintPreviewArtboard({
   breakGroup,
   weekDayDefs,
   pageLabel,
+  printVariant = "official",
+  includeShiftNotes = true,
 }: LivePrintPreviewArtboardProps) {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -59,6 +63,8 @@ export function LivePrintPreviewArtboard({
         versionLabel={shiftBuilderVersionLabel()}
         weekDayDefs={weekDayDefs}
         activeBreakGroup={activeBreakGroup}
+        printVariant={printVariant}
+        includeShiftNotes={includeShiftNotes}
       />
     </div>
   );

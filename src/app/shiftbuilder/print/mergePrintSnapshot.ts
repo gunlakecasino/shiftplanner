@@ -11,6 +11,7 @@ export type LiveBoardOverlay = {
   >;
   auxDefs: AuxDef[];
   tasksBySlot: Record<string, NightSlotTask[]>;
+  notes?: string;
 };
 
 /** Overlay live builder board state onto a fetched snapshot (current night preview). */
@@ -24,6 +25,7 @@ export function applyLiveBoardToPrintSnapshot(
     auxDefs: live.auxDefs,
     tasksBySlot: live.tasksBySlot,
     breakCounts: computeBreakCounts(live.assignments),
+    ...(live.notes !== undefined ? { notes: live.notes } : {}),
   };
 }
 

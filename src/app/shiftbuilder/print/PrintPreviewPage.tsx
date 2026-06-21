@@ -4,11 +4,14 @@ import type { PrintPreviewPageProps } from "./printPreviewTypes";
 import {
   GoldenAuxCard,
   GoldenBreaksHeader,
+  GoldenBreaksPlanningHeader,
   GoldenDeploymentHeader,
   GoldenOverlapSlot,
+  GoldenPlanningHeaderBadge,
   GoldenRRColumn,
   GoldenSectionHeader,
   GoldenSheetFooter,
+  GoldenShiftNotesBand,
   GoldenZoneCard,
   toTaskLines,
   ZONE_VISUAL_ORDER,
@@ -28,6 +31,59 @@ function filledCount(
   return keys.filter((k) => assignments[k]?.tmName).length;
 }
 
+function OverlapRowsSection({
+  overlapRows,
+  className = "",
+}: {
+  overlapRows: ReturnType<typeof buildOverlapRows>;
+  className?: string;
+}) {
+  return (
+    <section className={`sb-builder-section overlaps-section ${className}`.trim()}>
+      <GoldenSectionHeader label="OVERLAPS" count="" />
+      <div className="space-y-2">
+        {overlapRows.map((row) => (
+          <div key={row.key}>
+            <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+              <div
+                className="font-black tabular-nums leading-none text-[22px] text-[#1C1C1E]"
+                style={{ fontFamily: "var(--font-atkinson)" }}
+              >
+                {row.dateNum}
+              </div>
+              <div
+                className="font-bold tracking-[-0.4px] leading-none text-[16px]"
+                style={{ color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
+              >
+                {row.dayName}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
+                style={{ fontFamily: "var(--font-atkinson)" }}
+              >
+                {row.time}
+              </div>
+              <div className="flex-1 grid grid-cols-6 gap-1.5 min-w-0">
+                {row.slots.map((slot) => (
+                  <div key={slot.key} className="relative h-full">
+                    <GoldenOverlapSlot
+                      slotKey={slot.key}
+                      tmName={slot.tmName}
+                      tasks={slot.tasks}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function PrintPreviewPage({
   view,
   snapshot,
@@ -35,16 +91,48 @@ export function PrintPreviewPage({
   versionLabel,
   weekDayDefs,
   activeBreakGroup = 1,
+  printVariant = "official",
+  includeShiftNotes = true,
 }: PrintPreviewPageProps) {
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
+  const isPlanning = printVariant === "planning";
+  const variantAttr = isPlanning ? "planning" : "official";
 
   if (view === "breaks") {
-    const waves = buildBreaksWaves(snapshot);
     const overlapRows = buildOverlapRows(snapshot);
 
+    if (isPlanning) {
+      return (
+        <div className="print-artboard" data-print-view="breaks" data-print-variant={variantAttr}>
+          <GoldenPlanningHeaderBadge />
+          <GoldenBreaksPlanningHeader
+            day={day}
+            dayIndex={snapshot.dayIndex}
+            weekDayDefs={weekDayDefs}
+          />
+
+          <div className="sb-breaks-planning-body flex flex-col w-full flex-1 min-h-0 overflow-hidden">
+            <OverlapRowsSection overlapRows={overlapRows} className="flex-1 min-h-0 pt-1" />
+            {includeShiftNotes ? (
+              <GoldenShiftNotesBand notes={snapshot.notes} blankLines={5} />
+            ) : null}
+          </div>
+
+          <GoldenSheetFooter
+            versionLabel={versionLabel}
+            pageLabel={pageLabel}
+            printVariant="planning"
+            nightStatus={snapshot.nightStatus}
+          />
+        </div>
+      );
+    }
+
+    const waves = buildBreaksWaves(snapshot);
+
     return (
-      <div className="print-artboard" data-print-view="breaks">
+      <div className="print-artboard" data-print-view="breaks" data-print-variant={variantAttr}>
         <GoldenBreaksHeader
           day={day}
           dayIndex={snapshot.dayIndex}
@@ -151,48 +239,7 @@ export function PrintPreviewPage({
             })}
           </div>
 
-          <section className="sb-builder-section mt-auto pt-1.5 overlaps-section">
-            <GoldenSectionHeader label="OVERLAPS" count="" />
-            <div className="space-y-2">
-              {overlapRows.map((row) => (
-                <div key={row.key}>
-                  <div className="flex items-baseline gap-2 pl-1 mb-0.5">
-                    <div
-                      className="font-black tabular-nums leading-none text-[22px] text-[#1C1C1E]"
-                      style={{ fontFamily: "var(--font-atkinson)" }}
-                    >
-                      {row.dateNum}
-                    </div>
-                    <div
-                      className="font-bold tracking-[-0.4px] leading-none text-[16px]"
-                      style={{ color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
-                    >
-                      {row.dayName}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
-                      style={{ fontFamily: "var(--font-atkinson)" }}
-                    >
-                      {row.time}
-                    </div>
-                    <div className="flex-1 grid grid-cols-6 gap-1.5 min-w-0">
-                      {row.slots.map((slot) => (
-                        <div key={slot.key} className="relative h-full">
-                          <GoldenOverlapSlot
-                            slotKey={slot.key}
-                            tmName={slot.tmName}
-                            tasks={slot.tasks}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+          <OverlapRowsSection overlapRows={overlapRows} className="mt-auto pt-1.5" />
         </div>
 
         <GoldenSheetFooter versionLabel={versionLabel} pageLabel={pageLabel} />
@@ -216,7 +263,8 @@ export function PrintPreviewPage({
   const coveredByIndex = buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
 
   return (
-    <div className="print-artboard" data-print-view="deployment">
+    <div className="print-artboard" data-print-view="deployment" data-print-variant={variantAttr}>
+      {isPlanning ? <GoldenPlanningHeaderBadge /> : null}
       <GoldenDeploymentHeader
         day={day}
         dayIndex={snapshot.dayIndex}
@@ -276,7 +324,11 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section className="sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-[2] flex-col">
+        <section
+          className={`sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-col ${
+            isPlanning && includeShiftNotes ? "flex-[1.75]" : "flex-[2]"
+          }`}
+        >
           <GoldenSectionHeader
             label="AUXILIARY"
             count={`${auxFilled} / ${auxTotal} FILLED`}
@@ -306,9 +358,18 @@ export function PrintPreviewPage({
             })}
           </div>
         </section>
+
+        {isPlanning && includeShiftNotes ? (
+          <GoldenShiftNotesBand notes={snapshot.notes} blankLines={4} />
+        ) : null}
       </div>
 
-      <GoldenSheetFooter versionLabel={versionLabel} pageLabel={pageLabel} />
+      <GoldenSheetFooter
+        versionLabel={versionLabel}
+        pageLabel={pageLabel}
+        printVariant={printVariant}
+        nightStatus={snapshot.nightStatus}
+      />
     </div>
   );
 }

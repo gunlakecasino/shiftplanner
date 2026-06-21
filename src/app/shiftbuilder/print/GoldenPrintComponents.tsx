@@ -784,13 +784,145 @@ export function GoldenBreaksHeader({
   );
 }
 
+export function GoldenPlanningHeaderBadge() {
+  return (
+    <div
+      className="golden-planning-header-badge flex-shrink-0 mb-1 px-2 py-[3px] rounded-[3px] border border-[#D1D5DB] bg-[#F3F4F6] text-center"
+      style={{ fontFamily: "var(--font-atkinson)" }}
+    >
+      <span className="text-[8.5px] font-extrabold tracking-[1.4px] uppercase text-[#4B5563]">
+        Planning Worksheet — Not For Floor Distribution
+      </span>
+    </div>
+  );
+}
+
+export function GoldenShiftNotesBand({
+  notes,
+  blankLines = 4,
+}: {
+  notes?: string;
+  blankLines?: number;
+}) {
+  const trimmed = notes?.trim() ?? "";
+  return (
+    <div
+      className="golden-shift-notes-band flex-shrink-0 border border-[#E5E5E7] rounded-[3px] bg-[#FAFAFB] px-2.5 py-1.5"
+      style={{ fontFamily: "var(--font-atkinson)" }}
+    >
+      <div className="text-[8px] font-extrabold tracking-[1.2px] uppercase text-[#6B7280] mb-1">
+        Shift Notes
+      </div>
+      {trimmed ? (
+        <div className="text-[9px] leading-[1.35] text-[#374151] whitespace-pre-wrap mb-1 max-h-[36px] overflow-hidden">
+          {trimmed}
+        </div>
+      ) : null}
+      <div className="space-y-[5px]">
+        {Array.from({ length: blankLines }, (_, i) => (
+          <div key={i} className="golden-shift-notes-line h-[14px] border-b border-[#D1D5DB]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function GoldenBreaksPlanningHeader({
+  day,
+  dayIndex,
+  weekDayDefs,
+}: {
+  day: DayDef;
+  dayIndex: number;
+  weekDayDefs: DayDef[];
+}) {
+  return (
+    <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
+      <div className="flex items-end gap-3 min-w-0">
+        <div
+          className="font-black tabular-nums leading-[0.78]"
+          style={{
+            fontSize: 58,
+            letterSpacing: "-4px",
+            color: "transparent",
+            WebkitTextStroke: "1.5px #1C1C1E",
+            fontFamily: "var(--font-atkinson)",
+          }}
+        >
+          {day.dateNum}
+        </div>
+        <div className="-mb-0.5 flex flex-col min-w-0">
+          <div
+            className="font-bold leading-none text-[#1C1C1E]"
+            style={{
+              fontSize: 26,
+              letterSpacing: "-0.8px",
+              fontFamily: "var(--font-atkinson)",
+            }}
+          >
+            Overlaps
+          </div>
+          <div className="text-[11px] mt-0.5 leading-none text-[#4B5563]">
+            {day.name} · {day.monthYear} · Day {dayIndex + 1} of 7
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
+        <div
+          className="text-[9.5px] font-bold tracking-[1.2px] uppercase text-[#1C1C1E]"
+          style={{ fontFamily: "var(--font-atkinson)" }}
+        >
+          Planning Sheet
+        </div>
+        <div className="flex gap-[2px]">
+          {weekDayDefs.map((def, i) => {
+            const isActive = i === dayIndex;
+            return (
+              <div
+                key={i}
+                className="min-w-[18px] h-[16px] px-1 text-[9px] flex items-center justify-center font-bold tracking-[-0.2px] rounded-[3px]"
+                style={{
+                  background: isActive ? def.color : "transparent",
+                  color: isActive ? "#fff" : "#6B7280",
+                  fontFamily: "var(--font-atkinson)",
+                }}
+              >
+                {WEEK_LETTERS[i]}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GoldenSheetFooter({
   versionLabel,
   pageLabel,
+  printVariant = "official",
+  nightStatus,
 }: {
   versionLabel: string;
   pageLabel: string;
+  printVariant?: "official" | "planning";
+  nightStatus?: "published" | "draft";
 }) {
+  if (printVariant === "planning") {
+    const statusLabel = nightStatus === "published" ? "PUBLISHED" : "UNPUBLISHED";
+    return (
+      <div
+        className="sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] pt-1 border-t border-[#E5E5E7] text-[#9CA3AF]"
+        style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+      >
+        <div className="min-w-0 truncate text-[9px] font-bold tracking-[0.8px] uppercase text-[#6B7280]">
+          Planning · {statusLabel} · {versionLabel}
+        </div>
+        <div className="shrink-0 tabular-nums text-right">{pageLabel}</div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] pt-1 border-t border-[#E5E5E7] text-[#9CA3AF]"

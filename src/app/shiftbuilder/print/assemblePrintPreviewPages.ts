@@ -44,6 +44,9 @@ export async function capturePrintPreviewPages(args: {
   const captured: PrintPreviewCaptured = new Map();
   const versionLabel = shiftBuilderVersionLabel();
 
+  const printVariant = config.printVariant ?? "official";
+  const includeShiftNotes = config.includeShiftNotes !== false;
+
   const queueIds = applyCustomQueueOrder(
     buildPrintQueue(
       config.days,
@@ -53,6 +56,7 @@ export async function capturePrintPreviewPages(args: {
       config.overviewPosition,
       config.includeCoverPage,
       config.coverPagePosition,
+      printVariant,
     ),
     config.customQueueOrder ?? null,
   ).map((item) => item.id);
@@ -86,6 +90,8 @@ export async function capturePrintPreviewPages(args: {
         pageLabel: pageLabelForQueueId(queueIds, `${dayIdx}-d`),
         versionLabel,
         weekDayDefs: dayDefs,
+        printVariant,
+        includeShiftNotes,
       });
     }
     if (dayConf.printBreaks) {
@@ -96,6 +102,8 @@ export async function capturePrintPreviewPages(args: {
         pageLabel: pageLabelForQueueId(queueIds, `${dayIdx}-b`),
         versionLabel,
         weekDayDefs: dayDefs,
+        printVariant,
+        includeShiftNotes,
       });
     }
 

@@ -238,3 +238,43 @@ body.printing-dual-mode .print-dual-container .print-artboard .overlaps-section,
 body.golden-export-raster .print-dual-container .print-artboard .overlaps-section {
   margin-top: auto;
 }
+
+/* ── Planning Worksheet variant ─────────────────────────────────────────── */
+.print-stage-inner .print-artboard[data-print-variant="planning"] .assignment-card:not(.sb-card-empty):not(.empty),
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card:not(.sb-card-empty):not(.empty),
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card:not(.sb-card-empty):not(.empty) {
+  background: #f8f8fa !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name {
+  color: #4b5563 !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-task-list,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-task-list,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-task-list {
+  opacity: 0.88;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-section-aux,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-section-aux,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-section-aux {
+  flex-grow: 1.75;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .golden-shift-notes-band,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .golden-shift-notes-band,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .golden-shift-notes-band {
+  min-height: 80px;
+  max-height: 96px;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-body,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-body,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}

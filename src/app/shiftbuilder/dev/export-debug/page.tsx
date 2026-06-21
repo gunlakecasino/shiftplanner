@@ -63,6 +63,8 @@ export default function ExportDebugPage() {
         includeCoverPage: false,
         coverPagePosition: "first",
         customQueueOrder: null,
+        printVariant: "official",
+        includeShiftNotes: true,
       };
 
       setStatus("Rasterizing from mounted Golden session (live DOM — export path)…");

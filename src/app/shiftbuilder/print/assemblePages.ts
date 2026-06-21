@@ -79,6 +79,7 @@ export function assembleGoldenPrintPages(args: {
       config.overviewPosition,
       config.includeCoverPage,
       config.coverPagePosition,
+      config.printVariant ?? "official",
     ),
     config.customQueueOrder ?? null,
   );

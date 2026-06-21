@@ -4,6 +4,8 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 
 export type PrintPreviewView = "deployment" | "breaks";
 
+export type PrintVariant = "official" | "planning";
+
 export type PrintTaskLine = {
   id: string;
   label: string;
@@ -62,6 +64,8 @@ export type PrintDaySnapshot = {
   amOverlapDateNum: number;
   nextDayColor: string;
   breakCounts: Record<1 | 2 | 3 | 4, number>;
+  notes?: string;
+  nightStatus?: "published" | "draft";
 };
 
 export type PrintPreviewPageProps = {
@@ -71,4 +75,6 @@ export type PrintPreviewPageProps = {
   versionLabel: string;
   weekDayDefs: DayDef[];
   activeBreakGroup?: 1 | 2 | 3 | 4;
+  printVariant?: PrintVariant;
+  includeShiftNotes?: boolean;
 };

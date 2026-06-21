@@ -47,6 +47,7 @@ export interface PrintDayConfig {
 
 export type PageOrder = "paired" | "deploy-first" | "breaks-first";
 export type MarginSize = "none" | "narrow" | "normal" | "wide";
+export type PrintVariant = "official" | "planning";
 
 export interface PrintConfig {
   days: PrintDayConfig[];
@@ -57,6 +58,8 @@ export interface PrintConfig {
   includeCoverPage: boolean;
   coverPagePosition: "first" | "last";
   customQueueOrder?: string[] | null;
+  printVariant: PrintVariant;
+  includeShiftNotes: boolean;
 }
 
 export const MARGIN_VALUES: Record<MarginSize, string> = {
@@ -106,12 +109,20 @@ interface PrintCommandCenterProps {
   /** New: triggers PDF (or ZIP for multi-day) download using the same capture pipeline. */
   onExport?: (config: PrintConfig) => void;
   /** Jump to on-canvas Golden preview for a deploy/breaks sheet */
-  onPreviewSheet?: (args: { dayIndex: number; view: "deployment" | "breaks"; label: string }) => void;
+  onPreviewSheet?: (args: {
+    dayIndex: number;
+    view: "deployment" | "breaks";
+    label: string;
+    printVariant: PrintVariant;
+    includeShiftNotes: boolean;
+  }) => void;
   DAY_DEFS: DayDef[];
   selectedDayIndex: number;
   isPrinting: boolean;
   printProgress: PrintProgress | null;
   isDark?: boolean;
+  /** Publish status for the currently selected night */
+  currentNightStatus?: string | null;
 }
 
 function formatEstTime(secs: number): string {
@@ -131,17 +142,44 @@ function formatPresetSavedAt(ts: number): string {
 
 const BUILTIN_PRESET_HINTS: Record<string, string> = {
   tonight: "Tonight's deploy + breaks only",
+  "tonight-planning": "Tonight's planning worksheet (deploy + overlaps)",
   "full-week": "All 7 nights, deploy + breaks + overview",
   "deploy-book": "Deploy sheets for every night",
   "break-book": "Break sheets for every night",
 };
+
+function resolveNightStatus(
+  dayIndex: number,
+  selectedDayIndex: number,
+  currentNightStatus: string | null | undefined,
+  statusByDay: Record<number, string | null | undefined>,
+): string | null {
+  if (statusByDay[dayIndex] !== undefined) return statusByDay[dayIndex] ?? null;
+  if (dayIndex === selectedDayIndex) return currentNightStatus ?? null;
+  return null;
+}
+
+function hasUnpublishedQueuedNights(
+  days: PrintDayConfig[],
+  selectedDayIndex: number,
+  currentNightStatus: string | null | undefined,
+  statusByDay: Record<number, string | null | undefined>,
+): boolean {
+  return days
+    .filter((d) => d.printDeploy || d.printBreaks)
+    .some((d) => {
+      const status = resolveNightStatus(d.dayIndex, selectedDayIndex, currentNightStatus, statusByDay);
+      return status !== "published";
+    });
+}
 
 function detectActivePreset(
   days: PrintDayConfig[],
   todayIndex: number,
   includeOverview: boolean,
   includeCoverPage: boolean,
-): "tonight" | "full-week" | "deploy-book" | "break-book" | "custom" {
+  printVariant: PrintVariant,
+): "tonight" | "tonight-planning" | "full-week" | "deploy-book" | "break-book" | "custom" {
   const tonight = days[todayIndex];
   if (
     days.every(d => d.dayIndex === todayIndex
@@ -149,7 +187,9 @@ function detectActivePreset(
       : (!d.printDeploy && !d.printBreaks)) &&
     !includeOverview && !includeCoverPage &&
     tonight?.printDeploy && tonight?.printBreaks
-  ) return "tonight";
+  ) {
+    return printVariant === "planning" ? "tonight-planning" : "tonight";
+  }
 
   if (
     days.every((d) => d.printDeploy && d.printBreaks && d.inOverview) &&
@@ -420,6 +460,7 @@ export function PrintCommandCenter({
   isPrinting,
   printProgress,
   isDark = false,
+  currentNightStatus = null,
 }: PrintCommandCenterProps) {
 
   const applyConfig = useCallback((config: PrintConfig) => {
@@ -431,6 +472,8 @@ export function PrintCommandCenter({
     setIncludeCoverPage(config.includeCoverPage ?? false);
     setCoverPagePosition(config.coverPagePosition ?? "first");
     setCustomOrder(config.customQueueOrder ?? null);
+    setPrintVariant(config.printVariant ?? "official");
+    setIncludeShiftNotes(config.includeShiftNotes !== false);
   }, []);
 
   // ── Core config state ──────────────────────────────────────────────────────
@@ -441,6 +484,9 @@ export function PrintCommandCenter({
   const [overviewPosition, setOverviewPosition] = useState<"first" | "last">("last");
   const [includeCoverPage, setIncludeCoverPage] = useState(false);
   const [coverPagePosition, setCoverPagePosition] = useState<"first" | "last">("first");
+  const [printVariant, setPrintVariant] = useState<PrintVariant>("official");
+  const [includeShiftNotes, setIncludeShiftNotes] = useState(true);
+  const [nightStatusByDay, setNightStatusByDay] = useState<Record<number, string | null>>({});
 
   // ── Saved presets ──────────────────────────────────────────────────────────
   const [savedPresets, setSavedPresets] = useState<SavedPreset[]>([]);
@@ -474,15 +520,19 @@ export function PrintCommandCenter({
   useEffect(() => {
     if (!open) return;
     const last = loadLastPrintConfig(selectedDayIndex);
+    const defaultDays = defaultPrintDays(selectedDayIndex).map((d) =>
+      d.dayIndex === selectedDayIndex
+        ? { ...d, printDeploy: true, printBreaks: true }
+        : d,
+    );
+    const defaultVariant: PrintVariant =
+      currentNightStatus !== "published" ? "planning" : "official";
+
     if (last) {
       applyConfig(last);
     } else {
       applyConfig({
-        days: defaultPrintDays(selectedDayIndex).map((d) =>
-          d.dayIndex === selectedDayIndex
-            ? { ...d, printDeploy: true, printBreaks: true }
-            : d,
-        ),
+        days: defaultDays,
         pageOrder: "paired",
         margins: "narrow",
         includeOverview: false,
@@ -490,10 +540,54 @@ export function PrintCommandCenter({
         includeCoverPage: false,
         coverPagePosition: "first",
         customQueueOrder: null,
+        printVariant: defaultVariant,
+        includeShiftNotes: true,
       });
     }
     setSavedPresets(loadPresets());
-  }, [open, selectedDayIndex, applyConfig]);
+  }, [open, selectedDayIndex, applyConfig, currentNightStatus]);
+
+  // Fetch publish status for queued nights (for defaults + official confirm)
+  useEffect(() => {
+    if (!open) return;
+    const activeIndices = [
+      ...new Set(
+        days
+          .filter((d) => d.printDeploy || d.printBreaks)
+          .map((d) => d.dayIndex),
+      ),
+    ];
+    if (activeIndices.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNightIdForDate, getNightMeta } = await import("@/lib/shiftbuilder/data");
+        const entries = await Promise.all(
+          activeIndices.map(async (dayIndex) => {
+            const def = DAY_DEFS[dayIndex];
+            if (!def) return [dayIndex, null] as const;
+            const nightId = await getNightIdForDate(def.date);
+            if (!nightId) return [dayIndex, "draft"] as const;
+            const meta = await getNightMeta(nightId);
+            return [dayIndex, meta.status ?? "draft"] as const;
+          }),
+        );
+        if (cancelled) return;
+        setNightStatusByDay((prev) => {
+          const next = { ...prev };
+          for (const [idx, status] of entries) next[idx] = status;
+          return next;
+        });
+      } catch {
+        /* non-fatal */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, days, DAY_DEFS]);
 
   // Focus save input when shown
   useEffect(() => {
@@ -533,8 +627,9 @@ export function PrintCommandCenter({
         overviewPosition,
         includeCoverPage,
         coverPagePosition,
+        printVariant,
       ),
-    [days, pageOrder, DAY_DEFS, includeOverview, overviewPosition, includeCoverPage, coverPagePosition],
+    [days, pageOrder, DAY_DEFS, includeOverview, overviewPosition, includeCoverPage, coverPagePosition, printVariant],
   );
   const queueItems = useMemo(
     () => applyCustomQueueOrder(autoQueue, customOrder),
@@ -549,8 +644,26 @@ export function PrintCommandCenter({
   }, [autoQueue, customOrder]);
 
   const activePreset = useMemo(
-    () => detectActivePreset(days, selectedDayIndex, includeOverview, includeCoverPage),
-    [days, selectedDayIndex, includeOverview, includeCoverPage],
+    () => detectActivePreset(days, selectedDayIndex, includeOverview, includeCoverPage, printVariant),
+    [days, selectedDayIndex, includeOverview, includeCoverPage, printVariant],
+  );
+
+  const handlePrintVariantChange = useCallback(
+    (next: PrintVariant) => {
+      if (next === printVariant) return;
+      if (
+        next === "official" &&
+        hasUnpublishedQueuedNights(days, selectedDayIndex, currentNightStatus, nightStatusByDay)
+      ) {
+        const ok = window.confirm(
+          "One or more selected nights are still unpublished. Print the official floor sheet anyway?",
+        );
+        if (!ok) return;
+      }
+      setPrintVariant(next);
+      setCustomOrder(null);
+    },
+    [printVariant, days, selectedDayIndex, currentNightStatus, nightStatusByDay],
   );
 
   const deployCount = useMemo(() => days.filter((d) => d.printDeploy).length, [days]);
@@ -611,6 +724,8 @@ export function PrintCommandCenter({
       includeCoverPage,
       coverPagePosition,
       customQueueOrder: customOrder,
+      printVariant,
+      includeShiftNotes,
     }),
     [
       days,
@@ -621,6 +736,8 @@ export function PrintCommandCenter({
       includeCoverPage,
       coverPagePosition,
       customOrder,
+      printVariant,
+      includeShiftNotes,
     ],
   );
 
@@ -671,10 +788,10 @@ export function PrintCommandCenter({
 
   // ── Presets ───────────────────────────────────────────────────────────────
   const applyBuiltinPreset = useCallback(
-    (preset: "tonight" | "full-week" | "deploy-book" | "break-book") => {
+    (preset: "tonight" | "tonight-planning" | "full-week" | "deploy-book" | "break-book") => {
       setIncludeCoverPage(false);
       setCustomOrder(null);
-      if (preset === "tonight") {
+      if (preset === "tonight" || preset === "tonight-planning") {
         applyConfig({
           days: defaultPrintDays(selectedDayIndex).map((d) =>
             d.dayIndex === selectedDayIndex
@@ -688,6 +805,8 @@ export function PrintCommandCenter({
           includeCoverPage: false,
           coverPagePosition: "first",
           customQueueOrder: null,
+          printVariant: preset === "tonight-planning" ? "planning" : "official",
+          includeShiftNotes: true,
         });
       } else if (preset === "full-week") {
         applyConfig({
@@ -704,6 +823,8 @@ export function PrintCommandCenter({
           includeCoverPage: false,
           coverPagePosition: "first",
           customQueueOrder: null,
+          printVariant: "official",
+          includeShiftNotes: true,
         });
       } else if (preset === "deploy-book") {
         applyConfig({
@@ -720,6 +841,8 @@ export function PrintCommandCenter({
           includeCoverPage: false,
           coverPagePosition: "first",
           customQueueOrder: null,
+          printVariant: "official",
+          includeShiftNotes: true,
         });
       } else {
         applyConfig({
@@ -736,6 +859,8 @@ export function PrintCommandCenter({
           includeCoverPage: false,
           coverPagePosition: "first",
           customQueueOrder: null,
+          printVariant: "official",
+          includeShiftNotes: true,
         });
       }
     },
@@ -926,8 +1051,17 @@ export function PrintCommandCenter({
             </span>
           ) : (
             <>
+              {printVariant === "planning" && (
+                <SummaryPill label="Planning worksheet" color="#8E8E93" isDark={isDark} />
+              )}
               {deployCount > 0 && <SummaryPill label={`${deployCount} deploy`} color="rgba(52,199,89,0.9)" isDark={isDark} />}
-              {breaksCount > 0 && <SummaryPill label={`${breaksCount} breaks`} color="rgba(255,159,10,0.9)" isDark={isDark} />}
+              {breaksCount > 0 && (
+                <SummaryPill
+                  label={printVariant === "planning" ? `${breaksCount} overlaps` : `${breaksCount} breaks`}
+                  color="rgba(255,159,10,0.9)"
+                  isDark={isDark}
+                />
+              )}
               {includeOverview && overviewNightCount > 0 && (
                 <SummaryPill label={`Overview · ${overviewNightCount} col${overviewNightCount !== 1 ? "s" : ""}`} color="#5856D6" isDark={isDark} />
               )}
@@ -950,6 +1084,7 @@ export function PrintCommandCenter({
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               {([
                 { id: "tonight", label: "Tonight", icon: <Moon size={12} strokeWidth={2.2} /> },
+                { id: "tonight-planning", label: "Tonight — Planning", icon: <Pencil size={12} strokeWidth={2.2} /> },
                 { id: "full-week", label: "Full Week", icon: <CalendarDays size={12} strokeWidth={2.2} /> },
                 { id: "deploy-book", label: "Deploy Book", icon: <LayoutGrid size={12} strokeWidth={2.2} /> },
                 { id: "break-book", label: "Break Book", icon: <Coffee size={12} strokeWidth={2.2} /> },
@@ -1051,6 +1186,71 @@ export function PrintCommandCenter({
 
           {/* ── SETTINGS ──────────────────────────────────────────────────── */}
           <div style={{ padding: "14px 20px 0", display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* Sheet type */}
+            <div>
+              <SectionLabel text="SHEET TYPE" isDark={isDark} />
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                {([
+                  { v: "planning" as const, l: "Planning Worksheet", d: "Muted review sheet · overlaps-only breaks" },
+                  { v: "official" as const, l: "Official Floor Sheet", d: "Standard deploy + break waves for floor" },
+                ]).map(({ v, l, d }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => handlePrintVariantChange(v)}
+                    aria-pressed={printVariant === v}
+                    className="sb-interactive pcc-seg"
+                    style={{
+                      flex: "1 1 180px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 2,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      border: `1.5px solid ${printVariant === v ? "#0A84FF" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
+                      background: printVariant === v ? (isDark ? "rgba(10,132,255,0.12)" : "rgba(10,132,255,0.07)") : (isDark ? "rgba(44,44,46,0.38)" : "rgba(255,255,255,0.5)"),
+                      transition: "all 0.12s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%" }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: printVariant === v ? "#0A84FF" : tx }}>{l}</div>
+                      {printVariant === v && <Check size={12} color="#0A84FF" strokeWidth={2.5} style={{ marginLeft: "auto" }} />}
+                    </div>
+                    <div style={{ fontSize: 9.5, color: ts }}>{d}</div>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIncludeShiftNotes((v) => !v)}
+                aria-pressed={includeShiftNotes}
+                className="sb-interactive"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  marginTop: 8,
+                  padding: "6px 8px",
+                  borderRadius: 8,
+                  border: `1px solid ${includeShiftNotes ? "rgba(10,132,255,0.35)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
+                  background: includeShiftNotes ? (isDark ? "rgba(10,132,255,0.1)" : "rgba(10,132,255,0.06)") : "transparent",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                <CheckDot active={includeShiftNotes} color="#0A84FF" />
+                <span style={{ fontSize: 11, fontWeight: 600, color: includeShiftNotes ? "#0A84FF" : tx }}>
+                  Include shift notes
+                </span>
+                <span style={{ fontSize: 9.5, color: ts, marginLeft: "auto" }}>
+                  Pre-fills saved notes + ruled lines
+                </span>
+              </button>
+            </div>
 
             {/* Page Order — horizontal segmented */}
             <div>
@@ -1210,7 +1410,10 @@ export function PrintCommandCenter({
                   {queueItems.map((item, idx) => {
                     const isBeingDragged = dragId === item.id;
                     const isDropTarget = dragOverId === item.id && dragId !== item.id;
-                    const typeLabel = { deploy: "Deploy", breaks: "Breaks", overview: "Overview", cover: "Cover" }[item.type];
+                    const typeLabel =
+                      item.type === "breaks" && printVariant === "planning"
+                        ? "Overlaps"
+                        : { deploy: "Deploy", breaks: "Breaks", overview: "Overview", cover: "Cover" }[item.type];
                     const canPreview =
                       onPreviewSheet &&
                       (item.type === "deploy" || item.type === "breaks") &&
@@ -1265,6 +1468,8 @@ export function PrintCommandCenter({
                                     dayIndex: item.dayIndex!,
                                     view: item.type === "breaks" ? "breaks" : "deployment",
                                     label: item.label,
+                                    printVariant,
+                                    includeShiftNotes,
                                   });
                                 }}
                                 style={{

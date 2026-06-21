@@ -1,5 +1,5 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import type { PrintConfig, PrintDayConfig, PageOrder } from "../components/PrintCommandCenter";
+import type { PrintConfig, PrintDayConfig, PageOrder, PrintVariant } from "../components/PrintCommandCenter";
 
 export type PrintQueueItemType = "deploy" | "breaks" | "overview" | "cover";
 
@@ -39,6 +39,20 @@ export function estimatePrintSeconds(days: PrintDayConfig[], includeOverview: bo
   return (deployBreaks.size + overviewOnly) * 4 + (includeOverview ? 2 : 0);
 }
 
+function sheetSuffix(printVariant: PrintVariant): string {
+  return printVariant === "planning" ? " (Planning)" : "";
+}
+
+function deployLabel(short: string, printVariant: PrintVariant): string {
+  return `${short} Deploy${sheetSuffix(printVariant)}`;
+}
+
+function breaksLabel(short: string, printVariant: PrintVariant): string {
+  return printVariant === "planning"
+    ? `${short} Overlaps (Planning)`
+    : `${short} Breaks`;
+}
+
 export function buildPrintQueue(
   days: PrintDayConfig[],
   pageOrder: PageOrder,
@@ -47,6 +61,7 @@ export function buildPrintQueue(
   overviewPosition: "first" | "last",
   includeCoverPage: boolean,
   coverPagePosition: "first" | "last",
+  printVariant: PrintVariant = "official",
 ): PrintQueueItem[] {
   const items: PrintQueueItem[] = [];
   const active = days.filter((d) => d.printDeploy || d.printBreaks);
@@ -62,7 +77,7 @@ export function buildPrintQueue(
       if (d.printDeploy) {
         dayItems.push({
           id: `${d.dayIndex}-d`,
-          label: `${def.short} Deploy`,
+          label: deployLabel(def.short, printVariant),
           type: "deploy",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -71,7 +86,7 @@ export function buildPrintQueue(
       if (d.printBreaks) {
         dayItems.push({
           id: `${d.dayIndex}-b`,
-          label: `${def.short} Breaks`,
+          label: breaksLabel(def.short, printVariant),
           type: "breaks",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -84,7 +99,7 @@ export function buildPrintQueue(
       if (def && d.printDeploy) {
         dayItems.push({
           id: `${d.dayIndex}-d`,
-          label: `${def.short} Deploy`,
+          label: deployLabel(def.short, printVariant),
           type: "deploy",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -96,7 +111,7 @@ export function buildPrintQueue(
       if (def && d.printBreaks) {
         dayItems.push({
           id: `${d.dayIndex}-b`,
-          label: `${def.short} Breaks`,
+          label: breaksLabel(def.short, printVariant),
           type: "breaks",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -109,7 +124,7 @@ export function buildPrintQueue(
       if (def && d.printBreaks) {
         dayItems.push({
           id: `${d.dayIndex}-b`,
-          label: `${def.short} Breaks`,
+          label: breaksLabel(def.short, printVariant),
           type: "breaks",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -121,7 +136,7 @@ export function buildPrintQueue(
       if (def && d.printDeploy) {
         dayItems.push({
           id: `${d.dayIndex}-d`,
-          label: `${def.short} Deploy`,
+          label: deployLabel(def.short, printVariant),
           type: "deploy",
           color: def.color,
           dayIndex: d.dayIndex,
@@ -167,6 +182,7 @@ export function normalizePrintConfigForExecution(
     config.overviewPosition,
     config.includeCoverPage,
     config.coverPagePosition,
+    config.printVariant ?? "official",
   );
   const custom = config.customQueueOrder;
   if (!custom?.length) return config;
@@ -184,7 +200,10 @@ export function normalizePrintConfigForExecution(
   return { ...config, customQueueOrder: null };
 }
 
-export function tonightPrintConfig(selectedDayIndex: number): PrintConfig {
+export function tonightPrintConfig(
+  selectedDayIndex: number,
+  printVariant: PrintVariant = "official",
+): PrintConfig {
   return {
     days: defaultPrintDays(selectedDayIndex).map((d) =>
       d.dayIndex === selectedDayIndex
@@ -198,7 +217,13 @@ export function tonightPrintConfig(selectedDayIndex: number): PrintConfig {
     includeCoverPage: false,
     coverPagePosition: "first",
     customQueueOrder: null,
+    printVariant,
+    includeShiftNotes: true,
   };
+}
+
+export function tonightPlanningPrintConfig(selectedDayIndex: number): PrintConfig {
+  return tonightPrintConfig(selectedDayIndex, "planning");
 }
 
 export function fullWeekPrintConfig(): PrintConfig {
@@ -216,6 +241,8 @@ export function fullWeekPrintConfig(): PrintConfig {
     includeCoverPage: false,
     coverPagePosition: "first",
     customQueueOrder: null,
+    printVariant: "official",
+    includeShiftNotes: true,
   };
 }
 
@@ -241,6 +268,8 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
       overviewPosition: parsed.overviewPosition ?? "last",
       includeCoverPage: parsed.includeCoverPage ?? false,
       coverPagePosition: parsed.coverPagePosition ?? "first",
+      printVariant: parsed.printVariant === "planning" ? "planning" : "official",
+      includeShiftNotes: parsed.includeShiftNotes !== false,
       // Stale saved drag-order (e.g. deploy-only) must not drop breaks at print time.
       customQueueOrder: null,
     };

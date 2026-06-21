@@ -21,7 +21,7 @@ import {
   pageLabelForQueueId,
   singleSheetPageLabel,
 } from "./printPageLabels";
-import type { PrintPreviewView } from "./printPreviewTypes";
+import type { PrintPreviewView, PrintVariant } from "./printPreviewTypes";
 import { usePrintPreviewSnapshot } from "./usePrintPreviewSnapshot";
 
 const SHEET_LABELS: Record<PrintPreviewView, { duplex: string; single: string }> = {
@@ -47,6 +47,9 @@ export type PrintPreviewStageProps = {
   /** Optional queue context when opened from Print Command Center eye icon. */
   queuePageId?: string | null;
   queueIds?: string[] | null;
+  printVariant?: PrintVariant;
+  includeShiftNotes?: boolean;
+  liveNotes?: string;
 };
 
 function viewsForFocus(focus: PrintPreviewFocus): PrintPreviewView[] {
@@ -90,6 +93,9 @@ export function PrintPreviewStage({
   liveTasksBySlot,
   queuePageId,
   queueIds,
+  printVariant = "official",
+  includeShiftNotes = true,
+  liveNotes,
 }: PrintPreviewStageProps) {
   const views = useMemo(() => viewsForFocus(focus), [focus]);
   const stageW = printPreviewStageWidth(views.length === 2 ? 2 : 1);
@@ -107,8 +113,9 @@ export function PrintPreviewStage({
       assignments: liveAssignments,
       auxDefs: liveAuxDefs,
       tasksBySlot: liveTasksBySlot,
+      ...(liveNotes !== undefined ? { notes: liveNotes } : {}),
     };
-  }, [liveAssignments, liveAuxDefs, liveTasksBySlot]);
+  }, [liveAssignments, liveAuxDefs, liveTasksBySlot, liveNotes]);
 
   const { snapshot, loading, error } = usePrintPreviewSnapshot({
     day: selectedDay,
@@ -173,6 +180,8 @@ export function PrintPreviewStage({
                 queuePageId,
                 queueIds ?? null,
               )}
+              printVariant={printVariant}
+              includeShiftNotes={includeShiftNotes}
             />
           </PrintPreviewScaledSheet>
         );
