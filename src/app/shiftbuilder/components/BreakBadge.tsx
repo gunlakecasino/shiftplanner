@@ -3,11 +3,42 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { premiumSpring, premiumHoverLift } from "@/lib/premiumSpring";
-import { breakGroupLabel, BREAK_GROUP_OVERLAPS } from "@/lib/shiftbuilder/constants";
+import { premiumSpring } from "@/lib/premiumSpring";
+import { BREAK_GROUP_OVERLAPS } from "@/lib/shiftbuilder/constants";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
-// BreakBadge: 0 = off ("–"), 1/2/3 = waves, 4 = overlaps ("OL").
+function BreakImprintMark({ value }: { value: number }) {
+  if (value === 0) {
+    return <span className="sb-break-imprint-dash" aria-hidden>–</span>;
+  }
+  if (value === BREAK_GROUP_OVERLAPS) {
+    return <span className="sb-break-imprint-ol" aria-hidden>OL</span>;
+  }
+  if (value === 1) {
+    return (
+      <span className="sb-break-imprint-dots sb-break-imprint-dots--1" aria-hidden>
+        <span className="sb-break-imprint-dot" />
+      </span>
+    );
+  }
+  if (value === 2) {
+    return (
+      <span className="sb-break-imprint-dots sb-break-imprint-dots--2" aria-hidden>
+        <span className="sb-break-imprint-dot" />
+        <span className="sb-break-imprint-dot" />
+      </span>
+    );
+  }
+  return (
+    <span className="sb-break-imprint-dots sb-break-imprint-dots--3" aria-hidden>
+      <span className="sb-break-imprint-dot" />
+      <span className="sb-break-imprint-dot" />
+      <span className="sb-break-imprint-dot" />
+    </span>
+  );
+}
+
+// BreakBadge: 0 = off ("–"), 1/2/3 = dotted wave imprint, 4 = overlaps ("OL").
 // Cycle via nextBreakGroup: 1 → 2 → 3 → OL → – → 1.
 const BreakBadge = React.memo(function BreakBadge({
   value,
@@ -19,28 +50,20 @@ const BreakBadge = React.memo(function BreakBadge({
   value: number;
   onCycle: () => void;
   size?: "sm" | "md";
-  /** Zone accent tint for /today kiosk break dots */
+  /** Zone accent tint for debossed imprint ring + dots */
   accentColor?: string;
   kioskSize?: boolean;
 }) {
   const tablet = isTabletTouchDevice();
   const isOl = value === BREAK_GROUP_OVERLAPS;
-  const visual = tablet
-    ? isOl
-      ? size === "sm"
-        ? "w-[30px] h-[22px] text-[10px]"
-        : "w-[34px] h-[24px] text-[11px]"
-      : size === "sm"
-        ? "w-[28px] h-[22px] text-[11px]"
-        : "w-[32px] h-[24px] text-[12px]"
-    : isOl
-      ? size === "sm"
-        ? "w-[20px] h-[14px] text-[8px]"
-        : "w-[24px] h-[16px] text-[9px]"
-      : size === "sm"
-        ? "w-[18px] h-[14px] text-[9px]"
-        : "w-[22px] h-[16px] text-[10.5px]";
-  const display = breakGroupLabel(value);
+  const imprintSize = tablet
+    ? size === "sm"
+      ? "sb-break-imprint--tablet-sm"
+      : "sb-break-imprint--tablet-md"
+    : size === "sm"
+      ? "sb-break-imprint--sm"
+      : "sb-break-imprint--md";
+
   const label =
     value === 0
       ? "Off the break sheet — tap to cycle"
@@ -49,23 +72,19 @@ const BreakBadge = React.memo(function BreakBadge({
         : `Break Group ${value} — tap to cycle`;
   const isOff = value === 0;
 
-  const spanClass = cn(
-    "sb-break-badge-visual",
-    visual,
-    isOff ? "bg-[#9CA3AF] dark:bg-[#48484A]" : "bg-[#1C1C1E] dark:bg-[#E5E5E7] dark:text-[#1C1C1E]",
-    "text-white font-bold rounded-[2px] flex items-center justify-center select-none leading-none",
-    kioskSize && "sb-break-badge-kiosk-pill",
-  );
-
-  const pillStyle =
-    !isOff && accentColor
-      ? { background: accentColor, color: "#fff" }
-      : undefined;
+  const imprintStyle = accentColor
+    ? ({
+        ["--break-imprint-accent" as string]: accentColor,
+      } as React.CSSProperties)
+    : undefined;
 
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onCycle(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCycle();
+      }}
       onPointerDown={(e) => e.stopPropagation()}
       className={cn(
         "sb-interactive sb-break-badge-btn sb-kiosk-action inline-flex items-center justify-center shrink-0",
@@ -76,13 +95,21 @@ const BreakBadge = React.memo(function BreakBadge({
       aria-label={label}
     >
       <motion.span
-        className={spanClass}
-        style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)", ...pillStyle }}
-        {...premiumHoverLift}
+        className={cn(
+          "sb-break-imprint",
+          imprintSize,
+          isOff ? "sb-break-imprint--off" : "sb-break-imprint--active",
+          kioskSize && "sb-break-imprint--kiosk",
+        )}
+        style={imprintStyle}
         transition={premiumSpring}
-        whileTap={{ scale: 0.92, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}
+        whileHover={{ scale: 1.06, transition: premiumSpring }}
+        whileTap={{ scale: 0.94, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}
       >
-        {display}
+        <span className="sb-break-imprint-ring" aria-hidden />
+        <span className="sb-break-imprint-face">
+          <BreakImprintMark value={value} />
+        </span>
       </motion.span>
     </button>
   );

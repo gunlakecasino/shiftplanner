@@ -176,7 +176,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           {assignmentState.kind !== "covered" && assignmentState.kind !== "unassigned" && (
             <PlacementFitChip fit={fitChip} compact />
           )}
-          <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" />
+          <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" accentColor={color} />
         </div>
       </div>
 

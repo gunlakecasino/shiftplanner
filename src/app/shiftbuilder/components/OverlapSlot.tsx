@@ -112,11 +112,12 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card relative h-full min-h-[48px] flex flex-col border border-[#E5E5E7] rounded-[3px] bg-white px-2.5 py-1.5 touch-none ${
+      className={`assignment-card sb-assignment-card relative h-full min-h-[48px] flex flex-col overflow-hidden border border-[#E5E5E7] rounded-[3px] bg-white px-2.5 py-1.5 touch-none ${
         isOver ? "drop-target-active" : ""
       } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
     >
-      <div className="flex items-center justify-between gap-1 min-h-[16px]">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex items-center justify-between gap-1 min-h-[16px] shrink-0">
         {showDigitalAssists && setBreakGroupForSlot ? (
           <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" />
         ) : (
@@ -127,7 +128,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
       ) : hasTM ? (
-        <div className="flex items-center gap-1 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 shrink-0">
           {a.isLocked && (
             <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
           )}
@@ -159,7 +160,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       )}
       {tasks && tasks.length > 0 && (
         <div
-          className={`mt-0.5 text-[9.5px] leading-tight overflow-hidden ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-0 overflow-y-auto text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -179,6 +180,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 });

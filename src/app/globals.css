@@ -1001,9 +1001,25 @@ body {
   min-height: 0;
 }
 
-.sb-builder-stage .builder-workspace .sb-card-task-scroll {
+/* Task list only — scrolls inside the card when rows exceed available height. */
+.builder-workspace .assignment-card .sb-card-task-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--ios-label-tertiary) 35%, transparent) transparent;
+}
+
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ios-label-tertiary) 35%, transparent);
 }
 
 /* Flex aux row — blank shells + slot chrome */
@@ -1857,4 +1873,172 @@ button,
   .sb-break-badge-btn {
     touch-action: manipulation;
   }
+}
+
+/* Break imprint — debossed divotted circle on assignment cards (replaces square pill). */
+.sb-break-imprint {
+  --break-imprint-accent: var(--card-accent, #6b7280);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.72), transparent 46%),
+    radial-gradient(circle at 68% 78%, rgba(0, 0, 0, 0.06), transparent 52%),
+    color-mix(in srgb, var(--ios-background-primary) 4%, var(--ios-background-secondary));
+  border: 1.5px solid color-mix(in srgb, var(--break-imprint-accent) 36%, var(--ios-label-tertiary));
+  box-shadow:
+    inset 0 2.5px 5px rgba(0, 0, 0, 0.16),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.78),
+    0 1px 0 rgba(255, 255, 255, 0.92);
+  color: color-mix(in srgb, var(--break-imprint-accent) 82%, #1c1c1e);
+  user-select: none;
+  overflow: hidden;
+}
+
+.sb-break-imprint--sm {
+  width: 22px;
+  height: 22px;
+}
+
+.sb-break-imprint--md {
+  width: 26px;
+  height: 26px;
+}
+
+.sb-break-imprint--tablet-sm {
+  width: 30px;
+  height: 30px;
+}
+
+.sb-break-imprint--tablet-md {
+  width: 34px;
+  height: 34px;
+}
+
+.sb-break-imprint-ring {
+  position: absolute;
+  inset: 1px;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 22.5deg,
+    color-mix(in srgb, var(--break-imprint-accent) 72%, #2c2c2e) 0deg 30deg,
+    transparent 30deg 45deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 54%, #000 57%, #000 80%, transparent 83%);
+  mask: radial-gradient(circle, transparent 54%, #000 57%, #000 80%, transparent 83%);
+  opacity: 0.92;
+}
+
+.sb-break-imprint-face {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.sb-break-imprint--active {
+  border-color: color-mix(in srgb, var(--break-imprint-accent) 58%, #1c1c1e);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.58), transparent 48%),
+    radial-gradient(circle at 70% 80%, color-mix(in srgb, var(--break-imprint-accent) 14%, rgba(0, 0, 0, 0.12)), transparent 54%),
+    color-mix(in srgb, var(--break-imprint-accent) 14%, var(--ios-background-secondary));
+  color: color-mix(in srgb, var(--break-imprint-accent) 92%, #111111);
+  box-shadow:
+    inset 0 3px 6px color-mix(in srgb, var(--break-imprint-accent) 26%, rgba(0, 0, 0, 0.22)),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.sb-break-imprint--off {
+  color: var(--ios-label-secondary);
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ios-label-tertiary) 52%, transparent);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.sb-break-imprint--off .sb-break-imprint-ring {
+  opacity: 0.45;
+  background: repeating-conic-gradient(
+    from 22.5deg,
+    color-mix(in srgb, var(--ios-label-tertiary) 70%, #9ca3af) 0deg 30deg,
+    transparent 30deg 45deg
+  );
+}
+
+.sb-break-imprint-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: currentColor;
+  box-shadow:
+    0 0.5px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -0.5px 0 rgba(0, 0, 0, 0.18);
+}
+
+.sb-break-imprint--tablet-sm .sb-break-imprint-dot,
+.sb-break-imprint--tablet-md .sb-break-imprint-dot,
+.sb-break-imprint--kiosk .sb-break-imprint-dot {
+  width: 4.5px;
+  height: 4.5px;
+}
+
+.sb-break-imprint-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
+  line-height: 1;
+}
+
+.sb-break-imprint-dots--3 {
+  gap: 2px;
+}
+
+.sb-break-imprint-dash {
+  font-family: var(--font-atkinson, var(--font-ui, system-ui));
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  transform: translateY(-0.5px);
+}
+
+.sb-break-imprint-ol {
+  font-family: var(--font-atkinson, var(--font-ui, system-ui));
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.sb-break-imprint--tablet-sm .sb-break-imprint-ol,
+.sb-break-imprint--tablet-md .sb-break-imprint-ol {
+  font-size: 8.5px;
+}
+
+.sb-break-imprint--tablet-sm .sb-break-imprint-dash,
+.sb-break-imprint--tablet-md .sb-break-imprint-dash {
+  font-size: 12px;
+}
+
+.dark .sb-break-imprint {
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.1), transparent 50%),
+    color-mix(in srgb, var(--ios-background-primary) 10%, var(--ios-background-secondary));
+  box-shadow:
+    inset 0 2.5px 6px rgba(0, 0, 0, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .sb-break-imprint--active {
+  box-shadow:
+    inset 0 3px 7px color-mix(in srgb, var(--break-imprint-accent) 32%, rgba(0, 0, 0, 0.48)),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }

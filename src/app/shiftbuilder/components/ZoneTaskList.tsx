@@ -31,12 +31,8 @@ const ZoneTaskList: React.FC<{
   if (!tasks || tasks.length === 0) return null;
   const textColor = hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
 
-  // For AUX (dense): show up to 2 tasks fully visible using very compact metrics.
-  // This is the balance: 2 tasks (your reported case) are now completely visible and "match the day",
-  // while the card stays inside the fixed 1056×816 Golden artboard and the equalized AUX band.
-  // For 3+ tasks: show first 2 + "+N more" (full list is still in the model for Sudo/Print/Drag/Pad).
-  // The container has max-h in the caller (AuxCard) to guarantee no overflow.
-  const maxVisible = dense ? 2 : 99;
+  // Dense AUX in print: cap at 2 + "+N more". Live builder scrolls the full list in AuxCard.
+  const maxVisible = dense && isPrintPreview ? 2 : tasks.length;
   const visibleTasks = tasks.slice(0, maxVisible);
   const extra = tasks.length - visibleTasks.length;
 

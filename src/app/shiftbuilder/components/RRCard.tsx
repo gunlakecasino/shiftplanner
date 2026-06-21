@@ -136,9 +136,9 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 min-h-0 touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
-      <div className={`min-w-0 pb-2 ${showDigitalAssists ? "" : "pt-1"}`}>
+      <div className={`min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}>
         <SlotAssignmentBody
           state={assignmentState}
           scale="rr"
@@ -157,8 +157,8 @@ const RRSide: React.FC<{
           Matches uniform plain visual with text size. */}
       {tasks && tasks.length > 0 && (
         <>
-          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
-          <div className="px-3 py-2 space-y-0.5">
+          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
+          <div className="sb-card-task-scroll flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-0.5">
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}
@@ -231,11 +231,11 @@ function RRSideShell({
             <PlacementFitChip fit={fitChip} compact />
           )}
           {/* Functional break group pill */}
-          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" />
+          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" accentColor={color} />
         </div>
       </div>
 
-      <div className="sb-card-task-scroll flex flex-col flex-1 min-h-0 overflow-y-auto px-3 pt-1">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1">
         {body}
       </div>
       {coverageTasks.length > 0 && (

@@ -364,7 +364,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               <BreakBadge
                 value={currentBreak}
                 onCycle={cycleBreak}
-                accentColor={isTodayKiosk ? color : undefined}
+                accentColor={color}
                 kioskSize={isTodayKiosk}
               />
             </span>
@@ -419,24 +419,26 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        <SlotAssignmentBody
-              state={assignmentState}
-              scale="aux"
-              showDigitalAssists={showDigitalAssists}
-              isDuplicate={isDuplicate}
-              otherSlotsForTm={otherSlotsForTm}
-              inviteSize="aux"
-              emptyPresentation="label"
-              nameSizeOverride={
-                hasTM
-                  ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
-                  : undefined
-              }
-              onUnassignedClick={(e) => {
-                e.stopPropagation();
-                onCardClick(def.key, e.currentTarget, e);
-              }}
-            />
+        <div className="shrink-0">
+          <SlotAssignmentBody
+            state={assignmentState}
+            scale="aux"
+            showDigitalAssists={showDigitalAssists}
+            isDuplicate={isDuplicate}
+            otherSlotsForTm={otherSlotsForTm}
+            inviteSize="aux"
+            emptyPresentation="label"
+            nameSizeOverride={
+              hasTM
+                ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
+                : undefined
+            }
+            onUnassignedClick={(e) => {
+              e.stopPropagation();
+              onCardClick(def.key, e.currentTarget, e);
+            }}
+          />
+        </div>
 
             {regularTasks.length > 0 ? (
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
