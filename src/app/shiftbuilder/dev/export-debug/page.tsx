@@ -65,6 +65,7 @@ export default function ExportDebugPage() {
         customQueueOrder: null,
         printVariant: "official",
         includeShiftNotes: true,
+        planningBlankSlate: false,
       };
 
       setStatus("Rasterizing from mounted Golden session (live DOM — export path)…");

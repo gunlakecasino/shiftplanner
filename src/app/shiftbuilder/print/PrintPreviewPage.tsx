@@ -143,17 +143,23 @@ export function PrintPreviewPage({
   activeBreakGroup = 1,
   printVariant = "official",
   includeShiftNotes = true,
+  planningBlankSlate = false,
 }: PrintPreviewPageProps) {
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
   const isPlanning = printVariant === "planning";
   const variantAttr = isPlanning ? "planning" : "official";
+  const blankSlate = isPlanning && planningBlankSlate;
+  const planningNotes = blankSlate ? undefined : snapshot.notes;
+  const coveredByForPlanning = blankSlate
+    ? ({} as ReturnType<typeof buildCoveredByIndex>)
+    : buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
 
   if (view === "breaks") {
     const overlapRows = buildOverlapRows(snapshot);
 
     if (isPlanning) {
-      const coveredByIndex = buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
+      const coveredByIndex = coveredByForPlanning;
       const auxFilled = auxDefs.filter(
         (d) => (d.role !== "blank" || !!d.label) && assignments[d.key]?.tmName,
       ).length;
@@ -185,7 +191,7 @@ export function PrintPreviewPage({
               />
             </div>
             {includeShiftNotes ? (
-              <GoldenPlanningNotesPanel notes={snapshot.notes} />
+              <GoldenPlanningNotesPanel notes={planningNotes} />
             ) : null}
           </div>
 
@@ -330,7 +336,9 @@ export function PrintPreviewPage({
     (d) => (d.role !== "blank" || !!d.label) && assignments[d.key]?.tmName,
   ).length;
   const auxTotal = auxDefs.filter((d) => d.role !== "blank" || !!d.label).length;
-  const coveredByIndex = buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
+  const coveredByIndex = isPlanning
+    ? coveredByForPlanning
+    : buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
 
   return (
     <div className="print-artboard" data-print-view="deployment" data-print-variant={variantAttr}>

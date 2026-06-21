@@ -787,6 +787,7 @@ function AuthedShiftBuilder() {
     queuePageId: string;
     printVariant?: import("./components/PrintCommandCenter").PrintVariant;
     includeShiftNotes?: boolean;
+    planningBlankSlate?: boolean;
   } | null>(null);
   const printPreviewSheetCount = printPreviewFocus === "duplex" ? 2 : 1;
   const printPreviewContentWidth = printPreviewStageWidth(
@@ -3717,11 +3718,13 @@ function AuthedShiftBuilder() {
       label: string;
       printVariant: import("./components/PrintCommandCenter").PrintVariant;
       includeShiftNotes: boolean;
+      planningBlankSlate: boolean;
     }) => {
       const lastConfig = loadLastPrintConfig(args.dayIndex);
       const config = lastConfig ?? tonightPrintConfig(args.dayIndex);
       const printVariant = args.printVariant ?? config.printVariant ?? "official";
       const includeShiftNotes = args.includeShiftNotes ?? config.includeShiftNotes !== false;
+      const planningBlankSlate = args.planningBlankSlate ?? config.planningBlankSlate === true;
       const queueIds = applyCustomQueueOrder(
         buildPrintQueue(
           config.days,
@@ -3746,6 +3749,7 @@ function AuthedShiftBuilder() {
           queuePageId,
           printVariant,
           includeShiftNotes,
+          planningBlankSlate,
         });
         setCanvasMode("print-preview");
         setSelectedDayIndex(args.dayIndex);
@@ -8061,6 +8065,7 @@ function AuthedShiftBuilder() {
                   (currentNightStatus !== "published" ? "planning" : "official")
                 }
                 includeShiftNotes={printPreviewQueueContext?.includeShiftNotes !== false}
+                planningBlankSlate={printPreviewQueueContext?.planningBlankSlate === true}
                 liveNotes={notesRef.current?.innerText ?? currentNight.notes ?? ""}
               />
             ) : (

@@ -219,6 +219,7 @@ export function tonightPrintConfig(
     customQueueOrder: null,
     printVariant,
     includeShiftNotes: true,
+    planningBlankSlate: false,
   };
 }
 
@@ -243,6 +244,7 @@ export function fullWeekPrintConfig(): PrintConfig {
     customQueueOrder: null,
     printVariant: "official",
     includeShiftNotes: true,
+    planningBlankSlate: false,
   };
 }
 
@@ -270,6 +272,7 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
       coverPagePosition: parsed.coverPagePosition ?? "first",
       printVariant: parsed.printVariant === "planning" ? "planning" : "official",
       includeShiftNotes: parsed.includeShiftNotes !== false,
+      planningBlankSlate: parsed.planningBlankSlate === true,
       // Stale saved drag-order (e.g. deploy-only) must not drop breaks at print time.
       customQueueOrder: null,
     };

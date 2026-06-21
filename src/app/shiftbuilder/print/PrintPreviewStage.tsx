@@ -49,6 +49,7 @@ export type PrintPreviewStageProps = {
   queueIds?: string[] | null;
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
+  planningBlankSlate?: boolean;
   liveNotes?: string;
 };
 
@@ -95,6 +96,7 @@ export function PrintPreviewStage({
   queueIds,
   printVariant = "official",
   includeShiftNotes = true,
+  planningBlankSlate = false,
   liveNotes,
 }: PrintPreviewStageProps) {
   const views = useMemo(() => viewsForFocus(focus), [focus]);
@@ -182,6 +184,7 @@ export function PrintPreviewStage({
               )}
               printVariant={printVariant}
               includeShiftNotes={includeShiftNotes}
+              planningBlankSlate={planningBlankSlate}
             />
           </PrintPreviewScaledSheet>
         );

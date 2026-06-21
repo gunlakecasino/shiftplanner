@@ -322,12 +322,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   min-height: 0;
 }
 
-.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
-body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
-body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid {
-  grid-auto-rows: minmax(52px, 1fr) !important;
-}
-
 .print-stage-inner .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card {
@@ -353,17 +347,37 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper {
-  flex: 0 1 42%;
+  flex: 0 1 46%;
   min-height: 0;
-  max-height: 44%;
+  max-height: 48%;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel {
-  flex: 1.15 1 55%;
-  min-height: 55%;
+  flex: 1.08 1 52%;
+  min-height: 52%;
   margin-top: 2px;
+}
+
+/* Sheet 2 — allow aux/overlap tasks to wrap two lines in the upper band */
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span {
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.12 !important;
+  font-size: 8.5px !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid {
+  grid-auto-rows: minmax(56px, 1fr) !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .golden-planning-notes-column-body,

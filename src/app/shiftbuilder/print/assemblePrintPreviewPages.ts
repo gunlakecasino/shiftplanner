@@ -46,6 +46,7 @@ export async function capturePrintPreviewPages(args: {
 
   const printVariant = config.printVariant ?? "official";
   const includeShiftNotes = config.includeShiftNotes !== false;
+  const planningBlankSlate = config.planningBlankSlate === true;
 
   const queueIds = applyCustomQueueOrder(
     buildPrintQueue(
@@ -92,6 +93,7 @@ export async function capturePrintPreviewPages(args: {
         weekDayDefs: dayDefs,
         printVariant,
         includeShiftNotes,
+        planningBlankSlate,
       });
     }
     if (dayConf.printBreaks) {
@@ -104,6 +106,7 @@ export async function capturePrintPreviewPages(args: {
         weekDayDefs: dayDefs,
         printVariant,
         includeShiftNotes,
+        planningBlankSlate,
       });
     }
 

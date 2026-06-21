@@ -18,6 +18,7 @@ export type LivePrintPreviewArtboardProps = {
   pageLabel: string;
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
+  planningBlankSlate?: boolean;
 };
 
 /**
@@ -32,6 +33,7 @@ export function LivePrintPreviewArtboard({
   pageLabel,
   printVariant = "official",
   includeShiftNotes = true,
+  planningBlankSlate = false,
 }: LivePrintPreviewArtboardProps) {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +67,7 @@ export function LivePrintPreviewArtboard({
         activeBreakGroup={activeBreakGroup}
         printVariant={printVariant}
         includeShiftNotes={includeShiftNotes}
+        planningBlankSlate={planningBlankSlate}
       />
     </div>
   );

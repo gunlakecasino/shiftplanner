@@ -60,6 +60,7 @@ export interface PrintConfig {
   customQueueOrder?: string[] | null;
   printVariant: PrintVariant;
   includeShiftNotes: boolean;
+  planningBlankSlate: boolean;
 }
 
 export const MARGIN_VALUES: Record<MarginSize, string> = {
@@ -115,6 +116,7 @@ interface PrintCommandCenterProps {
     label: string;
     printVariant: PrintVariant;
     includeShiftNotes: boolean;
+    planningBlankSlate: boolean;
   }) => void;
   DAY_DEFS: DayDef[];
   selectedDayIndex: number;
@@ -474,6 +476,7 @@ export function PrintCommandCenter({
     setCustomOrder(config.customQueueOrder ?? null);
     setPrintVariant(config.printVariant ?? "official");
     setIncludeShiftNotes(config.includeShiftNotes !== false);
+    setPlanningBlankSlate(config.planningBlankSlate === true);
   }, []);
 
   // ── Core config state ──────────────────────────────────────────────────────
@@ -486,6 +489,7 @@ export function PrintCommandCenter({
   const [coverPagePosition, setCoverPagePosition] = useState<"first" | "last">("first");
   const [printVariant, setPrintVariant] = useState<PrintVariant>("official");
   const [includeShiftNotes, setIncludeShiftNotes] = useState(true);
+  const [planningBlankSlate, setPlanningBlankSlate] = useState(false);
   const [nightStatusByDay, setNightStatusByDay] = useState<Record<number, string | null>>({});
 
   // ── Saved presets ──────────────────────────────────────────────────────────
@@ -542,6 +546,7 @@ export function PrintCommandCenter({
         customQueueOrder: null,
         printVariant: defaultVariant,
         includeShiftNotes: true,
+        planningBlankSlate: false,
       });
     }
     setSavedPresets(loadPresets());
@@ -726,6 +731,7 @@ export function PrintCommandCenter({
       customQueueOrder: customOrder,
       printVariant,
       includeShiftNotes,
+      planningBlankSlate,
     }),
     [
       days,
@@ -738,6 +744,7 @@ export function PrintCommandCenter({
       customOrder,
       printVariant,
       includeShiftNotes,
+      planningBlankSlate,
     ],
   );
 
@@ -807,6 +814,7 @@ export function PrintCommandCenter({
           customQueueOrder: null,
           printVariant: preset === "tonight-planning" ? "planning" : "official",
           includeShiftNotes: true,
+          planningBlankSlate: false,
         });
       } else if (preset === "full-week") {
         applyConfig({
@@ -825,6 +833,7 @@ export function PrintCommandCenter({
           customQueueOrder: null,
           printVariant: "official",
           includeShiftNotes: true,
+          planningBlankSlate: false,
         });
       } else if (preset === "deploy-book") {
         applyConfig({
@@ -843,6 +852,7 @@ export function PrintCommandCenter({
           customQueueOrder: null,
           printVariant: "official",
           includeShiftNotes: true,
+          planningBlankSlate: false,
         });
       } else {
         applyConfig({
@@ -861,6 +871,7 @@ export function PrintCommandCenter({
           customQueueOrder: null,
           printVariant: "official",
           includeShiftNotes: true,
+          planningBlankSlate: false,
         });
       }
     },
@@ -1251,9 +1262,37 @@ export function PrintCommandCenter({
                   Include shift notes
                 </span>
                 <span style={{ fontSize: 9.5, color: ts, marginLeft: "auto" }}>
-                  Pre-fills saved notes + ruled lines
+                  Pre-fills saved notes + dot grid
                 </span>
               </button>
+              {printVariant === "planning" && (
+                <button
+                  type="button"
+                  onClick={() => setPlanningBlankSlate((v) => !v)}
+                  aria-pressed={planningBlankSlate}
+                  className="sb-interactive"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    marginTop: 6,
+                    padding: "6px 8px",
+                    borderRadius: 8,
+                    border: `1px solid ${planningBlankSlate ? "rgba(10,132,255,0.35)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
+                    background: planningBlankSlate ? (isDark ? "rgba(10,132,255,0.1)" : "rgba(10,132,255,0.06)") : "transparent",
+                    cursor: "pointer",
+                    width: "100%",
+                  }}
+                >
+                  <CheckDot active={planningBlankSlate} color="#0A84FF" />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: planningBlankSlate ? "#0A84FF" : tx }}>
+                    Blank slate worksheet
+                  </span>
+                  <span style={{ fontSize: 9.5, color: ts, marginLeft: "auto" }}>
+                    No notes prefill · no covered-by hints
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Page Order — horizontal segmented */}
@@ -1474,6 +1513,7 @@ export function PrintCommandCenter({
                                     label: item.label,
                                     printVariant,
                                     includeShiftNotes,
+                                    planningBlankSlate,
                                   });
                                 }}
                                 style={{

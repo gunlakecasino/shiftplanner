@@ -77,4 +77,6 @@ export type PrintPreviewPageProps = {
   activeBreakGroup?: 1 | 2 | 3 | 4;
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
+  /** Planning only — strip notes prefill and covered-by hints for a clean worksheet. */
+  planningBlankSlate?: boolean;
 };
