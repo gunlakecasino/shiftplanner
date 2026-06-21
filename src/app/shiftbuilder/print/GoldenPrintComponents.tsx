@@ -787,10 +787,10 @@ export function GoldenBreaksHeader({
 export function GoldenPlanningHeaderBadge() {
   return (
     <div
-      className="golden-planning-header-badge flex-shrink-0 mb-1 px-2 py-[3px] rounded-[3px] border border-[#D1D5DB] bg-[#F3F4F6] text-center"
+      className="golden-planning-header-badge flex-shrink-0 mb-0.5 px-2 py-[2px] rounded-[2px] border border-[#D1D5DB] bg-[#F3F4F6] text-center"
       style={{ fontFamily: "var(--font-atkinson)" }}
     >
-      <span className="text-[8.5px] font-extrabold tracking-[1.4px] uppercase text-[#4B5563]">
+      <span className="text-[7.5px] font-extrabold tracking-[1.2px] uppercase text-[#4B5563]">
         Planning Worksheet — Not For Floor Distribution
       </span>
     </div>
@@ -818,9 +818,9 @@ export function GoldenShiftNotesBand({
           {trimmed}
         </div>
       ) : null}
-      <div className="space-y-[5px]">
+      <div className="space-y-[4px]">
         {Array.from({ length: blankLines }, (_, i) => (
-          <div key={i} className="golden-shift-notes-line h-[14px] border-b border-[#D1D5DB]" />
+          <div key={i} className="golden-shift-notes-line h-[12px] border-b border-[#D1D5DB]" />
         ))}
       </div>
     </div>

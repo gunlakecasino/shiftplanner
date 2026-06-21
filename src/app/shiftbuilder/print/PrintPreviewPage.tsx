@@ -324,11 +324,7 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section
-          className={`sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-col ${
-            isPlanning && includeShiftNotes ? "flex-[1.75]" : "flex-[2]"
-          }`}
-        >
+        <section className="sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-[2] flex-col">
           <GoldenSectionHeader
             label="AUXILIARY"
             count={`${auxFilled} / ${auxTotal} FILLED`}
@@ -358,11 +354,11 @@ export function PrintPreviewPage({
             })}
           </div>
         </section>
-
-        {isPlanning && includeShiftNotes ? (
-          <GoldenShiftNotesBand notes={snapshot.notes} blankLines={4} />
-        ) : null}
       </div>
+
+      {isPlanning && includeShiftNotes ? (
+        <GoldenShiftNotesBand notes={snapshot.notes} blankLines={3} />
+      ) : null}
 
       <GoldenSheetFooter
         versionLabel={versionLabel}
