@@ -848,7 +848,6 @@ function GoldenPlanningNotesColumn({
       </div>
       <div className="golden-planning-notes-column-body flex flex-col flex-1 min-h-0 px-2 py-1.5 overflow-hidden">
         {children}
-        <div className="golden-planning-notes-ruled flex-1 min-h-0" aria-hidden />
       </div>
     </div>
   );
