@@ -98,12 +98,18 @@ export function getSpreadPlacementCounts(
   return counts;
 }
 
+/** Last-30 matrix legend colors (matches PlacementPad matrix legend dots). */
+export const MATRIX_SPREAD_ONCE = "#34C759";
+export const MATRIX_SPREAD_TWICE = "#FF9500";
+export const MATRIX_SPREAD_THRICE_PLUS = "#FF3B30";
+export const MATRIX_SPREAD_NONE = "#C7C7CC";
+
 /** Last-30 spread pill accent by placement count (1=green, 2=orange, 3+=red). */
 export function spreadFrequencyAccent(count: number): string | null {
   if (count <= 0) return null;
-  if (count === 1) return "#16a34a";
-  if (count === 2) return "#ea580c";
-  return "#dc2626";
+  if (count === 1) return MATRIX_SPREAD_ONCE;
+  if (count === 2) return MATRIX_SPREAD_TWICE;
+  return MATRIX_SPREAD_THRICE_PLUS;
 }
 
 /** Most recent N placement UI keys for a TM, prior to viewed night. */

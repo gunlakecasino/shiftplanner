@@ -31,7 +31,10 @@ import {
   PLACEMENT_SPREAD_NIGHTS,
   getSpreadPlacementKeys,
   getSpreadPlacementCounts,
-  spreadFrequencyAccent,
+  MATRIX_SPREAD_ONCE,
+  MATRIX_SPREAD_TWICE,
+  MATRIX_SPREAD_THRICE_PLUS,
+  MATRIX_SPREAD_NONE,
   getLastPlacementSequence,
   getDaysSinceForKey,
   formatPlacementUiLabel,
@@ -51,6 +54,28 @@ type ExposureLevel = 0 | 1 | 2 | 3;
 
 function LegendDot({ color }: { color: string }) {
   return <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />;
+}
+
+function matrixSpreadPillStyle(exposure: ExposureLevel): React.CSSProperties {
+  if (exposure === 0) {
+    return {
+      border: `1px dashed ${MATRIX_SPREAD_NONE}`,
+      color: "#9CA3AF",
+      background: "white",
+    };
+  }
+  const base =
+    exposure === 1
+      ? MATRIX_SPREAD_ONCE
+      : exposure === 2
+        ? MATRIX_SPREAD_TWICE
+        : MATRIX_SPREAD_THRICE_PLUS;
+  const bgAlpha = exposure === 1 ? "22" : exposure === 2 ? "30" : "3A";
+  return {
+    border: `2px solid ${base}`,
+    color: base,
+    background: `${base}${bgAlpha}`,
+  };
 }
 
 function InlineCoverage({ sourceKey, auxDefs, onPick, onCancel }: { sourceKey: string; auxDefs: AuxDef[]; onPick: (target: string) => void; onCancel: () => void }) {
@@ -613,56 +638,31 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </div>
 
               <div className="flex items-center gap-2 mb-2 flex-wrap text-[9px] text-gray-500">
-                <span className="flex items-center gap-1"><LegendDot color="#34C759"/>1×</span>
-                <span className="flex items-center gap-1"><LegendDot color="#FF9500"/>2×</span>
-                <span className="flex items-center gap-1"><LegendDot color="#FF3B30"/>3×+</span>
-                <span className="flex items-center gap-1"><LegendDot color="#C7C7CC"/>not in spread</span>
+                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_ONCE}/>1×</span>
+                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_TWICE}/>2×</span>
+                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_THRICE_PLUS}/>3×+</span>
+                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_NONE}/>not in spread</span>
               </div>
 
               <div className="grid grid-cols-5 gap-1">
-                {refinedZones.slice(0, 20).map((item) => {
-                  const base = item.color;
-                  const exp = item.exposure;
-                  let style: React.CSSProperties = {};
-                  if (exp === 0) {
-                    style = { 
-                      border: `1px dashed ${base}40`, 
-                      color: '#9CA3AF', 
-                      background: 'white' 
-                    };
-                  } else if (exp === 1) {
-                    style = { 
-                      border: `2px solid ${base}`, 
-                      color: base, 
-                      background: `${base}15` 
-                    };
-                  } else if (exp === 2) {
-                    style = { 
-                      border: `2px solid ${base}`, 
-                      color: base, 
-                      background: `${base}25` 
-                    };
-                  } else {
-                    style = { 
-                      border: `2px solid ${base}`, 
-                      color: base, 
-                      background: `${base}35` 
-                    };
-                  }
-                  return (
-                    <div 
-                      key={item.id} 
+                {refinedZones.slice(0, 20).map((item) => (
+                    <div
+                      key={item.id}
                       className="rounded-xl py-[5px] text-[10px] font-semibold text-center transition-colors"
-                      style={style}
+                      style={matrixSpreadPillStyle(item.exposure)}
+                      title={
+                        item.exposure === 0
+                          ? `${item.label} · not in last 30 nights`
+                          : `${item.label} · ${item.exposure >= 3 ? "3+" : item.exposure}× in last 30 nights`
+                      }
                     >
                       {item.label}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
 
-            {/* LAST 5 - varied colors */}
+            {/* LAST 5 — slot accent colors (matches deployment card chrome) */}
             <div>
               <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">LAST 5</p>
               <div className="grid grid-cols-5 gap-1">
