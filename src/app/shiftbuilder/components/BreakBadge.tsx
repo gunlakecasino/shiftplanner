@@ -7,9 +7,41 @@ import { premiumSpring } from "@/lib/premiumSpring";
 import { BREAK_GROUP_OVERLAPS } from "@/lib/shiftbuilder/constants";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
+/** Coin-edge notch ring — reads as divotted even at card-header scale. */
+function BreakImprintNotches({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10.1"
+        stroke="currentColor"
+        strokeWidth="0.55"
+        opacity="0.22"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="9.15"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeDasharray="5.35 2.05"
+        strokeLinecap="butt"
+        transform="rotate(11.25 12 12)"
+      />
+    </svg>
+  );
+}
+
 function BreakImprintMark({ value }: { value: number }) {
   if (value === 0) {
-    return <span className="sb-break-imprint-dash" aria-hidden>–</span>;
+    return <span className="sb-break-imprint-dash" aria-hidden />;
   }
   if (value === BREAK_GROUP_OVERLAPS) {
     return <span className="sb-break-imprint-ol" aria-hidden>OL</span>;
@@ -17,7 +49,7 @@ function BreakImprintMark({ value }: { value: number }) {
   return <span className="sb-break-imprint-num" aria-hidden>{value}</span>;
 }
 
-// BreakBadge: 0 = off ("–"), 1/2/3 = grey glassy imprint, 4 = overlaps ("OL").
+// BreakBadge: 0 = off (faint notch), 1/2/3/OL = grey debossed imprint.
 // Cycle via nextBreakGroup: 1 → 2 → 3 → OL → – → 1.
 const BreakBadge = React.memo(function BreakBadge({
   value,
@@ -75,7 +107,7 @@ const BreakBadge = React.memo(function BreakBadge({
         whileHover={{ scale: 1.06, transition: premiumSpring }}
         whileTap={{ scale: 0.94, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}
       >
-        <span className="sb-break-imprint-ring" aria-hidden />
+        <BreakImprintNotches className="sb-break-imprint-svg" />
         <span className="sb-break-imprint-face">
           <BreakImprintMark value={value} />
         </span>

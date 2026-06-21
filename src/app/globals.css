@@ -1875,63 +1875,54 @@ button,
   }
 }
 
-/* Break imprint — grey glassy divotted circle on assignment cards. */
+/* Break imprint — grey debossed divot stamped into the card surface. */
 .sb-break-imprint {
-  --break-imprint-grey: #8e8e93;
-  --break-imprint-grey-deep: #636366;
+  --break-imprint-ink: #6b7280;
+  --break-imprint-ring: #9ca3af;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   border-radius: 9999px;
+  border: none;
   background:
-    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.78), transparent 46%),
-    radial-gradient(circle at 68% 78%, rgba(0, 0, 0, 0.07), transparent 52%),
-    linear-gradient(145deg, #f5f5f7 0%, #e8e8ed 55%, #d8d8de 100%);
-  border: 1.5px solid color-mix(in srgb, var(--break-imprint-grey) 42%, #c7c7cc);
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.55), transparent 52%),
+    radial-gradient(circle at 62% 78%, rgba(0, 0, 0, 0.045), transparent 58%);
   box-shadow:
-    inset 0 2.5px 5px rgba(0, 0, 0, 0.14),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.82),
-    0 1px 0 rgba(255, 255, 255, 0.95);
-  color: var(--break-imprint-grey-deep);
+    inset 0 2px 4px rgba(0, 0, 0, 0.11),
+    inset 0 0.5px 1px rgba(0, 0, 0, 0.06);
+  color: var(--break-imprint-ring);
   user-select: none;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sb-break-imprint--sm {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .sb-break-imprint--md {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 .sb-break-imprint--tablet-sm {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .sb-break-imprint--tablet-md {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
 }
 
-.sb-break-imprint-ring {
+.sb-break-imprint-svg {
   position: absolute;
-  inset: 1px;
-  border-radius: 9999px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  background: repeating-conic-gradient(
-    from 22.5deg,
-    color-mix(in srgb, var(--break-imprint-grey) 78%, #48484a) 0deg 30deg,
-    transparent 30deg 45deg
-  );
-  -webkit-mask: radial-gradient(circle, transparent 54%, #000 57%, #000 80%, transparent 83%);
-  mask: radial-gradient(circle, transparent 54%, #000 57%, #000 80%, transparent 83%);
-  opacity: 0.9;
 }
 
 .sb-break-imprint-face {
@@ -1941,95 +1932,104 @@ button,
   align-items: center;
   justify-content: center;
   line-height: 1;
+  color: var(--break-imprint-ink);
 }
 
 .sb-break-imprint--active {
-  border-color: color-mix(in srgb, var(--break-imprint-grey) 62%, #48484a);
-  background:
-    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.62), transparent 48%),
-    radial-gradient(circle at 70% 80%, rgba(0, 0, 0, 0.1), transparent 54%),
-    linear-gradient(145deg, #ececf0 0%, #dcdce2 55%, #cbcbd3 100%);
-  color: #48484a;
   box-shadow:
-    inset 0 3px 6px rgba(0, 0, 0, 0.2),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.68),
-    0 1px 0 rgba(255, 255, 255, 0.85);
+    inset 0 2.5px 5px rgba(0, 0, 0, 0.14),
+    inset 0 1px 2px rgba(0, 0, 0, 0.08),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.65);
+}
+
+.sb-break-imprint--active .sb-break-imprint-face {
+  color: #4b5563;
 }
 
 .sb-break-imprint--off {
-  color: var(--ios-label-secondary);
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--ios-label-tertiary) 52%, transparent);
+  background:
+    radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.28), transparent 54%),
+    transparent;
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.1),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.62);
+    inset 0 1px 2.5px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 rgba(0, 0, 0, 0.03);
+  color: #c7c7cc;
 }
 
-.sb-break-imprint--off .sb-break-imprint-ring {
-  opacity: 0.45;
-  background: repeating-conic-gradient(
-    from 22.5deg,
-    color-mix(in srgb, var(--ios-label-tertiary) 70%, #9ca3af) 0deg 30deg,
-    transparent 30deg 45deg
-  );
+.sb-break-imprint--off .sb-break-imprint-face {
+  color: #c7c7cc;
 }
 
 .sb-break-imprint-num {
   font-family: var(--font-atkinson, var(--font-ui, system-ui));
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  transform: translateY(-0.5px);
+  letter-spacing: -0.02em;
+  transform: translateY(-0.25px);
+  text-shadow:
+    0 0.5px 0 rgba(255, 255, 255, 0.85),
+    0 -0.5px 0 rgba(0, 0, 0, 0.1);
 }
 
 .sb-break-imprint--tablet-sm .sb-break-imprint-num,
 .sb-break-imprint--tablet-md .sb-break-imprint-num,
 .sb-break-imprint--kiosk .sb-break-imprint-num {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .sb-break-imprint-dash {
-  font-family: var(--font-atkinson, var(--font-ui, system-ui));
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-  transform: translateY(-0.5px);
+  display: block;
+  width: 5px;
+  height: 1px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.55;
+  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.7);
 }
 
 .sb-break-imprint-ol {
   font-family: var(--font-atkinson, var(--font-ui, system-ui));
-  font-size: 7.5px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   line-height: 1;
+  transform: translateY(-0.25px);
+  text-shadow:
+    0 0.5px 0 rgba(255, 255, 255, 0.85),
+    0 -0.5px 0 rgba(0, 0, 0, 0.1);
 }
 
 .sb-break-imprint--tablet-sm .sb-break-imprint-ol,
 .sb-break-imprint--tablet-md .sb-break-imprint-ol {
-  font-size: 8.5px;
+  font-size: 7.5px;
 }
 
 .sb-break-imprint--tablet-sm .sb-break-imprint-dash,
 .sb-break-imprint--tablet-md .sb-break-imprint-dash {
-  font-size: 12px;
+  width: 6px;
 }
 
 .dark .sb-break-imprint {
-  --break-imprint-grey: #aeaeb2;
-  --break-imprint-grey-deep: #d1d1d6;
+  --break-imprint-ink: #aeaeb2;
+  --break-imprint-ring: #636366;
   background:
-    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.12), transparent 50%),
-    linear-gradient(145deg, #3a3a3c 0%, #2c2c2e 55%, #1c1c1e 100%);
-  border-color: color-mix(in srgb, var(--break-imprint-grey) 38%, #48484a);
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.06), transparent 52%),
+    radial-gradient(circle at 62% 78%, rgba(0, 0, 0, 0.22), transparent 58%);
   box-shadow:
-    inset 0 2.5px 6px rgba(0, 0, 0, 0.48),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 2px 5px rgba(0, 0, 0, 0.34),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.04);
 }
 
-.dark .sb-break-imprint--active {
-  color: #e5e5ea;
-  box-shadow:
-    inset 0 3px 7px rgba(0, 0, 0, 0.52),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+.dark .sb-break-imprint--active .sb-break-imprint-face {
+  color: #d1d1d6;
+}
+
+.dark .sb-break-imprint--off {
+  color: #48484a;
+}
+
+.dark .sb-break-imprint--off .sb-break-imprint-face {
+  color: #48484a;
 }
