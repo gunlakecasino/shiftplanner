@@ -6,11 +6,72 @@ import type { TaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
 import {
   normalizeTaskMarkerType,
   shouldRenderTaskMarker,
-  taskMarkerContainerStyle,
   taskMarkerInk,
+  taskMarkerWash,
   type TaskMarkerType,
 } from "@/lib/shiftbuilder/taskMarkerStyle";
 import { taskLevelCss } from "@/lib/shiftbuilder/taskTextStyle";
+
+function FeltHighlight({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
+  const wash = taskMarkerWash(ink, isPrint ? 0.34 : 0.38);
+  const washSoft = taskMarkerWash(ink, isPrint ? 0.16 : 0.2);
+  const washEdge = taskMarkerWash(ink, isPrint ? 0.48 : 0.52);
+
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      viewBox="0 0 120 28"
+      preserveAspectRatio="none"
+      style={{ overflow: "visible" }}
+    >
+      {/* Main chisel-tip wash */}
+      <path
+        d="M 3 7 C 18 4.5, 42 5.5, 68 6.2 S 108 5.8, 117 7.2 L 118 20 C 116 23.5, 88 24.5, 52 24 C 22 23.5, 5 22.5, 2 19.5 Z"
+        fill={wash}
+      />
+      {/* Softer overlap for uneven ink density */}
+      <path
+        d="M 0 9 C 24 6.5, 56 7.8, 92 8.5 S 120 7.5, 120 9.5 L 119 18.5 C 112 21.5, 74 22.5, 38 21.8 C 14 21.2, 2 19.8, 0 16.5 Z"
+        fill={washSoft}
+      />
+      {/* Left stroke where the marker first lands */}
+      <path
+        d="M 4 6.5 C 4 12, 3.5 17.5, 4 22"
+        fill="none"
+        stroke={washEdge}
+        strokeWidth={isPrint ? 3.2 : 4}
+        strokeLinecap="round"
+      />
+      <path
+        d="M 6.5 8 C 6.8 13, 6.2 18, 6.8 21.5"
+        fill="none"
+        stroke={washEdge}
+        strokeWidth={isPrint ? 1.4 : 1.8}
+        strokeLinecap="round"
+        strokeOpacity={0.35}
+      />
+      {/* Feathered top edge */}
+      <path
+        d="M 8 6.8 C 34 5.2, 62 6.5, 110 7.5"
+        fill="none"
+        stroke={washEdge}
+        strokeWidth={isPrint ? 1.2 : 1.6}
+        strokeLinecap="round"
+        strokeOpacity={0.22}
+      />
+      {/* Feathered bottom edge */}
+      <path
+        d="M 6 21.5 C 38 23.2, 72 23.8, 114 21.8"
+        fill="none"
+        stroke={washEdge}
+        strokeWidth={isPrint ? 1 : 1.4}
+        strokeLinecap="round"
+        strokeOpacity={0.18}
+      />
+    </svg>
+  );
+}
 
 function FeltUnderline({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
   const h = isPrint ? 7 : 9;
@@ -140,6 +201,30 @@ export function TaskMarkerLabel({
     );
   }
 
+  if (normalized === "highlight") {
+    return (
+      <span
+        className={className}
+        style={{
+          ...base,
+          backgroundColor: "transparent",
+          borderLeft: "none",
+        }}
+      >
+        <span
+          className="relative inline"
+          style={{
+            padding: isPrintPreview ? "0 4px 1px" : "1px 6px 2px",
+            transform: isPrintPreview ? "rotate(-0.15deg)" : "rotate(-0.25deg)",
+          }}
+        >
+          <FeltHighlight ink={ink} isPrint={isPrintPreview} />
+          <FormattedTaskLabel label={label} textStyle={textStyle} />
+        </span>
+      </span>
+    );
+  }
+
   if (normalized === "underline") {
     return (
       <span
@@ -188,13 +273,8 @@ export function TaskMarkerLabel({
     );
   }
 
-  const style = taskMarkerContainerStyle(color, normalized, {
-    base,
-    isPrint: isPrintPreview,
-  });
-
   return (
-    <span className={className} style={style}>
+    <span className={className} style={base}>
       <FormattedTaskLabel label={label} textStyle={textStyle} />
     </span>
   );

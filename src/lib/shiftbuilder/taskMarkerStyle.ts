@@ -49,8 +49,13 @@ export function resolveTaskAppearanceColor(
   return null;
 }
 
+/** RGBA helper for highlight wash layers. */
+export function taskMarkerWash(ink: string, alpha: number): string {
+  return hexToRgba(ink, alpha);
+}
+
 /**
- * Left-bar highlight marker (builder + print).
+ * Base container style for highlight markers — ink wash is rendered via SVG in TaskMarkerLabel.
  */
 export function taskMarkerContainerStyle(
   color: string | null | undefined,
@@ -65,14 +70,9 @@ export function taskMarkerContainerStyle(
 
   if (type !== "highlight" || !shouldRenderTaskMarker(type, color)) return base;
 
-  const ink = taskMarkerInk(color);
-
   return {
     ...base,
-    backgroundColor: hexToRgba(ink, 0.1),
-    borderLeft: `3px solid ${ink}`,
-    borderRadius: "2px",
-    paddingLeft: base.paddingLeft ?? (opts?.isPrint ? "5px" : "6px"),
-    marginLeft: base.marginLeft ?? "-1px",
+    backgroundColor: "transparent",
+    borderLeft: "none",
   };
 }

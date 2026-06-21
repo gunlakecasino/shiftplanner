@@ -534,7 +534,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                       : "border-black/15 hover:bg-[var(--ios-gray-6)]"
                   }`}
                 >
-                  {m === "highlight" ? "Highlight" : m === "underline" ? "Felt line" : m === "circle" ? "Felt ring" : "None"}
+                  {m === "highlight" ? "Felt highlight" : m === "underline" ? "Felt line" : m === "circle" ? "Felt ring" : "None"}
                 </button>
               ))}
             </div>

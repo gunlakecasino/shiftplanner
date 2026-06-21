@@ -65,13 +65,11 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   const markerType = normalizeTaskMarkerType(task.markerType);
   const hasColor = !!task.color;
   const showMarker = shouldRenderTaskMarker(markerType, task.color);
-  const usesLeftAccent = showMarker && markerType === "highlight";
-
   const labelRef = React.useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = React.useState(isPrintPreview ? '9.5px' : '13px');
   const [hanging, setHanging] = React.useState<{ textIndent: string; paddingLeft: string }>({
     textIndent: '0',
-    paddingLeft: usesLeftAccent ? (isPrintPreview ? '6px' : '9px') : '0'
+    paddingLeft: '0',
   });
 
   // Responsive task label: base 13px consistent across all cards.
@@ -88,7 +86,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       // or measurement differences never add a second line in any browser's print engine.
       const staticSize = textSize?.match(/\[([\d.]+)px\]/)?.[1] ? textSize.match(/\[([\d.]+)px\]/)![1] + 'px' : '9.5px';
       setFontSize(staticSize);
-      setHanging({ textIndent: '0', paddingLeft: usesLeftAccent ? '6px' : '0' });
+      setHanging({ textIndent: '0', paddingLeft: '0' });
       return;
     }
 
@@ -101,7 +99,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       // measure at base
       el.style.fontSize = '13px';
       el.style.textIndent = '0';
-      el.style.paddingLeft = usesLeftAccent ? '9px' : '0';
+      el.style.paddingLeft = '0';
       el.style.whiteSpace = 'nowrap';
 
       const needed = el.scrollWidth;
@@ -109,7 +107,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
       let fs = '13px';
       let ti = '0';
-      let pl = usesLeftAccent ? '9px' : '0';
+      let pl = '0';
 
       if (needed > avail) {
         el.style.fontSize = '10px';
@@ -117,7 +115,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
         if (needed10 > avail) {
           fs = '10px';
           ti = '-1.15em';
-          pl = usesLeftAccent ? 'calc(9px + 1.15em)' : '1.15em';
+          pl = '1.15em';
         } else {
           fs = '10px';
         }
