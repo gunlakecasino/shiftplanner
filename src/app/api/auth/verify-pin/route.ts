@@ -90,11 +90,17 @@ export async function POST(request: NextRequest) {
     pinChangeToken: requiresPinChange ? pinChangeToken : undefined,
   });
 
-  if (!requiresPinChange) {
-    const attached = attachSessionCookie(response, freshUser.id);
-    if (!attached) {
-      return NextResponse.json({ error: "Server session signing unavailable" }, { status: 503 });
-    }
+  if (!requiresPinChange && !attachSessionCookie(response, freshUser.id)) {
+    console.error(
+      "[verify-pin] Session cookie not attached — set OPS_SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY on the server",
+    );
+    return NextResponse.json(
+      {
+        error:
+          "Server session signing unavailable — set OPS_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY) on Railway",
+      },
+      { status: 503 },
+    );
   }
 
   return response;

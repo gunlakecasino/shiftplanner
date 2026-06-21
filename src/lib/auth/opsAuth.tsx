@@ -198,10 +198,11 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      const safeUser = mapApiUser(json.user);
       const requiresPinChange = !!json.requiresPinChange;
+
       if (requiresPinChange) {
-        const safeUser = mapApiUser(json.user);
-        setUser(safeUser);
+        applySessionUser(safeUser);
         setPinChangeToken(json.pinChangeToken ?? null);
         return {
           success: true,
@@ -210,24 +211,19 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      const confirmed = await refreshSession();
-      if (!confirmed || !userRef.current) {
-        return {
-          success: false,
-          error: "Signed in but session cookie was not established — contact admin (OPS_SESSION_SECRET)",
-        };
-      }
+      applySessionUser(safeUser);
+      void refreshSession();
 
       logOpsAudit({
         action: "session_start",
-        operatorName: operatorDisplayName(userRef.current),
-        opsUserId: userRef.current.id,
-        payload: { role: userRef.current.role, source: "pin_gate" },
+        operatorName: operatorDisplayName(safeUser),
+        opsUserId: safeUser.id,
+        payload: { role: safeUser.role, source: "pin_gate" },
       });
 
       return {
         success: true,
-        user: userRef.current,
+        user: safeUser,
         requiresPinChange: false,
       };
     } catch (err: unknown) {
@@ -238,7 +234,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [refreshSession]);
+  }, [applySessionUser, refreshSession]);
 
   const completePinChange = useCallback((updated: OpsUser) => {
     const safeUser: OpsUser = { ...updated, must_change_pin: false };

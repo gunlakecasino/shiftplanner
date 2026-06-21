@@ -23,7 +23,8 @@ const usedPinChangeTokens = new Map<string, number>();
 function sessionSecret(): string | null {
   const secret =
     process.env.OPS_SESSION_SECRET?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
   return secret || null;
 }
 
