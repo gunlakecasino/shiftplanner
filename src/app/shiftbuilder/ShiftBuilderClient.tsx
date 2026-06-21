@@ -956,10 +956,6 @@ function AuthedShiftBuilder() {
   // to the right of the left control rail.
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
 
-  // Calendar popover (full month picker) for jumping to any date via the left-rail calendar icon.
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarView, setCalendarView] = useState<Date>(() => new Date());
-
   // === React 19 Transitions for fast day switching (new research direction) ===
   // Day changes should feel instant. We use startTransition so React can keep
   // the old UI responsive while the new day's heavy board renders.
@@ -993,28 +989,6 @@ function AuthedShiftBuilder() {
       window.removeEventListener("keydown", onKey);
     };
   }, [dayPickerOpen]);
-
-  // Close calendar popover on outside click or Escape.
-  useEffect(() => {
-    if (!calendarOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const cal = document.getElementById("left-rail-calendar-popover");
-      const trigger = document.getElementById("left-rail-calendar-trigger");
-      if (trigger && trigger.contains(e.target as Node)) return;
-      if (cal && !cal.contains(e.target as Node)) {
-        setCalendarOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCalendarOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [calendarOpen]);
-
-  // (Dock calendar close effect removed along with the old bottom dock popover)
 
   const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(null);
   const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
@@ -6996,6 +6970,13 @@ function AuthedShiftBuilder() {
           setWeekStart(newWeek);
           setSelectedDayIndex(idx);
         }}
+        onNavigateToDate={(d) => {
+          const newWeek = startOfShiftWeek(d);
+          const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
+          setWeekStart(newWeek);
+          setSelectedDayIndex(idx);
+        }}
+        selectedDate={DAY_DEFS[selectedDayIndex]?.date}
         onLaunchpad={viewMode === "canvas" ? handleBackToLaunchpad : undefined}
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
@@ -7033,6 +7014,8 @@ function AuthedShiftBuilder() {
           canPublish ? () => void handleToggleDayPublished() : undefined
         }
         publishDayBusy={publishDayBusy}
+        onRunEngine={viewMode === "canvas" ? runXaiEngineFromCanvas : undefined}
+        onClearDay={viewMode === "canvas" ? handleClearBoard : undefined}
       />
 
       {/* Beautiful seamless exit pill for print preview mode */}
@@ -7160,160 +7143,6 @@ function AuthedShiftBuilder() {
                 </button>
               );
             })}
-          </div>
-        )}
-
-        {/* Full calendar popover — opens when the calendar icon in the left rail is tapped.
-           Lets the operator jump to any date by picking a day in any month. */}
-        {calendarOpen && !rosterOpen && (
-          <div
-            id="left-rail-calendar-popover"
-            className="fixed z-[70] w-[280px] rounded-2xl border border-white/70 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] p-3 shadow-2xl shadow-black/10 backdrop-blur-xl text-[12px]"
-            style={{
-              left: "52px",
-              top: "calc(50% + 253px - 80px)",
-              transform: "translateY(-50%)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <button
-                onClick={() => setCalendarView(addDays(calendarView, -30))}
-                className="w-6 h-6 rounded-full hover:bg-[var(--ios-gray-6)] flex items-center justify-center text-[var(--ios-label-tertiary)]"
-                aria-label="Previous month"
-              >
-                ‹
-              </button>
-
-              <div className="font-semibold text-[var(--ios-label)] tabular-nums">
-                {MONTH_LONG[calendarView.getMonth()]} {calendarView.getFullYear()}
-              </div>
-
-              <button
-                onClick={() => setCalendarView(addDays(calendarView, 32))}
-                className="w-6 h-6 rounded-full hover:bg-[var(--ios-gray-6)] flex items-center justify-center text-[var(--ios-label-tertiary)]"
-                aria-label="Next month"
-              >
-                ›
-              </button>
-            </div>
-
-            {/* Day headers */}
-            <div className="grid grid-cols-7 text-center text-[var(--ios-label-tertiary)] font-medium mb-1">
-              {["S","M","T","W","T","F","S"].map((d, i) => (
-                <div key={i}>{d}</div>
-              ))}
-            </div>
-
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-0.5 text-center">
-              {(() => {
-                const year = calendarView.getFullYear();
-                const month = calendarView.getMonth();
-
-                const firstOfMonth = new Date(year, month, 1);
-                const startWeekday = firstOfMonth.getDay(); // 0=Sun
-
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-                const cells: React.ReactNode[] = [];
-
-                // Leading days from previous month (muted)
-                for (let i = 0; i < startWeekday; i++) {
-                  const d = new Date(year, month, 1 - (startWeekday - i));
-                  cells.push(
-                    <button
-                      key={`prev-${i}`}
-                      onClick={() => {
-                        const newWeek = startOfShiftWeek(d);
-                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                        setWeekStart(newWeek);
-                        setSelectedDayIndex(idx);
-                        setCalendarOpen(false);
-                      }}
-                      className="h-7 w-7 text-[11px] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] rounded-md"
-                    >
-                      {d.getDate()}
-                    </button>
-                  );
-                }
-
-                // Current month days
-                for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
-                  const d = new Date(year, month, dayNum);
-                  const currentSelectedDate = DAY_DEFS[selectedDayIndex]?.date;
-                  const isSelectedDay = currentSelectedDate && sameDay(d, currentSelectedDate);
-
-                  cells.push(
-                    <button
-                      key={dayNum}
-                      onClick={() => {
-                        const newWeek = startOfShiftWeek(d);
-                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                        setWeekStart(newWeek);
-                        setSelectedDayIndex(idx);
-                        setCalendarOpen(false);
-                      }}
-                      className={`h-7 w-7 text-[11px] rounded-md transition-colors ${
-                        isSelectedDay
-                          ? "bg-[#111] text-white font-semibold"
-                          : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label)]"
-                      }`}
-                    >
-                      {dayNum}
-                    </button>
-                  );
-                }
-
-                // Trailing days from next month
-                const remaining = 42 - cells.length;
-                for (let i = 1; i <= remaining; i++) {
-                  const d = new Date(year, month + 1, i);
-                  cells.push(
-                    <button
-                      key={`next-${i}`}
-                      onClick={() => {
-                        const newWeek = startOfShiftWeek(d);
-                        const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
-                        setWeekStart(newWeek);
-                        setSelectedDayIndex(idx);
-                        setCalendarOpen(false);
-                      }}
-                      className="h-7 w-7 text-[11px] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] rounded-md"
-                    >
-                      {d.getDate()}
-                    </button>
-                  );
-                }
-
-                return cells;
-              })()}
-            </div>
-
-            {/* Footer actions */}
-            <div className="mt-2 pt-2 border-t border-[var(--ios-gray-4)] flex justify-between">
-              <button
-                onClick={() => {
-                  const today = currentShiftDate();
-                  const newWeek = startOfShiftWeek(today);
-                  const idx = daysBetween(newWeek, today);
-                  setWeekStart(newWeek);
-                  setSelectedDayIndex(Math.max(0, Math.min(6, idx)));
-                  setCalendarOpen(false);
-                }}
-                className="text-[11px] px-2 py-0.5 rounded-md text-[var(--ios-blue)] hover:bg-[color-mix(in_srgb,var(--ios-blue)_10%,transparent)]"
-              >
-                Today
-              </button>
-
-              <button
-                onClick={() => setCalendarOpen(false)}
-                className="text-[11px] px-2 py-0.5 rounded-md text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"
-              >
-                Close
-              </button>
-            </div>
           </div>
         )}
 
