@@ -10,10 +10,13 @@ import {
 
 export type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
 import type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
+import { sessionIdleMs } from "./sessionPolicy";
 
 export { getEffectivePermissions, getPermissionsForRole, mergePermissions };
 
+/** Poll often enough to slide the cookie before idle timeout while active. */
 const SESSION_REFRESH_MS = 60_000;
+const ACTIVITY_THROTTLE_MS = 15_000;
 
 interface OpsAuthContextValue {
   user: OpsUser | null;
@@ -64,6 +67,16 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
   const [pinChangeToken, setPinChangeToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const userRef = useRef<OpsUser | null>(null);
+  const lastActivityRef = useRef(Date.now());
+  const idleTimeoutMsRef = useRef(sessionIdleMs());
+
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  const isWithinIdleWindow = useCallback(() => {
+    return Date.now() - lastActivityRef.current < idleTimeoutMsRef.current;
+  }, []);
 
   useEffect(() => {
     userRef.current = user;
@@ -71,6 +84,14 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshSession = useCallback(async () => {
     if (pinChangeToken) return;
+
+    if (!isWithinIdleWindow()) {
+      if (userRef.current) {
+        setUser(null);
+        setPinChangeToken(null);
+      }
+      return;
+    }
 
     try {
       const res = await fetch("/api/auth/session", { credentials: "same-origin" });
@@ -92,6 +113,9 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const nextUser = mapApiUser(json.user);
+      if (typeof json.idleTimeoutMinutes === "number" && json.idleTimeoutMinutes > 0) {
+        idleTimeoutMsRef.current = json.idleTimeoutMinutes * 60_000;
+      }
       const prev = userRef.current;
       if (!prev || permissionsChanged(prev, nextUser) || prev.must_change_pin !== nextUser.must_change_pin) {
         setUser(nextUser);
@@ -99,7 +123,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn("[opsAuth] session refresh failed", e);
     }
-  }, [pinChangeToken]);
+  }, [pinChangeToken, isWithinIdleWindow, markActivity]);
 
   useEffect(() => {
     try {
@@ -116,6 +140,10 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
         const json = await res.json();
         if (!cancelled && json.authenticated && json.user) {
           setUser(mapApiUser(json.user));
+          if (typeof json.idleTimeoutMinutes === "number" && json.idleTimeoutMinutes > 0) {
+            idleTimeoutMsRef.current = json.idleTimeoutMinutes * 60_000;
+          }
+          markActivity();
         }
       } catch (e) {
         console.warn("[opsAuth] session hydrate failed", e);
@@ -127,29 +155,55 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [markActivity]);
 
   useEffect(() => {
     if (!user || pinChangeToken) return;
+
+    let lastThrottle = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastThrottle < ACTIVITY_THROTTLE_MS) return;
+      lastThrottle = now;
+      markActivity();
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "keydown",
+      "mousemove",
+      "wheel",
+      "touchstart",
+      "scroll",
+    ];
+
+    for (const evt of activityEvents) {
+      window.addEventListener(evt, onActivity, { passive: true });
+    }
 
     const interval = window.setInterval(() => {
       void refreshSession();
     }, SESSION_REFRESH_MS);
 
     const onFocus = () => {
-      void refreshSession();
+      if (isWithinIdleWindow()) void refreshSession();
     };
 
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") void refreshSession();
+      if (document.visibilityState === "visible" && isWithinIdleWindow()) {
+        void refreshSession();
+      }
     });
 
     return () => {
+      for (const evt of activityEvents) {
+        window.removeEventListener(evt, onActivity);
+      }
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [user, pinChangeToken, refreshSession]);
+  }, [user, pinChangeToken, refreshSession, markActivity, isWithinIdleWindow]);
 
   const login = useCallback(async (pin: string) => {
     setIsLoading(true);
@@ -172,6 +226,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
 
       const safeUser = mapApiUser(json.user);
       setUser(safeUser);
+      markActivity();
 
       const requiresPinChange = !!json.requiresPinChange;
       if (requiresPinChange) {
@@ -199,19 +254,20 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [markActivity]);
 
   const completePinChange = useCallback((updated: OpsUser) => {
     const safeUser: OpsUser = { ...updated, must_change_pin: false };
     setUser(safeUser);
     setPinChangeToken(null);
+    markActivity();
     logOpsAudit({
       action: "session_start",
       operatorName: operatorDisplayName(safeUser),
       opsUserId: safeUser.id,
       payload: { role: safeUser.role, source: "pin_gate_after_change" },
     });
-  }, []);
+  }, [markActivity]);
 
   const logout = useCallback(async () => {
     if (user) {

@@ -1,14 +1,20 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { NextRequest, NextResponse } from "next/server";
+import {
+  sessionAbsoluteMaxSec,
+  sessionIdleSec,
+} from "./sessionPolicy";
 
 export const OPS_SESSION_COOKIE = "oms_ops_session";
-const SESSION_MAX_AGE_SEC = 60 * 60 * 18; // 18h
 const PIN_CHANGE_MAX_AGE_SEC = 15 * 60;
 
 type TokenPayload = {
   typ: "session" | "pin_change";
   sub: string;
+  /** Idle deadline (unix sec) — extended on activity while below abs. */
   exp: number;
+  /** Absolute session cap (unix sec) — set once at login. */
+  abs?: number;
   jti: string;
 };
 
@@ -29,17 +35,13 @@ function b64urlDecode(input: string): string {
   return Buffer.from(input, "base64url").toString("utf8");
 }
 
-function signPayload(payload: Omit<TokenPayload, "exp" | "jti"> & { ttlSec: number }): string | null {
+function nowSec(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function signPayload(body: TokenPayload): string | null {
   const secret = sessionSecret();
   if (!secret) return null;
-
-  const jti = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const body: TokenPayload = {
-    typ: payload.typ,
-    sub: payload.sub,
-    jti,
-    exp: Math.floor(Date.now() / 1000) + payload.ttlSec,
-  };
 
   const encoded = b64url(JSON.stringify(body));
   const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
@@ -66,19 +68,67 @@ function verifySignedToken(token: string): TokenPayload | null {
   try {
     const payload = JSON.parse(b64urlDecode(encoded)) as TokenPayload;
     if (!payload?.sub || !payload?.exp || !payload?.typ || !payload?.jti) return null;
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+    const now = nowSec();
+    if (payload.exp < now) return null;
+    if (payload.typ === "session" && payload.abs != null && payload.abs < now) return null;
     return payload;
   } catch {
     return null;
   }
 }
 
+function newJti(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildSessionPayload(userId: string, abs?: number): TokenPayload | null {
+  const now = nowSec();
+  const absoluteCap = abs ?? now + sessionAbsoluteMaxSec();
+  const idleDeadline = Math.min(now + sessionIdleSec(), absoluteCap);
+  if (idleDeadline <= now) return null;
+
+  return {
+    typ: "session",
+    sub: userId,
+    exp: idleDeadline,
+    abs: absoluteCap,
+    jti: newJti(),
+  };
+}
+
+function slideSessionPayload(existing: TokenPayload): TokenPayload | null {
+  if (existing.typ !== "session" || existing.abs == null) return null;
+
+  const now = nowSec();
+  if (existing.abs < now) return null;
+
+  const idleDeadline = Math.min(now + sessionIdleSec(), existing.abs);
+  if (idleDeadline <= now) return null;
+
+  return {
+    typ: "session",
+    sub: existing.sub,
+    exp: idleDeadline,
+    abs: existing.abs,
+    jti: newJti(),
+  };
+}
+
 export function createSessionToken(userId: string): string | null {
-  return signPayload({ typ: "session", sub: userId, ttlSec: SESSION_MAX_AGE_SEC });
+  const body = buildSessionPayload(userId);
+  if (!body) return null;
+  return signPayload(body);
 }
 
 export function createPinChangeToken(userId: string): string | null {
-  return signPayload({ typ: "pin_change", sub: userId, ttlSec: PIN_CHANGE_MAX_AGE_SEC });
+  const now = nowSec();
+  const body: TokenPayload = {
+    typ: "pin_change",
+    sub: userId,
+    jti: newJti(),
+    exp: now + PIN_CHANGE_MAX_AGE_SEC,
+  };
+  return signPayload(body);
 }
 
 export function readSessionUserId(request: NextRequest): string | null {
@@ -96,7 +146,6 @@ export function verifyPinChangeToken(token: string, userId: string): boolean {
   if (usedPinChangeTokens.has(payload.jti)) return false;
   usedPinChangeTokens.set(payload.jti, Date.now());
 
-  // Prune old entries
   if (usedPinChangeTokens.size > 500) {
     const cutoff = Date.now() - PIN_CHANGE_MAX_AGE_SEC * 1000;
     for (const [k, t] of usedPinChangeTokens) {
@@ -107,16 +156,43 @@ export function verifyPinChangeToken(token: string, userId: string): boolean {
   return true;
 }
 
-export function attachSessionCookie(response: NextResponse, userId: string): void {
-  const token = createSessionToken(userId);
-  if (!token) return;
+function writeSessionCookie(response: NextResponse, token: string): void {
+  const payload = verifySignedToken(token);
+  const maxAge = payload
+    ? Math.max(1, payload.abs != null ? payload.abs - nowSec() : sessionIdleSec())
+    : sessionIdleSec();
+
   response.cookies.set(OPS_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     path: "/",
-    maxAge: SESSION_MAX_AGE_SEC,
+    maxAge,
   });
+}
+
+export function attachSessionCookie(response: NextResponse, userId: string): void {
+  const token = createSessionToken(userId);
+  if (!token) return;
+  writeSessionCookie(response, token);
+}
+
+/** Extend idle deadline after confirmed activity (session GET, etc.). */
+export function refreshSessionCookie(request: NextRequest, response: NextResponse): boolean {
+  const token = request.cookies.get(OPS_SESSION_COOKIE)?.value;
+  if (!token) return false;
+
+  const payload = verifySignedToken(token);
+  if (!payload || payload.typ !== "session") return false;
+
+  const slid = slideSessionPayload(payload);
+  if (!slid) return false;
+
+  const nextToken = signPayload(slid);
+  if (!nextToken) return false;
+
+  writeSessionCookie(response, nextToken);
+  return true;
 }
 
 export function clearSessionCookie(response: NextResponse): void {
