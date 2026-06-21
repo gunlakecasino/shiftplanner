@@ -265,14 +265,27 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-assignee-name {
+  color: #4b5563 !important;
   font-size: 17px !important;
   line-height: 1 !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-card-grid,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-card-grid,
-body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="deployment"] .sb-print-card-grid {
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-card-grid {
   grid-auto-rows: minmax(54px, 1fr) !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card {
+  overflow: visible !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] [data-task-label] span,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] [data-task-label] span,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] [data-task-label] span {
+  color: #374151 !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .golden-shift-notes-band,
