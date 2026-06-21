@@ -17,6 +17,7 @@ import {
   isTaskTextStyleEqual,
   normalizeTaskTextStyle,
   TASK_FONT_SIZES,
+  TASK_LABEL_SIZE_PX,
   type TaskFormatScope,
   type TaskTextStyle,
 } from "@/lib/shiftbuilder/taskTextStyle";
@@ -476,13 +477,17 @@ const TasksPad: React.FC<TasksPadProps> = ({
               contentEditable
               suppressContentEditableWarning
               onInput={(e) => setLabelDraft(e.currentTarget.innerText)}
-              className="w-full min-h-[52px] rounded-md border border-[var(--ios-gray-4)]/20 bg-[var(--ios-background-secondary)] px-2.5 py-2 text-[13px] font-medium focus:outline-none focus:border-[var(--ios-blue)]/60 whitespace-pre-wrap break-words"
+              className="w-full min-h-[52px] rounded-md border border-[var(--ios-gray-4)]/20 bg-[var(--ios-background-secondary)] px-2.5 py-2 font-medium focus:outline-none focus:border-[var(--ios-blue)]/60 whitespace-pre-wrap break-words"
+              style={{ fontSize: TASK_LABEL_SIZE_PX.default }}
             />
           </div>
 
           <div className="px-3 pb-2">
             <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Preview</div>
-            <div className="rounded-md px-2.5 py-1.5 text-[13px] font-medium leading-tight border border-[var(--ios-gray-4)]/15">
+            <div
+              className="rounded-md px-2.5 py-1.5 font-medium leading-tight border border-[var(--ios-gray-4)]/15"
+              style={{ fontSize: TASK_LABEL_SIZE_PX.default }}
+            >
               <TaskMarkerLabel
                 label={labelDraft.trim() || "—"}
                 color={colorDraft}

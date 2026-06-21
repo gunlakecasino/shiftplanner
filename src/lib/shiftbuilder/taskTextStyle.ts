@@ -22,6 +22,53 @@ export type TaskFormatScope = "task" | "selection";
 
 export const TASK_FONT_SIZES = [11, 13, 15] as const;
 
+/** Default deployment-card task label colors (builder + print). */
+export const TASK_LABEL_COLOR = {
+  primary: "#111827",
+  secondary: "#374151",
+  primaryDark: "#E8E8ED",
+  secondaryDark: "#AEAEB2",
+} as const;
+
+/** Default task label sizes (px) by card context. */
+export const TASK_LABEL_SIZE_PX = {
+  default: 14,
+  zoneCard: 13,
+  zoneList: 12.5,
+  rrOverlap: 10.5,
+  dense: 10,
+  denseSmall: 9.5,
+  print: 10,
+  printDense: 9.5,
+} as const;
+
+export function taskLabelSizeClass(px: number): string {
+  return `text-[${px}px]`;
+}
+
+export function parseTaskLabelSizePx(
+  textSize?: string,
+  fallback: number = TASK_LABEL_SIZE_PX.default,
+): number {
+  const match = textSize?.match(/\[([\d.]+)px\]/);
+  return match ? parseFloat(match[1]) : fallback;
+}
+
+export function taskLabelShrinkPx(basePx: number): number {
+  return Math.max(8.5, Math.round((basePx - 3) * 2) / 2);
+}
+
+export function taskLabelColorClass(hasTM: boolean, dark = false): string {
+  if (dark) {
+    return hasTM
+      ? `text-[${TASK_LABEL_COLOR.primaryDark}]`
+      : `text-[${TASK_LABEL_COLOR.secondaryDark}]`;
+  }
+  return hasTM
+    ? `text-[${TASK_LABEL_COLOR.primary}]`
+    : `text-[${TASK_LABEL_COLOR.secondary}]`;
+}
+
 export function normalizeTaskTextStyle(raw: unknown): TaskTextStyle | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;

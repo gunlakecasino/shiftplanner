@@ -6,6 +6,13 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { premiumSpring } from "@/lib/premiumSpring";
 import { TaskMarkerLabel } from "./TaskMarkerLabel";
 import { normalizeTaskMarkerType, shouldRenderTaskMarker } from "@/lib/shiftbuilder/taskMarkerStyle";
+import {
+  parseTaskLabelSizePx,
+  taskLabelColorClass,
+  taskLabelShrinkPx,
+  taskLabelSizeClass,
+  TASK_LABEL_SIZE_PX,
+} from "@/lib/shiftbuilder/taskTextStyle";
 
 
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
@@ -57,8 +64,8 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   onSetTaskColor,
   onEditTask,
   onOpenTaskTextEdit,
-  textSize = "text-[13px]",
-  textColorClass = "text-[#1f2937] dark:text-[#C7C7CC]",
+  textSize = taskLabelSizeClass(TASK_LABEL_SIZE_PX.default),
+  textColorClass = taskLabelColorClass(true),
   draggable = true,
   isPrintPreview = false,
 }) => {
@@ -66,14 +73,17 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   const hasColor = !!task.color;
   const showMarker = shouldRenderTaskMarker(markerType, task.color);
   const labelRef = React.useRef<HTMLSpanElement>(null);
-  const [fontSize, setFontSize] = React.useState(isPrintPreview ? '9.5px' : '13px');
+  const baseSizePx = parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.default);
+  const shrinkSizePx = taskLabelShrinkPx(baseSizePx);
+  const [fontSize, setFontSize] = React.useState(
+    isPrintPreview ? `${TASK_LABEL_SIZE_PX.print}px` : `${baseSizePx}px`,
+  );
   const [hanging, setHanging] = React.useState<{ textIndent: string; paddingLeft: string }>({
     textIndent: '0',
     paddingLeft: '0',
   });
 
-  // Responsive task label: base 13px consistent across all cards.
-  // If overflows single line at 13px -> shrink to 10px.
+  // Responsive task label: measure at card base size, shrink one step if needed.
   // If still overflows -> wrap with hanging indent.
   // ONLY in builder (!isPrintPreview). In print-preview / PDF capture we use the static
   // compact textSize passed from the card lists (matches Golden spec exactly, no
@@ -84,7 +94,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       // prop or default. No hanging indent (prevents extra layout height). No RO.
       // Additionally force nowrap + truncate so long custom labels (e.g. "Lobby")
       // or measurement differences never add a second line in any browser's print engine.
-      const staticSize = textSize?.match(/\[([\d.]+)px\]/)?.[1] ? textSize.match(/\[([\d.]+)px\]/)![1] + 'px' : '9.5px';
+      const staticSize = `${parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.print)}px`;
       setFontSize(staticSize);
       setHanging({ textIndent: '0', paddingLeft: '0' });
       return;
@@ -97,7 +107,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
 
     const compute = () => {
       // measure at base
-      el.style.fontSize = '13px';
+      el.style.fontSize = `${baseSizePx}px`;
       el.style.textIndent = '0';
       el.style.paddingLeft = '0';
       el.style.whiteSpace = 'nowrap';
@@ -105,19 +115,19 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       const needed = el.scrollWidth;
       const avail = Math.max(20, container.clientWidth - 4); // tolerance for borders/padding
 
-      let fs = '13px';
+      let fs = `${baseSizePx}px`;
       let ti = '0';
       let pl = '0';
 
       if (needed > avail) {
-        el.style.fontSize = '10px';
-        const needed10 = el.scrollWidth;
-        if (needed10 > avail) {
-          fs = '10px';
+        el.style.fontSize = `${shrinkSizePx}px`;
+        const neededShrink = el.scrollWidth;
+        if (neededShrink > avail) {
+          fs = `${shrinkSizePx}px`;
           ti = '-1.15em';
           pl = '1.15em';
         } else {
-          fs = '10px';
+          fs = `${shrinkSizePx}px`;
         }
       }
 
@@ -131,7 +141,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     const ro = new ResizeObserver(compute);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [task.taskLabel, hasColor, markerType, isPrintPreview, textSize]);
+  }, [task.taskLabel, hasColor, markerType, isPrintPreview, textSize, baseSizePx, shrinkSizePx]);
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
   // The Sudo Tasks tab writes to the same localStorage key.
   const effectiveDraggable = React.useMemo(() => {

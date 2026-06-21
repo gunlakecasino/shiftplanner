@@ -4,6 +4,11 @@ import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import TaskRow from "./TaskRow";
+import {
+  taskLabelColorClass,
+  taskLabelSizeClass,
+  TASK_LABEL_SIZE_PX,
+} from "@/lib/shiftbuilder/taskTextStyle";
 
 // Compact list of selected tasks shown at the bottom of a Zone / AUX card.
 // When empty, renders nothing so the card collapses gracefully.
@@ -33,7 +38,7 @@ const ZoneTaskList: React.FC<{
   textColorClass?: string;
 }> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onSetTaskMarker, onEditTask, onOpenTaskTextEdit, dense = false, isPrintPreview = false }) => {
   if (!tasks || tasks.length === 0) return null;
-  const textColor = hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]";
+  const textColor = taskLabelColorClass(hasTM);
 
   // Dense AUX in print: cap at 2 + "+N more". Live builder scrolls the full list in AuxCard.
   const maxVisible = dense && isPrintPreview ? 2 : tasks.length;
@@ -41,10 +46,12 @@ const ZoneTaskList: React.FC<{
   const extra = tasks.length - visibleTasks.length;
 
   const isPrint = isPrintPreview;
-  const textSize = dense ? "text-[9px]" : (isPrint ? "text-[9.5px]" : "text-[11.5px]");
+  const textSize = dense
+    ? taskLabelSizeClass(isPrint ? TASK_LABEL_SIZE_PX.printDense : TASK_LABEL_SIZE_PX.denseSmall)
+    : taskLabelSizeClass(isPrint ? TASK_LABEL_SIZE_PX.print : TASK_LABEL_SIZE_PX.zoneList);
   const containerClass = dense
-    ? `mt-auto pt-0 text-[9px] leading-[1.0] ${textColor}`
-    : `mt-auto ${isPrint ? 'pt-0.5' : 'pt-1'} ${isPrint ? 'text-[9.5px]' : 'text-[11.5px]'} leading-tight ${textColor}`;
+    ? `mt-auto pt-0 ${textSize} leading-[1.05] ${textColor}`
+    : `mt-auto ${isPrint ? "pt-0.5" : "pt-1"} ${textSize} leading-tight ${textColor}`;
 
   return (
     <div

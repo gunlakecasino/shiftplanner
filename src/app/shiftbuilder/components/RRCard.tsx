@@ -12,6 +12,7 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import CoverageBar from "./CoverageBar";
 import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
+import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { PlacementFitChip } from "./PlacementFitChip";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
@@ -182,8 +183,8 @@ const RRSide: React.FC<{
                 onSetTaskMarker={onSetTaskMarker}
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
-                textSize="text-[12px]"
-                textColorClass="text-gray-600"
+                textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
+                textColorClass={taskLabelColorClass(true)}
               />
             ))}
           </CardTaskZone>
@@ -202,8 +203,8 @@ const RRSide: React.FC<{
                 onSetTaskMarker={onSetTaskMarker}
                 onEditTask={onEditTask}
                 onOpenTaskTextEdit={onOpenTaskTextEdit}
-                textSize="text-[12px]"
-                textColorClass="text-gray-600"
+                textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
+                textColorClass={taskLabelColorClass(true)}
               />
             ))}
           </div>

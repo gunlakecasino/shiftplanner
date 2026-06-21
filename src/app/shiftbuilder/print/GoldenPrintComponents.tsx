@@ -19,6 +19,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
+import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 
 type CoveredScale = "zone" | "rr" | "aux";
@@ -82,9 +83,12 @@ export function GoldenTaskRow({
   task: PrintTaskLine;
   hasTM: boolean;
 }) {
-  const textColor = hasTM ? "#1f2937" : "#6B7280";
+  const textColor = hasTM ? TASK_LABEL_COLOR.primary : TASK_LABEL_COLOR.secondary;
   return (
-    <div className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 text-[9.5px] leading-[1.05]">
+    <div
+      className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 leading-[1.05]"
+      style={{ fontSize: TASK_LABEL_SIZE_PX.print }}
+    >
       <div data-task-label className="min-w-0 flex-1 leading-[1.05]">
         <TaskMarkerLabel
           label={task.label}
@@ -92,7 +96,7 @@ export function GoldenTaskRow({
           markerType={task.markerType}
           textStyle={task.textStyle}
           isPrintPreview
-          fontSize="9.5px"
+          fontSize={`${TASK_LABEL_SIZE_PX.print}px`}
           textColor={textColor}
           className="block rounded-sm font-medium py-px"
           hanging={{ textIndent: "0", paddingLeft: "0" }}
@@ -112,11 +116,15 @@ export function GoldenTaskList({
   dense?: boolean;
 }) {
   if (!tasks.length) return null;
-  const textColor = hasTM ? "text-[#1f2937]" : "text-[#6B7280]";
+  const textColor = hasTM
+    ? `text-[${TASK_LABEL_COLOR.primary}]`
+    : `text-[${TASK_LABEL_COLOR.secondary}]`;
   return (
     <div
       className={`sb-golden-task-list min-h-0 flex-1 flex flex-col justify-start gap-[2px] ${
-        dense ? "text-[9px] leading-[1.08]" : "text-[9.5px] leading-[1.12]"
+        dense
+          ? `text-[${TASK_LABEL_SIZE_PX.printDense}px] leading-[1.08]`
+          : `text-[${TASK_LABEL_SIZE_PX.print}px] leading-[1.12]`
       } ${textColor}`}
       style={{ fontFamily: "var(--font-atkinson)" }}
     >

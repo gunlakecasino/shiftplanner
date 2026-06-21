@@ -11,6 +11,7 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
+import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { UnassignedDropHint } from "./builderPrimitives";
@@ -274,8 +275,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  textSize="text-[12px]"
-                  textColorClass="text-gray-600"
+                  textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
+                  textColorClass={taskLabelColorClass(true)}
                 />
               ))}
             </CardTaskZone>
@@ -294,8 +295,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  textSize="text-[12px]"
-                  textColorClass="text-gray-600"
+                  textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
+                  textColorClass={taskLabelColorClass(false)}
                 />
               ))}
             </div>

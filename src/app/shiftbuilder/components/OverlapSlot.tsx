@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import TaskRow from "./TaskRow";
+import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import BreakBadge from "./BreakBadge";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
@@ -190,7 +191,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           onOpenTasksPad={onOpenTaskTextEdit}
           isLocked={isLocked}
           enabled={showDigitalAssists}
-          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-[24px] overflow-y-auto text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-[24px] overflow-y-auto ${taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)} leading-tight ${taskLabelColorClass(hasTM)}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {(tasks ?? []).map((t) => (
@@ -203,15 +204,15 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               onSetTaskMarker={onSetTaskMarker}
               onEditTask={onEditTask}
               onOpenTaskTextEdit={onOpenTaskTextEdit}
-              textSize="text-[9.5px]"
-              textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)}
+              textColorClass={taskLabelColorClass(hasTM)}
               isPrintPreview={false}
             />
           ))}
         </CardTaskZone>
       ) : tasks && tasks.length > 0 ? (
         <div
-          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-0 overflow-y-auto text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)} leading-tight ${taskLabelColorClass(hasTM)}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
           {tasks.map((t) => (
@@ -224,8 +225,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               onSetTaskMarker={onSetTaskMarker}
               onEditTask={onEditTask}
               onOpenTaskTextEdit={onOpenTaskTextEdit}
-              textSize="text-[9.5px]"
-              textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)}
+              textColorClass={taskLabelColorClass(hasTM)}
               isPrintPreview={!showDigitalAssists}
             />
           ))}
