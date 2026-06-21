@@ -63,7 +63,7 @@
   /* ── Velvet gold accent ──────────────────────────────────────────────── */
   --sb-gold:        #ffcc00; /* stripe / swatch */
   --sb-gold-ink:    #d4a800; /* headers, chips, coverage labels */
-  --sb-gold-bright: #ffdb4d;
+  --sb-gold-bright: #d4a800;
   --sb-gold-tint:   rgba(255, 204, 0, 0.14);
   --sb-gold-surface: rgba(255, 204, 0, 0.24);
   --sb-gold-border: rgba(255, 204, 0, 0.44);
@@ -900,17 +900,52 @@ body {
 .builder-workspace .sheet-section-header .count {
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--sb-gold-surface);
-  color: var(--sb-gold-ink);
   font-size: 9.5px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.builder-workspace .sheet-section-header .sb-section-count--filled {
+  background: var(--sb-gold-surface);
+  color: var(--sb-gold-ink);
   border: 1px solid var(--sb-gold-border);
 }
 
-.dark .builder-workspace .sheet-section-header .count {
-  background: rgba(255, 204, 0, 0.16);
-  color: #ffdb4d;
-  border-color: rgba(255, 204, 0, 0.32);
+.builder-workspace .sheet-section-header .sb-section-count--empty {
+  background: rgba(142, 142, 147, 0.12);
+  color: #6b7280;
+  border: 1px solid rgba(142, 142, 147, 0.24);
+}
+
+.dark .builder-workspace .sheet-section-header .sb-section-count--filled {
+  background: rgba(255, 204, 0, 0.18);
+  color: var(--sb-gold-ink);
+  border-color: var(--sb-gold-border);
+}
+
+.dark .builder-workspace .sheet-section-header .sb-section-count--empty {
+  background: rgba(142, 142, 147, 0.16);
+  color: #aeaeb2;
+  border-color: rgba(142, 142, 147, 0.28);
+}
+
+/* Gold labels/dividers — same ink as Z1/Z2 card headers */
+.sb-gold-text {
+  color: var(--sb-gold-ink);
+}
+
+.sb-gold-rule {
+  background: color-mix(in srgb, var(--sb-gold-ink) 22%, transparent);
+}
+
+.sb-roster-scheduled {
+  border-left: 2px solid var(--sb-gold-ink);
+  background: var(--sb-gold-tint);
+}
+
+.dark .sb-roster-scheduled {
+  background: rgba(255, 204, 0, 0.1);
 }
 
 .builder-workspace .sb-builder-section + .sb-builder-section {

@@ -368,15 +368,15 @@ const RosterRail = React.memo(function RosterRail({
         {graveOnly && hasAnyScheduledUnplaced && (
           <>
             <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
-              <div className="flex-1 h-px bg-amber-500/25" />
-              <span className="text-[9px] uppercase tracking-[1.2px] text-amber-800/90 dark:text-amber-200/90 font-semibold whitespace-nowrap">On Schedule — Not Placed</span>
-              <div className="flex-1 h-px bg-amber-500/25" />
+              <div className="flex-1 h-px sb-gold-rule" />
+              <span className="text-[9px] uppercase tracking-[1.2px] sb-gold-text font-semibold whitespace-nowrap">On Schedule — Not Placed</span>
+              <div className="flex-1 h-px sb-gold-rule" />
             </div>
 
             {filteredSchedGraves.length > 0 && (
               <>
                 <button type="button" onClick={() => setScheduledGravesExpanded(v => !v)} aria-expanded={scheduledGravesExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-800 dark:text-amber-200 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-700 dark:hover:text-amber-100 transition-colors">
+                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
                   <span className="flex items-center gap-1.5">
                     <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                     Graves
@@ -393,7 +393,7 @@ const RosterRail = React.memo(function RosterRail({
             {filteredSchedPM.length > 0 && (
               <>
                 <button type="button" onClick={() => setScheduledPMExpanded(v => !v)} aria-expanded={scheduledPMExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-800 dark:text-amber-200 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-700 dark:hover:text-amber-100 transition-colors">
+                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
                   <span className="flex items-center gap-1.5">
                     <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                     PM Overlaps ({pmSwingLabel})
@@ -410,7 +410,7 @@ const RosterRail = React.memo(function RosterRail({
             {filteredSchedAM.length > 0 && (
               <>
                 <button type="button" onClick={() => setScheduledAMExpanded(v => !v)} aria-expanded={scheduledAMExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-amber-800 dark:text-amber-200 font-semibold px-1 pt-1 pb-0.5 hover:text-amber-700 dark:hover:text-amber-100 transition-colors">
+                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
                   <span className="flex items-center gap-1.5">
                     <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
                     AM Overlaps ({amDayShiftLabel})
@@ -424,7 +424,7 @@ const RosterRail = React.memo(function RosterRail({
               </>
             )}
 
-            <div className="h-px bg-amber-500/20 mx-1 my-1" />
+            <div className="h-px sb-gold-rule mx-1 my-1" />
           </>
         )}
 

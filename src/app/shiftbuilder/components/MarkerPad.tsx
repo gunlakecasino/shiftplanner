@@ -126,7 +126,7 @@ const BreakWave: React.FC<{
           Break Wave
         </span>
         {current > 0 && (
-          <span className="text-[9.5px] font-semibold" style={{ color: "var(--sb-gold-bright, #E9B948)", fontFamily: "var(--font-jetbrains, monospace)" }}>
+          <span className="text-[9.5px] font-semibold sb-gold-text" style={{ fontFamily: "var(--font-jetbrains, monospace)" }}>
             Group {breakGroupLabel(current)}
           </span>
         )}
@@ -547,7 +547,7 @@ const MiniHistorySection: React.FC<{
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             fontSize: 9, fontWeight: 600, letterSpacing: "0.2px",
-            color: "var(--sb-gold-bright, #E9B948)",
+            color: "var(--sb-gold-ink)",
             background: "none", border: "none", cursor: "pointer",
             padding: "2px 6px",
             borderRadius: 6,
@@ -556,13 +556,13 @@ const MiniHistorySection: React.FC<{
           }}
           onMouseEnter={(e) => { 
             e.currentTarget.style.background = "rgba(184,151,8,0.14)"; 
-            e.currentTarget.style.color = "var(--sb-gold-ink, #b89708)"; 
+            e.currentTarget.style.color = "var(--sb-gold-ink, #d4a800)";
             e.currentTarget.style.boxShadow = "inset 0 1px 0 var(--sb-glass-highlight)";
             e.currentTarget.style.transform = "translateY(-0.5px)";
           }}
           onMouseLeave={(e) => { 
             e.currentTarget.style.background = "none"; 
-            e.currentTarget.style.color = "var(--sb-gold-bright, #E9B948)"; 
+            e.currentTarget.style.color = "var(--sb-gold-ink, #d4a800)";
             e.currentTarget.style.boxShadow = "none";
             e.currentTarget.style.transform = "";
           }}
@@ -1658,7 +1658,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                     fontSize: 10, padding: "3px 8px", borderRadius: 8,
                     background: "rgba(184,151,8,0.10)",
                     border: "1px solid rgba(184,151,8,0.25)",
-                    color: "var(--sb-gold-bright, #E9B948)",
+                    color: "var(--sb-gold-ink)",
                     fontWeight: 600, letterSpacing: "-0.1px",
                     fontFamily: "var(--font-atkinson)",
                     cursor: "pointer",

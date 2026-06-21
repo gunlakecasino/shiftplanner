@@ -202,7 +202,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     <div
       ref={setRowRef}
       data-task-host={taskHostId}
-      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[var(--ios-yellow, #ffcc00)]/40' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
+      className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[var(--sb-gold-border)]' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
       {...(canDrag ? dragListeners : {})}
       {...(canDrag ? taskDragAttributes : {})}
       onDoubleClick={(e) => {

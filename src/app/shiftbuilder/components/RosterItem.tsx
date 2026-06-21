@@ -58,7 +58,7 @@ const RosterItem = React.memo(function RosterItem({
               emphasis === "on"
                 ? "border-l-2 border-[#007AFF] bg-white/70 dark:bg-white/5"
                 : emphasis === "scheduled"
-                ? "border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/10"
+                ? "sb-roster-scheduled"
                 : ""
             }`
       } ${isDragging ? "sb-roster-row--dragging" : ""}`}

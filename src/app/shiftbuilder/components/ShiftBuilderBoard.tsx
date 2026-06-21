@@ -54,6 +54,12 @@ import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
 
 
+function sectionCountClass(filled: number, isTodayBoard: boolean): string {
+  const tone = filled === 0 ? "sb-section-count--empty" : "sb-section-count--filled";
+  const today = isTodayBoard ? " sb-today-muted-count" : "";
+  return `count ${tone}${today}`;
+}
+
 /** Enter-only fade for day navigation — no exit (avoids doubled grid children + layout thrash). */
 function builderDayCardMotionProps(
   idx: number,
@@ -1149,7 +1155,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <div className="divider" />
-                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
+                <span
+                  className={sectionCountClass(
+                    ZONE_DEFS.filter((d) =>
+                      slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                    ).length,
+                    isTodayBoard,
+                  )}
+                >
                   {ZONE_DEFS.filter((d) =>
                     slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
                   ).length} / 10 FILLED
@@ -1246,7 +1259,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
                 <div className="divider" />
-                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
+                <span
+                  className={sectionCountClass(
+                    RR_DEFS.reduce((acc, d) => {
+                      const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
+                      const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
+                      return acc + (m ? 1 : 0) + (w ? 1 : 0);
+                    }, 0),
+                    isTodayBoard,
+                  )}
+                >
                   {RR_DEFS.reduce((acc, d) => {
                     const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
                     const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
@@ -1364,7 +1386,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
-                <span className={`count${isTodayBoard ? " sb-today-muted-count" : ""}`}>
+                <span
+                  className={sectionCountClass(
+                    auxDefs.filter((d) =>
+                      (d.role !== "blank" || !!d.label) &&
+                      slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                    ).length,
+                    isTodayBoard,
+                  )}
+                >
                   {auxDefs.filter((d) =>
                     (d.role !== "blank" || !!d.label) && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
                   ).length} / {auxDefs.filter((d) => d.role !== "blank" || !!d.label).length} FILLED
