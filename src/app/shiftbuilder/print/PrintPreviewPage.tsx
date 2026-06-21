@@ -31,6 +31,56 @@ function filledCount(
   return keys.filter((k) => assignments[k]?.tmName).length;
 }
 
+function AuxCardsSection({
+  auxDefs,
+  assignments,
+  tasksBySlot,
+  coveredByIndex,
+  auxFilled,
+  auxTotal,
+  className = "",
+}: {
+  auxDefs: PrintPreviewPageProps["snapshot"]["auxDefs"];
+  assignments: PrintPreviewPageProps["snapshot"]["assignments"];
+  tasksBySlot: PrintPreviewPageProps["snapshot"]["tasksBySlot"];
+  coveredByIndex: ReturnType<typeof buildCoveredByIndex>;
+  auxFilled: number;
+  auxTotal: number;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`sb-builder-section sb-print-section sb-print-section-aux min-h-0 flex flex-col ${className}`.trim()}
+    >
+      <GoldenSectionHeader label="AUXILIARY" count={`${auxFilled} / ${auxTotal} FILLED`} />
+      <div
+        className="sb-print-card-grid grid gap-1.5 flex-1 min-h-0 w-full"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(auxDefs.length, 1)}, minmax(0, 1fr))`,
+          gridAutoRows: "minmax(0, 1fr)",
+        }}
+      >
+        {auxDefs.map((def) => {
+          const a = assignments[def.key] || {};
+          const isBlank = def.role === "blank" && !def.label;
+          return (
+            <div key={def.key} className="relative h-full" data-slot-key={def.key}>
+              <GoldenAuxCard
+                def={def}
+                tmName={a.tmName}
+                breakGroup={a.breakGroup ?? 0}
+                tasks={toTaskLines(tasksBySlot[def.key])}
+                empty={!isBlank && !slotShowsFilled(def.key, assignments)}
+                coveredByNames={coveredByIndex[def.key]}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function OverlapRowsSection({
   overlapRows,
   className = "",
@@ -103,6 +153,12 @@ export function PrintPreviewPage({
     const overlapRows = buildOverlapRows(snapshot);
 
     if (isPlanning) {
+      const coveredByIndex = buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
+      const auxFilled = auxDefs.filter(
+        (d) => (d.role !== "blank" || !!d.label) && assignments[d.key]?.tmName,
+      ).length;
+      const auxTotal = auxDefs.filter((d) => d.role !== "blank" || !!d.label).length;
+
       return (
         <div className="print-artboard" data-print-view="breaks" data-print-variant={variantAttr}>
           <GoldenPlanningHeaderBadge />
@@ -112,10 +168,22 @@ export function PrintPreviewPage({
             weekDayDefs={weekDayDefs}
           />
 
-          <div className="sb-breaks-planning-body flex flex-col w-full flex-1 min-h-0 overflow-hidden">
-            <OverlapRowsSection overlapRows={overlapRows} className="flex-1 min-h-0 pt-1" />
+          <div className="sb-breaks-planning-body flex flex-col w-full flex-1 min-h-0 overflow-hidden gap-1">
+            <OverlapRowsSection
+              overlapRows={overlapRows}
+              className="sb-planning-overlaps-block flex-shrink-0 pt-1"
+            />
+            <AuxCardsSection
+              auxDefs={auxDefs}
+              assignments={assignments}
+              tasksBySlot={tasksBySlot}
+              coveredByIndex={coveredByIndex}
+              auxFilled={auxFilled}
+              auxTotal={auxTotal}
+              className="sb-planning-aux-block flex-1 min-h-0 mb-0"
+            />
             {includeShiftNotes ? (
-              <GoldenShiftNotesBand notes={snapshot.notes} blankLines={5} />
+              <GoldenShiftNotesBand notes={snapshot.notes} blankLines={4} />
             ) : null}
           </div>
 
@@ -273,8 +341,16 @@ export function PrintPreviewPage({
         activeBreakGroup={activeBreakGroup}
       />
 
-      <div className="sb-print-deployment-body flex flex-col w-full flex-1 min-h-0 overflow-hidden">
-        <section className="sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-[5] flex-col">
+      <div
+        className={`sb-print-deployment-body flex flex-col w-full flex-1 min-h-0 overflow-hidden ${
+          isPlanning ? "sb-print-deployment-body--planning-zones-rr" : ""
+        }`}
+      >
+        <section
+          className={`sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-col ${
+            isPlanning ? "flex-[6]" : "flex-[5]"
+          }`}
+        >
           <GoldenSectionHeader label="ZONES" count={`${zoneFilled} / 10 FILLED`} />
           <div
             className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
@@ -299,7 +375,11 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section className="sb-builder-section sb-print-section sb-print-section-rr mb-1 min-h-0 flex flex-[4] flex-col">
+        <section
+          className={`sb-builder-section sb-print-section sb-print-section-rr mb-1 min-h-0 flex flex-col ${
+            isPlanning ? "flex-[5] mb-0" : "flex-[4]"
+          }`}
+        >
           <GoldenSectionHeader label="RESTROOMS" count={`${rrFilled} / 10 FILLED`} />
           <div
             className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
@@ -324,41 +404,18 @@ export function PrintPreviewPage({
           </div>
         </section>
 
-        <section className="sb-builder-section sb-print-section sb-print-section-aux mb-2 min-h-0 flex flex-[2] flex-col">
-          <GoldenSectionHeader
-            label="AUXILIARY"
-            count={`${auxFilled} / ${auxTotal} FILLED`}
+        {!isPlanning ? (
+          <AuxCardsSection
+            auxDefs={auxDefs}
+            assignments={assignments}
+            tasksBySlot={tasksBySlot}
+            coveredByIndex={coveredByIndex}
+            auxFilled={auxFilled}
+            auxTotal={auxTotal}
+            className="mb-2 flex-[2]"
           />
-          <div
-            className="sb-print-card-grid grid gap-1.5 flex-1 min-h-0 w-full"
-            style={{
-              gridTemplateColumns: `repeat(${Math.max(auxDefs.length, 1)}, minmax(0, 1fr))`,
-              gridAutoRows: "minmax(0, 1fr)",
-            }}
-          >
-            {auxDefs.map((def) => {
-              const a = assignments[def.key] || {};
-              const isBlank = def.role === "blank" && !def.label;
-              return (
-                <div key={def.key} className="relative h-full" data-slot-key={def.key}>
-                  <GoldenAuxCard
-                    def={def}
-                    tmName={a.tmName}
-                    breakGroup={a.breakGroup ?? 0}
-                    tasks={toTaskLines(tasksBySlot[def.key])}
-                    empty={!isBlank && !slotShowsFilled(def.key, assignments)}
-                    coveredByNames={coveredByIndex[def.key]}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        ) : null}
       </div>
-
-      {isPlanning && includeShiftNotes ? (
-        <GoldenShiftNotesBand notes={snapshot.notes} blankLines={3} />
-      ) : null}
 
       <GoldenSheetFooter
         versionLabel={versionLabel}

@@ -142,7 +142,7 @@ function formatPresetSavedAt(ts: number): string {
 
 const BUILTIN_PRESET_HINTS: Record<string, string> = {
   tonight: "Tonight's deploy + breaks only",
-  "tonight-planning": "Tonight's planning worksheet (deploy + overlaps)",
+  "tonight-planning": "Tonight's planning worksheet (zones/RR + aux/overlaps/notes)",
   "full-week": "All 7 nights, deploy + breaks + overview",
   "deploy-book": "Deploy sheets for every night",
   "break-book": "Break sheets for every night",
@@ -1057,7 +1057,11 @@ export function PrintCommandCenter({
               {deployCount > 0 && <SummaryPill label={`${deployCount} deploy`} color="rgba(52,199,89,0.9)" isDark={isDark} />}
               {breaksCount > 0 && (
                 <SummaryPill
-                  label={printVariant === "planning" ? `${breaksCount} overlaps` : `${breaksCount} breaks`}
+                  label={
+                    printVariant === "planning"
+                      ? `${breaksCount} aux + overlaps`
+                      : `${breaksCount} breaks`
+                  }
                   color="rgba(255,159,10,0.9)"
                   isDark={isDark}
                 />
@@ -1412,7 +1416,7 @@ export function PrintCommandCenter({
                     const isDropTarget = dragOverId === item.id && dragId !== item.id;
                     const typeLabel =
                       item.type === "breaks" && printVariant === "planning"
-                        ? "Overlaps"
+                        ? "Aux + Overlaps"
                         : { deploy: "Deploy", breaks: "Breaks", overview: "Overview", cover: "Cover" }[item.type];
                     const canPreview =
                       onPreviewSheet &&

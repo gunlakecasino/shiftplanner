@@ -860,10 +860,10 @@ export function GoldenBreaksPlanningHeader({
               fontFamily: "var(--font-atkinson)",
             }}
           >
-            Overlaps
+            Aux · Overlaps · Notes
           </div>
           <div className="text-[11px] mt-0.5 leading-none text-[#4B5563]">
-            {day.name} · {day.monthYear} · Day {dayIndex + 1} of 7
+            {day.name} · {day.monthYear} · Planning sheet 2 of 2
           </div>
         </div>
       </div>

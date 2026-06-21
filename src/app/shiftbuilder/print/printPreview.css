@@ -276,6 +276,45 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   grid-auto-rows: minmax(54px, 1fr) !important;
 }
 
+/* Planning deploy — zones + RR only (aux/notes on sheet 2) */
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-zones,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-zones,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-zones {
+  flex-grow: 6;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-rr,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-rr,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-section-rr {
+  flex-grow: 5;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="deployment"] .sb-print-deployment-body--planning-zones-rr .sb-print-card-grid {
+  grid-auto-rows: minmax(68px, 1fr) !important;
+}
+
+/* Planning sheet 2 — overlaps + aux + shift notes */
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-overlaps-block,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-overlaps-block,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-overlaps-block {
+  flex: 0 0 auto;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid {
+  grid-auto-rows: minmax(52px, 1fr) !important;
+}
+
 .print-stage-inner .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card {
@@ -292,8 +331,8 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .golden-shift-notes-band,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .golden-shift-notes-band {
   flex-shrink: 0;
-  min-height: 64px;
-  max-height: 72px;
+  min-height: 72px;
+  max-height: 88px;
   margin-top: 2px;
 }
 

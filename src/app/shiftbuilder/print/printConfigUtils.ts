@@ -49,7 +49,7 @@ function deployLabel(short: string, printVariant: PrintVariant): string {
 
 function breaksLabel(short: string, printVariant: PrintVariant): string {
   return printVariant === "planning"
-    ? `${short} Overlaps (Planning)`
+    ? `${short} Aux + Overlaps (Planning)`
     : `${short} Breaks`;
 }
 
