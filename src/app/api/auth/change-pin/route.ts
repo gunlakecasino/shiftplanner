@@ -106,6 +106,8 @@ export async function POST(request: NextRequest) {
     user: userForClientResponse(freshUser),
   });
 
-  attachSessionCookie(response, userId);
+  if (!attachSessionCookie(response, userId)) {
+    return NextResponse.json({ error: "Server session signing unavailable" }, { status: 503 });
+  }
   return response;
 }

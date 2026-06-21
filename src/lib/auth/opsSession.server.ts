@@ -97,19 +97,23 @@ function buildSessionPayload(userId: string, abs?: number): TokenPayload | null 
 }
 
 function slideSessionPayload(existing: TokenPayload): TokenPayload | null {
-  if (existing.typ !== "session" || existing.abs == null) return null;
+  if (existing.typ !== "session") return null;
 
   const now = nowSec();
-  if (existing.abs < now) return null;
+  const absoluteCap =
+    existing.abs ??
+    (existing.exp > now ? existing.exp : now + sessionAbsoluteMaxSec());
 
-  const idleDeadline = Math.min(now + sessionIdleSec(), existing.abs);
+  if (absoluteCap < now) return null;
+
+  const idleDeadline = Math.min(now + sessionIdleSec(), absoluteCap);
   if (idleDeadline <= now) return null;
 
   return {
     typ: "session",
     sub: existing.sub,
     exp: idleDeadline,
-    abs: existing.abs,
+    abs: absoluteCap,
     jti: newJti(),
   };
 }
@@ -158,8 +162,9 @@ export function verifyPinChangeToken(token: string, userId: string): boolean {
 
 function writeSessionCookie(response: NextResponse, token: string): void {
   const payload = verifySignedToken(token);
+  const now = nowSec();
   const maxAge = payload
-    ? Math.max(1, payload.abs != null ? payload.abs - nowSec() : sessionIdleSec())
+    ? Math.max(60, (payload.exp ?? now + sessionIdleSec()) - now)
     : sessionIdleSec();
 
   response.cookies.set(OPS_SESSION_COOKIE, token, {
@@ -171,10 +176,11 @@ function writeSessionCookie(response: NextResponse, token: string): void {
   });
 }
 
-export function attachSessionCookie(response: NextResponse, userId: string): void {
+export function attachSessionCookie(response: NextResponse, userId: string): boolean {
   const token = createSessionToken(userId);
-  if (!token) return;
+  if (!token) return false;
   writeSessionCookie(response, token);
+  return true;
 }
 
 /** Extend idle deadline after confirmed activity (session GET, etc.). */

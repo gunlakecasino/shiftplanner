@@ -91,7 +91,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (!requiresPinChange) {
-    attachSessionCookie(response, freshUser.id);
+    const attached = attachSessionCookie(response, freshUser.id);
+    if (!attached) {
+      return NextResponse.json({ error: "Server session signing unavailable" }, { status: 503 });
+    }
   }
 
   return response;

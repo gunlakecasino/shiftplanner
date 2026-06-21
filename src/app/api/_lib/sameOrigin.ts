@@ -25,5 +25,11 @@ export function isSameOriginOpsRequest(request: NextRequest): boolean {
     }
   }
 
+  // Same-origin fetch() often omits Origin/Referer; Sec-Fetch-Site is reliable in modern browsers.
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return true;
+  }
+
   return false;
 }
