@@ -22,15 +22,15 @@ function BreakImprintNotches({ className }: { className?: string }) {
         cy="12"
         r="10.1"
         stroke="currentColor"
-        strokeWidth="0.55"
-        opacity="0.22"
+        strokeWidth="0.65"
+        opacity="0.3"
       />
       <circle
         cx="12"
         cy="12"
         r="9.15"
         stroke="currentColor"
-        strokeWidth="1.65"
+        strokeWidth="1.85"
         strokeDasharray="5.35 2.05"
         strokeLinecap="butt"
         transform="rotate(11.25 12 12)"

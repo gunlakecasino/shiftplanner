@@ -1877,8 +1877,8 @@ button,
 
 /* Break imprint — grey debossed divot stamped into the card surface. */
 .sb-break-imprint {
-  --break-imprint-ink: #6b7280;
-  --break-imprint-ring: #9ca3af;
+  --break-imprint-ink: #4b5563;
+  --break-imprint-ring: #86868b;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1898,23 +1898,23 @@ button,
 }
 
 .sb-break-imprint--sm {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .sb-break-imprint--md {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
 }
 
 .sb-break-imprint--tablet-sm {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
 }
 
 .sb-break-imprint--tablet-md {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
 }
 
 .sb-break-imprint-svg {
@@ -1943,7 +1943,7 @@ button,
 }
 
 .sb-break-imprint--active .sb-break-imprint-face {
-  color: #4b5563;
+  color: #374151;
 }
 
 .sb-break-imprint--off {
@@ -1953,17 +1953,17 @@ button,
   box-shadow:
     inset 0 1px 2.5px rgba(0, 0, 0, 0.06),
     inset 0 0.5px 0 rgba(0, 0, 0, 0.03);
-  color: #c7c7cc;
+  color: #aeaeb2;
 }
 
 .sb-break-imprint--off .sb-break-imprint-face {
-  color: #c7c7cc;
+  color: #aeaeb2;
 }
 
 .sb-break-imprint-num {
   font-family: var(--font-atkinson, var(--font-ui, system-ui));
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1976,23 +1976,23 @@ button,
 .sb-break-imprint--tablet-sm .sb-break-imprint-num,
 .sb-break-imprint--tablet-md .sb-break-imprint-num,
 .sb-break-imprint--kiosk .sb-break-imprint-num {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .sb-break-imprint-dash {
   display: block;
-  width: 5px;
-  height: 1px;
+  width: 6px;
+  height: 1.25px;
   border-radius: 9999px;
   background: currentColor;
-  opacity: 0.55;
+  opacity: 0.62;
   box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.7);
 }
 
 .sb-break-imprint-ol {
   font-family: var(--font-atkinson, var(--font-ui, system-ui));
-  font-size: 6.5px;
-  font-weight: 700;
+  font-size: 7px;
+  font-weight: 800;
   letter-spacing: 0.05em;
   line-height: 1;
   transform: translateY(-0.25px);
@@ -2003,12 +2003,12 @@ button,
 
 .sb-break-imprint--tablet-sm .sb-break-imprint-ol,
 .sb-break-imprint--tablet-md .sb-break-imprint-ol {
-  font-size: 7.5px;
+  font-size: 8px;
 }
 
 .sb-break-imprint--tablet-sm .sb-break-imprint-dash,
 .sb-break-imprint--tablet-md .sb-break-imprint-dash {
-  width: 6px;
+  width: 7px;
 }
 
 .dark .sb-break-imprint {
