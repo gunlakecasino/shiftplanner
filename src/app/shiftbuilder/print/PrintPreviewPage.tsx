@@ -11,7 +11,7 @@ import {
   GoldenRRColumn,
   GoldenSectionHeader,
   GoldenSheetFooter,
-  GoldenShiftNotesBand,
+  GoldenPlanningNotesPanel,
   GoldenZoneCard,
   toTaskLines,
   ZONE_VISUAL_ORDER,
@@ -169,21 +169,23 @@ export function PrintPreviewPage({
           />
 
           <div className="sb-breaks-planning-body flex flex-col w-full flex-1 min-h-0 overflow-hidden gap-1">
-            <OverlapRowsSection
-              overlapRows={overlapRows}
-              className="sb-planning-overlaps-block flex-shrink-0 pt-1"
-            />
-            <AuxCardsSection
-              auxDefs={auxDefs}
-              assignments={assignments}
-              tasksBySlot={tasksBySlot}
-              coveredByIndex={coveredByIndex}
-              auxFilled={auxFilled}
-              auxTotal={auxTotal}
-              className="sb-planning-aux-block flex-1 min-h-0 mb-0"
-            />
+            <div className="sb-breaks-planning-upper flex flex-col min-h-0 gap-1">
+              <OverlapRowsSection
+                overlapRows={overlapRows}
+                className="sb-planning-overlaps-block flex-shrink-0 pt-1"
+              />
+              <AuxCardsSection
+                auxDefs={auxDefs}
+                assignments={assignments}
+                tasksBySlot={tasksBySlot}
+                coveredByIndex={coveredByIndex}
+                auxFilled={auxFilled}
+                auxTotal={auxTotal}
+                className="sb-planning-aux-block flex-1 min-h-0 mb-0"
+              />
+            </div>
             {includeShiftNotes ? (
-              <GoldenShiftNotesBand notes={snapshot.notes} blankLines={4} />
+              <GoldenPlanningNotesPanel notes={snapshot.notes} />
             ) : null}
           </div>
 

@@ -827,6 +827,52 @@ export function GoldenShiftNotesBand({
   );
 }
 
+function GoldenPlanningNotesColumn({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`golden-planning-notes-column flex flex-col min-h-0 min-w-0 h-full border-r border-[#E5E5E7] last:border-r-0 ${className}`}
+      style={{ fontFamily: "var(--font-atkinson)" }}
+    >
+      <div className="golden-planning-notes-column-header flex-shrink-0 px-2 py-1 border-b border-[#E5E5E7] bg-[#F3F4F6]">
+        <span className="text-[8px] font-extrabold tracking-[1.2px] uppercase text-[#6B7280]">
+          {label}
+        </span>
+      </div>
+      <div className="golden-planning-notes-column-body flex flex-col flex-1 min-h-0 px-2 py-1.5 overflow-hidden">
+        {children}
+        <div className="golden-planning-notes-ruled flex-1 min-h-0" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+export function GoldenPlanningNotesPanel({ notes }: { notes?: string }) {
+  const trimmed = notes?.trim() ?? "";
+  return (
+    <div className="golden-planning-notes-panel flex flex-col flex-1 min-h-0 border border-[#E5E5E7] rounded-[3px] bg-[#FAFAFB] overflow-hidden">
+      <div className="golden-planning-notes-panel-grid grid h-full min-h-0 grid-cols-[35%_40%_25%]">
+        <GoldenPlanningNotesColumn label="Notes">
+          {trimmed ? (
+            <div className="golden-planning-notes-prefill flex-shrink-0 text-[9px] leading-[1.4] text-[#374151] whitespace-pre-wrap mb-1">
+              {trimmed}
+            </div>
+          ) : null}
+        </GoldenPlanningNotesColumn>
+        <GoldenPlanningNotesColumn label="Projects" />
+        <GoldenPlanningNotesColumn label="Events" />
+      </div>
+    </div>
+  );
+}
+
 export function GoldenBreaksPlanningHeader({
   day,
   dayIndex,
