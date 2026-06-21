@@ -1969,11 +1969,12 @@ function AuthedShiftBuilder() {
     const tablet = isTabletTouchDevice();
     const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
+      const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: (tablet ? 18 : 24) + dockInset,
+        right: hGutter + dockInset,
         bottom: builderStageBottomInsetPx(),
-        left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 12 : 16,
+        left: rosterOpen ? (tablet ? 212 : 280) : hGutter,
       };
     }
     return {

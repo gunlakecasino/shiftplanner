@@ -751,6 +751,13 @@ body {
   box-sizing: border-box;
 }
 
+/* Live builder: stage host forces align-items:stretch — re-center the canvas on the viewport axis. */
+.sb-builder-stage.sb-stage-host > .sb-builder-canvas {
+  align-self: center !important;
+  width: min(100%, var(--sb-builder-canvas-max, 1581px)) !important;
+  margin-inline: auto !important;
+}
+
 /* /today kiosk — paper hero, calmer empty slots, compact open aux ghosts. */
 .print-stage-inner.sb-today-board .print-artboard {
   box-shadow:
@@ -1680,8 +1687,11 @@ body {
   min-height: 0;
 }
 
-/* Task list only — scrolls inside the card when rows exceed available height. */
-.builder-workspace .assignment-card .sb-card-task-scroll {
+/* Task list only — scrolls inside the card when rows exceed available height.
+   Safari: parent cards use overflow:hidden + border-radius, which clips edge scrollbars;
+   use solid rgba thumbs, wider track, and inset from the right edge. */
+.builder-workspace .assignment-card .sb-card-task-scroll,
+.builder-workspace .sb-assignment-card .sb-card-task-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
@@ -1689,16 +1699,35 @@ body {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--ios-label-tertiary) 35%, transparent) transparent;
+  scrollbar-color: rgba(120, 120, 128, 0.5) rgba(0, 0, 0, 0.04);
+  /* Inset scrollbar from overflow:hidden + rounded card edge (Safari clips edge scrollbars) */
+  padding-right: 6px;
+  box-sizing: border-box;
 }
 
-.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar {
-  width: 4px;
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar,
+.builder-workspace .sb-assignment-card .sb-card-task-scroll::-webkit-scrollbar {
+  width: 6px;
+  -webkit-appearance: none;
 }
 
-.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb {
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--ios-label-tertiary) 35%, transparent);
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar-track,
+.builder-workspace .sb-assignment-card .sb-card-task-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  margin: 2px 0;
+}
+
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb,
+.builder-workspace .sb-assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: rgba(120, 120, 128, 0.5);
+  min-height: 28px;
+}
+
+.builder-workspace .assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb:hover,
+.builder-workspace .sb-assignment-card .sb-card-task-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.7);
 }
 
 /* Flex aux row — blank shells + slot chrome */
