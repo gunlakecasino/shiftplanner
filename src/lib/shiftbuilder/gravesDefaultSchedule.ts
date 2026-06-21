@@ -6,7 +6,9 @@
 
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { addDays, daysBetween, formatLocalDateISO, startOfShiftWeek } from "./dateUtils";
+import type { TeamMember } from "./data";
 import type { ScheduledTm, ScheduledTmsForNightResult } from "./schedules";
+import { boardTmId } from "./tmIdentity";
 
 export type GravesBand = "grave" | "am_overlap" | "pm_overlap";
 
@@ -257,19 +259,100 @@ export async function getScheduledTmsFromGravesDefault(
   ]);
   const allScheduled = pick(allIds);
 
+  const scheduledWithRoles = allScheduled.map((tm) => ({
+    ...tm,
+    shift: { label: "Scheduled" as const, startTime: null, endTime: null },
+    isFullGrave: isTmIdOnScheduleSet(tm.id, ids.grave, profileIndex),
+    isPMOverlap: isTmIdOnScheduleSet(tm.id, ids.pmOverlap, profileIndex),
+    isAMOverlap: isTmIdOnScheduleSet(tm.id, ids.amOverlap, profileIndex),
+  }));
+
   return {
     allScheduled,
     fullGraveScheduled,
     pmOverlapScheduled,
     amOverlapScheduled,
-    scheduledWithRoles: allScheduled.map((tm) => ({
-      ...tm,
-      shift: { label: "Scheduled", startTime: null, endTime: null },
-      isFullGrave: ids.grave.has(tm.id),
-      isPMOverlap: ids.pmOverlap.has(tm.id),
-      isAMOverlap: ids.amOverlap.has(tm.id),
-    })),
+    scheduledWithRoles,
   };
+}
+
+/** Roster row for the TM rail — strictly from graves_default_schedule (+ night_on_call). */
+export type GravesScheduleRosterRow = {
+  id: string;
+  name: string;
+  fullName?: string;
+  primarySection?: string | null;
+  gravePool?: string | null;
+  gender?: string | null;
+  isFullGrave: boolean;
+  isPMOverlap: boolean;
+  isAMOverlap: boolean;
+};
+
+/**
+ * Build the canonical roster list for ShiftBuilder's left rail.
+ * Sole source: getScheduledTmsFromGravesDefault (same data as /shiftbuilder/graves-schedule).
+ */
+export function buildGravesScheduleRosterRows(
+  scheduled: ScheduledTmsForNightResult,
+  profiles: TeamMember[],
+): GravesScheduleRosterRow[] {
+  const profileByKey = new Map<string, TeamMember>();
+  for (const p of profiles) {
+    profileByKey.set(p.id, p);
+  }
+
+  const boardIdFromScheduled = (t: ScheduledTm) =>
+    boardTmId({ id: t.id, tmId: t.tmId ?? undefined });
+
+  const graveBoardIds = new Set(
+    scheduled.fullGraveScheduled.map(boardIdFromScheduled).filter(Boolean),
+  );
+  const pmBoardIds = new Set(
+    scheduled.pmOverlapScheduled.map(boardIdFromScheduled).filter(Boolean),
+  );
+  const amBoardIds = new Set(
+    scheduled.amOverlapScheduled.map(boardIdFromScheduled).filter(Boolean),
+  );
+
+  const byBoardId = new Map<string, GravesScheduleRosterRow>();
+
+  for (const tm of scheduled.allScheduled) {
+    const boardId = boardIdFromScheduled(tm);
+    if (!boardId) continue;
+
+    const profile = profileByKey.get(boardId);
+    const existing = byBoardId.get(boardId);
+
+    const row: GravesScheduleRosterRow = existing ?? {
+      id: boardId,
+      name: profile?.name || tm.name,
+      fullName: profile?.fullName ?? undefined,
+      primarySection: profile?.primarySection ?? null,
+      gravePool: profile?.gravePool ?? tm.gravePool,
+      gender: profile?.gender ?? tm.gender,
+      isFullGrave: false,
+      isPMOverlap: false,
+      isAMOverlap: false,
+    };
+
+    if (graveBoardIds.has(boardId)) row.isFullGrave = true;
+    if (pmBoardIds.has(boardId)) row.isPMOverlap = true;
+    if (amBoardIds.has(boardId)) row.isAMOverlap = true;
+
+    byBoardId.set(boardId, row);
+  }
+
+  return Array.from(byBoardId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** GRAVE-only toggle: restrict rail pool to full-grave band (excludes PM/AM overlap bands). */
+export function filterGravesScheduleRosterByBand(
+  roster: GravesScheduleRosterRow[],
+  graveBandOnly: boolean,
+): GravesScheduleRosterRow[] {
+  if (!graveBandOnly) return roster;
+  return roster.filter((t) => t.isFullGrave);
 }
 
 export type GravesEligibleTm = {

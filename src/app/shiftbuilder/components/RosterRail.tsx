@@ -3,529 +3,582 @@
 import React from "react";
 import VirtualRosterList from "./VirtualRosterList";
 import { BuilderLoadingLine } from "./builderPrimitives";
-import RosterItem from "./RosterItem";
-import { 
-  useAssignments, 
-  useRosterSectionExpanded, 
-  useGraveOnly, 
+import {
+  filterGravesScheduleRosterByBand,
+  type GravesScheduleRosterRow,
+} from "@/lib/shiftbuilder/gravesDefaultSchedule";
+import {
+  boardTmId,
+  buildTmLookupIndex,
+  collectPlacedTmIds,
+  isTmPlacedTonight,
+  resolveTmFromLookup,
+} from "@/lib/shiftbuilder/tmIdentity";
+import {
+  useAssignments,
+  useDraftAssignments,
+  useRosterSectionExpanded,
+  useGraveOnly,
   useRosterSearch,
-  useShiftBuilderStore 
+  useShiftBuilderStore,
 } from "../store/useShiftBuilderStore";
 
 export interface RosterRailProps {
-  // Core data (narrow day-specific slice)
-  realRoster: any[];
-  graveRoster: any[];
-  assignments?: Record<string, any>; // optional — prefer store selector (3.4)
-  assignedThisNight: Set<string>;
+  /** Canonical pool from graves_default_schedule (+ night_on_call) for tonight. */
+  scheduleRoster: GravesScheduleRosterRow[];
+  /** Placed tonight (committed + draft + live) — alias-expanded in rail. */
+  placedTmIds: Set<string>;
+  /** Profile rows for resolving placed TMs missing from the schedule slice. */
+  profileRoster?: Array<{
+    id?: string;
+    name?: string;
+    fullName?: string;
+    primarySection?: string | null;
+    gravePool?: string | null;
+    isFullGrave?: boolean;
+    isPMOverlap?: boolean;
+    isAMOverlap?: boolean;
+  }>;
   scheduledTmIdsTonight: Set<string>;
   calledOffIds: Set<string>;
-
-  // View + filter state (controlled by orchestrator / useRosterPanels)
-  // These are now optional — RosterRail prefers narrow Zustand selectors (3.4)
-  graveOnly?: boolean;
-  rosterSearch?: string;
   isDark: boolean;
   isCurrentNightLocked: boolean;
   canEditAssignments: boolean;
-
-  // Overlap labels (pre-computed in parent for the current day)
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   selectedDay: { name: string; dateNum: number };
-
-  // Expanded state + filter setters are now handled via Zustand selectors/actions inside RosterRail (3.4).
-  // The props below are kept temporarily for any external callers during transition.
-  setGraveOnly?: (v: boolean) => void;
-  setRosterSearch?: (v: string) => void;
-
-  // Live / drag context if needed inside items
-  live?: any;
-
-  /** True only on cold load — avoids "Loading roster" flash when keepPreviousData holds prior day. */
   isRosterLoading?: boolean;
 }
 
-/**
- * RosterRail
- *
- * Isolated, memoized owner of the entire left floating roster rail content.
- * Symmetric win to ShiftBuilderBoard for day-switch + assignment-drag perf on iPad.
- *
- * - Receives only the narrow data it needs for the current day + UI state.
- * - Owns the heavy filtering + sectioning logic (the old giant IIFE).
- * - All VirtualRosterList + RosterItem usage lives here.
- * - Parent orchestrator no longer re-renders this subtree on unrelated board changes.
- *
- * Sacred contracts preserved: exact section order, emphasis colors, scheduled-unplaced
- * grouping, GRAVE filter behavior, search, expand/collapse persistence (via props),
- * drag & drop targets.
- */
+function MsIcon({
+  name,
+  size = 12,
+  fill = 0,
+  className,
+}: {
+  name: string;
+  size?: number;
+  fill?: 0 | 1;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`ms ${className ?? ""}`}
+      style={{
+        fontSize: size,
+        fontVariationSettings: `"FILL" ${fill}, "wght" 400, "opsz" 20`,
+      }}
+    >
+      {name}
+    </span>
+  );
+}
+
+function RosterSectionHeader({
+  label,
+  count,
+  total,
+  expanded,
+  onToggle,
+  tone = "muted",
+}: {
+  label: string;
+  count: number;
+  total?: number;
+  expanded: boolean;
+  onToggle: () => void;
+  tone?: "gold" | "placed" | "warn" | "muted";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className={`sb-roster-section__btn sb-interactive ${
+        tone === "gold" ? "sb-roster-section__btn--gold" : tone === "placed" ? "sb-roster-section__btn--placed" : ""
+      }`}
+    >
+      <span className="sb-roster-section__left min-w-0">
+        <MsIcon
+          name="chevron_right"
+          className={`sb-roster-section__chevron ${expanded ? "sb-roster-section__chevron--open" : ""}`}
+        />
+        <span
+          className={`sb-roster-section__label truncate ${
+            tone === "gold"
+              ? "sb-roster-section__label--gold"
+              : tone === "placed"
+                ? "sb-roster-section__label--placed"
+                : tone === "warn"
+                  ? "sb-roster-section__label--warn"
+                  : "sb-roster-section__label--muted"
+          }`}
+        >
+          {label}
+        </span>
+      </span>
+      <span
+        className={`sb-roster-section__count ${
+          tone === "gold"
+            ? "sb-roster-section__count--gold"
+            : tone === "placed"
+              ? "sb-roster-section__count--placed"
+              : tone === "warn"
+                ? "sb-roster-section__count--warn"
+                : "sb-roster-section__count--muted"
+        }`}
+      >
+        {count}
+        {total !== undefined && total !== count ? ` / ${total}` : ""}
+      </span>
+    </button>
+  );
+}
+
+function rowFromLookupEntry(entry: Record<string, unknown>): GravesScheduleRosterRow {
+  const id = boardTmId(entry as { id?: string; tmId?: string; tm_id?: string });
+  return {
+    id,
+    name: String(entry.name || entry.fullName || id),
+    fullName: (entry.fullName as string) || undefined,
+    primarySection: (entry.primarySection as string) ?? null,
+    gravePool: (entry.gravePool as string) ?? null,
+    gender: (entry.gender as string) ?? null,
+    isFullGrave: !!(entry.isFullGrave ?? entry.isFullGraveTonight),
+    isPMOverlap: !!(entry.isPMOverlap ?? entry.isPMOverlapTonight),
+    isAMOverlap: !!(entry.isAMOverlap ?? entry.isAMOverlapTonight),
+  };
+}
+
 const RosterRail = React.memo(function RosterRail({
-  realRoster,
-  graveRoster,
-  assignments: assignmentsProp,
-  assignedThisNight,
+  scheduleRoster,
+  placedTmIds: placedTmIdsProp,
+  profileRoster = [],
   scheduledTmIdsTonight,
   calledOffIds,
-  graveOnly: graveOnlyProp,
-  rosterSearch: rosterSearchProp,
   isDark,
   isCurrentNightLocked,
   canEditAssignments,
   amOverlapDayName,
   amOverlapDateNum,
   selectedDay,
-  setGraveOnly: setGraveOnlyProp,
-  setRosterSearch: setRosterSearchProp,
   isRosterLoading = false,
 }: RosterRailProps) {
-  // 3.4 — Narrow Zustand subscriptions (primary). Only re-renders when these exact slices change.
-  const assignments = useAssignments() ?? assignmentsProp ?? {};
-  const graveOnly = useGraveOnly() ?? graveOnlyProp ?? true;
-  const rosterSearch = useRosterSearch() ?? rosterSearchProp ?? '';
+  const graveOnly = useGraveOnly();
+  const rosterSearch = useRosterSearch();
+  const storeAssignments = useAssignments() ?? {};
+  const storeDraftAssignments = useDraftAssignments() ?? {};
 
-  // Expanded sections via individual selectors (fine-grained)
-  const otherTmsExpanded = useRosterSectionExpanded('otherTms');
-  const calledOffExpanded = useRosterSectionExpanded('calledOff');
-  const deployedExpanded = useRosterSectionExpanded('deployed');
-  const pmOverlapsExpanded = useRosterSectionExpanded('pmOverlaps');
-  const amOverlapsExpanded = useRosterSectionExpanded('amOverlaps');
-  const portersExpanded = useRosterSectionExpanded('porters');
-  const scheduledGravesExpanded = useRosterSectionExpanded('scheduledGraves');
-  const scheduledPMExpanded = useRosterSectionExpanded('scheduledPM');
-  const scheduledAMExpanded = useRosterSectionExpanded('scheduledAM');
+  const placedTmIds = React.useMemo(() => {
+    const merged = new Set(placedTmIdsProp);
+    collectPlacedTmIds(storeAssignments, storeDraftAssignments).forEach((id) => merged.add(id));
+    return merged;
+  }, [placedTmIdsProp, storeAssignments, storeDraftAssignments]);
 
-  // Store-backed setters (3.4) — always read fresh value for functional updates.
-  const setOtherTmsExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.otherTms;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('otherTms', next);
-    setGraveOnlyProp?.(useShiftBuilderStore.getState().rosterUI.graveOnly);
-  };
-  const setCalledOffExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.calledOff;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('calledOff', next);
-  };
-  const setDeployedExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.deployed;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('deployed', next);
-  };
-  const setPmOverlapsExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.pmOverlaps;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('pmOverlaps', next);
-  };
-  const setAmOverlapsExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.amOverlaps;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('amOverlaps', next);
-  };
-  const setPortersExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.porters;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('porters', next);
-  };
-  const setScheduledGravesExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.scheduledGraves;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('scheduledGraves', next);
-  };
-  const setScheduledPMExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.scheduledPM;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('scheduledPM', next);
-  };
-  const setScheduledAMExpanded = (v: boolean | ((prev: boolean) => boolean)) => {
-    const current = useShiftBuilderStore.getState().rosterUI.expanded.scheduledAM;
-    const next = typeof v === 'function' ? v(current) : v;
-    useShiftBuilderStore.getState().setRosterSectionExpanded('scheduledAM', next);
+  const identityLookup = React.useMemo(
+    () => buildTmLookupIndex([...scheduleRoster, ...profileRoster]),
+    [scheduleRoster, profileRoster],
+  );
+
+  const calledOffExpanded = useRosterSectionExpanded("calledOff");
+  const deployedExpanded = useRosterSectionExpanded("deployed");
+  const scheduledGravesExpanded = useRosterSectionExpanded("scheduledGraves");
+  const scheduledPMExpanded = useRosterSectionExpanded("scheduledPM");
+  const scheduledAMExpanded = useRosterSectionExpanded("scheduledAM");
+
+  type ExpandedKey = keyof ReturnType<typeof useShiftBuilderStore.getState>["rosterUI"]["expanded"];
+
+  const setSection = (key: ExpandedKey, v: boolean | ((prev: boolean) => boolean)) => {
+    const current = useShiftBuilderStore.getState().rosterUI.expanded[key];
+    const next = typeof v === "function" ? v(current) : v;
+    useShiftBuilderStore.getState().setRosterSectionExpanded(key, next);
   };
 
   const setGraveOnly = (v: boolean) => {
     useShiftBuilderStore.getState().setGraveOnly(v);
-    setGraveOnlyProp?.(v);
   };
+
   const setRosterSearch = (v: string) => {
     useShiftBuilderStore.getState().setRosterSearch(v);
-    setRosterSearchProp?.(v);
   };
-  // Local derived filtering (was the giant IIFE in the monolith — now scoped here)
-  const rawRoster = graveOnly ? graveRoster : realRoster;
 
-  const sourceRoster = React.useMemo(() => rawRoster.map((tm: any) => ({
-    ...tm,
-    isOnSchedule: assignedThisNight.has(tm.id),
-  })), [rawRoster, assignedThisNight]);
+  /** Band-filtered schedule pool + any placed TMs (always visible even in Graves-only mode). */
+  const rawPool = React.useMemo(() => {
+    const bandPool = filterGravesScheduleRosterByBand(scheduleRoster, graveOnly);
+    const byId = new Map(bandPool.map((t) => [t.id, t]));
 
-  const isPorter = React.useCallback((tm: any) => (tm.primarySection || '').toLowerCase().includes('porter'), []);
+    for (const pid of placedTmIds) {
+      const resolved = resolveTmFromLookup(identityLookup, pid);
+      if (!resolved) continue;
+      const row = rowFromLookupEntry(resolved);
+      if (row.id && !byId.has(row.id)) {
+        byId.set(row.id, row);
+      }
+    }
 
-  const calledOff = React.useMemo(() => sourceRoster.filter((t: any) => calledOffIds.has(t.id)), [sourceRoster, calledOffIds]);
-  const notCalledOff = React.useMemo(() => sourceRoster.filter((t: any) => !calledOffIds.has(t.id)), [sourceRoster, calledOffIds]);
+    return Array.from(byId.values());
+  }, [scheduleRoster, graveOnly, placedTmIds, identityLookup]);
+
+  const isPlaced = React.useCallback(
+    (tm: GravesScheduleRosterRow) => isTmPlacedTonight(tm, placedTmIds, identityLookup),
+    [placedTmIds, identityLookup],
+  );
+
+  const sourceRoster = React.useMemo(
+    () =>
+      rawPool.map((tm) => ({
+        ...tm,
+        isPlaced: isPlaced(tm),
+      })),
+    [rawPool, isPlaced],
+  );
+
+  const placedCount = React.useMemo(
+    () => sourceRoster.filter((t) => t.isPlaced && !calledOffIds.has(t.id)).length,
+    [sourceRoster, calledOffIds],
+  );
+
+  const unplacedCount = React.useMemo(
+    () => sourceRoster.filter((t) => !t.isPlaced && !calledOffIds.has(t.id)).length,
+    [sourceRoster, calledOffIds],
+  );
+
+  const isPorter = React.useCallback(
+    (tm: GravesScheduleRosterRow) => (tm.primarySection || "").toLowerCase().includes("porter"),
+    [],
+  );
+
+  const calledOff = React.useMemo(
+    () => sourceRoster.filter((t) => calledOffIds.has(t.id)),
+    [sourceRoster, calledOffIds],
+  );
+  const notCalledOff = React.useMemo(
+    () => sourceRoster.filter((t) => !calledOffIds.has(t.id)),
+    [sourceRoster, calledOffIds],
+  );
 
   const {
     onThisNight,
-    alreadyDeployed,
-    porters,
-    pmOverlaps,
-    amOverlaps,
-    regularGravePool,
     scheduledUnplacedGraves,
     scheduledUnplacedPM,
     scheduledUnplacedAM,
     pmSwingLabel,
     amDayShiftLabel,
   } = React.useMemo(() => {
-    let onThisNight: any[] = [];
-    let alreadyDeployed: any[] = [];
-    let porters: any[] = [];
-    let pmOverlaps: any[] = [];
-    let amOverlaps: any[] = [];
-    let regularGravePool: any[] = [];
-    let scheduledUnplacedGraves: any[] = [];
-    let scheduledUnplacedPM: any[] = [];
-    let scheduledUnplacedAM: any[] = [];
-    let pmSwingLabel = '';
-    let amDayShiftLabel = '';
+    const onThisNight = notCalledOff.filter((t) => t.isPlaced);
+    const notAssignedThisNight = notCalledOff.filter((t) => !t.isPlaced);
 
-    if (graveOnly) {
-      onThisNight = notCalledOff.filter((t: any) => t.isOnSchedule);
-      alreadyDeployed = notCalledOff.filter((t: any) => t.isOnWeek && !t.isOnSchedule);
+    const scheduledUnplaced = notAssignedThisNight.filter((t) => {
+      if (scheduledTmIdsTonight.size === 0) return true;
+      if (scheduledTmIdsTonight.has(t.id)) return true;
+      for (const sid of scheduledTmIdsTonight) {
+        const resolved = resolveTmFromLookup(identityLookup, sid);
+        if (resolved && boardTmId(resolved) === t.id) return true;
+      }
+      return false;
+    });
 
-      const notAssignedThisNight = notCalledOff.filter((t: any) => !t.isOnSchedule);
-      const hasScheduleData = scheduledTmIdsTonight.size > 0;
-      const scheduledUnplaced = hasScheduleData
-        ? notAssignedThisNight.filter((t: any) => scheduledTmIdsTonight.has(t.id))
-        : [];
-      const scheduledUnplacedIds = new Set(scheduledUnplaced.map((t: any) => t.id));
+    const scheduledUnplacedGraves = scheduledUnplaced.filter(
+      (t) => !isPorter(t) && t.isFullGrave && !t.isPMOverlap && !t.isAMOverlap,
+    );
+    const scheduledUnplacedPM = scheduledUnplaced.filter((t) => t.isPMOverlap);
+    const scheduledUnplacedAM = scheduledUnplaced.filter(
+      (t) => t.isAMOverlap && !t.isPMOverlap,
+    );
 
-      scheduledUnplacedGraves = scheduledUnplaced.filter((t: any) => !isPorter(t) && t.gravePool === 'Full');
-      scheduledUnplacedPM = scheduledUnplaced.filter((t: any) => t.isPMOverlap);
-      scheduledUnplacedAM = scheduledUnplaced.filter((t: any) => t.isAMOverlap && !t.isPMOverlap);
-
-      pmSwingLabel = `${selectedDay.name.slice(0, 3)} ${selectedDay.dateNum} swing (until 1am)`;
-      amDayShiftLabel = `${amOverlapDayName?.slice(0, 3) || ''} ${amOverlapDateNum || ''} day shift (5am)`;
-
-      const remaining = hasScheduleData
-        ? notAssignedThisNight.filter((t: any) => !scheduledUnplacedIds.has(t.id))
-        : notAssignedThisNight;
-
-      porters = remaining.filter((t: any) => isPorter(t));
-      const nonPorters = remaining.filter((t: any) => !isPorter(t));
-      pmOverlaps = nonPorters.filter((t: any) => t.isPMOverlap);
-      amOverlaps = nonPorters.filter((t: any) => t.isAMOverlap && !t.isPMOverlap);
-      regularGravePool = nonPorters.filter((t: any) => !t.isPMOverlap && !t.isAMOverlap);
-    } else {
-      onThisNight = notCalledOff.filter((t: any) => t.isOnSchedule);
-      regularGravePool = notCalledOff.filter((t: any) => !t.isOnSchedule);
-    }
+    const pmSwingLabel = `${selectedDay.name.slice(0, 3)} ${selectedDay.dateNum} swing (until 1am)`;
+    const amDayShiftLabel = `${amOverlapDayName?.slice(0, 3) || ""} ${amOverlapDateNum || ""} day shift (5am)`;
 
     return {
-      onThisNight, alreadyDeployed, porters, pmOverlaps, amOverlaps, regularGravePool,
-      scheduledUnplacedGraves, scheduledUnplacedPM, scheduledUnplacedAM,
-      pmSwingLabel, amDayShiftLabel,
+      onThisNight,
+      scheduledUnplacedGraves,
+      scheduledUnplacedPM,
+      scheduledUnplacedAM,
+      pmSwingLabel,
+      amDayShiftLabel,
     };
-  }, [graveOnly, notCalledOff, scheduledTmIdsTonight, selectedDay, amOverlapDayName, amOverlapDateNum, isPorter]);
+  }, [
+    notCalledOff,
+    scheduledTmIdsTonight,
+    selectedDay,
+    amOverlapDayName,
+    amOverlapDateNum,
+    isPorter,
+    identityLookup,
+  ]);
 
   const filterTerm = rosterSearch.trim().toLowerCase();
 
-  const filteredCalledOff = React.useMemo(() => filterTerm
-    ? calledOff.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm))
-    : calledOff, [calledOff, filterTerm]);
+  const matchesSearch = React.useCallback(
+    (tm: GravesScheduleRosterRow) => {
+      if (!filterTerm) return true;
+      return (
+        tm.name.toLowerCase().includes(filterTerm) ||
+        tm.id.toLowerCase().includes(filterTerm) ||
+        (tm.primarySection || "").toLowerCase().includes(filterTerm)
+      );
+    },
+    [filterTerm],
+  );
 
-  const filteredOnThisNight = React.useMemo(() => filterTerm
-    ? onThisNight.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : onThisNight, [onThisNight, filterTerm]);
+  const filteredCalledOff = React.useMemo(
+    () => (filterTerm ? calledOff.filter(matchesSearch) : calledOff),
+    [calledOff, filterTerm, matchesSearch],
+  );
+  const filteredOnThisNight = React.useMemo(
+    () => (filterTerm ? onThisNight.filter(matchesSearch) : onThisNight),
+    [onThisNight, filterTerm, matchesSearch],
+  );
+  const filteredSchedGraves = React.useMemo(
+    () =>
+      filterTerm ? scheduledUnplacedGraves.filter(matchesSearch) : scheduledUnplacedGraves,
+    [scheduledUnplacedGraves, filterTerm, matchesSearch],
+  );
+  const filteredSchedPM = React.useMemo(
+    () => (filterTerm ? scheduledUnplacedPM.filter(matchesSearch) : scheduledUnplacedPM),
+    [scheduledUnplacedPM, filterTerm, matchesSearch],
+  );
+  const filteredSchedAM = React.useMemo(
+    () => (filterTerm ? scheduledUnplacedAM.filter(matchesSearch) : scheduledUnplacedAM),
+    [scheduledUnplacedAM, filterTerm, matchesSearch],
+  );
 
-  const filteredDeployed = React.useMemo(() => filterTerm
-    ? alreadyDeployed.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : alreadyDeployed, [alreadyDeployed, filterTerm]);
+  const hasAnyScheduledUnplaced =
+    filteredSchedGraves.length > 0 ||
+    filteredSchedPM.length > 0 ||
+    filteredSchedAM.length > 0;
 
-  const filteredPorters = React.useMemo(() => filterTerm
-    ? porters.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : porters, [porters, filterTerm]);
+  const itemProps = React.useCallback(
+    (tm: GravesScheduleRosterRow, emphasis: "on" | "off" | "scheduled") => ({
+      tm,
+      isAssigned: isPlaced(tm),
+      emphasis,
+      isLocked: isCurrentNightLocked,
+      canEdit: canEditAssignments,
+    }),
+    [isPlaced, isCurrentNightLocked, canEditAssignments],
+  );
 
-  const filteredPMOverlaps = React.useMemo(() => filterTerm
-    ? pmOverlaps.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : pmOverlaps, [pmOverlaps, filterTerm]);
-
-  const filteredAMOverlaps = React.useMemo(() => filterTerm
-    ? amOverlaps.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : amOverlaps, [amOverlaps, filterTerm]);
-
-  const filteredRegularGrave = React.useMemo(() => filterTerm
-    ? regularGravePool.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : regularGravePool, [regularGravePool, filterTerm]);
-
-  const filteredSchedGraves = React.useMemo(() => filterTerm
-    ? scheduledUnplacedGraves.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : scheduledUnplacedGraves, [scheduledUnplacedGraves, filterTerm]);
-
-  const filteredSchedPM = React.useMemo(() => filterTerm
-    ? scheduledUnplacedPM.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : scheduledUnplacedPM, [scheduledUnplacedPM, filterTerm]);
-
-  const filteredSchedAM = React.useMemo(() => filterTerm
-    ? scheduledUnplacedAM.filter((tm: any) => tm.name.toLowerCase().includes(filterTerm) || tm.id.toLowerCase().includes(filterTerm) || (tm.primarySection || "").toLowerCase().includes(filterTerm))
-    : scheduledUnplacedAM, [scheduledUnplacedAM, filterTerm]);
-
-  const hasAnyScheduledUnplaced = scheduledTmIdsTonight.size > 0 && (filteredSchedGraves.length > 0 || filteredSchedPM.length > 0 || filteredSchedAM.length > 0);
+  const scheduleEmpty = !isRosterLoading && scheduleRoster.length === 0;
+  const deployTotal = placedCount + unplacedCount;
+  const placementPct = deployTotal > 0 ? Math.round((placedCount / deployTotal) * 100) : 0;
+  const scheduledBandCount = graveOnly
+    ? filterGravesScheduleRosterByBand(scheduleRoster, true).length
+    : scheduleRoster.length;
+  const listEstimate = 48;
 
   return (
     <>
-      {/* Header + count (moved inside rail for full isolation) */}
-      <div className="px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="flex items-baseline gap-2">
-          <div className="font-bold tracking-[1.5px] text-[11px]" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
-            GRAVE ROSTER
+      <header className="sb-roster-header">
+        <div className="sb-roster-header__title-row">
+          <div className="sb-roster-header__glyph" aria-hidden>
+            <MsIcon name="groups" size={13} fill={1} />
           </div>
-          <div className="flex-1 h-px bg-[#E5E5E7] dark:bg-[#3A3A3C]" />
+          <span className="sb-roster-header__title">Grave Roster</span>
+          <div className="sb-roster-header__line" />
         </div>
-        <div className="text-[10px] text-[var(--ios-label-tertiary)] dark:text-[var(--ios-label-tertiary)] mt-0.5 tracking-[0.2px]">
+        <p className="sb-roster-header__subtitle">
           {graveOnly
-            ? `11pm–6:55am eligible pool — ${graveRoster.length} TMs`
-            : "All active TMs • Drag to any slot"}
-        </div>
-      </div>
+            ? `Graves band · ${scheduledBandCount} on tonight's sheet`
+            : `Graves Default Schedule · ${scheduleRoster.length} scheduled`}
+        </p>
+        {(placedCount > 0 || unplacedCount > 0) && (
+          <>
+            <div className="sb-roster-stats">
+              <span className="sb-roster-stat sb-roster-stat--placed">
+                <span className="sb-roster-stat__dot" />
+                {placedCount} placed
+              </span>
+              <span className="sb-roster-stat sb-roster-stat--pending">
+                <span className="sb-roster-stat__dot" />
+                {unplacedCount} to place
+              </span>
+            </div>
+            <div className="sb-roster-progress" aria-hidden>
+              <div className="sb-roster-progress__fill" style={{ width: `${placementPct}%` }} />
+            </div>
+          </>
+        )}
+      </header>
 
-      {/* Unified filter strip */}
-      <div className="px-4 pb-3 flex-shrink-0 space-y-2">
-        <div className="relative">
+      <div className="sb-roster-controls">
+        <div className="sb-roster-search-wrap">
           <input
             type="text"
             value={rosterSearch}
             onChange={(e) => setRosterSearch(e.target.value)}
-            placeholder={graveOnly ? "Search GRAVE pool…" : "Search team members…"}
-            className="w-full bg-[var(--ios-background-secondary)] dark:bg-[var(--ios-background-secondary)] dark:text-[var(--ios-label)] border border-[var(--ios-gray-4)] dark:border-[var(--ios-gray-3)] rounded-[3px] pl-8 pr-3 py-1.5 text-[12px] placeholder:text-[var(--ios-label-tertiary)] dark:placeholder:text-[#636366] focus:outline-none focus:border-[var(--ios-gray-4)] dark:focus:border-[var(--ios-gray-3)] transition-colors"
+            placeholder="Search by name or ID…"
+            className="sb-roster-search sb-interactive"
             style={{ fontFamily: "var(--font-geist-sans)" }}
           />
-          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ios-label-tertiary)]">
-            <span className="ms" style={{ fontSize: 14, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>search</span>
+          <div className="sb-roster-search__icon">
+            <MsIcon name="search" size={14} />
           </div>
         </div>
 
-        <div className="flex border border-[var(--ios-gray-4)] dark:border-[var(--ios-gray-3)] rounded-[4px] overflow-hidden text-[11px] font-medium shadow-sm bg-[var(--ios-background-secondary)] dark:bg-[var(--ios-background-secondary)]">
+        <div className="sb-roster-segment" role="group" aria-label="Schedule band filter">
           <button
+            type="button"
             onClick={() => setGraveOnly(false)}
-            className={`sb-interactive flex-1 px-3 py-1.5 ${
-              !graveOnly ? "bg-[var(--ios-label)] text-[var(--ios-white)] shadow-inner" : isDark ? "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-5)]" : "text-[var(--ios-label-secondary)] hover:bg-[var(--ios-gray-6)]"
-            }`}
+            className={`sb-roster-segment__btn sb-interactive ${!graveOnly ? "sb-roster-segment__btn--active" : ""}`}
           >
-            All
+            All bands
           </button>
           <button
+            type="button"
             onClick={() => setGraveOnly(true)}
-            className={`sb-interactive flex-1 px-3 py-1.5 border-l border-[#D1D1D6] dark:border-[#3A3A3C] ${
-              graveOnly ? "bg-[var(--ios-label)] text-[var(--ios-white)] shadow-inner" : isDark ? "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-5)]" : "text-[var(--ios-label-secondary)] hover:bg-[var(--ios-gray-6)]"
-            }`}
-            title="Only TMs with grave_pool availability for 11pm–6:55am"
+            className={`sb-roster-segment__btn sb-interactive ${graveOnly ? "sb-roster-segment__btn--active" : ""}`}
+            title="Only TMs on the Graves band for tonight"
           >
-            GRAVE only
+            Graves only
           </button>
         </div>
         {graveOnly && (
-          <div className="text-[9px] text-[#8E8E93] px-1 tracking-[0.3px]">
-            Filtered to TMs marked for grave rotations
-          </div>
+          <p className="sb-roster-filter-hint">Showing full-grave band from Graves Default Schedule</p>
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto px-4 pb-8 space-y-1.5">
-        {isRosterLoading && realRoster.length === 0 && (
-          <BuilderLoadingLine className="!mt-0 text-xs px-2 py-1">Loading roster</BuilderLoadingLine>
+      <div className="sb-roster-body">
+        {isRosterLoading && scheduleRoster.length === 0 && (
+          <BuilderLoadingLine className="!mt-0 text-xs px-2 py-1">
+            Loading roster
+          </BuilderLoadingLine>
         )}
 
-        {/* 0. Called Off */}
-        {filteredCalledOff.length > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={() => setCalledOffExpanded(v => !v)}
-              aria-expanded={calledOffExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-orange)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-orange)] transition-colors"
-            >
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: calledOffExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                Called Off
-              </span>
-              <span className="tabular-nums">{filteredCalledOff.length}</span>
-            </button>
-            {calledOffExpanded && filteredCalledOff.map((tm: any) => (
-              <div key={tm.id} className="px-2 py-1 mx-1 my-0.5 rounded-md bg-orange-50/60 border border-orange-200/60 flex items-center gap-2 text-[12px]">
-                <span className="line-through text-orange-700/80 font-medium truncate flex-1">
-                  {tm.name || tm.fullName || tm.id}
-                </span>
-                <span className="text-[9px] uppercase tracking-[0.6px] text-orange-600/70 font-semibold">off</span>
-              </div>
-            ))}
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-          </>
+        {scheduleEmpty && (
+          <div className="sb-roster-empty">
+            No TMs on Graves Default Schedule for tonight. Edit the sheet at{" "}
+            <a href="/shiftbuilder/graves-schedule" className="sb-gold-text underline">
+              Graves Schedule
+            </a>
+            .
+          </div>
         )}
 
-        {/* 0b. Scheduled Tonight — Not Yet Placed */}
-        {graveOnly && hasAnyScheduledUnplaced && (
-          <>
-            <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+        {filteredOnThisNight.length > 0 && (
+          <section className="sb-roster-section">
+            <RosterSectionHeader
+              label="Already Placed"
+              count={filteredOnThisNight.length}
+              total={filterTerm ? onThisNight.length : undefined}
+              expanded={deployedExpanded}
+              onToggle={() => setSection("deployed", (v) => !v)}
+              tone="placed"
+            />
+            {deployedExpanded && (
+              <VirtualRosterList
+                items={filteredOnThisNight}
+                estimateSize={listEstimate}
+                overscan={6}
+                useParentScroll
+                getItemProps={(tm) => itemProps(tm, "on")}
+              />
+            )}
+          </section>
+        )}
+
+        {hasAnyScheduledUnplaced && (
+          <section className="sb-roster-section">
+            <div className="sb-roster-banner">
               <div className="flex-1 h-px sb-gold-rule" />
-              <span className="text-[9px] uppercase tracking-[1.2px] sb-gold-text font-semibold whitespace-nowrap">On Schedule — Not Placed</span>
+              <span className="sb-roster-banner__label">On Sheet — Not Placed</span>
               <div className="flex-1 h-px sb-gold-rule" />
             </div>
 
             {filteredSchedGraves.length > 0 && (
-              <>
-                <button type="button" onClick={() => setScheduledGravesExpanded(v => !v)} aria-expanded={scheduledGravesExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
-                  <span className="flex items-center gap-1.5">
-                    <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledGravesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                    Graves
-                  </span>
-                  <span className="tabular-nums">{filteredSchedGraves.length}{filterTerm ? ` / ${scheduledUnplacedGraves.length}` : ""}</span>
-                </button>
+              <div className="sb-roster-section">
+                <RosterSectionHeader
+                  label="Graves"
+                  count={filteredSchedGraves.length}
+                  total={filterTerm ? scheduledUnplacedGraves.length : undefined}
+                  expanded={scheduledGravesExpanded}
+                  onToggle={() => setSection("scheduledGraves", (v) => !v)}
+                  tone="gold"
+                />
                 {scheduledGravesExpanded && (
-                  <VirtualRosterList items={filteredSchedGraves} estimateSize={42} overscan={6} useParentScroll
-                    getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "scheduled", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
+                  <VirtualRosterList
+                    items={filteredSchedGraves}
+                    estimateSize={listEstimate}
+                    overscan={6}
+                    useParentScroll
+                    getItemProps={(tm) => itemProps(tm, "scheduled")}
+                  />
                 )}
-              </>
+              </div>
             )}
 
-            {filteredSchedPM.length > 0 && (
-              <>
-                <button type="button" onClick={() => setScheduledPMExpanded(v => !v)} aria-expanded={scheduledPMExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
-                  <span className="flex items-center gap-1.5">
-                    <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledPMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                    PM Overlaps ({pmSwingLabel})
-                  </span>
-                  <span className="tabular-nums">{filteredSchedPM.length}{filterTerm ? ` / ${scheduledUnplacedPM.length}` : ""}</span>
-                </button>
-                {scheduledPMExpanded && filteredSchedPM.map((tm: any) => {
-                  const isAssigned = assignedThisNight.has(tm.id);
-                  return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                })}
-              </>
+            {!graveOnly && filteredSchedPM.length > 0 && (
+              <div className="sb-roster-section">
+                <RosterSectionHeader
+                  label={`PM · ${pmSwingLabel}`}
+                  count={filteredSchedPM.length}
+                  total={filterTerm ? scheduledUnplacedPM.length : undefined}
+                  expanded={scheduledPMExpanded}
+                  onToggle={() => setSection("scheduledPM", (v) => !v)}
+                  tone="gold"
+                />
+                {scheduledPMExpanded && (
+                  <VirtualRosterList
+                    items={filteredSchedPM}
+                    estimateSize={listEstimate}
+                    overscan={6}
+                    useParentScroll
+                    getItemProps={(tm) => itemProps(tm, "scheduled")}
+                  />
+                )}
+              </div>
             )}
 
-            {filteredSchedAM.length > 0 && (
-              <>
-                <button type="button" onClick={() => setScheduledAMExpanded(v => !v)} aria-expanded={scheduledAMExpanded}
-                  className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] sb-gold-text font-semibold px-1 pt-1 pb-0.5 hover:opacity-80 transition-opacity">
-                  <span className="flex items-center gap-1.5">
-                    <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: scheduledAMExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                    AM Overlaps ({amDayShiftLabel})
-                  </span>
-                  <span className="tabular-nums">{filteredSchedAM.length}{filterTerm ? ` / ${scheduledUnplacedAM.length}` : ""}</span>
-                </button>
-                {scheduledAMExpanded && filteredSchedAM.map((tm: any) => {
-                  const isAssigned = assignedThisNight.has(tm.id);
-                  return <RosterItem key={tm.id} tm={tm} isAssigned={isAssigned} emphasis="scheduled" isLocked={isCurrentNightLocked} canEdit={canEditAssignments} />;
-                })}
-              </>
+            {!graveOnly && filteredSchedAM.length > 0 && (
+              <div className="sb-roster-section">
+                <RosterSectionHeader
+                  label={`AM · ${amDayShiftLabel}`}
+                  count={filteredSchedAM.length}
+                  total={filterTerm ? scheduledUnplacedAM.length : undefined}
+                  expanded={scheduledAMExpanded}
+                  onToggle={() => setSection("scheduledAM", (v) => !v)}
+                  tone="gold"
+                />
+                {scheduledAMExpanded && (
+                  <VirtualRosterList
+                    items={filteredSchedAM}
+                    estimateSize={listEstimate}
+                    overscan={6}
+                    useParentScroll
+                    getItemProps={(tm) => itemProps(tm, "scheduled")}
+                  />
+                )}
+              </div>
             )}
-
-            <div className="h-px sb-gold-rule mx-1 my-1" />
-          </>
+          </section>
         )}
 
-        {/* 1. Already Deployed */}
-        {graveOnly && filteredOnThisNight.length > 0 && (
-          <>
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-            <button type="button" onClick={() => setDeployedExpanded(v => !v)} aria-expanded={deployedExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: deployedExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                Already Deployed
-              </span>
-              <span className="tabular-nums">{filteredOnThisNight.length}{filterTerm ? ` / ${onThisNight.length}` : ""}</span>
-            </button>
-            {deployedExpanded && (
-              <VirtualRosterList items={filteredOnThisNight} estimateSize={42} overscan={6} useParentScroll
-                getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "off", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
-            )}
-          </>
+        {filteredCalledOff.length > 0 && (
+          <section className="sb-roster-section">
+            <div className="sb-roster-divider" />
+            <RosterSectionHeader
+              label="Called Off"
+              count={filteredCalledOff.length}
+              expanded={calledOffExpanded}
+              onToggle={() => setSection("calledOff", (v) => !v)}
+              tone="warn"
+            />
+            {calledOffExpanded &&
+              filteredCalledOff.map((tm) => (
+                <div key={tm.id} className="sb-roster-called-chip">
+                  <span className="sb-roster-called-chip__name">{tm.name || tm.fullName || tm.id}</span>
+                  <span className="sb-roster-called-chip__badge">off</span>
+                </div>
+              ))}
+          </section>
         )}
 
-        {/* 2. Porters */}
-        {graveOnly && filteredPorters.length > 0 && (
-          <>
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-            <button type="button" onClick={() => setPortersExpanded(v => !v)} aria-expanded={portersExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: portersExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                Porters
-              </span>
-              <span className="tabular-nums">{filteredPorters.length}{filterTerm ? ` / ${porters.length}` : ""}</span>
-            </button>
-            {portersExpanded && (
-              <VirtualRosterList items={filteredPorters} estimateSize={42} overscan={6} useParentScroll
-                getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "off", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
-            )}
-          </>
-        )}
-
-        {/* 3. AM Overlaps */}
-        {graveOnly && filteredAMOverlaps.length > 0 && (
-          <>
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-            <button type="button" onClick={() => setAmOverlapsExpanded(v => !v)} aria-expanded={amOverlapsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: amOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                AM Overlaps (in 5:00–5:30am)
-              </span>
-              <span className="tabular-nums">{filteredAMOverlaps.length}{filterTerm ? ` / ${amOverlaps.length}` : ""}</span>
-            </button>
-            {amOverlapsExpanded && (
-              <VirtualRosterList items={filteredAMOverlaps} estimateSize={42} overscan={6} useParentScroll
-                getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "off", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
-            )}
-          </>
-        )}
-
-        {/* 4. PM Overlaps */}
-        {graveOnly && filteredPMOverlaps.length > 0 && (
-          <>
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-            <button type="button" onClick={() => setPmOverlapsExpanded(v => !v)} aria-expanded={pmOverlapsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: pmOverlapsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                PM Overlaps (out at 1:00am)
-              </span>
-              <span className="tabular-nums">{filteredPMOverlaps.length}{filterTerm ? ` / ${pmOverlaps.length}` : ""}</span>
-            </button>
-            {pmOverlapsExpanded && (
-              <VirtualRosterList items={filteredPMOverlaps} estimateSize={42} overscan={6} useParentScroll
-                getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "off", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
-            )}
-          </>
-        )}
-
-        {/* 5. Not Scheduled — Regular GRAVE Pool */}
-        {filteredRegularGrave.length > 0 && (
-          <>
-            <div className="h-px bg-[#E5E5E7] mx-1 my-1" />
-            <button type="button" onClick={() => setOtherTmsExpanded(v => !v)} aria-expanded={otherTmsExpanded}
-              className="w-full flex items-center justify-between text-[10px] uppercase tracking-[1px] text-[var(--ios-label-tertiary)] font-semibold px-1 pt-2 pb-0.5 hover:text-[var(--ios-label)] transition-colors">
-              <span className="flex items-center gap-1.5">
-                <span className="ms" style={{ fontSize: 12, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20', display: 'inline-block', transform: otherTmsExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>chevron_right</span>
-                Not Scheduled
-              </span>
-              <span className="tabular-nums">{filteredRegularGrave.length}{filterTerm ? ` / ${regularGravePool.length}` : ""}</span>
-            </button>
-            {otherTmsExpanded && (
-              <VirtualRosterList items={filteredRegularGrave} estimateSize={42} overscan={8} useParentScroll
-                getItemProps={(tm) => ({ tm, isAssigned: assignedThisNight.has(tm.id), emphasis: "off", isLocked: isCurrentNightLocked, canEdit: canEditAssignments })} />
-            )}
-          </>
-        )}
-
-        {filterTerm && filteredOnThisNight.length === 0 && filteredPorters.length === 0 && filteredAMOverlaps.length === 0 && filteredPMOverlaps.length === 0 && filteredRegularGrave.length === 0 && (
-          <div className="text-xs text-[#8E8E93] px-2 py-2">No matches for “{rosterSearch}”</div>
-        )}
+        {filterTerm &&
+          filteredCalledOff.length === 0 &&
+          filteredOnThisNight.length === 0 &&
+          !hasAnyScheduledUnplaced && (
+            <div className="sb-roster-empty">No matches for “{rosterSearch}”</div>
+          )}
       </div>
     </>
   );

@@ -55,3 +55,40 @@ export function resolveTmFromLookup(
 ): any | undefined {
   return lookup.get(storedId);
 }
+
+/** True when a roster row matches any id in the placed set (slug/UUID alias-safe). */
+export function isTmPlacedTonight(
+  tm: { id?: string; tmId?: string; tm_id?: string },
+  placedIds: Set<string>,
+  lookup?: Map<string, { id?: string; tmId?: string; tm_id?: string }>,
+): boolean {
+  const boardId = boardTmId(tm);
+  if (!boardId) return false;
+  if (placedIds.has(boardId)) return true;
+  for (const pid of placedIds) {
+    if (!pid) continue;
+    if (pid === boardId) return true;
+    const resolved = lookup?.get(pid);
+    if (resolved && boardTmId(resolved) === boardId) return true;
+  }
+  return false;
+}
+
+/** Collect every assignment tm id (committed + draft proposals). */
+export function collectPlacedTmIds(
+  assignments: Record<string, { tmId?: string | null } | undefined>,
+  draftAssignments?: Record<string, { tmId?: string | null; proposedTmId?: string; proposedClear?: boolean } | undefined>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const a of Object.values(assignments)) {
+    if (a?.tmId) out.add(a.tmId);
+  }
+  if (draftAssignments) {
+    for (const d of Object.values(draftAssignments)) {
+      if (d?.proposedClear) continue;
+      const id = d?.proposedTmId || d?.tmId;
+      if (id) out.add(id);
+    }
+  }
+  return out;
+}

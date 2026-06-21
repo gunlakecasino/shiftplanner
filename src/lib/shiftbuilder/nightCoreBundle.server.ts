@@ -11,7 +11,10 @@ import {
   enrichAssignmentsWithBreakGroups,
   slotDefaultBreakMapToRecord,
 } from "./breakGroupResolve";
-import { getScheduledTmsFromGravesDefault } from "./gravesDefaultSchedule";
+import {
+  buildGravesScheduleRosterRows,
+  getScheduledTmsFromGravesDefault,
+} from "./gravesDefaultSchedule";
 import {
   getCachedActiveTeamMembers,
   getCachedGraveAvailableTeamMembers,
@@ -154,6 +157,8 @@ export type NightCoreBundlePayload = {
   scheduledTmIdsTonight: string[];
   realRoster: any[];
   graveRoster: any[];
+  /** Canonical TM rail pool — graves_default_schedule (+ night_on_call) only. */
+  gravesScheduleRoster: any[];
   fullGraveScheduledTonight: string[];
   pmOverlapScheduledTonight: string[];
   amOverlapScheduledTonight: string[];
@@ -231,6 +236,8 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
       isFullGraveTonight: fullGrave.has(m.id),
     }));
 
+  const gravesScheduleRoster = buildGravesScheduleRosterRows(scheduled, allMembers);
+
   return {
     nightId,
     assignments,
@@ -239,6 +246,7 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
     scheduledTmIdsTonight: Array.from(allScheduled),
     realRoster: enrichRoster(members),
     graveRoster: enrichRoster(graveRoster),
+    gravesScheduleRoster,
     fullGraveScheduledTonight: Array.from(fullGrave),
     pmOverlapScheduledTonight: Array.from(pmOverlap),
     amOverlapScheduledTonight: Array.from(amOverlap),

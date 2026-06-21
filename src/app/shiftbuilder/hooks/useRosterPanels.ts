@@ -4,23 +4,12 @@ import { useState, useEffect } from "react";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 /**
- * Bundles all pure-UI expand/collapse panel state for the floating Roster rail,
- * plus the GRAVE-only filter, and roster search.
+ * Bundles floating panel open/close state for the roster rail and weekly overview.
  *
- * Nothing in here touches Supabase — all state is either ephemeral or
- * persisted to localStorage.
+ * Roster filter, search, and section expand/collapse live in Zustand (rosterUI slice)
+ * so RosterRail can subscribe narrowly without prop drilling.
  */
 export function useRosterPanels() {
-  // "Other TMs" section collapsed by default; persisted across refreshes.
-  const [otherTmsExpanded, setOtherTmsExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const saved = localStorage.getItem("oms_roster_other_expanded");
-    return saved === "true";
-  });
-  useEffect(() => {
-    localStorage.setItem("oms_roster_other_expanded", String(otherTmsExpanded));
-  }, [otherTmsExpanded]);
-
   // Floating roster panel open/close; persisted across refreshes.
   // iPad: default collapsed so the artboard gets full width (~110% fit scale).
   const [rosterOpen, setRosterOpen] = useState<boolean>(() => {
@@ -40,39 +29,8 @@ export function useRosterPanels() {
     }
   }, [rosterOpen]);
 
-  // Called-off section expand toggle.
-  const [calledOffExpanded, setCalledOffExpanded] = useState(true);
-
   // Modal / flyout toggles.
   const [xaiSphereOpen, setXaiSphereOpen] = useState(false);
-
-  // Roster rail group expand/collapse defaults.
-  const [deployedExpanded, setDeployedExpanded] = useState(false);
-  const [pmOverlapsExpanded, setPmOverlapsExpanded] = useState(false);
-  const [amOverlapsExpanded, setAmOverlapsExpanded] = useState(false);
-  const [portersExpanded, setPortersExpanded] = useState(false);
-  // Scheduled-tonight-unplaced groups default expanded (priority view).
-  const [scheduledGravesExpanded, setScheduledGravesExpanded] = useState(true);
-  const [scheduledPMExpanded, setScheduledPMExpanded] = useState(true);
-  const [scheduledAMExpanded, setScheduledAMExpanded] = useState(true);
-
-  // Roster text search.
-  const [rosterSearch, setRosterSearch] = useState("");
-
-  // GRAVE shift filter — when true only TMs with 11pm–6:55am availability show.
-  // Default ON: very useful for operators building a grave deployment.
-  const [graveOnly, setGraveOnly] = useState(true);
-
-  // When the GRAVE filter is active, collapse sections that don't apply.
-  useEffect(() => {
-    if (graveOnly) {
-      setDeployedExpanded(false);
-      setPortersExpanded(false);
-      setPmOverlapsExpanded(false);
-      setAmOverlapsExpanded(false);
-      setOtherTmsExpanded(false);
-    }
-  }, [graveOnly]);
 
   // Weekly Overview panel (live table). Persisted like roster (tablet/desktop split).
   const [weeklyOverviewOpen, setWeeklyOverviewOpen] = useState<boolean>(() => {
@@ -93,19 +51,8 @@ export function useRosterPanels() {
   }, [weeklyOverviewOpen]);
 
   return {
-    otherTmsExpanded, setOtherTmsExpanded,
     rosterOpen, setRosterOpen,
-    calledOffExpanded, setCalledOffExpanded,
     xaiSphereOpen, setXaiSphereOpen,
-    deployedExpanded, setDeployedExpanded,
-    pmOverlapsExpanded, setPmOverlapsExpanded,
-    amOverlapsExpanded, setAmOverlapsExpanded,
-    portersExpanded, setPortersExpanded,
-    scheduledGravesExpanded, setScheduledGravesExpanded,
-    scheduledPMExpanded, setScheduledPMExpanded,
-    scheduledAMExpanded, setScheduledAMExpanded,
-    rosterSearch, setRosterSearch,
-    graveOnly, setGraveOnly,
     weeklyOverviewOpen, setWeeklyOverviewOpen,
   };
 }

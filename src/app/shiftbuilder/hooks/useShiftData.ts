@@ -60,6 +60,8 @@ export interface UseShiftDataReturn {
   amOverlapScheduledTonight: Set<string>;
   effectiveRealRoster: any[];
   effectiveGraveRoster: any[];
+  /** TM rail pool — graves_default_schedule (+ night_on_call) only. */
+  effectiveGravesScheduleRoster: any[];
   effectiveRecentZoneHistory: any;
   effectiveCardBorders: Record<string, string>;
 
@@ -105,6 +107,7 @@ export function useShiftData(
   const stableRefs = React.useRef({
     realRoster: [] as any[],
     graveRoster: [] as any[],
+    gravesScheduleRoster: [] as any[],
     fullGrave: new Set<string>(),
     pmOverlap: new Set<string>(),
     amOverlap: new Set<string>(),
@@ -153,6 +156,16 @@ export function useShiftData(
     }
     return stableRefs.current.graveRoster;
   }, [currentNight.graveRoster]);
+
+  const effectiveGravesScheduleRoster = React.useMemo(() => {
+    const src = currentNight.gravesScheduleRoster;
+    if (!src || src.length === 0) return stableRefs.current.gravesScheduleRoster;
+    const s = sigOf(src);
+    if (s !== sigOf(stableRefs.current.gravesScheduleRoster)) {
+      stableRefs.current.gravesScheduleRoster = [...src];
+    }
+    return stableRefs.current.gravesScheduleRoster;
+  }, [currentNight.gravesScheduleRoster]);
 
   const fullGraveScheduledTonight = React.useMemo(() => {
     const src = currentNight.fullGraveScheduledTonight as Set<string> | undefined;
@@ -334,6 +347,7 @@ export function useShiftData(
     amOverlapScheduledTonight,
     effectiveRealRoster,
     effectiveGraveRoster,
+    effectiveGravesScheduleRoster,
     effectiveRecentZoneHistory,
     effectiveCardBorders,
     hasBoardPayload,

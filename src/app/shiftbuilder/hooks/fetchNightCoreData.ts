@@ -10,6 +10,7 @@ import {
   getCachedGraveAvailableTeamMembers,
   getCachedSlotDefaults,
 } from "@/lib/shiftbuilder/data.server";
+import { buildGravesScheduleRosterRows } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
   resolveAuxLayout,
@@ -24,6 +25,7 @@ type NightCoreApiPayload = {
   scheduledTmIdsTonight: string[];
   realRoster: any[];
   graveRoster: any[];
+  gravesScheduleRoster: any[];
   fullGraveScheduledTonight: string[];
   pmOverlapScheduledTonight: string[];
   amOverlapScheduledTonight: string[];
@@ -47,6 +49,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
     scheduledTmIdsTonight: toSet(raw.scheduledTmIdsTonight as string[]),
     realRoster: raw.realRoster,
     graveRoster: raw.graveRoster,
+    gravesScheduleRoster: raw.gravesScheduleRoster ?? [],
     fullGraveScheduledTonight: toSet(raw.fullGraveScheduledTonight),
     pmOverlapScheduledTonight: toSet(raw.pmOverlapScheduledTonight),
     amOverlapScheduledTonight: toSet(raw.amOverlapScheduledTonight),
@@ -65,6 +68,7 @@ function emptyNightCoreResult() {
     scheduledTmIdsTonight: new Set<string>(),
     realRoster: [] as unknown[],
     graveRoster: [] as unknown[],
+    gravesScheduleRoster: [] as unknown[],
     fullGraveScheduledTonight: new Set<string>(),
     pmOverlapScheduledTonight: new Set<string>(),
     amOverlapScheduledTonight: new Set<string>(),
@@ -152,6 +156,7 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
     fullGraveScheduled: [] as any[],
     pmOverlapScheduled: [] as any[],
     amOverlapScheduled: [] as any[],
+    scheduledWithRoles: [] as any[],
   };
 
   try {
@@ -162,6 +167,7 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
         fullGraveScheduled: data.fullGraveScheduled || [],
         pmOverlapScheduled: data.pmOverlapScheduled || [],
         amOverlapScheduled: data.amOverlapScheduled || [],
+        scheduledWithRoles: data.scheduledWithRoles || [],
       };
     }
   } catch (e) {
@@ -187,6 +193,8 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
       isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
     }));
 
+  const gravesScheduleRoster = buildGravesScheduleRosterRows(canonicalScheduled, members);
+
   return {
     nightId: id,
     assignments,
@@ -195,6 +203,7 @@ async function fetchNightCoreClientFallback(selectedDay: DayDef) {
     scheduledTmIdsTonight: new Set(canonicalScheduled.allScheduled.map(scheduledId)),
     realRoster: enrich(members),
     graveRoster: enrich(graveRoster),
+    gravesScheduleRoster,
     fullGraveScheduledTonight,
     pmOverlapScheduledTonight,
     amOverlapScheduledTonight,

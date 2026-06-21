@@ -179,7 +179,11 @@ import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/Shi
 import { BuilderPinnedFooter } from "./components/BuilderPinnedFooter";
 import PlacementPad from "./components/PlacementPad";
 import PlacementDock from "./components/placement-dock/PlacementDock";
-import { placementDockStageRightInset } from "@/lib/shiftbuilder/tabletDevice";
+import {
+  placementDockStageRightInset,
+  rosterPanelWidth,
+} from "@/lib/shiftbuilder/tabletDevice";
+import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
@@ -230,6 +234,7 @@ import {
   useAssignments, 
   useDraftAssignments,
   useAuxDefs,
+  useGraveOnly,
 } from "./store/useShiftBuilderStore";
 import { createRoot, Root } from "react-dom/client";
 
@@ -644,6 +649,7 @@ function AuthedShiftBuilder() {
   // This is the minimal patch for the giant file after repeated extractions.
   let effectiveRealRoster: any[] = [];
   let effectiveGraveRoster: any[] = [];
+  let effectiveGravesScheduleRoster: any[] = [];
 
   const enterCanvas = React.useCallback((targetDayIndex?: number) => {
     if (typeof targetDayIndex === 'number') {
@@ -1158,21 +1164,12 @@ function AuthedShiftBuilder() {
 
   // === Roster panel UI state (extracted to useRosterPanels) =================
   const {
-    otherTmsExpanded, setOtherTmsExpanded,
     rosterOpen, setRosterOpen,
-    calledOffExpanded, setCalledOffExpanded,
     xaiSphereOpen, setXaiSphereOpen,
-    deployedExpanded, setDeployedExpanded,
-    pmOverlapsExpanded, setPmOverlapsExpanded,
-    amOverlapsExpanded, setAmOverlapsExpanded,
-    portersExpanded, setPortersExpanded,
-    scheduledGravesExpanded, setScheduledGravesExpanded,
-    scheduledPMExpanded, setScheduledPMExpanded,
-    scheduledAMExpanded: _setScheduledAMExpanded, // eslint-disable-line @typescript-eslint/no-unused-vars -- provided by hook for rail internals; not called from Client scope
-    rosterSearch,
-    setRosterSearch: _setRosterSearch, // eslint-disable-line @typescript-eslint/no-unused-vars -- provided by hook for rail internals; not called from Client scope
-    graveOnly, setGraveOnly,
   } = useRosterPanels();
+
+  /** Roster rail filter — single source of truth in Zustand (3.4). */
+  const graveOnly = useGraveOnly();
 
   const router = useRouter();
 
@@ -1348,9 +1345,6 @@ function AuthedShiftBuilder() {
     Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
     return set;
   }, [assignments, draftAssignments]);
-
-  // GRAVE shift filter (11pm–6:55am)
-  const baseRoster = graveOnly ? graveRoster : realRoster;
 
   // These will be used in the rail rendering below.
   // We compute filtered versions of on/off schedule here for clean separation.
@@ -1710,7 +1704,9 @@ function AuthedShiftBuilder() {
     // For lookup we use the FULL roster (the called-off filter only gates
     // *new* placement choices). If Grok proposes moving an already-assigned
     // TM, we still need to resolve their name even if they're called off.
-    const rosterToUse = graveOnly ? effectiveGraveRoster : effectiveRealRoster;
+    const rosterToUse = graveOnly
+      ? filterGravesScheduleRosterByBand(effectiveGravesScheduleRoster, true)
+      : effectiveGravesScheduleRoster;
 
     actions.forEach((action) => {
       if (action.type === "assign" && action.slotKey && action.tmId) {
@@ -1810,7 +1806,7 @@ function AuthedShiftBuilder() {
       // Hide called-off TMs from Grok entirely. They're not eligible for
       // placement tonight and surfacing them would just produce suggestions
       // we'd reject in the guard.
-      graveRoster: availableGraveRoster,
+      graveRoster: availableGraveRoster as any[],
       selectedSlotKey: focus.type === "slot" ? focus.value : undefined,
       selectedPersonName: focus.type === "person" ? focus.value : undefined,
       contextType: focus.type === "board" ? "board" : focus.type,
@@ -1828,7 +1824,7 @@ function AuthedShiftBuilder() {
     const { askGrokForStructuredSuggestions } = await import("./actions");
     const result = await askGrokForStructuredSuggestions({
       snapshot,
-      rosterForGuard: availableGraveRoster,
+      rosterForGuard: availableGraveRoster as any[],
       userQuestion: resolvedQuestion,
     });
 
@@ -2175,6 +2171,7 @@ function AuthedShiftBuilder() {
 
   effectiveRealRoster = shiftData.effectiveRealRoster || [];
   effectiveGraveRoster = shiftData.effectiveGraveRoster || [];
+  effectiveGravesScheduleRoster = shiftData.effectiveGravesScheduleRoster || [];
 
   const effectiveRecentZoneHistory = shiftData.effectiveRecentZoneHistory ?? recentZoneHistory;
   const effectiveCardBorders = shiftData.effectiveCardBorders ?? cardBorders;
@@ -2185,32 +2182,21 @@ function AuthedShiftBuilder() {
 
   const effectiveScheduledTmIdsTonight: Set<string> = shiftData.effectiveScheduledTmIdsTonight;
 
-  const scheduleFilterActive = effectiveScheduledTmIdsTonight.size > 0;
-
   // Engine + picker pool — MUST run after effective* roster bridge (not the early `let` defaults).
+  /** TM rail + engine pool — graves_default_schedule (+ night_on_call) only. */
+  const availableGravesScheduleRoster = React.useMemo(
+    () =>
+      (effectiveGravesScheduleRoster as any[]).filter((t: any) => {
+        const id = boardTmId(t);
+        return !!id && !calledOffIds.has(id);
+      }),
+    [effectiveGravesScheduleRoster, calledOffIds],
+  );
   const availableGraveRoster = React.useMemo(
-    () =>
-      (effectiveGraveRoster as any[]).filter((t: any) => {
-        const id = boardTmId(t);
-        if (!id || calledOffIds.has(id)) return false;
-        return !scheduleFilterActive || effectiveScheduledTmIdsTonight.has(id);
-      }),
-    [
-      effectiveGraveRoster,
-      calledOffIds,
-      scheduleFilterActive,
-      effectiveScheduledTmIdsTonight,
-    ],
+    () => filterGravesScheduleRosterByBand(availableGravesScheduleRoster, true),
+    [availableGravesScheduleRoster],
   );
-  const availableRealRoster = React.useMemo(
-    () =>
-      (effectiveRealRoster as any[]).filter((t: any) => {
-        const id = boardTmId(t);
-        if (!id || calledOffIds.has(id)) return false;
-        return !scheduleFilterActive || effectiveScheduledTmIdsTonight.has(id);
-      }),
-    [effectiveRealRoster, calledOffIds, scheduleFilterActive, effectiveScheduledTmIdsTonight],
-  );
+  const availableRealRoster = availableGravesScheduleRoster;
 
   // === END TEMP DIAGNOSTIC ===
 
@@ -7100,30 +7086,25 @@ function AuthedShiftBuilder() {
         {/* FLOATING ROSTER — thin chrome; heavy content (filtering + 6+ Virtual sections) now lives in isolated RosterRail (symmetric carve to ShiftBuilderBoard) */}
         <div
           aria-hidden={!rosterOpen}
-          className={`sb-roster-shell fixed w-[268px] z-30 rounded-2xl overflow-hidden flex flex-col ${rosterOpen ? "" : "pointer-events-none"}`}
+          className={`sb-roster-shell fixed z-30 rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
           style={{
-            background: isDark ? "rgba(20,19,22,0.84)" : "rgba(252,252,250,0.90)",
-            backdropFilter: "blur(48px) saturate(200%)",
-            WebkitBackdropFilter: "blur(48px) saturate(200%)",
-            border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid color-mix(in srgb, var(--ios-gray-4) 8%, transparent)",
-            boxShadow: isDark
-              ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 60px rgba(0,0,0,0.55)"
-              : "inset 0 1px 0 rgba(255,255,255,0.90), 0 20px 60px rgba(0,0,0,0.10)",
+            width: rosterPanelWidth(),
+            top: stageTopInsetPx() + 8,
+            left: 12,
+            maxHeight: `calc(100vh - ${stageTopInsetPx() + 20}px)`,
             transformOrigin: "0% 50%",
-            transform: rosterOpen ? "scale(1)" : "scale(0.92) translateX(-8px)",
+            transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
             opacity: rosterOpen ? 1 : 0,
             pointerEvents: rosterOpen ? "auto" : "none",
+            transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease",
           }}
         >
           <RosterRail
-            realRoster={effectiveRealRoster}
-            graveRoster={effectiveGraveRoster}
-            // assignments now pulled via narrow Zustand selector inside RosterRail (3.4)
-            assignedThisNight={assignedThisNight}
+            scheduleRoster={effectiveGravesScheduleRoster}
+            placedTmIds={alreadyAssignedThisNight}
+            profileRoster={effectiveRealRoster}
             scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
             calledOffIds={calledOffIds}
-            graveOnly={graveOnly}
-            rosterSearch={rosterSearch}
             isDark={isDark}
             isCurrentNightLocked={isCurrentNightLocked}
             canEditAssignments={canEditAssignments}
