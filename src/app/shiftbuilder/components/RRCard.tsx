@@ -17,7 +17,6 @@ import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
   CardAccentStripe,
   SlotAssignmentBody,
-  coverageBodyPadding,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 
@@ -210,11 +209,9 @@ function RRSideShell({
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   body: React.ReactNode;
 }) {
-  const coveragePb = coverageBodyPadding(coverageTasks.length, showDigitalAssists);
-
   return (
     <div
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col rounded-2xl flex-1 min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col flex-1 rounded-2xl h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -238,21 +235,22 @@ function RRSideShell({
         </div>
       </div>
 
-      <div
-        className="flex flex-col flex-1 min-h-0 px-3 pt-1"
-        style={{ paddingBottom: coveragePb }}
-      >
+      <div className="sb-card-task-scroll flex flex-col flex-1 min-h-0 overflow-y-auto px-3 pt-1">
         {body}
-        {coverageTasks.map((t) => (
-          <CoverageBar
-            key={t.id}
-            task={t}
-            slotKey={slotKey}
-            onRemoveTask={onRemoveTask}
-            builderCalm={showDigitalAssists}
-          />
-        ))}
       </div>
+      {coverageTasks.length > 0 && (
+        <div className="sb-coverage-footer shrink-0">
+          {coverageTasks.map((t) => (
+            <CoverageBar
+              key={t.id}
+              task={t}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              builderCalm={showDigitalAssists}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -66,7 +66,7 @@ export default function ExportDebugPage() {
       };
 
       setStatus("Rasterizing from mounted Golden session (live DOM — export path)…");
-      const session = mountGoldenPrintSession(pages, config, "export");
+      const session = await mountGoldenPrintSession(pages, config, "export");
       let liveRasterWidth = 0;
       let liveRasterHeight = 0;
       try {

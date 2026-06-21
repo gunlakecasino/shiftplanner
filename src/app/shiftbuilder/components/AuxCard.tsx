@@ -17,6 +17,7 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
+import { PlacementFitChip } from "./PlacementFitChip";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -82,6 +83,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onOpenTaskTextEdit,
   onLiveUnassign,
   isLocked = false,
+  fitChip,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -249,16 +251,24 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     <input
       ref={labelInputRef}
       value={labelDraft}
+      data-aux-label-input
       onChange={(e) => setLabelDraft(e.target.value)}
       onBlur={commitLabel}
       onKeyDown={(e) => {
-        if (e.key === "Enter") commitLabel();
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitLabel();
+        }
         if (e.key === "Escape") {
+          e.preventDefault();
           setLabelDraft(def.label);
           setEditingLabel(false);
         }
       }}
+      onKeyDownCapture={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       className="font-extrabold tracking-[0.4px] uppercase bg-transparent border-b border-current outline-none min-w-0 max-w-[88px]"
       style={{ fontSize: 10, fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     />
@@ -347,6 +357,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
+            {hasTM && coveredByNames.length === 0 && (
+              <PlacementFitChip fit={fitChip} compact />
+            )}
             <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
               <BreakBadge
                 value={currentBreak}
@@ -384,6 +397,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             left: pickerPosition.left,
           }}
           onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onKeyDownCapture={(e) => e.stopPropagation()}
         >
           <AuxRolePicker
             onSelect={handleRoleSelect}
@@ -427,7 +442,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
             ) : null}
 
-            <div className={`mt-auto min-h-0 overflow-hidden flex-shrink ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+            <div className={`sb-card-task-scroll mt-auto min-h-0 flex-1 overflow-y-auto ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
               <ZoneTaskList
                 tasks={regularTasks}
                 hasTM={hasTM}

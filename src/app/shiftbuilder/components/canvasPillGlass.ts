@@ -32,8 +32,8 @@ export function velvetGlassPillStyle(extra?: CSSProperties): CSSProperties {
 export const CANVAS_PILL_MONO =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
-/** Fixed stack anchor — sits above ops status pill (bottom 10px). */
-export const ROTATION_HEALTH_BOTTOM_PX = 44;
+/** Fixed stack anchor — sits above ops status pill (bottom 10px, ~36px tall). */
+export const ROTATION_HEALTH_BOTTOM_PX = 52;
 
 /** Per-day week health tracker — stacked above the rotation health cluster. */
 export const WEEK_HEALTH_TRACKER_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX + 92;
@@ -56,11 +56,8 @@ export function stageTopInsetPx(): number {
   return FLOATING_NAV_TOP_PX + FLOATING_NAV_HEIGHT_PX;
 }
 
-/** Builder deployment uses a tighter bottom inset so the board fills the viewport.
- *  More breathing room at bottom to keep coverage bars + bottom row fully visible after scaling. */
+/** Bottom inset for LIVE ops pill clearance (footer is pinned inside the canvas column). */
 export function builderStageBottomInsetPx(): number {
-  // More breathing on load to prevent over-zoom/cutoff on bottom row + aux right edge.
-  // Especially important until full layout (cards, tasks, aux) has settled.
-  return isTabletTouchDevice() ? 56 : 48;
+  return isTabletTouchDevice() ? 44 : 36;
 }
 

@@ -35,81 +35,47 @@ export function PlacementFitChip({ fit, xaiFit, compact = false }: PlacementFitC
     ? (xaiFit?.headline ? `${xaiFit.headline}\n${effectiveSummary}\n(xAI reasoned from board/week context + your Gold examples where relevant)` : effectiveSummary)
     : (effectiveFact ? `${effectiveSummary}\n${effectiveFact}` : effectiveSummary);
 
-  const displayText = isXai 
-    ? (xaiFit?.headline ? xaiFit.headline.slice(0, 20) + (xaiFit.headline.length > 20 ? '…' : '') : 'xAI')
+  const displayText = isXai
+    ? (xaiFit?.headline ? xaiFit.headline.slice(0, 20) + (xaiFit.headline.length > 20 ? "…" : "") : "xAI")
     : label;
 
-  // New pill styles (Best / Okay / Check / Invalid) for card headers (compact).
-  // Matches the provided pill_bestPlacement / pill_okayPlacement / pill_CheckPlacement / pill_InvalidPlacement specs.
-  // 30% smaller than original, then +10% from that.
-  if (compact && !isXai) {
-    if (effectiveVerdict === "open_gap") return null;
-    // Fixed-size vibrant pills (46.2×15.4, ~20px radius, scaled shadow, white Inter 800 @9.24px/11.55px)
-    const pillBg = styles.bg || '#6B7280';
+  const isFitVerdict = ["strong_fit", "acceptable", "questionable", "poor_fit", "needs_swap"].includes(
+    effectiveVerdict,
+  );
+
+  // Card rotation-health glance: color-only dot (verdict label stays in tooltip).
+  if (!isXai && isFitVerdict) {
+    const dotBg = styles.bg || "#6B7280";
+    const dotSize = compact ? 10 : 11;
 
     return (
       <AnimatePresence>
         <motion.span
           key={effectiveVerdict}
-          className="no-print inline-flex flex-shrink-0 items-center justify-center overflow-hidden"
+          className="sb-fit-dot no-print inline-flex flex-shrink-0 items-center justify-center"
+          role="img"
+          aria-label={`Rotation fit: ${label}`}
           style={{
-            width: "46.2px",
-            height: "15.4px",
-            background: pillBg,
-            boxShadow: "0px 3.08px 3.08px rgba(0, 0, 0, 0.25)",
-            borderRadius: "20px",
-            fontFamily: "'Inter', 'Inter Tight', system-ui, -apple-system, sans-serif",
-            fontWeight: 800,
-            fontSize: "9.24px",
-            lineHeight: "11.55px",
-            color: "#FFFFFF",
-            letterSpacing: "-0.1px",
+            width: dotSize,
+            height: dotSize,
+            background: dotBg,
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.35)",
+            borderRadius: "50%",
           }}
           title={title}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          initial={{ opacity: 0, scale: 0.85, y: 0.5 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.75 }}
           transition={premiumSpring}
-        >
-          {displayText}
-        </motion.span>
+        />
       </AnimatePresence>
     );
   }
 
-  // Non-compact (Placement Pad, Overlap slots, xAI insight surfaces, etc.)
-  // Use a pill-style treatment that echoes the card compact pills (solid color + shadow + white text).
-  // Size is 30% smaller than spec + 10% (≈77% of original).
-  const isFitVerdict = ["strong_fit", "acceptable", "questionable", "poor_fit", "needs_swap"].includes(effectiveVerdict);
-
-  if (!isXai && isFitVerdict) {
-    const pillBg = styles.bg || '#6B7280';
-    return (
-      <AnimatePresence>
-        <motion.span
-          key={effectiveVerdict}
-          className="no-print inline-flex items-center justify-center rounded-[15.4px] px-1.5 text-[7.7px] font-extrabold leading-none flex-shrink-0"
-          style={{
-            height: "13.86px",
-            background: pillBg,
-            boxShadow: "0px 2.31px 2.31px rgba(0, 0, 0, 0.2)",
-            fontFamily: "'Inter', system-ui, sans-serif",
-            color: "#FFFFFF",
-          }}
-          title={title}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={premiumSpring}
-        >
-          {displayText}
-        </motion.span>
-      </AnimatePresence>
-    );
+  if (compact && !isXai) {
+    return null;
   }
 
   const chipClass = isXai 

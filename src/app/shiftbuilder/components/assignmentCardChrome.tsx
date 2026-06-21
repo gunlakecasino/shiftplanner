@@ -85,16 +85,20 @@ export function CardSlotHeader({
         {icon != null ? (
           <span className="text-[12px] leading-none drop-shadow-sm shrink-0">{icon}</span>
         ) : null}
-        <span
-          className={`font-bold tracking-[0.07em] uppercase truncate ${titleClassName ?? ""}`}
-          style={{
-            fontSize: 10,
-            fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
-            letterSpacing: "0.07em",
-          }}
-        >
-          {label}
-        </span>
+        {React.isValidElement(label) ? (
+          <div className="min-w-0 flex-1">{label}</div>
+        ) : (
+          <span
+            className={`font-bold tracking-[0.07em] uppercase truncate ${titleClassName ?? ""}`}
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
+              letterSpacing: "0.07em",
+            }}
+          >
+            {label}
+          </span>
+        )}
       </div>
       {trailing ? (
         <div className="flex items-center gap-1.5 shrink-0">{trailing}</div>

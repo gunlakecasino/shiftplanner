@@ -1,0 +1,99 @@
+.orb-container {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.orb-container canvas {
+  border-radius: inherit;
+}
+
+.sb-rotation-health-orb {
+  position: relative;
+  isolation: isolate;
+  pointer-events: auto;
+  border-radius: 50%;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.12));
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sb-rotation-health-orb.is-hovered {
+  transform: scale(1.02);
+}
+
+.sb-rotation-health-orb__bezel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -0.5px 2px rgba(0, 0, 0, 0.2),
+    0 0 0 0.5px rgba(0, 0, 0, 0.1);
+}
+
+.sb-rotation-health-orb__canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #141416;
+  clip-path: circle(50% at 50% 50%);
+}
+
+.sb-rotation-health-orb__vignette {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.22);
+}
+
+.sb-rotation-health-orb__readout {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sb-rotation-health-orb.is-hovered .sb-rotation-health-orb__readout {
+  opacity: 1;
+  transition-duration: 0.3s;
+  transition-delay: 0.06s;
+}
+
+.sb-rotation-health-orb__readout-scrim {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(0, 0, 0, 0.36) 0%,
+    rgba(0, 0, 0, 0.12) 58%,
+    transparent 100%
+  );
+}
+
+.sb-rotation-health-orb__readout-value {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}

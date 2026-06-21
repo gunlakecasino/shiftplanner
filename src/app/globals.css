@@ -652,6 +652,11 @@ body {
     0 6px 16px -4px rgba(0, 0, 0, 0.10);
 }
 
+/* Inside the scaled builder canvas, hover transforms stack with stage scale and read as zoom jitter. */
+.builder-workspace .assignment-card:hover {
+  transform: none;
+}
+
 .assignment-card:hover::before {
   opacity: 1;
 }
@@ -721,12 +726,12 @@ body {
   --sb-task-size: 9px;
   --sb-invite-min-h-zone: 110px;
   --sb-invite-min-h-rr: 72px;
-  --sb-grid-gap: clamp(8px, 1vw, 14px);
+  --sb-grid-gap: clamp(6px, 0.9vw, 14px);
 
   width: 100%;
   max-width: 100%;
   margin-inline: auto;
-  padding: 16px clamp(12px, 2vw, 24px) 32px;
+  padding: 12px clamp(12px, 2vw, 24px) 16px;
   box-sizing: border-box;
   container-type: inline-size;
   container-name: builder;
@@ -916,6 +921,11 @@ body {
   min-height: 0;
 }
 
+.sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-builder-section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Generous, modern grid breathing so every card and every task row is comfortable and scannable.
    No cramped 1fr squeeze — natural heights + good gaps let you see *all* the cards. */
 .builder-workspace .grid {
@@ -933,7 +943,7 @@ body {
   max-width: 100%;
   min-width: 0;
   gap: var(--sb-grid-gap, clamp(8px, 1vw, 14px));
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -962,7 +972,7 @@ body {
   min-width: 0;
 }
 
-/* Equal-height rows: grid cells stretch; cards fill the cell (builder only). */
+/* Responsive fill: rows share section height; tasks scroll inside cards when needed. */
 .sb-builder-stage .sb-builder-card-grid {
   align-items: stretch;
   grid-auto-rows: minmax(0, 1fr);
@@ -975,11 +985,25 @@ body {
   flex-direction: column;
 }
 
+.sb-builder-stage .sb-day-card-host {
+  backface-visibility: hidden;
+}
+
 .sb-builder-stage .sb-builder-card-grid .assignment-card,
 .sb-builder-stage .sb-builder-card-grid .sb-assignment-card {
   flex: 1 1 auto;
   height: 100%;
   min-height: 0;
+}
+
+.sb-builder-stage .sb-rr-grid > .sb-day-card-host > div {
+  height: 100%;
+  min-height: 0;
+}
+
+.sb-builder-stage .builder-workspace .sb-card-task-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ios-label-tertiary) 35%, transparent) transparent;
 }
 
 /* Flex aux row — blank shells + slot chrome */
@@ -1054,14 +1078,16 @@ body {
    Sidebar widened to 165px (+25px for aux cards); main 5-col area previously widened +50px/card. Height:100% + 1fr rows to fill to bottom. */
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
   display: grid;
-  grid-template-columns: 1fr 165px;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 165px;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   align-items: stretch;
   max-width: 1581px;
   margin-left: auto;
   margin-right: auto;
+  width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 /* Ensure main cards have room; aux sidebar cards also benefit */
@@ -1071,10 +1097,14 @@ body {
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
   grid-column: 1;
   grid-row: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
   grid-column: 1;
   grid-row: 2;
+  min-height: 0;
+  overflow: hidden;
 }
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
   grid-column: 2;
@@ -1082,19 +1112,21 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* Turn the aux cards container into vertical stack filling the sidebar height */
+/* Aux sidebar — vertical stack fills full column height; cards share space to the bottom. */
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-aux-grid {
   display: flex !important;
   flex-direction: column;
   gap: 4px;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-aux-grid > * {
   flex: 1 1 0;
-  min-height: 0;
+  min-height: 56px;
   width: 100%;
 }
 
@@ -1134,13 +1166,17 @@ body {
 
 /* Make the workspace fill the full artboard height in builder (relaxed) so grids reach the footer */
 .sb-builder-stage .builder-workspace {
+  flex: 1 1 auto;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .sb-builder-stage .builder-workspace > .flex.flex-col.w-full {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* Sophisticated Apple-grade assignment cards.
@@ -1171,12 +1207,19 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.builder-workspace .assignment-card:hover {
+.sb-print-preview-host .builder-workspace .assignment-card:hover {
   transform: translateY(-2px);
   box-shadow:
     0 4px 12px -2px rgba(0, 0, 0, 0.08),
     0 20px 40px -10px rgba(0, 0, 0, 0.14);
   border-color: color-mix(in srgb, var(--card-accent, #6B7280) 22%, rgba(0, 0, 0, 0.08));
+}
+
+.sb-builder-stage .builder-workspace .assignment-card:hover {
+  transform: none;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.07),
+    0 8px 24px rgba(0, 0, 0, 0.09);
 }
 
 .dark .builder-workspace .assignment-card:hover {
@@ -1345,7 +1388,7 @@ body {
 
 .builder-workspace .assignment-card.sb-weekly-highlight {
   z-index: 2;
-  transform: translateY(-1px);
+  transform: none;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--card-accent, #ffcc00) 55%, transparent),
     0 14px 36px -10px rgba(0, 0, 0, 0.2) !important;
@@ -1359,7 +1402,7 @@ body {
   letter-spacing: 0.2px !important;
 }
 
-/* Coverage bars — pinned to card foot, never promoted to mid-card banners */
+/* Coverage bars — in-flow at card foot in builder (flex footer); absolute for print paths */
 .builder-workspace .assignment-card .sb-coverage-bar {
   position: absolute;
   bottom: 0;
@@ -1367,6 +1410,23 @@ body {
   right: 0;
   z-index: 2;
   border-radius: 0 0 7px 7px;
+}
+
+.builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-bar--builder-calm,
+.sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  flex-shrink: 0;
+}
+
+.builder-workspace .sb-coverage-footer {
+  margin-top: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 /* Zone accent stripe (the 3px color bar at top of zone cards) stays tasteful. */
@@ -1441,7 +1501,7 @@ body {
 }
 
 .sb-builder-stage.sb-stage-host {
-  align-items: center !important;
+  align-items: stretch !important;
   min-width: 0 !important;
   max-width: 100% !important;
   overflow-x: clip;
@@ -1500,10 +1560,63 @@ body.sb-shiftbuilder {
 
 .sb-builder-main,
 .sb-stage-host,
-.sb-builder-scale-viewport,
 .sb-builder-canvas {
   overflow: hidden !important;
   overscroll-behavior: none !important;
+}
+
+/* Fluid builder — board fills viewport height; pinned footer stays at stage bottom */
+.sb-builder-fluid-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sb-builder-pinned-footer {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: clamp(8px, 1.5vw, 16px);
+  align-items: center;
+  width: 100%;
+  padding: 10px clamp(12px, 2vw, 24px);
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in srgb, var(--ios-label-tertiary) 16%, transparent);
+  background: color-mix(in srgb, var(--ios-background-primary) 98%, transparent);
+  font-size: clamp(8px, 1.05vw, 10px);
+  line-height: 1.1;
+  letter-spacing: 0.1px;
+  z-index: 4;
+}
+
+.sb-builder-pinned-footer__brand {
+  justify-self: start;
+  text-align: left;
+}
+
+.sb-builder-pinned-footer__version {
+  justify-self: center;
+  text-align: center;
+}
+
+.sb-builder-pinned-footer__page {
+  justify-self: end;
+  text-align: right;
+}
+
+/* Shorter viewports: tighten vertical rhythm so more of the board fits above the pinned footer */
+@media (max-height: 860px) {
+  .builder-workspace {
+    padding-top: 8px;
+    padding-bottom: 10px;
+    --sb-grid-gap: clamp(5px, 0.7vw, 10px);
+  }
+
+  .builder-workspace .sheet-section-header {
+    margin-bottom: 2px;
+  }
 }
 
 /* During active dnd gestures, block browser pinch/elastic zoom on scaled artboard + touch devices */

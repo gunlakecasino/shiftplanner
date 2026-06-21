@@ -1,8 +1,15 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { premiumSpring, premiumSpringReduced, premiumEntrance, premiumHoverLift, premiumStagger, premiumButton, premiumEntranceReduced, premiumPresenceReduced } from "@/lib/premiumSpring";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  premiumSpring,
+  premiumBuilderCardHost,
+  premiumButton,
+  premiumPresenceReduced,
+  premiumDaySwitchStagger,
+  premiumDaySwitchStaggerReduced,
+} from "@/lib/premiumSpring";
 import ZoneCard from "./ZoneCard";
 import RRCard from "./RRCard";
 import AuxCard from "./AuxCard";
@@ -46,6 +53,28 @@ import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
 
+
+/** Enter-only fade for day navigation — no exit (avoids doubled grid children + layout thrash). */
+function builderDayCardMotionProps(
+  idx: number,
+  reducedMotion: boolean | null,
+  allowDayEnter: boolean,
+) {
+  if (!allowDayEnter || reducedMotion) {
+    return {
+      initial: false as const,
+      animate: { opacity: 1 },
+      ...premiumBuilderCardHost,
+    };
+  }
+  const stagger = reducedMotion ? premiumDaySwitchStaggerReduced(idx) : premiumDaySwitchStagger(idx);
+  return {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: stagger.transition,
+    ...premiumBuilderCardHost,
+  } as const;
+}
 
 function slotShowsFilled(
   slotKey: string,
@@ -161,6 +190,9 @@ export interface ShiftBuilderBoardProps {
 
   /** Footer brand line (default: Weekly Zone Deployment Book). */
   sheetBrandTitle?: string;
+
+  /** Builder fluid layout: footer is pinned on the stage host instead of in-flow here. */
+  hideSheetFooter?: boolean;
 
   /** Long-press the version label to open OMS Settings (hidden admin entry). */
   onOpenSettings?: () => void;
@@ -297,6 +329,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onSetAuxLabel,
   placementPadInsightsEnabled = true,
   sheetBrandTitle = "Weekly Zone Deployment Book",
+  hideSheetFooter = false,
   onOpenSettings,
   isTodayBoard = false,
   kioskAssignPulseKey = null,
@@ -321,6 +354,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   draftGrokExplanation,
 }: ShiftBuilderBoardProps) {
   const reducedMotion = useReducedMotion();
+  /** After first paint, day changes get a short enter fade (not first mount). */
+  const allowCardDayEnterRef = React.useRef(false);
+  React.useEffect(() => {
+    allowCardDayEnterRef.current = true;
+  }, []);
+  const allowCardDayEnter = allowCardDayEnterRef.current;
 
   const versionLongPressRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -466,6 +505,20 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   );
 
   const currentIso = nightIsoFromDate(selectedDay.date);
+  /** Date-keyed so animation fires once per navigation (nightId resolves later and would double-fire). */
+  const dayTransitionKey = currentIso;
+
+  const dayTransitionPauseRef = React.useRef(false);
+  const [equalizeEpoch, setEqualizeEpoch] = React.useState(0);
+  React.useEffect(() => {
+    if (!allowCardDayEnterRef.current) return;
+    dayTransitionPauseRef.current = true;
+    const t = window.setTimeout(() => {
+      dayTransitionPauseRef.current = false;
+      setEqualizeEpoch((e) => e + 1);
+    }, 240);
+    return () => window.clearTimeout(t);
+  }, [dayTransitionKey]);
 
   const internalFitMap = usePlacementFitMap({
     enabled: !fitBySlotProp && currentView === "deployment",
@@ -510,16 +563,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const printDayNameSize = isTodayBoard ? 28 : 26;
   const builderCardGridClass = showDigitalAssists ? " sb-builder-card-grid" : "";
   /** Grid cell host — stretches to row height so cards align across columns. */
-  const gridHostClass = isPrintPreview ? "relative h-full" : "relative h-full min-h-0 flex flex-col";
+  const gridHostClass = isPrintPreview
+    ? "relative h-full"
+    : "relative h-full min-h-0 flex flex-col";
+  const builderGridAutoRows = "minmax(0, 1fr)";
   const zoneGridClass = isPrintPreview
     ? `sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
-    : `sb-zone-grid flex-1 w-full${builderCardGridClass}`;
+    : `sb-zone-grid flex-1 w-full min-h-0${builderCardGridClass}`;
   const rrGridClass = isPrintPreview
     ? `sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
-    : `sb-rr-grid flex-1 w-full${builderCardGridClass}`;
+    : `sb-rr-grid flex-1 w-full min-h-0${builderCardGridClass}`;
   const auxGridClass = isPrintPreview
     ? `grid gap-1.5 flex-1 w-full${builderCardGridClass}`
-    : `sb-aux-grid flex-1 w-full${builderCardGridClass}`;
+    : `sb-aux-grid flex-1 w-full min-h-0${builderCardGridClass}`;
   // Overlap strips: 6-across with row-equal heights (dedicated grid, not zone card grid).
   const overlapGridClass = isPrintPreview
     ? "sb-overlap-grid sb-overlap-card-grid flex-1 grid grid-cols-6 gap-1.5 min-w-0"
@@ -638,8 +694,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   };
 
   // Equalize card heights within each grid row on the deployment sheet.
-  // Re-runs when returning from the breaks view (grids unmount/remount) so heights
-  // do not stay at natural uneven sizes after tab switches.
   React.useEffect(() => {
     let innerRaf = 0;
     let ro: ResizeObserver | null = null;
@@ -674,7 +728,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       }
     };
 
-    /** RR columns stack women's + men's cards; equalize each band across the 5 columns. */
+    /** RR columns stack women's + men's cards; equalize each band across the row. */
     const equalizeRRGrid = (gridEl: HTMLElement) => {
       const wrappers = Array.from(gridEl.children) as HTMLElement[];
       const womenCards: HTMLElement[] = [];
@@ -702,12 +756,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     };
 
     const equalize = () => {
-      if (isPrintPreview) return; // Pure CSS distribution (minmax(0,1fr) + h-full) in sacred preview/capture.
+      if (isPrintPreview) return;
       if (isAnyDragActive) return;
-      // Builder: do NOT force minHeights. Cards (and thus rows/sections) size to what their
-      // content needs (text + strict padding + variable # of tasks pinned at bottom).
-      // The sheet container below will adapt (overflow-y-auto) so the full natural layout is visible.
-      // (Previously we equalized bands; that is now relaxed per request for content-adaptive cards.)
+      if (dayTransitionPauseRef.current) return;
+      const zEl = zonesGridRef.current;
+      const rEl = restroomsGridRef.current;
+      const aEl = auxGridRef.current;
+      if (!zEl || !rEl || !aEl) return;
+
+      equalizeRRGrid(rEl);
+      equalizeCardsInGrid(zEl, getGridColumnCount(zEl));
+      equalizeCardsInGrid(aEl, getGridColumnCount(aEl));
     };
 
     const attachResizeObserver = () => {
@@ -723,9 +782,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     };
 
     if (!isAnyDragActive) {
-      // Only schedule equalize + attach ResizeObserver when NOT dragging.
-      // During active drag we completely avoid any RAFs and observer callbacks that would
-      // mutate card minHeight on the scaled artboard (primary cause of the perceived "zoom out" glitch).
       const outerRaf = requestAnimationFrame(() => {
         equalize();
         innerRaf = requestAnimationFrame(() => {
@@ -741,9 +797,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       };
     }
 
-    // Drag active: no equalize work, no observer attached this effect run.
-    // equalize() itself also bails early (defense-in-depth if a stale callback fires at the boundary).
-    // Effect will re-run on isAnyDragActive change (it's a dep) and restore normal equalizing cleanly.
     return () => {
       ro?.disconnect();
     };
@@ -758,7 +811,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     cardBorders,
     selectedSlotKey,
     artboardScale,
-    isAnyDragActive, // React to drag start/end so we can pause/restore cleanly.
+    isAnyDragActive,
+    isPrintPreview,
+    nightId,
+    equalizeEpoch,
   ]);
 
   // Helper used only inside breaks view wave rendering
@@ -1078,7 +1134,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       </div>
       {/* /sheet-header */}
 
-      <div className={`flex flex-col w-full flex-1 min-h-0 overflow-hidden`}>
+      <div className={`flex flex-col w-full flex-1 min-h-0 ${isPrintPreview ? "overflow-hidden" : "min-h-0"}`}>
         {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
         {renderTaskTextEditPad()}
         {renderPlacementDock()}
@@ -1088,7 +1144,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                  Row 1: Z1 | Z3 | Z4 | Z5 | Z9
                  Row 2: Z2 | Z6 | Z7 | Z8 | Z10
                  (5-col CSS grid; child order = visual positions. Mirrored in print overview for PDF consistency.) */}
-            <div className="sb-with-aux-sidebar">
+            <div className="sb-with-aux-sidebar flex-1 min-h-0">
             <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
@@ -1107,7 +1163,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   </span>
                 )}
               </div>
-              <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={zonesGridRef} className={zoneGridClass} style={{ gridAutoRows: builderGridAutoRows }}>
                 {ZONE_VISUAL_ORDER.map((zKey, visualIdx) => {
                   const def = ZONE_DEFS.find((d) => d.key === zKey)!;
                   const key = def.key;
@@ -1172,14 +1228,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     </div>
                   ) : (
                     <motion.div
-                      key={key}
-                      className={gridHostClass}
+                      key={`${dayTransitionKey}-${key}`}
+                      className={`${gridHostClass} sb-day-card-host`}
                       data-slot-key={key}
                       data-placement-host={key}
-                      {...premiumEntrance}
-                      {...premiumHoverLift}
-                      custom={idx}
-                      transition={premiumStagger(idx)}
+                      {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                     >
                       {cardContent}
                     </motion.div>
@@ -1201,7 +1254,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   }, 0)} / 10 FILLED
                 </span>
               </div>
-              <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: "minmax(0, 1fr)" }}>
+              <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: builderGridAutoRows }}>
                 {RR_DEFS.map((def, idx) => {
                   const key = `RR${def.num}`; // physical key for marker pad (sides use MRR/WRR internally)
                   const accent = getRRAccent(def.num);
@@ -1292,15 +1345,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     </div>
                   ) : (
                     <motion.div
-                      key={def.num}
-                      className={gridHostClass}
+                      key={`${dayTransitionKey}-${key}`}
+                      className={`${gridHostClass} sb-day-card-host`}
                       data-slot-key={key}
                       data-pad-host={rrHostId}
                       data-placement-host={rrHostId}
-                      {...premiumEntrance}
-                      {...premiumHoverLift}
-                      custom={idx}
-                      transition={premiumStagger(idx)}
+                      {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                     >
                       {cardContent}
                     </motion.div>
@@ -1354,16 +1404,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div
                 ref={auxGridRef}
                 className={`${auxGridClass}${isTodayBoard ? " sb-today-aux-grid" : ""}`}
-                style={{
-                  ...(isPrintPreview
-                    ? { gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))` }
-                    : {}),
-                  gridAutoRows: "minmax(0, 1fr)",
-                }}
+                style={
+                  isPrintPreview
+                    ? {
+                        gridTemplateColumns: `repeat(${auxDefs.length}, minmax(0, 1fr))`,
+                        gridAutoRows: "minmax(0, 1fr)",
+                      }
+                    : { gridAutoRows: builderGridAutoRows }
+                }
               >
                 {!isPrintPreview ? (
-                  <AnimatePresence>
-                    {auxDefs.map((def, idx) => {
+                    auxDefs.map((def, idx) => {
                       const key = def.key;
                       const accent = getAuxAccent(key, def.role);
                       const a = displayAssignments[key] || {};
@@ -1421,34 +1472,18 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         </>
                       );
 
-                      const entrance = reducedMotion ? premiumEntranceReduced : premiumEntrance;
-                      const exitTrans = reducedMotion 
-                        ? { ...premiumSpringReduced } 
-                        : { ...premiumSpring, stiffness: 300, damping: 22 };
-
                       return (
                         <motion.div
-                          key={key}
-                          layout  // smooth reflow of siblings when aux count changes (add/remove)
-                          className={gridHostClass}
+                          key={`${dayTransitionKey}-${key}`}
+                          className={`${gridHostClass} sb-day-card-host`}
                           data-slot-key={key}
                           data-placement-host={key}
-                          {...entrance}
-                          {...premiumHoverLift}
-                          custom={idx}
-                          transition={premiumStagger(idx)}
-                          exit={{
-                            opacity: 0,
-                            scale: 0.92,
-                            y: 8,
-                            transition: exitTrans
-                          }}
+                          {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                         >
                           {cardContent}
                         </motion.div>
                       );
-                    })}
-                  </AnimatePresence>
+                    })
                 ) : (
                   auxDefs.map((def, idx) => {
                     const key = def.key;
@@ -1567,11 +1602,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           {Array.from({ length: 6 }).map((_, i) => {
                             const slotKey = `OL-${row.key}-${i}`;
                             return (
-                              <div
-                                key={i}
-                                className={gridHostClass}
+                              <motion.div
+                                key={`${dayTransitionKey}-${slotKey}`}
+                                className={`${gridHostClass} sb-day-card-host`}
                                 data-slot-key={slotKey}
                                 data-placement-host={slotKey}
+                                {...builderDayCardMotionProps(i, reducedMotion, allowCardDayEnter)}
                               >
                                 <OverlapSlot
                                   slotKey={slotKey}
@@ -1596,7 +1632,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                   conflictingTms={conflictingTms}
                                   tmConflictSlots={tmConflictSlots}
                                 />
-                              </div>
+                              </motion.div>
                             );
                           })}
                         </div>
@@ -1832,7 +1868,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         )}
       </div>
 
-      {/* Rotation health — fixed bottom-corner drawer above LIVE pill; all builder views. */}
+      {/* Rotation health — standalone orb above LIVE; hover for %. */}
       {!isPrintPreview && (
         <RotationHealthFloater
           visible
@@ -1846,61 +1882,54 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           selectedDayDateKey={selectedDayDateKeyProp ?? currentIso}
           weekHealthLoading={weekHealthLoading}
           weeklyRecentHistory={weeklyRecentHistory}
-          canRunEngine={canRunEngine}
-          onRunEngine={onRunXaiEngine}
-          onClear={onClearBoard}
-          running={engineRunning}
-          onApplyDraft={onApplyDraft}
-          onDiscardDraft={onDiscardDraft}
-          draftGrokExplanation={draftGrokExplanation}
-          isCurrentNightLocked={isCurrentNightLocked}
         />
       )}
 
-      {/* Sheet footer — single aligned row (brand · version · page) */}
-      <div
-        className={`sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] ${
-          isTodayBoard ? "sb-today-footer-chrome" : ""
-        } ${
-          isPrintPreview
-            ? "pt-1 border-t border-[#E5E5E7]"
-            : "pt-2 mt-3 border-t border-black/5 dark:border-white/[0.07]"
-        }`}
-        style={{
-          color: isDark ? "#9CA3AF" : "#9CA3AF",
-          fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-        }}
-      >
-        <div className="min-w-0 truncate">
-          <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
-            SBS
-          </span>
-          <span className="mx-1 opacity-60">©</span>
-          <span style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}>{sheetBrandTitle}</span>
-          <span className="mx-1 opacity-40">—</span>
-          <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
-            GRAVES
-          </span>
-        </div>
+      {!hideSheetFooter ? (
         <div
-          className="shrink-0 tabular-nums select-none"
-          onPointerDown={handleVersionPointerDown}
-          onPointerUp={clearVersionLongPress}
-          onPointerLeave={clearVersionLongPress}
-          onPointerCancel={clearVersionLongPress}
-          onContextMenu={(e) => e.preventDefault()}
+          className={`sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] ${
+            isTodayBoard ? "sb-today-footer-chrome" : ""
+          } ${
+            isPrintPreview
+              ? "pt-1 border-t border-[#E5E5E7]"
+              : "pt-2 mt-3 border-t border-black/5 dark:border-white/[0.07]"
+          }`}
+          style={{
+            color: isDark ? "#9CA3AF" : "#9CA3AF",
+            fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+          }}
         >
-          {shiftBuilderVersionLabel()}
-        </div>
-        {!isTodayBoard ? (
-          <div
-            className="shrink-0 tabular-nums text-right"
-            style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}
-          >
-            — {currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2} of 14 —
+          <div className="min-w-0 truncate">
+            <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+              SBS
+            </span>
+            <span className="mx-1 opacity-60">©</span>
+            <span style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}>{sheetBrandTitle}</span>
+            <span className="mx-1 opacity-40">—</span>
+            <span className="font-semibold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+              GRAVES
+            </span>
           </div>
-        ) : null}
-      </div>
+          <div
+            className="shrink-0 tabular-nums select-none"
+            onPointerDown={handleVersionPointerDown}
+            onPointerUp={clearVersionLongPress}
+            onPointerLeave={clearVersionLongPress}
+            onPointerCancel={clearVersionLongPress}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            {shiftBuilderVersionLabel()}
+          </div>
+          {!isTodayBoard ? (
+            <div
+              className="shrink-0 tabular-nums text-right"
+              style={{ color: isDark ? "#9CA3AF" : "#6B7280" }}
+            >
+              — {currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2} of 14 —
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
     </div>
   );

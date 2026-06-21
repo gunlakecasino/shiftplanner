@@ -6,7 +6,6 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  KeyboardSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -102,10 +101,10 @@ export default function InteractiveStage({
   // Sensors tuned for iPad + Pencil + Safari compatibility.
   // Pointer for mouse/pencil, Touch for finger (with hold to distinguish from scroll).
   // MeasuringStrategy.Always below helps with ancestor CSS scale(transform) rect accuracy.
+  // Pointer + touch only — KeyboardSensor steals Space/Enter from aux label inputs.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-    useSensor(KeyboardSensor),
   );
 
   // Prevent iOS Safari (iPad) and Mac Safari from interpreting drag gestures as pinch-to-zoom or "smart zoom".

@@ -28,10 +28,9 @@ const CoverageBar = React.memo(function CoverageBar({
     <div
       className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""}`}
       style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        ...(builderCalm
+          ? {}
+          : { position: 'absolute', bottom: 0, left: 0, right: 0 }),
         background: builderCalm 
           ? `color-mix(in srgb, var(--card-accent, ${bg}) 65%, var(--ios-background-secondary))` 
           : `var(--card-accent, ${bg})`,
@@ -66,7 +65,6 @@ const CoverageBar = React.memo(function CoverageBar({
             color: 'color-mix(in srgb, var(--ios-white) 55%, transparent)',
             fontSize: 13,
             opacity: hovered ? 1 : 0.55,
-            transform: hovered ? 'scale(1.1)' : 'scale(1)',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ios-white)')}
           onMouseLeave={(e) => (e.currentTarget.style.color = hovered ? 'var(--ios-white)' : 'color-mix(in srgb, var(--ios-white) 55%, transparent)')}

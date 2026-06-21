@@ -40,6 +40,11 @@ export const premiumHoverLift = {
   whileTap: { scale: 0.985, transition: { ...premiumSpring, stiffness: 500, damping: 20 } },
 };
 
+/** Builder grid hosts — shadow-only hover (no scale) to avoid zoom jitter inside the scaled canvas. */
+export const premiumBuilderCardHost = {
+  whileTap: { scale: 0.995, transition: { ...premiumSpring, stiffness: 500, damping: 24 } },
+};
+
 /** Staggered entrance delay for lists/grids. */
 export const premiumStagger = (index: number) => ({
   transition: { ...premiumSpring, delay: 0.02 + index * 0.025 },
@@ -74,3 +79,38 @@ export const premiumPresenceReduced = {
   exit: { opacity: 0 },
   transition: premiumSpringReduced,
 };
+
+/**
+ * Day-navigation crossfade for builder assignment cards only.
+ * Opacity tween (no y/scale) — springs + exit animations fight CSS grid equalize and read choppy.
+ */
+export const premiumDaySwitchTween = {
+  type: "tween",
+  duration: 0.2,
+  ease: [0.22, 1, 0.36, 1],
+} as const satisfies Transition;
+
+export const premiumDaySwitchEnter = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: premiumDaySwitchTween,
+};
+export const premiumDaySwitchEnterReduced = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: premiumSpringReduced,
+};
+
+/** Tight stagger cap — ripple without a long trailing cascade. */
+export const premiumDaySwitchStagger = (index: number) => ({
+  transition: {
+    ...premiumDaySwitchTween,
+    delay: Math.min(index, 5) * 0.008,
+  },
+});
+export const premiumDaySwitchStaggerReduced = (index: number) => ({
+  transition: {
+    ...premiumSpringReduced,
+    delay: Math.min(index, 5) * 0.006,
+  },
+});

@@ -46,12 +46,19 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
     onClose?.();
   };
 
+  const stopKeyBubble = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+  };
+
   if (mode === "custom") {
     return (
       <div
+        data-aux-role-picker
         className={`sb-aux-role-picker flex flex-col gap-1.5 rounded-[4px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] p-2 shadow-lg min-w-[148px] ${className}`}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={stopKeyBubble}
+        onKeyDownCapture={stopKeyBubble}
       >
         <span
           className="text-[8px] font-bold uppercase tracking-[1px] text-[#6B7280] dark:text-[#9CA3AF]"
@@ -63,14 +70,23 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
           ref={inputRef}
           type="text"
           value={customDraft}
+          data-aux-label-input
           onChange={(e) => setCustomDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") applyCustom();
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              applyCustom();
+            }
             if (e.key === "Escape") {
+              e.preventDefault();
               setMode("roles");
               setCustomDraft(initialCustomLabel);
             }
           }}
+          onKeyDownCapture={stopKeyBubble}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           placeholder="e.g. COFFEE RUN"
           className="w-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.3px] rounded-[3px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-[#FAFAFA] dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-[#F2F2F4] outline-none focus:border-[#007AFF]"
           style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
@@ -101,9 +117,12 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
 
   return (
     <div
+      data-aux-role-picker
       className={`sb-aux-role-picker flex flex-col gap-1 rounded-[4px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] p-1 shadow-lg ${className}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={stopKeyBubble}
+      onKeyDownCapture={stopKeyBubble}
     >
       <div className="flex flex-row flex-wrap gap-1 max-w-[200px]">
         {ROLE_OPTIONS.map(({ role, label }) => (

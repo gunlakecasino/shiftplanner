@@ -1,89 +1,66 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useRef } from "react";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
-import { useAssignments, useAuxDefs } from "../store/useShiftBuilderStore";
 import { shiftBuilderVersionLabel } from "../version";
-import { buildLivePrintDaySnapshot } from "./buildLivePrintDaySnapshot";
+import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { PrintPreviewPage } from "./PrintPreviewPage";
-import type { PrintPreviewView } from "./printPreviewTypes";
+import type { PrintDaySnapshot, PrintPreviewView } from "./printPreviewTypes";
 
-function goldenPrintPageLabel(dayIndex: number, view: PrintPreviewView): string {
-  const n = view === "deployment" ? dayIndex * 2 + 1 : dayIndex * 2 + 2;
-  return `— ${n} of 14 —`;
-}
+export type PrintPreviewFocus = "duplex" | "deployment" | "breaks";
 
 export type LivePrintPreviewArtboardProps = {
-  selectedDay: DayDef;
-  selectedDayIndex: number;
-  currentView: "deployment" | "breaks";
-  selectedTasks: Record<string, NightSlotTask[]>;
-  amOverlapDayName: string;
-  amOverlapDateNum: number;
-  nextDayColor: string;
+  view: PrintPreviewView;
+  snapshot: PrintDaySnapshot;
   breakGroup: ActiveBreakGroupFilter;
   weekDayDefs: DayDef[];
+  pageLabel: string;
 };
 
 /**
- * On-canvas print preview — renders the exact same PrintPreviewPage component
- * that export/print uses (GoldenPrintComponents + print-artboard contract).
+ * On-canvas print preview — one Golden sheet. Snapshot is loaded once per night
+ * by PrintPreviewStage (Supabase-backed, same as export/print).
  */
 export function LivePrintPreviewArtboard({
-  selectedDay,
-  selectedDayIndex,
-  currentView,
-  selectedTasks,
-  amOverlapDayName,
-  amOverlapDateNum,
-  nextDayColor,
+  view,
+  snapshot,
   breakGroup,
   weekDayDefs,
+  pageLabel,
 }: LivePrintPreviewArtboardProps) {
-  const assignments = useAssignments() ?? {};
-  const auxDefs = useAuxDefs() ?? [];
+  const hostRef = useRef<HTMLDivElement>(null);
 
-  const view: PrintPreviewView = currentView === "breaks" ? "breaks" : "deployment";
   const activeBreakGroup: 1 | 2 | 3 | 4 =
     breakGroup === 1 || breakGroup === 2 || breakGroup === 3 || breakGroup === 4
       ? breakGroup
       : 1;
 
-  const snapshot = useMemo(
-    () =>
-      buildLivePrintDaySnapshot({
-        dayIndex: selectedDayIndex,
-        day: selectedDay,
-        assignments,
-        tasksBySlot: selectedTasks,
-        auxDefs,
-        amOverlapDayName,
-        amOverlapDateNum,
-        nextDayColor,
-      }),
-    [
-      selectedDayIndex,
-      selectedDay,
-      assignments,
-      selectedTasks,
-      auxDefs,
-      amOverlapDayName,
-      amOverlapDateNum,
-      nextDayColor,
-    ],
-  );
+  useEffect(() => {
+    if (view !== "breaks" || !hostRef.current) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled || !hostRef.current) return;
+      const artboard = hostRef.current.querySelector(".print-artboard");
+      if (artboard) postProcessBreaksArtboard(artboard);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
+    return () => {
+      cancelled = true;
+    };
+  }, [view, snapshot]);
 
   return (
-    <PrintPreviewPage
-      view={view}
-      snapshot={snapshot}
-      pageLabel={goldenPrintPageLabel(selectedDayIndex, view)}
-      versionLabel={shiftBuilderVersionLabel()}
-      weekDayDefs={weekDayDefs}
-      activeBreakGroup={activeBreakGroup}
-    />
+    <div ref={hostRef}>
+      <PrintPreviewPage
+        view={view}
+        snapshot={snapshot}
+        pageLabel={pageLabel}
+        versionLabel={shiftBuilderVersionLabel()}
+        weekDayDefs={weekDayDefs}
+        activeBreakGroup={activeBreakGroup}
+      />
+    </div>
   );
 }
 

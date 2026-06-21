@@ -461,6 +461,84 @@ export function getTmThisWeekRepeatForSlot(
   };
 }
 
+type RgbTriplet = readonly [number, number, number];
+
+function lerpRgb(a: RgbTriplet, b: RgbTriplet, t: number): RgbTriplet {
+  const clamped = Math.max(0, Math.min(1, t));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * clamped),
+    Math.round(a[1] + (b[1] - a[1]) * clamped),
+    Math.round(a[2] + (b[2] - a[2]) * clamped),
+  ];
+}
+
+function rgbToHex([r, g, b]: RgbTriplet): string {
+  const h = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+const ORB_RED: RgbTriplet = [220, 38, 38];
+const ORB_RED_HI: RgbTriplet = [248, 113, 113];
+const ORB_ORANGE: RgbTriplet = [234, 88, 12];
+const ORB_ORANGE_HI: RgbTriplet = [251, 146, 60];
+const ORB_GREEN: RgbTriplet = [22, 163, 74];
+const ORB_GREEN_MID: RgbTriplet = [34, 197, 94];
+const ORB_GREEN_HI: RgbTriplet = [56, 189, 110];
+const ORB_GREEN_LITE: RgbTriplet = [110, 231, 163];
+
+/** Continuous red → orange → green palette for the health orb shader. */
+export function rotationHealthOrbPalette(percent: number | null | undefined): {
+  primary: string;
+  secondary: string;
+  tail: string;
+  background: string;
+  ring: string;
+  accent: string;
+} {
+  const n = normalizeRotationHealthPercent(percent);
+  if (n === null) {
+    return {
+      primary: "#8e8e93",
+      secondary: "#aeaeb2",
+      tail: "#6b7280",
+      background: "#2c2c2e",
+      ring: "rgba(142, 142, 147, 0.45)",
+      accent: "rgba(142, 142, 147, 0.25)",
+    };
+  }
+
+  let primary: RgbTriplet;
+  let secondary: RgbTriplet;
+
+  if (n <= ROTATION_HEALTH_AMBER_MIN) {
+    const t = n / ROTATION_HEALTH_AMBER_MIN;
+    primary = lerpRgb(ORB_RED, ORB_ORANGE, t);
+    secondary = lerpRgb(ORB_RED_HI, ORB_ORANGE_HI, t);
+  } else if (n < ROTATION_HEALTH_TARGET) {
+    const t =
+      (n - ROTATION_HEALTH_AMBER_MIN) /
+      (ROTATION_HEALTH_TARGET - ROTATION_HEALTH_AMBER_MIN);
+    primary = lerpRgb(ORB_ORANGE, ORB_GREEN, t);
+    secondary = lerpRgb(ORB_ORANGE_HI, ORB_GREEN_HI, t);
+  } else {
+    const t = Math.min(1, (n - ROTATION_HEALTH_TARGET) / (100 - ROTATION_HEALTH_TARGET));
+    primary = lerpRgb(ORB_GREEN, ORB_GREEN_MID, t);
+    secondary = lerpRgb(ORB_GREEN_HI, ORB_GREEN_LITE, t);
+  }
+
+  const core = lerpRgb(primary, [18, 20, 24], 0.58);
+  const rim = lerpRgb(primary, [48, 50, 56], 0.55);
+
+  return {
+    primary: rgbToHex(primary),
+    secondary: rgbToHex(secondary),
+    tail: "#6b7280",
+    background: rgbToHex(core),
+    ring: rgbToHex(rim),
+    accent: rgbToHex(lerpRgb(primary, [220, 255, 230], 0.35)),
+  };
+}
+
 export function rotationHealthFloaterColors(
   percent: number | null | undefined,
 ): { bg: string; border: string; text: string } {

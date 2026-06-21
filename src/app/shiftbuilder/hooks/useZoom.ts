@@ -64,14 +64,19 @@ export type BuilderFitOptions = {
  * When `builderFit.enabled`, the Fit target scales the full builder workspace
  * (zones + restrooms + aux) into the viewport instead of the Golden paper box.
  */
+export type ArtboardNaturalSize = { w: number; h: number };
+
 export function useZoom({
   rosterOpen,
   stageInsets,
   builderFit,
+  artboardSize,
 }: {
   rosterOpen: boolean;
   stageInsets: StageInsets;
   builderFit?: BuilderFitOptions;
+  /** Override Golden 1056×816 for modes like duplex print preview (992×399). */
+  artboardSize?: ArtboardNaturalSize;
 }) {
   const [isTabletTouch, setIsTabletTouch] = useState(isTabletTouchDevice);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
@@ -95,8 +100,12 @@ export function useZoom({
         ? FLOATING_NAV_HEIGHT_PX + builderStageBottomInsetPx() + canvasPad
         : 90);
 
-    const natW = useBuilderNatural ? DEPLOYMENT_CANVAS_MAX_WIDTH_PX : NATURAL_WIDTH;
-    const natH = useBuilderNatural ? BUILDER_NATURAL_HEIGHT : NATURAL_HEIGHT;
+    const natW = useBuilderNatural
+      ? DEPLOYMENT_CANVAS_MAX_WIDTH_PX
+      : (artboardSize?.w ?? NATURAL_WIDTH);
+    const natH = useBuilderNatural
+      ? BUILDER_NATURAL_HEIGHT
+      : (artboardSize?.h ?? NATURAL_HEIGHT);
 
     const byW = availW / natW;
     const byH = availH / natH;
@@ -129,7 +138,7 @@ export function useZoom({
   // Seed with builder wide size on mount so early scales aren't based on too-small initial measurement.
   const initialNat = builderFitEnabled
     ? { w: DEPLOYMENT_CANVAS_MAX_WIDTH_PX, h: BUILDER_NATURAL_HEIGHT }
-    : { w: NATURAL_WIDTH, h: NATURAL_HEIGHT };
+    : { w: artboardSize?.w ?? NATURAL_WIDTH, h: artboardSize?.h ?? NATURAL_HEIGHT };
   const stableNaturalRef = useRef(initialNat);
 
   // Intricate debounce to avoid thrashing on rapid window resizes while staying very responsive.
@@ -166,8 +175,8 @@ export function useZoom({
     const max = maxArtboardScale();
     const fitCap = builderFitEnabled ? 1 : max;
     const stable = stableNaturalRef.current;
-    let naturalW = builderFitEnabled ? stable.w : NATURAL_WIDTH;
-    let naturalH = builderFitEnabled ? stable.h : NATURAL_HEIGHT;
+    let naturalW = builderFitEnabled ? stable.w : (artboardSize?.w ?? NATURAL_WIDTH);
+    let naturalH = builderFitEnabled ? stable.h : (artboardSize?.h ?? NATURAL_HEIGHT);
 
     if (builderFitEnabled) {
       const content = builderFit?.contentRef.current;
@@ -178,14 +187,11 @@ export function useZoom({
         // Width floor only — early narrow layout must not shrink the fit divisor.
         measuredW = Math.max(measuredW, DEPLOYMENT_CANVAS_MAX_WIDTH_PX);
 
+        // Only grow stable naturals — shrinking on day switches caused fit zoom to jump in/out.
         if (measuredW > 80 && measuredW > stable.w + 20) {
-          stable.w = measuredW;
-        } else if (measuredW > 80 && measuredW < stable.w) {
           stable.w = measuredW;
         }
         if (measuredH > 80 && measuredH > stable.h + 20) {
-          stable.h = measuredH;
-        } else if (measuredH > 80 && measuredH < stable.h) {
           stable.h = measuredH;
         }
       }
@@ -219,7 +225,15 @@ export function useZoom({
     if (current == null || Math.abs(current - proposed) > 0.001) {
       setFitScale(proposed);
     }
-  }, [stageInsets, builderFitEnabled, builderChromeHeight, builderFit?.contentRef, builderFit?.pause]);
+  }, [
+    stageInsets,
+    builderFitEnabled,
+    builderChromeHeight,
+    builderFit?.contentRef,
+    builderFit?.pause,
+    artboardSize?.w,
+    artboardSize?.h,
+  ]);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px)");
@@ -278,16 +292,23 @@ export function useZoom({
       cancelAnimationFrame(t1);
       clearTimeout(t2);
     };
-  }, [rosterOpen, stageInsets, recomputeScale]);
+  }, [rosterOpen, stageInsets, recomputeScale, artboardSize?.w, artboardSize?.h]);
 
-  // Builder workspace: re-fit when content height changes (assignments, aux slots, etc.).
+  // Builder workspace: re-fit only when content grows (day switches often shrink — ignore those).
   useEffect(() => {
     if (!builderFitEnabled) return;
     const content = builderFit?.contentRef.current;
     if (!content || typeof ResizeObserver === "undefined") return;
 
+    const lastContent = { w: 0, h: 0 };
     const ro = new ResizeObserver(() => {
-      if (!builderFit?.pause) {
+      if (builderFit?.pause) return;
+      const w = content.scrollWidth || content.offsetWidth || 0;
+      const h = content.scrollHeight || content.offsetHeight || 0;
+      const grew = w > lastContent.w + 12 || h > lastContent.h + 12;
+      lastContent.w = Math.max(lastContent.w, w);
+      lastContent.h = Math.max(lastContent.h, h);
+      if (grew) {
         requestAnimationFrame(recomputeScale);
       }
     });

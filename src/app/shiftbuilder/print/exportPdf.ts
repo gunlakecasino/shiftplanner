@@ -84,14 +84,16 @@ export async function rasterizeGoldenPrintPages(
   config: PrintConfig,
   onProgress?: (p: ExportProgress) => void,
 ): Promise<GoldenRasterPage[]> {
-  const session = mountGoldenPrintSession(pages, config, "export");
+  const session = await mountGoldenPrintSession(pages, config, "export");
 
   try {
     prepareExportSessionForRaster(session);
     await waitForGoldenRenderSettled();
 
     const artboards = Array.from(
-      session.container.querySelectorAll(".print-artboard"),
+      session.container.querySelectorAll(
+        ":scope > .print-page-wrapper > .print-artboard",
+      ),
     ) as HTMLElement[];
 
     if (artboards.length !== pages.length) {

@@ -73,6 +73,8 @@ import { PrintExportProgressOverlay } from "./components/PrintExportProgressOver
 import {
   buildPrintQueue,
   applyCustomQueueOrder,
+  normalizePrintConfigForExecution,
+  loadLastPrintConfig,
   saveLastPrintConfig,
   tonightPrintConfig,
   fullWeekPrintConfig,
@@ -138,20 +140,19 @@ import {
   patchNightCoreAuxLayoutCache,
   patchNightSecondaryTasksCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
-import {
-  hydrateNightForPrint,
-  nextFrames as printNextFrames,
-  waitForPrintArtboardSettled,
-} from "./print/printHydrateNight";
 import { generatePrintPreviewGoldenPages } from "./print/printPreviewPipeline";
-import { postProcessBreaksArtboard } from "./print/breaksArtboard";
 import { exportGoldenPdf } from "./print/exportPdf";
 import {
   mountGoldenPrintSession,
   runBrowserPrint,
   waitForGoldenRenderSettled,
 } from "./print/printSession";
-import { LivePrintPreviewArtboard } from "./print/LivePrintPreviewArtboard";
+import { PrintPreviewStage } from "./print/PrintPreviewStage";
+import type { PrintPreviewFocus } from "./print/LivePrintPreviewArtboard";
+import {
+  printPreviewStageHeight,
+  printPreviewStageWidth,
+} from "./print/PrintPreviewScaledSheet";
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -175,6 +176,7 @@ import RosterItem from "./components/RosterItem";
 import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
+import { BuilderPinnedFooter } from "./components/BuilderPinnedFooter";
 import PlacementPad from "./components/PlacementPad";
 import PlacementDock from "./components/placement-dock/PlacementDock";
 import { placementDockStageRightInset } from "@/lib/shiftbuilder/tabletDevice";
@@ -283,7 +285,7 @@ import {
   isTabletTouchDevice,
   type StageInsets,
 } from "./hooks/useZoom";
-import { useStagePinchPan } from "./hooks/useStagePinchPan";
+
 
 
 // =============================================================================
@@ -770,6 +772,28 @@ function AuthedShiftBuilder() {
     return (saved === "print-preview" || saved === "builder") ? saved : "builder";
   });
   const isPrintPreview = canvasMode === "print-preview";
+  const [printPreviewFocus, setPrintPreviewFocus] = useState<PrintPreviewFocus>("duplex");
+  const [printPreviewQueueContext, setPrintPreviewQueueContext] = useState<{
+    queueIds: string[];
+    queuePageId: string;
+  } | null>(null);
+  const printPreviewSheetCount = printPreviewFocus === "duplex" ? 2 : 1;
+  const printPreviewContentWidth = printPreviewStageWidth(
+    printPreviewSheetCount === 2 ? 2 : 1,
+  );
+  const printPreviewContentHeight = printPreviewStageHeight();
+  const goldenFrameWidth = isPrintPreview ? printPreviewContentWidth : NATURAL_WIDTH;
+  const goldenFrameHeight = isPrintPreview ? printPreviewContentHeight : NATURAL_HEIGHT;
+  const printPreviewArtboardSize = isPrintPreview
+    ? { w: printPreviewContentWidth, h: printPreviewContentHeight }
+    : undefined;
+
+  // Duplex (deploy + breaks) unless opened from Print Command Center eye icon.
+  React.useEffect(() => {
+    if (isPrintPreview && printPreviewQueueContext === null) {
+      setPrintPreviewFocus("duplex");
+    }
+  }, [isPrintPreview, printPreviewQueueContext]);
   // Dismissable week health bar — placement under nav + stage top inset (see stageTopInsetPx).
   const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -789,7 +813,7 @@ function AuthedShiftBuilder() {
 
   // Lock entire web app exactly to browser window size (100vh/100vw).
   // Eliminates ALL scroll and page movement — even during dnd, pinch, or long content.
-  // Paired with global CSS + useZoom adaptive fit/scale.
+  // Paired with global CSS + fluid builder layout (print preview still uses useZoom).
   // Safari-specific: use window.innerHeight to defeat 100vh + address bar bugs.
   React.useEffect(() => {
     const htmlEl = document.documentElement;
@@ -1096,6 +1120,8 @@ function AuthedShiftBuilder() {
   // when closed.
   const [catalog, setCatalog] = useState<CatalogTask[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, NightSlotTask[]>>({});
+  const selectedTasksLatestRef = React.useRef(selectedTasks);
+  selectedTasksLatestRef.current = selectedTasks;
   const [tasksOpenFor, setTasksOpenFor] = useState<string | null>(null);
 
   // Task UX prefs (driven by the new Sudo → Tasks tab). Default = enabled so the
@@ -1942,29 +1968,6 @@ function AuthedShiftBuilder() {
     !isWeekHealthTrackerDismissed;
 
   const builderContentRef = useRef<HTMLDivElement>(null);
-  // Initialize to a wide value that forces the @container queries to use max columns (5 for zones/rr)
-  // so the first layout measures the "full natural" comfortable size instead of starting narrow and staying there.
-  // Start with a generous wide layout size so @container "builder" picks the 5-col + aux sidebar
-  // grid immediately on first render. Measurement will refine the exact natural size.
-  const [builderContentWidth, setBuilderContentWidth] = useState(1580);
-  const [builderContentHeight, setBuilderContentHeight] = useState(1050);
-
-  // Guard to prevent measurement thrash / freeze during heavy ops (engine, defaults, publish)
-  // Only on iPad these rapid RO + setState + scale updates were causing full UI freeze.
-  const isHeavyOperation = engineRunPhase !== "idle" || publishDayBusy || restoreDefaultBreaksBusy;
-  const isHeavyOpRef = useRef(false);
-  useEffect(() => {
-    isHeavyOpRef.current = isHeavyOperation;
-  }, [isHeavyOperation]);
-
-  // Pause scale/content measurements + fit recomputes during active drag or place
-  // to prevent the fitted viewport + reserved wrapper from visibly shrinking/in-out.
-  const isDraggingRef = useRef(!!activeDrag);
-  useEffect(() => {
-    isDraggingRef.current = !!activeDrag;
-  }, [activeDrag]);
-
-  const lastMeasuredRef = useRef({ w: 0, h: 0 });
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
@@ -1986,186 +1989,46 @@ function AuthedShiftBuilder() {
   }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey]);
 
   const {
-    zoomMode,
     setZoomMode,
-    fitScale,
     stageHostRef,
-    scale,
+    scale: previewScale,
     recomputeScale,
-    zoomSteps,
-    isTabletTouch,
-    maxScale,
   } = useZoom({
     rosterOpen,
     stageInsets,
-    builderFit: isBuilderLiveCanvas
-      ? {
-          enabled: true,
-          contentRef: builderContentRef,
-          chromeHeightPx: 0,
-          pause: isHeavyOperation || !!activeDrag,
-        }
-      : undefined,
+    artboardSize: printPreviewArtboardSize,
   });
 
-  // Stabilize recomputeScale calls so we don't put the function identity in useEffect deps.
-  // This avoids "deps array size changed" warnings during HMR / when the function is recreated.
+  /** Live builder: no CSS scale — fluid layout + pinned footer. Print preview keeps useZoom fit. */
+  const scale = isBuilderLiveCanvas ? 1 : previewScale;
+
   const recomputeScaleRef = useRef(recomputeScale);
   useEffect(() => {
     recomputeScaleRef.current = recomputeScale;
   }, [recomputeScale]);
 
-  // Builder canvas: default to zoom-to-fit on load, day switches, and deployment ↔ breaks toggles.
   useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
+    if (!isPrintPreview) return;
     setZoomMode("fit");
     const t1 = requestAnimationFrame(recomputeScaleRef.current);
-    const t2 = window.setTimeout(recomputeScaleRef.current, 200);
+    const t2 = window.setTimeout(recomputeScaleRef.current, 120);
     return () => {
       cancelAnimationFrame(t1);
       clearTimeout(t2);
     };
-  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, setZoomMode]);
-
-  // Re-measure fit when chrome changes but preserve manual zoom if the user stepped in/out.
-  useEffect(() => {
-    if (!isBuilderLiveCanvas || isHeavyOperation) return;
-    recomputeScaleRef.current();
-  }, [isBuilderLiveCanvas, currentView, showWeekHealthBar, rosterOpen, isHeavyOperation]);
-
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    const el = builderContentRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-
-    const measure = () => {
-      if (isHeavyOpRef.current || isDraggingRef.current) return; // pause during heavy ops or drag/place to avoid visible scale jank
-      const w = el.offsetWidth || el.scrollWidth || 0;
-      const h = el.offsetHeight || el.scrollHeight || 0;
-      const last = lastMeasuredRef.current;
-      // Raise threshold to ~28px so adding 1-2 small task rows inside cards does not cause
-      // the fitted scale + reserved wrapper to visibly shrink the whole screen.
-      if (Math.abs(w - last.w) > 16 || Math.abs(h - last.h) > 16) {
-        last.w = w;
-        last.h = h;
-        setBuilderContentWidth(w);
-        setBuilderContentHeight(h);
-        // Immediately ask for a fresh scale computation using the new natural size.
-        // This helps "zoom to fit on load" settle faster instead of waiting for next effect/RO.
-        requestAnimationFrame(() => recomputeScaleRef.current());
-      }
-    };
-    measure();
-    const ro = new ResizeObserver(() => requestAnimationFrame(measure));
-    ro.observe(el);
-
-    // Extra adaptive: also measure on fonts load (text metrics can affect natural content dims)
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(() => requestAnimationFrame(measure));
-    }
-
-    return () => ro.disconnect();
-  }, [isBuilderLiveCanvas, selectedDayIndex, currentView]); // measurement uses ref for last + heavy guard; no state deps needed
-
-  // After any heavy operation ends, do a final settle + re-measure + fit.
-  // Prevents stale scale/wrapper after bulk data changes (engine, defaults, publish).
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    if (isHeavyOperation) return;
-    const t = setTimeout(() => {
-      if (isDraggingRef.current) return;
-      const el = builderContentRef.current;
-      if (el) {
-        const w = el.offsetWidth || el.scrollWidth || 0;
-        const h = el.offsetHeight || el.scrollHeight || 0;
-        if (Math.abs(w - builderContentWidth) > 16 || Math.abs(h - builderContentHeight) > 16) {
-          setBuilderContentWidth(w);
-          setBuilderContentHeight(h);
-        }
-      }
-      recomputeScaleRef.current();
-    }, 120);
-    return () => clearTimeout(t);
-  }, [isHeavyOperation, isBuilderLiveCanvas, builderContentWidth, builderContentHeight]);
-
-  // Extra safety re-fit shortly after mount / data load for the live builder to avoid
-  // initial measurement being too small (causing cut-off on right/bottom as cards populate).
-  // Also re-measure after forcing the wide initial content width (to trigger max columns).
-  // Multiple passes help "zoom to fit on load" on Safari/iPad where layout settles late.
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-
-    const doMeasureAndFit = () => {
-      if (builderContentRef.current) {
-        const w = builderContentRef.current.offsetWidth || builderContentRef.current.scrollWidth || 0;
-        const h = builderContentRef.current.offsetHeight || builderContentRef.current.scrollHeight || 0;
-        if (w > builderContentWidth + 10) setBuilderContentWidth(Math.max(w, 1580));
-        if (h > builderContentHeight + 10) setBuilderContentHeight(Math.max(h, 1050));
-      }
-      recomputeScaleRef.current();
-    };
-
-    // Very early pass (before paint where possible)
-    const raf1 = requestAnimationFrame(doMeasureAndFit);
-    const t1 = setTimeout(doMeasureAndFit, 60);
-    const t2 = setTimeout(doMeasureAndFit, 180);
-    const t3 = setTimeout(doMeasureAndFit, 420);
-
-    return () => {
-      cancelAnimationFrame(raf1);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, [isBuilderLiveCanvas, builderContentWidth, builderContentHeight]);
-
-  const stepZoom = (dir: -1 | 1) => {
-    if (zoomMode === "fit") {
-      // With richer step lists, pick a sensible discrete level out of "fit"
-      // rather than blindly jumping to the extreme ends of the array.
-      let target: number;
-      if (dir > 0) {
-        target = zoomSteps.find((s) => s >= 1) || zoomSteps[zoomSteps.length - 1];
-      } else {
-        target = zoomSteps.slice().reverse().find((s) => s <= 0.85) || zoomSteps[0];
-      }
-      setZoomMode(target);
-      return;
-    }
-    const current =
-      typeof zoomMode === "number"
-        ? zoomSteps.reduce((best, step) =>
-            Math.abs(step - zoomMode) < Math.abs(best - zoomMode) ? step : best,
-          zoomSteps[0])
-        : zoomSteps[Math.floor(zoomSteps.length / 2)];
-    const idx = zoomSteps.indexOf(current);
-    const baseIdx = idx === -1 ? Math.floor(zoomSteps.length / 2) : idx;
-    const next = zoomSteps[Math.max(0, Math.min(zoomSteps.length - 1, baseIdx + dir))];
-    setZoomMode(next);
-  };
-
-  // Handlers for the FloatingNav zoom cluster (Fit / − / +)
-  const handleZoomFit = () => {
-    if (isHeavyOperation) return;
-    recomputeScaleRef.current(); // ensure fresh measurement
-    setZoomMode("fit");
-  };
-  const handleZoomOut = () => stepZoom(-1);
-  const handleZoomIn = () => stepZoom(1);
-
-  const isStageZoomed =
-    zoomMode !== "fit" || Math.abs(scale - fitScale) > 0.02;
-  const stageZoomLabel = `${Math.round(scale * 100)}%`;
-
-  useStagePinchPan({
-    enabled: isTabletTouch && !selectedSlotKey,
-    stageHostRef,
-    scale,
-    fitScale,
-    maxScale,
+  }, [
+    isPrintPreview,
+    printPreviewContentWidth,
+    printPreviewContentHeight,
+    printPreviewSheetCount,
     setZoomMode,
-    onFit: handleZoomFit,
-  });
+  ]);
+
+  const builderPageLabel = React.useMemo(() => {
+    const pageNum =
+      currentView === "deployment" ? selectedDayIndex * 2 + 1 : selectedDayIndex * 2 + 2;
+    return `— ${pageNum} of 14 —`;
+  }, [currentView, selectedDayIndex]);
 
   // === Apple Pencil Pro squeeze gesture to open Command Palette ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
@@ -3510,227 +3373,6 @@ function AuthedShiftBuilder() {
     shiftHistory.recordChange(description, prev, next);
   };
 
-  // === Dual-page print (Deployment + Break Sheet) ============================
-  //
-  // The artboard renders one view at a time on-screen (`currentView`). For
-  // print we want BOTH pages as a single print job so the operator can choose
-  // duplex in the print dialog and the two views end up on the two sides of
-  // one piece of paper.
-  //
-  // Refactoring the ~470 lines of artboard JSX to take `view` as a prop would
-  // touch 8 conditional sites; instead we capture each view's rendered HTML
-  // by briefly toggling `currentView`, then inject both HTMLs into a hidden
-  // `.print-dual-container` and call `window.print()`. Print CSS hides the
-  // live artboard and shows the dual container with a page-break between the
-  // two captures.
-  //
-  // Duplex/double-sided cannot be forced from CSS — that's a printer driver
-  // setting. We default to landscape via @page and trust the operator's
-  // print-dialog choice (or printer default) for duplex.
-  const handlePrintBothPages = React.useCallback(async () => {
-    handleSlotClose();
-    const liveArtboard = document.querySelector(".print-artboard") as HTMLElement | null;
-    if (!liveArtboard) {
-      // Fallback: best-effort single-page print if the artboard isn't in the DOM.
-      window.print();
-      return;
-    }
-
-    const originalView = currentView;
-
-    // Wait N animation frames so React has committed the new render before
-    // we serialize the DOM.
-    const nextFrames = (n: number) =>
-      new Promise<void>((resolve) => {
-        let count = 0;
-        const tick = () => {
-          count += 1;
-          if (count >= n) resolve();
-          else requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
-
-    try {
-      // Hide the live artboard during captures so it doesn't accidentally
-      // get included as an extra (blank) page.
-      if (liveArtboard) liveArtboard.style.visibility = 'hidden';
-
-      // Capture deployment view.
-      flushSync(() => { setCurrentView("deployment"); });
-      await nextFrames(2);
-      // Strip the temporary visibility:hidden we applied above so the captured
-      // snapshot renders correctly inside the print-dual-container.
-      if (liveArtboard) liveArtboard.style.visibility = '';
-      const deploymentHTML =
-        (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
-      if (liveArtboard) liveArtboard.style.visibility = 'hidden';
-
-      // Capture breaks view
-      flushSync(() => { setCurrentView("breaks"); });
-      await nextFrames(2);
-
-      // Force the artboard to the exact print height during capture so that
-      // the breaks view's flex layout sees a full 816px tall container.
-      // This allows `mt-auto` (and flex-1 areas) to pin the Overlaps section
-      // to the very bottom of the landscape page.
-      const artboardForBreaks = document.querySelector(".print-artboard") as HTMLElement | null;
-      const prevHeight = artboardForBreaks?.style.height;
-      const prevMinHeight = artboardForBreaks?.style.minHeight;
-      const prevDisplay = artboardForBreaks?.style.display;
-      const prevFlexDir = artboardForBreaks?.style.flexDirection;
-
-      if (artboardForBreaks) {
-        artboardForBreaks.style.height = "816px";
-        artboardForBreaks.style.minHeight = "816px";
-        artboardForBreaks.style.display = "flex";
-        artboardForBreaks.style.flexDirection = "column";
-      }
-
-      // Force layout calculation
-      artboardForBreaks?.getBoundingClientRect();
-      await nextFrames(1);
-
-      const breaksHTML =
-        (document.querySelector(".print-artboard") as HTMLElement | null)?.outerHTML ?? "";
-
-      // Restore
-      if (artboardForBreaks) {
-        artboardForBreaks.style.height = prevHeight || "";
-        artboardForBreaks.style.minHeight = prevMinHeight || "";
-        artboardForBreaks.style.display = prevDisplay || "";
-        artboardForBreaks.style.flexDirection = prevFlexDir || "";
-      }
-
-      // Restore the operator's original view before printing — once the
-      // container is injected and we trigger print, the visual freezes.
-      flushSync(() => { setCurrentView(originalView); });
-      await nextFrames(1);
-
-      // Restore visibility of the live artboard (it will be hidden again
-      // by the printing-dual-mode class right before window.print).
-      if (liveArtboard) liveArtboard.style.visibility = '';
-
-      if (!deploymentHTML || !breaksHTML) {
-        console.warn("[shiftbuilder] dual-page print failed to capture views; falling back");
-        window.print();
-        return;
-      }
-
-      // Build the print-only container holding both captures. The captures
-      // include the full `.print-artboard` markup with frozen classNames /
-      // inline styles, so global CSS still applies during print.
-      const container = document.createElement("div");
-      container.className = "print-dual-container";
-      container.innerHTML = deploymentHTML + breaksHTML;
-      document.body.appendChild(container);
-
-      // Post-process the breaks artboard (second one) to pin the overlaps
-      // section directly above the footer.
-      //
-      // Layout contract we enforce here:
-      //   .print-artboard (flex-col, 816px)
-      //     .sheet-header      (flex-shrink: 0)
-      //     .content-area      (flex: 1 1 0%, flex-col, overflow: hidden)
-      //       .wave-grid       (flex: 1 1 0%, min-h: 0, overflow: hidden)
-      //                        → takes remaining space; clips if waves are tall
-      //       .overlaps-section (flex-shrink: 0, margin-top: 0)
-      //                        → always visible, pinned just above the footer
-      //     .sheet-footer      (flex-shrink: 0)
-      const breaksArtboard = container.querySelectorAll('.print-artboard')[1];
-      if (breaksArtboard) {
-        // Content area: ensure it's a flex column so children can use flex sizing.
-        const contentArea = breaksArtboard.querySelector('.flex-1.min-h-0.overflow-hidden.flex.flex-col') as HTMLElement | null;
-        if (contentArea) {
-          contentArea.style.display = 'flex';
-          contentArea.style.flexDirection = 'column';
-          contentArea.style.flex = '1 1 0%';
-          contentArea.style.minHeight = '0';
-          contentArea.style.overflow = 'hidden';
-        }
-
-        // Wave grid (first child of content area): take available space but
-        // never push the overlaps section below the visible area.
-        const waveGrid = contentArea?.firstElementChild as HTMLElement | null;
-        if (waveGrid && waveGrid !== contentArea?.querySelector('.overlaps-section')) {
-          waveGrid.style.flex = '1 1 0%';
-          waveGrid.style.minHeight = '0';
-          waveGrid.style.overflow = 'hidden';
-          waveGrid.style.alignContent = 'start';
-        }
-
-        // Overlaps: never shrink, never pushed off-screen, pinned at the bottom
-        // of the flex column just above the footer.
-        const overlaps = breaksArtboard.querySelector('.overlaps-section') as HTMLElement | null;
-        if (overlaps) {
-          overlaps.style.flexShrink = '0';
-          overlaps.style.marginTop = '0';
-        }
-      }
-
-      // body class so print CSS knows to show the dual container.
-      document.body.classList.add("printing-dual-mode");
-
-      // Hide every other direct body child (the Next.js app root, any injected
-      // scripts/portals, etc.) with display:none so they produce zero layout
-      // in the print flow and can't generate a blank first page. We save and
-      // restore each element's previous inline display value.
-      const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
-      Array.from(document.body.children).forEach((child) => {
-        const el = child as HTMLElement;
-        if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
-          hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
-          el.style.display = "none";
-        }
-      });
-
-      // Trigger the dialog. window.print() is synchronous-ish in Chrome
-      // (returns after the dialog closes) and async in Safari (returns
-      // immediately while the dialog is shown). Either way the cleanup
-      // below runs once the call returns.
-      try {
-        window.print();
-      } finally {
-        hiddenBodyChildren.forEach(({ el, prevDisplay }) => {
-          el.style.display = prevDisplay;
-        });
-        document.body.classList.remove("printing-dual-mode");
-        container.remove();
-      }
-    } catch (e) {
-      console.error("[shiftbuilder] dual-page print error", e);
-      document.body.classList.remove("printing-dual-mode");
-      document.querySelector(".print-dual-container")?.remove();
-    }
-  }, [currentView, handleSlotClose]);
-
-  // Prints all 7 days in the active week: 14 pages (deployment + break sheet per day).
-  // Cycles through each day, waits for Supabase data to load, captures both views,
-  // then prints the full batch in one window.print() call.
-  const printHydrateApply = React.useMemo(
-    () => ({
-      setNightId,
-      setSelectedTasks,
-      setCardBorders,
-      setNightBreakRows,
-      setLoadingAssignments,
-      loadingAssignmentsRef,
-    }),
-    [],
-  );
-
-  const preparePrintDay = React.useCallback(
-    async (dayIdx: number) => {
-      const def = DAY_DEFS[dayIdx];
-      if (!def) return;
-      flushSync(() => setSelectedDayIndex(dayIdx));
-      await hydrateNightForPrint(def, currentNight.queryClient, printHydrateApply);
-      await printNextFrames(6);
-      await waitForPrintArtboardSettled();
-    },
-    [DAY_DEFS, currentNight.queryClient, printHydrateApply],
-  );
-
   // === Print Command Center — generalized multi-day, multi-config print handler ===
   //
   // Generalizes handlePrintWeek: iterates only the days/pages requested in config,
@@ -3738,6 +3380,7 @@ function AuthedShiftBuilder() {
   // + zoom so the output matches exactly what the Print Command Center previewed.
   const handlePrintWithConfig = React.useCallback(async (config: PrintConfig, options: { exportMode?: boolean } = {}) => {
     const { exportMode = false } = options;
+    config = normalizePrintConfigForExecution(config, DAY_DEFS);
     handleSlotClose();
     const originalDayIndex = selectedDayIndex;
     const originalView = currentView;
@@ -3847,12 +3490,34 @@ function AuthedShiftBuilder() {
 
 
 
+      // Persist aux layout so print capture sees custom slots; overlay live board for active night.
+      await flushAuxLayoutSave().catch(() => {});
+
+      const liveOverlaysByDay = new Map<
+        number,
+        {
+          assignments: Record<string, { tmId?: string; tmName?: string; breakGroup?: number; isLocked?: boolean }>;
+          auxDefs: AuxDef[];
+          tasksBySlot: Record<string, NightSlotTask[]>;
+        }
+      >();
+      if (dayIndices.includes(originalDayIndex)) {
+        liveOverlaysByDay.set(originalDayIndex, {
+          assignments: useShiftBuilderStore.getState().assignments ?? {},
+          auxDefs: auxDefsLatestRef.current,
+          tasksBySlot: selectedTasksLatestRef.current,
+        });
+      }
+
       const goldenPages = await generatePrintPreviewGoldenPages({
         config,
         dayDefs: DAY_DEFS,
         activeDays,
         coverHTML,
         overviewHTML,
+        liveOverlaysByDay,
+        draftAssignments: isDraftMode ? draftAssignments : undefined,
+        isDraftMode,
         onProgress: (label) => {
           bumpProgress(label);
         },
@@ -3861,6 +3526,13 @@ function AuthedShiftBuilder() {
       if (goldenPages.length === 0) {
         showToast(exportMode ? "Nothing to export." : "Nothing to print.", "error");
         return;
+      }
+
+      if (goldenPages.length !== totalPages) {
+        console.warn(
+          "[shiftbuilder] Print page count mismatch",
+          { expected: totalPages, rendered: goldenPages.length, keys: goldenPages.map((p) => p.key) },
+        );
       }
 
       if (exportMode) {
@@ -3882,8 +3554,7 @@ function AuthedShiftBuilder() {
       } else {
         setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
         saveLastPrintConfig(config);
-        const session = mountGoldenPrintSession(goldenPages, config, "print");
-        await waitForGoldenRenderSettled();
+        const session = await mountGoldenPrintSession(goldenPages, config, "print");
         await runBrowserPrint(session);
         setIsPrintCenterOpen(false);
       }
@@ -3904,19 +3575,59 @@ function AuthedShiftBuilder() {
       setIsPrinting(false);
       setPrintProgress(null);
     }
-  }, [DAY_DEFS, selectedDayIndex, currentView, showToast, handleSlotClose, canvasMode]);
+  }, [
+    DAY_DEFS,
+    selectedDayIndex,
+    currentView,
+    showToast,
+    handleSlotClose,
+    canvasMode,
+    flushAuxLayoutSave,
+    isDraftMode,
+    draftAssignments,
+  ]);
+
+  const handleCanvasModeChange = React.useCallback(
+    (mode: "builder" | "print-preview") => {
+      setCanvasMode(mode);
+      if (mode === "print-preview") {
+        setPrintPreviewFocus("duplex");
+        setPrintPreviewQueueContext(null);
+      }
+    },
+    [],
+  );
 
   const handlePreviewSheet = React.useCallback(
     (args: { dayIndex: number; view: "deployment" | "breaks"; label: string }) => {
+      const lastConfig = loadLastPrintConfig(args.dayIndex);
+      const config = lastConfig ?? tonightPrintConfig(args.dayIndex);
+      const queueIds = applyCustomQueueOrder(
+        buildPrintQueue(
+          config.days,
+          config.pageOrder,
+          DAY_DEFS,
+          config.includeOverview,
+          config.overviewPosition,
+          config.includeCoverPage,
+          config.coverPagePosition,
+        ),
+        config.customQueueOrder ?? null,
+      ).map((item) => item.id);
+      const queuePageId =
+        args.view === "breaks" ? `${args.dayIndex}-b` : `${args.dayIndex}-d`;
+
       setIsPrintCenterOpen(false);
       flushSync(() => {
+        setPrintPreviewFocus(args.view);
+        setPrintPreviewQueueContext({ queueIds, queuePageId });
         setCanvasMode("print-preview");
         setSelectedDayIndex(args.dayIndex);
         setCurrentView(args.view);
       });
       showToast(`Preview: ${args.label}`, "info");
     },
-    [showToast],
+    [DAY_DEFS, selectedDayIndex, showToast],
   );
 
   const handlePrintWeek = React.useCallback(async () => {
@@ -7323,18 +7034,12 @@ function AuthedShiftBuilder() {
         } : undefined}
         onLogout={logoutOperator}
         onOpenSettings={canAccessSudo ? handleOpenSettings : undefined}
-        // Zoom cluster (Fit / − / +)
-        onZoomFit={handleZoomFit}
-        onZoomOut={handleZoomOut}
-        onZoomIn={handleZoomIn}
-        zoomLabel={stageZoomLabel}
-        isZoomed={isStageZoomed}
         onPrint={() => setIsPrintCenterOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
         onRosterToggle={() => setRosterOpen((v) => !v)}
         canvasMode={canvasMode}
-        onCanvasModeChange={setCanvasMode}
+        onCanvasModeChange={handleCanvasModeChange}
         isDayPublished={currentNightStatus === "published"}
         canPublishDay={canPublish}
         onToggleDayPublished={
@@ -7346,7 +7051,7 @@ function AuthedShiftBuilder() {
       {/* Beautiful seamless exit pill for print preview mode */}
       {isPrintPreview && (
         <div
-          onClick={() => setCanvasMode('builder')}
+          onClick={() => handleCanvasModeChange('builder')}
           className="fixed z-[65] flex items-center gap-2.5 px-4 py-1.5 rounded-3xl text-[12px] font-semibold cursor-pointer select-none no-print"
           style={{
             top: 62,
@@ -7629,13 +7334,10 @@ function AuthedShiftBuilder() {
           </div>
         )}
 
-        {/* RIGHT: Scaled, centered artboard stage.
-           Fixed viewport: stageHost is overflow-hidden. We measure available
-           space and scale the content (via useZoom) to fit *exactly* with no
-           scroll or page shift possible, even while dragging. */}
+        {/* RIGHT: Builder stage — fluid width, scrollable body, pinned footer. Print preview still scales via useZoom. */}
         <div
           ref={stageHostRef}
-          className={`sb-stage-host flex-1 min-w-0 overflow-hidden sb-builder-stage bg-[var(--ios-background-primary)] dark:bg-[var(--ios-background-primary)] flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
+          className={`sb-stage-host flex-1 min-w-0 ${isPrintPreview ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"} sb-builder-stage bg-[var(--ios-background-primary)] dark:bg-[var(--ios-background-primary)] flex ${isBuilderLiveCanvas ? 'flex-col items-stretch justify-start' : 'items-center justify-center'} transition-[padding] duration-300`}
           style={{
             // Explicit per-side padding so the artboard floats clear of every
             // piece of floating chrome. On iPad, globals.css max() merges safe-area.
@@ -7652,32 +7354,13 @@ function AuthedShiftBuilder() {
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderLiveCanvas && (
             <div
-              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
-              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-hidden">
-                {/* Sized wrapper ensures the scaled content claims exactly the right layout space.
-                    This makes zoom/scale fully adaptive to window size without "page too long" hacks
-                    or negative margins. Intricate: explicit pre-transform dimensions + scale inside. */}
-                <div
-                  className="sb-scale-reservation"
-                  style={{
-                    // Small buffer + ceil to avoid subpixel clipping on right/bottom edges (aux cards, last row coverage)
-                    width: builderContentWidth > 50 ? `${Math.ceil(builderContentWidth * scale) + 2}px` : '100%',
-                    height: builderContentHeight > 50 ? `${Math.ceil(builderContentHeight * scale) + 2}px` : undefined,
-                    marginLeft: 'auto',
-                    marginRight: 'auto',
-                  }}
-                >
-                  <div
-                    ref={builderContentRef}
-                    className="sb-builder-scale-inner"
-                    style={{
-                      width: builderContentWidth > 50 ? `${builderContentWidth}px` : '100%',
-                      transform: `scale(${scale})`,
-                      transformOrigin: "top left",
-                    }}
-                  >
+              <div
+                ref={builderContentRef}
+                className="sb-builder-fluid-viewport w-full min-h-0 flex-1"
+              >
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
@@ -7742,7 +7425,8 @@ function AuthedShiftBuilder() {
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
-                artboardScale={scale}
+                artboardScale={1}
+                hideSheetFooter
                 isPrintPreview={false}
                 showWeekHealthBar={showWeekHealthBar}
                 weekDailyHealths={weekDailyHealths}
@@ -7752,9 +7436,12 @@ function AuthedShiftBuilder() {
                 onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
-                  </div>
-                </div>
               </div>
+              <BuilderPinnedFooter
+                pageLabel={builderPageLabel}
+                isDark={isDark}
+                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
+              />
             </div>
           )}
 
@@ -7764,25 +7451,25 @@ function AuthedShiftBuilder() {
           <div
             className={`relative flex-shrink-0 flex flex-col items-center ${relaxedFrameClass}`}
             style={{
-              width: NATURAL_WIDTH * scale,
+              width: goldenFrameWidth * scale,
               gap: 10,
             }}
           >
           <div
             className={`relative flex-shrink-0 ${relaxedFrameClass}`}
             style={{
-              width: NATURAL_WIDTH * scale,
-              height: NATURAL_HEIGHT * scale,
-              overflow: "hidden",
+              width: goldenFrameWidth * scale,
+              height: goldenFrameHeight * scale,
+              overflow: isPrintPreview ? "visible" : "hidden",
             }}
           >
             {/* The actual scaled artboard (original print-stage-inner) */}
             <div
-              className={`print-stage-inner relative overflow-hidden ${relaxedFrameClass}`}
+              className={`print-stage-inner relative ${isPrintPreview ? "overflow-visible" : "overflow-hidden"} ${relaxedFrameClass}`}
               ref={positioningRef}
               style={{
-                width: NATURAL_WIDTH,
-                height: NATURAL_HEIGHT,
+                width: goldenFrameWidth,
+                height: goldenFrameHeight,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
               }}
@@ -8259,58 +7946,20 @@ function AuthedShiftBuilder() {
                 )}
               </>
             ) : isPrintPreview ? (
-              // Seamlessly beautiful dual front+back print preview — shows both pages side-by-side like the PDF
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 20,
-                  justifyContent: 'center',
-                  alignItems: 'flex-start',
-                  paddingTop: 8,
-                }}
-              >
-                {(['deployment', 'breaks'] as const).map((view, i) => (
-                  <div key={view} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: '1.5px',
-                        color: '#6B7280',
-                        marginBottom: 4,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {i === 0 ? 'FRONT — DEPLOYMENT' : 'BACK — BREAKS'} 
-                    </div>
-                    <div
-                      style={{
-                        width: 1056,
-                        height: 816,
-                        overflow: 'hidden',
-                        border: '1px solid var(--ios-gray-6)',
-                        borderRadius: 2,
-                        boxShadow: '0 10px 40px -10px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.6) inset',
-                        background: '#fff',
-                        transform: 'scale(0.46)',
-                        transformOrigin: 'top center',
-                      }}
-                    >
-                      <LivePrintPreviewArtboard
-                        selectedDay={selectedDay}
-                        selectedDayIndex={selectedDayIndex}
-                        currentView={view}
-                        selectedTasks={selectedTasks}
-                        amOverlapDayName={amOverlapDayName}
-                        amOverlapDateNum={amOverlapDateNum}
-                        nextDayColor={nextDayColor}
-                        breakGroup={breakGroup}
-                        weekDayDefs={DAY_DEFS}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <PrintPreviewStage
+                selectedDay={selectedDay}
+                selectedDayIndex={selectedDayIndex}
+                focus={printPreviewFocus}
+                breakGroup={breakGroup}
+                weekDayDefs={DAY_DEFS}
+                isDraftMode={isDraftMode}
+                draftAssignments={draftAssignments}
+                liveAssignments={storeAssignments ?? {}}
+                liveAuxDefs={auxDefs}
+                liveTasksBySlot={selectedTasks}
+                queuePageId={printPreviewQueueContext?.queuePageId ?? null}
+                queueIds={printPreviewQueueContext?.queueIds ?? null}
+              />
             ) : (
               <ShiftBuilderBoard
                 // assignments + draftAssignments now come from narrow Zustand selectors inside the board (3.4)

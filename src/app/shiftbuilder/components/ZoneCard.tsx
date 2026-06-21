@@ -23,7 +23,6 @@ import {
   CoveredByOverlay,
   cardBodyInteriorClass,
   cardBodyInteriorStyle,
-  coverageBodyPadding,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
@@ -116,7 +115,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter((t) => t.isCoverage);
-  const coverageBodyPb = coverageBodyPadding(zoneCoverageTasks.length, showDigitalAssists);
   const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
 
   let assignmentState: SlotAssignmentState;
@@ -168,7 +166,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       <CardAccentStripe color={color} />
 
       {/* Refined header matching the design: icon + label, status badge, count pill */}
-      <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap">
+      <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap shrink-0">
         <span className="text-[12px] leading-none shrink-0" style={{ color }}>{icon}</span>
         <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color }}>
           {def.label}
@@ -182,67 +180,70 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         </div>
       </div>
 
-      {/* Large name / covered area. Covered uses the shared overlay to match the reference (small "COVERED BY" + large muted names in the name slot, no extra "Covered" title). */}
-      <div className="px-3.5 pt-1.5 pb-3">
-        {assignmentState.kind === "covered" ? (
-          <CoveredByOverlay
-            scale="zone"
-            coveredByNames={coveredByNames}
-            onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
-            nameSizeOverride={25}
-          />
-        ) : (
-          <h3 className={`text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`} style={assignmentState.kind === "unassigned" ? {color: '#A1A1AA', opacity: 0.75} : {}}>
-            {a.tmName || "Unassigned"}
-          </h3>
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Large name / covered area */}
+        <div className="px-3.5 pt-1.5 pb-2 shrink-0">
+          {assignmentState.kind === "covered" ? (
+            <CoveredByOverlay
+              scale="zone"
+              coveredByNames={coveredByNames}
+              onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+              nameSizeOverride={25}
+            />
+          ) : (
+            <h3 className={`text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`} style={assignmentState.kind === "unassigned" ? {color: '#A1A1AA', opacity: 0.75} : {}}>
+              {a.tmName || "Unassigned"}
+            </h3>
+          )}
+        </div>
+
+        {assignmentState.kind === "unassigned" ? (
+          <>
+            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
+            <div className="px-3.5 py-2.5 shrink-0">
+              <UnassignedInvite
+                size="zone"
+                onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+                title="Click or drop to assign team member"
+              />
+            </div>
+          </>
+        ) : regularTasks.length > 0 && (
+          <>
+            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
+            <div className="sb-card-task-scroll px-3 py-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto">
+              {regularTasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  slotKey={def.key}
+                  onRemoveTask={onRemoveTask}
+                  onSetTaskColor={onSetTaskColor}
+                  onSetTaskMarker={onSetTaskMarker}
+                  onEditTask={onEditTask}
+                  onOpenTaskTextEdit={onOpenTaskTextEdit}
+                  textSize="text-[12px]"
+                  textColorClass="text-gray-600"
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      {/* Task list (shown for both assigned + covered states) or unassigned invite.
-          Covered names are now rendered in the name row above (matching the reference image). */}
-      {assignmentState.kind === "unassigned" ? (
-        <>
-          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
-          <div className="px-3.5 py-2.5">
-            <UnassignedInvite
-              size="zone"
-              onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
-              title="Click or drop to assign team member"
+      {zoneCoverageTasks.length > 0 && (
+        <div className="sb-coverage-footer shrink-0">
+          {zoneCoverageTasks.map((t) => (
+            <CoverageBar
+              key={t.id}
+              task={t}
+              slotKey={def.key}
+              onRemoveTask={onRemoveTask}
+              builderCalm={showDigitalAssists}
             />
-          </div>
-        </>
-      ) : regularTasks.length > 0 && (
-        <>
-          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)]" />
-          <div className="px-3 py-2.5 space-y-0.5">
-            {regularTasks.map((t) => (
-              <TaskRow
-                key={t.id}
-                task={t}
-                slotKey={def.key}
-                onRemoveTask={onRemoveTask}
-                onSetTaskColor={onSetTaskColor}
-                onSetTaskMarker={onSetTaskMarker}
-                onEditTask={onEditTask}
-                onOpenTaskTextEdit={onOpenTaskTextEdit}
-                textSize="text-[12px]"
-                textColorClass="text-gray-600"
-              />
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
       )}
-
-      {/* Keep coverage banner functionality */}
-      {zoneCoverageTasks.map((t) => (
-        <CoverageBar
-          key={t.id}
-          task={t}
-          slotKey={def.key}
-          onRemoveTask={onRemoveTask}
-          builderCalm={showDigitalAssists}
-        />
-      ))}
     </div>
   );
 });

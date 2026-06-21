@@ -8,6 +8,21 @@ body.printing-dual-mode .print-dual-container {
   width: 1056px;
 }
 
+body.printing-dual-mode .print-dual-container .print-page-wrapper {
+  display: block;
+  width: 1056px;
+  margin: 0;
+  padding: 0;
+  page-break-after: always;
+  break-after: page;
+  break-inside: avoid;
+}
+
+body.printing-dual-mode .print-dual-container .print-page-wrapper:last-child {
+  page-break-after: auto;
+  break-after: auto;
+}
+
 body.printing-dual-mode .print-dual-container .print-artboard {
   width: 1056px;
   height: 816px;
@@ -16,8 +31,6 @@ body.printing-dual-mode .print-dual-container .print-artboard {
   overflow: hidden;
   box-shadow: none;
   margin: 0;
-  page-break-after: always;
-  break-after: page;
   background: #ffffff;
   zoom: 1;
   transform: none;
@@ -66,6 +79,25 @@ body.golden-export-raster .print-dual-container {
 }
 
 @media print {
+  /* ShiftBuilder pins the live app to 100vh + overflow:hidden — must not clip print. */
+  html.sb-shiftbuilder,
+  body.sb-shiftbuilder,
+  html.printing-dual-mode,
+  body.printing-dual-mode {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    background: #ffffff !important;
+  }
+
+  .sb-builder-shell.sb-shiftbuilder {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
   body.printing-dual-mode,
   html.printing-dual-mode {
     background: #ffffff !important;
@@ -75,10 +107,35 @@ body.golden-export-raster .print-dual-container {
     display: none !important;
   }
 
-  body.printing-dual-mode .print-dual-container {
+  body.printing-dual-mode .print-dual-container,
+  body.sb-print-export-busy.printing-dual-mode .print-dual-container {
     display: block !important;
     opacity: 1 !important;
     position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
     background: #ffffff !important;
+  }
+
+  body.printing-dual-mode .print-dual-container .print-page-wrapper {
+    display: block !important;
+    overflow: visible !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+  }
+
+  body.printing-dual-mode .print-dual-container .print-page-wrapper:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  body.printing-dual-mode .print-dual-container .print-artboard {
+    contain: none !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 }

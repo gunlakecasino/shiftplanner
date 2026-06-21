@@ -154,6 +154,36 @@ export function applyCustomQueueOrder(
   return customOrder.map((id) => map.get(id)!).filter(Boolean);
 }
 
+/** Drop stale drag-order when it no longer matches the active print queue. */
+export function normalizePrintConfigForExecution(
+  config: PrintConfig,
+  dayDefs: DayDef[],
+): PrintConfig {
+  const autoQueue = buildPrintQueue(
+    config.days,
+    config.pageOrder,
+    dayDefs,
+    config.includeOverview,
+    config.overviewPosition,
+    config.includeCoverPage,
+    config.coverPagePosition,
+  );
+  const custom = config.customQueueOrder;
+  if (!custom?.length) return config;
+
+  const autoIds = autoQueue.map((i) => i.id).join("\0");
+  const customIds = custom.join("\0");
+  if (autoIds === customIds) return config;
+
+  const validated = applyCustomQueueOrder(autoQueue, custom);
+  const validatedIds = validated.map((i) => i.id).join("\0");
+  if (validated.length === autoQueue.length && validatedIds === autoIds) {
+    return config;
+  }
+
+  return { ...config, customQueueOrder: null };
+}
+
 export function tonightPrintConfig(selectedDayIndex: number): PrintConfig {
   return {
     days: defaultPrintDays(selectedDayIndex).map((d) =>
@@ -199,14 +229,20 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
     const parsed = JSON.parse(raw) as Partial<PrintConfig>;
     if (!parsed.days || parsed.days.length !== 7) return null;
     return {
-      days: parsed.days,
+      days: parsed.days.map((d) => ({
+        dayIndex: d.dayIndex,
+        printDeploy: Boolean(d.printDeploy),
+        printBreaks: Boolean(d.printBreaks),
+        inOverview: Boolean(d.inOverview),
+      })),
       pageOrder: parsed.pageOrder ?? "paired",
       margins: parsed.margins ?? "narrow",
       includeOverview: parsed.includeOverview ?? false,
       overviewPosition: parsed.overviewPosition ?? "last",
       includeCoverPage: parsed.includeCoverPage ?? false,
       coverPagePosition: parsed.coverPagePosition ?? "first",
-      customQueueOrder: parsed.customQueueOrder ?? null,
+      // Stale saved drag-order (e.g. deploy-only) must not drop breaks at print time.
+      customQueueOrder: null,
     };
   } catch {
     return null;

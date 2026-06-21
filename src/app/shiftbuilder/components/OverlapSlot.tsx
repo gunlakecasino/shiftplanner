@@ -122,7 +122,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         ) : (
           <span className="w-0" />
         )}
-        {fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} /> : null}
+        {fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} compact /> : null}
       </div>
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
