@@ -214,6 +214,8 @@ import {
 } from "./components/placementFitForSlot";
 import type { PlacementTmProfile } from "./components/placementPadHelpers";
 import { usePlacementFitMap } from "./hooks/usePlacementFitMap";
+import { usePickerRotationSort } from "./hooks/usePickerRotationSort";
+import { applyGranularHealthToFitMap } from "@/lib/shiftbuilder/rotationHealthEngineContext";
 import {
   collectDeploymentSlotKeys,
   nightIsoFromDate,
@@ -1634,12 +1636,139 @@ function AuthedShiftBuilder() {
   const discardDraft = () => {
     if (!isDraftMode) return;
 
-    if (confirm("Discard the current engine draft?")) {
+    if (confirm("Discard the current draft? Unsaved placement changes will be lost.")) {
       setIsDraftMode(false);
       setDraftAssignments({});
       useShiftBuilderStore.getState().clearDraft();
     }
   };
+
+  const upsertDraftSlot = React.useCallback((
+    slotKey: string,
+    update: { kind: "assign"; tmId: string; tmName: string } | { kind: "clear" },
+  ) => {
+    setDraftAssignments((prev) => {
+      const committed = useShiftBuilderStore.getState().assignments ?? {};
+      const existingDraft = prev[slotKey];
+      const baseline = committed[slotKey];
+      const previousTmId = existingDraft?.previousTmId ?? baseline?.tmId;
+      const previousTmName = existingDraft?.previousTmName ?? baseline?.tmName;
+      const next = { ...prev };
+
+      if (update.kind === "clear") {
+        if (!baseline?.tmId && !(existingDraft?.proposedTmId && !existingDraft.proposedClear)) {
+          delete next[slotKey];
+        } else {
+          next[slotKey] = {
+            proposedTmId: "",
+            proposedTmName: "",
+            previousTmId,
+            previousTmName,
+            proposedClear: true,
+          };
+        }
+      } else {
+        const { tmId, tmName } = update;
+        if (tmId === baseline?.tmId) {
+          delete next[slotKey];
+        } else {
+          next[slotKey] = {
+            proposedTmId: tmId,
+            proposedTmName: tmName,
+            previousTmId,
+            previousTmName,
+          };
+        }
+      }
+
+      useShiftBuilderStore.getState().setDraftAssignments(next);
+      return next;
+    });
+  }, []);
+
+  const applyDraftMoveOrSwap = React.useCallback((
+    fromKey: string,
+    toKey: string,
+    moving: { tmId: string; tmName: string } | null,
+    displaced: { tmId: string; tmName: string } | null,
+  ) => {
+    setDraftAssignments((prev) => {
+      const committed = useShiftBuilderStore.getState().assignments ?? {};
+      const next = { ...prev };
+
+      const patchSlot = (
+        key: string,
+        tmId: string | null,
+        tmName: string | null,
+      ) => {
+        const existingDraft = next[key];
+        const baseline = committed[key];
+        const previousTmId = existingDraft?.previousTmId ?? baseline?.tmId;
+        const previousTmName = existingDraft?.previousTmName ?? baseline?.tmName;
+
+        if (!tmId) {
+          if (baseline?.tmId) {
+            next[key] = {
+              proposedTmId: "",
+              proposedTmName: "",
+              previousTmId,
+              previousTmName,
+              proposedClear: true,
+            };
+          } else {
+            delete next[key];
+          }
+        } else if (tmId === baseline?.tmId) {
+          delete next[key];
+        } else {
+          next[key] = {
+            proposedTmId: tmId,
+            proposedTmName: tmName ?? tmId,
+            previousTmId,
+            previousTmName,
+          };
+        }
+      };
+
+      if (moving?.tmId) {
+        patchSlot(toKey, moving.tmId, moving.tmName);
+      }
+      if (displaced?.tmId) {
+        patchSlot(fromKey, displaced.tmId, displaced.tmName);
+      } else {
+        patchSlot(fromKey, null, null);
+      }
+
+      useShiftBuilderStore.getState().setDraftAssignments(next);
+      return next;
+    });
+  }, []);
+
+  const draftSlotCount = React.useMemo(
+    () => Object.keys(draftAssignments).length,
+    [draftAssignments],
+  );
+
+  const toggleDraftMode = React.useCallback(() => {
+    if (!canEditAssignments) {
+      showToast("Insufficient privileges — you cannot edit assignments", "error");
+      return;
+    }
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — draft mode is disabled", "error");
+      return;
+    }
+    if (isDraftMode) {
+      if (draftSlotCount > 0) {
+        discardDraft();
+      } else {
+        setIsDraftMode(false);
+      }
+      return;
+    }
+    setIsDraftMode(true);
+    showToast("Draft mode on — edits stay provisional until Save All", "info");
+  }, [canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast]);
 
   // === Grok Structured Suggestions Integration ===
   /**
@@ -3153,6 +3282,11 @@ function AuthedShiftBuilder() {
       return;
     }
 
+    if (isDraftMode) {
+      upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
+      return;
+    }
+
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
     pendingHistoryRef.current = { description: `Assigned ${tmName} to ${slotKey}`, before };
 
@@ -3207,6 +3341,11 @@ function AuthedShiftBuilder() {
     }
     if (/^RR\d+$/.test(slotKey)) {
       console.warn('[shiftbuilder] unassign with physical RR key blocked');
+      return;
+    }
+
+    if (isDraftMode) {
+      upsertDraftSlot(slotKey, { kind: "clear" });
       return;
     }
 
@@ -3954,39 +4093,52 @@ function AuthedShiftBuilder() {
 
   // Resolve scheduled ids (tm_id or UUID) → board roster rows for the picker.
   const markerRosterLookup = React.useMemo(
-    () => buildTmLookupIndex([...effectiveRealRoster, ...effectiveGraveRoster]),
-    [effectiveRealRoster, effectiveGraveRoster]
+    () =>
+      buildTmLookupIndex([
+        ...effectiveGravesScheduleRoster,
+        ...effectiveRealRoster,
+        ...effectiveGraveRoster,
+      ]),
+    [effectiveGravesScheduleRoster, effectiveRealRoster, effectiveGraveRoster],
+  );
+
+  const idSetMatchesBoardId = React.useCallback(
+    (idSet: Set<string>, boardId: string) => {
+      if (idSet.has(boardId)) return true;
+      for (const sid of idSet) {
+        const resolved = resolveTmFromLookup(markerRosterLookup, sid);
+        if (resolved && boardTmId(resolved) === boardId) return true;
+      }
+      return false;
+    },
+    [markerRosterLookup],
   );
 
   const buildScheduledUnassignedList = React.useCallback(
-    (pathLabel: string) => {
-      const scheduledRoleIds = new Set<string>([
-        ...((effectiveGrave as any) || []),
-        ...((effectivePM as any) || []),
-        ...((effectiveAM as any) || []),
-      ]);
+    (_pathLabel: string) => {
+      // Same canonical pool as RosterRail — graves_default_schedule rows for tonight.
+      const scheduleRows = effectiveGravesScheduleRoster as Array<{
+        id?: string;
+        tmId?: string;
+        tm_id?: string;
+        name?: string;
+        fullName?: string;
+      }>;
       const seen = new Set<string>();
       const list: { tmId: string; tmName: string }[] = [];
-      let lookupMisses = 0;
-      let excludedAssigned = 0;
+      const useScheduledFilter = effectiveScheduledTmIdsTonight.size > 0;
 
-      for (const storedId of scheduledRoleIds) {
-        const tm = resolveTmFromLookup(markerRosterLookup, storedId);
-        if (!tm) {
-          lookupMisses++;
-          continue;
-        }
-        const tmId = assignmentTmId(tm);
+      for (const row of scheduleRows) {
+        const tmId = boardTmId(row);
         if (!tmId || seen.has(tmId)) continue;
-        const isAssigned =
-          alreadyAssignedThisNight.has(tmId) || alreadyAssignedThisNight.has(storedId);
-        const isCalledOff = calledOffIds.has(tmId) || calledOffIds.has(storedId);
-        if (isAssigned) {
-          excludedAssigned++;
+
+        if (useScheduledFilter && !idSetMatchesBoardId(effectiveScheduledTmIdsTonight, tmId)) {
           continue;
         }
-        if (isCalledOff) continue;
-        const tmName = tm.name || tm.fullName;
+        if (idSetMatchesBoardId(alreadyAssignedThisNight, tmId)) continue;
+        if (idSetMatchesBoardId(calledOffIds, tmId)) continue;
+
+        const tmName = row.name || row.fullName;
         if (!tmName) continue;
         seen.add(tmId);
         list.push({ tmId, tmName });
@@ -3995,18 +4147,22 @@ function AuthedShiftBuilder() {
       return list;
     },
     [
-      effectiveGrave,
-      effectivePM,
-      effectiveAM,
-      markerRosterLookup,
+      effectiveGravesScheduleRoster,
+      effectiveScheduledTmIdsTonight,
+      idSetMatchesBoardId,
       alreadyAssignedThisNight,
       calledOffIds,
-    ]
+    ],
   );
 
   const markerScheduledUnassigned = React.useMemo(
     () => buildScheduledUnassignedList("graves-default-schedule"),
-    [buildScheduledUnassignedList, pickerScheduleEpoch, fullGraveScheduledTonight, pmOverlapScheduledTonight, amOverlapScheduledTonight]
+    [
+      buildScheduledUnassignedList,
+      pickerScheduleEpoch,
+      effectiveGravesScheduleRoster,
+      effectiveScheduledTmIdsTonight,
+    ],
   );
 
   // Broad pool used *only* when the operator types in the TM picker search box.
@@ -4283,10 +4439,27 @@ function AuthedShiftBuilder() {
         }
       }
 
+      const granularDayFit = applyGranularHealthToFitMap(
+        dayFitBySlot as Record<string, import("./components/placementFitScore").PrerenderedPlacementFit>,
+        dayAssignments as Record<string, SlotAssignmentRow>,
+        {
+          auxDefs,
+          currentIso: dayIso,
+          histories: effectiveWeekHistories,
+          weeklyRecentHistory: filterWeeklyHistoryThroughNight(
+            plannedThisWeekRecentHistory,
+            dayIso,
+          ),
+          members: members as Array<Record<string, unknown>>,
+          isDraftMode: dayIsDraft,
+          draftAssignments: dayDraftAssignments,
+        },
+      );
+
       const daily = computeDailyHealthPercent(
         auxDefs,
         dayAssignments as any,
-        dayFitBySlot as any,
+        granularDayFit as any,
         dayIsDraft,
         dayDraftAssignments,
       );
@@ -4805,22 +4978,50 @@ function AuthedShiftBuilder() {
     (baseList: { tmId: string; tmName: string }[]) => {
       if (!selectedSlotKey) return baseList;
 
-      const isFullNightSlot = selectedSlotKey.startsWith('Z') ||
-        selectedSlotKey === 'ADM' ||
-        selectedSlotKey.startsWith('TR') ||
-        selectedSlotKey.startsWith('AUX') ||
-        selectedSlotKey.startsWith('SP');
+      const isFullNightSlot =
+        selectedSlotKey.startsWith("Z") ||
+        selectedSlotKey === "ADM" ||
+        selectedSlotKey.startsWith("TR") ||
+        selectedSlotKey.startsWith("AUX") ||
+        selectedSlotKey.startsWith("SP");
 
-      const isOLPMSlot = selectedSlotKey.startsWith('OL-PM') || selectedSlotKey.includes('PM-Overlap');
-      const isOLAMSlot = selectedSlotKey.startsWith('OL-AM') || selectedSlotKey.includes('AM-Overlap');
+      const isOLPMSlot =
+        selectedSlotKey.startsWith("OL-PM") || selectedSlotKey.includes("PM-Overlap");
+      const isOLAMSlot =
+        selectedSlotKey.startsWith("OL-AM") || selectedSlotKey.includes("AM-Overlap");
+
+      const matchesTonightBand = (tm: any, entryTmId: string) => {
+        const isFullGrave = !!(tm.isFullGrave || tm.isFullGraveTonight);
+        const isPM = !!(tm.isPMOverlap || tm.isPMOverlapTonight);
+        const isAM = !!(tm.isAMOverlap || tm.isAMOverlapTonight);
+        const hasScheduleFlags =
+          "isFullGrave" in tm ||
+          "isFullGraveTonight" in tm ||
+          "isPMOverlap" in tm ||
+          "isPMOverlapTonight" in tm ||
+          "isAMOverlap" in tm ||
+          "isAMOverlapTonight" in tm;
+
+        if (isFullNightSlot) {
+          if (hasScheduleFlags) return isFullGrave && !isPM && !isAM;
+          return roleSetHasTm((effectiveGrave as any) || new Set(), entryTmId);
+        }
+        if (isOLPMSlot) {
+          if (hasScheduleFlags) return isPM;
+          return roleSetHasTm((effectivePM as any) || new Set(), entryTmId);
+        }
+        if (isOLAMSlot) {
+          if (hasScheduleFlags) return isAM && !isPM;
+          return roleSetHasTm((effectiveAM as any) || new Set(), entryTmId);
+        }
+        return true;
+      };
 
       return baseList.filter((entry) => {
         const tm = resolveTmFromLookup(markerRosterLookup, entry.tmId);
         if (!tm) return false;
 
-        if (isFullNightSlot && !roleSetHasTm((effectiveGrave as any) || new Set(), entry.tmId)) return false;
-        if (isOLPMSlot && !roleSetHasTm((effectivePM as any) || new Set(), entry.tmId)) return false;
-        if (isOLAMSlot && !roleSetHasTm((effectiveAM as any) || new Set(), entry.tmId)) return false;
+        if (!matchesTonightBand(tm, entry.tmId)) return false;
 
         try {
           return isEligibleForSlot(tm, selectedSlotKey);
@@ -4829,7 +5030,7 @@ function AuthedShiftBuilder() {
         }
       });
     },
-    [selectedSlotKey, markerRosterLookup, effectiveGrave, effectivePM, effectiveAM, roleSetHasTm]
+    [selectedSlotKey, markerRosterLookup, effectiveGrave, effectivePM, effectiveAM, roleSetHasTm],
   );
 
   // getBasicEligibleForSlot: used only for the search pool.
@@ -4861,6 +5062,33 @@ function AuthedShiftBuilder() {
     () => getBasicEligibleForSlot(markerAllEligibleTms),
     [getBasicEligibleForSlot, markerAllEligibleTms]
   );
+
+  const pickerRotationSortEnabled =
+    !!selectedSlotKey &&
+    viewMode === "canvas" &&
+    (currentView === "deployment" || currentView === "weekly");
+
+  const pickerCurrentIso = nightIsoFromDate(
+    DAY_DEFS[selectedDayIndex]?.date ?? selectedDay.date,
+  );
+
+  const {
+    sortedCandidates: pickerSortedUnassigned,
+    fitByTmId: pickerFitByTmId,
+  } = usePickerRotationSort({
+    enabled: pickerRotationSortEnabled,
+    slotKey: selectedSlotKey,
+    candidates: markerSlotScheduledUnassigned,
+    assignments: padAssignments,
+    auxDefs: auxDefsForFit,
+    currentIso: pickerCurrentIso,
+    members: effectiveRealRoster as Array<Record<string, unknown>>,
+    weeklyRecentHistory: plannedThisWeekRecentHistory,
+  });
+
+  const activePickerScheduledUnassigned = selectedSlotKey
+    ? pickerSortedUnassigned
+    : markerScheduledUnassigned;
 
   const handlePadAddOnCall = React.useCallback(
     async (tmId: string, tmName: string) => {
@@ -5254,6 +5482,22 @@ function AuthedShiftBuilder() {
 
         const movingTmId: string | null = movingFromMain?.tmId ?? null;
         const displacedTmId: string | null = displacedFromMain?.tmId ?? null;
+
+        if (isDraftMode) {
+          const effectiveFrom = padAssignments[fromKey];
+          const effectiveTo = padAssignments[toKey];
+          applyDraftMoveOrSwap(
+            fromKey,
+            toKey,
+            effectiveFrom?.tmId
+              ? { tmId: effectiveFrom.tmId, tmName: effectiveFrom.tmName ?? effectiveFrom.tmId }
+              : null,
+            effectiveTo?.tmId
+              ? { tmId: effectiveTo.tmId, tmName: effectiveTo.tmName ?? effectiveTo.tmId }
+              : null,
+          );
+          return;
+        }
 
         // We keep a minimal local update only for the history/undo snapshot.
         // The real visual path is the main store (below). This reduces fighting layers.
@@ -6563,6 +6807,10 @@ function AuthedShiftBuilder() {
       console.warn('[shiftbuilder] live assign physical RR blocked');
       return;
     }
+    if (isDraftMode) {
+      upsertDraftSlot(uiKey, { kind: "assign", tmId, tmName });
+      return;
+    }
     // Always prefer the reliable modern source from useCurrentNight (the legacy [nightId] useState can be null on some paths)
     const reliableNightId = queryNightId || nightId;
     live?.assign?.(uiKey, tmId, tmName, {
@@ -6571,11 +6819,15 @@ function AuthedShiftBuilder() {
       targetNightId: reliableNightId,
       isDraftMode,
     });
-  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode]);
+  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot]);
 
   const handleBoardLiveUnassign = React.useCallback((uiKey: string) => {
     if (/^RR\d+$/.test(uiKey)) {
       console.warn('[shiftbuilder] live unassign physical RR blocked');
+      return;
+    }
+    if (isDraftMode) {
+      upsertDraftSlot(uiKey, { kind: "clear" });
       return;
     }
     const reliableNightId = queryNightId || nightId;
@@ -6585,7 +6837,7 @@ function AuthedShiftBuilder() {
       targetNightId: reliableNightId,
       isDraftMode,
     });
-  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode]);
+  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot]);
 
   // Marker pad engine insight handler.
   // Accepts optional context (rationale, fairnessSignals, recentPlacements, rrSide) from the unilateral pad
@@ -7016,6 +7268,11 @@ function AuthedShiftBuilder() {
         publishDayBusy={publishDayBusy}
         onRunEngine={viewMode === "canvas" ? runXaiEngineFromCanvas : undefined}
         onClearDay={viewMode === "canvas" ? handleClearBoard : undefined}
+        isDraftMode={isDraftMode}
+        draftSlotCount={draftSlotCount}
+        onToggleDraftMode={viewMode === "canvas" ? toggleDraftMode : undefined}
+        onSaveAllDraft={viewMode === "canvas" ? () => { void applyDraft(); } : undefined}
+        onDiscardDraft={viewMode === "canvas" ? discardDraft : undefined}
       />
 
       {/* Beautiful seamless exit pill for print preview mode */}
@@ -7222,8 +7479,9 @@ function AuthedShiftBuilder() {
                 onSlotToggle={handleSlotToggle}
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
-                scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+                scheduledUnassigned={activePickerScheduledUnassigned}
                 allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                pickerFitByTmId={selectedSlotKey ? pickerFitByTmId : undefined}
                 onAddOnCall={handlePadAddOnCall}
                 onMarkUnavailable={handlePadMarkUnavailable}
                 weeklyRecentHistory={plannedThisWeekRecentHistory}
@@ -7598,8 +7856,9 @@ function AuthedShiftBuilder() {
                     onCopyRestroomPairingTasks: handleCopyRestroomPairingTasks,
                     onAssignSweeper: (sk: string, label: string) => handleAssignSweeperTask(sk, label),
                     onRequestEngineInsight: handleBoardRequestEngineInsight,
-                    scheduledUnassigned: selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned,
+                    scheduledUnassigned: activePickerScheduledUnassigned,
                     allEligibleTms: selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms,
+                    pickerFitByTmId: selectedSlotKey ? pickerFitByTmId : undefined,
                     onAddOnCall: handlePadAddOnCall,
                     onMarkUnavailable: handlePadMarkUnavailable,
                     isDraftMode,
@@ -7817,8 +8076,9 @@ function AuthedShiftBuilder() {
                 onSlotToggle={handleSlotToggle}
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
-                scheduledUnassigned={selectedSlotKey ? markerSlotScheduledUnassigned : markerScheduledUnassigned}
+                scheduledUnassigned={activePickerScheduledUnassigned}
                 allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                pickerFitByTmId={selectedSlotKey ? pickerFitByTmId : undefined}
                 onAddOnCall={handlePadAddOnCall}
                 onMarkUnavailable={handlePadMarkUnavailable}
                 weeklyRecentHistory={plannedThisWeekRecentHistory}

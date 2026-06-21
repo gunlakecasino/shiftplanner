@@ -36,6 +36,12 @@ import {
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 import { useAssignments } from "../store/useShiftBuilderStore";
 import { BuilderLoadingLine } from "./builderPrimitives";
+import {
+  fitVerdictLabel,
+  fitVerdictStyles,
+  type PlacementFitVerdict,
+} from "@/lib/shiftbuilder/placementPadInsightSchema";
+import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 
 export interface TmEntry {
   tmId: string;
@@ -769,6 +775,7 @@ function TmPickerRow({
   rowBg,
   rowBorder,
   textPrimary,
+  rotationFit,
   onPick,
 }: {
   tm: TmEntry;
@@ -778,6 +785,7 @@ function TmPickerRow({
   rowBg: string;
   rowBorder: string;
   textPrimary: string;
+  rotationFit?: PickerTmRotationFit;
   onPick: (tm: TmEntry) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -786,6 +794,9 @@ function TmPickerRow({
     disabled: !enableDragAssign,
   });
   const initial = tm.tmName.charAt(0).toUpperCase();
+  const fitStyles = rotationFit
+    ? fitVerdictStyles(rotationFit.fitVerdict as PlacementFitVerdict)
+    : null;
 
   return (
     <button
@@ -843,15 +854,54 @@ function TmPickerRow({
       </span>
       <span
         style={{
+          flex: 1,
+          minWidth: 0,
           fontSize: isTablet ? 20 : 12.5,
           fontWeight: 600,
           color: textPrimary,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
           letterSpacing: "-0.15px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
         {tm.tmName}
       </span>
+      {rotationFit && fitStyles && (
+        <span
+          title={[
+            `${fitVerdictLabel(rotationFit.fitVerdict as PlacementFitVerdict)} · ${rotationFit.healthPoints.toFixed(1)}pt`,
+            rotationFit.fitFactLine,
+            rotationFit.fitSummary,
+          ].filter(Boolean).join("\n")}
+          style={{
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: isTablet ? "4px 8px" : "2px 6px",
+            borderRadius: 999,
+            background: fitStyles.bg,
+            color: fitStyles.text,
+            fontSize: isTablet ? 12 : 9,
+            fontWeight: 700,
+            fontFamily: "var(--font-jetbrains, monospace)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          <span
+            style={{
+              width: isTablet ? 7 : 5,
+              height: isTablet ? 7 : 5,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.92)",
+              flexShrink: 0,
+            }}
+          />
+          {rotationFit.healthPoints.toFixed(1)}
+        </span>
+      )}
     </button>
   );
 }
@@ -873,6 +923,8 @@ export const TmPicker: React.FC<{
   variant?: "default" | "tablet";
   /** Drag TM rows onto slots (requires parent DndContext). Click-to-assign still works. */
   enableDragAssign?: boolean;
+  /** Rotation-health preview per TM when assigning to a specific slot (default list only). */
+  fitByTmId?: Record<string, PickerTmRotationFit>;
 }> = ({
   tms,
   allTms,
@@ -886,6 +938,7 @@ export const TmPicker: React.FC<{
   isDark,
   variant = "default",
   enableDragAssign = false,
+  fitByTmId,
 }) => {
   const isTablet = variant === "tablet";
   const [filter, setFilter] = useState("");
@@ -982,7 +1035,9 @@ export const TmPicker: React.FC<{
       }}>
         {filter.trim()
           ? "Search: all eligible TMs (broad pool)"
-          : "Default: Graves Default Schedule + on-call (unassigned)"}
+          : fitByTmId && Object.keys(fitByTmId).length > 0
+            ? "Sorted by rotation health (strongest first)"
+            : "Default: Graves Default Schedule + on-call (unassigned)"}
       </div>
 
       {/* TM list */}
@@ -1010,6 +1065,7 @@ export const TmPicker: React.FC<{
                 rowBg={rowBg}
                 rowBorder={rowBorder}
                 textPrimary={textPrimary}
+                rotationFit={!filter.trim() ? fitByTmId?.[tm.tmId] : undefined}
                 onPick={onPick}
               />
               {showOnCall && (

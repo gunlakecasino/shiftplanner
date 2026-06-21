@@ -410,9 +410,9 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
     }
   }
 
-  const isGrave = !!tm.gravePool;
-  const isAMOverlapAssigned = !!tm.isAMOverlap;
-  const isPMOverlapAssigned = !!tm.isPMOverlap;
+  const isAMOverlapAssigned = !!(tm.isAMOverlap || tm.isAMOverlapTonight);
+  const isPMOverlapAssigned = !!(tm.isPMOverlap || tm.isPMOverlapTonight);
+  const isFullGraveBySchedule = !!(tm.isFullGrave || tm.isFullGraveTonight);
 
   // `gravePool` on tm_profiles is a string enum, NOT a boolean. Common
   // values include "AM", "PM", "Full" (and truthy fallbacks). A TM whose
@@ -421,8 +421,11 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
   // whether they happen to be assigned to an OL-AM/PM slot tonight.
   const gravePoolKind = String(tm.gravePool ?? "").toUpperCase();
   const isOverlapByPool = gravePoolKind === "AM" || gravePoolKind === "PM";
+  const isGrave =
+    !!tm.gravePool || isFullGraveBySchedule || isAMOverlapAssigned || isPMOverlapAssigned;
   const isFullGrave =
-    isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned;
+    isFullGraveBySchedule ||
+    (isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned);
 
   // Main Zone Deployment + Z9 Smoking Room — strict full-grave only
   if (slotKey.startsWith("Z")) {

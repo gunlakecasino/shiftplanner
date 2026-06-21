@@ -167,45 +167,37 @@ export function useShiftData(
     return stableRefs.current.gravesScheduleRoster;
   }, [currentNight.gravesScheduleRoster]);
 
-  const fullGraveScheduledTonight = React.useMemo(() => {
-    const src = currentNight.fullGraveScheduledTonight as Set<string> | undefined;
-    if (!src || src.size === 0) return stableRefs.current.fullGrave;
+  const stabilizeSet = (
+    key: "fullGrave" | "pmOverlap" | "amOverlap" | "scheduledTm",
+    src: Set<string> | undefined,
+  ): Set<string> => {
+    if (!src) return stableRefs.current[key];
     const s = sigOf(src);
-    if (s !== sigOf(stableRefs.current.fullGrave)) {
-      stableRefs.current.fullGrave = new Set(src);
+    if (s !== sigOf(stableRefs.current[key])) {
+      stableRefs.current[key] = new Set(src);
     }
-    return stableRefs.current.fullGrave;
-  }, [currentNight.fullGraveScheduledTonight]);
+    return stableRefs.current[key];
+  };
 
-  const pmOverlapScheduledTonight = React.useMemo(() => {
-    const src = currentNight.pmOverlapScheduledTonight as Set<string> | undefined;
-    if (!src || src.size === 0) return stableRefs.current.pmOverlap;
-    const s = sigOf(src);
-    if (s !== sigOf(stableRefs.current.pmOverlap)) {
-      stableRefs.current.pmOverlap = new Set(src);
-    }
-    return stableRefs.current.pmOverlap;
-  }, [currentNight.pmOverlapScheduledTonight]);
+  const fullGraveScheduledTonight = React.useMemo(
+    () => stabilizeSet("fullGrave", currentNight.fullGraveScheduledTonight as Set<string> | undefined),
+    [currentNight.fullGraveScheduledTonight],
+  );
 
-  const amOverlapScheduledTonight = React.useMemo(() => {
-    const src = currentNight.amOverlapScheduledTonight as Set<string> | undefined;
-    if (!src || src.size === 0) return stableRefs.current.amOverlap;
-    const s = sigOf(src);
-    if (s !== sigOf(stableRefs.current.amOverlap)) {
-      stableRefs.current.amOverlap = new Set(src);
-    }
-    return stableRefs.current.amOverlap;
-  }, [currentNight.amOverlapScheduledTonight]);
+  const pmOverlapScheduledTonight = React.useMemo(
+    () => stabilizeSet("pmOverlap", currentNight.pmOverlapScheduledTonight as Set<string> | undefined),
+    [currentNight.pmOverlapScheduledTonight],
+  );
 
-  const effectiveScheduledTmIdsTonight = React.useMemo(() => {
-    const src = currentNight.scheduledTmIdsTonight as Set<string> | undefined;
-    if (!src || src.size === 0) return stableRefs.current.scheduledTm;
-    const s = sigOf(src);
-    if (s !== sigOf(stableRefs.current.scheduledTm)) {
-      stableRefs.current.scheduledTm = new Set(src);
-    }
-    return stableRefs.current.scheduledTm;
-  }, [currentNight.scheduledTmIdsTonight]);
+  const amOverlapScheduledTonight = React.useMemo(
+    () => stabilizeSet("amOverlap", currentNight.amOverlapScheduledTonight as Set<string> | undefined),
+    [currentNight.amOverlapScheduledTonight],
+  );
+
+  const effectiveScheduledTmIdsTonight = React.useMemo(
+    () => stabilizeSet("scheduledTm", currentNight.scheduledTmIdsTonight as Set<string> | undefined),
+    [currentNight.scheduledTmIdsTonight],
+  );
 
   const effectiveRecentZoneHistory = React.useMemo(() => {
     const src = currentNight.recentZoneHistory;

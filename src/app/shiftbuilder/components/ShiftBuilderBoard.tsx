@@ -47,6 +47,7 @@ import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
 import { RotationHealthFloater } from "./RotationHealthFloater";
 import type { TmEntry } from "./MarkerPad";
+import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
 import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
@@ -164,6 +165,7 @@ export interface ShiftBuilderBoardProps {
   padAssignments?: Record<string, any>;
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
+  pickerFitByTmId?: Record<string, PickerTmRotationFit>;
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
   onMarkUnavailable?: (tmId: string, tmName: string, status: string) => void | Promise<void>;
   onToggleLock?: (slotKey: string) => void;
@@ -311,6 +313,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   padAssignments,
   scheduledUnassigned = [],
   allEligibleTms,
+  pickerFitByTmId,
   onAddOnCall,
   onMarkUnavailable,
   weeklyRecentHistory,
@@ -875,6 +878,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     onRequestEngineInsight,
     scheduledUnassigned,
     allEligibleTms,
+    pickerFitByTmId,
     onAddOnCall,
     onMarkUnavailable,
     boardPrerenderedFit: fitBySlot[slotKey],

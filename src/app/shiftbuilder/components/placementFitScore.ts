@@ -137,8 +137,11 @@ export function computePlacementHealthPoints(
       return Math.max(76, Math.min(84, p));
     }
     case "strong_fit": {
-      let p = 98;
+      let p = 100;
+      if (times === 1) p -= 4;
       if (week === 2) p -= 5;
+      else if (week === 1) p -= 2;
+      if (inLast5) p -= 6;
       if (!input.rationale) p -= 2;
       return Math.max(90, Math.min(100, p));
     }

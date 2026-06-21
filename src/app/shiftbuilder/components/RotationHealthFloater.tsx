@@ -8,6 +8,7 @@ import {
   GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   normalizeRotationHealthPercent,
+  formatRotationHealthPercent,
   type ShiftRotationHealth,
 } from "./shiftRotationHealth";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
@@ -62,15 +63,18 @@ function breakdownTitle(
       : "";
   const lines = [
     `Rotation health % = placed TMs only (open gaps do not reduce it).`,
-    `Tonight fit (spread + last-5 trail + week repeat per area). Week = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
+    `Granular fit: spread, last-5 position, week repeat, recency, gap coverage (one decimal).`,
+    `Tonight fit (per-slot granular avg). Week = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
     `Target: ${ROTATION_HEALTH_TARGET}%`,
     "",
-    dailyPercent !== null ? `This day: ${dailyPercent}%` : "This day: —",
+    dailyPercent !== null
+      ? `This day: ${formatRotationHealthPercent(dailyPercent)}`
+      : "This day: —",
     weekAveragePercent !== null
-      ? `Week avg (${GRAVE_WEEK_LABEL}): ${weekAveragePercent}%`
+      ? `Week avg (${GRAVE_WEEK_LABEL}): ${formatRotationHealthPercent(weekAveragePercent)}`
       : `Week avg (${GRAVE_WEEK_LABEL}): —`,
     health.weeklyBalance !== undefined
-      ? `Policy week score: ${health.weeklyBalance}% (max repeat: ${maxR}, violations: ${viols})${xaiAdj > 0 ? ` · xAI adj -${xaiAdj.toFixed(0)}pt` : ""}${violNote}`
+      ? `Policy week score: ${formatRotationHealthPercent(health.weeklyBalance)} (max repeat: ${maxR}, violations: ${viols})${xaiAdj > 0 ? ` · xAI adj -${xaiAdj.toFixed(0)}pt` : ""}${violNote}`
       : "",
     `${scoredCount} placed scored · ${openGaps} open gap${openGaps === 1 ? "" : "s"} (info only)`,
     "",
@@ -124,7 +128,7 @@ export function RotationHealthFloater({
 
   if (!visible) return null;
 
-  const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
+  const display = formatRotationHealthPercent(dailyPercent);
   const tooltip = breakdownTitle(health, dailyPercent, weekAveragePercent);
 
   const anchorStyle: React.CSSProperties =

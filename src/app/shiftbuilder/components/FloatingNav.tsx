@@ -13,8 +13,8 @@ import {
   sameDay,
 } from "@/lib/shiftbuilder/dateUtils";
 import {
-  Calendar,
   ChevronDown,
+  LocateFixed,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
@@ -26,6 +26,8 @@ import {
   Eye,
   X,
   Eraser,
+  FilePenLine,
+  Check,
 } from "lucide-react";
 
 export interface DayItem {
@@ -79,6 +81,11 @@ export interface FloatingNavProps {
   onOpenSettings?: (tab?: string) => void;
   onRunEngine?: () => void;
   onClearDay?: () => void;
+  isDraftMode?: boolean;
+  draftSlotCount?: number;
+  onToggleDraftMode?: () => void;
+  onSaveAllDraft?: () => void;
+  onDiscardDraft?: () => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
   onRosterToggle?: () => void;
@@ -127,6 +134,11 @@ export default function FloatingNav(props: FloatingNavProps) {
     onOpenSettings,
     onRunEngine,
     onClearDay,
+    isDraftMode = false,
+    draftSlotCount = 0,
+    onToggleDraftMode,
+    onSaveAllDraft,
+    onDiscardDraft,
     rosterOpen = false,
     onRosterToggle,
     canvasMode = "builder",
@@ -205,6 +217,12 @@ export default function FloatingNav(props: FloatingNavProps) {
   const menuDividerClass = isDark ? "h-px bg-white/10 my-1 mx-2" : "h-px bg-gray-100 my-1 mx-2";
 
   const calendarHighlight = selectedDate ?? selectedDay?.date;
+  const isViewingToday = !!selectedDay?.isToday;
+
+  const handleGoToToday = () => {
+    closeAllMenus();
+    onToday();
+  };
 
   return (
     <>
@@ -244,7 +262,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           zIndex: 40,
         }}
       >
-        {/* LEFT — month picker + calendar */}
+        {/* LEFT — month picker + go to today */}
         <div className="relative flex items-center gap-1 shrink-0" ref={calendarRef}>
           <button
             type="button"
@@ -275,13 +293,16 @@ export default function FloatingNav(props: FloatingNavProps) {
           <button
             type="button"
             className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
-            style={{ color: calendarOpen ? activeColor : "#666" }}
-            onClick={toggleCalendar}
-            title="Open calendar"
-            aria-label="Open calendar"
-            aria-expanded={calendarOpen}
+            style={{
+              color: isViewingToday ? (isDark ? "#71717a" : "#a1a1aa") : activeColor,
+              opacity: isViewingToday ? 0.5 : 1,
+            }}
+            onClick={handleGoToToday}
+            title={isViewingToday ? "Viewing today" : "Go to today"}
+            aria-label={isViewingToday ? "Viewing today" : "Go to today"}
+            disabled={isViewingToday}
           >
-            <Calendar size={13} strokeWidth={1.8} />
+            <LocateFixed size={13} strokeWidth={1.8} />
           </button>
 
           {calendarOpen && onNavigateToDate && (
@@ -593,7 +614,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 display: "inline-block",
               }}
             />
-            {isDayPublished ? "LIVE" : "DRAFT"}
+            {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
           </button>
 
           <div className="relative" ref={profileRef}>
@@ -684,6 +705,52 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
                 {(onRunEngine || onClearDay) && <div className={menuDividerClass} />}
+                {onToggleDraftMode && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onToggleDraftMode();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <FilePenLine size={14} />
+                    Draft Mode
+                    {isDraftMode && (
+                      <span className="ml-auto text-[11px] font-semibold opacity-70">✓</span>
+                    )}
+                  </button>
+                )}
+                {onSaveAllDraft && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    disabled={!isDraftMode || draftSlotCount === 0}
+                    onClick={() => {
+                      onSaveAllDraft();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Check size={14} />
+                    Save All
+                    {draftSlotCount > 0 && (
+                      <span className="ml-auto text-[11px] tabular-nums opacity-60">{draftSlotCount}</span>
+                    )}
+                  </button>
+                )}
+                {onDiscardDraft && isDraftMode && draftSlotCount > 0 && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onDiscardDraft();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <X size={14} /> Discard Draft
+                  </button>
+                )}
+                {(onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
                 {onRestoreDefaultBreaks && (
                   <button
                     type="button"

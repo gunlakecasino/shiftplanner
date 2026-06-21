@@ -8,6 +8,8 @@ import {
   GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
   rotationHealthFloaterColors,
+  formatRotationHealthPercent,
+  normalizeRotationHealthPercent,
   type WeekRepeatViolation,
 } from "./shiftRotationHealth";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
@@ -123,8 +125,7 @@ export function CanvasEngineCluster({
   const weekAveragePercent = weekHealthLoading
     ? null
     : computeWeekAverageHealth(weekDailyHealths, graveWeekDateKeys);
-  const weekAverageDisplay =
-    weekAveragePercent !== null ? `${weekAveragePercent}%` : "—%";
+  const weekAverageDisplay = formatRotationHealthPercent(weekAveragePercent);
 
   const running = engineRunPhase !== "idle";
   const engineDisabled = !canRunEngine || isCurrentNightLocked || running;
@@ -155,23 +156,25 @@ export function CanvasEngineCluster({
 
   if (!visible) return null;
 
-  const colors = rotationHealthFloaterColors(dailyPercent);
-  const display = dailyPercent !== null ? `${dailyPercent}%` : "—%";
+  const normalizedDaily = normalizeRotationHealthPercent(dailyPercent);
+  const colors = rotationHealthFloaterColors(normalizedDaily);
+  const display = formatRotationHealthPercent(normalizedDaily);
 
   const weekPolicyPercent = health.weekPolicyPercent ?? health.weeklyBalance;
-  const weekPolicyDisplay =
-    weekPolicyPercent !== undefined ? `${weekPolicyPercent}%` : "—%";
+  const weekPolicyDisplay = formatRotationHealthPercent(weekPolicyPercent);
 
   const breakdownTitle = [
     `Rotation health % = placed TMs only (open gaps do not reduce it).`,
     `Big = tonight fit (spread + last-5 trail + week repeat per area). Small = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
     `Target (tonight fit): ${ROTATION_HEALTH_TARGET}%`,
-    dailyPercent !== null ? `Tonight fit: ${dailyPercent}%` : "Tonight fit: —",
+    normalizedDaily !== null
+      ? `Tonight fit: ${formatRotationHealthPercent(normalizedDaily)}`
+      : "Tonight fit: —",
     weekAveragePercent !== null
-      ? `Week fit avg (${GRAVE_WEEK_LABEL} built days): ${weekAveragePercent}%`
+      ? `Week fit avg (${GRAVE_WEEK_LABEL} built days): ${formatRotationHealthPercent(weekAveragePercent)}`
       : `Week fit avg (${GRAVE_WEEK_LABEL}): —`,
     weekPolicyPercent !== undefined
-      ? `Week repeat policy: ${weekPolicyPercent}% (max repeat ${(health as any).maxWeeklyRepeat ?? 0}; violations ${(health as any).repeatViolations ?? 0})`
+      ? `Week repeat policy: ${formatRotationHealthPercent(weekPolicyPercent)} (max repeat ${(health as any).maxWeeklyRepeat ?? 0}; violations ${(health as any).repeatViolations ?? 0})`
       : "",
     (health as any).maxWeeklyRepeat !== undefined ? `Max repeat this week: ${(health as any).maxWeeklyRepeat} (violations: ${(health as any).repeatViolations ?? 0})` : "",
     `${health.scoredCount} placed scored · ${health.openGaps} open gap${health.openGaps === 1 ? "" : "s"} (info only)`,

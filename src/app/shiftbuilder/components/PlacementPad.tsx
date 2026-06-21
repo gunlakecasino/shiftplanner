@@ -24,6 +24,7 @@ import {
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
+import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
@@ -258,6 +259,7 @@ export interface PlacementPadProps {
   onRequestEngineInsight?: (slotKey: string, context?: string | Record<string, unknown>) => Promise<string>;
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
+  pickerFitByTmId?: Record<string, PickerTmRotationFit>;
   onAddOnCall?: (tmId: string, tmName: string) => void | Promise<void>;
   onMarkUnavailable?: (tmId: string, tmName: string, status: string) => void | Promise<void>;
   boardPrerenderedFit?: PrerenderedPlacementFit;
@@ -325,7 +327,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     assignments, selectedTasks, selectedDay, members = [], auxDefs, isCurrentNightLocked,
     onAddCoverage, onLiveUnassign, onToggleLock, onAssign, onAddTask, onRemoveTask,
     onClearSlotTasks, onCopyRestroomPairingTasks, onAssignSweeper, onMarkUnavailable,
-    scheduledUnassigned = [], allEligibleTms, onAddOnCall, boardPrerenderedFit,
+    scheduledUnassigned = [], allEligibleTms, pickerFitByTmId, onAddOnCall, boardPrerenderedFit,
     isDraftMode = false, draftAssignments = {}, weeklyRecentHistory, insightsEnabled = true, enableTmDragAssign = false,
   } = props;
 
@@ -544,7 +546,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {showTmPicker && (
           <div className="min-h-[180px]">
-            <TmPicker tms={scheduledUnassigned} allTms={allEligibleTms} currentTmName={a.tmId ? a.tmName : undefined} onPick={handlePickTm} onAddOnCall={onAddOnCall ? (tm) => void onAddOnCall(tm.tmId, tm.tmName) : undefined} onMarkUnavailable={onMarkUnavailable ? (tm, s) => void onMarkUnavailable(tm.tmId, tm.tmName, s) : undefined} onCancel={a.tmId ? () => setAssignMode(false) : undefined} confirmed={assignConfirmed} accent={accent} isDark={false} variant={padLarge ? "tablet" : "default"} enableDragAssign={enableTmDragAssign} />
+            <TmPicker tms={scheduledUnassigned} allTms={allEligibleTms} fitByTmId={pickerFitByTmId} currentTmName={a.tmId ? a.tmName : undefined} onPick={handlePickTm} onAddOnCall={onAddOnCall ? (tm) => void onAddOnCall(tm.tmId, tm.tmName) : undefined} onMarkUnavailable={onMarkUnavailable ? (tm, s) => void onMarkUnavailable(tm.tmId, tm.tmName, s) : undefined} onCancel={a.tmId ? () => setAssignMode(false) : undefined} confirmed={assignConfirmed} accent={accent} isDark={false} variant={padLarge ? "tablet" : "default"} enableDragAssign={enableTmDragAssign} />
           </div>
         )}
 

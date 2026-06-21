@@ -22,14 +22,34 @@ export const ROTATION_HEALTH_AMBER_MIN = 70;
 
 export type RotationHealthTier = "unknown" | "red" | "amber" | "green";
 
-/** Whole-number % shown to operators; also drives color tiers. */
+/** Round to one decimal — matches granular picker / tracker precision. */
+export function roundRotationHealthValue(percent: number): number {
+  return Math.round(percent * 10) / 10;
+}
+
+/** One-decimal % shown to operators; also drives color tiers. */
 export function normalizeRotationHealthPercent(
   percent: number | null | undefined,
 ): number | null {
   if (percent === null || percent === undefined || !Number.isFinite(percent)) {
     return null;
   }
-  return Math.round(percent);
+  return roundRotationHealthValue(percent);
+}
+
+/** Display helper for tracker, orb, and nav surfaces. */
+export function formatRotationHealthPercent(
+  percent: number | null | undefined,
+): string {
+  const n = normalizeRotationHealthPercent(percent);
+  return n === null ? "—%" : `${n.toFixed(1)}%`;
+}
+
+/** Mean of per-slot granular health points (picker-aligned). */
+export function averageGranularHealthScores(scores: number[]): number | null {
+  if (scores.length === 0) return null;
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  return roundRotationHealthValue(avg);
 }
 
 export function rotationHealthTier(
@@ -91,7 +111,7 @@ export function computeWeekAverageHealth(
         .filter((v): v is number => typeof v === "number")
     : Object.values(weekDailyHealths).filter((v): v is number => typeof v === "number");
   if (vals.length === 0) return null;
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  return roundRotationHealthValue(vals.reduce((a, b) => a + b, 0) / vals.length);
 }
 
 /** Fallback bucket points when granular healthPoints are unavailable. */
@@ -273,7 +293,7 @@ export function computeShiftRotationHealth(
   // This is the average of the detailed prerender fit verdicts (strong_fit=100, acceptable=85, etc.)
   // for the assigned relevant slots on this specific day. It legitimately varies by the day you are looking at.
   const percent = scores.length > 0
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    ? roundRotationHealthValue(scores.reduce((a, b) => a + b, 0) / scores.length)
     : 0;
 
   // === Weekly rotation health (the stable "week average") ===
@@ -371,7 +391,7 @@ export function computeShiftRotationHealth(
       if (dailyHealths && Object.keys(dailyHealths).length > 0) {
         const vals = Object.values(dailyHealths).filter((v) => typeof v === 'number');
         base = vals.length > 0
-          ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+          ? roundRotationHealthValue(vals.reduce((a, b) => a + b, 0) / vals.length)
           : 92;
       } else {
         base = 92;
@@ -390,7 +410,7 @@ export function computeShiftRotationHealth(
         repeatPenalty += Math.min(14, repeatViolations * 2);
       }
 
-      weeklyBalance = Math.max(40, Math.round(base - repeatPenalty));
+      weeklyBalance = roundRotationHealthValue(Math.max(40, base - repeatPenalty));
     }
   }
 
@@ -421,7 +441,9 @@ export function computeShiftRotationHealth(
   // This way the prominent number reflects what you're looking at right now, while the week component is consistent for the whole week.
   let effectivePercentForDisplay = percent;
   if (weeklyBalance !== undefined) {
-    effectivePercentForDisplay = Math.round(percent * 0.7 + weeklyBalance * 0.3);
+    effectivePercentForDisplay = roundRotationHealthValue(
+      percent * 0.7 + weeklyBalance * 0.3,
+    );
   }
 
   return {
@@ -619,7 +641,7 @@ export function computeDailyHealthPercent(
 
   if (scores.length === 0) return null;
 
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  return averageGranularHealthScores(scores);
 }
 
 /** Pure, reusable builder for week repeat data.

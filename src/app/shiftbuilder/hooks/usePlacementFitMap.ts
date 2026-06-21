@@ -22,6 +22,7 @@ import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/plac
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
 import type { PlacementTmProfile } from "@/app/shiftbuilder/components/placementPadHelpers";
 import { filterWeeklyHistoryThroughNight } from "@/app/shiftbuilder/components/shiftRotationHealth";
+import { applyGranularHealthToFitMap } from "@/lib/shiftbuilder/rotationHealthEngineContext";
 
 export type UsePlacementFitMapArgs = {
   enabled: boolean;
@@ -217,6 +218,18 @@ export function usePlacementFitMap({
         weeklyRecentHistory: scopedWeekHistory,
         candidateProfiles: assigned ? undefined : buildCandidates(slotKey),
         preferredCandidateIds: assigned ? undefined : preferredCandidateIds,
+      });
+    }
+
+    if (Object.keys(histories).length > 0) {
+      return applyGranularHealthToFitMap(out, assignments, {
+        auxDefs,
+        currentIso,
+        histories,
+        weeklyRecentHistory: scopedWeekHistory,
+        members,
+        isDraftMode,
+        draftAssignments,
       });
     }
 

@@ -188,7 +188,10 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             <CoveredByOverlay
               scale="zone"
               coveredByNames={coveredByNames}
-              onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCardClick(def.key, e.currentTarget, e);
+              }}
               nameSizeOverride={25}
             />
           ) : (
@@ -204,7 +207,10 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             <div className="px-3.5 py-2.5 shrink-0">
               <UnassignedInvite
                 size="zone"
-                onClick={(e) => onCardClick(def.key, e.currentTarget, e)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCardClick(def.key, e.currentTarget, e);
+                }}
                 title="Click or drop to assign team member"
               />
             </div>

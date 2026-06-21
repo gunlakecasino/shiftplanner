@@ -10,6 +10,8 @@ import { assignViolatesFillOrder } from "./xaiFillOrderContract";
 import {
   computeSlotPlacementFit,
   memberToPlacementProfile,
+  resolveSlotAssignmentRow,
+  type DraftAssignmentRow,
   type SlotAssignmentRow,
 } from "@/app/shiftbuilder/components/placementFitForSlot";
 import {
@@ -24,25 +26,40 @@ import {
   type WeekRepeatViolation,
 } from "@/app/shiftbuilder/components/shiftRotationHealth";
 import {
+  collectDeploymentSlotKeys,
   getLastPlacementSequence,
   getSpreadPlacementCounts,
   getSpreadPlacementKeys,
   PLACEMENT_SPREAD_NIGHTS,
   shouldShowPlacementFitChip,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
+import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
+import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 export type CandidateRotationPreview = {
   tmId: string;
   tmName: string;
   slotKey: string;
   fitVerdict: string;
+  /** Granular 0–100 score (one decimal) for picker sort + badge. */
   healthPoints: number;
   timesInSpread: number;
   inLast5: boolean;
+  /** 0 = most recent grave night in last-5 trail; -1 if not in trail. */
+  last5Index: number;
   weekRepeat: number;
+  /** Distinct grave nights worked this week through tonight (hypothetical assign). */
+  weekNightsWorked: number;
+  /** Distinct slot areas worked this grave week through tonight. */
+  weekUniqueSlots: number;
+  /** Days since last placement in this slot; null = never. */
+  daysSinceInSlot: number | null;
+  /** Slots in last-30 spread matrix with 0× exposure. */
+  gapCount: number;
   /** Top spread gaps for this TM (slots not in last-30). */
   topGaps: string[];
   fitSummary: string;
+  fitFactLine: string;
 };
 
 export type RotationHealthEngineBrief = {
@@ -207,23 +224,39 @@ export function scoreDraftRotationHealth(
         weeklyRecentHistory: scopedWeek,
       });
       draftFitBySlot[slotKey] = fit;
-      bySlot[slotKey] = {
-        tmId: row.tmId,
-        tmName: row.tmName ?? row.tmId,
-        healthPoints: slotHealthPoints(fit),
-        fitVerdict: fit.fitVerdict,
-        fitSummary: fit.fitSummary,
-      };
     } catch {
       /* skip */
     }
+  }
+
+  const granularDraftFit =
+    Object.keys(args.histories).length > 0
+      ? applyGranularHealthToFitMap(draftFitBySlot, draftAssignments, {
+          auxDefs: args.auxDefs,
+          currentIso: args.tonightIso,
+          histories: args.histories,
+          weeklyRecentHistory: scopedWeek,
+          members: args.members ?? [],
+        })
+      : draftFitBySlot;
+
+  for (const [slotKey, fit] of Object.entries(granularDraftFit)) {
+    const row = draftAssignments[slotKey];
+    if (!row?.tmId || !fit) continue;
+    bySlot[slotKey] = {
+      tmId: row.tmId,
+      tmName: row.tmName ?? row.tmId,
+      healthPoints: fit.healthPoints ?? slotHealthPoints(fit),
+      fitVerdict: fit.fitVerdict,
+      fitSummary: fit.fitSummary,
+    };
   }
 
   return {
     projectedFitPercent: computeDailyHealthPercent(
       args.auxDefs,
       draftAssignments,
-      draftFitBySlot,
+      granularDraftFit,
     ),
     slotCount: Object.keys(bySlot).length,
     bySlot,
@@ -576,6 +609,268 @@ export type PreviewCandidateRotationFitArgs = {
   members?: Array<Record<string, unknown>>;
 };
 
+function daysSinceLastPlacementInSlot(
+  history: ZoneDetailEntry | null,
+  slotKey: string,
+  beforeIso: string,
+): number | null {
+  const dates = (history?.zoneDates?.[slotKey] || []).filter((d) => d < beforeIso);
+  if (dates.length === 0) return null;
+  const latest = dates.reduce((a, b) => (a > b ? a : b));
+  const d1 = new Date(`${beforeIso}T12:00:00`);
+  const d2 = new Date(`${latest}T12:00:00`);
+  return Math.max(0, Math.floor((d1.getTime() - d2.getTime()) / 86_400_000));
+}
+
+function graveWeekWorkload(
+  weeklyRecentHistory: Map<string, WeekNightRecord[]> | undefined,
+  tmId: string,
+  throughIso: string,
+  countTonightHypothetical: boolean,
+): { weekNightsWorked: number; weekUniqueSlots: number } {
+  const records = (weeklyRecentHistory?.get(tmId) ?? []).filter(
+    (r) => r.nightDate <= throughIso,
+  );
+  const nightSet = new Set(records.map((r) => r.nightDate));
+  const slotSet = new Set(records.map((r) => r.slotKey));
+  if (countTonightHypothetical && !nightSet.has(throughIso)) {
+    nightSet.add(throughIso);
+  }
+  return {
+    weekNightsWorked: nightSet.size,
+    weekUniqueSlots: slotSet.size,
+  };
+}
+
+export type CandidatePickerScoreInput = {
+  slotKey: string;
+  tonightIso: string;
+  history: ZoneDetailEntry | null;
+  spreadCounts: Map<string, number>;
+  spreadKeys: Set<string>;
+  timesInSpread: number;
+  last5: string[];
+  weekRepeat: number;
+  weekNightsWorked: number;
+  weekUniqueSlots: number;
+  gapCount: number;
+  fitVerdict: string;
+};
+
+/**
+ * Continuous 0–100 score (one decimal) for a hypothetical TM→slot pick.
+ * Differentiates candidates with similar spread counts via recency, last-5 position,
+ * grave-week load, gap coverage, and spread-balance signals.
+ */
+export function computeCandidatePickerHealthPoints(
+  input: CandidatePickerScoreInput,
+): number {
+  const {
+    slotKey,
+    tonightIso,
+    history,
+    spreadCounts,
+    spreadKeys,
+    timesInSpread,
+    last5,
+    weekRepeat,
+    weekNightsWorked,
+    weekUniqueSlots,
+    gapCount,
+    fitVerdict,
+  } = input;
+
+  let score = 100;
+
+  score -= timesInSpread * 7.5;
+
+  const last5Idx = last5.indexOf(slotKey);
+  if (last5Idx >= 0) {
+    score -= 8 + (4 - last5Idx) * 2.5;
+  }
+
+  score -= weekRepeat * 4.5;
+  if (weekRepeat >= 2) score -= (weekRepeat - 1) * 3.5;
+
+  const daysSince = daysSinceLastPlacementInSlot(history, slotKey, tonightIso);
+  if (daysSince === null) {
+    score += 7.5;
+  } else {
+    score += Math.min(11, daysSince * 0.12);
+  }
+
+  if (!spreadKeys.has(slotKey) && gapCount > 0) {
+    score += Math.min(3.5, 1.2 + gapCount * 0.25);
+  }
+
+  let maxSpreadElsewhere = 0;
+  for (const [key, count] of spreadCounts.entries()) {
+    if (key === slotKey) continue;
+    if (count > maxSpreadElsewhere) maxSpreadElsewhere = count;
+  }
+  if (timesInSpread > maxSpreadElsewhere) {
+    score -= 2.5 + (timesInSpread - maxSpreadElsewhere) * 1.2;
+  } else if (timesInSpread > 0 && timesInSpread === maxSpreadElsewhere) {
+    score -= 0.8;
+  }
+
+  if (weekNightsWorked > 0) {
+    score -= Math.min(5, weekNightsWorked * 0.6);
+  }
+  if (weekUniqueSlots > 0 && weekRepeat === 0) {
+    score += Math.min(2, weekUniqueSlots * 0.35);
+  }
+
+  score += Math.min(2.5, spreadKeys.size * 0.18);
+
+  if (fitVerdict === "acceptable") score = Math.min(score, 84);
+  else if (fitVerdict === "questionable") score = Math.min(score, 72);
+  else if (fitVerdict === "needs_swap") score = Math.min(score, 48);
+  else if (fitVerdict === "poor_fit") score = Math.min(score, 20);
+
+  const clamped = Math.max(0, Math.min(100, score));
+  return Math.round(clamped * 10) / 10;
+}
+
+function formatCandidatePickerFactLine(args: {
+  slotKey: string;
+  timesInSpread: number;
+  daysSinceInSlot: number | null;
+  weekRepeat: number;
+  last5Index: number;
+  gapCount: number;
+  weekNightsWorked: number;
+}): string {
+  const recency =
+    args.daysSinceInSlot === null
+      ? "never here"
+      : `${args.daysSinceInSlot}d since`;
+  const trail =
+    args.last5Index >= 0 ? `last-5 #${args.last5Index + 1}` : "not in last-5";
+  return [
+    `${args.timesInSpread}× ${args.slotKey} last-30`,
+    recency,
+    `wk×${args.weekRepeat} this slot`,
+    `${args.gapCount} spread gaps`,
+    trail,
+    `${args.weekNightsWorked} grave nights this wk`,
+  ].join(" · ");
+}
+
+/** Sort picker rows: healthPoints desc, then history/repeat tie-breakers. */
+export function compareCandidateRotationPreviews(
+  a: CandidateRotationPreview,
+  b: CandidateRotationPreview,
+): number {
+  const pts = b.healthPoints - a.healthPoints;
+  if (pts !== 0) return pts;
+
+  const spread = a.timesInSpread - b.timesInSpread;
+  if (spread !== 0) return spread;
+
+  if (a.inLast5 !== b.inLast5) return a.inLast5 ? 1 : -1;
+
+  const last5 =
+    (a.last5Index < 0 ? 99 : a.last5Index) -
+    (b.last5Index < 0 ? 99 : b.last5Index);
+  if (last5 !== 0) return last5;
+
+  const week = a.weekRepeat - b.weekRepeat;
+  if (week !== 0) return week;
+
+  const daysA = a.daysSinceInSlot ?? 9999;
+  const daysB = b.daysSinceInSlot ?? 9999;
+  if (daysB !== daysA) return daysB - daysA;
+
+  const gaps = b.gapCount - a.gapCount;
+  if (gaps !== 0) return gaps;
+
+  const wkNights = a.weekNightsWorked - b.weekNightsWorked;
+  if (wkNights !== 0) return wkNights;
+
+  return a.tmName.localeCompare(b.tmName);
+}
+
+export type GranularFitMapContext = {
+  auxDefs: AuxDef[];
+  currentIso: string;
+  histories: Record<string, ZoneDetailEntry | null>;
+  weeklyRecentHistory?: Map<string, WeekNightRecord[]>;
+  members?: Array<Record<string, unknown>>;
+  isDraftMode?: boolean;
+  draftAssignments?: Record<string, DraftAssignmentRow>;
+};
+
+/**
+ * Re-score placed slots with the same granular picker algorithm so tracker %,
+ * ROT orb, and Assign TM badges share one continuous health model.
+ */
+export function applyGranularHealthToFitMap(
+  fitBySlot: Record<string, PrerenderedPlacementFit>,
+  assignments: Record<string, SlotAssignmentRow>,
+  context: GranularFitMapContext,
+): Record<string, PrerenderedPlacementFit> {
+  const {
+    auxDefs,
+    currentIso,
+    histories,
+    weeklyRecentHistory,
+    members = [],
+    isDraftMode = false,
+    draftAssignments = {},
+  } = context;
+
+  const out: Record<string, PrerenderedPlacementFit> = { ...fitBySlot };
+
+  for (const slotKey of collectDeploymentSlotKeys(auxDefs)) {
+    if (!shouldShowPlacementFitChip(slotKey)) continue;
+
+    const row = resolveSlotAssignmentRow(
+      slotKey,
+      assignments,
+      isDraftMode,
+      draftAssignments,
+    );
+    const tmId = row?.tmId;
+    if (!tmId) continue;
+
+    const preview = previewCandidateRotationFit({
+      tmId,
+      tmName: row?.tmName ?? tmId,
+      slotKey,
+      tonightIso: currentIso,
+      assignments,
+      auxDefs,
+      histories,
+      weeklyRecentHistory,
+      members,
+    });
+
+    const existing = out[slotKey];
+    if (!existing) continue;
+
+    out[slotKey] = {
+      ...existing,
+      healthPoints: preview.healthPoints,
+      fitVerdict: preview.fitVerdict as PlacementFitVerdict,
+      fitFactLine: preview.fitFactLine,
+    };
+  }
+
+  return out;
+}
+
+/** Map granular picker points to a verdict band for row badge color. */
+export function pickerVerdictFromHealthPoints(
+  points: number,
+): "strong_fit" | "acceptable" | "questionable" | "needs_swap" | "poor_fit" {
+  if (points >= 90) return "strong_fit";
+  if (points >= 76) return "acceptable";
+  if (points >= 48) return "questionable";
+  if (points >= 20) return "needs_swap";
+  return "poor_fit";
+}
+
 /** Simulate rotation fit if tmId were placed on slotKey tonight (with current board context). */
 export function previewCandidateRotationFit(
   args: PreviewCandidateRotationFitArgs,
@@ -643,18 +938,60 @@ export function previewCandidateRotationFit(
     true,
   );
   const last5 = getLastPlacementSequence(history, 5, tonightIso);
+  const timesInSpread = spreadCounts.get(slotKey) ?? 0;
+  const inLast5 = last5.includes(slotKey);
+  const last5Index = last5.indexOf(slotKey);
+  const daysSinceInSlot = daysSinceLastPlacementInSlot(history, slotKey, tonightIso);
+  const gapCount = matrixKeys.filter(
+    (k) => !spreadKeys.has(k) && k !== slotKey,
+  ).length;
+  const { weekNightsWorked, weekUniqueSlots } = graveWeekWorkload(
+    scopedWeek,
+    tmId,
+    tonightIso,
+    true,
+  );
+  const healthPoints = computeCandidatePickerHealthPoints({
+    slotKey,
+    tonightIso,
+    history,
+    spreadCounts,
+    spreadKeys,
+    timesInSpread,
+    last5,
+    weekRepeat,
+    weekNightsWorked,
+    weekUniqueSlots,
+    gapCount,
+    fitVerdict: fit.fitVerdict,
+  });
+  const fitFactLine = formatCandidatePickerFactLine({
+    slotKey,
+    timesInSpread,
+    daysSinceInSlot,
+    weekRepeat,
+    last5Index,
+    gapCount,
+    weekNightsWorked,
+  });
 
   return {
     tmId,
     tmName,
     slotKey,
-    fitVerdict: fit.fitVerdict,
-    healthPoints: slotHealthPoints(fit),
-    timesInSpread: spreadCounts.get(slotKey) ?? 0,
-    inLast5: last5.includes(slotKey),
+    fitVerdict: pickerVerdictFromHealthPoints(healthPoints),
+    healthPoints,
+    timesInSpread,
+    inLast5,
+    last5Index,
     weekRepeat,
+    weekNightsWorked,
+    weekUniqueSlots,
+    daysSinceInSlot,
+    gapCount,
     topGaps,
     fitSummary: fit.fitSummary,
+    fitFactLine,
   };
 }
 

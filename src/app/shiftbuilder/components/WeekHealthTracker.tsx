@@ -6,6 +6,7 @@ import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import {
   rotationHealthFloaterColors,
   normalizeRotationHealthPercent,
+  formatRotationHealthPercent,
   rotationHealthTextColor,
 } from "./shiftRotationHealth";
 import {
@@ -185,7 +186,7 @@ export function WeekHealthTracker({
                       : "1px solid rgba(0,0,0,0.05)",
                   opacity: hasHealth ? 1 : 0.45,
                 }}
-                title={`${def.name || "Day"} ${dateNum}: ${health != null ? health + "%" : healthLoading ? "loading…" : "—"}`}
+                title={`${def.name || "Day"} ${dateNum}: ${healthLoading ? "loading…" : formatRotationHealthPercent(health)}`}
                 aria-label={`${label} health ${health != null ? health : "unknown"} percent`}
                 aria-current={isSelected ? "true" : undefined}
               >
@@ -207,7 +208,7 @@ export function WeekHealthTracker({
                           : "#9ca3af",
                   }}
                 >
-                  {health != null ? `${health}%` : "—"}
+                  {health != null ? formatRotationHealthPercent(health) : "—"}
                 </span>
               </button>
             );
@@ -228,12 +229,12 @@ export function WeekHealthTracker({
                 border: `1px solid ${colors.border}`,
                 color: colors.text,
               }}
-              title={`${def.name || "Day"} ${dateNum}: ${health != null ? health + "%" : healthLoading ? "loading…" : "—"}`}
+              title={`${def.name || "Day"} ${dateNum}: ${healthLoading ? "loading…" : formatRotationHealthPercent(health)}`}
               aria-label={`${label} health ${health != null ? health : "unknown"} percent`}
             >
               <span className="text-[7px] font-medium tabular-nums opacity-90">{label}</span>
               <span className="font-mono text-[9px] font-semibold tabular-nums leading-none">
-                {health != null ? `${health}` : "—"}
+                {health != null ? normalizeRotationHealthPercent(health)?.toFixed(1) : "—"}
               </span>
             </button>
           );
