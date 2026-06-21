@@ -5,7 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
-import { cardAccentInk } from "@/lib/shiftbuilder/constants";
+import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 
 /** Shared typography scale for assignment card name rows. */
@@ -54,7 +54,7 @@ export function coverageBodyPadding(
 export function CardAccentStripe({ color }: { color: string }) {
   return (
     <div
-      className="h-[3px] w-full shrink-0"
+      className={`h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
       style={{ backgroundColor: color }}
     />
   );

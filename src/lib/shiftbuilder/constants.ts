@@ -143,8 +143,8 @@ export const ZONE_COLORS: Record<string, string> = {
 
 export const getZoneColor = (key: string) => ZONE_COLORS[key] || '#6B7280';
 
-/** Warm gold ink — lighter than brown, readable on white (pairs with #ffcc00 stripe). */
-export const SB_GOLD_INK = "#b89708";
+/** Vibrant gold-yellow ink on white cards (pairs with #ffcc00 stripe). */
+export const SB_GOLD_INK = "#d4a800";
 
 /** Readable header ink for bright display accents (e.g. iOS yellow on white cards). */
 const CARD_ACCENT_INK: Record<string, string> = {

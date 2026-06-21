@@ -61,11 +61,12 @@
   --sb-text-muted: #9CA3AF;
 
   /* ── Velvet gold accent ──────────────────────────────────────────────── */
-  --sb-gold:        #ffcc00; /* stripe / swatch only — use --sb-gold-ink for text */
-  --sb-gold-ink:    #b89708;
-  --sb-gold-bright: #c9a83a;
-  --sb-gold-tint:   rgba(184, 151, 8, 0.12);
-  --sb-gold-border: rgba(184, 151, 8, 0.28);
+  --sb-gold:        #ffcc00; /* stripe / swatch */
+  --sb-gold-ink:    #d4a800; /* headers, chips, coverage labels */
+  --sb-gold-bright: #ffdb4d;
+  --sb-gold-tint:   rgba(255, 204, 0, 0.14);
+  --sb-gold-surface: rgba(255, 204, 0, 0.24);
+  --sb-gold-border: rgba(255, 204, 0, 0.44);
 
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
   --sb-z1:  #ffcc00; /* yellow */
@@ -899,7 +900,7 @@ body {
 .builder-workspace .sheet-section-header .count {
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--sb-gold-tint);
+  background: var(--sb-gold-surface);
   color: var(--sb-gold-ink);
   font-size: 9.5px;
   font-weight: 700;
@@ -907,9 +908,9 @@ body {
 }
 
 .dark .builder-workspace .sheet-section-header .count {
-  background: rgba(212, 175, 55, 0.14);
-  color: #e8d48b;
-  border-color: rgba(212, 175, 55, 0.28);
+  background: rgba(255, 204, 0, 0.16);
+  color: #ffdb4d;
+  border-color: rgba(255, 204, 0, 0.32);
 }
 
 .builder-workspace .sb-builder-section + .sb-builder-section {
@@ -1372,14 +1373,14 @@ body {
   opacity: 0.5;
 }
 
-/* Builder drop targets — readable gold ring, not neon yellow. */
+/* Builder drop targets — lively gold ring */
 .builder-workspace .assignment-card.drop-target-active,
 .builder-workspace .drop-target-active {
-  border-color: color-mix(in srgb, var(--sb-gold-ink) 72%, #b89708) !important;
+  border-color: color-mix(in srgb, var(--sb-gold) 58%, var(--sb-gold-ink)) !important;
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--sb-gold-ink) 28%, transparent),
-    0 10px 28px -8px rgba(122, 98, 0, 0.22) !important;
-  background: rgba(255, 253, 248, 0.96) !important;
+    0 0 0 2px color-mix(in srgb, var(--sb-gold) 32%, transparent),
+    0 10px 28px -8px rgba(255, 204, 0, 0.2) !important;
+  background: rgba(255, 252, 235, 0.96) !important;
   transform: translateY(-2px) scale(1.008);
 }
 
@@ -1446,11 +1447,16 @@ body {
   width: 100%;
 }
 
-/* Zone accent stripe (the 3px color bar at top of zone cards) stays tasteful. */
+/* Zone accent stripe — gold zones stay bright; others slightly softened. */
 .builder-workspace .assignment-card > .h-\[3px\],
 .builder-workspace .assignment-card .h-\[3px\] {
   opacity: 0.65;
   height: 2px;
+}
+
+.builder-workspace .assignment-card .sb-accent-stripe--gold {
+  opacity: 1;
+  height: 3px;
 }
 
 /* Overlaps section (at bottom) gets a little extra love for visibility. */
@@ -2035,22 +2041,19 @@ button,
   color: #48484a;
 }
 
-/* Gold warning chips — duplicate TM, section counts, etc. */
-.sb-gold-chip {
-  background: var(--sb-gold-tint);
+/* Gold chips + card coverage banners — shared lively yellow surface */
+.sb-gold-chip,
+.builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent {
+  background: var(--sb-gold-surface);
   color: var(--sb-gold-ink);
+  border-color: var(--sb-gold-border);
+}
+
+.sb-gold-chip {
   border: 1px solid var(--sb-gold-border);
 }
 
-.dark .sb-gold-chip {
-  background: rgba(212, 175, 55, 0.14);
-  color: #e8d48b;
-  border-color: rgba(212, 175, 55, 0.28);
-}
-
-/* Gold coverage banners — match header chips (soft tint + warm ink, not white on neon). */
 .builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent {
-  background: var(--sb-gold-tint) !important;
   border-top: 1px solid var(--sb-gold-border) !important;
 }
 
@@ -2058,6 +2061,13 @@ button,
   color: var(--sb-gold-ink) !important;
 }
 
+.dark .sb-gold-chip,
+.dark .builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent {
+  background: rgba(255, 204, 0, 0.18);
+  border-color: rgba(255, 204, 0, 0.34);
+}
+
+.dark .sb-gold-chip,
 .dark .builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent .sb-coverage-bar-label {
-  color: #e8d48b !important;
+  color: #ffdb4d !important;
 }

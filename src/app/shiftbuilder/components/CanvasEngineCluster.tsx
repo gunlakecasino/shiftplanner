@@ -249,9 +249,9 @@ export function CanvasEngineCluster({
               className="shrink-0 rounded px-1.5 py-0.5 font-bold uppercase"
               style={{
                 fontSize: 8,
-                background: "var(--sb-gold-tint, rgba(122, 98, 0, 0.1))",
-                border: "1px solid var(--sb-gold-border, rgba(122, 98, 0, 0.32))",
-                color: "var(--sb-gold-ink, #b89708)",
+                background: "var(--sb-gold-surface, rgba(255, 204, 0, 0.24))",
+                border: "1px solid var(--sb-gold-border, rgba(255, 204, 0, 0.44))",
+                color: "var(--sb-gold-ink, #d4a800)",
               }}
             >
               Draft

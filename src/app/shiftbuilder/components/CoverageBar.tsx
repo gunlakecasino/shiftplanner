@@ -5,7 +5,6 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   COVERAGE_BAR_FONT_SIZE,
   COVERAGE_BAR_H,
-  cardAccentInk,
   isGoldAccent,
 } from "@/lib/shiftbuilder/constants";
 
@@ -28,32 +27,31 @@ const CoverageBar = React.memo(function CoverageBar({
 }) {
   const [hovered, setHovered] = React.useState(false);
   const accent = task.color || "#6B7280";
-  const goldAccent = isGoldAccent(accent);
-  const labelInk = goldAccent ? cardAccentInk(accent) : "#ffffff";
+  const goldBanner = isGoldAccent(accent);
 
   return (
     <div
-      className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""} ${builderCalm && goldAccent ? "sb-coverage-bar--gold-accent" : ""}`}
+      className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""} ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
       style={{
-        ...(builderCalm
+        ...(builderCalm || goldBanner
           ? {}
           : { position: "absolute", bottom: 0, left: 0, right: 0 }),
-        background: builderCalm
-          ? goldAccent
-            ? "var(--sb-gold-tint)"
-            : `color-mix(in srgb, ${accent} 65%, var(--ios-background-secondary))`
-          : accent,
+        background: goldBanner
+          ? "var(--sb-gold-surface)"
+          : builderCalm
+            ? `color-mix(in srgb, ${accent} 65%, var(--ios-background-secondary))`
+            : accent,
         borderRadius: "0 0 3px 3px",
         paddingTop: 3,
         paddingBottom: 3,
         height: COVERAGE_BAR_H,
         minHeight: COVERAGE_BAR_H,
         zIndex: 2,
-        borderTop: builderCalm
-          ? goldAccent
-            ? "1px solid var(--sb-gold-border)"
-            : "1px solid color-mix(in srgb, var(--ios-background-secondary) 20%, transparent)"
-          : "1px solid rgba(255,255,255,0.25)",
+        borderTop: goldBanner
+          ? "1px solid var(--sb-gold-border)"
+          : builderCalm
+            ? "1px solid color-mix(in srgb, var(--ios-background-secondary) 20%, transparent)"
+            : "1px solid rgba(255,255,255,0.25)",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -64,7 +62,7 @@ const CoverageBar = React.memo(function CoverageBar({
         style={{
           fontSize: COVERAGE_BAR_FONT_SIZE,
           fontFamily: "var(--font-atkinson)",
-          color: builderCalm && goldAccent ? labelInk : "#ffffff",
+          color: goldBanner ? "var(--sb-gold-ink)" : "#ffffff",
         }}
       >
         {task.taskLabel}
@@ -77,10 +75,10 @@ const CoverageBar = React.memo(function CoverageBar({
           }}
           className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all"
           style={{
-            color: builderCalm && goldAccent
+            color: goldBanner
               ? hovered
-                ? labelInk
-                : `color-mix(in srgb, ${labelInk} 58%, transparent)`
+                ? "var(--sb-gold-ink)"
+                : "color-mix(in srgb, var(--sb-gold-ink) 58%, transparent)"
               : hovered
                 ? "var(--ios-white)"
                 : "color-mix(in srgb, var(--ios-white) 55%, transparent)",
