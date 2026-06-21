@@ -955,7 +955,8 @@ body {
 
 /* ── TM Roster rail — premium liquid-glass chrome ─────────────────────── */
 .sb-roster-shell {
-  position: relative;
+  /* fixed — out of flex flow (relative here overrode Tailwind .fixed and pushed the board right) */
+  position: fixed;
   --sb-roster-accent: var(--sb-gold);
   background: color-mix(in srgb, var(--sb-paper, #fcfcfa) 88%, transparent);
   backdrop-filter: var(--sb-glass-blur);
