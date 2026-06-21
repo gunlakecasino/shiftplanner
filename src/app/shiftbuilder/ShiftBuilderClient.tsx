@@ -1969,12 +1969,13 @@ function AuthedShiftBuilder() {
     const tablet = isTabletTouchDevice();
     const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
-      const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: hGutter + dockInset,
+        right: dockInset,
         bottom: builderStageBottomInsetPx(),
-        left: rosterOpen ? (tablet ? 212 : 280) : hGutter,
+        // Roster is position:fixed — no horizontal stage inset (was carving ~280px and
+        // shifting the board right). Canvas self-centers like the floating nav pill.
+        left: 0,
       };
     }
     return {
@@ -7336,7 +7337,7 @@ function AuthedShiftBuilder() {
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderLiveCanvas && (
             <div
-              className="sb-builder-canvas mx-auto flex min-h-0 w-full flex-1 flex-col"
+              className="sb-builder-canvas mx-auto flex min-h-0 max-w-full flex-1 flex-col"
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
               <div

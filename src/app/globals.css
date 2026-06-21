@@ -751,11 +751,18 @@ body {
   box-sizing: border-box;
 }
 
-/* Live builder: stage host forces align-items:stretch — re-center the canvas on the viewport axis. */
+/* Live builder: center the deployment column on the viewport (same axis as FloatingNav).
+   Stage horizontal padding is 0 — roster is a fixed overlay and must not carve layout. */
 .sb-builder-stage.sb-stage-host > .sb-builder-canvas {
   align-self: center !important;
-  width: min(100%, var(--sb-builder-canvas-max, 1581px)) !important;
+  width: min(
+    calc(100vw - 48px),
+    var(--sb-builder-canvas-max, 1581px)
+  ) !important;
+  max-width: var(--sb-builder-canvas-max, 1581px) !important;
   margin-inline: auto !important;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* /today kiosk — paper hero, calmer empty slots, compact open aux ghosts. */
