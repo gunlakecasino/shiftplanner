@@ -24,7 +24,12 @@ export interface OverlapSlotProps {
   onCardClick?: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
+  draftInfo?: {
+    proposedTmId?: string;
+    proposedTmName: string;
+    previousTmName?: string;
+    proposedClear?: boolean;
+  };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
@@ -83,8 +88,19 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   tmConflictSlots,
 }) => {
   const a = assignments[slotKey] || {};
+  const draftActive =
+    isDraftMode && !!draftInfo?.proposedTmName?.trim() && !draftInfo?.proposedClear;
+  const slotTm = {
+    tmId: draftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
+    tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
+  };
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(slotKey, "overlap", { tmId: a.tmId, tmName: a.tmName }, isLocked);
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
+    slotKey,
+    "overlap",
+    slotTm,
+    isLocked,
+  );
   const dim = !hasTM && !loading;
   const cycleBreak = () => {
     if (setBreakGroupForSlot) {
@@ -94,7 +110,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
 
   // Phase 1 Live layer ready.
   const tasks = selectedTasks[slotKey];
-  const currentTmId = a?.tmId;
+  const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
 
@@ -138,7 +154,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
             whileHover={showDigitalAssists ? { scale: 1.01 } : {}}
             transition={premiumSpring}
           >
-            {a.tmName}
+            {slotTm.tmName}
           </motion.span>
           {isDuplicate && showDigitalAssists && (
             <span

@@ -290,27 +290,28 @@ export function ensureAdminFirst(defs: AuxDef[]): AuxDef[] {
   const adminIndex = defs.findIndex((d) => d.role === "admin");
   if (adminIndex === 0) return defs;
 
-  let next = [...defs];
-  let adminDef: AuxDef;
+  const next = [...defs];
 
   if (adminIndex > 0) {
-    adminDef = next.splice(adminIndex, 1)[0];
-  } else {
-    // No admin: replace the first card (the first editable/blank) with admin.
-    // Keep the key of the replaced slot if possible.
-    const replaceKey = next.length > 0 ? next[0].key : "AUX1";
-    adminDef = {
-      key: replaceKey,
-      role: "admin" as const,
+    const adminDef = next.splice(adminIndex, 1)[0];
+    return [adminDef, ...next];
+  }
+
+  // No admin: promote an empty blank shell in place. Never drop a custom-labeled card.
+  const emptyBlankIdx = next.findIndex(
+    (d) => d.role === "blank" && !d.label?.trim(),
+  );
+  if (emptyBlankIdx >= 0) {
+    next[emptyBlankIdx] = {
+      ...next[emptyBlankIdx],
+      role: "admin",
       label: "ADMIN",
       locations: ["Floor Admin"],
     };
-    if (next.length > 0) {
-      next.shift(); // remove the first editable being replaced
-    }
+    return next;
   }
 
-  return [adminDef, ...next];
+  return defs;
 }
 
 export function defaultAuxDefsForNewNight(): AuxDef[] {

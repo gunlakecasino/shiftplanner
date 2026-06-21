@@ -37,7 +37,12 @@ export interface ZoneCardProps {
   loading?: boolean;
   borderColor?: string;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string };
+  draftInfo?: {
+    proposedTmId?: string;
+    proposedTmName: string;
+    previousTmName?: string;
+    proposedClear?: boolean;
+  };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
@@ -92,17 +97,23 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   onKioskLongPress,
 }) => {
   const a = assignments[def.key] || {};
+  const draftActive =
+    isDraftMode && !!draftInfo?.proposedTmName?.trim() && !draftInfo?.proposedClear;
+  const slotTm = {
+    tmId: draftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
+    tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
+  };
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getZoneColor(def.key);
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
-    def.key, "zone", { tmId: a.tmId, tmName: a.tmName }, isLocked,
+    def.key, "zone", slotTm, isLocked,
   );
 
   const isCovered = coveredByNames.length > 0;
   const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading && !isCovered;
-  const currentTmId = a?.tmId;
+  const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
   const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
@@ -121,11 +132,11 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   let assignmentState: SlotAssignmentState;
   if (loading && !hasTM) {
     assignmentState = { kind: "loading" };
-  } else if (isDraftMode && draftInfo?.proposedTmName) {
+  } else if (draftActive) {
     assignmentState = {
       kind: "draft",
-      proposedName: draftInfo.proposedTmName,
-      previousName: draftInfo.previousTmName,
+      proposedName: draftInfo!.proposedTmName,
+      previousName: draftInfo?.previousTmName,
     };
   } else if (hasTM) {
     assignmentState = {
@@ -139,6 +150,15 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   } else {
     assignmentState = { kind: "unassigned" };
   }
+
+  const displayName =
+    assignmentState.kind === "draft"
+      ? assignmentState.proposedName
+      : assignmentState.kind === "assigned"
+        ? assignmentState.tmName
+        : assignmentState.kind === "unassigned"
+          ? "Unassigned"
+          : "";
 
   return (
     <div
@@ -195,9 +215,22 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               nameSizeOverride={25}
             />
           ) : (
-            <h3 className={`text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`} style={assignmentState.kind === "unassigned" ? {color: '#A1A1AA', opacity: 0.75} : {}}>
-              {a.tmName || "Unassigned"}
-            </h3>
+            <div className="min-w-0">
+              <h3
+                className={`text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
+                style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
+              >
+                {displayName}
+              </h3>
+              {assignmentState.kind === "draft" && assignmentState.previousName ? (
+                <span
+                  className="text-[9px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px] block"
+                  style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+                >
+                  was: {assignmentState.previousName}
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
 

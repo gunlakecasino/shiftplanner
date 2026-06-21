@@ -2214,6 +2214,8 @@ function AuthedShiftBuilder() {
   auxDefsLatestRef.current = auxDefs;
   const auxSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const auxLayoutSavedFingerprintRef = React.useRef<string>("");
+  /** Blocks debounced aux_layout writes until night-core auxDefs have hydrated (prevents default layout clobbering DB). */
+  const auxLayoutHydratedRef = React.useRef(false);
 
   const flushAuxLayoutSave = React.useCallback(async () => {
     if (auxSaveTimerRef.current) {
@@ -2628,7 +2630,12 @@ function AuthedShiftBuilder() {
   const hydratedAuxDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     hydratedAuxDayRef.current = null;
+    auxLayoutHydratedRef.current = false;
     auxLayoutSavedFingerprintRef.current = "";
+    if (auxSaveTimerRef.current) {
+      clearTimeout(auxSaveTimerRef.current);
+      auxSaveTimerRef.current = null;
+    }
   }, [selectedDay.date]);
 
   React.useEffect(() => {
@@ -2639,7 +2646,13 @@ function AuthedShiftBuilder() {
     const fromQuery = currentNight.auxDefs;
     if (fromQuery == null) return;
 
+    if (auxSaveTimerRef.current) {
+      clearTimeout(auxSaveTimerRef.current);
+      auxSaveTimerRef.current = null;
+    }
+
     hydratedAuxDayRef.current = dayKey;
+    auxLayoutHydratedRef.current = true;
     const normalized = fromQuery.map((d) => ({
       ...d,
       role: d.role ?? "blank",
@@ -2658,8 +2671,9 @@ function AuthedShiftBuilder() {
     currentNight.nightId,
   ]);
 
-  // Persist aux_layout whenever layout changes
+  // Persist aux_layout whenever layout changes (only after hydration — never write default shells on cold load)
   React.useEffect(() => {
+    if (!auxLayoutHydratedRef.current) return;
     scheduleAuxLayoutSave(250);
   }, [auxDefs, scheduleAuxLayoutSave]);
 
