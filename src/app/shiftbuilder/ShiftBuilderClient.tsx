@@ -14,6 +14,10 @@ import {
 // NOTE: Heavy data.ts functions dynamically imported below to fix Turbopack "module factory is not available" HMR errors.
 // Only types remain as type-only import (zero runtime cost).
 import type { CatalogTask, NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
+import {
+  remapTaskTextStyleForLabelChange,
+  type TaskTextStyle,
+} from "@/lib/shiftbuilder/taskTextStyle";
 import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
@@ -2033,22 +2037,34 @@ function AuthedShiftBuilder() {
   /** Active anchored placement pad slot (card-attached inspector + editor). */
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
 
-  const handleSlotToggle = React.useCallback((slotKey: string) => {
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — editing disabled", "error");
-      return;
-    }
-    let resolved = slotKey;
-    // Physical RR wrapper (RR6) → open the correct MRR/WRR side (never fan out to all 5 cards)
+  const resolvePlacementSlotKey = React.useCallback((slotKey: string) => {
     if (/^RR\d+$/.test(slotKey)) {
       const num = slotKey.replace(/^RR/, "");
       const mKey = `MRR${num}`;
       const wKey = `WRR${num}`;
       const merged = useShiftBuilderStore.getState().assignments ?? {};
-      resolved = !merged[mKey]?.tmName ? mKey : wKey;
+      return !merged[mKey]?.tmName ? mKey : wKey;
     }
+    return slotKey;
+  }, []);
+
+  const handleSlotToggle = React.useCallback((slotKey: string) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — editing disabled", "error");
+      return;
+    }
+    const resolved = resolvePlacementSlotKey(slotKey);
     setSelectedSlotKey((prev) => (prev === resolved ? null : resolved));
-  }, [isCurrentNightLocked, showToast]);
+  }, [isCurrentNightLocked, showToast, resolvePlacementSlotKey]);
+
+  /** Always open (never toggle closed) — used so double-click keeps the pad visible. */
+  const handleSlotOpen = React.useCallback((slotKey: string) => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — editing disabled", "error");
+      return;
+    }
+    setSelectedSlotKey(resolvePlacementSlotKey(slotKey));
+  }, [isCurrentNightLocked, showToast, resolvePlacementSlotKey]);
 
   const handleSlotClose = React.useCallback(() => {
     setSelectedSlotKey(null);
@@ -6426,6 +6442,43 @@ function AuthedShiftBuilder() {
   );
 
   // Per-task marker style (underline / circle / highlight / none)
+  const handleSetTaskTextStyle = React.useCallback(
+    (uiKey: string, taskLabel: string, textStyle: TaskTextStyle | null) => {
+      const targetNightId = nightId;
+      const captureDateKey: string = formatLocalDateISO(selectedDay.date);
+      const { slot_key, rr_side } = uiToDb(uiKey);
+
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.map((t) =>
+          t.taskLabel === taskLabel ? { ...t, textStyle } : t,
+        );
+        return { ...prev, [uiKey]: next };
+      });
+
+      logBuilderChange({
+        action: "task_style",
+        slotKey: uiKey,
+        targetNightId,
+        payload: { taskLabel, textStyle },
+      });
+
+      (async () => {
+        try {
+          const { updateNightSlotTaskStyle, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+          await updateNightSlotTaskStyle(targetNightId!, slot_key, taskLabel, textStyle, rr_side);
+          const fresh = await getNightSlotTasks(targetNightId!);
+          if (currentNight.queryClient) {
+            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+          }
+        } catch (err) {
+          console.error("[ShiftBuilder] Failed to set task text style:", err);
+        }
+      })();
+    },
+    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient],
+  );
+
   const handleSetTaskMarker = React.useCallback(
     (uiKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
       const targetNightId = nightId;
@@ -6454,7 +6507,7 @@ function AuthedShiftBuilder() {
       (async () => {
         try {
           const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-          await (updateNightSlotTaskColor as any)(targetNightId!, slot_key, taskLabel, undefined, rr_side, markerType);
+          await updateNightSlotTaskColor(targetNightId!, slot_key, taskLabel, undefined, rr_side, markerType);
           const fresh = await getNightSlotTasks(targetNightId!);
           if (currentNight.queryClient) {
             patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
@@ -6467,31 +6520,106 @@ function AuthedShiftBuilder() {
     [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient]
   );
 
-  // Edit / rename an existing task label (inline edit)
-  const handleEditTask = React.useCallback(
-    (uiKey: string, oldLabel: string, newLabel: string) => {
+  const handleSetTaskAppearance = React.useCallback(
+    async (
+      uiKey: string,
+      taskLabel: string,
+      appearance: {
+        color: string | null;
+        markerType: "highlight" | "underline" | "circle" | "none";
+      },
+    ) => {
       const targetNightId = nightId;
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
+      const { slot_key, rr_side } = uiToDb(uiKey);
 
-      const trimmed = newLabel.trim();
-      if (!trimmed || trimmed === oldLabel) return;
-
-      // Optimistic update — replace the label on the matching task
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) =>
-          t.taskLabel === oldLabel ? { ...t, taskLabel: trimmed } : t
+          t.taskLabel === taskLabel
+            ? { ...t, color: appearance.color, markerType: appearance.markerType }
+            : t,
         );
         return { ...prev, [uiKey]: next };
       });
 
-      const { slot_key, rr_side } = uiToDb(uiKey);
-      import("@/lib/shiftbuilder/data").then(({ updateNightSlotTaskLabel }) =>
-        (updateNightSlotTaskLabel as any)(targetNightId, slot_key, oldLabel, trimmed, rr_side).catch((err: unknown) => {
-          console.error('[ShiftBuilder] Failed to edit task label:', err);
-        })
-      );
+      logBuilderChange({
+        action: "task_color",
+        slotKey: uiKey,
+        targetNightId,
+        payload: {
+          taskLabel,
+          color: appearance.color,
+          markerType: appearance.markerType,
+        },
+      });
+
+      try {
+        const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        await updateNightSlotTaskColor(
+          targetNightId!,
+          slot_key,
+          taskLabel,
+          appearance.color,
+          rr_side,
+          appearance.markerType,
+        );
+        const fresh = await getNightSlotTasks(targetNightId!);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+        }
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to set task appearance:", err);
+        throw err;
+      }
     },
-    [nightId]
+    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient],
+  );
+
+  // Edit / rename an existing task label (inline edit)
+  const handleEditTask = React.useCallback(
+    (uiKey: string, oldLabel: string, newLabel: string) => {
+      const targetNightId = nightId;
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
+
+      const trimmed = newLabel.trim();
+      if (!trimmed || trimmed === oldLabel) return;
+
+      let remappedStyle: TaskTextStyle | null = null;
+
+      setSelectedTasks((prev) => {
+        const existing = prev[uiKey] || [];
+        const next = existing.map((t) => {
+          if (t.taskLabel !== oldLabel) return t;
+          remappedStyle = remapTaskTextStyleForLabelChange(t.textStyle, oldLabel, trimmed);
+          return {
+            ...t,
+            taskLabel: trimmed,
+            textStyle: remappedStyle,
+          };
+        });
+        return { ...prev, [uiKey]: next };
+      });
+
+      const { slot_key, rr_side } = uiToDb(uiKey);
+      (async () => {
+        try {
+          const { updateNightSlotTaskLabel, updateNightSlotTaskStyle, getNightSlotTasks } =
+            await import("@/lib/shiftbuilder/data");
+          await updateNightSlotTaskLabel(targetNightId!, slot_key, oldLabel, trimmed, rr_side);
+          if (remappedStyle) {
+            await updateNightSlotTaskStyle(targetNightId!, slot_key, trimmed, remappedStyle, rr_side);
+          }
+          const fresh = await getNightSlotTasks(targetNightId!);
+          if (currentNight.queryClient) {
+            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+          }
+        } catch (err) {
+          console.error("[ShiftBuilder] Failed to edit task label:", err);
+        }
+      })();
+    },
+    [nightId, selectedDay.date, currentNight.queryClient],
   );
 
   // Operator-authored custom task: insert into the catalog AND select it for
@@ -6827,6 +6955,27 @@ function AuthedShiftBuilder() {
   const handleBoardSetTaskMarker = React.useCallback((slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
     handleSetTaskMarker(slotKey, taskLabel, markerType);
   }, [handleSetTaskMarker]);
+
+  const handleBoardSetTaskAppearance = React.useCallback(
+    (
+      slotKey: string,
+      taskLabel: string,
+      appearance: {
+        color: string | null;
+        markerType: "highlight" | "underline" | "circle" | "none";
+      },
+    ) => {
+      handleSetTaskAppearance(slotKey, taskLabel, appearance);
+    },
+    [handleSetTaskAppearance],
+  );
+
+  const handleBoardSetTaskTextStyle = React.useCallback(
+    (slotKey: string, taskLabel: string, textStyle: import("@/lib/shiftbuilder/taskTextStyle").TaskTextStyle | null) => {
+      handleSetTaskTextStyle(slotKey, taskLabel, textStyle);
+    },
+    [handleSetTaskTextStyle],
+  );
 
   const handleBoardEditTask = React.useCallback((slotKey: string, taskId: string, newLabel: string) => {
     handleEditTask(slotKey, taskId, newLabel);
@@ -7490,6 +7639,8 @@ function AuthedShiftBuilder() {
                 onRemoveTask={handleBoardRemoveTask}
                 onSetTaskColor={handleBoardSetTaskColor}
                 onSetTaskMarker={handleBoardSetTaskMarker}
+                onSetTaskAppearance={handleBoardSetTaskAppearance}
+                onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
@@ -7507,6 +7658,7 @@ function AuthedShiftBuilder() {
                 amOverlapDateNum={amOverlapDateNum}
                 selectedSlotKey={selectedSlotKey}
                 onSlotToggle={handleSlotToggle}
+                onSlotOpen={handleSlotOpen}
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
                 scheduledUnassigned={activePickerScheduledUnassigned}
@@ -8094,6 +8246,8 @@ function AuthedShiftBuilder() {
                 onRemoveTask={handleBoardRemoveTask}
                 onSetTaskColor={handleBoardSetTaskColor}
                 onSetTaskMarker={handleBoardSetTaskMarker}
+                onSetTaskAppearance={handleBoardSetTaskAppearance}
+                onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
                 setBreakGroupForSlot={setBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
@@ -8111,6 +8265,7 @@ function AuthedShiftBuilder() {
                 amOverlapDateNum={amOverlapDateNum}
                 selectedSlotKey={selectedSlotKey}
                 onSlotToggle={handleSlotToggle}
+                onSlotOpen={handleSlotOpen}
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
                 scheduledUnassigned={activePickerScheduledUnassigned}

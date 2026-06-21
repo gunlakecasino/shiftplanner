@@ -3,6 +3,7 @@ import { parseLocalDateISO } from "./dateUtils";
 import { getCachedNightIdForDate } from "./data.server";
 import { fetchRecentZoneHistoryServer } from "./zoneHistory.server";
 import type { ZoneHistoryRecord } from "./zoneHistory";
+import { normalizeTaskTextStyle } from "./taskTextStyle";
 
 let _client: SupabaseClient | null = null;
 
@@ -29,6 +30,8 @@ type NightSlotTaskRow = {
   color: string | null;
   marker_type?: string | null;
   markerType?: string | null;
+  text_style?: unknown;
+  textStyle?: unknown;
   is_coverage: boolean;
 };
 
@@ -52,6 +55,7 @@ function mapNightSlotTask(r: NightSlotTaskRow) {
     sortOrder: r.sort_order ?? 0,
     color: r.color ?? null,
     markerType: (r.marker_type ?? r.markerType ?? null) as any,
+    textStyle: normalizeTaskTextStyle(r.text_style ?? r.textStyle ?? null),
     isCoverage: r.is_coverage ?? false,
   };
 }

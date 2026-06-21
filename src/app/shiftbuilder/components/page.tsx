@@ -165,9 +165,10 @@ export default function XDStyleComponentLibrary() {
     }
   };
 
-  const handleOpenTaskTextEdit = (slotKey: string, task: NightSlotTask) => {
+  const handleOpenTaskTextEdit = (slotKey: string, task?: NightSlotTask) => {
     // Simple but effective inline editing via prompt (feels like a design tool)
     // In a fuller XD tool this could open the real TaskTextEditPad in a portal.
+    if (!task) return;
     const newLabel = window.prompt('Edit task label (demo):', task.taskLabel);
     if (newLabel != null) {
       handleEditTask(slotKey, task.taskLabel, newLabel);

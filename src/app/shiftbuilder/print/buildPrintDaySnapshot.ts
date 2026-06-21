@@ -50,6 +50,8 @@ function toTaskLines(tasks: NightSlotTask[] | undefined): PrintTaskLine[] {
     id: t.id,
     label: t.taskLabel,
     color: t.color ?? null,
+    markerType: t.markerType ?? null,
+    textStyle: t.textStyle ?? null,
     isCoverage: Boolean(t.isCoverage),
   }));
 }

@@ -380,11 +380,33 @@ export async function removeNightSlotTaskServer(params: RemoveTaskParams): Promi
   if (error) throw new Error(`Failed to remove task: ${error.message}`);
 }
 
+export async function updateNightSlotTaskStyleServer(
+  nightId: string,
+  slotKey: string,
+  taskLabel: string,
+  textStyle: Record<string, unknown> | null,
+  rrSide: "mens" | "womens" | null = null,
+): Promise<void> {
+  const client = adminClient();
+  let q = client
+    .from("night_slot_tasks")
+    .update({ text_style: textStyle })
+    .eq("night_id", nightId)
+    .eq("slot_key", slotKey)
+    .eq("task_label", taskLabel);
+
+  if (rrSide) q = q.eq("rr_side", rrSide);
+  else q = q.is("rr_side", null);
+
+  const { error } = await q;
+  if (error) throw new Error(`Failed to set task text style: ${error.message}`);
+}
+
 export async function updateNightSlotTaskColorServer(
   nightId: string,
   slotKey: string,
   taskLabel: string,
-  color: string | null,
+  color?: string | null,
   rrSide: "mens" | "womens" | null = null,
   markerType?: "highlight" | "underline" | "circle" | "none" | null,
 ): Promise<void> {

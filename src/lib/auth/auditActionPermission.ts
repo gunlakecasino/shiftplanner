@@ -15,6 +15,7 @@ export function permissionRequiredForAuditAction(
     case "coverage_add":
     case "break_change":
     case "task_color":
+    case "task_style":
       return "canEditAssignments";
     case "lock":
     case "unlock":

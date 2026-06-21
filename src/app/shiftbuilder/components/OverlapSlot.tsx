@@ -8,6 +8,7 @@ import TaskRow from "./TaskRow";
 import BreakBadge from "./BreakBadge";
 import { PlacementFitChip } from "./PlacementFitChip";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
+import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { premiumSpring } from "@/lib/premiumSpring";
 import {
@@ -35,7 +36,11 @@ export interface OverlapSlotProps {
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
 
   // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
@@ -122,9 +127,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   return (
     <div
       ref={setRef}
-      onClick={(e) => {
-        if (!isLocked && onCardClick) onCardClick(slotKey, e.currentTarget, e);
-      }}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
@@ -144,7 +146,12 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {loading && !hasTM ? (
         <AssignmentSkeleton size="md" />
       ) : hasTM ? (
-        <div className="flex items-center gap-1 min-w-0 shrink-0">
+        <div
+          className="sb-card-assign-zone flex items-center gap-1 min-w-0 shrink-0"
+          onDoubleClick={(e) => {
+            if (!isLocked && onCardClick) handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
+          }}
+        >
           {a.isLocked && (
             <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
           )}
@@ -167,14 +174,42 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         </div>
       ) : (
         <div
-          className="unassigned-label flex flex-1 flex-col items-center justify-center text-[9.5px] tracking-[0.3px]"
+          className="sb-card-assign-zone unassigned-label flex flex-1 flex-col items-center justify-center text-[9.5px] tracking-[0.3px]"
           style={{ fontFamily: "var(--font-atkinson)" }}
+          onDoubleClick={(e) => {
+            if (!isLocked && onCardClick) handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
+          }}
         >
           <span className="sb-unassigned-primary px-1 py-[1px] inline-block">— Unassigned —</span>
           <UnassignedDropHint className="mt-px" />
         </div>
       )}
-      {tasks && tasks.length > 0 && (
+      {showDigitalAssists ? (
+        <CardTaskZone
+          slotKey={slotKey}
+          onOpenTasksPad={onOpenTaskTextEdit}
+          isLocked={isLocked}
+          enabled={showDigitalAssists}
+          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-[24px] overflow-y-auto text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
+          style={{ fontFamily: "var(--font-atkinson)" }}
+        >
+          {(tasks ?? []).map((t) => (
+            <TaskRow
+              key={t.id}
+              task={t}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              onSetTaskColor={onSetTaskColor}
+              onSetTaskMarker={onSetTaskMarker}
+              onEditTask={onEditTask}
+              onOpenTaskTextEdit={onOpenTaskTextEdit}
+              textSize="text-[9.5px]"
+              textColorClass={hasTM ? "text-[#1f2937] dark:text-[#C7C7CC]" : "text-[#6B7280] dark:text-[#636366]"}
+              isPrintPreview={false}
+            />
+          ))}
+        </CardTaskZone>
+      ) : tasks && tasks.length > 0 ? (
         <div
           className={`sb-card-task-scroll mt-0.5 flex-1 min-h-0 overflow-y-auto text-[9.5px] leading-tight ${hasTM ? "text-[#6B7280]" : "text-[#9CA3AF]"}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
@@ -195,7 +230,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
             />
           ))}
         </div>
-      )}
+      ) : null}
       </div>
     </div>
   );

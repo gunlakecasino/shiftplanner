@@ -1,6 +1,7 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import { normalizeTaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
 import { zoneHistoryMapFromRecord, type ZoneHistoryRecord } from "@/lib/shiftbuilder/zoneHistory";
 
 type NightSecondaryApiPayload = {
@@ -25,6 +26,7 @@ function mapNightSlotTaskRow(row: Record<string, unknown>): NightSlotTask {
     sortOrder: Number(row.sortOrder ?? row.sort_order ?? 0),
     color: (row.color ?? null) as string | null,
     markerType: (row.markerType ?? row.marker_type ?? null) as NightSlotTask['markerType'],
+    textStyle: normalizeTaskTextStyle(row.textStyle ?? row.text_style ?? null),
     isCoverage: Boolean(row.isCoverage ?? row.is_coverage ?? false),
   };
 }

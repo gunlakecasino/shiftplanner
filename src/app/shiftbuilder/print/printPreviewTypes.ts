@@ -6,10 +6,14 @@ export type PrintPreviewView = "deployment" | "breaks";
 
 export type PrintVariant = "official" | "planning";
 
+import type { TaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
+
 export type PrintTaskLine = {
   id: string;
   label: string;
   color?: string | null;
+  markerType?: "highlight" | "underline" | "circle" | "none" | null;
+  textStyle?: TaskTextStyle | null;
   isCoverage?: boolean;
 };
 

@@ -12,6 +12,7 @@ export type DeploymentChangeAction =
   | "coverage_add"
   | "break_change"
   | "task_color"
+  | "task_style"
   | "print"
   | "settings_update"
   | "team_update"

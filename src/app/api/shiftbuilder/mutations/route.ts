@@ -18,6 +18,7 @@ import {
   toggleAssignmentLockServer,
   updateNightSlotTaskColorServer,
   updateNightSlotTaskLabelServer,
+  updateNightSlotTaskStyleServer,
   upsertBreakAssignmentServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
@@ -37,6 +38,7 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   add_night_slot_task: "canEditAssignments",
   remove_night_slot_task: "canEditAssignments",
   update_night_slot_task_color: "canEditAssignments",
+  update_night_slot_task_style: "canEditAssignments",
   update_night_slot_task_label: "canEditAssignments",
   replace_night_slot_tasks_for_slot: "canEditAssignments",
   replace_all_night_slot_tasks: "canEditAssignments",
@@ -159,6 +161,17 @@ export async function POST(request: NextRequest) {
           (body.color as string | null) ?? null,
           (body.rrSide as "mens" | "womens" | null) ?? null,
           body.markerType as "highlight" | "underline" | "circle" | "none" | null | undefined,
+        );
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json({ ok: true });
+      }
+      case "update_night_slot_task_style": {
+        await updateNightSlotTaskStyleServer(
+          String(body.nightId),
+          String(body.slotKey),
+          String(body.taskLabel),
+          (body.textStyle as Record<string, unknown> | null) ?? null,
+          (body.rrSide as "mens" | "womens" | null) ?? null,
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });

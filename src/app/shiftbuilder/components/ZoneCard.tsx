@@ -27,6 +27,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
+import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
 
 export interface ZoneCardProps {
   def: any;
@@ -47,7 +48,11 @@ export interface ZoneCardProps {
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
@@ -163,7 +168,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   return (
     <div
       ref={setRef}
-      onClick={(e) => { if (!isLocked) onCardClick(def.key, e.currentTarget, e); }}
       onPointerMove={(e) => {
         handleSpotlightMove(e);
         if (isTodayKiosk) longPress.onPointerMove(e);
@@ -203,15 +207,15 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
 
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* Large name / covered area */}
-        <div className="px-3.5 pt-1.5 pb-2 shrink-0">
+        <div
+          className="sb-card-assign-zone px-3.5 pt-1.5 pb-2 shrink-0"
+          onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+        >
           {assignmentState.kind === "covered" ? (
             <CoveredByOverlay
               scale="zone"
               coveredByNames={coveredByNames}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCardClick(def.key, e.currentTarget, e);
-              }}
+              onClick={(e) => e.stopPropagation()}
               nameSizeOverride={25}
             />
           ) : (
@@ -237,18 +241,46 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         {assignmentState.kind === "unassigned" ? (
           <>
             <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
-            <div className="px-3.5 py-2.5 shrink-0">
+            <div
+              className="px-3.5 py-2.5 shrink-0"
+              onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+            >
               <UnassignedInvite
                 size="zone"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCardClick(def.key, e.currentTarget, e);
-                }}
-                title="Click or drop to assign team member"
+                onClick={(e) => e.stopPropagation()}
+                title="Double-click to open placement · drop to assign"
               />
             </div>
           </>
-        ) : regularTasks.length > 0 && (
+        ) : null}
+
+        {showDigitalAssists && !isTodayKiosk ? (
+          <>
+            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
+            <CardTaskZone
+              slotKey={def.key}
+              onOpenTasksPad={onOpenTaskTextEdit}
+              isLocked={isLocked}
+              enabled={showDigitalAssists}
+              className="sb-card-task-scroll px-3 py-2 space-y-0.5 flex-1 min-h-[36px] overflow-y-auto"
+            >
+              {regularTasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  slotKey={def.key}
+                  onRemoveTask={onRemoveTask}
+                  onSetTaskColor={onSetTaskColor}
+                  onSetTaskMarker={onSetTaskMarker}
+                  onEditTask={onEditTask}
+                  onOpenTaskTextEdit={onOpenTaskTextEdit}
+                  textSize="text-[12px]"
+                  textColorClass="text-gray-600"
+                />
+              ))}
+            </CardTaskZone>
+          </>
+        ) : regularTasks.length > 0 ? (
           <>
             <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
             <div className="sb-card-task-scroll px-3 py-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto">
@@ -268,7 +300,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               ))}
             </div>
           </>
-        )}
+        ) : null}
       </div>
 
       {zoneCoverageTasks.length > 0 && (

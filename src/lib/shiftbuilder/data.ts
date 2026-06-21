@@ -10,6 +10,7 @@ import type { BreakGroupValue } from './breakGroupResolve';
 import { addDays, startOfRosterWeek, daysBetween } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
 import { isWorkingShift } from './types/schedules';
+import { normalizeTaskTextStyle, type TaskTextStyle } from './taskTextStyle';
 
 /**
  * Shift Builder Data Layer — Real Supabase backed.
@@ -1123,6 +1124,7 @@ export interface NightSlotTask {
   sortOrder: number;
   color: string | null; // per-task highlight color (hex) for the colored sphere
   markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null; // text marker style for the task label
+  textStyle?: TaskTextStyle | null;
   isCoverage: boolean;  // true for "Add Coverage" bars — distinct from regular tasks
 }
 
@@ -1196,6 +1198,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     sortOrder: r.sort_order ?? 0,
     color: r.color ?? null,
     markerType: (r.marker_type ?? r.markerType ?? null) as any,
+    textStyle: normalizeTaskTextStyle(r.text_style ?? r.textStyle ?? null),
     isCoverage: r.is_coverage ?? false,
   }));
 }
@@ -1350,7 +1353,7 @@ export async function updateNightSlotTaskColor(
   nightId: string,
   slotKey: string,
   taskLabel: string,
-  color: string | null,
+  color?: string | null,
   rrSide: 'mens' | 'womens' | null = null,
   markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null
 ): Promise<void> {
@@ -1381,6 +1384,29 @@ export async function updateNightSlotTaskColor(
  * Rename / edit the label of an existing task on a slot.
  * Because the label is part of the identifying key, we update the task_label column directly.
  */
+export async function updateNightSlotTaskStyle(
+  nightId: string,
+  slotKey: string,
+  taskLabel: string,
+  textStyle: TaskTextStyle | null,
+  rrSide: 'mens' | 'womens' | null = null,
+): Promise<void> {
+  if (!nightId || !slotKey || !taskLabel) {
+    throw new Error('updateNightSlotTaskStyle requires nightId, slotKey, taskLabel');
+  }
+
+  const payload = { nightId, slotKey, taskLabel, textStyle, rrSide };
+  await runBoardMutation(
+    'update_night_slot_task_style',
+    payload,
+    async () => {
+      const { updateNightSlotTaskStyleServer } = await import('./opsMutations.server');
+      await updateNightSlotTaskStyleServer(nightId, slotKey, taskLabel, textStyle, rrSide);
+      return { ok: true };
+    },
+  );
+}
+
 export async function updateNightSlotTaskLabel(
   nightId: string,
   slotKey: string,

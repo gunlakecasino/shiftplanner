@@ -18,6 +18,7 @@ import {
   breakGroupLabel,
 } from "@/lib/shiftbuilder/constants";
 import type { PrintTaskLine } from "./printPreviewTypes";
+import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 
 type CoveredScale = "zone" | "rr" | "aux";
@@ -81,37 +82,21 @@ export function GoldenTaskRow({
   task: PrintTaskLine;
   hasTM: boolean;
 }) {
-  const hasColor = Boolean(task.color);
   const textColor = hasTM ? "#1f2937" : "#6B7280";
   return (
     <div className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 text-[9.5px] leading-[1.05]">
       <div data-task-label className="min-w-0 flex-1 leading-[1.05]">
-        <span
+        <TaskMarkerLabel
+          label={task.label}
+          color={task.color}
+          markerType={task.markerType}
+          textStyle={task.textStyle}
+          isPrintPreview
+          fontSize="9.5px"
+          textColor={textColor}
           className="block rounded-sm font-medium py-px"
-          style={
-            hasColor
-              ? {
-                  backgroundColor: `${task.color}15`,
-                  borderLeft: `3px solid ${task.color}`,
-                  fontSize: "9.5px",
-                  paddingLeft: "6px",
-                  marginLeft: "-1px",
-                  color: textColor,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }
-              : {
-                  fontSize: "9.5px",
-                  color: textColor,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }
-          }
-        >
-          {task.label}
-        </span>
+          hanging={{ textIndent: "0", paddingLeft: "0" }}
+        />
       </div>
     </div>
   );
@@ -184,6 +169,8 @@ function toTaskLines(tasks: NightSlotTask[] | PrintTaskLine[] | undefined): Prin
     id: t.id,
     label: "taskLabel" in t ? t.taskLabel : t.label,
     color: t.color ?? null,
+    markerType: ("markerType" in t ? t.markerType : null) ?? null,
+    textStyle: "textStyle" in t ? t.textStyle ?? null : null,
     isCoverage: Boolean(t.isCoverage),
   }));
 }

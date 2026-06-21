@@ -4,6 +4,9 @@ import React from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { premiumSpring } from "@/lib/premiumSpring";
+import { TaskMarkerLabel } from "./TaskMarkerLabel";
+import { normalizeTaskMarkerType, shouldRenderTaskMarker } from "@/lib/shiftbuilder/taskMarkerStyle";
+
 
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
 // Using iOS 26 system colors for accents/highlights
@@ -31,8 +34,12 @@ export interface TaskRowProps {
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  /** Double-click opens the pop-up font/text attributes pad (like PlacementPad). Provided only in builder (not print). */
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  /** Double-click opens Tasks Pad (task optional when opening from card). Builder only. */
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   // Slight visual tweaks per context (Zone vs tight RR/Overlap)
   textSize?: string;
   textColorClass?: string;
@@ -55,9 +62,10 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   draggable = true,
   isPrintPreview = false,
 }) => {
+  const markerType = normalizeTaskMarkerType(task.markerType);
   const hasColor = !!task.color;
-  const markerType = task.markerType || 'highlight';
-  const usesLeftAccent = hasColor && markerType === 'highlight';
+  const showMarker = shouldRenderTaskMarker(markerType, task.color);
+  const usesLeftAccent = showMarker && markerType === "highlight";
 
   const labelRef = React.useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = React.useState(isPrintPreview ? '9.5px' : '13px');
@@ -213,52 +221,17 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       {/* Label — static; color accent (left border + subtle tint) is the persistent visual for the text attribute.
           Double-click the row anywhere to open the full text/font edit pad (label + color). Hover toolbar removed per spec. */}
       <div data-task-label className={`min-w-0 flex-1 ${isPrintPreview ? 'leading-[1.05]' : 'leading-snug'}`}>
-        <span
-          ref={labelRef}
-          className="block rounded-sm transition-colors font-medium py-px"
-          style={
-            hasColor && markerType !== 'none' ? (() => {
-              const base: React.CSSProperties = {
-                fontSize,
-                textIndent: hanging.textIndent,
-                paddingLeft: hanging.paddingLeft,
-                marginLeft: '-1px',
-                ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
-              };
-              if (markerType === 'underline') {
-                return {
-                  ...base,
-                  borderBottom: `3px solid ${task.color}`,
-                  paddingBottom: '2px',
-                  backgroundColor: 'transparent',
-                  borderLeft: 'none',
-                };
-              }
-              if (markerType === 'circle') {
-                return {
-                  ...base,
-                  border: `2px solid ${task.color}`,
-                  borderRadius: '9999px',
-                  padding: '1px 6px',
-                  backgroundColor: 'transparent',
-                  borderLeft: 'none',
-                  display: 'inline-block',
-                  marginLeft: '2px',
-                };
-              }
-              // default highlight
-              return {
-                ...base,
-                backgroundColor: `${task.color}15`,
-                borderLeft: `3px solid ${task.color}`,
-              };
-            })() : {
-              fontSize,
-              ...(isPrintPreview ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {})
-            }
-          }
-        >
-          {task.taskLabel}
+        <span ref={labelRef} className="block min-w-0 max-w-full">
+          <TaskMarkerLabel
+            label={task.taskLabel}
+            color={showMarker ? task.color : null}
+            markerType={showMarker ? markerType : "none"}
+            textStyle={task.textStyle}
+            isPrintPreview={isPrintPreview}
+            fontSize={fontSize}
+            hanging={hanging}
+            className="block rounded-sm transition-colors font-medium py-px"
+          />
         </span>
       </div>
       {onRemoveTask && !isPrintPreview ? (

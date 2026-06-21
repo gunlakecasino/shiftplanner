@@ -20,6 +20,7 @@ import {
   SlotAssignmentBody,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
+import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
 
 export interface RRCardProps {
   def: any;
@@ -36,7 +37,11 @@ export interface RRCardProps {
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
@@ -65,7 +70,11 @@ const RRSide: React.FC<{
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   isLocked?: boolean;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
@@ -133,13 +142,15 @@ const RRSide: React.FC<{
   return (
     <div
       ref={setRef}
-      onClick={(e) => { if (!isLocked) onClick(slotKey, e.currentTarget, e); }}
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
       className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
-      <div className={`min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}>
+      <div
+        className={`sb-card-assign-zone min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}
+        onDoubleClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
+      >
         <SlotAssignmentBody
           state={assignmentState}
           scale="rr"
@@ -147,16 +158,37 @@ const RRSide: React.FC<{
           isDuplicate={isDuplicate}
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
-          onUnassignedClick={(e) => {
-            e.stopPropagation();
-            onClick(slotKey, e.currentTarget, e);
-          }}
+          onUnassignedClick={(e) => e.stopPropagation()}
         />
       </div>
 
-      {/* Task list using TaskRow to restore drag/reorder/duplicate and color highlights (e.g. sweeper orange).
-          Matches uniform plain visual with text size. */}
-      {tasks && tasks.length > 0 && (
+      {showDigitalAssists ? (
+        <>
+          <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
+          <CardTaskZone
+            slotKey={slotKey}
+            onOpenTasksPad={onOpenTaskTextEdit}
+            isLocked={isLocked}
+            enabled={showDigitalAssists}
+            className="sb-card-task-scroll flex-1 min-h-[32px] overflow-y-auto px-3 py-2 space-y-0.5"
+          >
+            {(tasks ?? []).map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                slotKey={slotKey}
+                onRemoveTask={onRemoveTask}
+                onSetTaskColor={onSetTaskColor}
+                onSetTaskMarker={onSetTaskMarker}
+                onEditTask={onEditTask}
+                onOpenTaskTextEdit={onOpenTaskTextEdit}
+                textSize="text-[12px]"
+                textColorClass="text-gray-600"
+              />
+            ))}
+          </CardTaskZone>
+        </>
+      ) : tasks && tasks.length > 0 ? (
         <>
           <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
           <div className="sb-card-task-scroll flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-0.5">
@@ -176,7 +208,7 @@ const RRSide: React.FC<{
             ))}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

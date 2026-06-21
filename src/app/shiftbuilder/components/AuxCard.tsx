@@ -31,6 +31,7 @@ import {
   cardBodyInteriorStyle,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
+import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
 
 export interface AuxCardProps {
   def: AuxDef;
@@ -46,7 +47,11 @@ export interface AuxCardProps {
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
@@ -324,7 +329,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       onClick={(e) => {
         if (isLocked) return;
         if (isUnsetBlank && !hasTM) toggleRolePicker(e);
-        else onCardClick(def.key, e.currentTarget, e);
       }}
       onPointerMove={(e) => {
         handleSpotlightMove(e);
@@ -418,7 +422,10 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        <div className="shrink-0">
+        <div
+          className="sb-card-assign-zone shrink-0"
+          onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+        >
           <SlotAssignmentBody
             state={assignmentState}
             scale="aux"
@@ -432,32 +439,55 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
                 : undefined
             }
-            onUnassignedClick={(e) => {
-              e.stopPropagation();
-              onCardClick(def.key, e.currentTarget, e);
-            }}
+            onUnassignedClick={(e) => e.stopPropagation()}
           />
         </div>
 
-            {regularTasks.length > 0 ? (
+            {showDigitalAssists && !isTodayKiosk ? (
+              <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
+            ) : regularTasks.length > 0 ? (
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
             ) : null}
 
-            <div className={`sb-card-task-scroll mt-auto min-h-0 flex-1 overflow-y-auto ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
-              <ZoneTaskList
-                tasks={regularTasks}
-                hasTM={hasTM}
+            {showDigitalAssists && !isTodayKiosk ? (
+              <CardTaskZone
                 slotKey={def.key}
-                onRemoveTask={onRemoveTask}
-                onSetTaskColor={onSetTaskColor}
-                onSetTaskMarker={onSetTaskMarker}
-                onEditTask={onEditTask}
-                onOpenTaskTextEdit={onOpenTaskTextEdit}
-                dense
-                textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
-                isPrintPreview={!showDigitalAssists}
-              />
-            </div>
+                onOpenTasksPad={onOpenTaskTextEdit}
+                isLocked={isLocked}
+                enabled={showDigitalAssists}
+                className={`sb-card-task-scroll mt-auto min-h-[28px] flex-1 overflow-y-auto ${!hasTM ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}
+              >
+                <ZoneTaskList
+                  tasks={regularTasks}
+                  hasTM={hasTM}
+                  slotKey={def.key}
+                  onRemoveTask={onRemoveTask}
+                  onSetTaskColor={onSetTaskColor}
+                  onSetTaskMarker={onSetTaskMarker}
+                  onEditTask={onEditTask}
+                  onOpenTaskTextEdit={onOpenTaskTextEdit}
+                  dense
+                  textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
+                  isPrintPreview={false}
+                />
+              </CardTaskZone>
+            ) : (
+              <div className={`sb-card-task-scroll mt-auto min-h-0 flex-1 overflow-y-auto ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+                <ZoneTaskList
+                  tasks={regularTasks}
+                  hasTM={hasTM}
+                  slotKey={def.key}
+                  onRemoveTask={onRemoveTask}
+                  onSetTaskColor={onSetTaskColor}
+                  onSetTaskMarker={onSetTaskMarker}
+                  onEditTask={onEditTask}
+                  onOpenTaskTextEdit={onOpenTaskTextEdit}
+                  dense
+                  textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
+                  isPrintPreview={!showDigitalAssists}
+                />
+              </div>
+            )}
       </div>
     </div>
   );

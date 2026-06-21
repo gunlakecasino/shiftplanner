@@ -18,7 +18,11 @@ const ZoneTaskList: React.FC<{
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
   /** Double-click a task row to open the text/font attributes pad. */
-  onOpenTaskTextEdit?: (slotKey: string, task: NightSlotTask) => void;
+  onOpenTaskTextEdit?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => void;
   /** For AUX cards and tight spaces: use smaller text, tighter spacing, and cap visible tasks. */
   dense?: boolean;
   /** Forwarded to TaskRow: when true use static golden sizes (no dynamic measurement). */

@@ -41,7 +41,7 @@ import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore }
 import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
 import PlacementDock from "./placement-dock/PlacementDock";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
-import TaskTextEditPad from "./TaskTextEditPad";
+import TasksPad from "./TasksPad";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
@@ -141,6 +141,15 @@ export interface ShiftBuilderBoardProps {
   onRemoveTask?: any;
   onSetTaskColor?: any;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
+  onSetTaskAppearance?: (
+    slotKey: string,
+    taskLabel: string,
+    appearance: {
+      color: string | null;
+      markerType: "highlight" | "underline" | "circle" | "none";
+    },
+  ) => void;
+  onSetTaskTextStyle?: (slotKey: string, taskLabel: string, textStyle: import("@/lib/shiftbuilder/taskTextStyle").TaskTextStyle | null) => void;
   onEditTask?: any;
   setBreakGroupForSlot?: any;
   onLiveAssign?: any;
@@ -160,6 +169,8 @@ export interface ShiftBuilderBoardProps {
   /** Active anchored placement pad slot (controlled by orchestrator). */
   selectedSlotKey?: string | null;
   onSlotToggle?: (slotKey: string) => void;
+  /** Always opens the pad (no toggle-off) — keeps pad open on double-click. */
+  onSlotOpen?: (slotKey: string) => void;
   onSlotClose?: () => void;
   /** Merged assignments for pad display (store + live). */
   padAssignments?: Record<string, any>;
@@ -295,6 +306,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onRemoveTask,
   onSetTaskColor,
   onSetTaskMarker,
+  onSetTaskAppearance,
+  onSetTaskTextStyle,
   onEditTask,
   setBreakGroupForSlot,
   onLiveAssign,
@@ -309,6 +322,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   processedBreakCounts,
   selectedSlotKey = null,
   onSlotToggle,
+  onSlotOpen,
   onSlotClose,
   padAssignments,
   scheduledUnassigned = [],
@@ -643,7 +657,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       if (
         !target.closest("[data-slot-key]") &&
         !target.closest(".placement-pad") &&
-        !target.closest(".placement-dock")
+        !target.closest(".placement-dock") &&
+        !target.closest("[data-tasks-pad]")
       ) {
         onSlotClose?.();
       }
@@ -671,15 +686,30 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Local to Board (builder-only UI state). No need to lift open/close to Client.
   const [activeTaskEditPad, setActiveTaskEditPad] = React.useState<null | {
     slotKey: string;
-    task: NightSlotTask;
+    task?: NightSlotTask;
     hostId: string;
+    addMode?: boolean;
   }>(null);
 
-  const handleOpenTaskTextEdit = React.useCallback((slotKey: string, task: NightSlotTask) => {
+  const handleOpenTaskTextEdit = React.useCallback((
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => {
     if (isPrintPreview) return;
-    const hostId = `task-${slotKey}-${task.id}`;
-    setActiveTaskEditPad({ slotKey, task, hostId });
-  }, [isPrintPreview]);
+    const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[slotKey] ?? []).filter(
+      (t) => !t.isCoverage,
+    );
+    const addMode = options?.addMode === true || (!task && slotTaskList.length === 0);
+    const resolved = addMode ? undefined : (task ?? (slotTaskList.length === 1 ? slotTaskList[0] : undefined));
+    const hostId = resolved ? `task-${slotKey}-${resolved.id}` : slotKey;
+    setActiveTaskEditPad({
+      slotKey,
+      task: resolved,
+      hostId,
+      addMode,
+    });
+  }, [isPrintPreview, selectedTasks]);
 
   const closeTaskTextEditPad = React.useCallback(() => {
     setActiveTaskEditPad(null);
@@ -687,15 +717,24 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const renderTaskTextEditPad = () => {
     if (isPrintPreview || !activeTaskEditPad) return null;
+    const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[activeTaskEditPad.slotKey] ?? []).filter(
+      (t) => !t.isCoverage,
+    );
     return (
-      <TaskTextEditPad
+      <TasksPad
+        key={`${activeTaskEditPad.slotKey}:${activeTaskEditPad.task?.id ?? "slot"}:${activeTaskEditPad.addMode ? "add" : "edit"}`}
         slotKey={activeTaskEditPad.slotKey}
         task={activeTaskEditPad.task}
+        slotTasks={slotTaskList}
         hostId={activeTaskEditPad.hostId}
+        addMode={activeTaskEditPad.addMode}
         onClose={closeTaskTextEditPad}
         onEditTask={onEditTask}
+        onAddTask={onAddTask}
         onSetTaskColor={onSetTaskColor}
         onSetTaskMarker={onSetTaskMarker}
+        onSetTaskAppearance={onSetTaskAppearance}
+        onSetTaskTextStyle={onSetTaskTextStyle}
         onRemoveTask={onRemoveTask}
         isDark={isDark}
       />
@@ -847,13 +886,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Actions inside the pad (Lock / Coverage / Swap / Assign Sweeper) explicitly call the
   // original onCardClick / onGenderClick (which opens the full MarkerPad) + close the pad.
   // Clear is direct + fast. This prevents the "both pad + full drawer at once" clutter.
+  /** Placement Pad opens only on double-click (assignee zone) — never on single click. */
   const handleCardClickForPad = React.useCallback((k: string) => {
-    onSlotToggle?.(k);
-  }, [onSlotToggle]);
+    onSlotOpen?.(k);
+  }, [onSlotOpen]);
 
   const handleGenderClickForPad = React.useCallback((k: string) => {
-    onSlotToggle?.(k);
-  }, [onSlotToggle]);
+    onSlotOpen?.(k);
+  }, [onSlotOpen]);
 
   const placementPadProps = (slotKey: string) => ({
     slotKey,
@@ -871,6 +911,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     onToggleLock,
     onAssign,
     onAddTask,
+    onOpenTasksPad: handleOpenTaskTextEdit,
     onRemoveTask,
     onClearSlotTasks,
     onCopyRestroomPairingTasks,

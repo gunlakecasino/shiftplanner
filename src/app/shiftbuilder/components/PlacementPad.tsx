@@ -252,6 +252,8 @@ export interface PlacementPadProps {
   onToggleLock?: (slotKey: string) => void;
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
+  /** Opens Tasks Pad — primary surface for adding and formatting tasks. */
+  onOpenTasksPad?: (slotKey: string, task?: NightSlotTask, options?: { addMode?: boolean }) => void;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onClearSlotTasks?: (slotKey: string) => void | Promise<void>;
   onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
@@ -291,7 +293,9 @@ function anchorClass(anchor: PlacementPadAnchor): string {
 }
 
 function computePortalStyle(hostId: string, anchor: PlacementPadAnchor): React.CSSProperties | null {
-  const host = document.querySelector(`[data-placement-host="${hostId}"]`) as HTMLElement | null;
+  const host = document.querySelector(
+    `[data-placement-host="${hostId}"], [data-task-host="${hostId}"]`,
+  ) as HTMLElement | null;
   if (!host) return null;
   const rect = host.getBoundingClientRect();
   const gap = 6;
@@ -325,7 +329,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const {
     slotKey, anchor, hostId, presentation = "flyout", dockTab = "assign", onDockTabChange, onClose,
     assignments, selectedTasks, selectedDay, members = [], auxDefs, isCurrentNightLocked,
-    onAddCoverage, onLiveUnassign, onToggleLock, onAssign, onAddTask, onRemoveTask,
+    onAddCoverage, onLiveUnassign, onToggleLock, onAssign, onAddTask, onOpenTasksPad, onRemoveTask,
     onClearSlotTasks, onCopyRestroomPairingTasks, onAssignSweeper, onMarkUnavailable,
     scheduledUnassigned = [], allEligibleTms, pickerFitByTmId, onAddOnCall, boardPrerenderedFit,
     isDraftMode = false, draftAssignments = {}, weeklyRecentHistory, insightsEnabled = true, enableTmDragAssign = false,
@@ -358,8 +362,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
-  const [taskInput, setTaskInput] = useState("");
   const [sweeperOpen, setSweeperOpen] = useState(false);
+  const [taskInput, setTaskInput] = useState("");
   const taskInputRef = useRef<HTMLInputElement>(null);
 
   const closeSide = anchor === "left" ? "left" : "right";
@@ -436,7 +440,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setTimeout(() => { setAssignMode(false); setAssignConfirmed(false); }, 700);
   }, [slotKey, onAssign]);
 
-  const handleAddTask = () => {
+  const handleInlineAddTask = () => {
     const lbl = taskInput.trim();
     if (!lbl || !onAddTask) return;
     setTaskInput("");
@@ -559,21 +563,57 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
             {showTasksPane && (
               <div className="space-y-1.5">
                 {tasks.map((t) => (
-                  <div key={t.id || t.taskLabel} className="flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px]">
+                  <div
+                    key={t.id || t.taskLabel}
+                    className={`flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px] ${onOpenTasksPad ? "cursor-pointer hover:border-[#007AFF]/30 hover:bg-[#007AFF]/[0.03]" : ""}`}
+                    onClick={onOpenTasksPad ? (e) => { e.stopPropagation(); onOpenTasksPad(slotKey, t); } : undefined}
+                    onKeyDown={onOpenTasksPad ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTasksPad(slotKey, t); } } : undefined}
+                    role={onOpenTasksPad ? "button" : undefined}
+                    tabIndex={onOpenTasksPad ? 0 : undefined}
+                  >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color ?? accent }} />
                       <span className="font-medium text-gray-800 truncate">{t.taskLabel}</span>
                     </div>
-                    {onRemoveTask && <button onClick={() => onRemoveTask(slotKey, t.taskLabel)} className="text-gray-300"><X className="w-3 h-3" /></button>}
+                    {onRemoveTask && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
+                        className="text-gray-300 hover:text-red-400"
+                        aria-label={`Remove ${t.taskLabel}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 ))}
 
-                {onAddTask && (
+                {onOpenTasksPad ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true }); }}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{tasks.length ? "Add another task" : "Add tasks"}</span>
+                  </button>
+                ) : onAddTask ? (
                   <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-2xl border border-gray-200">
-                    <input ref={taskInputRef} value={taskInput} onChange={e => setTaskInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask()} placeholder="Add a task..." className="flex-1 bg-transparent text-[12px] text-gray-700 placeholder-gray-400 outline-none" />
-                    {taskInput.trim() && <button onClick={handleAddTask} className="text-[#007AFF] flex-shrink-0"><Plus className="w-3.5 h-3.5" /></button>}
+                    <input
+                      ref={taskInputRef}
+                      value={taskInput}
+                      onChange={(e) => setTaskInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleInlineAddTask()}
+                      placeholder="Add a task..."
+                      className="flex-1 bg-transparent text-[12px] text-gray-700 placeholder-gray-400 outline-none"
+                    />
+                    {taskInput.trim() ? (
+                      <button type="button" onClick={handleInlineAddTask} className="text-[#007AFF] flex-shrink-0">
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    ) : null}
                   </div>
-                )}
+                ) : null}
 
                 {onAssignSweeper && (() => {
                   const hasSweeper = tasks.some((t: any) => t.taskLabel?.toLowerCase().includes('sweep'));
