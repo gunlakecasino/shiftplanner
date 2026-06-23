@@ -5,20 +5,27 @@ import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLi
 import { sanitizePermissionOverrides } from "@/lib/auth/permissionCatalog";
 import { countActiveSudoAdmins, requireSudoAdmin } from "@/lib/auth/requireSudoAdmin.server";
 import { verifyAdminPin } from "@/lib/auth/verifyAdminPin.server";
+import {
+  createOpsUserWithPin,
+  issueOpsTemporaryPin,
+} from "@/lib/auth/opsUserLifecycle.server";
+import { resolveDisplayRole, resolveStoredUserRole } from "@/lib/auth/roleStorage";
 import { logOpsAuditServer } from "@/lib/shiftbuilder/opsAuditLog.server";
 
 const USER_SELECT =
   "id, email, full_name, username, role, is_active, permissions, must_change_pin, pin_issued_at, last_pin_change_at, created_at, updated_at";
 
 function mapUser(row: Record<string, unknown>) {
+  const storedRole = String(row.role ?? "viewer");
+  const permissions = (row.permissions as Record<string, unknown> | null) ?? null;
   return {
     id: String(row.id),
     email: (row.email as string | null) ?? null,
     full_name: String(row.full_name ?? ""),
     username: String(row.username ?? ""),
-    role: String(row.role ?? "utility_ops_super"),
+    role: resolveDisplayRole(storedRole, permissions),
     is_active: Boolean(row.is_active),
-    permissions: (row.permissions as Record<string, unknown> | null) ?? null,
+    permissions,
     must_change_pin: Boolean(row.must_change_pin),
     pin_issued_at: (row.pin_issued_at as string | null) ?? null,
     last_pin_change_at: (row.last_pin_change_at as string | null) ?? null,
@@ -126,8 +133,9 @@ export async function POST(request: NextRequest) {
       const full_name = String(body.full_name ?? "").trim();
       const username = String(body.username ?? "").trim();
       const email = body.email ? String(body.email).trim() : null;
-      const role = String(body.role ?? "utility_ops_super").trim();
-      const permissions = sanitizePermissionOverrides(
+      const requestedRole = String(body.role ?? "viewer").trim();
+      const stored = resolveStoredUserRole(
+        requestedRole,
         body.permissions as Record<string, boolean> | null,
       );
 
@@ -135,26 +143,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "full_name and username are required" }, { status: 400 });
       }
 
-      const { data, error } = await client.rpc("create_user_with_pin", {
-        p_full_name: full_name,
-        p_username: username,
-        p_email: email,
-        p_role: role,
-        p_pin: null,
-        p_permissions: permissions,
-        p_must_change_pin: true,
-      });
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-      }
-
-      const row = Array.isArray(data) ? data[0] : data;
-      const userId = row?.user_id ?? row?.userId;
-      const temporaryPin = row?.temporary_pin ?? row?.temporaryPin;
-
-      if (!userId || !temporaryPin) {
-        return NextResponse.json({ error: "User created but PIN response missing" }, { status: 500 });
+      let userId: string;
+      let temporaryPin: string;
+      try {
+        const created = await createOpsUserWithPin(client, {
+          full_name,
+          username,
+          email,
+          role: stored.role,
+          permissions: stored.permissions,
+          must_change_pin: true,
+        });
+        userId = created.userId;
+        temporaryPin = created.temporaryPin;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "User creation failed";
+        return NextResponse.json({ error: msg }, { status: 400 });
       }
 
       const { data: userRow } = await client
@@ -166,7 +170,7 @@ export async function POST(request: NextRequest) {
       await auditAdmin(actor.id, actor.full_name || actor.username, {
         event: "user_create",
         targetUserId: userId,
-        role,
+        role: requestedRole,
       });
 
       return NextResponse.json({
@@ -185,7 +189,7 @@ export async function POST(request: NextRequest) {
 
       const { data: target } = await client
         .from("users")
-        .select("id, role, is_active")
+        .select("id, role, is_active, permissions")
         .eq("id", userId)
         .maybeSingle();
 
@@ -193,8 +197,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
 
-      const nextRole = body.role !== undefined ? String(body.role) : target.role;
-      const roleChanging = body.role !== undefined && nextRole !== target.role;
+      const currentDisplayRole = resolveDisplayRole(
+        String(target.role),
+        target.permissions as Record<string, unknown> | null,
+      );
+      const requestedDisplayRole =
+        body.role !== undefined ? String(body.role) : currentDisplayRole;
+      const stored = resolveStoredUserRole(
+        requestedDisplayRole,
+        body.permissions as Record<string, boolean> | null,
+      );
+      const nextRole = stored.role;
+      const roleChanging =
+        body.role !== undefined && requestedDisplayRole !== currentDisplayRole;
 
       if (roleChanging) {
         const pinCheck = await requireAdminPinConfirm(actor.id, body.adminPin);
@@ -225,8 +240,10 @@ export async function POST(request: NextRequest) {
       }
 
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (body.role !== undefined) patch.role = nextRole;
-      if (body.permissions !== undefined) {
+      if (body.role !== undefined) {
+        patch.role = stored.role;
+        patch.permissions = stored.permissions;
+      } else if (body.permissions !== undefined) {
         patch.permissions = sanitizePermissionOverrides(
           body.permissions as Record<string, boolean> | null,
         );
@@ -318,15 +335,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: pinCheck.error }, { status: pinCheck.status });
       }
 
-      const { data, error } = await client.rpc("issue_temporary_pin", { p_user_id: userId });
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      let temporaryPin: string;
+      try {
+        temporaryPin = await issueOpsTemporaryPin(client, userId);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "PIN reset failed";
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
 
       await auditAdmin(actor.id, actor.full_name || actor.username, {
         event: "pin_reset",
         targetUserId: userId,
       });
 
-      return NextResponse.json({ success: true, temporaryPin: data as string });
+      return NextResponse.json({ success: true, temporaryPin });
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

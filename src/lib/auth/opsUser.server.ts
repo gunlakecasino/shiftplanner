@@ -1,5 +1,6 @@
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { getEffectivePermissions } from "./permissions";
+import { resolveDisplayRole } from "./roleStorage";
 import type { OpsRole, OpsUser } from "./opsAuthTypes";
 
 const USER_PROFILE_SELECT =
@@ -17,13 +18,14 @@ export async function loadOpsUserById(userId: string): Promise<OpsUser | null> {
 
   if (error || !data || !data.is_active) return null;
 
+  const permissions = data.permissions ?? null;
   return {
     id: data.id,
     email: data.email ?? "",
     full_name: data.full_name ?? "",
     username: data.username ?? "",
-    role: data.role as OpsRole,
-    permissions: data.permissions ?? null,
+    role: resolveDisplayRole(data.role, permissions) as OpsRole,
+    permissions,
     must_change_pin: Boolean(data.must_change_pin),
   };
 }

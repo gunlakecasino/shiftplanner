@@ -15,12 +15,11 @@ import {
   reactivateUser,
   updateUserProfile,
   type SudoUser,
-} from "@/lib/shiftbuilder/sudoActions";
+} from "@/lib/shiftbuilder/adminUsersClient";
 import type { OpsRole, ShiftBuilderPermissions } from "@/lib/auth/opsAuth";
 import {
-  OPS_ROLE_OPTIONS,
   roleLabel,
-  roleSurface,
+  roleOptionsForUser,
   sanitizePermissionOverrides,
 } from "@/lib/auth/permissionCatalog";
 import { PermissionMatrix } from "../components/PermissionMatrix";
@@ -168,7 +167,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
     full_name: "",
     username: "",
     email: "",
-    role: "utility_ops_super" as OpsRole,
+    role: "viewer" as OpsRole,
     permissions: null as Partial<ShiftBuilderPermissions> | null,
   });
 
@@ -366,7 +365,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
         full_name: "",
         username: "",
         email: "",
-        role: "utility_ops_super",
+        role: "viewer",
         permissions: null,
       });
 
@@ -479,13 +478,13 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                   <span
                     className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wide",
-                      roleSurface(u.role) === "admin"
+                      "text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wide",
+                      u.role === "sudo_admin"
                         ? "bg-violet-500/10 text-violet-600 dark:text-violet-300"
                         : "bg-sky-500/10 text-sky-700 dark:text-sky-300",
                     )}
                   >
-                    {roleSurface(u.role)}
+                    {roleLabel(u.role)}
                   </span>
                   {u.must_change_pin && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
@@ -558,14 +557,14 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                   }
                   className="w-full border rounded-xl px-3 py-2 text-sm bg-transparent"
                 >
-                  {OPS_ROLE_OPTIONS.map((r) => (
+                  {roleOptionsForUser(selectedUser.role).map((r) => (
                     <option key={r.value} value={r.value}>
-                      {r.label} — {r.surface} surface
+                      {r.label}
                     </option>
                   ))}
                 </select>
                 <p className="text-[10px] text-[#6C6C72] mt-1">
-                  {OPS_ROLE_OPTIONS.find((r) => r.value === selectedUser.role)?.description}
+                  {roleOptionsForUser(selectedUser.role).find((r) => r.value === selectedUser.role)?.description}
                 </p>
               </div>
 
@@ -674,9 +673,9 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                 }
                 className="w-full border rounded-xl px-3 py-2 text-sm bg-transparent"
               >
-                {OPS_ROLE_OPTIONS.map((r) => (
+                {roleOptionsForUser(newUser.role).map((r) => (
                   <option key={r.value} value={r.value}>
-                    {r.label} ({r.surface})
+                    {r.label}
                   </option>
                 ))}
               </select>

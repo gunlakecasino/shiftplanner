@@ -1,9 +1,18 @@
 import type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
+import { isViewerStoredAccount } from "./roleStorage";
 
 export type { OpsRole, ShiftBuilderPermissions };
 
+function permissionsBaseRole(user: Pick<OpsUser, "role" | "permissions">): OpsRole {
+  if (isViewerStoredAccount(user.role, user.permissions)) {
+    return "viewer";
+  }
+  return user.role;
+}
+
 export function getEffectivePermissions(user: Pick<OpsUser, "role" | "permissions">): ShiftBuilderPermissions {
-  const base = getPermissionsForRole(user.role);
+  const baseRole = permissionsBaseRole(user);
+  const base = getPermissionsForRole(baseRole);
   let effective = mergePermissions(base, user.permissions);
   if (!["sudo_admin", "graves_ops_super"].includes(user.role)) {
     effective = { ...effective, canSeeDraftData: false };
@@ -13,6 +22,19 @@ export function getEffectivePermissions(user: Pick<OpsUser, "role" | "permission
 
 export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
   switch (role) {
+    case "viewer":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: false,
+        canApplySchedules: false,
+        canPublish: false,
+        canSeeDraftData: false,
+        canAccessSudo: false,
+        canRunEngine: false,
+        canManageTeam: false,
+        canEditPublishedOnly: true,
+      };
+
     case "sudo_admin":
     case "admin":
     case "ops_director":
@@ -25,6 +47,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessSudo: true,
         canRunEngine: true,
         canManageTeam: true,
+        canEditPublishedOnly: false,
       };
 
     case "ops_manager":
@@ -37,6 +60,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessSudo: true,
         canRunEngine: true,
         canManageTeam: true,
+        canEditPublishedOnly: false,
       };
 
     case "graves_ops_super":
@@ -49,6 +73,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessSudo: false,
         canRunEngine: false,
         canManageTeam: false,
+        canEditPublishedOnly: false,
       };
 
     case "days_ops_super":
@@ -62,6 +87,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessSudo: false,
         canRunEngine: false,
         canManageTeam: false,
+        canEditPublishedOnly: false,
       };
 
     case "utility_ops_super":
@@ -76,6 +102,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessSudo: false,
         canRunEngine: false,
         canManageTeam: false,
+        canEditPublishedOnly: false,
       };
   }
 }
@@ -95,6 +122,9 @@ export function mergePermissions(
   if (typeof overrides.canAccessSudo === "boolean") sanitized.canAccessSudo = overrides.canAccessSudo;
   if (typeof overrides.canRunEngine === "boolean") sanitized.canRunEngine = overrides.canRunEngine;
   if (typeof overrides.canManageTeam === "boolean") sanitized.canManageTeam = overrides.canManageTeam;
+  if (typeof overrides.canEditPublishedOnly === "boolean") {
+    sanitized.canEditPublishedOnly = overrides.canEditPublishedOnly;
+  }
 
   return { ...base, ...sanitized };
 }

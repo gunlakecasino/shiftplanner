@@ -1,4 +1,5 @@
 export type OpsRole =
+  | "viewer"
   | "sudo_admin"
   | "admin"
   | "ops_director"
@@ -18,6 +19,8 @@ export interface ShiftBuilderPermissions {
   canAccessSudo: boolean;
   canRunEngine: boolean;
   canManageTeam: boolean;
+  /** Marker: floor viewer — edits limited to published nights (stored on legacy DB role). */
+  canEditPublishedOnly: boolean;
 }
 
 export interface OpsUser {

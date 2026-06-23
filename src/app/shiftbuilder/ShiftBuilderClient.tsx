@@ -1721,6 +1721,10 @@ function AuthedShiftBuilder() {
   );
 
   const toggleDraftMode = React.useCallback(() => {
+    if (!canSeeDraftData) {
+      showToast("Draft mode is only available to planning roles", "error");
+      return;
+    }
     if (!canEditAssignments) {
       showToast("Insufficient privileges — you cannot edit assignments", "error");
       return;
@@ -1739,7 +1743,7 @@ function AuthedShiftBuilder() {
     }
     setIsDraftMode(true);
     showToast("Draft mode on — edits stay provisional until Save All", "info");
-  }, [canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast]);
+  }, [canSeeDraftData, canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast]);
 
   // === Grok Structured Suggestions Integration ===
   /**
@@ -3255,9 +3259,16 @@ function AuthedShiftBuilder() {
   // a different day before the network call resolves, the write still lands
   // on the night it was issued against.
   // ── Permission guard helpers (centralized so every mutation path is covered)
+  const isNightEditable =
+    canSeeDraftData || currentNightStatus === "published";
+
   const requireEdit = (): boolean => {
     if (!canEditAssignments) {
       showToast("Insufficient privileges — you cannot edit assignments", "error");
+      return false;
+    }
+    if (!isNightEditable) {
+      showToast("This night is unpublished — your role can only edit published days", "error");
       return false;
     }
     return true;
@@ -7412,13 +7423,26 @@ function AuthedShiftBuilder() {
           canPublish ? () => void handleToggleDayPublished() : undefined
         }
         publishDayBusy={publishDayBusy}
-        onRunEngine={viewMode === "canvas" ? runXaiEngineFromCanvas : undefined}
-        onClearDay={viewMode === "canvas" ? handleClearBoard : undefined}
+        onRunEngine={
+          viewMode === "canvas" && canRunEngine ? runXaiEngineFromCanvas : undefined
+        }
+        onClearDay={
+          viewMode === "canvas" && canSeeDraftData ? handleClearBoard : undefined
+        }
         isDraftMode={isDraftMode}
         draftSlotCount={draftSlotCount}
-        onToggleDraftMode={viewMode === "canvas" ? toggleDraftMode : undefined}
-        onSaveAllDraft={viewMode === "canvas" ? () => { void applyDraft(); } : undefined}
+        onToggleDraftMode={
+          viewMode === "canvas" && canSeeDraftData ? toggleDraftMode : undefined
+        }
+        onSaveAllDraft={
+          viewMode === "canvas" && canSeeDraftData
+            ? () => {
+                void applyDraft();
+              }
+            : undefined
+        }
         onDiscardDraft={viewMode === "canvas" ? discardDraft : undefined}
+        permissions={permissions}
       />
 
       {/* Beautiful seamless exit pill for print preview mode */}

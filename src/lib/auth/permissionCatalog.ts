@@ -60,6 +60,12 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
     group: "Administrative",
     description: "Open OMS Settings — engine, users, defaults, reports",
   },
+  {
+    key: "canEditPublishedOnly",
+    label: "Published Nights Only",
+    group: "Editing",
+    description: "Floor viewer marker — edits allowed only on published nights",
+  },
 ];
 
 export type OpsRoleOption = {
@@ -69,63 +75,84 @@ export type OpsRoleOption = {
   surface: "admin" | "team";
 };
 
+/** Primary roles shown in Settings → Users. Legacy roles remain valid for existing accounts. */
 export const OPS_ROLE_OPTIONS: OpsRoleOption[] = [
   {
     value: "sudo_admin",
     label: "Sudo Admin",
-    description: "Full backend control including user management",
+    description: "Full control — settings, publish, engine, all nights",
     surface: "admin",
   },
   {
-    value: "admin",
-    label: "Admin",
-    description: "Full ShiftBuilder + Settings access",
-    surface: "admin",
-  },
-  {
-    value: "ops_director",
-    label: "Ops Director",
-    description: "Leadership — publish, engine, settings",
-    surface: "admin",
-  },
-  {
-    value: "ops_manager",
-    label: "Ops Manager",
-    description: "Managers — schedules, engine, team",
-    surface: "admin",
-  },
-  {
-    value: "graves_ops_super",
-    label: "Graves Supervisor",
-    description: "Grave shift floor lead — canvas editing",
-    surface: "team",
-  },
-  {
-    value: "days_ops_super",
-    label: "Days Supervisor",
-    description: "Day shift supervisor — canvas editing",
-    surface: "team",
-  },
-  {
-    value: "swings_ops_super",
-    label: "Swings Supervisor",
-    description: "Swing shift supervisor — canvas editing",
-    surface: "team",
-  },
-  {
-    value: "utility_ops_super",
-    label: "Utility Supervisor",
-    description: "Default floor operator — canvas editing",
+    value: "viewer",
+    label: "Viewer",
+    description: "Floor operator — view all days, edit placements/tasks/coverage on published nights only",
     surface: "team",
   },
 ];
 
+const LEGACY_ROLE_OPTIONS: OpsRoleOption[] = [
+  {
+    value: "admin",
+    label: "Admin (legacy)",
+    description: "Legacy full-access role — prefer Sudo Admin",
+    surface: "admin",
+  },
+  {
+    value: "ops_director",
+    label: "Ops Director (legacy)",
+    description: "Legacy leadership role",
+    surface: "admin",
+  },
+  {
+    value: "ops_manager",
+    label: "Ops Manager (legacy)",
+    description: "Legacy manager role",
+    surface: "admin",
+  },
+  {
+    value: "graves_ops_super",
+    label: "Graves Supervisor (legacy)",
+    description: "Legacy grave shift supervisor",
+    surface: "team",
+  },
+  {
+    value: "days_ops_super",
+    label: "Days Supervisor (legacy)",
+    description: "Legacy day shift supervisor",
+    surface: "team",
+  },
+  {
+    value: "swings_ops_super",
+    label: "Swings Supervisor (legacy)",
+    description: "Legacy swing shift supervisor",
+    surface: "team",
+  },
+  {
+    value: "utility_ops_super",
+    label: "Utility Supervisor (legacy)",
+    description: "Legacy utility supervisor",
+    surface: "team",
+  },
+];
+
+export const ALL_ROLE_OPTIONS: OpsRoleOption[] = [...OPS_ROLE_OPTIONS, ...LEGACY_ROLE_OPTIONS];
+
 export function roleLabel(role: string): string {
-  return OPS_ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role;
+  return ALL_ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role;
 }
 
 export function roleSurface(role: string): "admin" | "team" {
-  return OPS_ROLE_OPTIONS.find((r) => r.value === role)?.surface ?? "team";
+  return ALL_ROLE_OPTIONS.find((r) => r.value === role)?.surface ?? "team";
+}
+
+/** Options for role pickers — includes legacy role when editing an existing legacy account. */
+export function roleOptionsForUser(currentRole?: string | null): OpsRoleOption[] {
+  if (!currentRole || OPS_ROLE_OPTIONS.some((r) => r.value === currentRole)) {
+    return OPS_ROLE_OPTIONS;
+  }
+  const legacy = LEGACY_ROLE_OPTIONS.find((r) => r.value === currentRole);
+  return legacy ? [...OPS_ROLE_OPTIONS, legacy] : OPS_ROLE_OPTIONS;
 }
 
 /** Sanitize permission overrides — only known boolean keys. */

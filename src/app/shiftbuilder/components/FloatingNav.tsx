@@ -12,6 +12,8 @@ import {
   MONTH_LONG,
   sameDay,
 } from "@/lib/shiftbuilder/dateUtils";
+import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
+import { roleLabel } from "@/lib/auth/permissionCatalog";
 import {
   ChevronDown,
   LocateFixed,
@@ -96,6 +98,7 @@ export interface FloatingNavProps {
   onToggleDayPublished?: () => void;
   publishDayBusy?: boolean;
   top?: number;
+  permissions?: ShiftBuilderPermissions;
 }
 
 const MONTHS = MONTH_LONG;
@@ -149,7 +152,18 @@ export default function FloatingNav(props: FloatingNavProps) {
     onToggleWeekHealth,
     weekHealthVisible = false,
     top = 0,
+    permissions,
   } = props;
+
+  const canEditAssignments = permissions?.canEditAssignments ?? true;
+  const canPublish = permissions?.canPublish ?? false;
+  const canRunEngine = permissions?.canRunEngine ?? false;
+  const canAccessSudo = permissions?.canAccessSudo ?? false;
+  const canSeeDraftData = permissions?.canSeeDraftData ?? false;
+  const showDraftTools = canSeeDraftData && canEditAssignments;
+  const showPublishControls = canPublish;
+  const showEngineTools = canRunEngine;
+  const showAdminLinks = canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -596,26 +610,46 @@ export default function FloatingNav(props: FloatingNavProps) {
             </button>
           )}
 
-          <button
-            type="button"
-            className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
-            style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
-            onClick={onToggleDayPublished}
-            disabled={!canPublishDay}
-            title={isDayPublished ? "Unpublish this day" : "Publish this day"}
-          >
+          {showPublishControls ? (
+            <button
+              type="button"
+              className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
+              style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
+              onClick={onToggleDayPublished}
+              disabled={!canPublishDay}
+              title={isDayPublished ? "Unpublish this day" : "Publish this day"}
+            >
+              <span
+                className="live-dot shrink-0"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: isDayPublished ? "#22c55e" : "#f59e0b",
+                  display: "inline-block",
+                }}
+              />
+              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+            </button>
+          ) : (
             <span
-              className="live-dot shrink-0"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: isDayPublished ? "#22c55e" : "#f59e0b",
-                display: "inline-block",
-              }}
-            />
-            {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
-          </button>
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
+              style={{ color: isDark ? "#a1a1aa" : "#666" }}
+              title={isDayPublished ? "Published night" : "Unpublished — read-only for your role"}
+            >
+              <span
+                className="shrink-0"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: isDayPublished ? "#22c55e" : "#f59e0b",
+                  display: "inline-block",
+                }}
+              />
+              {isDayPublished ? "PUBLISHED" : "READ-ONLY"}
+            </span>
+          )}
 
           <div className="relative" ref={profileRef}>
             <button
@@ -648,8 +682,20 @@ export default function FloatingNav(props: FloatingNavProps) {
               >
                 <div className={`px-3 py-2 text-[12px] border-b ${isDark ? "text-zinc-400 border-white/10" : "text-gray-500"}`}>
                   {currentUser.full_name}
-                  <div className="opacity-80">{currentUser.username} · {currentUser.role}</div>
+                  <div className="opacity-80">{currentUser.username} · {roleLabel(currentUser.role)}</div>
                 </div>
+                {showAdminLinks && onOpenSettings && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onOpenSettings();
+                      setProfileOpen(false);
+                    }}
+                  >
+                    Settings
+                  </button>
+                )}
                 <button type="button" className={menuItemClass} onClick={() => { onLogout?.(); setProfileOpen(false); }}>
                   Sign out
                 </button>
@@ -680,7 +726,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {onRunEngine && (
+                {showEngineTools && onRunEngine && (
                   <button
                     type="button"
                     className={menuItemClass}
@@ -692,7 +738,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Sparkles size={14} /> Run Engine
                   </button>
                 )}
-                {onClearDay && (
+                {showDraftTools && onClearDay && (
                   <button
                     type="button"
                     className={menuItemClass}
@@ -704,8 +750,10 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Eraser size={14} /> Clear Day
                   </button>
                 )}
-                {(onRunEngine || onClearDay) && <div className={menuDividerClass} />}
-                {onToggleDraftMode && (
+                {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay)) && (
+                  <div className={menuDividerClass} />
+                )}
+                {showDraftTools && onToggleDraftMode && (
                   <button
                     type="button"
                     className={menuItemClass}
@@ -721,7 +769,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     )}
                   </button>
                 )}
-                {onSaveAllDraft && (
+                {showDraftTools && onSaveAllDraft && (
                   <button
                     type="button"
                     className={menuItemClass}
@@ -738,7 +786,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     )}
                   </button>
                 )}
-                {onDiscardDraft && isDraftMode && draftSlotCount > 0 && (
+                {showDraftTools && onDiscardDraft && isDraftMode && draftSlotCount > 0 && (
                   <button
                     type="button"
                     className={menuItemClass}
@@ -750,7 +798,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <X size={14} /> Discard Draft
                   </button>
                 )}
-                {(onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
+                {showDraftTools && (onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
                 {onRestoreDefaultBreaks && (
                   <button
                     type="button"
@@ -763,21 +811,25 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Coffee size={14} /> Default Breaks
                   </button>
                 )}
-                <button type="button" className={menuItemClass} onClick={handleDefaultTasks}>
-                  <LayoutGrid size={14} /> Default Tasks
-                </button>
-                <div className={menuDividerClass} />
-                <button
-                  type="button"
-                  className={menuItemClass}
-                  onClick={() => {
-                    onToggleDayPublished?.();
-                    setMoreOpen(false);
-                  }}
-                  disabled={!canPublishDay}
-                >
-                  {isDayPublished ? "Unpublish Day" : "Publish Day"}
-                </button>
+                {showAdminLinks && (
+                  <button type="button" className={menuItemClass} onClick={handleDefaultTasks}>
+                    <LayoutGrid size={14} /> Default Tasks
+                  </button>
+                )}
+                {showAdminLinks && <div className={menuDividerClass} />}
+                {showPublishControls && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onToggleDayPublished?.();
+                      setMoreOpen(false);
+                    }}
+                    disabled={!canPublishDay}
+                  >
+                    {isDayPublished ? "Unpublish Day" : "Publish Day"}
+                  </button>
+                )}
                 {onPrint && (
                   <button
                     type="button"
@@ -810,12 +862,12 @@ export default function FloatingNav(props: FloatingNavProps) {
                     )}
                   </button>
                 )}
-                {onCopyPriorWeekTasks && (
+                {showDraftTools && onCopyPriorWeekTasks && (
                   <button type="button" className={menuItemClass} onClick={() => { onCopyPriorWeekTasks(); setMoreOpen(false); }}>
                     Copy Prior Week Tasks
                   </button>
                 )}
-                {onCopyYesterdayTasks && (
+                {showDraftTools && onCopyYesterdayTasks && (
                   <button type="button" className={menuItemClass} onClick={() => { onCopyYesterdayTasks(); setMoreOpen(false); }}>
                     Copy Yesterday Tasks
                   </button>
@@ -826,7 +878,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Back to Launchpad
                   </button>
                 )}
-                {onToggleWeekHealth && (
+                {showDraftTools && onToggleWeekHealth && (
                   <button type="button" className={menuItemClass} onClick={() => { onToggleWeekHealth(); setMoreOpen(false); }}>
                     {weekHealthVisible ? "Hide" : "Show"} Week Health
                   </button>
