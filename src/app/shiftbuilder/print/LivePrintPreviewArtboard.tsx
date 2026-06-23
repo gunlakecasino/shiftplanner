@@ -5,6 +5,7 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { shiftBuilderVersionLabel } from "../version";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
+import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 import { PrintPreviewPage } from "./PrintPreviewPage";
 import type { PrintDaySnapshot, PrintPreviewView, PrintVariant } from "./printPreviewTypes";
 
@@ -43,18 +44,23 @@ export function LivePrintPreviewArtboard({
       : 1;
 
   useEffect(() => {
-    if (view !== "breaks" || !hostRef.current) return;
+    if (!hostRef.current) return;
     let cancelled = false;
     const run = () => {
       if (cancelled || !hostRef.current) return;
       const artboard = hostRef.current.querySelector(".print-artboard");
-      if (artboard) postProcessBreaksArtboard(artboard);
+      if (!artboard) return;
+      if (view === "breaks") {
+        postProcessBreaksArtboard(artboard);
+      } else if (printVariant === "official") {
+        postProcessOfficialDeploymentArtboard(artboard);
+      }
     };
     requestAnimationFrame(() => requestAnimationFrame(run));
     return () => {
       cancelled = true;
     };
-  }, [view, snapshot]);
+  }, [view, snapshot, printVariant]);
 
   return (
     <div ref={hostRef}>

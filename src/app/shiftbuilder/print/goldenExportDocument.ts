@@ -1,6 +1,7 @@
 import { toJpeg, toPng } from "html-to-image";
 import type { PrintPageKind } from "./assemblePages";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
+import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 import {
   GOLDEN_HEIGHT_PX,
   GOLDEN_RASTER_STAGING_LEFT_PX,
@@ -200,11 +201,15 @@ export async function rasterizeGoldenArtboardElement(args: {
 }): Promise<RasterResult> {
   if (args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
+  } else if (args.kind === "deploy") {
+    postProcessOfficialDeploymentArtboard(args.artboard);
   }
   prepareArtboardForRaster(args.artboard);
   applyArtboardContract(args.artboard);
   if (args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
+  } else if (args.kind === "deploy") {
+    postProcessOfficialDeploymentArtboard(args.artboard);
   }
   inlineLiveDomForRaster(args.artboard);
   args.artboard.getBoundingClientRect();
@@ -274,6 +279,8 @@ export async function rasterizeGoldenPageHtml(args: {
 
     if (args.kind === "breaks") {
       postProcessBreaksArtboard(artboard);
+    } else if (args.kind === "deploy") {
+      postProcessOfficialDeploymentArtboard(artboard);
     }
     applyArtboardContract(artboard);
     artboard.getBoundingClientRect();

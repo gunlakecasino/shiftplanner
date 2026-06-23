@@ -2,6 +2,7 @@ import type { PrintConfig } from "../components/PrintCommandCenter";
 import { MARGIN_VALUES, MARGIN_ZOOM } from "../components/PrintCommandCenter";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
+import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 
 import type { GoldenPrintPage } from "./assemblePages";
 
@@ -136,6 +137,12 @@ function applyGoldenArtboardContract(
 
   if (page.kind === "breaks" && artboard.getAttribute("data-print-view") === "breaks") {
     postProcessBreaksArtboard(artboard);
+  } else if (
+    page.kind === "deploy" &&
+    artboard.getAttribute("data-print-view") === "deployment" &&
+    artboard.getAttribute("data-print-variant") !== "planning"
+  ) {
+    postProcessOfficialDeploymentArtboard(artboard);
   }
 }
 

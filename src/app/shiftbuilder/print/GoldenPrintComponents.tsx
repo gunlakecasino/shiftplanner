@@ -119,14 +119,19 @@ export function GoldenTaskList({
   const textColor = hasTM
     ? `text-[${TASK_LABEL_COLOR.primary}]`
     : `text-[${TASK_LABEL_COLOR.secondary}]`;
+  const fontSize = dense
+    ? `var(--sb-print-task-dense-px, ${TASK_LABEL_SIZE_PX.printDense}px)`
+    : `var(--sb-print-task-px, ${TASK_LABEL_SIZE_PX.print}px)`;
+
   return (
     <div
-      className={`sb-golden-task-list min-h-0 flex-1 flex flex-col justify-start gap-[2px] ${
-        dense
-          ? `text-[${TASK_LABEL_SIZE_PX.printDense}px] leading-[1.08]`
-          : `text-[${TASK_LABEL_SIZE_PX.print}px] leading-[1.12]`
-      } ${textColor}`}
-      style={{ fontFamily: "var(--font-atkinson)" }}
+      className={`sb-golden-task-list min-h-0 flex-1 flex flex-col justify-start ${dense ? "sb-golden-task-list--dense" : ""} ${textColor}`}
+      style={{
+        fontFamily: "var(--font-atkinson)",
+        fontSize,
+        lineHeight: "var(--sb-print-task-leading, 1.12)",
+        gap: "var(--sb-print-task-gap, 2px)",
+      }}
     >
       {tasks.map((t) => (
         <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} />

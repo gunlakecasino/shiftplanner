@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ZONE_DEFS, RR_DEFS, BREAK_GROUP_OVERLAPS, breakGroupLabel } from "@/lib/shiftbuilder/constants";
 import type { PrintPreviewPageProps } from "./printPreviewTypes";
 import {
@@ -22,6 +22,10 @@ import {
   slotShowsFilled,
 } from "./buildPrintDaySnapshot";
 import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
+import {
+  solveOfficialDeploymentLayout,
+  type OfficialDeploymentLayout,
+} from "./deploymentPrintLayout";
 import "./printPreview.css";
 
 function filledCount(
@@ -39,6 +43,7 @@ function AuxCardsSection({
   auxFilled,
   auxTotal,
   className = "",
+  sectionStyle,
 }: {
   auxDefs: PrintPreviewPageProps["snapshot"]["auxDefs"];
   assignments: PrintPreviewPageProps["snapshot"]["assignments"];
@@ -47,10 +52,12 @@ function AuxCardsSection({
   auxFilled: number;
   auxTotal: number;
   className?: string;
+  sectionStyle?: React.CSSProperties;
 }) {
   return (
     <section
       className={`sb-builder-section sb-print-section sb-print-section-aux min-h-0 flex flex-col ${className}`.trim()}
+      style={sectionStyle}
     >
       <GoldenSectionHeader label="AUXILIARY" count={`${auxFilled} / ${auxTotal} FILLED`} />
       <div
@@ -154,6 +161,37 @@ export function PrintPreviewPage({
   const coveredByForPlanning = blankSlate
     ? ({} as ReturnType<typeof buildCoveredByIndex>)
     : buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
+
+  const officialLayout: OfficialDeploymentLayout | null = useMemo(
+    () => (!isPlanning && view === "deployment" ? solveOfficialDeploymentLayout(snapshot) : null),
+    [isPlanning, view, snapshot],
+  );
+
+  const officialArtboardStyle = useMemo((): React.CSSProperties | undefined => {
+    if (!officialLayout) return undefined;
+    return {
+      ["--sb-print-zones-grow" as string]: String(officialLayout.zonesFlexGrow),
+      ["--sb-print-rr-grow" as string]: String(officialLayout.rrFlexGrow),
+      ["--sb-print-aux-grow" as string]: String(officialLayout.auxFlexGrow),
+      ["--sb-print-task-px" as string]: `${officialLayout.taskFontPx}px`,
+      ["--sb-print-task-dense-px" as string]: `${officialLayout.taskDenseFontPx}px`,
+      ["--sb-print-task-leading" as string]: String(officialLayout.taskLineHeight),
+      ["--sb-print-task-gap" as string]: `${officialLayout.taskGapPx}px`,
+    };
+  }, [officialLayout]);
+
+  const sectionFlexStyle = (
+    kind: "zones" | "rr" | "aux",
+  ): React.CSSProperties | undefined => {
+    if (!officialLayout) return undefined;
+    const grow =
+      kind === "zones"
+        ? officialLayout.zonesFlexGrow
+        : kind === "rr"
+          ? officialLayout.rrFlexGrow
+          : officialLayout.auxFlexGrow;
+    return { flexGrow: grow, flexBasis: 0, flexShrink: 1 };
+  };
 
   if (view === "breaks") {
     const overlapRows = buildOverlapRows(snapshot);
@@ -341,7 +379,16 @@ export function PrintPreviewPage({
     : buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
 
   return (
-    <div className="print-artboard" data-print-view="deployment" data-print-variant={variantAttr}>
+    <div
+      className="print-artboard"
+      data-print-view="deployment"
+      data-print-variant={variantAttr}
+      data-print-density={officialLayout?.density}
+      data-print-zones-grow={officialLayout ? String(officialLayout.zonesFlexGrow) : undefined}
+      data-print-rr-grow={officialLayout ? String(officialLayout.rrFlexGrow) : undefined}
+      data-print-aux-grow={officialLayout ? String(officialLayout.auxFlexGrow) : undefined}
+      style={officialArtboardStyle}
+    >
       {isPlanning ? <GoldenPlanningHeaderBadge /> : null}
       <GoldenDeploymentHeader
         day={day}
@@ -358,8 +405,9 @@ export function PrintPreviewPage({
       >
         <section
           className={`sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-col ${
-            isPlanning ? "flex-[6]" : "flex-[5]"
+            isPlanning ? "flex-[6]" : ""
           }`}
+          style={sectionFlexStyle("zones")}
         >
           <GoldenSectionHeader label="ZONES" count={`${zoneFilled} / 10 FILLED`} />
           <div
@@ -387,8 +435,9 @@ export function PrintPreviewPage({
 
         <section
           className={`sb-builder-section sb-print-section sb-print-section-rr mb-1 min-h-0 flex flex-col ${
-            isPlanning ? "flex-[5] mb-0" : "flex-[4]"
+            isPlanning ? "flex-[5] mb-0" : ""
           }`}
+          style={sectionFlexStyle("rr")}
         >
           <GoldenSectionHeader label="RESTROOMS" count={`${rrFilled} / 10 FILLED`} />
           <div
@@ -422,7 +471,8 @@ export function PrintPreviewPage({
             coveredByIndex={coveredByIndex}
             auxFilled={auxFilled}
             auxTotal={auxTotal}
-            className="mb-2 flex-[2]"
+            className={`mb-2 ${officialLayout ? "" : "flex-[2]"}`}
+            sectionStyle={sectionFlexStyle("aux")}
           />
         ) : null}
       </div>

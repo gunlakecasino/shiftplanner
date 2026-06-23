@@ -174,19 +174,52 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-view=
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-zones,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-zones {
-  flex-grow: 5;
+  flex-grow: var(--sb-print-zones-grow, 5);
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-rr,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-rr {
-  flex-grow: 4;
+  flex-grow: var(--sb-print-rr-grow, 4);
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-section-aux,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-aux,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="deployment"] .sb-print-section-aux {
-  flex-grow: 2;
+  flex-grow: var(--sb-print-aux-grow, 2);
+}
+
+/* Official floor sheet — adaptive task typography + aux band shrink */
+.print-stage-inner .print-artboard[data-print-variant="official"] .sb-golden-task-list,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-golden-task-list,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-golden-task-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="official"] .sb-golden-card-body,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-golden-card-body,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-golden-card-body {
+  gap: var(--sb-print-task-gap, 8px);
+}
+
+.print-stage-inner .print-artboard[data-print-variant="official"][data-print-density="compact"] .sheet-section-header,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"][data-print-density="compact"] .sheet-section-header,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"][data-print-density="compact"] .sheet-section-header,
+.print-stage-inner .print-artboard[data-print-variant="official"][data-print-density="tight"] .sheet-section-header,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"][data-print-density="tight"] .sheet-section-header,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"][data-print-density="tight"] .sheet-section-header {
+  margin: 3px 0 2px;
+}
+
+/* Blank aux shells should not eat vertical space from zone/RR task stacks */
+.print-stage-inner .print-artboard[data-print-variant="official"] .sb-print-section-aux .assignment-card.sb-aux-blank,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-section-aux .assignment-card.sb-aux-blank,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-section-aux .assignment-card.sb-aux-blank {
+  max-height: 46px;
+  min-height: 38px;
+  flex: 0 1 auto;
 }
 
 .print-stage-inner .print-artboard[data-print-view="deployment"] .sb-print-card-grid,
