@@ -753,6 +753,8 @@ body {
 
 /* Live builder — roster is portaled/fixed; stage is a single full-width column. */
 .sb-builder-stage.sb-stage-host.sb-builder-live {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   align-items: center !important;
   overflow-x: hidden !important;
 }
@@ -818,20 +820,15 @@ body {
   max-width: 100%;
 }
 
+/* Live builder stage — flex column fills viewport; board grids stretch via 1fr rows. */
 .sb-builder-scale-viewport {
   position: relative;
   width: 100%;
-  overflow: visible;
-  /* Adaptive/responsive zoom foundation: sized wrappers inside control layout box precisely
-     based on window-derived fitScale. Enables intricate window following without fixed paper
-     constraints or height thrashing in builder relaxed mode. */
-}
-
-.sb-builder-scale-inner {
-  will-change: transform;
-  transform-style: preserve-3d; /* smoother scaling on some browsers */
-  backface-visibility: hidden;
-  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .sb-scale-reservation {
@@ -1813,7 +1810,7 @@ body {
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 165px;
-  /* Restrooms are a double-stack (W+M) — give row 2 slightly more than zones row 1. */
+  /* fr rows + height:100% — board stretches to the pinned footer on every viewport size. */
   grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 6px;
   align-items: stretch;
@@ -1823,6 +1820,7 @@ body {
   width: 100%;
   height: 100%;
   min-height: 0;
+  flex: 1 1 auto;
 }
 
 /* Ensure main cards have room; aux sidebar cards also benefit */
@@ -1900,10 +1898,11 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* Make the workspace fill the full artboard height in builder (relaxed) so grids reach the footer */
+/* Workspace is the flex child that carries height into zones/RR/aux grids. */
 .sb-builder-stage .builder-workspace {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2259,11 +2258,13 @@ body {
   display: none !important;
 }
 
-/* Main canvas fills available width but must be allowed to shrink (min-width:0). */
+/* Main column — flex so stageHost can flex-1 fill viewport below FloatingNav. */
 .sb-builder-main {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column !important;
   width: 100% !important;
   min-width: 0 !important;
+  min-height: 0 !important;
   max-width: 100% !important;
   flex: 1 1 auto !important;
   overflow-x: hidden;
@@ -2271,7 +2272,7 @@ body {
 
 /* Fix the entire web app (when in builder) exactly to browser window/viewport size.
    No scrollbars anywhere. No page movement or elastic scroll on drag/interaction.
-   The useZoom adaptive scale + explicit sized wrappers keep the board fully visible inside. */
+   Fluid flex/grid layout keeps the board fully visible inside. */
 html.sb-shiftbuilder,
 body.sb-shiftbuilder {
   height: var(--sb-viewport-height, 100dvh) !important;

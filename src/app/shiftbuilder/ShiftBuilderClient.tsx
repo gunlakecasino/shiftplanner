@@ -202,7 +202,6 @@ import {
   stageTopInsetPx,
   builderStageBottomInsetPx,
   BUILDER_CANVAS_MAX_WIDTH_PX,
-  BUILDER_PINNED_FOOTER_SLOT_PX,
 } from "./components/canvasPillGlass";
 import {
   computeShiftRotationHealth,
@@ -2050,9 +2049,6 @@ function AuthedShiftBuilder() {
     isBuilderDeployment &&
     !isWeekHealthTrackerDismissed;
 
-  const builderContentRef = useRef<HTMLDivElement>(null);
-  const [builderContentHeight, setBuilderContentHeight] = React.useState(0);
-
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
     const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
@@ -2082,16 +2078,10 @@ function AuthedShiftBuilder() {
     rosterOpen,
     stageInsets,
     artboardSize: printPreviewArtboardSize,
-    builderFit: isBuilderLiveCanvas
-      ? {
-          enabled: true,
-          contentRef: builderContentRef,
-          chromeHeightPx: BUILDER_PINNED_FOOTER_SLOT_PX,
-        }
-      : undefined,
   });
 
-  const scale = previewScale;
+  // Live builder fills the stage via CSS flex/grid — not document transform scale.
+  const scale = isBuilderLiveCanvas ? 1 : previewScale;
 
   const recomputeScaleRef = useRef(recomputeScale);
   useEffect(() => {
@@ -2120,34 +2110,6 @@ function AuthedShiftBuilder() {
     printPreviewSheetCount,
     setZoomMode,
   ]);
-
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    setZoomMode("fit");
-    const t1 = requestAnimationFrame(recomputeScaleRef.current);
-    const t2 = window.setTimeout(recomputeScaleRef.current, 200);
-    return () => {
-      cancelAnimationFrame(t1);
-      clearTimeout(t2);
-    };
-  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, setZoomMode]);
-
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    recomputeScaleRef.current();
-  }, [isBuilderLiveCanvas, showWeekHealthBar, rosterOpen]);
-
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    const el = builderContentRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () =>
-      setBuilderContentHeight(el.scrollHeight || el.offsetHeight || 0);
-    measure();
-    const ro = new ResizeObserver(() => requestAnimationFrame(measure));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isBuilderLiveCanvas, currentView, selectedDayIndex, showWeekHealthBar]);
 
   const builderPageLabel = React.useMemo(() => {
     const pageNum =
@@ -7611,23 +7573,7 @@ function AuthedShiftBuilder() {
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
               <div className="sb-builder-fluid-viewport w-full min-h-0 flex-1 flex flex-col">
-              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 overflow-visible flex flex-col">
-                <div
-                  ref={builderContentRef}
-                  className="sb-builder-scale-inner w-full"
-                  style={
-                    scale < 0.995
-                      ? {
-                          transform: `scale(${scale})`,
-                          transformOrigin: "top center",
-                          marginBottom:
-                            builderContentHeight > 0
-                              ? -Math.round(builderContentHeight * (1 - scale))
-                              : undefined,
-                        }
-                      : undefined
-                  }
-                >
+              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col">
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
@@ -7707,7 +7653,6 @@ function AuthedShiftBuilder() {
                 onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
-                </div>
               </div>
               </div>
               <BuilderPinnedFooter

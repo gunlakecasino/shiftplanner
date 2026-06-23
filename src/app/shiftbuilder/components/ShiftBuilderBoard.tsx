@@ -1741,7 +1741,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               className={
                 isPrintPreview
                   ? "sb-breaks-wave-grid grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full"
-                  : "grid grid-cols-4 gap-1 mb-1.5"
+                  : "grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full"
               }
             >
               {([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {

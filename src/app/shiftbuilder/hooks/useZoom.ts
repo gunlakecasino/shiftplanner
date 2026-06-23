@@ -14,16 +14,16 @@ export type ZoomMode = "fit" | number;
 export const NATURAL_WIDTH = 1056;
 export const NATURAL_HEIGHT = 816;
 
-/** Representative builder workspace height before live DOM measurement settles. */
-export const BUILDER_NATURAL_HEIGHT = 1000;
+/** Fallback builder height before live DOM measurement settles (Golden contract). */
+export const BUILDER_NATURAL_HEIGHT = 816;
 
-/** Builder fit tuning — balance "see everything" vs feeling too zoomed out on load. */
-const BUILDER_CANVAS_PAD_DESKTOP = 44;
-const BUILDER_CANVAS_PAD_TABLET = 56;
-const BUILDER_FIT_SAFETY_DESKTOP = 0.97;
-const BUILDER_FIT_SAFETY_TABLET = 0.93;
-/** When height binds, allow a hair more zoom-in (bottom chrome can clip slightly). */
-const BUILDER_HEIGHT_RELAX_DESKTOP = 1.12;
+/** Builder fit tuning — small gutter so the board can use nearly the full stage. */
+const BUILDER_CANVAS_PAD_DESKTOP = 12;
+const BUILDER_CANVAS_PAD_TABLET = 16;
+const BUILDER_FIT_SAFETY_DESKTOP = 0.98;
+const BUILDER_FIT_SAFETY_TABLET = 0.95;
+/** Ignore sub-pixel content jitter when adopting new builder naturals. */
+const BUILDER_NATURAL_HYSTERESIS_PX = 12;
 
 export { isTabletTouchDevice };
 
@@ -50,10 +50,16 @@ export type BuilderFitOptions = {
   /** When true, fit scale is derived from measured builder-workspace content (not Golden 1056×816). */
   enabled: boolean;
   contentRef: RefObject<HTMLDivElement | null>;
-  /** Extra vertical chrome inside stageHost (e.g. week health bar slot). */
+  /** Live scale viewport (fluid area above pinned footer) — preferred for availW/H. */
+  fitViewportRef?: RefObject<HTMLDivElement | null>;
+  /** Extra vertical chrome inside stageHost when fitViewportRef is not used. */
   chromeHeightPx?: number;
   /** When true, pause recomputeScale and ResizeObserver-driven refits (prevents iPad freeze during engine/publish/defaults). */
   pause?: boolean;
+  /** When this value changes (e.g. day/view), reset cached naturals so fit can shrink as well as grow. */
+  resetToken?: string | number;
+  /** Live builder canvas: always stay in fit mode (window resize + content changes re-fit automatically). */
+  autoFitLock?: boolean;
 };
 
 /**
@@ -113,15 +119,11 @@ export function useZoom({
     const byW = availW / natW;
     const byH = availH / natH;
 
-    let fit: number;
-    if (useBuilderNatural) {
-      const relaxedH = byH * BUILDER_HEIGHT_RELAX_DESKTOP;
-      fit = Math.min(fitCap, byW, relaxedH) * BUILDER_FIT_SAFETY_DESKTOP;
-    } else {
-      fit = isTabletTouchDevice()
+    const fit = useBuilderNatural
+      ? Math.min(fitCap, byW, byH) * BUILDER_FIT_SAFETY_DESKTOP
+      : isTabletTouchDevice()
         ? Math.min(max, byW, byH)
         : Math.min(1, byW, byH);
-    }
     return Math.max(useBuilderNatural ? 0.45 : 0.35, fit);
   });
   const stageHostRef = useRef<HTMLDivElement>(null);
@@ -135,10 +137,10 @@ export function useZoom({
 
   const builderFitEnabled = builderFit?.enabled ?? false;
   const builderChromeHeight = builderFit?.chromeHeightPx ?? 0;
+  const builderAutoFitLock = builderFit?.autoFitLock ?? false;
 
-  // Stable naturals to avoid tiny content deltas (single task add, etc) causing
-  // visible fitScale "shrink the whole screen" jitter. Only adopt meaningfully larger.
-  // Seed with builder wide size on mount so early scales aren't based on too-small initial measurement.
+  // Stable naturals with hysteresis — adopt width/height changes in either direction
+  // so the board always fits the window without micro-jitter from single task adds.
   const initialNat = builderFitEnabled
     ? { w: DEPLOYMENT_CANVAS_MAX_WIDTH_PX, h: BUILDER_NATURAL_HEIGHT }
     : { w: artboardSize?.w ?? NATURAL_WIDTH, h: artboardSize?.h ?? NATURAL_HEIGHT };
@@ -156,7 +158,13 @@ export function useZoom({
     let availW = 0;
     let availH = 0;
 
-    if (el && el.clientWidth > 50 && el.clientHeight > 50) {
+    const fitViewport = builderFit?.fitViewportRef?.current;
+    if (fitViewport && fitViewport.clientWidth > 50 && fitViewport.clientHeight > 50) {
+      const isTablet = isTabletTouchDevice();
+      const canvasPad = isTablet ? BUILDER_CANVAS_PAD_TABLET : BUILDER_CANVAS_PAD_DESKTOP;
+      availW = Math.max(0, fitViewport.clientWidth - canvasPad);
+      availH = Math.max(0, fitViewport.clientHeight - canvasPad);
+    } else if (el && el.clientWidth > 50 && el.clientHeight > 50) {
       const isTablet = isTabletTouchDevice();
       const canvasPad = builderFitEnabled
         ? (isTablet ? BUILDER_CANVAS_PAD_TABLET : BUILDER_CANVAS_PAD_DESKTOP)
@@ -171,7 +179,7 @@ export function useZoom({
       availH = vpH - insets.top - insets.bottom - (builderFitEnabled ? 72 : 40);
     }
 
-    if (builderFitEnabled) {
+    if (builderFitEnabled && !fitViewport) {
       availH -= builderChromeHeight;
     }
 
@@ -184,18 +192,12 @@ export function useZoom({
     if (builderFitEnabled) {
       const content = builderFit?.contentRef.current;
       if (content) {
-        let measuredW = content.scrollWidth || content.offsetWidth;
-        const measuredH = content.scrollHeight || content.offsetHeight;
-
-        // Width floor only — early narrow layout must not shrink the fit divisor.
-        measuredW = Math.max(measuredW, DEPLOYMENT_CANVAS_MAX_WIDTH_PX);
-
-        // Only grow stable naturals — shrinking on day switches caused fit zoom to jump in/out.
-        if (measuredW > 80 && measuredW > stable.w + 20) {
-          stable.w = measuredW;
+        const measured = measureBuilderFitNaturals(content);
+        if (measured.w > 80 && Math.abs(measured.w - stable.w) > BUILDER_NATURAL_HYSTERESIS_PX) {
+          stable.w = measured.w;
         }
-        if (measuredH > 80 && measuredH > stable.h + 20) {
-          stable.h = measuredH;
+        if (measured.h > 80 && Math.abs(measured.h - stable.h) > BUILDER_NATURAL_HYSTERESIS_PX) {
+          stable.h = measured.h;
         }
       }
       naturalW = stable.w;
@@ -205,17 +207,11 @@ export function useZoom({
     const byWidth = availW / naturalW;
     const byHeight = availH / naturalH;
 
+    // Fit the measured builder workspace into the stage — strict width + height bind
+    // so deployment + breaks + restrooms always stay inside the visible window.
+    const next = Math.min(fitCap, max, byWidth, byHeight);
+
     const isTablet = isTabletTouchDevice();
-    const heightBinder =
-      builderFitEnabled && !isTablet
-        ? byHeight * BUILDER_HEIGHT_RELAX_DESKTOP
-        : byHeight;
-
-    // Fit the measured builder workspace into the stage. Width usually drives;
-    // height relaxation keeps load zoom closer to "comfortable" (~85–88%) instead
-    // of over-shrinking when the measured scroll height includes bottom chrome.
-    const next = Math.min(fitCap, max, byWidth, heightBinder);
-
     const safety = builderFitEnabled
       ? (isTablet ? BUILDER_FIT_SAFETY_TABLET : BUILDER_FIT_SAFETY_DESKTOP)
       : 0.97;
@@ -233,10 +229,26 @@ export function useZoom({
     builderFitEnabled,
     builderChromeHeight,
     builderFit?.contentRef,
+    builderFit?.fitViewportRef,
     builderFit?.pause,
     artboardSize?.w,
     artboardSize?.h,
   ]);
+
+  useEffect(() => {
+    if (!builderFitEnabled || builderFit?.resetToken == null) return;
+    stableNaturalRef.current = {
+      w: DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
+      h: BUILDER_NATURAL_HEIGHT,
+    };
+    setZoomMode("fit");
+    const t1 = requestAnimationFrame(recomputeScale);
+    const t2 = window.setTimeout(recomputeScale, 80);
+    return () => {
+      cancelAnimationFrame(t1);
+      clearTimeout(t2);
+    };
+  }, [builderFitEnabled, builderFit?.resetToken, recomputeScale, setZoomMode]);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (min-width: 768px)");
@@ -257,6 +269,9 @@ export function useZoom({
     // Especially important on iPad/Safari where visualViewport changes with toolbars, split-view, keyboard.
     let resizeTimer: number | null = null;
     const onResize = () => {
+      if (builderAutoFitLock) {
+        setZoomMode("fit");
+      }
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         requestAnimationFrame(recomputeScale);
@@ -286,7 +301,7 @@ export function useZoom({
       if (ro) ro.disconnect();
       if (resizeTimer) window.clearTimeout(resizeTimer);
     };
-  }, [recomputeScale]);
+  }, [recomputeScale, builderAutoFitLock, setZoomMode]);
 
   useEffect(() => {
     const t1 = requestAnimationFrame(recomputeScale);
@@ -297,7 +312,7 @@ export function useZoom({
     };
   }, [rosterOpen, stageInsets, recomputeScale, artboardSize?.w, artboardSize?.h]);
 
-  // Builder workspace: re-fit only when content grows (day switches often shrink — ignore those).
+  // Builder workspace: re-fit whenever measured content size changes meaningfully.
   useEffect(() => {
     if (!builderFitEnabled) return;
     const content = builderFit?.contentRef.current;
@@ -308,10 +323,15 @@ export function useZoom({
       if (builderFit?.pause) return;
       const w = content.scrollWidth || content.offsetWidth || 0;
       const h = content.scrollHeight || content.offsetHeight || 0;
-      const grew = w > lastContent.w + 12 || h > lastContent.h + 12;
-      lastContent.w = Math.max(lastContent.w, w);
-      lastContent.h = Math.max(lastContent.h, h);
-      if (grew) {
+      const changed =
+        Math.abs(w - lastContent.w) > BUILDER_NATURAL_HYSTERESIS_PX ||
+        Math.abs(h - lastContent.h) > BUILDER_NATURAL_HYSTERESIS_PX;
+      lastContent.w = w;
+      lastContent.h = h;
+      if (changed) {
+        if (builderAutoFitLock) {
+          setZoomMode("fit");
+        }
         requestAnimationFrame(recomputeScale);
       }
     });
@@ -322,9 +342,17 @@ export function useZoom({
       ro.disconnect();
       clearTimeout(t);
     };
-  }, [builderFitEnabled, builderFit?.contentRef, recomputeScale, builderFit?.pause]);
+  }, [
+    builderFitEnabled,
+    builderFit?.contentRef,
+    recomputeScale,
+    builderFit?.pause,
+    builderAutoFitLock,
+    setZoomMode,
+  ]);
 
-  const rawScale = zoomMode === "fit" ? fitScale : zoomMode;
+  const rawScale =
+    builderAutoFitLock || zoomMode === "fit" ? fitScale : zoomMode;
   const scale = Math.min(rawScale, maxArtboardScale());
 
   // Ref sync effects (refs were hoisted at top of hook for early cb access).
@@ -343,7 +371,7 @@ export function useZoom({
   // Gives fine-grained control in addition to the +/- buttons and discrete steps.
   // Tablet uses pinch via useStagePinchPan instead.
   useEffect(() => {
-    if (isTabletTouch) return;
+    if (isTabletTouch || builderAutoFitLock) return;
     const el = stageHostRef.current;
     if (!el) return;
 
@@ -370,7 +398,7 @@ export function useZoom({
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [isTabletTouch, setZoomMode]);
+  }, [isTabletTouch, builderAutoFitLock, setZoomMode]);
 
   return {
     zoomMode,
@@ -387,6 +415,47 @@ export function useZoom({
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Intrinsic builder board size at scale 1. Avoids scrollHeight on the scale wrapper
+ * (which inflates when the sidebar grid uses height:100% / fr rows).
+ */
+export function measureBuilderFitNaturals(root: HTMLElement): { w: number; h: number } {
+  const workspace = root.querySelector<HTMLElement>(".builder-workspace");
+  if (!workspace) {
+    return {
+      w: Math.min(DEPLOYMENT_CANVAS_MAX_WIDTH_PX, root.offsetWidth || DEPLOYMENT_CANVAS_MAX_WIDTH_PX),
+      h: Math.max(root.offsetHeight, 320),
+    };
+  }
+
+  const sidebar = workspace.querySelector<HTMLElement>(".sb-with-aux-sidebar");
+  const header = workspace.querySelector<HTMLElement>(".sheet-header");
+  const headerH = header?.offsetHeight ?? 0;
+  let bodyH = 0;
+
+  if (sidebar) {
+    const prevHeight = sidebar.style.height;
+    const prevMinH = sidebar.style.minHeight;
+    sidebar.style.height = "auto";
+    sidebar.style.minHeight = "0";
+    bodyH = sidebar.offsetHeight;
+    sidebar.style.height = prevHeight;
+    sidebar.style.minHeight = prevMinH;
+  } else {
+    bodyH = Math.max(0, workspace.offsetHeight - headerH);
+  }
+
+  const w = Math.min(
+    DEPLOYMENT_CANVAS_MAX_WIDTH_PX,
+    Math.max(workspace.offsetWidth, root.offsetWidth),
+  );
+
+  return {
+    w: Math.max(320, w),
+    h: Math.max(320, headerH + bodyH),
+  };
 }
 
 /** Content box inside a padded stage host (client* includes padding). */
