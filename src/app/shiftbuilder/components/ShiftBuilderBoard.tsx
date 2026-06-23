@@ -787,6 +787,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         if (cards[0]) womenCards.push(cards[0] as HTMLElement);
         if (cards[1]) menCards.push(cards[1] as HTMLElement);
       });
+
+      // Builder live canvas: row height is budgeted by the sidebar grid. Forcing
+      // natural minHeight on W/M halves overflows the cell and clips the men's side.
+      if (!isPrintPreview) {
+        [...womenCards, ...menCards].forEach((card) => {
+          card.style.minHeight = "";
+        });
+        return;
+      }
+
       const applyBand = (cards: HTMLElement[]) => {
         let maxH = 0;
         cards.forEach((card) => {

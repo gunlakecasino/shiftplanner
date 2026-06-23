@@ -97,7 +97,10 @@ export function useZoom({
     const availH =
       window.innerHeight -
       (useBuilderNatural
-        ? FLOATING_NAV_HEIGHT_PX + builderStageBottomInsetPx() + canvasPad
+        ? FLOATING_NAV_HEIGHT_PX +
+          builderStageBottomInsetPx() +
+          canvasPad +
+          (builderFit?.chromeHeightPx ?? 0)
         : 90);
 
     const natW = useBuilderNatural

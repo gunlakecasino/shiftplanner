@@ -61,3 +61,6 @@ export function builderStageBottomInsetPx(): number {
   return isTabletTouchDevice() ? 44 : 36;
 }
 
+/** Pinned sheet footer slot inside sb-builder-canvas (must be subtracted from fit height). */
+export const BUILDER_PINNED_FOOTER_SLOT_PX = 48;
+

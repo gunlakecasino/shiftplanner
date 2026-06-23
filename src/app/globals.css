@@ -1813,8 +1813,9 @@ body {
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 165px;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+  /* Restrooms are a double-stack (W+M) — give row 2 slightly more than zones row 1. */
+  grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 6px;
   align-items: stretch;
   max-width: 1581px;
   margin-left: auto;
@@ -1890,6 +1891,7 @@ body {
 
 /* Compact header for aux in the narrow right column */
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header {
+  margin: 3px 0 2px;
   padding: 2px 4px;
   font-size: 10px;
 }
@@ -1900,8 +1902,7 @@ body {
 
 /* Make the workspace fill the full artboard height in builder (relaxed) so grids reach the footer */
 .sb-builder-stage .builder-workspace {
-  flex: 1 1 auto;
-  height: 100%;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
