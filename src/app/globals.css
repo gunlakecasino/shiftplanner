@@ -2273,8 +2273,8 @@ body {
    The useZoom adaptive scale + explicit sized wrappers keep the board fully visible inside. */
 html.sb-shiftbuilder,
 body.sb-shiftbuilder {
-  height: 100vh !important;
-  max-height: 100vh !important;
+  height: var(--sb-viewport-height, 100dvh) !important;
+  max-height: var(--sb-viewport-height, 100dvh) !important;
   overflow: hidden !important;
   overscroll-behavior: none !important;
   -webkit-overflow-scrolling: none !important;
@@ -2282,20 +2282,16 @@ body.sb-shiftbuilder {
 }
 
 .sb-builder-shell.sb-shiftbuilder {
-  height: 100vh !important;
-  max-height: 100vh !important;
+  height: var(--sb-viewport-height, 100dvh) !important;
+  max-height: var(--sb-viewport-height, 100dvh) !important;
   overflow: hidden !important;
   overscroll-behavior: none !important;
   -webkit-overflow-scrolling: none !important;
-  /* Safari fix: clamp the root shell to actual window + take out of flow */
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  bottom: 0 !important;
   width: 100% !important;
-  /* Extra for when 100vh lies in Safari with dynamic bars */
-  min-height: -webkit-fill-available;
 }
 
 .sb-builder-main,

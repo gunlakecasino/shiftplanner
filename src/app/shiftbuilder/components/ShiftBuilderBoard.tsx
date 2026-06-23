@@ -53,6 +53,7 @@ import { nightIsoFromDate } from "./placementPadHelpers";
 import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
+import { VIEWPORT_SYNC_EVENT } from "@/lib/shiftbuilder/viewportLock";
 
 
 function sectionCountClass(filled: number, isTodayBoard: boolean): string {
@@ -829,6 +830,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       grids.forEach((el) => ro!.observe(el));
     };
 
+    const onViewportSync = () => requestAnimationFrame(equalize);
+    window.addEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
+
     if (!isAnyDragActive) {
       const outerRaf = requestAnimationFrame(() => {
         equalize();
@@ -842,11 +846,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         cancelAnimationFrame(outerRaf);
         cancelAnimationFrame(innerRaf);
         ro?.disconnect();
+        window.removeEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
       };
     }
 
     return () => {
       ro?.disconnect();
+      window.removeEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
     };
   }, [
     currentView,

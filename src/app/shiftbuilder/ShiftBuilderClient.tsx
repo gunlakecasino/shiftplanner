@@ -116,6 +116,7 @@ import {
   COVERAGE_BAR_H,
 } from "@/lib/shiftbuilder/constants";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
+import { installShiftBuilderViewportLock } from "@/lib/shiftbuilder/viewportLock";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
 import { useCurrentNight } from "./hooks/useCurrentNight";
@@ -827,85 +828,47 @@ function AuthedShiftBuilder() {
   const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
   const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
 
-  // Lock entire web app exactly to browser window size (100vh/100vw).
-  // Eliminates ALL scroll and page movement — even during dnd, pinch, or long content.
-  // Paired with global CSS + fluid builder layout (print preview still uses useZoom).
-  // Safari-specific: use window.innerHeight to defeat 100vh + address bar bugs.
+  // Lock entire web app to the *visible* viewport (visualViewport on Safari/iPad).
+  // CSS uses --sb-viewport-height (synced here) — not raw 100vh, which randomly
+  // exceeds the visible area and clips bottom cards behind overflow:hidden.
+  const onViewportSyncRef = useRef<(() => void) | null>(null);
+
   React.useEffect(() => {
     const htmlEl = document.documentElement;
     const bodyEl = document.body;
 
-    htmlEl.classList.add('sb-shiftbuilder');
-    bodyEl.classList.add('sb-shiftbuilder');
+    htmlEl.classList.add("sb-shiftbuilder");
+    bodyEl.classList.add("sb-shiftbuilder");
 
     const prev = {
       htmlOverflow: htmlEl.style.overflow,
       bodyOverflow: bodyEl.style.overflow,
-      htmlHeight: htmlEl.style.height,
-      bodyHeight: bodyEl.style.height,
     };
 
-    const setFixedHeight = () => {
-      const h = `${window.innerHeight}px`;
-      htmlEl.style.height = h;
-      bodyEl.style.height = h;
+    htmlEl.style.overflow = "hidden";
+    bodyEl.style.overflow = "hidden";
 
-      // Clamp the shell directly — this is the most reliable for Safari
-      // (takes the app out of normal document flow so no page can "scroll")
-      const shell = document.querySelector('.sb-builder-shell') as HTMLElement | null;
-      if (shell) {
-        shell.style.height = h;
-        shell.style.position = 'fixed';
-        shell.style.top = '0';
-        shell.style.left = '0';
-        shell.style.right = '0';
-        shell.style.bottom = '0';
-        shell.style.overflow = 'hidden';
-        shell.style.width = '100%';
-      }
-    };
+    const teardownViewport = installShiftBuilderViewportLock({
+      onSync: () => onViewportSyncRef.current?.(),
+    });
 
-    htmlEl.style.overflow = 'hidden';
-    bodyEl.style.overflow = 'hidden';
-    setFixedHeight();
-
-    // Safari-specific: block wheel (macOS Safari) at document level to kill page scroll.
-    // (We do NOT block touchmove globally to avoid breaking dnd-kit TouchSensor on iPad.)
     const blockWheel = (e: WheelEvent) => {
       e.preventDefault();
     };
 
-    htmlEl.addEventListener('wheel', blockWheel, { passive: false });
-    bodyEl.addEventListener('wheel', blockWheel, { passive: false });
-
-    const onResize = () => setFixedHeight();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', onResize);
+    htmlEl.addEventListener("wheel", blockWheel, { passive: false });
+    bodyEl.addEventListener("wheel", blockWheel, { passive: false });
 
     return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('orientationchange', onResize);
+      teardownViewport();
 
-      htmlEl.removeEventListener('wheel', blockWheel as any);
-      bodyEl.removeEventListener('wheel', blockWheel as any);
+      htmlEl.removeEventListener("wheel", blockWheel as EventListener);
+      bodyEl.removeEventListener("wheel", blockWheel as EventListener);
 
-      htmlEl.classList.remove('sb-shiftbuilder');
-      bodyEl.classList.remove('sb-shiftbuilder');
+      htmlEl.classList.remove("sb-shiftbuilder");
+      bodyEl.classList.remove("sb-shiftbuilder");
       htmlEl.style.overflow = prev.htmlOverflow;
       bodyEl.style.overflow = prev.bodyOverflow;
-      htmlEl.style.height = prev.htmlHeight;
-      bodyEl.style.height = prev.bodyHeight;
-
-      const shell = document.querySelector('.sb-builder-shell') as HTMLElement | null;
-      if (shell) {
-        shell.style.position = '';
-        shell.style.top = '';
-        shell.style.left = '';
-        shell.style.right = '';
-        shell.style.bottom = '';
-        shell.style.height = '';
-        shell.style.overflow = '';
-      }
     };
   }, []);
   // Persist
@@ -2126,6 +2089,12 @@ function AuthedShiftBuilder() {
   useEffect(() => {
     recomputeScaleRef.current = recomputeScale;
   }, [recomputeScale]);
+
+  useEffect(() => {
+    onViewportSyncRef.current = () => {
+      recomputeScaleRef.current();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isPrintPreview) return;
@@ -7330,7 +7299,7 @@ function AuthedShiftBuilder() {
 
   return (
     <div
-      className="sb-builder-shell h-screen flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder"
+      className="sb-builder-shell flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder"
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,
@@ -7511,7 +7480,7 @@ function AuthedShiftBuilder() {
                 width: rosterPanelWidth(),
                 top: stageTopInsetPx() + 8,
                 left: 12,
-                maxHeight: `calc(100vh - ${stageTopInsetPx() + 20}px)`,
+                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 20}px)`,
                 transformOrigin: "0% 50%",
                 transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
                 opacity: rosterOpen ? 1 : 0,
@@ -8072,7 +8041,7 @@ function AuthedShiftBuilder() {
                       right: weekLensSidebarOpen ? 16 : -260,
                       zIndex: 110,
                       width: 220,
-                      maxHeight: 'calc(100vh - 120px)',
+                      maxHeight: 'calc(var(--sb-viewport-height, 100dvh) - 120px)',
                       background: 'color-mix(in srgb, var(--ios-background-secondary) 98%, transparent)',
                       border: '1px solid #E5E5EA',
                       borderRadius: 6,
