@@ -3322,14 +3322,14 @@ export async function addSlotDefaultTask(params: {
   taskColor?: string | null;
   isCoverage?: boolean;
   sortOrder?: number;
-}): Promise<void> {
+}): Promise<SlotDefaultTask> {
   const {
     slotKey, slotType, rrSide = '',
     taskLabel, taskColor = null,
     isCoverage = false, sortOrder = 0,
   } = params;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('slot_default_tasks')
     .upsert(
       {
@@ -3342,12 +3342,26 @@ export async function addSlotDefaultTask(params: {
         sort_order: sortOrder,
       },
       { onConflict: 'slot_key,rr_side,task_label' }
-    );
+    )
+    .select('id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order')
+    .single();
 
   if (error) {
     console.error('[shiftbuilder/data] addSlotDefaultTask error:', error);
     throw new Error(`Failed to add default task: ${(error as any).message ?? 'unknown'}`);
   }
+
+  const r = data as any;
+  return {
+    id: r.id,
+    slotKey: r.slot_key,
+    slotType: r.slot_type,
+    rrSide: r.rr_side ?? '',
+    taskLabel: r.task_label,
+    taskColor: r.task_color ?? null,
+    isCoverage: r.is_coverage ?? false,
+    sortOrder: r.sort_order ?? 0,
+  };
 }
 
 /** Remove a task chip default by id. */

@@ -36,6 +36,10 @@ import {
   graveBreakGroupSlotDefaults,
 } from "@/lib/shiftbuilder/graveBreakGroupDefaults";
 import { sudoIosClasses, sudoPushButtonClasses } from "./sudoIosTheme";
+import {
+  formatTaskLabelTitleCase,
+  formatTaskLabelTitleCaseOnWordBoundary,
+} from "@/lib/shiftbuilder/taskTextStyle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slot descriptor — flattened list of all manageable slots
@@ -286,12 +290,24 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   );
 
   // ── Add task ──────────────────────────────────────────────────────────────
+  const handleAddInputChange = useCallback((value: string) => {
+    const formatted = formatTaskLabelTitleCaseOnWordBoundary(value);
+    setAddInput(formatted !== value ? formatted : value);
+  }, []);
+
   const handleAddTask = useCallback(
     async (def: SlotDef) => {
-      const label = addInput.trim();
+      const label = formatTaskLabelTitleCase(addInput);
       if (!label) return;
 
       const existing = tasksBySlot[def.compositeKey] ?? [];
+      if (existing.some((t) => t.taskLabel.toLowerCase() === label.toLowerCase())) {
+        showToast(`"${label}" is already a default for this slot`, "info");
+        setAddInput("");
+        setAddingFor(null);
+        return;
+      }
+
       const sortOrder = existing.length;
 
       const optimisticTask: SlotDefaultTask = {
@@ -313,35 +329,37 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
       setAddingFor(null);
 
       try {
-        const { addSlotDefaultTask, getSlotDefaultTasks } = await import("@/lib/shiftbuilder/data");
-        await addSlotDefaultTask({
+        const { addSlotDefaultTask } = await import("@/lib/shiftbuilder/data");
+        const saved = await addSlotDefaultTask({
           slotKey: def.dbKey,
           slotType: def.dbType,
           rrSide: def.rrSide,
           taskLabel: label,
           sortOrder,
         });
-        // Re-fetch to get real id
-        const fresh = await getSlotDefaultTasks();
-        const ts: Record<string, SlotDefaultTask[]> = {};
-        for (const t of fresh) {
-          const ck = `${t.slotKey}|${t.rrSide}`;
-          if (!ts[ck]) ts[ck] = [];
-          ts[ck].push(t);
-        }
-        setTasksBySlot(ts);
+        setTasksBySlot((p) => {
+          const list = (p[def.compositeKey] ?? []).filter((t) => t.id !== optimisticTask.id);
+          const withoutDup = list.filter(
+            (t) => t.taskLabel.toLowerCase() !== saved.taskLabel.toLowerCase(),
+          );
+          return {
+            ...p,
+            [def.compositeKey]: [...withoutDup, saved].sort(
+              (a, b) => a.sortOrder - b.sortOrder || a.taskLabel.localeCompare(b.taskLabel),
+            ),
+          };
+        });
       } catch (e: any) {
-        // Revert optimistic
         setTasksBySlot((p) => ({
           ...p,
           [def.compositeKey]: (p[def.compositeKey] ?? []).filter(
-            (t) => t.id !== optimisticTask.id
+            (t) => t.id !== optimisticTask.id,
           ),
         }));
         showToast("Failed to add task: " + (e?.message ?? "unknown"), "error");
       }
     },
-    [addInput, tasksBySlot]
+    [addInput, tasksBySlot],
   );
 
   // ── Remove task ───────────────────────────────────────────────────────────
@@ -555,7 +573,11 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
                         setAddingFor(null);
                         setAddInput("");
                       }}
-                      onAddInputChange={setAddInput}
+                      onAddInputChange={handleAddInputChange}
+                      onAddInputBlur={() => {
+                        const formatted = formatTaskLabelTitleCase(addInput);
+                        if (formatted !== addInput) setAddInput(formatted);
+                      }}
                       onAddSubmit={() => handleAddTask(def)}
                       onRemoveTask={(t) => handleRemoveTask(def, t)}
                       isDark={isDark}
@@ -606,14 +628,26 @@ interface SlotRowProps {
   onStartAdd: () => void;
   onCancelAdd: () => void;
   onAddInputChange: (v: string) => void;
+  onAddInputBlur?: () => void;
   onAddSubmit: () => void;
   onRemoveTask: (t: SlotDefaultTask) => void;
   isDark?: boolean;
 }
 
 function SlotRow({
-  def, breakGroup, tasks, isAdding, addInput, addInputRef,
-  onCycleBreak, onStartAdd, onCancelAdd, onAddInputChange, onAddSubmit, onRemoveTask,
+  def,
+  breakGroup,
+  tasks,
+  isAdding,
+  addInput,
+  addInputRef,
+  onCycleBreak,
+  onStartAdd,
+  onCancelAdd,
+  onAddInputChange,
+  onAddInputBlur,
+  onAddSubmit,
+  onRemoveTask,
   isDark = false,
 }: SlotRowProps) {
   const ios = sudoIosClasses(isDark);
@@ -674,6 +708,7 @@ function SlotRow({
               ref={addInputRef}
               value={addInput}
               onChange={(e) => onAddInputChange(e.target.value)}
+              onBlur={onAddInputBlur}
               onKeyDown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); onAddSubmit(); }
                 if (e.key === "Escape") onCancelAdd();
