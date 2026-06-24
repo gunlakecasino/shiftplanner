@@ -6,7 +6,11 @@ import {
   attachSessionCookie,
   createPinChangeToken,
 } from "@/lib/auth/opsSession.server";
-import { userForClientResponse, loadOpsUserById } from "@/lib/auth/opsUser.server";
+import {
+  userForClientResponse,
+  resolveOpsUserAfterPinVerify,
+  type VerifyPinEdgeUser,
+} from "@/lib/auth/opsUser.server";
 
 function edgeVerifyPinUrl(): string {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -88,8 +92,11 @@ export async function POST(request: NextRequest) {
     await client.rpc("reset_pin_attempts", { p_user_id: edgeJson.user.id });
   }
 
-  const freshUser = await loadOpsUserById(edgeJson.user.id);
+  const freshUser = await resolveOpsUserAfterPinVerify(
+    edgeJson.user as VerifyPinEdgeUser,
+  );
   if (!freshUser) {
+    console.error("[verify-pin] Could not resolve user after edge auth:", edgeJson.user?.id);
     return NextResponse.json({ error: "Account unavailable" }, { status: 403 });
   }
 

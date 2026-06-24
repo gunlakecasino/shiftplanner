@@ -46,7 +46,11 @@ export function humanizeLoginError(
   if (status === 403 || msg.includes("unavailable") || msg.includes("forbidden")) {
     return "This account isn't available right now. Contact an administrator.";
   }
-  if (status === 503 || msg.includes("session signing")) {
+  if (
+    status === 503 ||
+    msg.includes("session signing") ||
+    msg.includes("service unavailable")
+  ) {
     return "Sign-in is temporarily unavailable. Try again shortly.";
   }
   if (msg.includes("network") || msg.includes("failed to reach")) {
