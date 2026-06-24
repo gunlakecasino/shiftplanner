@@ -158,8 +158,11 @@ export function nightIsoFromDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Prior-placement window for critical repeat (same area as last N graves). */
+/** Hard engine gate — last N placement events (newest first), every card type. */
 export const PRIOR_PLACEMENT_CRITICAL_WINDOW = 3;
+
+/** Soft fit trail — last N placement events, same-area only. */
+export const LAST5_SOFT_TRAIL_COUNT = 5;
 
 /**
  * Canonical repeat key for prior-N / critical-repeat checks.
@@ -281,8 +284,8 @@ export function weekEntriesForTm(
 }
 
 /**
- * Last N placement nights (newest first), merging DB history with in-week plan entries.
- * Matches the TM name trail on assignment cards.
+ * Last N placement events (newest first), merging DB history with in-week plan entries.
+ * Matches the TM name trail on assignment cards — one entry per slot assignment, not deduped by night.
  */
 export function getMergedPlacementSequence(
   history: ZoneDetailEntry | null,
@@ -295,6 +298,7 @@ export function getMergedPlacementSequence(
     .map((e) => e.ui);
 }
 
+/** Hard gate: same area or RR side-family within the TM's last N placement events. */
 export function isInPriorPlacementWindow(
   history: ZoneDetailEntry | null,
   slotKey: string,
@@ -302,8 +306,19 @@ export function isInPriorPlacementWindow(
   window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
   weekEntries?: Array<{ nightDate: string; slotKey: string }>,
 ): boolean {
+  const priorPlacements = getMergedPlacementSequence(history, window, beforeIso, weekEntries);
+  return priorPlacements.some((ui) => placementRepeatKeysConflict(slotKey, ui));
+}
+
+/** Soft last-5 trail — same RR number or zone only (not cross-station WRR family). */
+export function isInLast5SameAreaTrail(
+  history: ZoneDetailEntry | null,
+  slotKey: string,
+  beforeIso?: string,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+): boolean {
   return isSlotInPlacementSequence(
-    getMergedPlacementSequence(history, window, beforeIso, weekEntries),
+    getMergedPlacementSequence(history, LAST5_SOFT_TRAIL_COUNT, beforeIso, weekEntries),
     slotKey,
   );
 }
@@ -312,7 +327,7 @@ export function isSlotInPlacementSequence(
   sequence: string[],
   slotKey: string,
 ): boolean {
-  return sequence.some((ui) => placementRepeatKeysConflict(slotKey, ui));
+  return sequence.some((ui) => placementRepeatKeysMatch(slotKey, ui));
 }
 
 /**

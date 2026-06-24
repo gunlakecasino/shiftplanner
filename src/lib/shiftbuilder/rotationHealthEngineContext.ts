@@ -32,8 +32,10 @@ import {
   getSpreadPlacementKeys,
   isInPriorPlacementWindow,
   isSlotInPlacementSequence,
+  LAST5_SOFT_TRAIL_COUNT,
   PLACEMENT_SPREAD_NIGHTS,
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  placementRepeatKeysConflict,
   placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
   weekEntriesForTm,
@@ -698,8 +700,8 @@ export function computeCandidatePickerHealthPoints(
     last5,
   } = input;
 
-  const priorThree = last5.slice(0, PRIOR_PLACEMENT_CRITICAL_WINDOW);
-  if (priorThree.some((ui) => placementRepeatKeysMatch(ui, slotKey))) {
+  const priorNights = last5.slice(0, PRIOR_PLACEMENT_CRITICAL_WINDOW);
+  if (priorNights.some((ui) => placementRepeatKeysConflict(slotKey, ui))) {
     return 50;
   }
 
@@ -720,9 +722,13 @@ export function computeCandidatePickerHealthPoints(
 
   score -= timesInSpread * 7.5;
 
-  const last5Idx = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
-  if (last5Idx >= 0) {
-    score -= 8 + (4 - last5Idx) * 2.5;
+  const criticalIdx = last5.findIndex((ui) => placementRepeatKeysConflict(slotKey, ui));
+  if (criticalIdx >= 0 && criticalIdx < PRIOR_PLACEMENT_CRITICAL_WINDOW) {
+    score -= 8 + (PRIOR_PLACEMENT_CRITICAL_WINDOW - 1 - criticalIdx) * 2.5;
+  }
+  const sameAreaIdx = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
+  if (sameAreaIdx >= PRIOR_PLACEMENT_CRITICAL_WINDOW) {
+    score -= 4;
   }
 
   score -= weekRepeat * 4.5;
@@ -979,10 +985,11 @@ export function previewCandidateRotationFit(
     true,
   );
   const tmWeekEntries = weekEntriesForTm(scopedWeek, tmId, tonightIso);
-  const last5 = getMergedPlacementSequence(history, 5, tonightIso, tmWeekEntries);
+  const last5 = getMergedPlacementSequence(history, LAST5_SOFT_TRAIL_COUNT, tonightIso, tmWeekEntries);
   const timesInSpread = spreadCounts.get(slotKey) ?? 0;
   const inLast5 = isSlotInPlacementSequence(last5, slotKey);
   const last5Index = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
+
   const daysSinceInSlot = daysSinceLastPlacementInSlot(history, slotKey, tonightIso);
   const gapCount = matrixKeys.filter(
     (k) => !spreadKeys.has(k) && k !== slotKey,

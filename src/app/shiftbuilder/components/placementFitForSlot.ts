@@ -7,8 +7,8 @@ import {
   computePlacementRotationBasics,
   getMergedPlacementSequence,
   getSpreadPlacementCounts,
+  isInLast5SameAreaTrail,
   isInPriorPlacementWindow,
-  isSlotInPlacementSequence,
   spreadCountForRepeatKey,
   weekEntriesForTm,
   PLACEMENT_SPREAD_NIGHTS,
@@ -24,8 +24,6 @@ import {
   type PlacementFitScoreInput,
   type PrerenderedPlacementFit,
 } from "./placementFitScore";
-
-const LAST5_COUNT = 5;
 
 /** Post-swap verdicts that mean the trade hurts rotation health for the other TM. */
 const SWAP_HARM_VERDICTS: PlacementFitVerdict[] = [
@@ -288,12 +286,6 @@ export function computeSlotPlacementFit(
     currentIso,
   );
   const timesInSpread = spreadCountForRepeatKey(spreadCounts, slotKey);
-  const last5 = getMergedPlacementSequence(
-    history,
-    LAST5_COUNT,
-    currentIso,
-    weekEntries,
-  );
   const currentTm = memberToPlacementProfile(members, tmId);
   const tmEligibleForSlot = currentTm
     ? isEligibleForSlot(
@@ -370,7 +362,7 @@ export function computeSlotPlacementFit(
     assigned: true,
     tmEligibleForSlot,
     timesInSpread,
-    inLast5: isSlotInPlacementSequence(last5, slotKey),
+    inLast5: isInLast5SameAreaTrail(history, slotKey, currentIso, weekEntries),
     inPriorPlacementWindow: isInPriorPlacementWindow(
       history,
       slotKey,

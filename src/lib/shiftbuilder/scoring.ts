@@ -11,7 +11,7 @@
  *   • soft_prefer_set   (weight 0.6)  — same table, strength='soft'
  *   • pair_affinity     (weight 1.0)  — tm_pair_affinities against neighbors already placed
  *   • within_repeat     (weight 1.0)  — hard gate, TM can't be in two slots tonight
- *   • prior_placement_repeat (hard)   — same area or RR side-family in last 3 grave nights
+ *   • prior_placement_repeat (hard)   — same area or RR side-family in last 3 placements
  *
  * Deferred to Phase 2 (need history queries):
  *   fatigue_index, area_diversity, cross_week_rotation, weekly_load_balance,
@@ -141,7 +141,7 @@ export function scoreAssignment(
   }
 
   // ---- prior_placement_repeat (hard) --------------------------------
-  // Same deployment area or RR side-family (all WRR* / all MRR*) in last 3 graves.
+  // Same deployment area or RR side-family in the TM's last 3 placement events.
   if (!excluded && ctx.placementHistories && ctx.tonightIso) {
     const history = ctx.placementHistories[tm.id] ?? null;
     const weekEntries = weekEntriesForTm(
