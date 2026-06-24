@@ -74,21 +74,33 @@ export function isTmPlacedTonight(
   return false;
 }
 
+type PlacementRowLike = {
+  tmId?: string | null;
+  proposedTmId?: string;
+  proposedClear?: boolean;
+} | null | undefined;
+
+/** Merge placed TM ids from a committed and/or draft assignment map. */
+export function addPlacedTmIdsFromMap(
+  target: Set<string>,
+  map?: Record<string, PlacementRowLike> | null,
+): void {
+  if (!map) return;
+  for (const row of Object.values(map)) {
+    if (!row) continue;
+    if (row.proposedClear) continue;
+    const id = row.proposedTmId ?? row.tmId;
+    if (id) target.add(String(id));
+  }
+}
+
 /** Collect every assignment tm id (committed + draft proposals). */
 export function collectPlacedTmIds(
-  assignments: Record<string, { tmId?: string | null } | undefined>,
-  draftAssignments?: Record<string, { tmId?: string | null; proposedTmId?: string; proposedClear?: boolean } | undefined>,
+  assignments: Record<string, PlacementRowLike>,
+  draftAssignments?: Record<string, PlacementRowLike>,
 ): Set<string> {
   const out = new Set<string>();
-  for (const a of Object.values(assignments)) {
-    if (a?.tmId) out.add(a.tmId);
-  }
-  if (draftAssignments) {
-    for (const d of Object.values(draftAssignments)) {
-      if (d?.proposedClear) continue;
-      const id = d?.proposedTmId || d?.tmId;
-      if (id) out.add(id);
-    }
-  }
+  addPlacedTmIdsFromMap(out, assignments);
+  addPlacedTmIdsFromMap(out, draftAssignments);
   return out;
 }

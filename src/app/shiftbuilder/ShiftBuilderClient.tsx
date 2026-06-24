@@ -99,6 +99,8 @@ import {
   assignmentTmId,
   boardTmId,
   boardTmIdsFromScheduled,
+  addPlacedTmIdsFromMap,
+  collectPlacedTmIds,
   buildTmLookupIndex,
   resolveTmFromLookup,
 } from "@/lib/shiftbuilder/tmIdentity";
@@ -1111,11 +1113,10 @@ function AuthedShiftBuilder() {
   // the initial render. The full rich version (including currentNight, Zustand store,
   // and liveAssignmentsStore) lives in `alreadyAssignedThisNight` below, which is used
   // for the MarkerPad picker and other late consumers.
-  const assignedThisNight = React.useMemo(() => {
-    const set = new Set<string>(Object.values(assignments).map((a: any) => a?.tmId).filter(Boolean));
-    Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    return set;
-  }, [assignments, draftAssignments]);
+  const assignedThisNight = React.useMemo(
+    () => collectPlacedTmIds(assignments, draftAssignments),
+    [assignments, draftAssignments],
+  );
 
   // These will be used in the rail rendering below.
   // We compute filtered versions of on/off schedule here for clean separation.
@@ -3916,25 +3917,23 @@ function AuthedShiftBuilder() {
     const dateKey = formatLocalDateISO(selectedDay.date);
     const boardReadyForDay = getBoardAssignmentsDayKey() === dateKey;
 
-    const absorb = (src: Record<string, any> | undefined | null) => {
-      if (!src) return;
-      Object.values(src).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    };
-
     // Only absorb query assignments when nightCore is for this day (not keepPreviousData).
     if (!shiftData.isCorePlaceholder) {
-      absorb(currentNight?.assignments as Record<string, any> | undefined);
+      addPlacedTmIdsFromMap(
+        set,
+        currentNight?.assignments as Record<string, { tmId?: string | null }> | undefined,
+      );
     }
 
     if (boardReadyForDay) {
-      absorb(assignments);
-      absorb(draftAssignments);
-      absorb(storeAssignments);
-      absorb(storeDraftAssignments);
+      addPlacedTmIdsFromMap(set, assignments);
+      addPlacedTmIdsFromMap(set, draftAssignments);
+      addPlacedTmIdsFromMap(set, storeAssignments);
+      addPlacedTmIdsFromMap(set, storeDraftAssignments);
     }
 
     const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    absorb(liveForNight);
+    addPlacedTmIdsFromMap(set, liveForNight);
     return set;
   }, [
     assignments,
@@ -3951,8 +3950,13 @@ function AuthedShiftBuilder() {
   // Must mirror the board store exactly — layering legacy/query/live with Object.assign
   // leaves ghost assignments on cleared slots after drag moves (deleted keys never removed).
   const padAssignments = React.useMemo(
-    () => buildPadAssignmentsFromStore(storeAssignments, storeDraftAssignments, isDraftMode),
-    [storeAssignments, storeDraftAssignments, isDraftMode],
+    () =>
+      buildPadAssignmentsFromStore(
+        storeAssignments,
+        isDraftMode ? draftAssignments : storeDraftAssignments,
+        isDraftMode,
+      ),
+    [storeAssignments, storeDraftAssignments, draftAssignments, isDraftMode],
   );
 
   // === TM Picker lists — Graves Default Schedule (graves_default_schedule + night_on_call) ===
@@ -4054,14 +4058,18 @@ function AuthedShiftBuilder() {
   // No scheduled filter — any TM that passes core isEligibleForSlot is allowed.
   const markerAllEligibleTms = React.useMemo(() => {
     return effectiveRealRoster
-      .filter((t: any) => !alreadyAssignedThisNight.has(t.id) && !calledOffIds.has(t.id))
+      .filter(
+        (t: any) =>
+          !idSetMatchesBoardId(alreadyAssignedThisNight, boardTmId(t)) &&
+          !idSetMatchesBoardId(calledOffIds, boardTmId(t)),
+      )
       .map((t: any) => {
         const tmName = t.name || t.fullName;
         if (!tmName) return null;
         return { tmId: t.id as string, tmName: tmName as string };
       })
       .filter(Boolean) as { tmId: string; tmName: string }[];
-  }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds]);
+  }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds, idSetMatchesBoardId]);
 
   const storeAssignmentsForFit = useAssignments() ?? {};
   const auxDefsForFit = useAuxDefs() ?? [];
