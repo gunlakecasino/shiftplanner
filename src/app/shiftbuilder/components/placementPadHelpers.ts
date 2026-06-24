@@ -298,7 +298,22 @@ export function getMergedPlacementSequence(
     .map((e) => e.ui);
 }
 
-/** Hard gate: same area or RR side-family within the TM's last N placement events. */
+/**
+ * UI / fit chips — same deployment area in the TM's last N placement events.
+ * Restrooms: same RR number only (WRR8/MRR8/RR8); not cross-station WRR6 vs WRR8.
+ */
+export function isInPriorPlacementSameAreaWindow(
+  history: ZoneDetailEntry | null,
+  slotKey: string,
+  beforeIso?: string,
+  window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+): boolean {
+  const priorPlacements = getMergedPlacementSequence(history, window, beforeIso, weekEntries);
+  return priorPlacements.some((ui) => placementRepeatKeysMatch(slotKey, ui));
+}
+
+/** Engine hard exclude — same area or RR side-family (MRR vs WRR cross-station) in last N placements. */
 export function isInPriorPlacementWindow(
   history: ZoneDetailEntry | null,
   slotKey: string,

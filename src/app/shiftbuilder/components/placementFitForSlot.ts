@@ -8,7 +8,7 @@ import {
   getMergedPlacementSequence,
   getSpreadPlacementCounts,
   isInLast5SameAreaTrail,
-  isInPriorPlacementWindow,
+  isInPriorPlacementSameAreaWindow,
   spreadCountForRepeatKey,
   weekEntriesForTm,
   PLACEMENT_SPREAD_NIGHTS,
@@ -363,7 +363,7 @@ export function computeSlotPlacementFit(
     tmEligibleForSlot,
     timesInSpread,
     inLast5: isInLast5SameAreaTrail(history, slotKey, currentIso, weekEntries),
-    inPriorPlacementWindow: isInPriorPlacementWindow(
+    inPriorPlacementWindow: isInPriorPlacementSameAreaWindow(
       history,
       slotKey,
       currentIso,

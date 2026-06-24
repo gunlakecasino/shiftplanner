@@ -35,7 +35,6 @@ import {
   LAST5_SOFT_TRAIL_COUNT,
   PLACEMENT_SPREAD_NIGHTS,
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
-  placementRepeatKeysConflict,
   placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
   weekEntriesForTm,
@@ -701,7 +700,7 @@ export function computeCandidatePickerHealthPoints(
   } = input;
 
   const priorNights = last5.slice(0, PRIOR_PLACEMENT_CRITICAL_WINDOW);
-  if (priorNights.some((ui) => placementRepeatKeysConflict(slotKey, ui))) {
+  if (priorNights.some((ui) => placementRepeatKeysMatch(slotKey, ui))) {
     return 50;
   }
 
@@ -722,7 +721,7 @@ export function computeCandidatePickerHealthPoints(
 
   score -= timesInSpread * 7.5;
 
-  const criticalIdx = last5.findIndex((ui) => placementRepeatKeysConflict(slotKey, ui));
+  const criticalIdx = last5.findIndex((ui) => placementRepeatKeysMatch(slotKey, ui));
   if (criticalIdx >= 0 && criticalIdx < PRIOR_PLACEMENT_CRITICAL_WINDOW) {
     score -= 8 + (PRIOR_PLACEMENT_CRITICAL_WINDOW - 1 - criticalIdx) * 2.5;
   }
