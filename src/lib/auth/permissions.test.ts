@@ -20,10 +20,22 @@ describe("getEffectivePermissions", () => {
     });
 
     expect(effective.canAccessSudo).toBe(false);
-    expect(effective.canAccessReports).toBe(true);
+    expect(effective.canAccessReports).toBe(false);
     expect(effective.canSeeDraftData).toBe(false);
     expect(effective.canEditPublishedOnly).toBe(true);
     expect(effective.canEditAssignments).toBe(true);
+  });
+
+  it("does not grant admin reports even when overrides request it", () => {
+    const effective = getEffectivePermissions({
+      id: "u1b",
+      email: "",
+      full_name: "Ops Admin",
+      username: "opsadmin2",
+      role: "admin",
+      permissions: { canAccessReports: true },
+    });
+    expect(effective.canAccessReports).toBe(false);
   });
 
   it("canonicalizes sudo_admin — legacy overrides cannot restrict draft access", () => {

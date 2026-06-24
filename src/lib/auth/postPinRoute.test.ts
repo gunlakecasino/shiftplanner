@@ -28,10 +28,15 @@ const adminRole: ShiftBuilderPermissions = {
   canPublish: false,
   canSeeDraftData: false,
   canAccessSudo: false,
-  canAccessReports: true,
+  canAccessReports: false,
   canRunEngine: false,
   canManageTeam: false,
   canEditPublishedOnly: true,
+};
+
+const reportsPlusViewer: ShiftBuilderPermissions = {
+  ...adminRole,
+  canAccessReports: true,
 };
 
 const sudoAdmin: ShiftBuilderPermissions = {
@@ -63,7 +68,8 @@ const teamViewer: ShiftBuilderPermissions = {
 describe("resolveOpsSurface", () => {
   it("maps sudo, admin, reports, and team surfaces", () => {
     expect(resolveOpsSurface(sudoAdmin)).toBe("sudo");
-    expect(resolveOpsSurface(adminRole)).toBe("admin");
+    expect(resolveOpsSurface(adminRole)).toBe("team");
+    expect(resolveOpsSurface(reportsPlusViewer)).toBe("admin");
     expect(resolveOpsSurface(reportsOnly)).toBe("reports");
     expect(resolveOpsSurface(teamViewer)).toBe("team");
   });
@@ -128,10 +134,10 @@ describe("guardAuthenticatedRoute", () => {
 });
 
 describe("postPinDestination", () => {
-  it("lands admin on canvas by default but honors reports deep links", () => {
+  it("lands admin on canvas and blocks reports and settings", () => {
     expect(postPinDestination("/", adminRole)).toBe("/shiftbuilder");
     expect(postPinDestination("/shiftbuilder/reports", adminRole)).toBe(
-      "/shiftbuilder/reports",
+      "/shiftbuilder",
     );
     expect(postPinDestination("/shiftbuilder/settings", adminRole)).toBe(
       "/shiftbuilder",

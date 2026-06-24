@@ -93,8 +93,8 @@ export const OPS_ROLE_OPTIONS: OpsRoleOption[] = [
   {
     value: "admin",
     label: "Admin",
-    description: "Viewer + Reports — published nights on canvas and placement analytics",
-    surface: "admin",
+    description: "Published nights on canvas — same floor access as Viewer (no reports or settings)",
+    surface: "team",
   },
   {
     value: "viewer",

@@ -68,7 +68,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: false,
         canSeeDraftData: false,
         canAccessSudo: false,
-        canAccessReports: true,
+        canAccessReports: false,
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
