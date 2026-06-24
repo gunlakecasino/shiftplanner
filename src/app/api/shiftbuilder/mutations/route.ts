@@ -26,7 +26,14 @@ import {
   upsertBreakAssignmentServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
-import { revalidateNightBoardCaches } from "@/lib/shiftbuilder/revalidateOpsCache";
+import { revalidateNightBoardCaches, revalidateSlotDefaultsCache } from "@/lib/shiftbuilder/revalidateOpsCache";
+import {
+  addSlotDefaultTaskServer,
+  bulkUpsertSlotDefaultsServer,
+  removeSlotDefaultTaskServer,
+  upsertSlotDefaultServer,
+} from "@/lib/shiftbuilder/slotDefaultsMutations.server";
+import type { SlotDefault } from "@/lib/shiftbuilder/data";
 
 const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   upsert_zone_assignment: "canEditAssignments",
@@ -46,6 +53,10 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   update_night_slot_task_label: "canEditAssignments",
   replace_night_slot_tasks_for_slot: "canEditAssignments",
   replace_all_night_slot_tasks: "canEditAssignments",
+  add_slot_default_task: "canAccessSudo",
+  remove_slot_default_task: "canAccessSudo",
+  upsert_slot_default: "canAccessSudo",
+  bulk_upsert_slot_defaults: "canAccessSudo",
 };
 
 async function bustCache(date?: string) {
@@ -212,6 +223,55 @@ export async function POST(request: NextRequest) {
           (body.tasks as never[]) ?? [],
         );
         await bustCache(body.date as string | undefined);
+        return NextResponse.json({ ok: true });
+      }
+      case "add_slot_default_task": {
+        const task = await addSlotDefaultTaskServer({
+          slotKey: String(body.slotKey),
+          slotType: body.slotType as "zone" | "rr" | "aux",
+          rrSide: (body.rrSide as string | undefined) ?? "",
+          taskLabel: String(body.taskLabel),
+          taskColor: (body.taskColor as string | null | undefined) ?? null,
+          isCoverage: Boolean(body.isCoverage),
+          sortOrder: Number(body.sortOrder ?? 0),
+        });
+        try {
+          await revalidateSlotDefaultsCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(task);
+      }
+      case "remove_slot_default_task": {
+        await removeSlotDefaultTaskServer(String(body.id));
+        try {
+          await revalidateSlotDefaultsCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json({ ok: true });
+      }
+      case "upsert_slot_default": {
+        await upsertSlotDefaultServer({
+          slotKey: String(body.slotKey),
+          slotType: body.slotType as "zone" | "rr" | "aux",
+          rrSide: (body.rrSide as string | undefined) ?? "",
+          defaultBreakGroup: Number(body.defaultBreakGroup) as never,
+        });
+        try {
+          await revalidateSlotDefaultsCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json({ ok: true });
+      }
+      case "bulk_upsert_slot_defaults": {
+        await bulkUpsertSlotDefaultsServer((body.rows as SlotDefault[]) ?? []);
+        try {
+          await revalidateSlotDefaultsCache();
+        } catch {
+          /* non-fatal */
+        }
         return NextResponse.json({ ok: true });
       }
       default:

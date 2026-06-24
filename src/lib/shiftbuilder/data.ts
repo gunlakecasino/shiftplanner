@@ -58,6 +58,35 @@ async function runBoardMutation<T>(
   return result;
 }
 
+/** Settings / Card Defaults — sudo-gated API in browser; service role on server. */
+async function runSudoMutation<T>(
+  action: string,
+  payload: Record<string, unknown>,
+  serverFallback: () => Promise<T>,
+): Promise<T> {
+  if (typeof window !== 'undefined') {
+    const { postOpsMutation } = await import('./opsMutationClient');
+    const result = await postOpsMutation<T>(action, payload);
+    try {
+      const { revalidateSlotDefaultsCache } = await import('./revalidateOpsCache');
+      await revalidateSlotDefaultsCache();
+    } catch {
+      /* non-fatal */
+    }
+    invalidateSlotDefaultsCache();
+    return result;
+  }
+  const result = await serverFallback();
+  try {
+    const { revalidateSlotDefaultsCache } = await import('./revalidateOpsCache');
+    await revalidateSlotDefaultsCache();
+  } catch {
+    /* non-fatal */
+  }
+  invalidateSlotDefaultsCache();
+  return result;
+}
+
 /**
  * Logs Supabase errors in a structured way that survives serialization
  * across React Server Components, edge runtimes, and production logging pipelines.
@@ -3248,22 +3277,15 @@ export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
 export async function bulkUpsertSlotDefaults(rows: SlotDefault[]): Promise<void> {
   if (!rows.length) return;
 
-  const payload = rows.map((r) => ({
-    slot_key: r.slotKey,
-    slot_type: r.slotType,
-    rr_side: r.rrSide ?? "",
-    default_break_group: r.defaultBreakGroup,
-    updated_at: new Date().toISOString(),
-  }));
-
-  const { error } = await supabase
-    .from("slot_defaults")
-    .upsert(payload, { onConflict: "slot_key,rr_side" });
-
-  if (error) {
-    console.error("[shiftbuilder/data] bulkUpsertSlotDefaults error:", error);
-    throw new Error(`Failed to save slot defaults: ${(error as any).message ?? "unknown"}`);
-  }
+  await runSudoMutation(
+    "bulk_upsert_slot_defaults",
+    { rows },
+    async () => {
+      const { bulkUpsertSlotDefaultsServer } = await import("./slotDefaultsMutations.server");
+      await bulkUpsertSlotDefaultsServer(rows);
+      return { ok: true };
+    },
+  );
 
   writeSlotDefaultsCache(rows);
 }
@@ -3290,27 +3312,15 @@ export async function upsertSlotDefault(params: {
   rrSide?: string;
   defaultBreakGroup: BreakGroupValue;
 }): Promise<void> {
-  const { slotKey, slotType, rrSide = '', defaultBreakGroup } = params;
-
-  const { error } = await supabase
-    .from('slot_defaults')
-    .upsert(
-      {
-        slot_key: slotKey,
-        slot_type: slotType,
-        rr_side: rrSide,
-        default_break_group: defaultBreakGroup,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'slot_key,rr_side' }
-    );
-
-  if (error) {
-    console.error('[shiftbuilder/data] upsertSlotDefault error:', error);
-    throw new Error(`Failed to save slot default: ${(error as any).message ?? 'unknown'}`);
-  }
-
-  invalidateSlotDefaultsCache();
+  await runSudoMutation(
+    "upsert_slot_default",
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { upsertSlotDefaultServer } = await import("./slotDefaultsMutations.server");
+      await upsertSlotDefaultServer(params);
+      return { ok: true };
+    },
+  );
 }
 
 /** Add a task chip default for a slot. Silently dedupes on (slot_key, rr_side, task_label). */
@@ -3323,58 +3333,27 @@ export async function addSlotDefaultTask(params: {
   isCoverage?: boolean;
   sortOrder?: number;
 }): Promise<SlotDefaultTask> {
-  const {
-    slotKey, slotType, rrSide = '',
-    taskLabel, taskColor = null,
-    isCoverage = false, sortOrder = 0,
-  } = params;
-
-  const { data, error } = await supabase
-    .from('slot_default_tasks')
-    .upsert(
-      {
-        slot_key: slotKey,
-        slot_type: slotType,
-        rr_side: rrSide,
-        task_label: taskLabel,
-        task_color: taskColor,
-        is_coverage: isCoverage,
-        sort_order: sortOrder,
-      },
-      { onConflict: 'slot_key,rr_side,task_label' }
-    )
-    .select('id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order')
-    .single();
-
-  if (error) {
-    console.error('[shiftbuilder/data] addSlotDefaultTask error:', error);
-    throw new Error(`Failed to add default task: ${(error as any).message ?? 'unknown'}`);
-  }
-
-  const r = data as any;
-  return {
-    id: r.id,
-    slotKey: r.slot_key,
-    slotType: r.slot_type,
-    rrSide: r.rr_side ?? '',
-    taskLabel: r.task_label,
-    taskColor: r.task_color ?? null,
-    isCoverage: r.is_coverage ?? false,
-    sortOrder: r.sort_order ?? 0,
-  };
+  return runSudoMutation(
+    "add_slot_default_task",
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { addSlotDefaultTaskServer } = await import("./slotDefaultsMutations.server");
+      return addSlotDefaultTaskServer(params);
+    },
+  );
 }
 
 /** Remove a task chip default by id. */
 export async function removeSlotDefaultTask(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('slot_default_tasks')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error('[shiftbuilder/data] removeSlotDefaultTask error:', error);
-    throw new Error(`Failed to remove default task: ${(error as any).message ?? 'unknown'}`);
-  }
+  await runSudoMutation(
+    "remove_slot_default_task",
+    { id },
+    async () => {
+      const { removeSlotDefaultTaskServer } = await import("./slotDefaultsMutations.server");
+      await removeSlotDefaultTaskServer(id);
+      return { ok: true };
+    },
+  );
 }
 
 // ── Push helpers (shared) ────────────────────────────────────────────────────
