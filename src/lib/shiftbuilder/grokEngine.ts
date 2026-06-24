@@ -189,6 +189,7 @@ export function buildGrokEngineSnapshot(args: {
         : null;
 
       const candidates = ranking.topCandidates
+        .filter((c) => !c.excluded)
         .slice(0, topK)
         .map((c) => {
           const signalEntries = Object.entries(c.breakdown)
@@ -500,7 +501,7 @@ export function guardGrokEnginePicks(
     const allowed = r.candidates.some((c) => c.tmId === p.tmId);
     if (!allowed) {
       warnings.push(
-        `Grok picked ${p.tmId} for ${p.slotKey} but they weren't in the candidate list`
+        `Grok picked ${p.tmId} for ${p.slotKey} but they weren't in the eligible (non-excluded) candidate list`,
       );
       continue;
     }

@@ -162,7 +162,7 @@ export function nightIsoFromDate(d: Date): string {
 export const PRIOR_PLACEMENT_CRITICAL_WINDOW = 3;
 
 /**
- * Canonical repeat key for prior-3 / critical-repeat checks.
+ * Canonical repeat key for prior-N / critical-repeat checks.
  * MRR8, WRR8, and RR8 all map to RR8 (same restroom number).
  */
 export function placementRepeatKey(ui: string): string {
@@ -172,8 +172,27 @@ export function placementRepeatKey(ui: string): string {
   return ui;
 }
 
+/** Side-family key for cross-station RR rotation (all WRR* or all MRR*). */
+export function placementSideFamilyRepeatKey(ui: string): string | null {
+  if (!ui) return null;
+  if (/^WRR\d+$/i.test(ui)) return "WRR";
+  if (/^MRR\d+$/i.test(ui)) return "MRR";
+  return null;
+}
+
 export function placementRepeatKeysMatch(a: string, b: string): boolean {
   return placementRepeatKey(a) === placementRepeatKey(b);
+}
+
+/**
+ * True when candidate slot conflicts with a prior placement for rotation hard gates:
+ * same RR number (incl. opposite side), same exact zone/aux key, or same RR side-family.
+ */
+export function placementRepeatKeysConflict(candidateSlot: string, priorUi: string): boolean {
+  if (placementRepeatKeysMatch(candidateSlot, priorUi)) return true;
+  const candFamily = placementSideFamilyRepeatKey(candidateSlot);
+  const priorFamily = placementSideFamilyRepeatKey(priorUi);
+  return !!(candFamily && priorFamily && candFamily === priorFamily);
 }
 
 /** Sum spread counts for all UI keys that share the same repeat area (RR sides). */
@@ -293,8 +312,7 @@ export function isSlotInPlacementSequence(
   sequence: string[],
   slotKey: string,
 ): boolean {
-  const target = placementRepeatKey(slotKey);
-  return sequence.some((ui) => placementRepeatKey(ui) === target);
+  return sequence.some((ui) => placementRepeatKeysConflict(slotKey, ui));
 }
 
 /**

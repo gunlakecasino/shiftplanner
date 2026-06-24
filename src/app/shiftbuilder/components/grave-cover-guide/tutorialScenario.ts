@@ -9,6 +9,7 @@ export type TutorialTask = {
   color?: string;
   isCoverage?: boolean;
   coverageTarget?: TutorialSlotKey;
+  coverageSide?: "A" | "B";
 };
 
 export type TutorialAssignment = {
@@ -60,7 +61,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: "intro",
     title: "Covering grave tonight",
-    body: "Martinez called off from Z4. On most nights there is no bench — you reshuffle people already on the board. This practice board uses the same zone grid, roster, placement pad, coverage picker, and task rows as live ShiftBuilder.",
+    body: "Martinez called off from Z4. On most nights there is no bench — you reshuffle people already on the board. This practice board mirrors live ShiftBuilder: Grave Roster on the left, Placement Pad on the card, coverage bars at the card bottom (not in the task list), and the Tasks Pad for regular task lines.",
     hint: "Click Start when ready.",
   },
   {
@@ -71,9 +72,9 @@ export const GUIDE_STEPS: GuideStep[] = [
   },
   {
     id: "dblclick-z4",
-    title: "Open Z4 placement pad",
-    body: "Martinez is still on Z4. Double-click the upper name area on the card — same as the live board.",
-    hint: "Double-click Martinez on Z4.",
+    title: "Open Z4 Placement Pad",
+    body: "Martinez is still on Z4. On desktop, double-click the upper name area. On iPad, a single tap opens the same Placement Pad flyout.",
+    hint: "Open the pad on Z4 (double-click on desktop).",
   },
   {
     id: "mark-unavailable",
@@ -90,8 +91,8 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: "dblclick-empty-z4",
     title: "Fill the Z4 hole",
-    body: "Z4 is empty with ASSIGN TM in the lower invite area. Double-click the upper name area to open the placement pad.",
-    hint: "Double-click empty Z4.",
+    body: "Z4 is empty — Unassigned in the name area and ASSIGN TM below. Open the Placement Pad from the upper name area (or tap ASSIGN TM).",
+    hint: "Open the pad on empty Z4.",
   },
   {
     id: "tap-assign",
@@ -107,15 +108,15 @@ export const GUIDE_STEPS: GuideStep[] = [
   },
   {
     id: "add-coverage",
-    title: "Add coverage on the card",
-    body: "With Chen on Z4, open the pad again and tap Coverage in the footer. Pick Z8 so the floor sees Chen is also covering the thin zone — a gold coverage bar appears on the card, same as live ShiftBuilder.",
-    hint: "Coverage → Z8.",
+    title: "Add coverage (bottom bar)",
+    body: "With Chen on Z4, open the Placement Pad again and tap Coverage in the footer. Pick Z8 in the Add coverage grid. Live ShiftBuilder adds an And Zone 8 bar at the very bottom of Z4 — not in the task list. Z8 will show Covered by Chen.",
+    hint: "Footer → Coverage → Z8.",
   },
   {
     id: "add-task",
-    title: "Add a task line",
-    body: "Double-click the lower task area on Z4 (below the name). Add a short task so the next supervisor sees the plan — e.g. Monitor Z8.",
-    hint: "Double-click tasks on Z4, then add the task.",
+    title: "Add a regular task (separate from coverage)",
+    body: "Coverage bars and tasks are different. Double-click (or tap on iPad) the lower task area on Z4 to open the Tasks Pad. Add a short reminder — e.g. Monitor Z8 — thin. This appears in the middle task rows, not in the coverage bar.",
+    hint: "Open Tasks Pad on Z4, then add the task.",
   },
   {
     id: "complete",

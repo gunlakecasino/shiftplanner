@@ -32,7 +32,7 @@ export function TutorialTaskPad({
             <X className="w-3 h-3 text-gray-500" />
           </button>
         </div>
-        <p className="text-[11px] text-gray-500 mb-2">Same as live board — double-click task rows to edit.</p>
+        <p className="text-[11px] text-gray-500 mb-2">Regular tasks only — coverage bars (And Zone X) are separate and sit at the card bottom.</p>
         <div className="flex gap-1">
           <input
             value={value}

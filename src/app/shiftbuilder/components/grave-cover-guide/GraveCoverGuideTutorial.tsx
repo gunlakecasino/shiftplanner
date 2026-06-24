@@ -23,6 +23,7 @@ import { TutorialTaskPad } from "./TutorialTaskPad";
 import { TutorialRoster } from "./TutorialRoster";
 import { TutorialNav } from "./TutorialNav";
 import { getZoneColor } from "@/lib/shiftbuilder/constants";
+import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import "../graveCoverGuideTutorial.css";
 
 export const GRAVE_COVER_GUIDE_STORAGE_KEY = "shiftbuilder:grave-cover-guide-completed";
@@ -184,10 +185,11 @@ export function GraveCoverGuideTutorial({
         ...(prev.Z4 ?? []),
         {
           id: "cov-z8",
-          taskLabel: `Covering ${target}`,
+          taskLabel: `And Zone ${target.slice(1)}`,
           color: getZoneColor(target),
           isCoverage: true,
           coverageTarget: target,
+          coverageSide: "A" as const,
         },
       ],
     }));
@@ -207,6 +209,28 @@ export function GraveCoverGuideTutorial({
     setTaskPadSlot(null);
     goTo("complete");
   };
+
+  const coveredByForSlot = React.useMemo(() => {
+    const index: Partial<Record<TutorialSlotKey, CoveredByEntry[]>> = {};
+    for (const sourceKey of TUTORIAL_ZONE_ORDER) {
+      const assignment = board[sourceKey];
+      if (!assignment) continue;
+      for (const t of tasks[sourceKey] ?? []) {
+        if (!t.isCoverage || !t.coverageTarget) continue;
+        const target = t.coverageTarget;
+        if (board[target]) continue;
+        const entry: CoveredByEntry = {
+          tmName: assignment.tmName,
+          tmId: assignment.tmId,
+          side: t.coverageSide ?? "A",
+          sourceKey,
+          taskLabel: t.taskLabel,
+        };
+        index[target] = [...(index[target] ?? []), entry];
+      }
+    }
+    return index;
+  }, [board, tasks]);
 
   const pickerOptions = React.useMemo(() => {
     const options: Array<{ tmId: string; tmName: string; subtitle?: string }> = [];
@@ -260,10 +284,11 @@ export function GraveCoverGuideTutorial({
           <div className="sb-guide-coach__reference">
             <p className="sb-guide-coach__ref-title">Live board controls</p>
             <ul>
-              <li><strong>Mark unavailable</strong> — whole night</li>
-              <li><strong>Clear</strong> — one slot</li>
-              <li><strong>Coverage</strong> — footer → zone grid</li>
-              <li><strong>Tasks</strong> — double-click lower card area</li>
+              <li><strong>Mark unavailable</strong> — whole night (pad header)</li>
+              <li><strong>Clear</strong> — one slot (pad footer)</li>
+              <li><strong>Coverage</strong> — footer → <em>And Zone X</em> bar at card bottom</li>
+              <li><strong>Tasks</strong> — tap/double-click lower task area (not coverage)</li>
+              <li><strong>Covered by</strong> — shows on empty slots someone is covering</li>
             </ul>
           </div>
           <div className="sb-guide-coach__actions">
@@ -310,6 +335,7 @@ export function GraveCoverGuideTutorial({
                       slotKey={key}
                       assignment={board[key]}
                       tasks={tasks[key]}
+                      coveredBy={coveredByForSlot[key]}
                       highlighted={
                         (stepId === "dblclick-z4" && key === "Z4" && !!board.Z4) ||
                         (stepId === "dblclick-empty-z4" && key === "Z4" && !board.Z4) ||

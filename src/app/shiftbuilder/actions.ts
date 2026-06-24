@@ -266,6 +266,9 @@ export interface GrokEngineToolContext {
     pairAffinitiesByTm?: Map<string, any[]>;
     accommodationsByTm?: Map<string, any[]>;
     zoneMatrix?: Map<string, Map<string, any>>;
+    placementHistories?: Record<string, import("@/lib/shiftbuilder/data").ZoneDetailEntry | null>;
+    weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+    tonightIso?: string;
   };
   scheduledTmIds?: Set<string>;
   engineConfig?: EngineConfig;
@@ -341,6 +344,9 @@ Actively use tools (scoreCandidate, getTMScheduleStatus, getCurrentBoardState) t
             currentDraft: currentDraftMap,
             adjacency: buildDefaultAdjacency(),
             zoneMatrix: toolContext!.scoringData!.zoneMatrix,
+            placementHistories: toolContext!.scoringData!.placementHistories,
+            weeklyRecentHistory: toolContext!.scoringData!.weeklyRecentHistory,
+            tonightIso: toolContext!.scoringData!.tonightIso,
           }
         : ({} as Parameters<typeof scoreAssignment>[2]);
 

@@ -11,7 +11,7 @@
  *   • soft_prefer_set   (weight 0.6)  — same table, strength='soft'
  *   • pair_affinity     (weight 1.0)  — tm_pair_affinities against neighbors already placed
  *   • within_repeat     (weight 1.0)  — hard gate, TM can't be in two slots tonight
- *   • prior_placement_repeat (hard)   — same area in last 3 grave nights (RR-normalized)
+ *   • prior_placement_repeat (hard)   — same area or RR side-family in last 3 grave nights
  *
  * Deferred to Phase 2 (need history queries):
  *   fatigue_index, area_diversity, cross_week_rotation, weekly_load_balance,
@@ -33,6 +33,7 @@ import type { EngineConfig } from "./engineConfig";
 import { resolvedWeights } from "./engineConfig";
 import {
   isInPriorPlacementWindow,
+  PRIOR_PLACEMENT_CRITICAL_WINDOW,
   weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 // (uiToDb intentionally unused — slot_difficulty uses its own key scheme; see uiKeyToSlotDifficultyKey)
@@ -74,9 +75,9 @@ export interface ScoringContext {
   zoneMatrix?: Map<string, Map<string, TmZoneMatrixRow>>;
   /** Per-TM placement history (tm_placement_history) for rotation gates. */
   placementHistories?: Record<string, ZoneDetailEntry | null>;
-  /** In-week planned placements merged into prior-3 trail checks. */
+  /** In-week planned placements merged into prior-N trail checks. */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
-  /** Tonight's ISO date — scopes prior-3 to nights before this one. */
+  /** Tonight's ISO date — scopes prior-N to nights before this one. */
   tonightIso?: string;
 }
 
@@ -100,6 +101,11 @@ export interface ScoreResult {
   excluded: boolean;
   /** Reason for exclusion, if any */
   excludeReason?: string;
+}
+
+/** Hard rotation gate — same area or RR side-family in the prior-N window. */
+export function isRotationHardExclude(result: ScoreResult): boolean {
+  return result.excluded && result.breakdown.prior_placement_repeat?.raw === -1;
 }
 
 // =====================================================================
@@ -135,7 +141,7 @@ export function scoreAssignment(
   }
 
   // ---- prior_placement_repeat (hard) --------------------------------
-  // Same deployment area as one of the TM's last 3 grave placements.
+  // Same deployment area or RR side-family (all WRR* / all MRR*) in last 3 graves.
   if (!excluded && ctx.placementHistories && ctx.tonightIso) {
     const history = ctx.placementHistories[tm.id] ?? null;
     const weekEntries = weekEntriesForTm(
@@ -145,7 +151,7 @@ export function scoreAssignment(
     );
     if (isInPriorPlacementWindow(history, slotKey, ctx.tonightIso, undefined, weekEntries)) {
       excluded = true;
-      excludeReason = `Same area in last 3 grave placements (prior-3 trail)`;
+      excludeReason = `Rotation conflict in last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} grave placements (area or RR family)`;
       breakdown.prior_placement_repeat = {
         raw: -1,
         weighted: -Infinity,

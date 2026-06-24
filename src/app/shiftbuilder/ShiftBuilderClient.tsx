@@ -4442,6 +4442,14 @@ function AuthedShiftBuilder() {
         return;
       }
 
+      if (weekPlanTmIds.length > 0 && !weekHistoriesReady) {
+        showToast(
+          "Placement histories still loading — wait a moment, then run the engine again",
+          "error",
+        );
+        return;
+      }
+
       setEngineRunPhase("planner");
       const engineStart = performance.now();
 
@@ -4611,6 +4619,9 @@ function AuthedShiftBuilder() {
               pairAffinitiesByTm: tmPairAffinitiesByTm,
               accommodationsByTm: tmAccommodationsByTm,
               zoneMatrix: tmZoneMatrix,
+              placementHistories: effectiveWeekHistories,
+              weeklyRecentHistory: plannedThisWeekRecentHistory,
+              tonightIso: tonightIsoForEngine,
             },
             auxDefs,
             currentDraft: new Map(Object.entries(draftForGrok)),
@@ -4662,6 +4673,9 @@ function AuthedShiftBuilder() {
                   pairAffinitiesByTm: tmPairAffinitiesByTm,
                   accommodationsByTm: tmAccommodationsByTm,
                   zoneMatrix: tmZoneMatrix,
+                  placementHistories: effectiveWeekHistories,
+                  weeklyRecentHistory: plannedThisWeekRecentHistory,
+                  tonightIso: tonightIsoForEngine,
                 },
                 scheduledTmIds: effectiveScheduledTmIdsTonight,
                 rotationEngineContext: {
@@ -4816,6 +4830,8 @@ function AuthedShiftBuilder() {
       graveWeekDateKeys,
       plannedThisWeekRecentHistory,
       effectiveRealRoster,
+      weekHistoriesReady,
+      weekPlanTmIds,
     ],
   );
 

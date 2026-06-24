@@ -336,11 +336,12 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
         return b.total - a.total;
       });
 
-    const top = scored.slice(0, topK);
-    const picked = top.find((c) => !c.excluded);
+    const eligibleScored = scored.filter((c) => !c.excluded);
+    const top = eligibleScored.slice(0, topK);
+    const picked = top[0] ?? eligibleScored[0] ?? null;
 
     breakdown[slotKey] = {
-      topCandidates: top,
+      topCandidates: top.length > 0 ? top : scored.slice(0, topK),
       pickedTmId: picked ? picked.tmId : null,
       preserved: false,
     };
@@ -349,18 +350,12 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       proposedAssignments[slotKey] = picked.tmId;
       currentDraft.set(slotKey, picked.tmId);
     } else {
-      // "Unless something goes crazy wrong" policy:
-      // For high-priority slots (early in order), be much more aggressive about filling
-      // even with lower-scoring candidates rather than leaving them empty.
       const isHardCoverage = HARD_COVERAGE_SLOTS.has(slotKey);
 
-      if (isHardCoverage && scored.length > 0) {
-        // Prefer non-excluded candidates; only violate soft gates as a last resort.
-        const bestAvailable = scored.find((c) => !c.excluded) ?? scored[0];
-        proposedAssignments[slotKey] = bestAvailable.tmId;
-        currentDraft.set(slotKey, bestAvailable.tmId);
-        const prior3Note = bestAvailable.excluded ? " (all candidates excluded — last resort)" : "";
-        notes.push(`High-priority slot ${slotKey} force-filled with ${bestAvailable.tmName} (score ${bestAvailable.total.toFixed(1)}) to maintain order${prior3Note}`);
+      if (isHardCoverage) {
+        notes.push(
+          `High-priority slot ${slotKey} left unfilled — all ${scored.length} eligible TM(s) blocked by rotation or preference gates`,
+        );
       } else {
         notes.push(`No non-excluded candidate for ${slotKey}`);
       }

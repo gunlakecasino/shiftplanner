@@ -11,8 +11,10 @@ import {
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import {
   CardAccentStripe,
+  CoveredByOverlay,
   UnassignedInvite,
 } from "../assignmentCardChrome";
+import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import BreakBadge from "../BreakBadge";
 import type { TutorialAssignment, TutorialSlotKey, TutorialTask } from "./tutorialScenario";
 
@@ -20,6 +22,7 @@ type TutorialZoneCardProps = {
   slotKey: TutorialSlotKey;
   assignment: TutorialAssignment | null;
   tasks?: TutorialTask[];
+  coveredBy?: CoveredByEntry[];
   highlighted?: boolean;
   pulse?: boolean;
   highlightTaskZone?: boolean;
@@ -31,6 +34,7 @@ export function TutorialZoneCard({
   slotKey,
   assignment,
   tasks = [],
+  coveredBy = [],
   highlighted = false,
   pulse = false,
   highlightTaskZone = false,
@@ -41,6 +45,7 @@ export function TutorialZoneCard({
   const color = getZoneColor(slotKey);
   const icon = ZONE_ICONS[slotKey] ?? "●";
   const isEmpty = !assignment;
+  const isCovered = isEmpty && coveredBy.length > 0;
   const regularTasks = tasks.filter((t) => !t.isCoverage);
   const coverageTasks = tasks.filter((t) => t.isCoverage);
   const breakGroup = assignment?.breakGroup ?? 0;
@@ -80,7 +85,14 @@ export function TutorialZoneCard({
           onAssignZoneDoubleClick?.(slotKey);
         }}
       >
-        {isEmpty ? (
+        {isCovered ? (
+          <CoveredByOverlay
+            scale="zone"
+            coveredBy={coveredBy}
+            targetSlotKey={slotKey}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : isEmpty ? (
           <h3 className="text-[18px] font-bold text-[#9CA3AF] opacity-70 truncate">Unassigned</h3>
         ) : (
           <h3
@@ -92,7 +104,7 @@ export function TutorialZoneCard({
         )}
       </div>
 
-      {isEmpty && (
+      {isEmpty && !isCovered && (
         <>
           <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
           <div className="px-3.5 py-1.5 shrink-0">

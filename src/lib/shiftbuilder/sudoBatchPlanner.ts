@@ -15,6 +15,7 @@ import {
 } from "./placement";
 import { buildDefaultAdjacency } from "./scoring";
 import { uiToDb, dbToUi } from "./slot-keys";
+import type { ZoneDetailEntry } from "./data";
 
 type GraveTm = Awaited<
   ReturnType<typeof import("./data").getGraveAvailableTeamMembers>
@@ -42,6 +43,86 @@ export interface BatchWeekResult {
   totalAssigned: number;
   totalPreserved: number;
   totalUnfilled: number;
+}
+
+type WeekPlacementEntry = { nightDate: string; slotKey: string; tmId: string };
+
+async function loadPlacementHistoriesForRoster(
+  tmIds: string[],
+): Promise<Record<string, ZoneDetailEntry | null>> {
+  if (tmIds.length === 0) return {};
+  const { getTmPlacementHistory } = await import("./data");
+  const histories: Record<string, ZoneDetailEntry | null> = {};
+  const CHUNK = 16;
+  for (let i = 0; i < tmIds.length; i += CHUNK) {
+    const chunk = tmIds.slice(i, i + CHUNK);
+    await Promise.all(
+      chunk.map(async (tmId) => {
+        histories[tmId] = await getTmPlacementHistory(tmId, 30);
+      }),
+    );
+  }
+  return histories;
+}
+
+/** All zone/RR assignments in a week — used to merge in-week trails before each night. */
+async function loadWeekPlacementEntries(
+  nightRows: Array<{ id: string; night_date: string }>,
+): Promise<WeekPlacementEntry[]> {
+  if (nightRows.length === 0) return [];
+  const nightIdToDate = new Map(
+    nightRows.map((n) => [String(n.id), String(n.night_date)]),
+  );
+  const { data: assignRows, error } = await supabase
+    .from("zone_assignments")
+    .select("night_id, slot_key, slot_type, rr_side, tm_id")
+    .in("night_id", [...nightIdToDate.keys()])
+    .not("tm_id", "is", null);
+  if (error || !assignRows?.length) return [];
+
+  const entries: WeekPlacementEntry[] = [];
+  for (const row of assignRows as Array<{
+    night_id: string;
+    slot_key: string;
+    slot_type: string;
+    rr_side: string | null;
+    tm_id: string;
+  }>) {
+    const nightDate = nightIdToDate.get(String(row.night_id));
+    if (!nightDate || !row.tm_id) continue;
+    try {
+      const slotKey = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
+      entries.push({ nightDate, slotKey, tmId: String(row.tm_id) });
+    } catch {
+      /* skip unrecognized slot */
+    }
+  }
+  return entries;
+}
+
+function buildWeeklyRecentHistoryForNight(
+  weekEntries: WeekPlacementEntry[],
+  tonightIso: string,
+): Map<string, Array<{ nightDate: string; slotKey: string }>> {
+  const map = new Map<string, Array<{ nightDate: string; slotKey: string }>>();
+  for (const e of weekEntries) {
+    if (e.nightDate >= tonightIso) continue;
+    if (!map.has(e.tmId)) map.set(e.tmId, []);
+    map.get(e.tmId)!.push({ nightDate: e.nightDate, slotKey: e.slotKey });
+  }
+  return map;
+}
+
+function mergeBatchNightIntoWeekEntries(
+  weekEntries: WeekPlacementEntry[],
+  nightDate: string,
+  proposed: Record<string, string>,
+): void {
+  weekEntries.push(
+    ...Object.entries(proposed)
+      .filter(([, tmId]) => !!tmId)
+      .map(([slotKey, tmId]) => ({ nightDate, slotKey, tmId })),
+  );
 }
 
 export interface BatchRunOptions {
@@ -124,6 +205,12 @@ export async function batchRunEngineForWeek(
 
   const adjacency = buildDefaultAdjacency();
   const results: BatchNightResult[] = [];
+  const tmIds = grave.map((tm) => tm.id).filter(Boolean);
+  const [placementHistories, weekPlacementEntries] = await Promise.all([
+    loadPlacementHistoriesForRoster(tmIds),
+    loadWeekPlacementEntries(nightRows as Array<{ id: string; night_date: string }>),
+  ]);
+  const mutableWeekEntries = [...weekPlacementEntries];
 
   for (const night of nightRows) {
     const nightId = String(night.id);
@@ -143,10 +230,27 @@ export async function batchRunEngineForWeek(
         pairByTm,
         accByTm,
         adjacency,
+        placementHistories,
+        weeklyRecentHistory: buildWeeklyRecentHistoryForNight(mutableWeekEntries, nightDate),
         skipFilledNights,
         requireSchedule,
         filterBySchedule,
       });
+      if (nightResult.status === "ok" && nightResult.assigned > 0) {
+        const { getNightAssignments } = await import("@/lib/shiftbuilder/data");
+        const fresh = await getNightAssignments(nightId);
+        const proposed: Record<string, string> = {};
+        for (const a of fresh) {
+          if (!a.tmId) continue;
+          try {
+            const uiKey = dbToUi(a.slotKey, a.slotType ?? "zone", a.rrSide ?? null);
+            proposed[uiKey] = a.tmId;
+          } catch {
+            /* skip */
+          }
+        }
+        mergeBatchNightIntoWeekEntries(mutableWeekEntries, nightDate, proposed);
+      }
       results.push(nightResult);
     } catch (err) {
       results.push({
@@ -229,9 +333,21 @@ export async function batchRunEngineForNight(
     accByTm.get(r.tmId)!.push(r);
   });
 
+  const tmIds = grave.map((tm) => tm.id).filter(Boolean);
+  const nightDate = String((nightRow as any).night_date);
+  const placementHistories = await loadPlacementHistoriesForRoster(tmIds);
+
+  const { data: weekNightRows } = await supabase
+    .from("nights")
+    .select("id, night_date")
+    .eq("id", nightId);
+  const weekEntries = weekNightRows
+    ? await loadWeekPlacementEntries(weekNightRows as Array<{ id: string; night_date: string }>)
+    : [];
+
   return runEngineForSingleNight({
     nightId,
-    nightDate: String((nightRow as any).night_date),
+    nightDate,
     dayName: String((nightRow as any).day_name ?? ""),
     grave,
     engineConfig,
@@ -242,6 +358,8 @@ export async function batchRunEngineForNight(
     accByTm,
     adjacency: buildDefaultAdjacency(),
     zoneMatrix,
+    placementHistories,
+    weeklyRecentHistory: buildWeeklyRecentHistoryForNight(weekEntries, nightDate),
     skipFilledNights,
     requireSchedule,
     filterBySchedule,
@@ -265,11 +383,31 @@ async function runEngineForSingleNight(params: {
   accByTm: Map<string, any[]>;
   adjacency: Map<string, string[]>;
   zoneMatrix?: Map<string, Map<string, any>>;
+  placementHistories?: Record<string, ZoneDetailEntry | null>;
+  weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
   skipFilledNights: boolean;
   requireSchedule: boolean;
   filterBySchedule: boolean;
 }): Promise<BatchNightResult> {
-  const { nightId, nightDate, dayName, grave, engineConfig, skillScores, slotDifficulty, prefByTm, pairByTm, accByTm, adjacency, zoneMatrix, skipFilledNights, requireSchedule, filterBySchedule } = params;
+  const {
+    nightId,
+    nightDate,
+    dayName,
+    grave,
+    engineConfig,
+    skillScores,
+    slotDifficulty,
+    prefByTm,
+    pairByTm,
+    accByTm,
+    adjacency,
+    zoneMatrix,
+    placementHistories = {},
+    weeklyRecentHistory = new Map(),
+    skipFilledNights,
+    requireSchedule,
+    filterBySchedule,
+  } = params;
   const notes: string[] = [];
 
   // Load night-specific data in parallel (dynamic import keeps heavy modules off static graph)
@@ -334,6 +472,9 @@ async function runEngineForSingleNight(params: {
       accommodationsByTm: accByTm,
       adjacency,
       zoneMatrix,
+      placementHistories,
+      weeklyRecentHistory,
+      tonightIso: nightDate,
     },
   });
 
