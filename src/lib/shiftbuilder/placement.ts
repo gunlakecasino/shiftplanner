@@ -354,11 +354,12 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       const isHardCoverage = HARD_COVERAGE_SLOTS.has(slotKey);
 
       if (isHardCoverage && scored.length > 0) {
-        // Take the best available (even if excluded or low score) for critical early slots
-        const bestAvailable = scored[0];
+        // Prefer non-excluded candidates; only violate soft gates as a last resort.
+        const bestAvailable = scored.find((c) => !c.excluded) ?? scored[0];
         proposedAssignments[slotKey] = bestAvailable.tmId;
         currentDraft.set(slotKey, bestAvailable.tmId);
-        notes.push(`High-priority slot ${slotKey} force-filled with ${bestAvailable.tmName} (score ${bestAvailable.total.toFixed(1)}) to maintain order`);
+        const prior3Note = bestAvailable.excluded ? " (all candidates excluded — last resort)" : "";
+        notes.push(`High-priority slot ${slotKey} force-filled with ${bestAvailable.tmName} (score ${bestAvailable.total.toFixed(1)}) to maintain order${prior3Note}`);
       } else {
         notes.push(`No non-excluded candidate for ${slotKey}`);
       }

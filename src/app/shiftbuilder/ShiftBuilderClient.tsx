@@ -4380,6 +4380,7 @@ function AuthedShiftBuilder() {
         const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
         const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
         await yieldToMain();
+        const tonightIsoForEngine = formatLocalDateISO(selectedDay.date);
         const plannerResult = runWeightedPlanner({
           orderedSlots,
           assignments,
@@ -4395,6 +4396,9 @@ function AuthedShiftBuilder() {
             accommodationsByTm: tmAccommodationsByTm,
             adjacency: buildDefaultAdjacency(),
             zoneMatrix: tmZoneMatrix,
+            placementHistories: effectiveWeekHistories,
+            weeklyRecentHistory: plannedThisWeekRecentHistory,
+            tonightIso: tonightIsoForEngine,
           },
         });
         await yieldToMain();

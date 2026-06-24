@@ -276,6 +276,7 @@ Key signals include:
 - pair_affinity (with already-placed neighbors)
 - area_diversity, cross_week_rotation, prior_run_continuity (from historical matrix)
 - within_repeat (hard constraint)
+- prior_placement_repeat (hard constraint — same area in last 3 grave nights; RR sides normalized)
 
 ## 4. Guidance for Intelligent Agents
 You must respect all hard eligibility rules and the fill-order constitution (PLACEMENT_ORDER / coverage tiers).

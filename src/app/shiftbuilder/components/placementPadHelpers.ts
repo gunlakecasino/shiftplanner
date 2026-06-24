@@ -248,15 +248,44 @@ export function buildPlacementTrailLabels(
     .map((e) => formatCardPlacementTrailLabel(e.ui));
 }
 
+/** Week plan entries for one TM, optionally scoped before a night (exclusive). */
+export function weekEntriesForTm(
+  weeklyRecentHistory:
+    | Map<string, Array<{ nightDate: string; slotKey: string }>>
+    | undefined,
+  tmId: string,
+  beforeIso?: string,
+): Array<{ nightDate: string; slotKey: string }> {
+  const rows = weeklyRecentHistory?.get(tmId) ?? [];
+  if (!beforeIso) return rows;
+  return rows.filter((r) => r.nightDate < beforeIso);
+}
+
+/**
+ * Last N placement nights (newest first), merging DB history with in-week plan entries.
+ * Matches the TM name trail on assignment cards.
+ */
+export function getMergedPlacementSequence(
+  history: ZoneDetailEntry | null,
+  n: number,
+  beforeIso?: string,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+): string[] {
+  return collectPlacementTrailEvents(history, beforeIso, weekEntries)
+    .slice(0, n)
+    .map((e) => e.ui);
+}
+
 export function isInPriorPlacementWindow(
   history: ZoneDetailEntry | null,
   slotKey: string,
   beforeIso?: string,
   window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
 ): boolean {
-  const target = placementRepeatKey(slotKey);
-  return getLastPlacementSequence(history, window, beforeIso).some(
-    (ui) => placementRepeatKey(ui) === target,
+  return isSlotInPlacementSequence(
+    getMergedPlacementSequence(history, window, beforeIso, weekEntries),
+    slotKey,
   );
 }
 

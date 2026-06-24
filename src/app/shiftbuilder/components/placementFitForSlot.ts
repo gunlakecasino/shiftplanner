@@ -5,11 +5,12 @@ import type { PlacementCandidateProfile } from "@/lib/shiftbuilder/engineInsight
 import {
   buildMatrixSlotKeysForTm,
   computePlacementRotationBasics,
-  getLastPlacementSequence,
+  getMergedPlacementSequence,
   getSpreadPlacementCounts,
   isInPriorPlacementWindow,
   isSlotInPlacementSequence,
   spreadCountForRepeatKey,
+  weekEntriesForTm,
   PLACEMENT_SPREAD_NIGHTS,
   type PlacementCrossPattern,
   type PlacementRotationBasics,
@@ -278,13 +279,21 @@ export function computeSlotPlacementFit(
 
   const tmId = row?.tmId;
   const history = tmId ? histories[tmId] ?? null : null;
+  const weekEntries = tmId
+    ? weekEntriesForTm(weeklyRecentHistory, tmId, currentIso)
+    : undefined;
   const spreadCounts = getSpreadPlacementCounts(
     history,
     PLACEMENT_SPREAD_NIGHTS,
     currentIso,
   );
   const timesInSpread = spreadCountForRepeatKey(spreadCounts, slotKey);
-  const last5 = getLastPlacementSequence(history, LAST5_COUNT, currentIso);
+  const last5 = getMergedPlacementSequence(
+    history,
+    LAST5_COUNT,
+    currentIso,
+    weekEntries,
+  );
   const currentTm = memberToPlacementProfile(members, tmId);
   const tmEligibleForSlot = currentTm
     ? isEligibleForSlot(
@@ -362,7 +371,13 @@ export function computeSlotPlacementFit(
     tmEligibleForSlot,
     timesInSpread,
     inLast5: isSlotInPlacementSequence(last5, slotKey),
-    inPriorPlacementWindow: isInPriorPlacementWindow(history, slotKey, currentIso),
+    inPriorPlacementWindow: isInPriorPlacementWindow(
+      history,
+      slotKey,
+      currentIso,
+      undefined,
+      weekEntries,
+    ),
     padHistoryLoading: historiesLoading && !!tmId && !history,
     rotationBasics: basicsForScore,
     weekRepeatThisSlot,

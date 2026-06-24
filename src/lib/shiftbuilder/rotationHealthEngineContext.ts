@@ -27,11 +27,16 @@ import {
 } from "@/app/shiftbuilder/components/shiftRotationHealth";
 import {
   collectDeploymentSlotKeys,
-  getLastPlacementSequence,
+  getMergedPlacementSequence,
   getSpreadPlacementCounts,
   getSpreadPlacementKeys,
+  isInPriorPlacementWindow,
+  isSlotInPlacementSequence,
   PLACEMENT_SPREAD_NIGHTS,
+  PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
+  weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
@@ -363,6 +368,20 @@ export function buildHealthOptimizedDraft(
       if (scheduleGate && !scheduledTmIds!.has(c.tmId)) continue;
       if (usedTmIds.has(c.tmId)) continue;
 
+      const tmHistory = histories[c.tmId] ?? null;
+      const tmWeekEntries = weekEntriesForTm(scopedWeek, c.tmId, tonightIso);
+      if (
+        isInPriorPlacementWindow(
+          tmHistory,
+          slotKey,
+          tonightIso,
+          PRIOR_PLACEMENT_CRITICAL_WINDOW,
+          tmWeekEntries,
+        )
+      ) {
+        continue;
+      }
+
       const hypotheticalRows: Record<string, SlotAssignmentRow> = {
         ...draftRows,
         [slotKey]: { tmId: c.tmId, tmName: c.tmName },
@@ -406,10 +425,19 @@ export function buildHealthOptimizedDraft(
     }
 
     if (!best) {
-      const fallback = candidates.find(
-        (c) =>
-          (!scheduleGate || scheduledTmIds!.has(c.tmId)) && !usedTmIds.has(c.tmId),
-      );
+      const fallback = candidates.find((c) => {
+        if (scheduleGate && !scheduledTmIds!.has(c.tmId)) return false;
+        if (usedTmIds.has(c.tmId)) return false;
+        const tmHistory = histories[c.tmId] ?? null;
+        const tmWeekEntries = weekEntriesForTm(scopedWeek, c.tmId, tonightIso);
+        return !isInPriorPlacementWindow(
+          tmHistory,
+          slotKey,
+          tonightIso,
+          PRIOR_PLACEMENT_CRITICAL_WINDOW,
+          tmWeekEntries,
+        );
+      });
       if (fallback) {
         best = {
           tmId: fallback.tmId,
@@ -670,8 +698,8 @@ export function computeCandidatePickerHealthPoints(
     last5,
   } = input;
 
-  const priorThree = last5.slice(0, 3);
-  if (priorThree.includes(slotKey)) {
+  const priorThree = last5.slice(0, PRIOR_PLACEMENT_CRITICAL_WINDOW);
+  if (priorThree.some((ui) => placementRepeatKeysMatch(ui, slotKey))) {
     return 50;
   }
 
@@ -692,7 +720,7 @@ export function computeCandidatePickerHealthPoints(
 
   score -= timesInSpread * 7.5;
 
-  const last5Idx = last5.indexOf(slotKey);
+  const last5Idx = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
   if (last5Idx >= 0) {
     score -= 8 + (4 - last5Idx) * 2.5;
   }
@@ -950,10 +978,11 @@ export function previewCandidateRotationFit(
     tonightIso,
     true,
   );
-  const last5 = getLastPlacementSequence(history, 5, tonightIso);
+  const tmWeekEntries = weekEntriesForTm(scopedWeek, tmId, tonightIso);
+  const last5 = getMergedPlacementSequence(history, 5, tonightIso, tmWeekEntries);
   const timesInSpread = spreadCounts.get(slotKey) ?? 0;
-  const inLast5 = last5.includes(slotKey);
-  const last5Index = last5.indexOf(slotKey);
+  const inLast5 = isSlotInPlacementSequence(last5, slotKey);
+  const last5Index = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
   const daysSinceInSlot = daysSinceLastPlacementInSlot(history, slotKey, tonightIso);
   const gapCount = matrixKeys.filter(
     (k) => !spreadKeys.has(k) && k !== slotKey,
