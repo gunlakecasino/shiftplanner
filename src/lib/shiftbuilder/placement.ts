@@ -228,6 +228,65 @@ export function countFullGraveInRoster(roster: any[]): number {
   return roster.filter((tm) => isFullGraveForPlacement(tm)).length;
 }
 
+type ScoredPlannerCandidate = {
+  tmId: string;
+  tmName: string;
+  total: number;
+  breakdown: import("./scoring").SignalBreakdown;
+  excluded: boolean;
+  excludeReason: string | undefined;
+};
+
+/** Finite score for ranking hard-excluded candidates (ignores -Infinity totals). */
+function effectiveCandidateScore(c: ScoredPlannerCandidate): number {
+  if (!c.excluded && Number.isFinite(c.total)) return c.total;
+  let sum = 0;
+  for (const s of Object.values(c.breakdown ?? {})) {
+    if (Number.isFinite(s.weighted)) sum += s.weighted;
+  }
+  return sum;
+}
+
+function isSameAreaRotationHardExclude(c: ScoredPlannerCandidate): boolean {
+  return !!c.excluded && c.breakdown?.prior_placement_repeat?.raw === -1;
+}
+
+function rankCandidatesByEffectiveScore(
+  list: ScoredPlannerCandidate[],
+): ScoredPlannerCandidate[] {
+  return [...list].sort(
+    (a, b) => effectiveCandidateScore(b) - effectiveCandidateScore(a),
+  );
+}
+
+/**
+ * When every scorer hard-excludes, still fill core zones with the least-bad TM:
+ * prefer non–same-area blocks, then highest effective score, then full-grave for zones.
+ */
+function pickBestCoverageRescueCandidate(
+  scored: ScoredPlannerCandidate[],
+  candidates: any[],
+  slotKey: string,
+): ScoredPlannerCandidate | null {
+  if (scored.length === 0) return null;
+
+  const eligible = scored.filter((c) => !c.excluded);
+  if (eligible.length > 0) return eligible[0];
+
+  const notSameArea = scored.filter((c) => !isSameAreaRotationHardExclude(c));
+  if (notSameArea.length > 0) return rankCandidatesByEffectiveScore(notSameArea)[0];
+
+  const ranked = rankCandidatesByEffectiveScore(scored);
+  if (isCoreZoneAdminSlot(slotKey)) {
+    const fullGrave = ranked.find((c) => {
+      const tm = candidates.find((t) => assignmentTmId(t) === c.tmId);
+      return tm && isFullGraveForPlacement(tm);
+    });
+    if (fullGrave) return fullGrave;
+  }
+  return ranked[0] ?? null;
+}
+
 /**
  * Walks PLACEMENT_ORDER. For each slot, scores all eligible candidates not
  * already used in this draft and picks the highest-scoring TM.
@@ -380,22 +439,18 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
 
     let finalPick = picked;
 
-    // Core zones/admin: never leave open while unused full-grave TMs remain — prefer
-    // coverage over rotation/preference gates (restrooms already claimed first in order).
-    if (!finalPick && isCoreZoneAdminSlot(slotKey) && candidates.length > 0) {
-      const rescue = candidates.find((tm) => isFullGraveForPlacement(tm)) ?? candidates[0];
-      const rescueId = assignmentTmId(rescue);
-      if (rescueId) {
-        finalPick = {
-          tmId: rescueId,
-          tmName: rescue.name || rescue.fullName || rescueId,
-          total: 0,
-          breakdown: {},
-          excluded: false,
-          excludeReason: undefined,
-        };
+    // Core zones/admin: never leave open while unused TMs remain — prefer coverage over
+    // rotation/preference gates, but always pick the highest-scored available candidate.
+    if (!finalPick && isCoreZoneAdminSlot(slotKey) && scored.length > 0) {
+      const rescueCandidate = pickBestCoverageRescueCandidate(
+        scored,
+        candidates,
+        slotKey,
+      );
+      if (rescueCandidate?.tmId) {
+        finalPick = rescueCandidate;
         notes.push(
-          `Core zone coverage: ${slotKey} ← ${finalPick.tmName} (best available full-grave TM)`,
+          `Core zone coverage: ${slotKey} ← ${finalPick.tmName} (best-scored available TM; rotation gates relaxed)`,
         );
       }
     }
@@ -403,9 +458,10 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     if (finalPick) {
       proposedAssignments[slotKey] = finalPick.tmId;
       currentDraft.set(slotKey, finalPick.tmId);
-      if (!picked) {
+      if (!picked || finalPick.tmId !== picked.tmId) {
+        const others = scored.filter((c) => c.tmId !== finalPick!.tmId);
         breakdown[slotKey] = {
-          topCandidates: scored.slice(0, topK),
+          topCandidates: [finalPick, ...others].slice(0, topK),
           pickedTmId: finalPick.tmId,
           preserved: false,
         };

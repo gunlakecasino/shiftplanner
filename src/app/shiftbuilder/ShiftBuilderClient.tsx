@@ -4740,8 +4740,20 @@ function AuthedShiftBuilder() {
         }
 
         const { mergeGrokOverridesIntoDraft } = await import("@/lib/shiftbuilder/grokEngine");
+        const plannerForMerge =
+          healthOptimized &&
+          Object.keys(healthOptimized.draft).length > 0 &&
+          (healthOptimized.liftVsPlanner ?? 0) > 0
+            ? {
+                ...plannerResult,
+                proposedAssignments: {
+                  ...plannerResult.proposedAssignments,
+                  ...healthOptimized.draft,
+                },
+              }
+            : plannerResult;
         const { proposedAssignments, reasoningBySlot } = mergeGrokOverridesIntoDraft({
-          plannerResult,
+          plannerResult: plannerForMerge,
           picks: grokResult.picks,
         });
 

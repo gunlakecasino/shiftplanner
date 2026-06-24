@@ -426,7 +426,7 @@ export function buildHealthOptimizedDraft(
     }
 
     if (!best) {
-      const fallback = candidates.find((c) => {
+      const fallbackPool = candidates.filter((c) => {
         if (scheduleGate && !scheduledTmIds!.has(c.tmId)) return false;
         if (usedTmIds.has(c.tmId)) return false;
         const tmHistory = histories[c.tmId] ?? null;
@@ -439,13 +439,14 @@ export function buildHealthOptimizedDraft(
           tmWeekEntries,
         );
       });
+      const fallback = [...fallbackPool].sort((a, b) => b.total - a.total)[0];
       if (fallback) {
         best = {
           tmId: fallback.tmId,
           tmName: fallback.tmName,
           healthPoints: 0,
           fitVerdict: "acceptable",
-          fitSummary: "Planner fallback — no health-scored candidate passed gates",
+          fitSummary: "Planner fallback — best-scored candidate (health gates relaxed)",
         };
       }
     }
