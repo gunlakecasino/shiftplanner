@@ -11,7 +11,8 @@
  *   • soft_prefer_set   (weight 0.6)  — same table, strength='soft'
  *   • pair_affinity     (weight 1.0)  — tm_pair_affinities against neighbors already placed
  *   • within_repeat     (weight 1.0)  — hard gate, TM can't be in two slots tonight
- *   • prior_placement_repeat (hard)   — same area or RR side-family in last 3 placements
+ *   • prior_placement_repeat (hard)   — same deployment area in last 3 placements
+ *   • rr_side_family_repeat (soft)    — different RR, same side (WRR6 after WRR8) in last 3
  *
  * Deferred to Phase 2 (need history queries):
  *   fatigue_index, area_diversity, cross_week_rotation, weekly_load_balance,
@@ -32,7 +33,8 @@ import type {
 import type { EngineConfig } from "./engineConfig";
 import { resolvedWeights } from "./engineConfig";
 import {
-  isInPriorPlacementWindow,
+  isInPriorPlacementSameAreaWindow,
+  isInPriorPlacementSideFamilyOnlyWindow,
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
   weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
@@ -103,7 +105,7 @@ export interface ScoreResult {
   excludeReason?: string;
 }
 
-/** Hard rotation gate — same area or RR side-family in the prior-N window. */
+/** Hard rotation gate — same deployment area in the prior-N window. */
 export function isRotationHardExclude(result: ScoreResult): boolean {
   return result.excluded && result.breakdown.prior_placement_repeat?.raw === -1;
 }
@@ -141,7 +143,7 @@ export function scoreAssignment(
   }
 
   // ---- prior_placement_repeat (hard) --------------------------------
-  // Same deployment area or RR side-family in the TM's last 3 placement events.
+  // Same deployment area in the TM's last 3 placement events (RR number / zone key).
   if (!excluded && ctx.placementHistories && ctx.tonightIso) {
     const history = ctx.placementHistories[tm.id] ?? null;
     const weekEntries = weekEntriesForTm(
@@ -149,13 +151,35 @@ export function scoreAssignment(
       tm.id,
       ctx.tonightIso,
     );
-    if (isInPriorPlacementWindow(history, slotKey, ctx.tonightIso, undefined, weekEntries)) {
+    if (
+      isInPriorPlacementSameAreaWindow(
+        history,
+        slotKey,
+        ctx.tonightIso,
+        undefined,
+        weekEntries,
+      )
+    ) {
       excluded = true;
-      excludeReason = `Rotation conflict in last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} grave placements (area or RR family)`;
+      excludeReason = `Rotation conflict in last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} grave placements (same area)`;
       breakdown.prior_placement_repeat = {
         raw: -1,
         weighted: -Infinity,
         note: excludeReason,
+      };
+    } else if (
+      isInPriorPlacementSideFamilyOnlyWindow(
+        history,
+        slotKey,
+        ctx.tonightIso,
+        undefined,
+        weekEntries,
+      )
+    ) {
+      breakdown.rr_side_family_repeat = {
+        raw: -1,
+        weighted: -48,
+        note: `Different RR on same side in last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} placements`,
       };
     }
   }

@@ -313,7 +313,26 @@ export function isInPriorPlacementSameAreaWindow(
   return priorPlacements.some((ui) => placementRepeatKeysMatch(slotKey, ui));
 }
 
-/** Engine hard exclude — same area or RR side-family (MRR vs WRR cross-station) in last N placements. */
+/**
+ * RR side-family only (e.g. WRR8 in trail, candidate WRR6) — not same RR number.
+ * Engine soft penalty; never a hard exclude (coverage must still complete).
+ */
+export function isInPriorPlacementSideFamilyOnlyWindow(
+  history: ZoneDetailEntry | null,
+  slotKey: string,
+  beforeIso?: string,
+  window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+): boolean {
+  const priorPlacements = getMergedPlacementSequence(history, window, beforeIso, weekEntries);
+  return priorPlacements.some(
+    (ui) =>
+      placementRepeatKeysConflict(slotKey, ui) &&
+      !placementRepeatKeysMatch(slotKey, ui),
+  );
+}
+
+/** Strict rotation conflict — same area or RR side-family (diagnostics / legacy). */
 export function isInPriorPlacementWindow(
   history: ZoneDetailEntry | null,
   slotKey: string,

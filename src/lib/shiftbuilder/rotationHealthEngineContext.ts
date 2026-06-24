@@ -30,7 +30,7 @@ import {
   getMergedPlacementSequence,
   getSpreadPlacementCounts,
   getSpreadPlacementKeys,
-  isInPriorPlacementWindow,
+  isInPriorPlacementSameAreaWindow,
   isSlotInPlacementSequence,
   LAST5_SOFT_TRAIL_COUNT,
   PLACEMENT_SPREAD_NIGHTS,
@@ -372,7 +372,7 @@ export function buildHealthOptimizedDraft(
       const tmHistory = histories[c.tmId] ?? null;
       const tmWeekEntries = weekEntriesForTm(scopedWeek, c.tmId, tonightIso);
       if (
-        isInPriorPlacementWindow(
+        isInPriorPlacementSameAreaWindow(
           tmHistory,
           slotKey,
           tonightIso,
@@ -431,7 +431,7 @@ export function buildHealthOptimizedDraft(
         if (usedTmIds.has(c.tmId)) return false;
         const tmHistory = histories[c.tmId] ?? null;
         const tmWeekEntries = weekEntriesForTm(scopedWeek, c.tmId, tonightIso);
-        return !isInPriorPlacementWindow(
+        return !isInPriorPlacementSameAreaWindow(
           tmHistory,
           slotKey,
           tonightIso,
