@@ -6,8 +6,8 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 
-import { PlacementFitChip } from "./PlacementFitChip";
-import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import {
   type BreakGroup,
@@ -159,11 +159,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
 
       <div
         className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-2.5 pb-2"
-        onDoubleClick={(e) => {
-          if (!isLocked && onCardClick) {
-            handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
-          }
-        }}
+        {...(onCardClick ? assignZoneOpenHandlers(slotKey, onCardClick, isLocked) : {})}
       >
         <SlotAssignmentBody
           state={assignmentState}
@@ -172,6 +168,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           isDuplicate={isDuplicate}
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
+          criticalRepeat={isCriticalRepeatFit(fitChip)}
           nameSizeOverride={showDigitalAssists ? 18 : 16}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {

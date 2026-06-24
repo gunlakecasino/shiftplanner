@@ -26,7 +26,6 @@ import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
-import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
 import {
   PLACEMENT_SPREAD_NIGHTS,
@@ -274,17 +273,8 @@ export interface PlacementPadProps {
 
 const PAD_W = 340;
 const PAD_MAX_HEIGHT = 640;
-const TABLET_SHEET_HEIGHT_RATIO = 0.42;
-const TABLET_SHEET_MAX_HEIGHT = 460;
 const LAST5_COUNT = 5;
 const Z9_STAT_RED = "#ff3b30"; // iOS red
-
-function computeTabletBottomSheetStyle(pickerOpen = false): React.CSSProperties {
-  const vv = window.visualViewport;
-  const h = vv?.height ?? window.innerHeight;
-  const maxH = pickerOpen ? Math.min(Math.round(h * 0.58), 560) : Math.min(Math.round(h * TABLET_SHEET_HEIGHT_RATIO), TABLET_SHEET_MAX_HEIGHT);
-  return { position: "fixed", left: 0, right: 0, bottom: 0, width: "100%", zIndex: 2147483635, maxHeight: maxH, display: "flex", flexDirection: "column", overflow: "hidden" };
-}
 
 function anchorClass(anchor: PlacementPadAnchor): string {
   if (anchor === "left") return "placement-pad absolute top-0 right-full mr-1.5";
@@ -311,15 +301,17 @@ function computePortalStyle(hostId: string, anchor: PlacementPadAnchor): React.C
   return { ...base, top };
 }
 
-export function usePortalPlacementStyle(hostId: string | undefined, anchor: PlacementPadAnchor, tabletPickerOpen = false): React.CSSProperties | null {
+export function usePortalPlacementStyle(hostId: string | undefined, anchor: PlacementPadAnchor, _tabletPickerOpen = false): React.CSSProperties | null {
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
   const rafRef = useRef<number | null>(null);
-  const tabletSheet = isTabletTouchDevice();
   const update = useCallback(() => {
     if (!hostId) { setStyle(null); return; }
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; setStyle(tabletSheet ? computeTabletBottomSheetStyle(tabletPickerOpen) : computePortalStyle(hostId, anchor)); });
-  }, [hostId, anchor, tabletSheet, tabletPickerOpen]);
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setStyle(computePortalStyle(hostId, anchor));
+    });
+  }, [hostId, anchor]);
   useLayoutEffect(() => { update(); window.addEventListener("resize", update); window.addEventListener("scroll", update, true); const vv = window.visualViewport; if (vv) vv.addEventListener("resize", update); return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); if (vv) vv.removeEventListener("resize", update); }; }, [update]);
   return style;
 }
@@ -340,7 +332,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const tasks = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
   const isRestroomSide = /^[MW]RR\d+$/.test(slotKey);
   const isDock = presentation === "dock";
-  const padLarge = isDock || (isTabletTouchDevice() && !!hostId);
+  const padLarge = isDock;
 
   // Original heavy logic kept (history, rotation, xAI, fit)
   const currentIso = nightIsoFromDate(selectedDay.date);
@@ -372,7 +364,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const showTasksPane = !isDock || dockTab === "tasks";
   const showIntelPane = !isDock || dockTab === "intel";
   const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
-  const tabletBottomSheet = !isDock && isTabletTouchDevice() && !!hostId && !!portalStyle;
   const usePortal = !isDock && !!hostId && !!portalStyle;
 
   const handleMoreDetails = React.useCallback(() => {
@@ -754,7 +745,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const outer = (
     <motion.div
-      className={`placement-pad no-print ${isDock ? "placement-dock-inner h-full" : usePortalLocal ? "fixed" : anchorClass(anchor)} ${tabletBottomSheet ? "sb-tablet-bottom-sheet" : ""} flex flex-col overflow-hidden`}
+      className={`placement-pad no-print ${isDock ? "placement-dock-inner h-full" : usePortalLocal ? "fixed" : anchorClass(anchor)} flex flex-col overflow-hidden`}
       style={
         isDock 
           ? { display: "flex", flexDirection: "column", height: "100%", width: "100%" } 
@@ -770,15 +761,13 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       }
       onClick={e => e.stopPropagation()}
     >
-      {tabletBottomSheet && <div className="sb-pad-handle" aria-hidden />}
       {refinedCard}
     </motion.div>
   );
 
   if (isDock) return outer;
   if (usePortalLocal && typeof document !== "undefined") {
-    const content = tabletBottomSheet ? (<><div className="sb-pad-backdrop no-print" onClick={e => { e.stopPropagation(); onClose(); }} />{outer}</>) : outer;
-    return createPortal(content, document.body);
+    return createPortal(outer, document.body);
   }
   return outer;
 };

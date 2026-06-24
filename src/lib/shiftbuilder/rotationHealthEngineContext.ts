@@ -667,12 +667,20 @@ export function computeCandidatePickerHealthPoints(
 ): number {
   const {
     slotKey,
+    last5,
+  } = input;
+
+  const priorThree = last5.slice(0, 3);
+  if (priorThree.includes(slotKey)) {
+    return 50;
+  }
+
+  const {
     tonightIso,
     history,
     spreadCounts,
     spreadKeys,
     timesInSpread,
-    last5,
     weekRepeat,
     weekNightsWorked,
     weekUniqueSlots,
@@ -725,6 +733,7 @@ export function computeCandidatePickerHealthPoints(
 
   if (fitVerdict === "acceptable") score = Math.min(score, 84);
   else if (fitVerdict === "questionable") score = Math.min(score, 72);
+  else if (fitVerdict === "critical_repeat") score = Math.min(score, 50);
   else if (fitVerdict === "needs_swap") score = Math.min(score, 48);
   else if (fitVerdict === "poor_fit") score = Math.min(score, 20);
 
@@ -747,14 +756,17 @@ function formatCandidatePickerFactLine(args: {
       : `${args.daysSinceInSlot}d since`;
   const trail =
     args.last5Index >= 0 ? `last-5 #${args.last5Index + 1}` : "not in last-5";
+  const priorThreeCritical =
+    args.last5Index >= 0 && args.last5Index < 3 ? "prior-3 critical" : null;
   return [
     `${args.timesInSpread}× ${args.slotKey} last-30`,
     recency,
     `wk×${args.weekRepeat} this slot`,
     `${args.gapCount} spread gaps`,
     trail,
+    priorThreeCritical,
     `${args.weekNightsWorked} grave nights this wk`,
-  ].join(" · ");
+  ].filter(Boolean).join(" · ");
 }
 
 /** Sort picker rows: healthPoints desc, then history/repeat tie-breakers. */
@@ -863,10 +875,11 @@ export function applyGranularHealthToFitMap(
 /** Map granular picker points to a verdict band for row badge color. */
 export function pickerVerdictFromHealthPoints(
   points: number,
-): "strong_fit" | "acceptable" | "questionable" | "needs_swap" | "poor_fit" {
+): PlacementFitVerdict {
   if (points >= 90) return "strong_fit";
   if (points >= 76) return "acceptable";
-  if (points >= 48) return "questionable";
+  if (points > 50) return "questionable";
+  if (points === 50) return "critical_repeat";
   if (points >= 20) return "needs_swap";
   return "poor_fit";
 }

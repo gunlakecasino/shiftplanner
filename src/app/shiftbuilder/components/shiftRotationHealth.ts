@@ -119,6 +119,7 @@ export const VERDICT_POINTS: Record<PlacementFitVerdict, number> = {
   strong_fit: 95,
   acceptable: 84,
   questionable: 62,
+  critical_repeat: 50,
   needs_swap: 45,
   poor_fit: 0,
   open_gap: 0,
@@ -184,6 +185,7 @@ export type ShiftRotationHealth = {
     strong_fit: number;
     acceptable: number;
     questionable: number;
+    critical_repeat: number;
     needs_swap: number;
     poor_fit: number;
     open_gap: number;
@@ -258,6 +260,7 @@ export function computeShiftRotationHealth(
     strong_fit: 0,
     acceptable: 0,
     questionable: 0,
+    critical_repeat: 0,
     needs_swap: 0,
     poor_fit: 0,
     open_gap: 0,
@@ -609,6 +612,7 @@ export function computeDailyHealthPercent(
     strong_fit: 0,
     acceptable: 0,
     questionable: 0,
+    critical_repeat: 0,
     needs_swap: 0,
     poor_fit: 0,
     open_gap: 0,

@@ -17,7 +17,7 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
-import { PlacementFitChip } from "./PlacementFitChip";
+import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -31,7 +31,7 @@ import {
   cardBodyInteriorStyle,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
-import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers } from "./CardTaskZone";
 
 export interface AuxCardProps {
   def: AuxDef;
@@ -424,7 +424,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       >
         <div
           className="sb-card-assign-zone shrink-0"
-          onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+          {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
         >
           <SlotAssignmentBody
             state={assignmentState}
@@ -434,6 +434,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             otherSlotsForTm={otherSlotsForTm}
             inviteSize="aux"
             emptyPresentation="label"
+            criticalRepeat={isCriticalRepeatFit(fitChip)}
             nameSizeOverride={
               hasTM
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)

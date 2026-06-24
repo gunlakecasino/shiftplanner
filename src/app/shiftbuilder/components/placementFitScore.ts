@@ -3,6 +3,7 @@ import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsight
 import {
   formatPlacementUiLabel,
   isSwapEligibleSlotKey,
+  PRIOR_PLACEMENT_CRITICAL_WINDOW,
   type PlacementRotationBasics,
 } from "./placementPadHelpers";
 import { areSwapLanePeers, isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
@@ -41,7 +42,12 @@ export type PlacementFitScoreInput = {
   actionableGapSlots?: string[];
   /** This-week (recent 7-night + current) repeat count for *this specific TM* in *this slotKey*. */
   weekRepeatThisSlot?: number;
+  /** Tonight's slot appears in the TM's prior N placement trail (before tonight). */
+  inPriorPlacementWindow?: boolean;
 };
+
+/** Hard cap when a TM is back in an area from their last 3 placements. */
+export const PRIOR_PLACEMENT_CRITICAL_HEALTH_POINTS = 50;
 
 export function signalNumber(
   signals: Record<string, number | string> | undefined,
@@ -117,6 +123,8 @@ export function computePlacementHealthPoints(
       return 0;
     case "needs_swap":
       return 44;
+    case "critical_repeat":
+      return PRIOR_PLACEMENT_CRITICAL_HEALTH_POINTS;
     case "questionable": {
       let p = 68;
       if (week >= 3) p -= 14;
@@ -239,6 +247,21 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
       "poor_fit",
       `${name} should not stay on ${slotLabel} tonight.`,
       buildFactLine(["Not eligible — grave pool or gender rules"]),
+    );
+  }
+
+  if (input.inPriorPlacementWindow) {
+    const priorTrail = `last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} placements`;
+    return finishFit(
+      input,
+      "critical_repeat",
+      `${name} on ${slotLabel} — critical repeat (${priorTrail}). Rotation health capped at 50%.`,
+      buildFactLine([
+        `in prior-${PRIOR_PLACEMENT_CRITICAL_WINDOW} trail`,
+        input.timesInSpread !== undefined && input.timesInSpread > 0
+          ? `${input.timesInSpread}× ${slotLabel} in last 30`
+          : null,
+      ]),
     );
   }
 

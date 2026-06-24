@@ -4,6 +4,8 @@ export const PlacementFitVerdictSchema = z.enum([
   "strong_fit",
   "acceptable",
   "questionable",
+  /** TM placed in an area from their prior 3 placements — hard 50% rotation health. */
+  "critical_repeat",
   "poor_fit",
   "needs_swap",
   /** Open / unassigned slot — not an engine placement recommendation. */
@@ -95,6 +97,8 @@ export function fitVerdictLabel(verdict: PlacementFitVerdict): string {
       return "Okay";
     case "questionable":
       return "Check";
+    case "critical_repeat":
+      return "Critical";
     case "poor_fit":
     case "needs_swap":
       return "Invalid";
@@ -132,6 +136,13 @@ export function fitVerdictStyles(verdict: PlacementFitVerdict): {
         bg: "#FF8D28",
         text: "#FFFFFF",
         badge: "bg-[#FF8D28] text-white",
+      };
+    case "critical_repeat":
+      return {
+        border: "transparent",
+        bg: "#B91C1C",
+        text: "#FFFFFF",
+        badge: "bg-[#B91C1C] text-white",
       };
     case "poor_fit":
     case "needs_swap":

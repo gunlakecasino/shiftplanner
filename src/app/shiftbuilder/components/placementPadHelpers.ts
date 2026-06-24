@@ -159,6 +159,18 @@ export function nightIsoFromDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Prior-placement window for critical repeat (same area as last N graves). */
+export const PRIOR_PLACEMENT_CRITICAL_WINDOW = 3;
+
+export function isInPriorPlacementWindow(
+  history: ZoneDetailEntry | null,
+  slotKey: string,
+  beforeIso?: string,
+  window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
+): boolean {
+  return getLastPlacementSequence(history, window, beforeIso).includes(slotKey);
+}
+
 /**
  * Last N placement nights, newest → oldest (most recent first).
  * Includes duplicate locations (e.g. Z1, Z1, Z1, Z4, ADM).

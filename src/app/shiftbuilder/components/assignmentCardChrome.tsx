@@ -7,6 +7,40 @@ import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
+import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
+
+const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
+
+/** Subtle inline mark beside a TM name when prior-3 placement repeat caps health at 50%. */
+export function CriticalRepeatNameMark({
+  title,
+}: {
+  title?: string;
+}) {
+  const tip =
+    title ??
+    `${fitVerdictLabel("critical_repeat")} — same area as one of their last 3 placements (50% rotation health)`;
+
+  return (
+    <span
+      className="sb-critical-repeat-mark no-print inline-flex shrink-0 items-center justify-center rounded-full font-black leading-none text-white"
+      style={{
+        width: 10,
+        height: 10,
+        fontSize: 7,
+        background: CRITICAL_REPEAT_MARK_COLOR,
+        boxShadow: "0 0 0 1px rgba(255,255,255,0.45)",
+        marginTop: "0.12em",
+      }}
+      title={tip}
+      aria-label={tip}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      !
+    </span>
+  );
+}
 
 /** Shared typography scale for assignment card name rows. */
 export type CardNameScale = "zone" | "rr" | "aux";
@@ -374,6 +408,7 @@ export function SlotAssignmentBody({
   inviteSize = "zone",
   emptyPresentation = "invite",
   nameSizeOverride,
+  criticalRepeat = false,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -386,6 +421,8 @@ export function SlotAssignmentBody({
   emptyPresentation?: "invite" | "label";
   /** Aux cards shrink name when tasks are present. */
   nameSizeOverride?: number;
+  /** Prior-3 placement repeat — show inline mark beside TM name. */
+  criticalRepeat?: boolean;
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -409,16 +446,19 @@ export function SlotAssignmentBody({
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
             transition={premiumSpring}
           >
-            <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
-              style={{
-                fontSize,
-                lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {state.proposedName}
-            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span
+                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
+                style={{
+                  fontSize,
+                  lineHeight: 1.02,
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                }}
+              >
+                {state.proposedName}
+              </span>
+              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
+            </div>
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}
@@ -433,16 +473,19 @@ export function SlotAssignmentBody({
           </motion.div>
         ) : (
           <div key="draft" className="flex flex-col min-w-0">
-            <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
-              style={{
-                fontSize,
-                lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {state.proposedName}
-            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span
+                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
+                style={{
+                  fontSize,
+                  lineHeight: 1.02,
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                }}
+              >
+                {state.proposedName}
+              </span>
+              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
+            </div>
             {isDuplicate && showDigitalAssists ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} />
             ) : null}
@@ -482,6 +525,7 @@ export function SlotAssignmentBody({
             >
               {state.tmName}
             </span>
+            {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}
@@ -502,6 +546,7 @@ export function SlotAssignmentBody({
             >
               {state.tmName}
             </span>
+            {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate && showDigitalAssists ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} />
             ) : null}

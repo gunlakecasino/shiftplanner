@@ -180,11 +180,7 @@ import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
 import { BuilderPinnedFooter } from "./components/BuilderPinnedFooter";
 import PlacementPad from "./components/PlacementPad";
-import PlacementDock from "./components/placement-dock/PlacementDock";
-import {
-  placementDockStageRightInset,
-  rosterPanelWidth,
-} from "@/lib/shiftbuilder/tabletDevice";
+import { rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { isPublishedOnlyViewer } from "./lib/viewerNightPolicy";
 import {
@@ -1866,23 +1862,22 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
-    const dockInset = tablet && selectedSlotKey ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
       const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: hGutter + dockInset,
+        right: hGutter,
         bottom: builderStageBottomInsetPx(),
         left: hGutter,
       };
     }
     return {
       top: stageTopInsetPx(),
-      right: (tablet ? 32 : 40) + dockInset,
+      right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
-  }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey]);
+  }, [rosterOpen, isBuilderLiveCanvas]);
 
   const {
     setZoomMode,
@@ -7858,9 +7853,7 @@ function AuthedShiftBuilder() {
                     isDraftMode,
                     draftAssignments,
                   };
-                  return isTabletTouchDevice() ? (
-                    <PlacementDock {...weeklyPadProps} />
-                  ) : (
+                  return (
                     <PlacementPad
                       {...weeklyPadProps}
                       anchor="right"

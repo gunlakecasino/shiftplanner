@@ -61,7 +61,7 @@ function breakdownTitle(
       : "";
   const lines = [
     `Rotation health % = placed TMs only (open gaps do not reduce it).`,
-    `Granular fit: spread, last-5 position, week repeat, recency, gap coverage (one decimal).`,
+    `Granular fit: spread, last-5 position, prior-3 critical (50%), week repeat, recency, gap coverage (one decimal).`,
     `Tonight fit (per-slot granular avg). Week = ${GRAVE_WEEK_LABEL} fit avg + repeat policy.`,
     `Target: ${ROTATION_HEALTH_TARGET}%`,
     "",
@@ -76,7 +76,7 @@ function breakdownTitle(
       : "",
     `${scoredCount} placed scored · ${openGaps} open gap${openGaps === 1 ? "" : "s"} (info only)`,
     "",
-    `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
+    `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.critical_repeat} critical · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
   ];
   return lines.join("\n");
 }

@@ -13,7 +13,7 @@ import CoverageBar from "./CoverageBar";
 import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import { PlacementFitChip } from "./PlacementFitChip";
+import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
@@ -21,7 +21,7 @@ import {
   SlotAssignmentBody,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
-import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers } from "./CardTaskZone";
 
 export interface RRCardProps {
   def: any;
@@ -84,6 +84,7 @@ const RRSide: React.FC<{
   tmConflictSlots?: Record<string, string[]>;
   showDigitalAssists?: boolean;
   coveredByNames?: string[];
+  fitChip?: PrerenderedPlacementFit | null;
 }> = ({
   slotKey,
   assignment,
@@ -103,6 +104,7 @@ const RRSide: React.FC<{
   tmConflictSlots,
   showDigitalAssists = false,
   coveredByNames = [],
+  fitChip,
 }) => {
   const a = assignment || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
@@ -150,7 +152,7 @@ const RRSide: React.FC<{
     >
       <div
         className={`sb-card-assign-zone min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}
-        onDoubleClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
+        {...assignZoneOpenHandlers(slotKey, onClick, isLocked)}
       >
         <SlotAssignmentBody
           state={assignmentState}
@@ -159,6 +161,7 @@ const RRSide: React.FC<{
           isDuplicate={isDuplicate}
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
+          criticalRepeat={isCriticalRepeatFit(fitChip)}
           onUnassignedClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -412,6 +415,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             tasks={wRegular}
             draftInfo={draftInfoW}
             coveredByNames={wCoveredBy}
+            fitChip={fitChipW}
             {...sideProps}
           />
         )}
@@ -437,6 +441,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             tasks={mRegular}
             draftInfo={draftInfoM}
             coveredByNames={mCoveredBy}
+            fitChip={fitChipM}
             {...sideProps}
           />
         )}

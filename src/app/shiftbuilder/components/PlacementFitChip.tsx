@@ -10,6 +10,12 @@ import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { XaiFit } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import { premiumSpring } from "@/lib/premiumSpring";
 
+export function isCriticalRepeatFit(
+  fit?: PrerenderedPlacementFit | null,
+): boolean {
+  return fit?.fitVerdict === "critical_repeat";
+}
+
 export type PlacementFitChipProps = {
   /** Same prerender the placement pad instant block uses. */
   fit?: PrerenderedPlacementFit | null;
@@ -39,9 +45,14 @@ export function PlacementFitChip({ fit, xaiFit, compact = false }: PlacementFitC
     ? (xaiFit?.headline ? xaiFit.headline.slice(0, 20) + (xaiFit.headline.length > 20 ? "…" : "") : "xAI")
     : label;
 
-  const isFitVerdict = ["strong_fit", "acceptable", "questionable", "poor_fit", "needs_swap"].includes(
-    effectiveVerdict,
-  );
+  const isFitVerdict = [
+    "strong_fit",
+    "acceptable",
+    "questionable",
+    "critical_repeat",
+    "poor_fit",
+    "needs_swap",
+  ].includes(effectiveVerdict);
 
   // Card rotation-health glance: color-only dot (verdict label stays in tooltip).
   if (!isXai && isFitVerdict) {

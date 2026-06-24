@@ -13,7 +13,8 @@ import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
-import { PlacementFitChip } from "./PlacementFitChip";
+import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
+import { CriticalRepeatNameMark } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
@@ -28,7 +29,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
-import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, padUsesSingleTap } from "./CardTaskZone";
 
 export interface ZoneCardProps {
   def: any;
@@ -210,7 +211,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         {/* Large name / covered area */}
         <div
           className="sb-card-assign-zone px-3.5 pt-1.5 pb-2 shrink-0"
-          onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+          {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
         >
           {assignmentState.kind === "covered" ? (
             <CoveredByOverlay
@@ -222,10 +223,13 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           ) : (
             <div className="min-w-0">
               <h3
-                className={`text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
+                className={`flex items-center gap-1 min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
                 style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
               >
-                {displayName}
+                <span className="truncate">{displayName}</span>
+                {showDigitalAssists && isCriticalRepeatFit(fitChip) ? (
+                  <CriticalRepeatNameMark />
+                ) : null}
               </h3>
               {assignmentState.kind === "draft" && assignmentState.previousName ? (
                 <span
@@ -244,12 +248,12 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
             <div
               className="px-3.5 py-2.5 shrink-0"
-              onDoubleClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+              {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
             >
               <UnassignedInvite
                 size="zone"
                 onClick={(e) => e.stopPropagation()}
-                title="Double-click to open placement · drop to assign"
+                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · drop to assign`}
               />
             </div>
           </>
