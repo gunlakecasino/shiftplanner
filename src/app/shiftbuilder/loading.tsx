@@ -1,8 +1,7 @@
-import { BuilderLoadingShell } from "./components/builderPrimitives";
-
 /**
- * Route-level loading shell — matches the live canvas chrome while the client bundle loads.
+ * Route transitions defer to shiftbuilder/layout OpsAuthGate (pin-over-skeleton).
+ * Avoid stacking a second BuilderLoadingShell here.
  */
 export default function ShiftBuilderLoading() {
-  return <BuilderLoadingShell />;
+  return null;
 }

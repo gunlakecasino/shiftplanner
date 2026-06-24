@@ -2,8 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
-import { OpsAuthGate } from "../components/OpsAuthGate";
+import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
 import { BuilderLoadingShell } from "../components/builderPrimitives";
 import { SettingsShell } from "./SettingsShell";
@@ -19,26 +18,22 @@ function SettingsGate() {
     }
   }, [isLoading, permissions?.canAccessSudo, router]);
 
+  if (!permissions?.canAccessSudo) {
+    return (
+      <BuilderLoadingShell
+        label="REDIRECTING"
+        sublabel="Team operators use the deployment canvas"
+      />
+    );
+  }
+
   return (
-    <OpsAuthGate loadingSublabel="Preparing settings">
-      {!permissions?.canAccessSudo ? (
-        <BuilderLoadingShell
-          label="REDIRECTING"
-          sublabel="Team operators use the deployment canvas"
-        />
-      ) : (
-        <PostPinRouteGuard>
-          <SettingsShell />
-        </PostPinRouteGuard>
-      )}
-    </OpsAuthGate>
+    <PostPinRouteGuard>
+      <SettingsShell />
+    </PostPinRouteGuard>
   );
 }
 
 export default function SettingsClient() {
-  return (
-    <OpsAuthProvider>
-      <SettingsGate />
-    </OpsAuthProvider>
-  );
+  return <SettingsGate />;
 }

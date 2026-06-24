@@ -17,18 +17,12 @@
 
 import dynamic from "next/dynamic";
 import { QueryProvider } from "./providers";
-import { BuilderLoadingShell } from "./components/builderPrimitives";
 import PwaRegister from "./components/PwaRegister";
 
-const ShiftBuilderClient = dynamic(
-  () => import("./ShiftBuilderClient"),
-  {
-    ssr: false,
-    loading: () => (
-      <BuilderLoadingShell />
-    ),
-  }
-);
+const ShiftBuilderClient = dynamic(() => import("./ShiftBuilderClient"), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function ShiftBuilderPage() {
   return (

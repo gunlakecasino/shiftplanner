@@ -62,12 +62,12 @@ import type { EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 // other heavy modules) as required from the giant Client at module evaluation time.
 // XAISphere import removed — was creating a static dependency chain through ./xai → @/lib/xai barrel → grokIntelligence.ts
 // If the sphere is still needed, it should be dynamically imported inside the render where the panel is toggled.
-import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
+import { useOpsAuth } from "@/lib/auth/opsAuth";
 import {
   logDeploymentChange,
   type DeploymentChangeAction,
 } from "@/lib/shiftbuilder/deploymentChangeLog";
-import { OpsAuthGate } from "./components/OpsAuthGate";
+
 import { PostPinRouteGuard } from "./components/PostPinRouteGuard";
 import {
   PrintCommandCenter,
@@ -83,8 +83,7 @@ import {
   tonightPrintConfig,
   fullWeekPrintConfig,
 } from "./print/printConfigUtils";
-import { buildOverviewArtboardHTML, type OverviewNight } from "./print/printOverviewTables";
-import { buildCoverPageArtboardHTML } from "./print/printCoverPage";
+import type { OverviewNight } from "./print/printOverviewTables";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 // ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
 import {
@@ -3512,11 +3511,8 @@ function AuthedShiftBuilder() {
       });
 
     const activeDays = config.days.filter(d => d.printDeploy || d.printBreaks);
-    const overviewDays = config.includeOverview ? config.days.filter(d => d.inOverview) : [];
-    const hasOverview = config.includeOverview && overviewDays.length > 0;
-    const hasCover    = config.includeCoverPage;
 
-    if (activeDays.length === 0 && !hasOverview && !hasCover) {
+    if (activeDays.length === 0) {
       showToast(exportMode ? "Nothing to export. (no pages selected)" : "No pages selected to print.", "error");
       return;
     }
@@ -3555,55 +3551,6 @@ function AuthedShiftBuilder() {
     };
 
     try {
-      // ── Phase 2: fetch overview data directly from Supabase ──────────────────
-      let overviewHTML: string | null = null;
-      let coverHTML: string | null = null;
-
-      if (hasOverview) {
-        setPrintProgress({ current: pageProgress, total: totalPages, label: "Building overview table…" });
-        try {
-          const { getActiveTeamMembers, getNightIdForDate, getNightAssignments } = await import("@/lib/shiftbuilder/data");
-          const allTms = await getActiveTeamMembers();
-          const tmNames = new Map(allTms.map((tm: any) => [tm.id, tm.name || tm.id]));
-
-          const overviewNights: OverviewNight[] = [];
-          for (const dayConf of overviewDays.slice().sort((a, b) => a.dayIndex - b.dayIndex)) {
-            const def = DAY_DEFS[dayConf.dayIndex];
-            const nightId = def ? await getNightIdForDate(def.date) : null;
-            const assignments: Record<string, { tmId: string; tmName: string; breakGroup?: number } | null> = {};
-            if (nightId) {
-              const rows = await getNightAssignments(nightId);
-              rows.forEach(row => {
-                try {
-                  const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-                  if (row.tmId) {
-                    assignments[uiKey] = {
-                      tmId: row.tmId,
-                      tmName: row.tmName || tmNames.get(row.tmId) || row.tmId,
-                      breakGroup: row.breakGroup ?? 0,
-                    };
-                  }
-                } catch { /* unmappable slot — skip */ }
-              });
-            }
-            overviewNights.push({ dayIndex: dayConf.dayIndex, assignments });
-          }
-          overviewHTML = buildOverviewArtboardHTML(overviewNights, DAY_DEFS);
-        } catch (ovwErr) {
-          console.warn("[shiftbuilder] overview fetch error — skipping overview page", ovwErr);
-          overviewHTML = null;
-        }
-        if (overviewHTML) bumpProgress("Overview table");
-      }
-
-      // ── Build cover page HTML (no async needed) ───────────────────────────────
-      if (hasCover) {
-        coverHTML = buildCoverPageArtboardHTML(DAY_DEFS, config, totalPages);
-        bumpProgress("Cover page");
-      }
-
-
-
       // Persist aux layout so print capture sees custom slots; overlay live board for active night.
       await flushAuxLayoutSave().catch(() => {});
 
@@ -3621,8 +3568,8 @@ function AuthedShiftBuilder() {
         config,
         dayDefs: DAY_DEFS,
         activeDays,
-        coverHTML,
-        overviewHTML,
+        coverHTML: null,
+        overviewHTML: null,
         liveOverlaysByDay,
         draftAssignments: isDraftMode ? draftAssignments : undefined,
         isDraftMode,
@@ -8535,7 +8482,7 @@ function AuthedShiftBuilder() {
         open={isPrintCenterOpen}
         onClose={() => setIsPrintCenterOpen(false)}
         onPrint={handlePrintWithConfig}
-        onExport={(config) => handlePrintWithConfig(config, { exportMode: true })}
+
         onPreviewSheet={handlePreviewSheet}
         DAY_DEFS={DAY_DEFS}
         selectedDayIndex={selectedDayIndex}
@@ -8581,24 +8528,12 @@ function AuthedShiftBuilder() {
 }
 
 // ---------------------------------------------------------------------------
-// Public entry — wraps everything with OpsAuthProvider and shows the PIN gate
-// until a valid operator authenticates. After auth, renders the full experience.
-// This is the minimal, non-disruptive gate the operator requested.
+// Public entry — auth gate lives in shiftbuilder/layout.tsx (pin over skeleton).
 // ---------------------------------------------------------------------------
 export default function ShiftBuilder() {
   return (
-    <OpsAuthProvider>
-      <ShiftBuilderGate />
-    </OpsAuthProvider>
-  );
-}
-
-function ShiftBuilderGate() {
-  return (
-    <OpsAuthGate loadingSublabel="Preparing computer context">
-      <PostPinRouteGuard>
-        <AuthedShiftBuilder />
-      </PostPinRouteGuard>
-    </OpsAuthGate>
+    <PostPinRouteGuard>
+      <AuthedShiftBuilder />
+    </PostPinRouteGuard>
   );
 }

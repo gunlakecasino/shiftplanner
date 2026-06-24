@@ -7,6 +7,7 @@ import {
   getPermissionsForRole,
   mergePermissions,
 } from "./permissions";
+import { humanizeLoginError } from "./loginErrors";
 
 export type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
 import type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
@@ -19,7 +20,10 @@ const SESSION_REFRESH_MS = 45_000;
 interface OpsAuthContextValue {
   user: OpsUser | null;
   isAuthenticated: boolean;
+  /** True only during initial /api/auth/session hydrate. */
   isLoading: boolean;
+  /** True while POST /api/auth/verify-pin is in flight — does not unmount PinGate. */
+  isLoggingIn: boolean;
   pinChangeToken: string | null;
 
   login: (pin: string) => Promise<{
@@ -86,6 +90,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<OpsUser | null>(null);
   const [pinChangeToken, setPinChangeToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const userRef = useRef<OpsUser | null>(null);
   const refreshInFlightRef = useRef(false);
 
@@ -180,7 +185,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, pinChangeToken, refreshSession]);
 
   const login = useCallback(async (pin: string) => {
-    setIsLoading(true);
+    setIsLoggingIn(true);
     try {
       const res = await fetch("/api/auth/verify-pin", {
         method: "POST",
@@ -194,7 +199,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || !json.success || !json.user) {
         return {
           success: false,
-          error: json.error || `Invalid credentials (HTTP ${res.status})`,
+          error: humanizeLoginError(json.error, res.status),
         };
       }
 
@@ -229,10 +234,12 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: unknown) {
       return {
         success: false,
-        error: `Network error: ${err instanceof Error ? err.message : "Failed to reach server"}`,
+        error: humanizeLoginError(
+          err instanceof Error ? err.message : "Failed to reach server",
+        ),
       };
     } finally {
-      setIsLoading(false);
+      setIsLoggingIn(false);
     }
   }, [applySessionUser, refreshSession]);
 
@@ -288,6 +295,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     user,
     isAuthenticated: !!user,
     isLoading,
+    isLoggingIn,
     pinChangeToken,
     login,
     completePinChange,

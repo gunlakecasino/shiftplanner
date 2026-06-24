@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { pinPolicyError } from "@/lib/auth/pinPolicy";
@@ -9,9 +9,10 @@ import { BuilderBusyLabel } from "./builderPrimitives";
 
 type Props = {
   operatorName: string;
+  onComplete?: () => void;
 };
 
-export function PinChangeGate({ operatorName }: Props) {
+export function PinChangeGate({ operatorName, onComplete }: Props) {
   const { user, pinChangeToken, completePinChange, logout } = useOpsAuth();
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -19,6 +20,11 @@ export function PinChangeGate({ operatorName }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const descId = useId();
+  const tempId = useId();
+  const newId = useId();
+  const confirmId = useId();
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);
@@ -40,7 +46,7 @@ export function PinChangeGate({ operatorName }: Props) {
     if (!canSubmit) return;
 
     if (newPin !== confirmPin) {
-      setError("PINs do not match");
+      setError("PINs do not match.");
       return;
     }
 
@@ -51,7 +57,7 @@ export function PinChangeGate({ operatorName }: Props) {
     }
 
     if (newPin === tempPin) {
-      setError("Choose a different PIN than your temporary one");
+      setError("Choose a different PIN than your temporary one.");
       return;
     }
 
@@ -73,7 +79,7 @@ export function PinChangeGate({ operatorName }: Props) {
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success || !json.user) {
-        setError(json.error || `PIN change failed (HTTP ${res.status})`);
+        setError(json.error || "Couldn't save your PIN. Try again.");
         return;
       }
 
@@ -93,8 +99,10 @@ export function PinChangeGate({ operatorName }: Props) {
         opsUserId: json.user.id,
         payload: { source: "pin_change", event: "personal_pin_set" },
       });
+
+      onComplete?.();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Network error");
+      setError(err instanceof Error ? err.message : "Network error. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -104,83 +112,97 @@ export function PinChangeGate({ operatorName }: Props) {
     value: string,
     onChange: (v: string) => void,
     label: string,
+    fieldId: string,
     ref?: React.RefObject<HTMLInputElement | null>,
   ) => (
     <div>
-      <label className="block text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">
+      <label htmlFor={fieldId} className="sb-auth-label">
         {label}
       </label>
       <input
         ref={ref}
+        id={fieldId}
         type="password"
         inputMode="numeric"
         pattern="[0-9]*"
         maxLength={6}
         value={value}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        className={cn(
-          "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-center",
-          "font-mono text-2xl tracking-[10px] text-zinc-100",
-          "focus:outline-none focus:border-emerald-500/60",
-        )}
+        className="sb-auth-input sb-auth-input--compact"
         disabled={submitting}
         autoComplete="off"
       />
+      <div className="sb-auth-slots" aria-hidden="true">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className={cn("sb-auth-slot", i < value.length && "sb-auth-slot--filled")}
+          />
+        ))}
+      </div>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center">
-      <div className="sb-overlay-backdrop sb-overlay-backdrop--fixed bg-[#111113]/90" />
-      <div
-        className={cn(
-          "sb-modal-enter relative w-full max-w-[420px] mx-4 rounded-2xl border border-zinc-800",
-          "bg-zinc-950/90 shadow-2xl shadow-black/60 overflow-hidden",
-        )}
-        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-      >
-        <div className="h-[3px] w-full bg-gradient-to-r from-emerald-500/70 via-emerald-400/50 to-emerald-500/70" />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+      className="sb-modal-enter sb-auth-card sb-auth-card--wide sb-auth-card--setup"
+      style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+    >
+      <div className="sb-auth-accent" aria-hidden="true" />
 
-        <div className="px-6 pt-6 pb-4">
-          <div className="font-mono text-[11px] tracking-[2px] text-zinc-500">GRAVE OPS</div>
-          <div className="text-xl font-semibold text-zinc-100 mt-0.5">Set your personal PIN</div>
-          <p className="text-[12px] text-zinc-400 mt-2 leading-relaxed">
-            Welcome, {operatorName}. Re-enter your temporary PIN, then choose a private 6-digit PIN.
-            Avoid sequences like 123456.
-          </p>
+      <div className="relative px-7 pt-7 pb-5">
+        <div className="flex items-start gap-4">
+          <div className="sb-auth-icon" aria-hidden="true">
+            <span className="ms" style={{ fontSize: 22 }}>
+              pin
+            </span>
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h2 id={titleId} className="sb-auth-title">
+              Set your personal PIN
+            </h2>
+            <p id={descId} className="sb-auth-subtitle mt-1.5">
+              Welcome, {operatorName}. Re-enter your temporary PIN, then choose a private
+              6-digit ops PIN. Avoid sequences like 123456.
+            </p>
+          </div>
         </div>
-
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
-          {pinField(tempPin, setTempPin, "TEMPORARY PIN (RE-ENTER)")}
-          {pinField(newPin, setNewPin, "NEW 6-DIGIT PIN", inputRef)}
-          {pinField(confirmPin, setConfirmPin, "CONFIRM PIN")}
-
-          {error && (
-            <div className="text-[11px] text-red-300 bg-red-950/50 border border-red-900/60 rounded-lg px-3 py-2 font-mono">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={cn(
-              "w-full rounded-xl py-3 text-sm font-medium",
-              canSubmit ? "bg-white text-black hover:bg-zinc-200" : "bg-zinc-800 text-zinc-500 cursor-not-allowed",
-            )}
-          >
-            {submitting ? <BuilderBusyLabel>SAVING PIN</BuilderBusyLabel> : "Save & continue"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="w-full text-center text-[12px] text-zinc-500 hover:text-zinc-300 py-1"
-          >
-            Sign out
-          </button>
-        </form>
       </div>
+
+      <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">
+        {pinField(tempPin, setTempPin, "Temporary PIN", tempId)}
+        {pinField(newPin, setNewPin, "New 6-Digit PIN", newId, inputRef)}
+        {pinField(confirmPin, setConfirmPin, "Confirm PIN", confirmId)}
+
+        {error ? (
+          <div role="alert" className="sb-auth-error">
+            {error}
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className={cn(
+            "sb-interactive sb-auth-primary sb-auth-primary--block",
+            canSubmit ? "sb-auth-primary--active" : "sb-auth-primary--disabled",
+          )}
+        >
+          {submitting ? <BuilderBusyLabel>SAVING PIN</BuilderBusyLabel> : "Save & continue"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="sb-interactive sb-auth-secondary sb-auth-secondary--ghost"
+        >
+          Sign out
+        </button>
+      </form>
     </div>
   );
 }

@@ -429,6 +429,33 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-b
 body.printing-dual-mode .print-dual-container .print-artboard .overlaps-section,
 body.golden-export-raster .print-dual-container .print-artboard .overlaps-section {
   margin-top: auto;
+  width: 100%;
+}
+
+/* Break sheet overlaps — align grid gutters with wave columns; center row labels */
+.print-stage-inner .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid {
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.print-stage-inner .print-artboard .sheet-footer,
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-footer,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-footer {
+  justify-content: center !important;
+  gap: 1.25rem !important;
+  text-align: center;
+}
+
+.print-stage-inner .print-artboard .sheet-footer > div,
+body.printing-dual-mode .print-dual-container .print-artboard .sheet-footer > div,
+body.golden-export-raster .print-dual-container .print-artboard .sheet-footer > div {
+  flex: 0 0 auto !important;
+  min-width: 0;
+  text-align: center;
 }
 
 /* ── Planning Worksheet variant ─────────────────────────────────────────── */

@@ -106,7 +106,7 @@ function OverlapRowsSection({
       <div className="space-y-2">
         {overlapRows.map((row) => (
           <div key={row.key}>
-            <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+            <div className="sb-overlap-row-meta flex items-end justify-center gap-2 mb-1.5 flex-wrap text-center">
               <div
                 className="font-black tabular-nums leading-none text-[22px] text-[#1C1C1E]"
                 style={{ fontFamily: "var(--font-atkinson)" }}
@@ -119,25 +119,23 @@ function OverlapRowsSection({
               >
                 {row.dayName}
               </div>
-            </div>
-            <div className="flex items-center gap-2">
               <div
-                className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]"
+                className="text-[10px] font-bold tracking-[0.35px] text-[#6B7280]"
                 style={{ fontFamily: "var(--font-atkinson)" }}
               >
                 {row.time}
               </div>
-              <div className="flex-1 grid grid-cols-6 gap-1.5 min-w-0">
-                {row.slots.map((slot) => (
-                  <div key={slot.key} className="relative h-full">
-                    <GoldenOverlapSlot
-                      slotKey={slot.key}
-                      tmName={slot.tmName}
-                      tasks={slot.tasks}
-                    />
-                  </div>
-                ))}
-              </div>
+            </div>
+            <div className="sb-overlap-row-grid grid grid-cols-6 gap-1 w-full min-w-0">
+              {row.slots.map((slot) => (
+                <div key={slot.key} className="relative h-full">
+                  <GoldenOverlapSlot
+                    slotKey={slot.key}
+                    tmName={slot.tmName}
+                    tasks={slot.tasks}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         ))}

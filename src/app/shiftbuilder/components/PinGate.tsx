@@ -1,147 +1,153 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getEffectivePermissions, useOpsAuth, type OpsUser } from "@/lib/auth/opsAuth";
 import { postPinDestination } from "@/lib/auth/postPinRoute";
-
 import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "./builderPrimitives";
-
-/**
- * PinGate — minimal 6-digit PIN entry for GRAVE Ops.
- * Matches the existing Velvet / Material Symbols aesthetic (dark zinc, Atkinson, ms icons).
- * Shown on first load until a valid operator authenticates.
- *
- * After successful PIN entry the parent (ShiftBuilderClient) will re-render
- * with the authenticated user available via useOpsAuth().
- */
 
 interface PinGateProps {
   onAuthenticated?: (user: OpsUser) => void;
 }
 
+function useFocusTrap(containerRef: React.RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    if (!active || !containerRef.current) return;
+
+    const root = containerRef.current;
+    const focusables = () =>
+      Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const nodes = focusables();
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [active, containerRef]);
+}
+
 export function PinGate({ onAuthenticated }: PinGateProps) {
-  const { login, isLoading: authLoading } = useOpsAuth();
+  const { login, isLoggingIn } = useOpsAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descId = useId();
+  const inputId = useId();
 
   const isComplete = pin.length === 6;
-  const submitting = isSubmitting || authLoading;
+  const submitting = isSubmitting || isLoggingIn;
 
-  // Auto-focus the PIN field on mount
+  useFocusTrap(dialogRef, true);
+
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, []);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!isComplete || submitting) return;
 
     setError(null);
     setIsSubmitting(true);
-    console.groupCollapsed("[PinGate] Login attempt");
-    console.log("Submitting PIN (length):", pin.length);
 
     const result = await login(pin);
 
-    console.log("Login result:", result);
-    console.groupEnd();
-
     if (result.success && result.user) {
-      if (result.requiresPinChange) {
+      if (!result.requiresPinChange) {
+        const permissions = getEffectivePermissions(result.user);
+        const destination = postPinDestination(pathname, permissions);
+        if (destination !== pathname) {
+          router.replace(destination);
+        }
         onAuthenticated?.(result.user);
-        return;
       }
-
-      const permissions = getEffectivePermissions(result.user);
-      const destination = postPinDestination(pathname, permissions);
-      if (destination !== pathname) {
-        router.replace(destination);
-      }
-      onAuthenticated?.(result.user);
     } else {
-      setError(result.error || "Invalid PIN");
-      // Shake the input on error for tactile feedback
+      setError(result.error || "Incorrect PIN. Try again.");
       const el = inputRef.current;
       if (el) {
         el.classList.add("animate-shake");
         setTimeout(() => el.classList.remove("animate-shake"), 420);
       }
-      // Clear the PIN field for re-entry (security + UX)
       setPin("");
+      inputRef.current?.focus();
     }
     setIsSubmitting(false);
-  };
+  }, [isComplete, submitting, login, pin, onAuthenticated, pathname, router]);
 
   const handlePinChange = (value: string) => {
-    // Only digits, max 6
     const cleaned = value.replace(/\D/g, "").slice(0, 6);
     setPin(cleaned);
     setError(null);
 
-    // Auto-submit when the 6th digit is entered
     if (cleaned.length === 6) {
-      // Small delay so the last digit renders before the network call
       setTimeout(() => {
-        handleSubmit();
+        void handleSubmit();
       }, 60);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className="sb-overlay-backdrop sb-overlay-backdrop--fixed bg-[#111113]/90" />
-      {/* Subtle grid like SudoWindow for visual continuity */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      />
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+      className="sb-modal-enter sb-auth-card sb-auth-card--access"
+      style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+    >
+      <div className="sb-auth-accent" aria-hidden="true" />
 
-      <div
-        className={cn(
-          "sb-modal-enter relative w-full max-w-[380px] mx-4 rounded-2xl border border-zinc-800",
-          "bg-zinc-950/90 shadow-2xl shadow-black/60",
-          "overflow-hidden"
-        )}
-        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
-      >
-        {/* Top red accent strip (same language as Sudo) */}
-        <div className="h-[3px] w-full bg-gradient-to-r from-red-500/70 via-red-400/50 to-red-500/70" />
-
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 flex items-start gap-3">
-          <span className="ms text-red-400 mt-0.5" style={{ fontSize: 22 }}>
-            lock
-          </span>
-          <div>
-            <div className="font-mono text-[11px] tracking-[2px] text-zinc-500">GRAVE OPS</div>
-            <div className="text-xl font-semibold text-zinc-100 tracking-[-0.2px] mt-0.5">
-              ShiftBuilder Access
-            </div>
-            <div className="text-[12px] text-zinc-400 mt-1">
-              Enter your 6-digit operator PIN
-            </div>
+      <div className="relative px-7 pt-7 pb-5">
+        <div className="flex items-start gap-4">
+          <div className="sb-auth-icon" aria-hidden="true">
+            <span className="ms" style={{ fontSize: 22 }}>
+              lock
+            </span>
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h2 id={titleId} className="sb-auth-title">
+              SheetBuilder Access
+            </h2>
+            <p id={descId} className="sb-auth-subtitle mt-1.5">
+              Enter your 6-digit ops PIN
+            </p>
           </div>
         </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
-          {/* PIN input — large, monospace, clean (PIN alone identifies the operator) */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">
-              6-DIGIT PIN
-            </label>
+      <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">
+        <div>
+          <label htmlFor={inputId} className="sb-auth-label">
+            6-Digit PIN
+          </label>
+          <div className="sb-auth-input-wrap">
             <input
               ref={inputRef}
+              id={inputId}
               type="password"
               inputMode="numeric"
               pattern="[0-9]*"
@@ -150,77 +156,70 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               onChange={(e) => handlePinChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && isComplete) {
-                  handleSubmit(e);
+                  void handleSubmit(e);
                 }
               }}
-              className={cn(
-                "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 text-center",
-                "font-mono text-4xl tracking-[12px] text-zinc-100 placeholder:text-zinc-700",
-                "focus:outline-none focus:border-red-500/60 transition-colors",
-                error && "border-red-500/70"
-              )}
+              className={cn("sb-auth-input", error && "sb-auth-input--error")}
               placeholder="••••••"
               disabled={submitting}
-              autoFocus
+              autoComplete="off"
+              aria-invalid={!!error}
+              aria-describedby={error ? "pin-gate-error" : undefined}
             />
-            {/* Visual 6-dot progress indicator */}
-            <div className="flex justify-center gap-2 mt-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full transition-[background-color,transform] duration-200",
-                    i < pin.length ? "bg-red-400" : "bg-zinc-800"
-                  )}
-                />
-              ))}
-            </div>
           </div>
-
-          {/* Error message - more verbose for debugging */}
-          {error && (
-            <div className="text-[11px] text-red-300 bg-red-950/50 border border-red-900/60 rounded-lg px-3 py-2.5 font-mono leading-snug break-words">
-              <div className="font-semibold text-red-400 mb-0.5 tracking-wider">LOGIN FAILED</div>
-              {error}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={!isComplete || submitting}
-              className={cn(
-                "sb-interactive flex-1 inline-flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium tracking-wide",
-                isComplete && !submitting
-                  ? "bg-white text-black hover:bg-zinc-200"
-                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-              )}
-            >
-              {submitting ? (
-                <BuilderBusyLabel>VERIFYING</BuilderBusyLabel>
-              ) : (
-                <>
-                  <span className="ms" style={{ fontSize: 16 }}>login</span>
-                  ENTER
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPin("");
-                setError(null);
-                inputRef.current?.focus();
-              }}
-              className="sb-interactive px-4 py-3 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-800 hover:border-zinc-700 active:bg-zinc-900"
-            >
-              Clear
-            </button>
+          <div className="sb-auth-slots" aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn("sb-auth-slot", i < pin.length && "sb-auth-slot--filled")}
+              />
+            ))}
           </div>
-        </form>
-      </div>
+        </div>
+
+        {error ? (
+          <div id="pin-gate-error" role="alert" className="sb-auth-error">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={!isComplete || submitting}
+            className={cn(
+              "sb-interactive sb-auth-primary sb-auth-primary--grow",
+              isComplete && !submitting
+                ? "sb-auth-primary--active"
+                : "sb-auth-primary--disabled",
+            )}
+          >
+            {submitting ? (
+              <BuilderBusyLabel>VERIFYING</BuilderBusyLabel>
+            ) : (
+              <>
+                <span className="ms" style={{ fontSize: 16 }} aria-hidden="true">
+                  login
+                </span>
+                ENTER
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPin("");
+              setError(null);
+              inputRef.current?.focus();
+            }}
+            disabled={submitting}
+            className="sb-interactive sb-auth-secondary disabled:opacity-45"
+          >
+            Clear
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -603,7 +603,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     : `sb-aux-grid flex-1 w-full min-h-0${builderCardGridClass}`;
   // Overlap strips: 6-across with row-equal heights (dedicated grid, not zone card grid).
   const overlapGridClass = isPrintPreview
-    ? "sb-overlap-grid sb-overlap-card-grid flex-1 grid grid-cols-6 gap-1.5 min-w-0"
+    ? "sb-overlap-grid sb-overlap-card-grid sb-overlap-row-grid flex-1 grid grid-cols-6 gap-1 min-w-0 w-full"
     : "sb-overlap-grid sb-overlap-card-grid flex-1 min-w-0";
   const breaksOverlapGridClass =
     "sb-overlap-grid sb-overlap-card-grid sb-breaks-overlap-grid grid grid-cols-6 gap-2 w-full flex-1 min-h-0";
@@ -1853,7 +1853,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   >
                     {isPrintPreview ? (
                       <>
-                        <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+                        <div className="sb-overlap-row-meta flex items-end justify-center gap-2 mb-1.5 flex-wrap text-center">
                           <div
                             className="font-black tabular-nums leading-none"
                             style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
@@ -1866,26 +1866,27 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           >
                             {row.dayName}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
+                          <div
+                            className="text-[10px] font-bold tracking-[0.35px] text-[#6B7280]"
+                            style={{ fontFamily: "var(--font-atkinson)" }}
+                          >
                             {row.time}
                           </div>
-                          <div className={overlapGridClass}>
-                            {Array.from({ length: 6 }).map((_, i) => {
-                              const slotKey = `OL-${row.key}-${i}`;
-                              return (
-                                <div
-                                  key={i}
-                                  className={gridHostClass}
-                                  data-slot-key={slotKey}
-                                  data-placement-host={slotKey}
-                                >
-                                  {renderBreaksOverlapSlot(slotKey)}
-                                </div>
-                              );
-                            })}
-                          </div>
+                        </div>
+                        <div className={overlapGridClass}>
+                          {Array.from({ length: 6 }).map((_, i) => {
+                            const slotKey = `OL-${row.key}-${i}`;
+                            return (
+                              <div
+                                key={i}
+                                className={gridHostClass}
+                                data-slot-key={slotKey}
+                                data-placement-host={slotKey}
+                              >
+                                {renderBreaksOverlapSlot(slotKey)}
+                              </div>
+                            );
+                          })}
                         </div>
                       </>
                     ) : (

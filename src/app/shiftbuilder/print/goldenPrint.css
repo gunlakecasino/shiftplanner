@@ -9,8 +9,11 @@ body.printing-dual-mode .print-dual-container {
 }
 
 body.printing-dual-mode .print-dual-container .print-page-wrapper {
-  display: block;
-  width: 1056px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   page-break-after: always;
@@ -121,11 +124,21 @@ body.golden-export-raster .print-dual-container {
   }
 
   body.printing-dual-mode .print-dual-container .print-page-wrapper {
-    display: block !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: visible !important;
     page-break-after: always !important;
     break-after: page !important;
     break-inside: avoid !important;
+  }
+
+  body.printing-dual-mode .print-dual-container .print-page-wrapper > .print-artboard {
+    flex-shrink: 0 !important;
+    width: 1056px !important;
+    margin: 0 !important;
   }
 
   body.printing-dual-mode .print-dual-container .print-page-wrapper:last-child {

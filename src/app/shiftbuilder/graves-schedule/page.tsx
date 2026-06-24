@@ -2,8 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { QueryProvider } from "../providers";
-import { BuilderLoadingShell } from "../components/builderPrimitives";
-
 const GravesDefaultSchedulePage = dynamic(
   () =>
     import("../components/GravesDefaultSchedulePage").then((m) => ({
@@ -11,12 +9,7 @@ const GravesDefaultSchedulePage = dynamic(
     })),
   {
     ssr: false,
-    loading: () => (
-      <BuilderLoadingShell
-        label="LOADING GRAVES SCHEDULE"
-        sublabel="Fri–Thu default grid"
-      />
-    ),
+    loading: () => null,
   },
 );
 

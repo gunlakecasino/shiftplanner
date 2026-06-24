@@ -167,23 +167,29 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       background: #ffffff !important;
     }
     .print-page-wrapper {
-      display: block !important;
-      width: ${GOLDEN_WIDTH_PX}px;
-      margin: 0;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
       padding: 0;
       overflow: visible !important;
       page-break-after: always;
       break-after: page;
       break-inside: avoid;
     }
-    .print-page-wrapper:last-child {
-      page-break-after: auto;
-      break-after: auto;
-    }
     .print-page-wrapper > .print-artboard {
+      flex-shrink: 0 !important;
+      width: ${GOLDEN_WIDTH_PX}px !important;
+      margin: 0 !important;
       contain: none !important;
       page-break-after: auto !important;
       break-after: auto !important;
+    }
+    .print-page-wrapper:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
     @media print {
       html, body {
@@ -196,6 +202,11 @@ function buildIframePrintOverrides(config: PrintConfig): string {
         height: auto !important;
       }
       .print-page-wrapper {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: flex-start !important;
+        width: 100% !important;
+        max-width: 100% !important;
         page-break-after: always !important;
         break-after: page !important;
         break-inside: avoid !important;
@@ -205,6 +216,9 @@ function buildIframePrintOverrides(config: PrintConfig): string {
         break-after: auto !important;
       }
       .print-page-wrapper > .print-artboard {
+        flex-shrink: 0 !important;
+        width: ${GOLDEN_WIDTH_PX}px !important;
+        margin: 0 !important;
         zoom: ${zoomValue} !important;
       }
     }
