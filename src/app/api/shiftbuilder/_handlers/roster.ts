@@ -1,4 +1,4 @@
-// v1.0 Release-Ready — Final Debug Pass + Full Audit Trail — UI frozen June 24 2026
+// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache, unstable_noStore } from "next/cache";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";

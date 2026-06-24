@@ -1,4 +1,4 @@
-/* v1.0 Release-Ready — UI frozen June 24 2026 */
+/* v1.0.0 — Production Release — UI frozen & shipped June 24 2026 */
 .sb-help-fab {
   position: fixed;
   top: max(12px, env(safe-area-inset-top, 12px));

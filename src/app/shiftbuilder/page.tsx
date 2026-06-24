@@ -1,4 +1,6 @@
-// v1.0 Release-Ready — UI frozen June 24 2026
+// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
+// PRODUCTION-READY — ShiftBuilder v1.0.0 floor release (June 24, 2026)
+// UI frozen. Hardening only: security headers, structured logging, audit API, route aliases, UX transitions.
 "use client";
 
 /**

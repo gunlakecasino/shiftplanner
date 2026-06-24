@@ -1,4 +1,4 @@
-// v1.0 Release-Ready — UI frozen June 24 2026
+// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {

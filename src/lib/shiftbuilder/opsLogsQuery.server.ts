@@ -1,4 +1,4 @@
-// v1.0 Release-Ready — Final Debug Pass + Full Audit Trail — UI frozen June 24 2026
+// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { parseLocalDateISO } from "./dateUtils";
 import {
