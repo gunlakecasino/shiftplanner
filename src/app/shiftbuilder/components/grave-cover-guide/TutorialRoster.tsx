@@ -33,7 +33,7 @@ export function TutorialRoster({
   const placementPct = 100;
 
   return (
-    <aside className={`sb-roster-shell sb-guide-roster ${highlightCalledOff ? "sb-guide-target" : ""}`}>
+    <aside className={`sb-roster-shell sb-guide-roster-panel ${highlightCalledOff ? "sb-guide-target" : ""}`}>
       <header className="sb-roster-header">
         <div className="sb-roster-header__title-row">
           <div className="sb-roster-header__glyph" aria-hidden>

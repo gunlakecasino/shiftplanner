@@ -7,17 +7,21 @@ import { cn } from "@/lib/utils";
 import {
   GUIDE_STEPS,
   INITIAL_BOARD,
-  TUTORIAL_FOCUS_ZONES,
+  TUTORIAL_ZONE_ORDER,
   collectPlacedTms,
+  countFilledZones,
   stepIndex,
   type GuideStepId,
   type TutorialBoard,
   type TutorialSlotKey,
+  type TutorialTasks,
 } from "./tutorialScenario";
 import { TutorialZoneCard } from "./TutorialZoneCard";
 import { TutorialPlacementPad } from "./TutorialPlacementPad";
+import { TutorialTaskPad } from "./TutorialTaskPad";
 import { TutorialRoster } from "./TutorialRoster";
 import { TutorialNav } from "./TutorialNav";
+import { getZoneColor } from "@/lib/shiftbuilder/constants";
 import "../graveCoverGuideTutorial.css";
 
 export const GRAVE_COVER_GUIDE_STORAGE_KEY = "shiftbuilder:grave-cover-guide-completed";
@@ -46,16 +50,21 @@ export function isGraveCoverGuideCompleted(): boolean {
   }
 }
 
+type PadMode = "default" | "assign" | "coverage";
+
 type PadState = {
   slotKey: TutorialSlotKey;
-  mode: "default" | "assign";
+  mode: PadMode;
 } | null;
 
-function advanceFrom(step: GuideStepId): GuideStepId | null {
-  const idx = stepIndex(step);
-  if (idx < 0 || idx >= GUIDE_STEPS.length - 1) return null;
-  return GUIDE_STEPS[idx + 1].id;
-}
+const PAD_STEPS: GuideStepId[] = [
+  "dblclick-z4",
+  "mark-unavailable",
+  "dblclick-empty-z4",
+  "tap-assign",
+  "pick-chen",
+  "add-coverage",
+];
 
 export function GraveCoverGuideTutorial({
   open,
@@ -66,27 +75,33 @@ export function GraveCoverGuideTutorial({
 }: GraveCoverGuideTutorialProps) {
   const [stepId, setStepId] = React.useState<GuideStepId>("intro");
   const [board, setBoard] = React.useState<TutorialBoard>(() => ({ ...INITIAL_BOARD }));
+  const [tasks, setTasks] = React.useState<TutorialTasks>(() => ({} as TutorialTasks));
   const [calledOff, setCalledOff] = React.useState<Array<{ tmId: string; tmName: string }>>([]);
   const [pad, setPad] = React.useState<PadState>(null);
+  const [taskPadSlot, setTaskPadSlot] = React.useState<TutorialSlotKey | null>(null);
   const [nightConfirmed, setNightConfirmed] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
     setStepId("intro");
     setBoard({ ...INITIAL_BOARD });
+    setTasks({} as TutorialTasks);
     setCalledOff([]);
     setPad(null);
+    setTaskPadSlot(null);
     setNightConfirmed(false);
   }, [open]);
 
   const step = GUIDE_STEPS[stepIndex(stepId)] ?? GUIDE_STEPS[0];
   const stepNumber = stepIndex(stepId) + 1;
+  const filledCount = countFilledZones(board);
 
   const goTo = React.useCallback((id: GuideStepId) => {
     setStepId(id);
-    if (id !== "dblclick-z4" && id !== "dblclick-empty-z4" && id !== "mark-unavailable" && id !== "tap-assign" && id !== "pick-chen") {
+    if (!PAD_STEPS.includes(id) && id !== "add-task") {
       setPad(null);
     }
+    if (id !== "add-task") setTaskPadSlot(null);
   }, []);
 
   const finish = React.useCallback(() => {
@@ -95,8 +110,9 @@ export function GraveCoverGuideTutorial({
     onClose();
   }, [onClose, onFinish]);
 
-  const openPad = (slotKey: TutorialSlotKey, mode: "default" | "assign" = "default") => {
+  const openPad = (slotKey: TutorialSlotKey, mode: PadMode = "default") => {
     setPad({ slotKey, mode });
+    setTaskPadSlot(null);
   };
 
   const handleZoneDoubleClick = (slotKey: TutorialSlotKey) => {
@@ -110,6 +126,16 @@ export function GraveCoverGuideTutorial({
       setStepId("tap-assign");
       return;
     }
+    if (stepId === "add-coverage" && slotKey === "Z4" && board.Z4) {
+      openPad("Z4");
+      return;
+    }
+  };
+
+  const handleTaskZoneDoubleClick = (slotKey: TutorialSlotKey) => {
+    if (stepId !== "add-task" || slotKey !== "Z4") return;
+    setTaskPadSlot(slotKey);
+    setPad(null);
   };
 
   const handleMarkUnavailable = () => {
@@ -131,21 +157,60 @@ export function GraveCoverGuideTutorial({
     if (stepId !== "pick-chen" || tmId !== "tm-chen") return;
     setBoard((prev) => ({
       ...prev,
-      Z4: { tmId, tmName },
+      Z4: { tmId, tmName, breakGroup: 1 },
       Z8: null,
     }));
     setPad(null);
+    goTo("add-coverage");
+  };
+
+  React.useEffect(() => {
+    if (stepId === "add-coverage" && board.Z4) {
+      setPad({ slotKey: "Z4", mode: "default" });
+    }
+  }, [stepId, board.Z4]);
+
+  const handleCoverageTap = () => {
+    if (stepId !== "add-coverage") return;
+    setPad({ slotKey: "Z4", mode: "coverage" });
+  };
+
+  const handleCoveragePick = (target: TutorialSlotKey) => {
+    if (stepId !== "add-coverage" || target !== "Z8") return;
+    setTasks((prev) => ({
+      ...prev,
+      Z4: [
+        ...(prev.Z4 ?? []),
+        {
+          id: "cov-z8",
+          taskLabel: `Covering ${target}`,
+          color: getZoneColor(target),
+          isCoverage: true,
+          coverageTarget: target,
+        },
+      ],
+    }));
+    setPad(null);
+    goTo("add-task");
+  };
+
+  const handleAddTask = (label: string) => {
+    if (stepId !== "add-task" || !taskPadSlot) return;
+    setTasks((prev) => ({
+      ...prev,
+      [taskPadSlot]: [
+        ...(prev[taskPadSlot] ?? []),
+        { id: `task-${Date.now()}`, taskLabel: label, color: getZoneColor(taskPadSlot) },
+      ],
+    }));
+    setTaskPadSlot(null);
     goTo("complete");
   };
 
   const pickerOptions = React.useMemo(() => {
     const options: Array<{ tmId: string; tmName: string; subtitle?: string }> = [];
     if (board.Z8) {
-      options.push({
-        tmId: board.Z8.tmId,
-        tmName: board.Z8.tmName,
-        subtitle: "On board · Z8",
-      });
+      options.push({ tmId: board.Z8.tmId, tmName: board.Z8.tmName, subtitle: "On board · Z8" });
     }
     for (const tm of collectPlacedTms(board)) {
       if (tm.tmId === board.Z8?.tmId) continue;
@@ -154,25 +219,12 @@ export function GraveCoverGuideTutorial({
     return options;
   }, [board]);
 
-  const placedForRoster = collectPlacedTms(board);
-
-  const canContinue =
-    stepId === "intro" ||
-    stepId === "review-called-off" ||
-    stepId === "complete";
+  const canContinue = stepId === "intro" || stepId === "review-called-off" || stepId === "complete";
 
   const handleContinue = () => {
-    if (stepId === "intro") {
-      goTo("confirm-night");
-      return;
-    }
-    if (stepId === "review-called-off") {
-      goTo("dblclick-empty-z4");
-      return;
-    }
-    if (stepId === "complete") {
-      finish();
-    }
+    if (stepId === "intro") goTo("confirm-night");
+    else if (stepId === "review-called-off") goTo("dblclick-empty-z4");
+    else if (stepId === "complete") finish();
   };
 
   const handleNightConfirm = () => {
@@ -191,46 +243,28 @@ export function GraveCoverGuideTutorial({
       aria-labelledby="sb-guide-coach-title"
       onClick={onClose}
     >
-      <div
-        className={cn("sb-guide-frame", isDark && "sb-guide-frame--dark")}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={cn("sb-guide-frame", isDark && "sb-guide-frame--dark")} onClick={(e) => e.stopPropagation()}>
         <aside className="sb-guide-coach">
           <div className="sb-guide-coach__head">
             <div>
-              <p className="sb-guide-coach__eyebrow">
-                Step {stepNumber} of {GUIDE_STEPS.length}
-              </p>
-              <h2 id="sb-guide-coach-title" className="sb-guide-coach__title">
-                {step.title}
-              </h2>
+              <p className="sb-guide-coach__eyebrow">Step {stepNumber} of {GUIDE_STEPS.length}</p>
+              <h2 id="sb-guide-coach-title" className="sb-guide-coach__title">{step.title}</h2>
             </div>
             <button type="button" className="sb-guide-coach__close" onClick={onClose} aria-label="Close">
               <X size={18} />
             </button>
           </div>
-
           <p className="sb-guide-coach__body">{step.body}</p>
           {step.hint ? <p className="sb-guide-coach__hint">{step.hint}</p> : null}
-
           <div className="sb-guide-coach__reference">
-            <p className="sb-guide-coach__ref-title">Real controls (same as live board)</p>
+            <p className="sb-guide-coach__ref-title">Live board controls</p>
             <ul>
-              <li>
-                <strong>Mark unavailable</strong> — whole night, all slots
-              </li>
-              <li>
-                <strong>Clear</strong> — one slot only
-              </li>
-              <li>
-                <strong>Restore</strong> — roster Called Off chip
-              </li>
-              <li>
-                <strong>Assign / Swap</strong> — placement pad
-              </li>
+              <li><strong>Mark unavailable</strong> — whole night</li>
+              <li><strong>Clear</strong> — one slot</li>
+              <li><strong>Coverage</strong> — footer → zone grid</li>
+              <li><strong>Tasks</strong> — double-click lower card area</li>
             </ul>
           </div>
-
           <div className="sb-guide-coach__actions">
             {canContinue && (
               <button type="button" className="sb-guide-coach__primary" onClick={handleContinue}>
@@ -238,45 +272,61 @@ export function GraveCoverGuideTutorial({
               </button>
             )}
             {stepId === "complete" && onRequestPrint && (
-              <button type="button" className="sb-guide-coach__secondary" onClick={onRequestPrint}>
-                Open Print
-              </button>
+              <button type="button" className="sb-guide-coach__secondary" onClick={onRequestPrint}>Open Print</button>
             )}
-            <button type="button" className="sb-guide-coach__skip" onClick={finish}>
-              Skip tutorial
-            </button>
+            <button type="button" className="sb-guide-coach__skip" onClick={finish}>Skip tutorial</button>
           </div>
         </aside>
 
         <div className="sb-guide-workspace builder-workspace">
-          <div className="sb-guide-workspace__label">Practice board — same layout as ShiftBuilder</div>
-
           <TutorialNav
             highlightDay={stepId === "confirm-night" && !nightConfirmed}
             onDayConfirm={handleNightConfirm}
             isDark={isDark}
           />
 
-          <div className="sb-guide-stage">
-            <div className="sb-builder-stage sb-guide-board">
-              <div className="sb-builder-card-grid sb-guide-card-grid">
-                {TUTORIAL_FOCUS_ZONES.map((key) => (
-                  <TutorialZoneCard
-                    key={key}
-                    slotKey={key}
-                    assignment={board[key]}
-                    highlighted={
-                      (stepId === "dblclick-z4" && key === "Z4" && !!board.Z4) ||
-                      (stepId === "dblclick-empty-z4" && key === "Z4" && !board.Z4)
-                    }
-                    pulse={
-                      (stepId === "dblclick-z4" && key === "Z4") ||
-                      (stepId === "dblclick-empty-z4" && key === "Z4")
-                    }
-                    onAssignZoneDoubleClick={handleZoneDoubleClick}
-                  />
-                ))}
-              </div>
+          <div className="sb-guide-canvas-row">
+            <div className="sb-guide-roster-slot">
+              <TutorialRoster
+                placed={collectPlacedTms(board)}
+                calledOff={calledOff}
+                highlightCalledOff={stepId === "review-called-off"}
+              />
+            </div>
+
+            <div className="sb-guide-board-wrap sb-builder-stage">
+              <section className="sb-builder-section">
+                <div className="sheet-section-header sb-guide-section-header">
+                  <span className="label">ZONES</span>
+                  <div className="divider" />
+                  <span className="sb-guide-fill-count">{filledCount} / 10 FILLED</span>
+                </div>
+
+                <div className="sb-builder-card-grid sb-guide-zone-grid">
+                  {TUTORIAL_ZONE_ORDER.map((key) => (
+                    <TutorialZoneCard
+                      key={key}
+                      slotKey={key}
+                      assignment={board[key]}
+                      tasks={tasks[key]}
+                      highlighted={
+                        (stepId === "dblclick-z4" && key === "Z4" && !!board.Z4) ||
+                        (stepId === "dblclick-empty-z4" && key === "Z4" && !board.Z4) ||
+                        (stepId === "add-coverage" && key === "Z4") ||
+                        (stepId === "add-task" && key === "Z4")
+                      }
+                      pulse={
+                        (stepId === "dblclick-z4" && key === "Z4") ||
+                        (stepId === "dblclick-empty-z4" && key === "Z4") ||
+                        (stepId === "add-task" && key === "Z4")
+                      }
+                      highlightTaskZone={stepId === "add-task" && key === "Z4"}
+                      onAssignZoneDoubleClick={handleZoneDoubleClick}
+                      onTaskZoneDoubleClick={handleTaskZoneDoubleClick}
+                    />
+                  ))}
+                </div>
+              </section>
 
               {pad && (
                 <div className="sb-guide-pad-anchor">
@@ -287,25 +337,30 @@ export function GraveCoverGuideTutorial({
                     pickerOptions={pickerOptions}
                     highlightMark={stepId === "mark-unavailable"}
                     highlightAssign={stepId === "tap-assign"}
+                    highlightCoverage={stepId === "add-coverage"}
                     highlightPickerTmId={stepId === "pick-chen" ? "tm-chen" : undefined}
                     onClose={() => setPad(null)}
                     onMarkUnavailable={handleMarkUnavailable}
                     onAssignTap={handleAssignTap}
-                    onSwapTap={() => {
-                      if (!board[pad.slotKey]) handleAssignTap();
-                    }}
+                    onSwapTap={handleAssignTap}
+                    onCoverageTap={handleCoverageTap}
+                    onCoveragePick={handleCoveragePick}
                     onClear={() => {}}
                     onPickTm={handlePickChen}
                   />
                 </div>
               )}
-            </div>
 
-            <TutorialRoster
-              placed={placedForRoster}
-              calledOff={calledOff}
-              highlightCalledOff={stepId === "review-called-off"}
-            />
+              {taskPadSlot && (
+                <div className="sb-guide-pad-anchor">
+                  <TutorialTaskPad
+                    slotKey={taskPadSlot}
+                    onAdd={handleAddTask}
+                    onClose={() => setTaskPadSlot(null)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
