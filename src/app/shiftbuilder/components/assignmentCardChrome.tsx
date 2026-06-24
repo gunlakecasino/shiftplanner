@@ -11,6 +11,37 @@ import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
+/** Last 3 grave placements before tonight — muted trail beside the TM name (builder only). */
+export function TmPlacementTrail({ labels }: { labels?: string[] }) {
+  if (!labels?.length) return null;
+
+  return (
+    <span
+      className="sb-tm-placement-trail no-print inline-flex items-center gap-[3px] shrink-0"
+      title={`Last ${labels.length} placements (newest first): ${labels.join(" → ")}`}
+      aria-label={`Recent placements: ${labels.join(", ")}`}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {labels.map((label, i) => (
+        <React.Fragment key={`${label}-${i}`}>
+          {i > 0 ? (
+            <span className="text-[7px] text-neutral-300/90 select-none leading-none" aria-hidden>
+              ·
+            </span>
+          ) : null}
+          <span
+            className="text-[8px] font-semibold uppercase tracking-[0.05em] text-neutral-400 leading-none"
+            style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+          >
+            {label}
+          </span>
+        </React.Fragment>
+      ))}
+    </span>
+  );
+}
+
 /** Subtle inline mark beside a TM name when prior-3 placement repeat caps health at 50%. */
 export function CriticalRepeatNameMark({
   title,
@@ -409,6 +440,7 @@ export function SlotAssignmentBody({
   emptyPresentation = "invite",
   nameSizeOverride,
   criticalRepeat = false,
+  placementTrail,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -423,6 +455,8 @@ export function SlotAssignmentBody({
   nameSizeOverride?: number;
   /** Prior-3 placement repeat — show inline mark beside TM name. */
   criticalRepeat?: boolean;
+  /** Last 3 placement labels before tonight (newest first). */
+  placementTrail?: string[];
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -457,6 +491,7 @@ export function SlotAssignmentBody({
               >
                 {state.proposedName}
               </span>
+              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </div>
             {isDuplicate ? (
@@ -484,6 +519,7 @@ export function SlotAssignmentBody({
               >
                 {state.proposedName}
               </span>
+              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </div>
             {isDuplicate && showDigitalAssists ? (
@@ -516,7 +552,7 @@ export function SlotAssignmentBody({
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}
             <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
+              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
               style={{
                 fontSize,
                 lineHeight: 1.02,
@@ -525,6 +561,7 @@ export function SlotAssignmentBody({
             >
               {state.tmName}
             </span>
+            {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
             {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
@@ -537,7 +574,7 @@ export function SlotAssignmentBody({
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}
             <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
+              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
               style={{
                 fontSize: showDigitalAssists ? fontSize : fontSize,
                 lineHeight: 1.0,
@@ -546,6 +583,7 @@ export function SlotAssignmentBody({
             >
               {state.tmName}
             </span>
+            {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
             {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate && showDigitalAssists ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} />

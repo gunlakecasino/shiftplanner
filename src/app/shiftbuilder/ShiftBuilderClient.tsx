@@ -3965,7 +3965,7 @@ function AuthedShiftBuilder() {
     !applyDefaultTasksBusy &&
     !currentNight.isFetching;
 
-  const { fitBySlot: deploymentFitBySlot } = usePlacementFitMap({
+  const { fitBySlot: deploymentFitBySlot, placementTrailsByTmId } = usePlacementFitMap({
       enabled: deploymentRotationFitEnabled,
       assignments: deferredAssignmentsForFit,
       isDraftMode,
@@ -7477,6 +7477,7 @@ function AuthedShiftBuilder() {
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
+                placementTrailsByTmId={placementTrailsByTmId}
                 artboardScale={scale}
                 hideSheetFooter
                 isPrintPreview={false}
@@ -8089,6 +8090,7 @@ function AuthedShiftBuilder() {
                 nextDayColor={nextDayColor}
                 members={effectiveRealRoster}
                 fitBySlot={deploymentFitBySlot}
+                placementTrailsByTmId={placementTrailsByTmId}
                 artboardScale={scale}
                 isPrintPreview={false}
               />

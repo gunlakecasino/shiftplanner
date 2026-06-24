@@ -189,6 +189,8 @@ export interface ShiftBuilderBoardProps {
   onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
   /** When set by ShiftBuilderClient, avoids duplicate history fetch + powers rotation health floater. */
   fitBySlot?: Record<string, PrerenderedPlacementFit>;
+  /** Last 3 placement labels per TM (from placement-histories fetch). */
+  placementTrailsByTmId?: Record<string, string[]>;
   /** Stage zoom — re-equalize card rows when fit changes (see layoutHeight below). */
   artboardScale?: number;
   /** When true (print-preview mode), suppress digital-only assists (xAI chips/lines, fit chips, HUDs) so the live canvas matches the exact Golden that will be cloned for PDF/print. Core content (names, badges that print, tasks, etc.) unchanged. */
@@ -342,6 +344,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onCopyRestroomPairingTasks,
   members = [],
   fitBySlot: fitBySlotProp,
+  placementTrailsByTmId: placementTrailsByTmIdProp,
   artboardScale,
   isPrintPreview = false,
   enableBreakGroupFilter,
@@ -557,6 +560,28 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     allEligibleTms,
   });
   const fitBySlot = fitBySlotProp ?? internalFitMap.fitBySlot;
+  const placementTrailsByTmId =
+    placementTrailsByTmIdProp ?? internalFitMap.placementTrailsByTmId;
+
+  const trailForTm = React.useCallback(
+    (tmId?: string | null) => {
+      if (!tmId) return undefined;
+      return placementTrailsByTmId[tmId];
+    },
+    [placementTrailsByTmId],
+  );
+
+  const tmIdForSlot = React.useCallback(
+    (slotKey: string, assignment?: { tmId?: string | null }) => {
+      const draft = draftAssignments[slotKey];
+      if (isDraftMode && draft?.proposedTmId && !draft.proposedClear) {
+        return draft.proposedTmId;
+      }
+      return assignment?.tmId ?? undefined;
+    },
+    [draftAssignments, isDraftMode],
+  );
+
   // /today kiosk: print-faithful layout + interactive floor assists (no fit/xAI chips).
   const showDigitalAssists = !isPrintPreview || isTodayBoard;
   const showFitChips = showDigitalAssists && !isTodayBoard;
@@ -1021,6 +1046,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         onLiveAssign={onLiveAssign}
         onLiveUnassign={onLiveUnassign}
         fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
+        placementTrail={trailForTm(tmIdForSlot(slotKey, displayAssignments[slotKey]))}
         showDigitalAssists={showDigitalAssists}
         focusedTmId={focusedTmId}
         conflictingTms={conflictingTms}
@@ -1302,6 +1328,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveAssign={onLiveAssign}
                         onLiveUnassign={onLiveUnassign}
                         fitChip={showFitChips ? fitBySlot[key] : undefined}
+                        placementTrail={trailForTm(tmIdForSlot(key, displayAssignments[key]))}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
@@ -1403,6 +1430,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onLiveUnassign={onLiveUnassign}
                         fitChipW={showFitChips ? fitBySlot[wKey] : undefined}
                         fitChipM={showFitChips ? fitBySlot[mKey] : undefined}
+                        placementTrailW={trailForTm(tmIdForSlot(wKey, displayAssignments[wKey]))}
+                        placementTrailM={trailForTm(tmIdForSlot(mKey, displayAssignments[mKey]))}
                         showDigitalAssists={showDigitalAssists}
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
@@ -1567,6 +1596,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             onLiveAssign={onLiveAssign}
                             onLiveUnassign={onLiveUnassign}
                             fitChip={showFitChips ? fitBySlot[key] : undefined}
+                            placementTrail={trailForTm(tmIdForSlot(key, displayAssignments[key]))}
                             showDigitalAssists={showDigitalAssists}
                             focusedTmId={focusedTmId}
                             conflictingTms={conflictingTms}
@@ -1638,6 +1668,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           onLiveAssign={onLiveAssign}
                           onLiveUnassign={onLiveUnassign}
                           fitChip={showFitChips ? fitBySlot[key] : undefined}
+                          placementTrail={trailForTm(tmIdForSlot(key, displayAssignments[key]))}
                           showDigitalAssists={showDigitalAssists}
                           focusedTmId={focusedTmId}
                           conflictingTms={conflictingTms}
@@ -1736,6 +1767,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                   onLiveAssign={onLiveAssign}
                                   onLiveUnassign={onLiveUnassign}
                                   fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
+                                  placementTrail={trailForTm(tmIdForSlot(slotKey, displayAssignments[slotKey]))}
                                   showDigitalAssists={showDigitalAssists}
                                   focusedTmId={focusedTmId}
                                   conflictingTms={conflictingTms}

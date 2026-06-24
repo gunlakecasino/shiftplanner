@@ -144,10 +144,9 @@ export function getDaysSinceForKey(
   key: string,
   beforeIso: string,
 ): string {
-  const dates = (h?.zoneDates?.[key] || []).filter((d: string) => d <= beforeIso);
+  const dates = (h?.zoneDates?.[key] || []).filter((d: string) => d < beforeIso);
   if (!dates.length) return "—";
   const latest = dates.sort().reverse()[0];
-  if (latest === beforeIso) return "today";
   const d1 = new Date(beforeIso + "T12:00:00");
   const d2 = new Date(latest + "T12:00:00");
   const diffMs = d1.getTime() - d2.getTime();
@@ -161,6 +160,30 @@ export function nightIsoFromDate(d: Date): string {
 
 /** Prior-placement window for critical repeat (same area as last N graves). */
 export const PRIOR_PLACEMENT_CRITICAL_WINDOW = 3;
+
+/** Card name trail — last N graves before tonight (newest first). */
+export const CARD_PLACEMENT_TRAIL_COUNT = 3;
+
+/** Compact trail label on assignment cards (e.g. Z4, RR8, Z9SR). */
+export function formatCardPlacementTrailLabel(ui: string, fallback?: string): string {
+  if (ui === "Z9SR") return "Z9SR";
+  if (/^Z\d+$/.test(ui)) return ui;
+  const rr = ui.match(/^[MW]RR(\d+)$/);
+  if (rr) return `RR${rr[1]}`;
+  if (ui.startsWith("TR")) return `T${ui.replace(/\D/g, "")}`;
+  const raw = fallback ?? ui;
+  return raw.replace(/\s+/g, "");
+}
+
+export function buildPlacementTrailLabels(
+  history: ZoneDetailEntry | null | undefined,
+  beforeIso?: string,
+  count = CARD_PLACEMENT_TRAIL_COUNT,
+): string[] {
+  return getLastPlacementSequence(history ?? null, count, beforeIso).map((ui) =>
+    formatCardPlacementTrailLabel(ui),
+  );
+}
 
 export function isInPriorPlacementWindow(
   history: ZoneDetailEntry | null,

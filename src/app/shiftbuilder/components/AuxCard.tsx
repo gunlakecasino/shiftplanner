@@ -56,6 +56,7 @@ export interface AuxCardProps {
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
+  placementTrail?: string[];
   showDigitalAssists?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
@@ -89,6 +90,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   onLiveUnassign,
   isLocked = false,
   fitChip,
+  placementTrail,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -435,6 +437,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             inviteSize="aux"
             emptyPresentation="label"
             criticalRepeat={isCriticalRepeatFit(fitChip)}
+            placementTrail={placementTrail}
             nameSizeOverride={
               hasTM
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)

@@ -49,6 +49,7 @@ export interface OverlapSlotProps {
   setBreakGroupForSlot?: (k: string, g: BreakGroup) => void;
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
+  placementTrail?: string[];
   showDigitalAssists?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
@@ -77,6 +78,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   setBreakGroupForSlot,
   isLocked = false,
   fitChip,
+  placementTrail,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -169,6 +171,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
+          placementTrail={placementTrail}
           nameSizeOverride={showDigitalAssists ? 18 : 16}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {

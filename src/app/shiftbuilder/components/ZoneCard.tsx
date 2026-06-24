@@ -14,7 +14,7 @@ import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { CriticalRepeatNameMark } from "./assignmentCardChrome";
+import { CriticalRepeatNameMark, TmPlacementTrail } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
@@ -59,6 +59,7 @@ export interface ZoneCardProps {
   onLiveUnassign?: (uiKey: string) => void;
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
+  placementTrail?: string[];
   showDigitalAssists?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
@@ -91,6 +92,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   onOpenTaskTextEdit,
   isLocked = false,
   fitChip,
+  placementTrail,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -227,6 +229,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
                 style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
               >
                 <span className="truncate">{displayName}</span>
+                {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
                 {showDigitalAssists && isCriticalRepeatFit(fitChip) ? (
                   <CriticalRepeatNameMark />
                 ) : null}

@@ -48,6 +48,8 @@ export interface RRCardProps {
   isLocked?: boolean;
   fitChipW?: PrerenderedPlacementFit | null;
   fitChipM?: PrerenderedPlacementFit | null;
+  placementTrailW?: string[];
+  placementTrailM?: string[];
   showDigitalAssists?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
@@ -85,6 +87,7 @@ const RRSide: React.FC<{
   showDigitalAssists?: boolean;
   coveredByNames?: string[];
   fitChip?: PrerenderedPlacementFit | null;
+  placementTrail?: string[];
 }> = ({
   slotKey,
   assignment,
@@ -105,6 +108,7 @@ const RRSide: React.FC<{
   showDigitalAssists = false,
   coveredByNames = [],
   fitChip,
+  placementTrail,
 }) => {
   const a = assignment || {};
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
@@ -162,6 +166,7 @@ const RRSide: React.FC<{
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
+          placementTrail={placementTrail}
           onUnassignedClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -311,6 +316,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isLocked = false,
   fitChipW,
   fitChipM,
+  placementTrailW,
+  placementTrailM,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -416,6 +423,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             draftInfo={draftInfoW}
             coveredByNames={wCoveredBy}
             fitChip={fitChipW}
+            placementTrail={placementTrailW}
             {...sideProps}
           />
         )}
@@ -442,6 +450,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             draftInfo={draftInfoM}
             coveredByNames={mCoveredBy}
             fitChip={fitChipM}
+            placementTrail={placementTrailM}
             {...sideProps}
           />
         )}

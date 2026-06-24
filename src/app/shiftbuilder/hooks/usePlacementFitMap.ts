@@ -7,6 +7,7 @@ import { isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
 import type { PlacementCandidateProfile } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import {
+  buildPlacementTrailLabels,
   collectDeploymentSlotKeys,
   PLACEMENT_SPREAD_NIGHTS,
   shouldShowPlacementFitChip,
@@ -52,6 +53,7 @@ export function usePlacementFitMap({
 }: UsePlacementFitMapArgs): {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   historiesLoading: boolean;
+  placementTrailsByTmId: Record<string, string[]>;
 } {
   const [histories, setHistories] = useState<Record<string, ZoneDetailEntry | null>>({});
   const [historiesLoading, setHistoriesLoading] = useState(false);
@@ -250,5 +252,15 @@ export function usePlacementFitMap({
     scopedWeekHistory,
   ]);
 
-  return { fitBySlot, historiesLoading };
+  const placementTrailsByTmId = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const [tmId, history] of Object.entries(histories)) {
+      if (!tmId) continue;
+      const labels = buildPlacementTrailLabels(history, currentIso);
+      if (labels.length > 0) out[tmId] = labels;
+    }
+    return out;
+  }, [histories, currentIso]);
+
+  return { fitBySlot, historiesLoading, placementTrailsByTmId };
 }
