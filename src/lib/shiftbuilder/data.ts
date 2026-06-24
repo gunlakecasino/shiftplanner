@@ -58,6 +58,40 @@ async function runBoardMutation<T>(
   return result;
 }
 
+type SlotDefaultsApiPayload = {
+  defaults: SlotDefault[];
+  tasks: SlotDefaultTask[];
+};
+
+let slotDefaultsBundleCache: { at: number; data: SlotDefaultsApiPayload } | null = null;
+const SLOT_DEFAULTS_BUNDLE_TTL_MS = 3000;
+
+function invalidateSlotDefaultsBundleCache(): void {
+  slotDefaultsBundleCache = null;
+}
+
+/** Card Defaults reads — session-gated API in browser (prod anon RLS blocks direct SELECT). */
+async function fetchSlotDefaultsBundle(): Promise<SlotDefaultsApiPayload> {
+  if (
+    slotDefaultsBundleCache &&
+    Date.now() - slotDefaultsBundleCache.at < SLOT_DEFAULTS_BUNDLE_TTL_MS
+  ) {
+    return slotDefaultsBundleCache.data;
+  }
+
+  const res = await fetch("/api/shiftbuilder/slot-defaults", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const json = (await res.json().catch(() => ({}))) as SlotDefaultsApiPayload & { error?: string };
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Failed to load slot defaults (HTTP ${res.status})`);
+  }
+  const data = { defaults: json.defaults ?? [], tasks: json.tasks ?? [] };
+  slotDefaultsBundleCache = { at: Date.now(), data };
+  return data;
+}
+
 /** Settings / Card Defaults — sudo-gated API in browser; service role on server. */
 async function runSudoMutation<T>(
   action: string,
@@ -74,6 +108,7 @@ async function runSudoMutation<T>(
       /* non-fatal */
     }
     invalidateSlotDefaultsCache();
+    invalidateSlotDefaultsBundleCache();
     return result;
   }
   const result = await serverFallback();
@@ -84,6 +119,7 @@ async function runSudoMutation<T>(
     /* non-fatal */
   }
   invalidateSlotDefaultsCache();
+  invalidateSlotDefaultsBundleCache();
   return result;
 }
 
@@ -3227,6 +3263,17 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
   const cached = readSlotDefaultsCache<SlotDefault>();
   if (cached) return cached;
 
+  if (typeof window !== "undefined") {
+    try {
+      const { defaults } = await fetchSlotDefaultsBundle();
+      writeSlotDefaultsCache(defaults);
+      return defaults;
+    } catch (e) {
+      console.error("[shiftbuilder/data] getSlotDefaults API error:", e);
+      return [];
+    }
+  }
+
   const { data, error } = await supabase
     .from('slot_defaults')
     .select('slot_key, slot_type, rr_side, default_break_group')
@@ -3248,6 +3295,16 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
 }
 
 export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
+  if (typeof window !== "undefined") {
+    try {
+      const { tasks } = await fetchSlotDefaultsBundle();
+      return tasks;
+    } catch (e) {
+      console.error("[shiftbuilder/data] getSlotDefaultTasks API error:", e);
+      return [];
+    }
+  }
+
   const { data, error } = await supabase
     .from('slot_default_tasks')
     .select('id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order')
