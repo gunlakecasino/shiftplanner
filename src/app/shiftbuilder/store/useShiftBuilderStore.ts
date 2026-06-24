@@ -75,22 +75,6 @@ interface ShiftBuilderState {
   setGraveOnly: (v: boolean) => void;
   setRosterSearch: (v: string) => void;
 
-  // Direct feed from Sudo Weekly Roster "Apply Roster" action.
-  // When the operator hits "Apply Roster" in the Sudo tab, this is populated
-  // so the main board + TM Picker can show exactly the scheduled TMs from
-  // the weekly roster without depending on the service role key path.
-  weeklyRosterScheduled: {
-    weekStart: string | null;
-    grave: string[];      // union across the week (legacy / diagnostics)
-    pmOverlap: string[];
-    amOverlap: string[];
-    /** Per-night scheduled sets keyed by local YYYY-MM-DD (Thu→Wed roster week). */
-    graveByNight?: Record<string, string[]>;
-    pmOverlapByNight?: Record<string, string[]>;
-    amOverlapByNight?: Record<string, string[]>;
-  };
-  setWeeklyRosterScheduled: (data: ShiftBuilderState['weeklyRosterScheduled']) => void;
-
   // Short-lived pending drag state (used to keep source cards stable during reassignment)
   pendingDrag: null | {
     fromSlot: string;
@@ -272,17 +256,6 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       set({ aiSessionUsage: cleared });
     },
 
-    // Direct "Apply Roster" feed from Sudo Weekly Roster tab
-    weeklyRosterScheduled: {
-      weekStart: null,
-      grave: [],
-      pmOverlap: [],
-      amOverlap: [],
-      graveByNight: {},
-      pmOverlapByNight: {},
-      amOverlapByNight: {},
-    },
-
     // Short-lived pending drag state to prevent mid-gesture mutation of source cards.
     // This is the #1 root cause of assigned TM drag being unreliable compared to tasks.
     pendingDrag: null as null | {
@@ -293,19 +266,6 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
 
     liveEngineConfigForAI: null,
     setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
-
-    setWeeklyRosterScheduled: (data) => {
-      set({ weeklyRosterScheduled: data });
-      // Always persist so the feed survives reloads / tab switches and the
-      // MarkerPad default list (the strict scheduled+eligible+unassigned list)
-      // stays correct after "Apply Roster".
-      try {
-        // dynamic import to avoid pulling the debug helper at module top level
-        import("@/lib/shiftbuilder/debugSessionLog").then(({ persistWeeklyRosterScheduled }) => {
-          if (data && (data as any).weekStart) persistWeeklyRosterScheduled(data);
-        });
-      } catch {}
-    },
 
     setPendingDrag: (drag) => set({ pendingDrag: drag }),
   }))

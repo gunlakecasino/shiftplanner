@@ -167,6 +167,20 @@ export async function getScheduledIdsForNight(
   return { grave, amOverlap, pmOverlap, onCall };
 }
 
+/** All scheduled TM ids for a night (grave + overlaps + on-call), alias-expanded. */
+export async function getAllScheduledTmIdsForNight(
+  nightDate: Date,
+  nightId?: string | null,
+): Promise<Set<string>> {
+  const ids = await expandScheduledIdsForNight(await getScheduledIdsForNight(nightDate, nightId));
+  return new Set([
+    ...ids.grave,
+    ...ids.pmOverlap,
+    ...ids.amOverlap,
+    ...ids.onCall,
+  ]);
+}
+
 /** Expand a schedule id set so both profile UUID and tm_id slug match board ids. */
 function expandIdSetWithProfiles(
   ids: Set<string>,

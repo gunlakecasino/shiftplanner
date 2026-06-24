@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import {
   FLOATING_NAV_FALLBACK_MAX_WIDTH_PX,
   FLOATING_NAV_MAX_WIDTH_PX,
@@ -30,6 +31,7 @@ import {
   Eraser,
   FilePenLine,
   Check,
+  CalendarDays,
 } from "lucide-react";
 
 export interface DayItem {
@@ -57,7 +59,6 @@ export interface FloatingNavProps {
   onNavigateToDate?: (date: Date) => void;
   /** Currently selected grave shift date — highlights the day in the month picker. */
   selectedDate?: Date;
-  onLaunchpad?: () => void;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
   onCopyPriorWeekTasks?: () => void;
@@ -124,7 +125,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     onToday,
     onNavigateToDate,
     selectedDate,
-    onLaunchpad,
     onPrevWeek,
     onNextWeek,
     onCopyPriorWeekTasks,
@@ -828,6 +828,16 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
                 {showAdminLinks && <div className={menuDividerClass} />}
+                {showAdminLinks && (
+                  <Link
+                    href="/shiftbuilder/graves-schedule"
+                    className={menuItemClass}
+                    onClick={() => setMoreOpen(false)}
+                  >
+                    <CalendarDays size={14} />
+                    Default Schedule
+                  </Link>
+                )}
                 {showPublishControls && (
                   <button
                     type="button"
@@ -884,11 +894,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
                 <div className={menuDividerClass} />
-                {onLaunchpad && (
-                  <button type="button" className={menuItemClass} onClick={() => { onLaunchpad(); setMoreOpen(false); }}>
-                    Back to Launchpad
-                  </button>
-                )}
                 {showDraftTools && onToggleWeekHealth && (
                   <button type="button" className={menuItemClass} onClick={() => { onToggleWeekHealth(); setMoreOpen(false); }}>
                     {weekHealthVisible ? "Hide" : "Show"} Week Health

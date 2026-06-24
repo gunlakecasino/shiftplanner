@@ -47,6 +47,7 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
 import { RotationHealthFloater } from "./RotationHealthFloater";
+import { setOpsStatusBarVisible } from "./OpsStatusBar";
 import type { TmEntry } from "./MarkerPad";
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
@@ -718,6 +719,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const closeTaskTextEditPad = React.useCallback(() => {
     setActiveTaskEditPad(null);
   }, []);
+
+  const tabletOverlayOpen =
+    isTabletTouchDevice() && !!(selectedSlotKey || activeTaskEditPad);
+
+  React.useEffect(() => {
+    setOpsStatusBarVisible(!tabletOverlayOpen);
+  }, [tabletOverlayOpen]);
 
   const renderTaskTextEditPad = () => {
     if (isPrintPreview || !activeTaskEditPad) return null;
@@ -1941,7 +1949,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       {/* Rotation health — standalone orb above LIVE; hover for %. */}
       {!isPrintPreview && (
         <RotationHealthFloater
-          visible
+          visible={!tabletOverlayOpen}
           auxDefs={auxDefs}
           assignments={displayAssignments}
           fitBySlot={fitBySlot || {}}

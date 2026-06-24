@@ -37,7 +37,7 @@ import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
 import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
-import { WeeklyRosterTab } from "../sudo/WeeklyRosterTab";
+import { GravesDefaultSchedulePage } from "../components/GravesDefaultSchedulePage";
 import {
   SETTINGS_SECTIONS,
   SETTINGS_TABS,
@@ -199,13 +199,12 @@ function SettingsTabPanel({
           isDark={isDark}
         />
       )}
-      {activeTab === "weeklyRoster" && (
-        <WeeklyRosterTab
-          onDataChanged={() => onDataChanged("weeklyRoster", { area: "roster_update" })}
-          isDark={isDark}
-          weekStart={weekStart}
-        />
-      )}
+      {activeTab === "gravesSchedule" &&
+        (permissions?.canApplySchedules ? (
+          <GravesDefaultSchedulePage embedded />
+        ) : (
+          <InsufficientPermNotice feature="Graves Default Schedule" isDark={isDark} />
+        ))}
     </div>
   );
 }

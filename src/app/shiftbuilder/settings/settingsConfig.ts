@@ -2,11 +2,11 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Bolt,
+  CalendarDays,
   Layers,
   LayoutDashboard,
   ScrollText,
   SlidersHorizontal,
-  Table2,
   UserCog,
   Users,
 } from "lucide-react";
@@ -15,7 +15,7 @@ export type SettingsTab =
   | "dashboard"
   | "defaults"
   | "team"
-  | "weeklyRoster"
+  | "gravesSchedule"
   | "users"
   | "engine"
   | "planner"
@@ -62,12 +62,12 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     description: "Roster profiles, eligibility, and grave pools",
   },
   {
-    id: "weeklyRoster",
-    label: "Weekly Roster",
-    shortLabel: "Roster",
+    id: "gravesSchedule",
+    label: "Graves Schedule",
+    shortLabel: "Schedule",
     section: "people",
-    icon: Table2,
-    description: "Apply and manage the weekly deployment roster",
+    icon: CalendarDays,
+    description: "Master Fri–Thu grid — who is scheduled each grave night",
   },
   {
     id: "users",
@@ -123,7 +123,7 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
 export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "defaults",
   "team",
-  "weeklyRoster",
+  "gravesSchedule",
   "users",
   "reports",
   "auditLog",
@@ -140,7 +140,8 @@ export function isSettingsTab(tab: string): tab is SettingsTab {
 /** Legacy ?tab= values removed from the settings shell. */
 const DEPRECATED_SETTINGS_TAB_REDIRECTS: Record<string, SettingsTab> = {
   tasks: "defaults",
-  tmDefaults: "weeklyRoster",
+  tmDefaults: "gravesSchedule",
+  weeklyRoster: "gravesSchedule",
 };
 
 export function resolveSettingsTab(param: string | null): SettingsTab {

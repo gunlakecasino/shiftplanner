@@ -7,6 +7,10 @@ import {
   verifyPinChangeToken,
 } from "@/lib/auth/opsSession.server";
 import { pinPolicyError } from "@/lib/auth/pinPolicy";
+import {
+  changeOpsUserPin,
+  OpsPinChangeError,
+} from "@/lib/auth/opsUserLifecycle.server";
 import { loadOpsUserById, userForClientResponse } from "@/lib/auth/opsUser.server";
 
 /**
@@ -78,20 +82,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 
-  const { error: changeErr } = await client.rpc("change_user_pin", {
-    p_user_id: userId,
-    p_current_pin: currentPin,
-    p_new_pin: newPin,
-    p_require_must_change: true,
-  });
-
-  if (changeErr) {
-    const msg = changeErr.message || "PIN change failed";
-    if (msg.toLowerCase().includes("incorrect")) {
-      await client.rpc("record_failed_pin_attempt", { p_user_id: userId });
+  try {
+    await changeOpsUserPin(client, {
+      userId,
+      currentPin,
+      newPin,
+      requireMustChange: true,
+    });
+  } catch (err: unknown) {
+    if (err instanceof OpsPinChangeError) {
+      if (err.code === "incorrect") {
+        await client.rpc("record_failed_pin_attempt", { p_user_id: userId });
+      }
+      const status =
+        err.code === "incorrect"
+          ? 401
+          : err.code === "not_authorized" || err.code === "expired"
+            ? 403
+            : 400;
+      return NextResponse.json({ error: err.message }, { status });
     }
-    const status = msg.toLowerCase().includes("incorrect") ? 401 : 400;
-    return NextResponse.json({ error: msg }, { status });
+    const msg = err instanceof Error ? err.message : "PIN change failed";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 
   await client.rpc("reset_pin_attempts", { p_user_id: userId });

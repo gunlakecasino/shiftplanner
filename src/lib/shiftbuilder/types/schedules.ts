@@ -80,8 +80,7 @@ export const GRAVE_WEEK_PATTERN_LENGTH = 7;
  *   - label === "OFF"
  * as non-working (OFF / not scheduled).
  *
- * This is the canonical check used by the board picker (getScheduledTmIdsForNightFromNewRoster)
- * and should be used in any sudo preview logic too.
+ * Used by graves_default_schedule resolution and schedule preview logic.
  */
 export function isWorkingShift(entry: WeeklyShift | null | undefined): boolean {
   if (!entry) return false;

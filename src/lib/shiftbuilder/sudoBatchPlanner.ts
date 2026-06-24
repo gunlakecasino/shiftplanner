@@ -47,7 +47,7 @@ export interface BatchWeekResult {
 export interface BatchRunOptions {
   /** If true, skip nights that already have ANY zone assignments (don't overwrite). */
   skipFilledNights?: boolean;
-  /** If true, also skip nights where night_tm_status has no present rows (no schedule loaded). */
+  /** If true, also skip nights with no TMs in the Graves Default Schedule for that date. */
   requireSchedule?: boolean;
   /**
    * If true, restrict the engine roster to only TMs whose names resolved in the
@@ -69,7 +69,7 @@ export interface BatchRunOptions {
  * Behaviour per night:
  *   - Respects `is_locked = true` (never overwrites a locked slot)
  *   - Respects `skipFilledNights` — skips the whole night if ≥1 zone already set
- *   - Respects `requireSchedule` — skips the night if night_tm_status is empty
+ *   - Respects `requireSchedule` — skips the night if Graves Default Schedule has no TMs
  *   - Only writes slots that were EMPTY before the run (fills gaps, not overwrites)
  */
 export async function batchRunEngineForWeek(
@@ -272,18 +272,17 @@ async function runEngineForSingleNight(params: {
   const { nightId, nightDate, dayName, grave, engineConfig, skillScores, slotDifficulty, prefByTm, pairByTm, accByTm, adjacency, zoneMatrix, skipFilledNights, requireSchedule, filterBySchedule } = params;
   const notes: string[] = [];
 
-  // Load night-specific data in parallel (dynamic to keep data.ts off the static graph)
-  const { getScheduledTmIdsForNight } = await import("@/lib/shiftbuilder/schedules");
-  const nightDateObj = new Date(nightDate);
+  // Load night-specific data in parallel (dynamic import keeps heavy modules off static graph)
+  const { getAllScheduledTmIdsForNight } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
+  const nightDateObj = new Date(`${nightDate}T12:00:00`);
   const { getNightAssignments } = await import("@/lib/shiftbuilder/data");
   const [scheduledIds, existingAssignments] = await Promise.all([
-    getScheduledTmIdsForNight(nightDateObj),
+    getAllScheduledTmIdsForNight(nightDateObj, nightId),
     getNightAssignments(nightId),
   ]);
 
-  // Optionally skip nights with no schedule import
   if (requireSchedule && scheduledIds.size === 0) {
-    return { nightId, nightDate, dayName, status: "skip", assigned: 0, preserved: 0, unfilled: 0, notes: ["Skipped: no schedule data imported for this night"] };
+    return { nightId, nightDate, dayName, status: "skip", assigned: 0, preserved: 0, unfilled: 0, notes: ["Skipped: no TMs scheduled in Graves Default Schedule for this night"] };
   }
 
   // Check for existing zone assignments

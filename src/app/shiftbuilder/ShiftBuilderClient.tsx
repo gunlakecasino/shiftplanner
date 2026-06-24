@@ -95,9 +95,6 @@ import {
   formatLocalDateISO, parseLocalDateISO,
 } from "@/lib/shiftbuilder/dateUtils"; // formatWeekLabel, MONTH_SHORT, rosterWeekStartISO, isDayInRosterWeek, DayDef pruned (unused after extractions; keep list minimal for lint)
 import {
-  readWeeklyRosterScheduledFromStorage,
-} from "@/lib/shiftbuilder/debugSessionLog"; // debugSessionLog pruned (unused after extraction)
-import {
   assignmentTmId,
   boardTmId,
   boardTmIdsFromScheduled,
@@ -192,7 +189,7 @@ import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefau
 import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
-import { OpsStatusBar, ensureOpsStatusBar, hideOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
+import { OpsStatusBar, ensureOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
 // CanvasEngineCluster removed (its week/rotation health box + pill was the "old" one overtaking the surface).
 // Rotation health is now the compact side drawer in RotationHealthFloater (with Clear/Run engine inside).
 import type { EngineRunPhase, CoverageEngineRunOptions } from "./components/CanvasEngineCluster";
@@ -231,7 +228,6 @@ import {
   ensureWeekPlacementHistories,
   getCachedWeekPlacementHistories,
 } from "./lib/weekPlacementHistoriesCache";
-import { ShiftBuilderLaunchpad } from "./components/ShiftBuilderLaunchpad";
 // LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
 // their (and their transitive deps like useCommandActions) out of the initial static
 // module graph of this giant file. This is the latest step in the long-running effort
@@ -243,37 +239,10 @@ import {
   useAuxDefs,
   useGraveOnly,
 } from "./store/useShiftBuilderStore";
-import { createRoot, Root } from "react-dom/client";
-
-/** Body-mounted launchpad shell — must not intercept clicks when canvas is active. */
-const LAUNCHPAD_ROOT_ID = "shiftbuilder-launchpad-root";
-
-function setLaunchpadRootVisible(container: HTMLDivElement, visible: boolean) {
-  container.style.transition =
-    "opacity var(--sb-dur-fast, 0.22s) var(--sb-spring-gentle, ease)";
-  if (visible) {
-    container.style.display = "block";
-    container.style.visibility = "visible";
-    container.style.pointerEvents = "auto";
-    requestAnimationFrame(() => {
-      container.style.opacity = "1";
-    });
-  } else {
-    container.style.opacity = "0";
-    container.style.pointerEvents = "none";
-    window.setTimeout(() => {
-      if (container.style.opacity === "0") {
-        container.style.display = "none";
-        container.style.visibility = "hidden";
-      }
-    }, 240);
-  }
-}
-
 /** Defensive teardown when leaving ShiftBuilder (avoids invisible full-screen blockers). */
 function teardownShiftBuilderBodyChrome() {
   if (typeof document === "undefined") return;
-  document.getElementById(LAUNCHPAD_ROOT_ID)?.remove();
+  document.getElementById("shiftbuilder-launchpad-root")?.remove();
   const wasPrinting = document.body.classList.contains("printing-dual-mode");
   document.body.classList.remove("printing-dual-mode");
   document.querySelector(".print-dual-container")?.remove();
@@ -572,16 +541,6 @@ function AuthedShiftBuilder() {
     return isNaN(d.getTime()) ? null : d;
   };
 
-  // Restore Apply Roster feed after refresh / HMR / tab reopen (localStorage).
-  // This makes the direct feed from "Apply Roster" survive reloads, which is
-  // required for the TM Picker to reliably show the scheduled + eligible + unassigned list.
-  useEffect(() => {
-    const saved = readWeeklyRosterScheduledFromStorage();
-    if (saved?.weekStart) {
-      useShiftBuilderStore.getState().setWeeklyRosterScheduled(saved as any);
-    }
-  }, []);
-
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     const savedDate = getSavedDate();
     if (savedDate) {
@@ -604,49 +563,20 @@ function AuthedShiftBuilder() {
     return idx;
   });
 
-  // === Launchpad vs full Canvas (elegant new default homescreen) =============
-  // The beautiful matching launchpad is now the default entry for ShiftBuilder.
-  // "Enter Canvas" (or clicking any day) loads the sacred interactive editor.
-  // Persist viewMode (like oms_selected_date) so hard refresh while in canvas
-  // re-loads directly into canvas (ensures OpsStatusBar + session pill visible
-  // without forcing operator back through launchpad).
-  const [viewMode, setViewMode] = useState<'launchpad' | 'canvas'>(() => {
+  React.useLayoutEffect(() => {
+    ensureOpsStatusBar();
     try {
-      const saved = localStorage.getItem("oms_view_mode");
-      if (saved === "canvas" || saved === "launchpad") return saved;
-    } catch {}
-    return "launchpad";
-  });
-  // One-shot "pending day to land on when we switch to canvas" from the launchpad.
-  // Using a ref (instead of state + effect that clears it) avoids any chance of
-  // the "setState in effect" causing repeated renders / max update depth.
-  // The value is consumed exactly once on the viewMode transition.
-  // (The previous useState + effect version was triggering "Maximum update depth exceeded"
-  // in some render/transition paths involving the launchpad <-> canvas switch.)
-  const pendingCanvasDayIndexRef = React.useRef<number | undefined>(undefined);
-
-  // Persisting setter used for all canvas/launchpad transitions so refresh keeps context.
-  const persistViewMode = React.useCallback((m: "launchpad" | "canvas") => {
-    try {
-      localStorage.setItem("oms_view_mode", m);
-    } catch {}
-    setViewMode(m);
-    // Extra defensive ensure for the OpsStatusBar + ai session pill when we go
-    // (or restore) to canvas. Complements the useLayoutEffect and the launchpad effect.
-    if (m === "canvas") {
-      ensureOpsStatusBar();
-    } else {
-      hideOpsStatusBar();
+      localStorage.removeItem("oms_view_mode");
+    } catch {
+      /* ignore */
     }
   }, []);
 
-  // Early ensure for the status bar on initial mount when we restored directly to canvas
-  // (the hard-refresh-in-canvas case). useLayoutEffect to run before browser paint.
-  React.useLayoutEffect(() => {
-    if (viewMode === "canvas") {
-      ensureOpsStatusBar();
-    }
-  }, [viewMode]);
+  React.useEffect(() => {
+    return () => {
+      teardownShiftBuilderBodyChrome();
+    };
+  }, []);
 
   // Early initialization of the roster bridges (Phase 3.1 unification).
   // Declared with `let` + empty defaults *here* (near the top, before any useMemo
@@ -657,116 +587,6 @@ function AuthedShiftBuilder() {
   let effectiveRealRoster: any[] = [];
   let effectiveGraveRoster: any[] = [];
   let effectiveGravesScheduleRoster: any[] = [];
-
-  const enterCanvas = React.useCallback((targetDayIndex?: number) => {
-    if (typeof targetDayIndex === 'number') {
-      pendingCanvasDayIndexRef.current = targetDayIndex;
-    }
-    persistViewMode('canvas');
-    // Force-create the pill synchronously from the action path. Complements the
-    // conditional mount + launchpad effect ensure. Guarantees visibility on first
-    // click into canvas after a hard refresh.
-    ensureOpsStatusBar();
-  }, [persistViewMode]);
-
-  // Apply a day pre-selected from the launchpad once we switch into canvas mode.
-  // Consumes the ref (set by enterCanvas) and clears it. Using ref + only depending on
-  // viewMode prevents any "set in effect + changing dep" re-trigger loops that could
-  // cause "Maximum update depth exceeded".
-  React.useEffect(() => {
-    if (viewMode === 'canvas' && typeof pendingCanvasDayIndexRef.current === 'number') {
-      const target = pendingCanvasDayIndexRef.current;
-      pendingCanvasDayIndexRef.current = undefined;
-      setSelectedDayIndex(target);
-    }
-  }, [viewMode]);
-
-  // === Imperative Launchpad Mounting (iPad Safari simulator fix) =============
-  // We mount the Launchpad via createRoot directly to document.body because
-  // declarative fixed/portal elements inside the canvas (which uses heavy
-  // transform + stacking contexts) do not reliably paint on iPad Safari simulator.
-  //
-  // Critical: We NEVER call root.unmount() during normal mode switches.
-  // Calling unmount() synchronously from an effect (or its cleanup) while the
-  // parent React tree is rendering triggers:
-  //   "Attempted to synchronously unmount a root while React was already rendering"
-  //
-  // Instead we use root.render(null) to clear it, which is safe.
-  // Real unmount + DOM removal only happens on final component teardown.
-  //
-  // CRITICAL: The container is position:fixed + inset:0. When canvas mode clears
-  // children via render(null), the empty div still captures all pointer events on
-  // iPad/desktop — page feels frozen after refresh (oms_view_mode=canvas) or after
-  // entering canvas. Always toggle display/pointer-events when hiding.
-  React.useLayoutEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    // Ensure we have a persistent container + root (create only once)
-    if (!launchpadContainerRef.current) {
-      // Orphan from a prior navigation if deferred cleanup did not run in time.
-      document.getElementById(LAUNCHPAD_ROOT_ID)?.remove();
-
-      const container = document.createElement('div');
-      container.id = LAUNCHPAD_ROOT_ID;
-      container.style.cssText = `
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 2147483640 !important;
-        background: transparent !important;
-        opacity: 0 !important;
-      `;
-      setLaunchpadRootVisible(container, false);
-      document.body.appendChild(container);
-      launchpadContainerRef.current = container;
-
-      const root = createRoot(container);
-      launchpadRootRef.current = root;
-    }
-
-    const container = launchpadContainerRef.current;
-    const root = launchpadRootRef.current!;
-
-    if (viewMode === 'launchpad') {
-      setLaunchpadRootVisible(container, true);
-      root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
-      console.log('[Launchpad] Rendered into body root (iPad reliable)');
-      hideOpsStatusBar();
-    } else {
-      // Safe way to "hide" the launchpad without unmounting the root.
-      // This avoids the synchronous unmount race condition entirely.
-      root.render(null);
-      setLaunchpadRootVisible(container, false);
-      // Explicit ensure here (in addition to <OpsStatusBar/> mount) defeats any timing
-      // where the conditional React tree hasn't committed the effect yet on refresh/enter.
-      ensureOpsStatusBar();
-    }
-
-    // This cleanup runs when AuthedShiftBuilder unmounts (leaving /shiftbuilder entirely).
-    // We MUST defer the actual .unmount() because calling it synchronously from
-    // an effect cleanup during a React update (e.g. viewMode change) triggers:
-    //   "Attempted to synchronously unmount a root while React was already rendering"
-    return () => {
-      const r = launchpadRootRef.current;
-      const c = launchpadContainerRef.current;
-
-      // Remove the full-screen shell immediately so client navigations to other
-      // routes are never left with a pointer-blocking layer.
-      if (c) {
-        setLaunchpadRootVisible(c, false);
-        try { c.remove(); } catch {}
-        launchpadContainerRef.current = null;
-      }
-      teardownShiftBuilderBodyChrome();
-
-      if (r) {
-        // Defer .unmount() only — safe outside React's commit phase.
-        setTimeout(() => {
-          try { r.unmount(); } catch {}
-          launchpadRootRef.current = null;
-        }, 0);
-      }
-    };
-  }, [viewMode, enterCanvas]);
 
   const [currentView, setCurrentView] = useState<"deployment" | "breaks" | "weekly">(() => {
     const saved = localStorage.getItem("oms_current_view");
@@ -984,20 +804,6 @@ function AuthedShiftBuilder() {
 
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
-
-  // Imperative launchpad container (required for reliable rendering on iPad Safari simulator)
-  const launchpadContainerRef = useRef<HTMLDivElement | null>(null);
-  const launchpadRootRef = useRef<Root | null>(null);
-
-  const handleBackToLaunchpad = React.useCallback(() => {
-    persistViewMode('launchpad');
-    const root = launchpadRootRef.current;
-    const launchContainer = launchpadContainerRef.current;
-    if (root && launchContainer) {
-      setLaunchpadRootVisible(launchContainer, true);
-      root.render(<ShiftBuilderLaunchpad onEnterCanvas={enterCanvas} />);
-    }
-  }, [persistViewMode, enterCanvas]);
 
   // === Date / week selection ===
   // todayDate holds the active SHIFT date (not the calendar date) — see
@@ -2048,7 +1854,6 @@ function AuthedShiftBuilder() {
 
   // === Zoom & centering (extracted to useZoom) ===
   const showWeekHealthBar =
-    viewMode === "canvas" &&
     currentView === "deployment" &&
     isBuilderDeployment &&
     !isWeekHealthTrackerDismissed;
@@ -2934,8 +2739,7 @@ function AuthedShiftBuilder() {
       const {
         createNightScheduleStatusChannel,
         createCallOffsChannel,
-        createTMDefaultSchedulesChannel,
-        createTMOnCallSchedulesChannel,
+        createGravesScheduleChannels,
         unsubscribeChannel,
       } = await import("@/lib/shiftbuilder/data");
 
@@ -2966,7 +2770,7 @@ function AuthedShiftBuilder() {
       });
       createdChannels.push(callOffChannel);
 
-      const defaultSchedulesChannel = createTMDefaultSchedulesChannel(async () => {
+      const refreshScheduledRoster = async () => {
         try {
           const dateStr = selectedDay.date.toISOString().slice(0, 10);
           const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
@@ -2977,32 +2781,20 @@ function AuthedShiftBuilder() {
             setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
-        console.log('[shiftbuilder] tm_default_schedules changed — refreshed via API');
-      });
-      createdChannels.push(defaultSchedulesChannel);
+      };
 
-      const onCallSchedulesChannel = createTMOnCallSchedulesChannel(async () => {
-        try {
-          const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
-            credentials: "same-origin",
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
-          }
-        } catch {}
-        console.log('[shiftbuilder] tm_on_call_schedules changed — refreshed via API');
+      const gravesScheduleChannels = createGravesScheduleChannels(async () => {
+        await refreshScheduledRoster();
+        console.log('[shiftbuilder] graves schedule changed — refreshed via API');
       });
-      createdChannels.push(onCallSchedulesChannel);
+      createdChannels.push(...gravesScheduleChannels);
 
       // Build teardown after we know we weren't cancelled
       if (!cancelled) {
         teardownFns.push(
           () => unsubscribeChannel(statusChannel),
           () => unsubscribeChannel(callOffChannel),
-          () => unsubscribeChannel(defaultSchedulesChannel),
-          () => unsubscribeChannel(onCallSchedulesChannel),
+          ...gravesScheduleChannels.map((ch) => () => unsubscribeChannel(ch)),
         );
       }
     })();
@@ -4156,7 +3948,6 @@ function AuthedShiftBuilder() {
   const deferredDraftAssignmentsForFit = useDeferredValue(draftAssignments);
 
   const deploymentRotationFitEnabled =
-    viewMode === "canvas" &&
     currentView === "deployment" &&
     engineRunPhase === "idle" &&
     !restoreDefaultBreaksBusy &&
@@ -5038,7 +4829,6 @@ function AuthedShiftBuilder() {
 
   const pickerRotationSortEnabled =
     !!selectedSlotKey &&
-    viewMode === "canvas" &&
     (currentView === "deployment" || currentView === "weekly");
 
   const pickerCurrentIso = nightIsoFromDate(
@@ -7400,22 +7190,15 @@ function AuthedShiftBuilder() {
           setSelectedDayIndex(idx);
         }}
         selectedDate={DAY_DEFS[selectedDayIndex]?.date}
-        onLaunchpad={viewMode === "canvas" ? handleBackToLaunchpad : undefined}
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
         onCopyPriorWeekTasks={handleCopyPriorWeekSameDayTasks}
         onCopyYesterdayTasks={handleCopyYesterdayTasks}
-        onRestoreDefaultBreaks={
-          viewMode === "canvas" ? handleRestoreDefaultBreaks : undefined
-        }
+        onRestoreDefaultBreaks={handleRestoreDefaultBreaks}
         restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
-        onApplyDefaultTasks={
-          viewMode === "canvas" && canAccessSudo ? handleApplyDefaultTasks : undefined
-        }
+        onApplyDefaultTasks={canAccessSudo ? handleApplyDefaultTasks : undefined}
         applyDefaultTasksBusy={applyDefaultTasksBusy}
-        onToggleWeekHealth={
-          viewMode === "canvas" ? handleToggleWeekHealthTracker : undefined
-        }
+        onToggleWeekHealth={handleToggleWeekHealthTracker}
         weekHealthVisible={!isWeekHealthTrackerDismissed}
         weekHealthPercent={weekAverageHealth}
         weekHealthLoading={weekHealthLoading}
@@ -7441,25 +7224,19 @@ function AuthedShiftBuilder() {
           canPublish ? () => void handleToggleDayPublished() : undefined
         }
         publishDayBusy={publishDayBusy}
-        onRunEngine={
-          viewMode === "canvas" && canRunEngine ? runXaiEngineFromCanvas : undefined
-        }
-        onClearDay={
-          viewMode === "canvas" && canSeeDraftData ? handleClearBoard : undefined
-        }
+        onRunEngine={canRunEngine ? runXaiEngineFromCanvas : undefined}
+        onClearDay={canSeeDraftData ? handleClearBoard : undefined}
         isDraftMode={isDraftMode}
         draftSlotCount={draftSlotCount}
-        onToggleDraftMode={
-          viewMode === "canvas" && canSeeDraftData ? toggleDraftMode : undefined
-        }
+        onToggleDraftMode={canSeeDraftData ? toggleDraftMode : undefined}
         onSaveAllDraft={
-          viewMode === "canvas" && canSeeDraftData
+          canSeeDraftData
             ? () => {
                 void applyDraft();
               }
             : undefined
         }
-        onDiscardDraft={viewMode === "canvas" ? discardDraft : undefined}
+        onDiscardDraft={discardDraft}
         permissions={permissions}
       />
 
@@ -8515,8 +8292,7 @@ function AuthedShiftBuilder() {
         />
       )}
 
-      {/* Permanent Ops Status Bar — visible only inside the canvas (hidden on launchpad for cleaner presentation) */}
-      {viewMode === 'canvas' && <OpsStatusBar />}
+      <OpsStatusBar />
 
       {/* Old CanvasEngineCluster / week rotation health box removed.
           The rotation health is now exclusively the compact side drawer (RotationHealthFloater with side-right-collapsed)

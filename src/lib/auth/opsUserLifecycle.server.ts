@@ -3,6 +3,41 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveStoredUserRole } from "./roleStorage";
 
 const BCRYPT_ROUNDS = 12;
+const TEMP_PIN_TTL_MS = 72 * 60 * 60 * 1000;
+
+export type OpsPinChangeErrorCode =
+  | "incorrect"
+  | "expired"
+  | "not_authorized"
+  | "not_found"
+  | "validation";
+
+export class OpsPinChangeError extends Error {
+  readonly code: OpsPinChangeErrorCode;
+
+  constructor(message: string, code: OpsPinChangeErrorCode) {
+    super(message);
+    this.name = "OpsPinChangeError";
+    this.code = code;
+  }
+}
+
+function normalizeBcryptHash(hash: string): string {
+  return hash.replace(/^\$2a\$/, "$2b$");
+}
+
+export function isTempPinExpired(
+  pinIssuedAt: string | null | undefined,
+  mustChangePin: boolean,
+): boolean {
+  if (!mustChangePin || !pinIssuedAt) return false;
+  const issued = new Date(pinIssuedAt).getTime();
+  return !Number.isNaN(issued) && issued < Date.now() - TEMP_PIN_TTL_MS;
+}
+
+async function verifyOpsPin(pin: string, storedHash: string): Promise<boolean> {
+  return bcrypt.compare(pin, normalizeBcryptHash(storedHash));
+}
 
 export function generateSixDigitPin(): string {
   let pin = "";
@@ -112,4 +147,69 @@ export async function issueOpsTemporaryPin(
   }
 
   return temporaryPin;
+}
+
+/** First-login / admin-reset PIN change — uses bcryptjs (not Postgres crypt). */
+export async function changeOpsUserPin(
+  client: SupabaseClient,
+  input: {
+    userId: string;
+    currentPin: string;
+    newPin: string;
+    requireMustChange?: boolean;
+  },
+): Promise<void> {
+  const { userId, currentPin, newPin, requireMustChange = true } = input;
+
+  const { data: row, error } = await client
+    .from("users")
+    .select("pin_hash, must_change_pin, pin_issued_at, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new OpsPinChangeError(error.message, "validation");
+  }
+  if (!row?.pin_hash || !row.is_active) {
+    throw new OpsPinChangeError("user not found or inactive", "not_found");
+  }
+
+  if (requireMustChange && !row.must_change_pin) {
+    throw new OpsPinChangeError(
+      "PIN change not authorized for this account state",
+      "not_authorized",
+    );
+  }
+
+  if (isTempPinExpired(row.pin_issued_at, Boolean(row.must_change_pin))) {
+    throw new OpsPinChangeError(
+      "Temporary PIN has expired — contact your administrator",
+      "expired",
+    );
+  }
+
+  const currentOk = await verifyOpsPin(currentPin, row.pin_hash);
+  if (!currentOk) {
+    throw new OpsPinChangeError("Current PIN is incorrect", "incorrect");
+  }
+
+  const pin_hash = await hashOpsPin(newPin);
+  const now = new Date().toISOString();
+
+  const { error: updateErr } = await client
+    .from("users")
+    .update({
+      pin_hash,
+      must_change_pin: false,
+      last_pin_change_at: now,
+      pin_issued_at: null,
+      failed_pin_attempts: 0,
+      locked_until: null,
+      updated_at: now,
+    })
+    .eq("id", userId);
+
+  if (updateErr) {
+    throw new OpsPinChangeError(updateErr.message, "validation");
+  }
 }

@@ -285,7 +285,7 @@ function ScheduleSection({
   );
 }
 
-export function GravesDefaultSchedulePage() {
+export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const [grid, setGrid] = useState<GridData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -445,18 +445,28 @@ export function GravesDefaultSchedulePage() {
 
   return (
     <div
-      className="min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"
+      className={embedded ? "h-full min-h-0 bg-transparent text-[#1C1C1E]" : "min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"}
       style={{ fontFamily: "var(--font-atkinson, system-ui, sans-serif)" }}
     >
-      <header className="border-b border-neutral-200 bg-white/90 backdrop-blur px-6 py-4 flex items-center justify-between">
+      <header
+        className={
+          embedded
+            ? "border-b border-neutral-200/80 px-1 pb-3 mb-4 flex items-center justify-between"
+            : "border-b border-neutral-200 bg-white/90 backdrop-blur px-6 py-4 flex items-center justify-between"
+        }
+      >
         <div>
-          <Link
-            href="/shiftbuilder"
-            className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-800"
-          >
-            ← ShiftBuilder
-          </Link>
-          <h1 className="text-[22px] font-bold tracking-tight mt-1">Graves Default Schedule</h1>
+          {!embedded && (
+            <Link
+              href="/shiftbuilder"
+              className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-800"
+            >
+              ← ShiftBuilder
+            </Link>
+          )}
+          <h1 className={embedded ? "text-[16px] font-bold tracking-tight" : "text-[22px] font-bold tracking-tight mt-1"}>
+            Graves Default Schedule
+          </h1>
           <p className="text-[12px] text-neutral-500 mt-0.5">
             Master Fri–Thu grid. Add or remove TMs per band; toggle days for who is scheduled each night.
           </p>
@@ -479,7 +489,7 @@ export function GravesDefaultSchedulePage() {
         </div>
       </header>
 
-      <main className="max-w-[1100px] mx-auto px-6 py-8">
+      <main className={embedded ? "max-w-none px-0 py-0 overflow-y-auto" : "max-w-[1100px] mx-auto px-6 py-8"}>
         {notice && (
           <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-[12px] text-emerald-900">
             {notice}

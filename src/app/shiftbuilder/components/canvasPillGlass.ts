@@ -35,6 +35,10 @@ export const CANVAS_PILL_MONO =
 /** Fixed stack anchor — sits above ops status pill (bottom 10px, ~36px tall). */
 export const ROTATION_HEALTH_BOTTOM_PX = 52;
 
+/** Bottom-corner chrome — below placement dock (70) and task/placement pads (210+). */
+export const OPS_PILL_Z = 45;
+export const ROTATION_HEALTH_Z = OPS_PILL_Z - 1;
+
 /** Per-day week health tracker — stacked above the rotation health cluster. */
 export const WEEK_HEALTH_TRACKER_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX + 92;
 

@@ -175,7 +175,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
   // -----------------------------------------------------------------------
   const handleRunNight = async (nightId: string, nightDate: string) => {
     if (!nightId || nightId.startsWith("derived-")) {
-      setBatchError("This night hasn't been created in the DB yet. Upload and apply a schedule first.");
+      setBatchError("This night hasn't been created in the DB yet. Open the board for that date first, or ensure the week exists in Batch Planner.");
       return;
     }
     setNightStates((prev) => ({ ...prev, [nightDate]: { phase: "running" } }));

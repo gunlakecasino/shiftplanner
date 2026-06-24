@@ -28,8 +28,6 @@ import { useToast } from "@/app/shiftbuilder/hooks/useToast";
 import { SudoTabLoading } from "./SudoGlass";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
-import { downloadOperatorOnboardingPdf } from "@/lib/auth/operatorOnboardingPdf";
-
 interface UsersTabProps {
   onDataChanged?: () => void;
   isDark?: boolean;
@@ -52,7 +50,6 @@ function formatWhen(iso: string | null | undefined): string {
 function TemporaryPinModal({
   open,
   operatorName,
-  username,
   temporaryPin,
   context,
   onClose,
@@ -60,14 +57,12 @@ function TemporaryPinModal({
 }: {
   open: boolean;
   operatorName: string;
-  username: string;
   temporaryPin: string;
   context: "create" | "reset";
   onClose: () => void;
   isDark?: boolean;
 }) {
   const [copied, setCopied] = React.useState(false);
-  const [printing, setPrinting] = React.useState(false);
 
   if (!open) return null;
 
@@ -113,38 +108,21 @@ function TemporaryPinModal({
           This PIN is shown once. It is not stored in plaintext. If lost, use &quot;Issue temporary PIN&quot; on the user profile.
         </p>
 
-        <div className="flex flex-col gap-2 mt-5">
+        <div className="flex gap-3 mt-5">
           <button
             type="button"
-            disabled={printing}
-            onClick={() => {
-              setPrinting(true);
-              void downloadOperatorOnboardingPdf({
-                operatorName,
-                username,
-                temporaryPin,
-              }).finally(() => setPrinting(false));
-            }}
-            className="w-full py-2.5 rounded-xl border text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+            onClick={() => void copy()}
+            className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5"
           >
-            {printing ? "Preparing PDF…" : "Print onboarding card (PDF)"}
+            {copied ? "Copied" : "Copy PIN"}
           </button>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => void copy()}
-              className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5"
-            >
-              {copied ? "Copied" : "Copy PIN"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white text-sm font-medium"
-            >
-              Done
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white text-sm font-medium"
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -173,7 +151,6 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
 
   const [pinReveal, setPinReveal] = React.useState<{
     operatorName: string;
-    username: string;
     temporaryPin: string;
     context: "create" | "reset";
   } | null>(null);
@@ -313,7 +290,6 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
           setAdminPinPrompt(null);
           setPinReveal({
             operatorName: user.full_name || user.username,
-            username: user.username,
             temporaryPin,
             context: "reset",
           });
@@ -342,11 +318,12 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
 
     setCreating(true);
     const displayName = newUser.full_name.trim();
+    const createdUsername = newUser.username.trim();
     const createdRole = newUser.role;
     try {
       const result = await createUser({
         full_name: displayName,
-        username: newUser.username.trim(),
+        username: createdUsername,
         email: newUser.email.trim() || null,
         role: createdRole,
         permissions: sanitizePermissionOverrides(newUser.permissions),
@@ -371,7 +348,6 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
 
       setPinReveal({
         operatorName: displayName,
-        username: newUser.username.trim(),
         temporaryPin: result.temporaryPin,
         context: "create",
       });
@@ -713,7 +689,6 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
       <TemporaryPinModal
         open={!!pinReveal}
         operatorName={pinReveal?.operatorName ?? ""}
-        username={pinReveal?.username ?? ""}
         temporaryPin={pinReveal?.temporaryPin ?? ""}
         context={pinReveal?.context ?? "create"}
         onClose={() => setPinReveal(null)}

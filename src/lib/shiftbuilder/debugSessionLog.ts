@@ -12,21 +12,4 @@ export function debugSessionLog(payload: Record<string, unknown>) {
   }).catch(() => {});
 }
 
-export const WEEKLY_ROSTER_STORAGE_KEY = "shiftbuilder_weeklyRosterScheduled";
 
-export function persistWeeklyRosterScheduled(data: unknown) {
-  try {
-    localStorage.setItem(WEEKLY_ROSTER_STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
-export function readWeeklyRosterScheduledFromStorage(): Record<string, unknown> | null {
-  try {
-    const raw = localStorage.getItem(WEEKLY_ROSTER_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}

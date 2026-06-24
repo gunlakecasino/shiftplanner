@@ -451,7 +451,7 @@ export async function getNightIdForDate(date: Date): Promise<string | null> {
  * be rare — schema mismatches or RLS issues).
  *
  * NOTE: weeks table is keyed by `week_ending` (Thu), not week_start. This
- * matches live schema and all other call sites (sudoActions, listSchedules, etc).
+ * matches live schema and all other week/night call sites.
  */
 export async function getOrCreateNightForDate(
   date: Date,
@@ -1689,7 +1689,7 @@ export async function seedDefaultTasksForNight(nightId: string): Promise<number>
 /**
  * Seed a night's break_assignments from the break_template table.
  * Called automatically by getOrCreateNightForDate — safe to also call
- * manually from the TasksTab "Apply defaults" button.
+ * manually from Settings → Card Defaults.
  * Idempotent: skips rows where (night_id, tm_id) already exists.
  */
 export async function seedDefaultBreaksForNight(nightId: string): Promise<number> {
@@ -2035,60 +2035,26 @@ export function createCallOffsChannel(
 }
 
 /**
- * Realtime channel for changes to tm_default_schedules.
- * Any change to a TM's default can affect who is considered "scheduled" on future days.
- * When this fires, the caller should re-fetch getScheduledTmIdsForNightFromNewRoster.
+ * Realtime channels for graves_default_schedule + night_on_call edits.
+ * When either fires, re-fetch /api/shiftbuilder/scheduled-roster for the active night.
  */
-export function createTMDefaultSchedulesChannel(
-  onChange: (payload: any) => void
-) {
-  const client = getSupabaseClient();
-
-  // Unique topic per creation so rapid effect re-runs / HMR never collide.
-  return freshChannel('shiftbuilder-tm-default-schedules')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'tm_default_schedules',
-      },
-      (payload) => {
-        console.log('[shiftbuilder] tm_default_schedules realtime change', payload.eventType);
-        onChange(payload);
-      }
-    )
-    .subscribe((status) => {
-      console.log('[shiftbuilder] tm_default_schedules subscription status:', status);
-    });
-}
-
-/**
- * Realtime channel for changes to tm_on_call_schedules (the weekly specials / overrides).
- * Critical for live reflection when user marks someone OFF or adds a special in Sudo Weekly Roster.
- */
-export function createTMOnCallSchedulesChannel(
-  onChange: (payload: any) => void
-) {
-  const client = getSupabaseClient();
-
-  // Unique topic per creation so rapid effect re-runs / HMR never collide.
-  return freshChannel('shiftbuilder-tm-on-call-schedules')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'tm_on_call_schedules',
-      },
-      (payload) => {
-        console.log('[shiftbuilder] tm_on_call_schedules realtime change', payload.eventType);
-        onChange(payload);
-      }
-    )
-    .subscribe((status) => {
-      console.log('[shiftbuilder] tm_on_call_schedules subscription status:', status);
-    });
+export function createGravesScheduleChannels(onChange: (payload: any) => void) {
+  const tables = ['graves_default_schedule', 'night_on_call'] as const;
+  const channels = tables.map((table) =>
+    freshChannel(`shiftbuilder-${table}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table },
+        (payload) => {
+          console.log(`[shiftbuilder] ${table} realtime change`, payload.eventType);
+          onChange(payload);
+        },
+      )
+      .subscribe((status) => {
+        console.log(`[shiftbuilder] ${table} subscription status:`, status);
+      }),
+  );
+  return channels;
 }
 
 // ============================================================================

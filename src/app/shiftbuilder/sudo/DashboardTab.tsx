@@ -3,8 +3,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { getActiveEngineConfig, type EngineConfig } from "@/lib/shiftbuilder/engineConfig";
-import { listSchedules, setWeekPublished, type ScheduleRecord } from "@/lib/shiftbuilder/sudoActions";
-import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import type { SettingsTab } from "../settings/settingsConfig";
 
 
@@ -16,7 +14,6 @@ export interface DashboardTabProps {
   weekStart?: Date | null;
   /** Navigate to another settings tab */
   onNavigate?: (tab: SettingsTab) => void;
-  /** Granular permissions — used to gate "Ready to Publish" widget etc. */
   permissions?: import("@/lib/auth/opsAuth").ShiftBuilderPermissions;
 }
 
@@ -24,27 +21,16 @@ export function DashboardTab({
   isDark = false,
   currentOperator,
   onNavigate,
-  onDataChanged,
-  permissions,
 }: DashboardTabProps) {
-  const canPublish = permissions?.canPublish ?? false;
   const [engineConfig, setEngineConfig] = React.useState<EngineConfig | null>(null);
-  const [unpublished, setUnpublished] = React.useState<ScheduleRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [cfg, schedules] = await Promise.all([
-          getActiveEngineConfig(),
-          listSchedules(),
-        ]);
-        if (!cancelled) {
-          setEngineConfig(cfg);
-          const drafts = schedules.filter(s => s.status !== "published");
-          setUnpublished(drafts);
-        }
+        const cfg = await getActiveEngineConfig();
+        if (!cancelled) setEngineConfig(cfg);
       } catch (e) {
         console.warn("[Dashboard] Failed to load dashboard data", e);
       } finally {
@@ -60,28 +46,8 @@ export function DashboardTab({
     onNavigate?.(tab);
   };
 
-  const handleQuickPublish = async (schedule: ScheduleRecord) => {
-    try {
-      await setWeekPublished(schedule.weekId, true);
-      logSettingsAudit({
-        tab: "dashboard",
-        action: "publish",
-        operator: currentOperator ?? null,
-        details: { weekId: schedule.weekId, weekLabel: schedule.weekLabel },
-      });
-      // Refresh local list
-      const fresh = await listSchedules();
-      const drafts = fresh.filter(s => s.status !== "published");
-      setUnpublished(drafts);
-      onDataChanged?.();
-    } catch (e: any) {
-      alert("Failed to publish: " + (e?.message || e));
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* Greeting + Context */}
       <div className="flex items-start justify-between">
         <div>
           <div className={cn("text-[11px] uppercase tracking-[2px] font-mono", isDark ? "text-[#8E8E93]" : "text-[#6C6C72]")}>
@@ -91,7 +57,7 @@ export function DashboardTab({
             {greetingName}
           </div>
           <div className={cn("mt-1 text-[13px]", isDark ? "text-zinc-400" : "text-[#5A5A5F]")}>
-            Welcome to Sudo — privileged operations control for GRAVE.
+            Welcome to OMS Settings — privileged operations control for GRAVE.
           </div>
         </div>
 
@@ -100,15 +66,7 @@ export function DashboardTab({
         </div>
       </div>
 
-      {/* Quick Status Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatusCard
-          isDark={isDark}
-          icon="schedule"
-          label="Current Week"
-          value="GRAVE Week 23"
-          sub="Fri 30 May – Thu 5 Jun"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatusCard
           isDark={isDark}
           icon="tune"
@@ -119,14 +77,13 @@ export function DashboardTab({
         />
         <StatusCard
           isDark={isDark}
-          icon="verified"
-          label="Last Applied"
-          value="Yesterday 02:14"
-          sub="TMS Week Ending 5-28"
+          icon="calendar_month"
+          label="Scheduling Source"
+          value="Graves Default Schedule"
+          sub="Fri–Thu master grid — no ADP uploads"
         />
       </div>
 
-      {/* Quick Actions */}
       <div>
         <div className={cn("text-[10px] uppercase tracking-[1.5px] font-mono mb-2", isDark ? "text-[#8E8E93]" : "text-[#6C6C72]")}>
           QUICK ACTIONS
@@ -143,6 +100,12 @@ export function DashboardTab({
             icon="layers"
             label="Manage Card Defaults"
             onClick={() => handleNav("defaults")}
+          />
+          <QuickAction
+            isDark={isDark}
+            icon="calendar_month"
+            label="Graves Schedule"
+            onClick={() => handleNav("gravesSchedule")}
           />
           <QuickAction
             isDark={isDark}
@@ -171,62 +134,14 @@ export function DashboardTab({
         </div>
       </div>
 
-      {/* Publish Widget - Weeks ready to be published (only for operators with canPublish) */}
-      {(unpublished.length > 0 && canPublish) && (
-        <div>
-          <div className={cn("text-[10px] uppercase tracking-[1.5px] font-mono mb-2 flex items-center justify-between", isDark ? "text-[#8E8E93]" : "text-[#6C6C72]")}>
-            <span>READY TO PUBLISH</span>
-            <span>{unpublished.length} week{unpublished.length > 1 ? "s" : ""}</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {unpublished.slice(0, 4).map((sch) => (
-              <div
-                key={sch.weekId}
-                className={cn(
-                  "flex items-center justify-between rounded-2xl border px-4 py-3",
-                  isDark ? "border-white/10 bg-white/4" : "border-black/10 bg-white"
-                )}
-              >
-                <div>
-                  <div className={cn("font-medium text-[13px]", isDark ? "text-zinc-100" : "text-[#1C1C1E]")}>
-                    {sch.weekLabel || sch.weekEnding}
-                  </div>
-                  <div className="text-[11px] text-[#6C6C72] font-mono truncate max-w-[220px]">
-                    {sch.schedulePath}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleQuickPublish(sch)}
-                  className="sb-interactive px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium"
-                >
-                  Publish
-                </button>
-              </div>
-            ))}
-            {unpublished.length > 4 && (
-              <button
-                onClick={() => handleNav("weeklyRoster")}
-                className={cn(
-                  "flex items-center justify-center rounded-2xl border text-sm font-medium",
-                  isDark ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-[#F8F8F6]"
-                )}
-              >
-                View all {unpublished.length} in Schedules →
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* System Notes / Future Widgets */}
       <div className={cn("rounded-2xl border p-5 text-[12.5px]", isDark ? "border-white/10 bg-white/3" : "border-black/8 bg-black/2")}>
         <div className="flex items-center gap-2 mb-2">
           <span className="ms text-[#B89708]" style={{ fontSize: 16 }}>info</span>
-          <span className="font-medium">Sudo Home</span>
+          <span className="font-medium">Settings Home</span>
         </div>
         <p className={cn("leading-relaxed", isDark ? "text-zinc-400" : "text-[#5A5A5F]")}>
-          Your calm command post. Use the section chips above the artboard for deep tools.
-          All changes here are audited and immediately available to the live floor.
+          Your calm command post. Use the section chips above for deep tools.
+          Who works each grave night is managed in Graves Schedule — legacy ADP / TM xlsx uploads are retired.
         </p>
       </div>
     </div>
@@ -251,8 +166,8 @@ function StatusCard({
   return (
     <div className={cn(
       "rounded-2xl border p-4",
-      isDark 
-        ? "border-white/10 bg-white/4" 
+      isDark
+        ? "border-white/10 bg-white/4"
         : "border-black/8 bg-white"
     )}>
       <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider mb-2">

@@ -14,7 +14,7 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
-import { ROTATION_HEALTH_BOTTOM_PX } from "./canvasPillGlass";
+import { ROTATION_HEALTH_BOTTOM_PX, ROTATION_HEALTH_Z } from "./canvasPillGlass";
 import { RotationHealthOrb } from "./RotationHealthOrb";
 
 export type RotationHealthPlacement =
@@ -26,8 +26,6 @@ export type RotationHealthPlacement =
 
 const OPS_PILL_STACK_BOTTOM_PX = ROTATION_HEALTH_BOTTOM_PX;
 const OPS_PILL_RIGHT_INSET = "max(10px, env(safe-area-inset-right, 0px))";
-const OPS_PILL_Z = 2147483647;
-const ROTATION_HEALTH_Z = OPS_PILL_Z - 1;
 
 function portalToBody(node: React.ReactNode): React.ReactNode {
   if (typeof document === "undefined") return null;

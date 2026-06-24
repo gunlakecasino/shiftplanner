@@ -34,7 +34,7 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
     key: "canApplySchedules",
     label: "Apply Schedules",
     group: "Schedules",
-    description: "Apply uploaded ADP schedules to live nights",
+    description: "Edit the Graves Default Schedule master grid",
   },
   {
     key: "canPublish",
