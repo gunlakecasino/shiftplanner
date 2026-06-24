@@ -48,3 +48,42 @@ export async function resumeShiftBuilderConnectivity(
 
   return resumeInFlight;
 }
+
+let deepRefreshInFlight: Promise<void> | null = null;
+
+/**
+ * Deep refresh for the active grave night: bust server bundles, invalidate TanStack,
+ * force refetch nightCore + nightSecondary, re-warm Supabase + realtime.
+ */
+export async function deepRefreshShiftBuilderDay(
+  opts: ShiftBuilderResumeOptions,
+): Promise<void> {
+  if (deepRefreshInFlight) return deepRefreshInFlight;
+
+  deepRefreshInFlight = (async () => {
+    const { queryClient, nightId, dateKey } = opts;
+
+    try {
+      await fetch("/api/shiftbuilder/refresh-day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ date: dateKey }),
+      });
+    } catch (e) {
+      console.warn("[shiftBuilderResume] refresh-day API failed (non-fatal)", e);
+    }
+
+    await resumeShiftBuilderConnectivity({ queryClient, nightId, dateKey });
+
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["nightCore", dateKey] }),
+      queryClient.refetchQueries({ queryKey: ["nightSecondary", dateKey] }),
+    ]);
+  })().finally(() => {
+    deepRefreshInFlight = null;
+  });
+
+  return deepRefreshInFlight;
+}

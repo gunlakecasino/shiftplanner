@@ -161,6 +161,34 @@ export function nightIsoFromDate(d: Date): string {
 /** Prior-placement window for critical repeat (same area as last N graves). */
 export const PRIOR_PLACEMENT_CRITICAL_WINDOW = 3;
 
+/**
+ * Canonical repeat key for prior-3 / critical-repeat checks.
+ * MRR8, WRR8, and RR8 all map to RR8 (same restroom number).
+ */
+export function placementRepeatKey(ui: string): string {
+  if (!ui) return ui;
+  const rr = ui.match(/^(?:M|W)?RR(\d+)$/i);
+  if (rr) return `RR${rr[1]}`;
+  return ui;
+}
+
+export function placementRepeatKeysMatch(a: string, b: string): boolean {
+  return placementRepeatKey(a) === placementRepeatKey(b);
+}
+
+/** Sum spread counts for all UI keys that share the same repeat area (RR sides). */
+export function spreadCountForRepeatKey(
+  counts: Map<string, number>,
+  slotKey: string,
+): number {
+  const target = placementRepeatKey(slotKey);
+  let total = 0;
+  for (const [ui, n] of counts) {
+    if (placementRepeatKey(ui) === target) total += n;
+  }
+  return total;
+}
+
 /** Card name trail — last N graves before tonight (newest first). */
 export const CARD_PLACEMENT_TRAIL_COUNT = 3;
 
@@ -226,7 +254,18 @@ export function isInPriorPlacementWindow(
   beforeIso?: string,
   window = PRIOR_PLACEMENT_CRITICAL_WINDOW,
 ): boolean {
-  return getLastPlacementSequence(history, window, beforeIso).includes(slotKey);
+  const target = placementRepeatKey(slotKey);
+  return getLastPlacementSequence(history, window, beforeIso).some(
+    (ui) => placementRepeatKey(ui) === target,
+  );
+}
+
+export function isSlotInPlacementSequence(
+  sequence: string[],
+  slotKey: string,
+): boolean {
+  const target = placementRepeatKey(slotKey);
+  return sequence.some((ui) => placementRepeatKey(ui) === target);
 }
 
 /**

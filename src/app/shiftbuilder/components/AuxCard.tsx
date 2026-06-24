@@ -438,6 +438,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             emptyPresentation="label"
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
+            placementTrailMatchSlotKey={def.key}
             nameSizeOverride={
               hasTM
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)

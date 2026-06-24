@@ -33,6 +33,7 @@ import {
   Check,
   CalendarDays,
   BarChart2,
+  RefreshCw,
 } from "lucide-react";
 
 export interface DayItem {
@@ -87,6 +88,9 @@ export interface FloatingNavProps {
   onOpenSettings?: (tab?: string) => void;
   onRunEngine?: () => void;
   onClearDay?: () => void;
+  /** Deep refresh: bust server caches + refetch night + placement histories. */
+  onRefreshDay?: () => void;
+  refreshDayBusy?: boolean;
   isDraftMode?: boolean;
   draftSlotCount?: number;
   onToggleDraftMode?: () => void;
@@ -143,6 +147,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     onOpenSettings,
     onRunEngine,
     onClearDay,
+    onRefreshDay,
+    refreshDayBusy = false,
     isDraftMode = false,
     draftSlotCount = 0,
     onToggleDraftMode,
@@ -768,7 +774,21 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Eraser size={14} /> Clear Day
                   </button>
                 )}
-                {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay)) && (
+                {onRefreshDay && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    disabled={refreshDayBusy}
+                    onClick={() => {
+                      onRefreshDay();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <RefreshCw size={14} className={refreshDayBusy ? "animate-spin" : undefined} />
+                    {refreshDayBusy ? "Refreshing day…" : "Refresh Day"}
+                  </button>
+                )}
+                {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
                 {showDraftTools && onToggleDraftMode && (

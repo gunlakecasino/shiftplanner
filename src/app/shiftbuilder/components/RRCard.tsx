@@ -167,6 +167,7 @@ const RRSide: React.FC<{
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
+          placementTrailMatchSlotKey={slotKey}
           onUnassignedClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
         />
       </div>

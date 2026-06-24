@@ -8,6 +8,8 @@ import {
   getLastPlacementSequence,
   getSpreadPlacementCounts,
   isInPriorPlacementWindow,
+  isSlotInPlacementSequence,
+  spreadCountForRepeatKey,
   PLACEMENT_SPREAD_NIGHTS,
   type PlacementCrossPattern,
   type PlacementRotationBasics,
@@ -281,7 +283,7 @@ export function computeSlotPlacementFit(
     PLACEMENT_SPREAD_NIGHTS,
     currentIso,
   );
-  const timesInSpread = spreadCounts.get(slotKey) ?? 0;
+  const timesInSpread = spreadCountForRepeatKey(spreadCounts, slotKey);
   const last5 = getLastPlacementSequence(history, LAST5_COUNT, currentIso);
   const currentTm = memberToPlacementProfile(members, tmId);
   const tmEligibleForSlot = currentTm
@@ -359,7 +361,7 @@ export function computeSlotPlacementFit(
     assigned: true,
     tmEligibleForSlot,
     timesInSpread,
-    inLast5: last5.includes(slotKey),
+    inLast5: isSlotInPlacementSequence(last5, slotKey),
     inPriorPlacementWindow: isInPriorPlacementWindow(history, slotKey, currentIso),
     padHistoryLoading: historiesLoading && !!tmId && !history,
     rotationBasics: basicsForScore,

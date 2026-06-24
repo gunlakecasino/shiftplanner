@@ -41,6 +41,8 @@ export type UsePlacementFitMapArgs = {
   allEligibleTms?: TmEntry[];
   /** For this-week repeat penalty in per-slot fit chips (prevents "strong" on 2×+ same place this week). */
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+  /** Bump to force placement-history refetch (deep refresh day). */
+  historyRefreshEpoch?: number;
 };
 
 export function usePlacementFitMap({
@@ -56,6 +58,7 @@ export function usePlacementFitMap({
   scheduledUnassigned = [],
   allEligibleTms = [],
   weeklyRecentHistory,
+  historyRefreshEpoch = 0,
 }: UsePlacementFitMapArgs): {
   fitBySlot: Record<string, PrerenderedPlacementFit>;
   historiesLoading: boolean;
@@ -91,6 +94,11 @@ export function usePlacementFitMap({
   const lastHistoriesSigRef = useRef<string>("");
 
   const shouldFetchHistories = (enabled || trailsEnabled) && !!tmIdsKey;
+
+  useEffect(() => {
+    lastFetchedKeyRef.current = null;
+    lastHistoriesSigRef.current = "";
+  }, [historyRefreshEpoch]);
 
   useEffect(() => {
     if (!tmIdsKey) {
@@ -146,7 +154,7 @@ export function usePlacementFitMap({
     return () => {
       cancelled = true;
     };
-  }, [shouldFetchHistories, tmIdsKey]);
+  }, [shouldFetchHistories, tmIdsKey, historyRefreshEpoch]);
 
   const otherTmProfiles = useMemo(() => {
     const out: Record<string, PlacementTmProfile | null> = {};

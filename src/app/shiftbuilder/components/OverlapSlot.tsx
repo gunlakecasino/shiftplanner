@@ -172,6 +172,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
+          placementTrailMatchSlotKey={slotKey}
           nameSizeOverride={showDigitalAssists ? 18 : 16}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {

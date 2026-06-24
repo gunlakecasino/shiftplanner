@@ -125,6 +125,7 @@ import WeeklyOverview from "./components/WeeklyOverview";
 // anything that must not be required at Client evaluation time.
 import { useShiftData } from "./hooks/useShiftData";
 import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
+import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
   initLiveCacheForNight,
@@ -3874,6 +3875,8 @@ function AuthedShiftBuilder() {
   // 1. Default = scheduled tonight (correct band) + eligible + unassigned
   // 2. Search = all eligible roster TMs; can add on-call for tonight
   const [pickerScheduleEpoch, setPickerScheduleEpoch] = React.useState(0);
+  const [fitHistoryRefreshEpoch, setFitHistoryRefreshEpoch] = React.useState(0);
+  const [refreshDayBusy, setRefreshDayBusy] = React.useState(false);
 
   React.useEffect(() => {
     setPickerScheduleEpoch((e) => e + 1);
@@ -4003,6 +4006,7 @@ function AuthedShiftBuilder() {
       scheduledUnassigned: markerScheduledUnassigned,
       allEligibleTms: markerAllEligibleTms,
       weeklyRecentHistory: plannedThisWeekRecentHistory,
+      historyRefreshEpoch: fitHistoryRefreshEpoch,
     });
 
   // Align with WeekHealthTracker pill index (selectedDayIndex), not deferred board index.
@@ -4888,6 +4892,37 @@ function AuthedShiftBuilder() {
   const activePickerScheduledUnassigned = selectedSlotKey
     ? pickerSortedUnassigned
     : markerScheduledUnassigned;
+
+  const handleDeepRefreshDay = React.useCallback(async () => {
+    const qc = currentNight.queryClient;
+    if (!qc) return;
+    const dateKey = formatLocalDateISO(selectedDay.date);
+    setRefreshDayBusy(true);
+    try {
+      await deepRefreshShiftBuilderDay({
+        queryClient: qc,
+        nightId: queryNightId || nightId,
+        dateKey,
+      });
+      setPickerScheduleEpoch((e) => e + 1);
+      setFitHistoryRefreshEpoch((e) => e + 1);
+      shiftData.bumpLiveAssignVersion();
+      shiftData.mirrorCurrentDay();
+      showToast("Day data refreshed", "success");
+    } catch (e) {
+      console.error("[shiftbuilder] deep refresh day failed", e);
+      showToast("Failed to refresh day", "error");
+    } finally {
+      setRefreshDayBusy(false);
+    }
+  }, [
+    currentNight.queryClient,
+    selectedDay.date,
+    queryNightId,
+    nightId,
+    shiftData,
+    showToast,
+  ]);
 
   const handlePadAddOnCall = React.useCallback(
     async (tmId: string, tmName: string) => {
@@ -7258,6 +7293,8 @@ function AuthedShiftBuilder() {
         publishDayBusy={publishDayBusy}
         onRunEngine={canRunEngine ? runXaiEngineFromCanvas : undefined}
         onClearDay={canSeeDraftData ? handleClearBoard : undefined}
+        onRefreshDay={canEditAssignments ? () => void handleDeepRefreshDay() : undefined}
+        refreshDayBusy={refreshDayBusy}
         isDraftMode={isDraftMode}
         draftSlotCount={draftSlotCount}
         onToggleDraftMode={canSeeDraftData ? toggleDraftMode : undefined}

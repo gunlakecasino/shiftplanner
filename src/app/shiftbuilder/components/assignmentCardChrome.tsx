@@ -8,11 +8,19 @@ import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
 import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
 import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import { placementRepeatKeysMatch } from "./placementPadHelpers";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
 /** Last 3 grave placements before tonight — muted trail beside the TM name (builder only). */
-export function TmPlacementTrail({ labels }: { labels?: string[] }) {
+export function TmPlacementTrail({
+  labels,
+  matchSlotKey,
+}: {
+  labels?: string[];
+  /** When set, matching trail chips use critical-repeat styling (RR8 = MRR8/WRR8). */
+  matchSlotKey?: string;
+}) {
   if (!labels?.length) return null;
 
   return (
@@ -23,21 +31,27 @@ export function TmPlacementTrail({ labels }: { labels?: string[] }) {
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {labels.map((label, i) => (
-        <React.Fragment key={`${label}-${i}`}>
-          {i > 0 ? (
-            <span className="text-[7px] text-neutral-300/90 select-none leading-none" aria-hidden>
-              ·
+      {labels.map((label, i) => {
+        const isRepeat =
+          !!matchSlotKey && placementRepeatKeysMatch(label, matchSlotKey);
+        return (
+          <React.Fragment key={`${label}-${i}`}>
+            {i > 0 ? (
+              <span className="text-[7px] text-neutral-300/90 select-none leading-none" aria-hidden>
+                ·
+              </span>
+            ) : null}
+            <span
+              className={`text-[8px] font-semibold uppercase tracking-[0.05em] leading-none ${
+                isRepeat ? "text-[#B91C1C]" : "text-neutral-400"
+              }`}
+              style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+            >
+              {label}
             </span>
-          ) : null}
-          <span
-            className="text-[8px] font-semibold uppercase tracking-[0.05em] text-neutral-400 leading-none"
-            style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-          >
-            {label}
-          </span>
-        </React.Fragment>
-      ))}
+          </React.Fragment>
+        );
+      })}
     </span>
   );
 }
@@ -441,6 +455,7 @@ export function SlotAssignmentBody({
   nameSizeOverride,
   criticalRepeat = false,
   placementTrail,
+  placementTrailMatchSlotKey,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -457,6 +472,8 @@ export function SlotAssignmentBody({
   criticalRepeat?: boolean;
   /** Last 3 placement labels before tonight (newest first). */
   placementTrail?: string[];
+  /** Slot key for highlighting a matching RR/zone in the prior-3 trail. */
+  placementTrailMatchSlotKey?: string;
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -491,7 +508,12 @@ export function SlotAssignmentBody({
               >
                 {state.proposedName}
               </span>
-              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {showDigitalAssists ? (
+                <TmPlacementTrail
+                  labels={placementTrail}
+                  matchSlotKey={placementTrailMatchSlotKey}
+                />
+              ) : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </div>
             {isDuplicate ? (
@@ -519,7 +541,12 @@ export function SlotAssignmentBody({
               >
                 {state.proposedName}
               </span>
-              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {showDigitalAssists ? (
+                <TmPlacementTrail
+                  labels={placementTrail}
+                  matchSlotKey={placementTrailMatchSlotKey}
+                />
+              ) : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </div>
             {isDuplicate && showDigitalAssists ? (
@@ -562,7 +589,12 @@ export function SlotAssignmentBody({
               >
                 {state.tmName}
               </span>
-              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {showDigitalAssists ? (
+                <TmPlacementTrail
+                  labels={placementTrail}
+                  matchSlotKey={placementTrailMatchSlotKey}
+                />
+              ) : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </span>
             {isDuplicate ? (
@@ -586,7 +618,12 @@ export function SlotAssignmentBody({
               >
                 {state.tmName}
               </span>
-              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {showDigitalAssists ? (
+                <TmPlacementTrail
+                  labels={placementTrail}
+                  matchSlotKey={placementTrailMatchSlotKey}
+                />
+              ) : null}
               {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </span>
             {isDuplicate && showDigitalAssists ? (

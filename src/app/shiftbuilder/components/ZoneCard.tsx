@@ -229,7 +229,9 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
                 style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
               >
                 <span className="truncate">{displayName}</span>
-                {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+                {showDigitalAssists ? (
+                  <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
+                ) : null}
                 {showDigitalAssists && isCriticalRepeatFit(fitChip) ? (
                   <CriticalRepeatNameMark />
                 ) : null}
