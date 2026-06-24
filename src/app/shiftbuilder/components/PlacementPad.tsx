@@ -282,6 +282,40 @@ function anchorClass(anchor: PlacementPadAnchor): string {
   return "placement-pad absolute top-0 left-full ml-1.5";
 }
 
+/** Shared flyout anchor + host for Placement Pad and Tasks Pad (card-attached portaling). */
+export function resolvePadAnchorHost(
+  slotKey: string,
+  auxDefs: AuxDef[],
+): { hostId: string; anchor: PlacementPadAnchor } | null {
+  if (!slotKey || /^RR\d+$/.test(slotKey)) return null;
+
+  const rrMatch = slotKey.match(/^(MRR|WRR)(\d+)$/);
+  if (rrMatch) {
+    const num = parseInt(rrMatch[2], 10);
+    return {
+      hostId: `rr-${num}`,
+      anchor: [8, 10].includes(num) ? "left" : "bottom",
+    };
+  }
+
+  if (/^Z\d+$/.test(slotKey)) {
+    return {
+      hostId: slotKey,
+      anchor: ["Z4", "Z5", "Z9", "Z10"].includes(slotKey) ? "left" : "right",
+    };
+  }
+
+  if (auxDefs.some((d) => d.key === slotKey)) {
+    return { hostId: slotKey, anchor: "bottom" };
+  }
+
+  if (/^OL-(PM|AM)-\d+$/.test(slotKey)) {
+    return { hostId: slotKey, anchor: "bottom" };
+  }
+
+  return null;
+}
+
 function computePortalStyle(hostId: string, anchor: PlacementPadAnchor): React.CSSProperties | null {
   const host = document.querySelector(
     `[data-placement-host="${hostId}"], [data-task-host="${hostId}"]`,

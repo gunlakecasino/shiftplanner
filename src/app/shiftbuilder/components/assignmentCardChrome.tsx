@@ -17,7 +17,7 @@ export function TmPlacementTrail({ labels }: { labels?: string[] }) {
 
   return (
     <span
-      className="sb-tm-placement-trail no-print inline-flex items-center gap-[3px] shrink-0"
+      className="sb-tm-placement-trail no-print inline-flex items-baseline gap-[3px] shrink-0 self-baseline"
       title={`Last ${labels.length} placements (newest first): ${labels.join(" → ")}`}
       aria-label={`Recent placements: ${labels.join(", ")}`}
       onClick={(e) => e.stopPropagation()}
@@ -480,7 +480,7 @@ export function SlotAssignmentBody({
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
             transition={premiumSpring}
           >
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-baseline gap-1 min-w-0">
               <span
                 className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
                 style={{
@@ -508,7 +508,7 @@ export function SlotAssignmentBody({
           </motion.div>
         ) : (
           <div key="draft" className="flex flex-col min-w-0">
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-baseline gap-1 min-w-0">
               <span
                 className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
                 style={{
@@ -551,18 +551,20 @@ export function SlotAssignmentBody({
             }
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}
-            <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-              style={{
-                fontSize,
-                lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {state.tmName}
+            <span className="inline-flex items-baseline gap-1 min-w-0">
+              <span
+                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
+                style={{
+                  fontSize,
+                  lineHeight: 1.02,
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                }}
+              >
+                {state.tmName}
+              </span>
+              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </span>
-            {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
-            {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}
@@ -573,18 +575,20 @@ export function SlotAssignmentBody({
             className="flex items-center gap-1.5 min-w-0"
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}
-            <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-              style={{
-                fontSize: showDigitalAssists ? fontSize : fontSize,
-                lineHeight: 1.0,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {state.tmName}
+            <span className="inline-flex items-baseline gap-1 min-w-0">
+              <span
+                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
+                style={{
+                  fontSize: showDigitalAssists ? fontSize : fontSize,
+                  lineHeight: 1.0,
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                }}
+              >
+                {state.tmName}
+              </span>
+              {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
+              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             </span>
-            {showDigitalAssists ? <TmPlacementTrail labels={placementTrail} /> : null}
-            {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
             {isDuplicate && showDigitalAssists ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} />
             ) : null}

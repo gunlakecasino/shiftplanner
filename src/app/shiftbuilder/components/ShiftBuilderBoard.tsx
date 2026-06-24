@@ -39,7 +39,7 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
-import PlacementPad, { type PlacementPadAnchor } from "./PlacementPad";
+import PlacementPad, { resolvePadAnchorHost, type PlacementPadAnchor } from "./PlacementPad";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import TasksPad from "./TasksPad";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
@@ -639,48 +639,51 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     anchor: PlacementPadAnchor;
     hostId: string;
   } | null => {
-    if (!selectedSlotKey || /^RR\d+$/.test(selectedSlotKey)) return null;
-
-    const rrMatch = selectedSlotKey.match(/^(MRR|WRR)(\d+)$/);
-    if (rrMatch) {
-      const num = parseInt(rrMatch[2], 10);
-      return {
-        slotKey: selectedSlotKey,
-        anchor: [8, 10].includes(num) ? "left" : "bottom",
-        hostId: `rr-${num}`,
-      };
-    }
-
-    if (/^Z\d+$/.test(selectedSlotKey)) {
-      return {
-        slotKey: selectedSlotKey,
-        anchor: ["Z4", "Z5", "Z9", "Z10"].includes(selectedSlotKey) ? "left" : "right",
-        hostId: selectedSlotKey,
-      };
-    }
-
-    if (auxDefs.some((d) => d.key === selectedSlotKey)) {
-      return {
-        slotKey: selectedSlotKey,
-        anchor: "bottom",
-        hostId: selectedSlotKey,
-      };
-    }
-
-    if (/^OL-(PM|AM)-\d+$/.test(selectedSlotKey)) {
-      return {
-        slotKey: selectedSlotKey,
-        anchor: "bottom",
-        hostId: selectedSlotKey,
-      };
-    }
-
-    return null;
+    if (!selectedSlotKey) return null;
+    const resolved = resolvePadAnchorHost(selectedSlotKey, auxDefs);
+    if (!resolved) return null;
+    return { slotKey: selectedSlotKey, ...resolved };
   }, [selectedSlotKey, auxDefs]);
 
-  // Close placement pad on outside click (flyout + right-side dock)
+  // === Task text/font attributes pad (tap on iPad / double-click on desktop) ===
+  // Local to Board (builder-only UI state). No need to lift open/close to Client.
+  const [activeTaskEditPad, setActiveTaskEditPad] = React.useState<null | {
+    slotKey: string;
+    task?: NightSlotTask;
+    hostId: string;
+    anchor: PlacementPadAnchor;
+    addMode?: boolean;
+  }>(null);
+
+  const closeTaskTextEditPad = React.useCallback(() => {
+    setActiveTaskEditPad(null);
+  }, []);
+
+  const handleOpenTaskTextEdit = React.useCallback((
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean },
+  ) => {
+    if (isPrintPreview) return;
+    onSlotClose?.();
+    const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[slotKey] ?? []).filter(
+      (t) => !t.isCoverage,
+    );
+    const addMode = options?.addMode === true || (!task && slotTaskList.length === 0);
+    const resolved = addMode ? undefined : (task ?? (slotTaskList.length === 1 ? slotTaskList[0] : undefined));
+    const placement = resolvePadAnchorHost(slotKey, auxDefs);
+    setActiveTaskEditPad({
+      slotKey,
+      task: resolved,
+      hostId: placement?.hostId ?? slotKey,
+      anchor: placement?.anchor ?? "right",
+      addMode,
+    });
+  }, [isPrintPreview, selectedTasks, onSlotClose, auxDefs]);
+
+  // Close flyout pads on outside click (placement + tasks)
   React.useEffect(() => {
-    if (!selectedSlotKey) return;
+    if (!selectedSlotKey && !activeTaskEditPad) return;
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (
@@ -690,44 +693,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         !target.closest("[data-tasks-pad]")
       ) {
         onSlotClose?.();
+        closeTaskTextEditPad();
       }
     };
     document.addEventListener("click", onDocClick, true);
     return () => document.removeEventListener("click", onDocClick, true);
-  }, [selectedSlotKey, onSlotClose]);
-
-  // === Task text/font attributes pad (tap on iPad / double-click on desktop) ===
-  // Local to Board (builder-only UI state). No need to lift open/close to Client.
-  const [activeTaskEditPad, setActiveTaskEditPad] = React.useState<null | {
-    slotKey: string;
-    task?: NightSlotTask;
-    hostId: string;
-    addMode?: boolean;
-  }>(null);
-
-  const handleOpenTaskTextEdit = React.useCallback((
-    slotKey: string,
-    task?: NightSlotTask,
-    options?: { addMode?: boolean },
-  ) => {
-    if (isPrintPreview) return;
-    const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[slotKey] ?? []).filter(
-      (t) => !t.isCoverage,
-    );
-    const addMode = options?.addMode === true || (!task && slotTaskList.length === 0);
-    const resolved = addMode ? undefined : (task ?? (slotTaskList.length === 1 ? slotTaskList[0] : undefined));
-    const hostId = resolved ? `task-${slotKey}-${resolved.id}` : slotKey;
-    setActiveTaskEditPad({
-      slotKey,
-      task: resolved,
-      hostId,
-      addMode,
-    });
-  }, [isPrintPreview, selectedTasks]);
-
-  const closeTaskTextEditPad = React.useCallback(() => {
-    setActiveTaskEditPad(null);
-  }, []);
+  }, [selectedSlotKey, activeTaskEditPad, onSlotClose, closeTaskTextEditPad]);
 
   const tabletOverlayOpen =
     isTabletTouchDevice() && !!(selectedSlotKey || activeTaskEditPad);
@@ -748,6 +719,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         task={activeTaskEditPad.task}
         slotTasks={slotTaskList}
         hostId={activeTaskEditPad.hostId}
+        anchor={activeTaskEditPad.anchor}
         addMode={activeTaskEditPad.addMode}
         onClose={closeTaskTextEditPad}
         onEditTask={onEditTask}
@@ -924,12 +896,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Clear is direct + fast. This prevents the "both pad + full drawer at once" clutter.
   /** Placement Pad opens on tap (iPad) or double-click (desktop) in the assignee zone. */
   const handleCardClickForPad = React.useCallback((k: string) => {
+    closeTaskTextEditPad();
     onSlotOpen?.(k);
-  }, [onSlotOpen]);
+  }, [onSlotOpen, closeTaskTextEditPad]);
 
   const handleGenderClickForPad = React.useCallback((k: string) => {
+    closeTaskTextEditPad();
     onSlotOpen?.(k);
-  }, [onSlotOpen]);
+  }, [onSlotOpen, closeTaskTextEditPad]);
 
   const placementPadProps = (slotKey: string) => ({
     slotKey,

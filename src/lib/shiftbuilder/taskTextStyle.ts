@@ -262,3 +262,61 @@ export function applyTaskLevelFormat(
 export function isTaskTextStyleEqual(a: TaskTextStyle | null | undefined, b: TaskTextStyle | null | undefined): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
+
+/** Articles, conjunctions, and short prepositions — lowercase in task labels unless first word. */
+const TASK_LABEL_SMALL_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "but",
+  "or",
+  "nor",
+  "as",
+  "at",
+  "by",
+  "for",
+  "in",
+  "of",
+  "on",
+  "to",
+  "vs",
+  "via",
+  "per",
+]);
+
+function capitalizeTaskWordToken(word: string, forceCapitalize: boolean): string {
+  const match = word.match(/^([^A-Za-z]*)([A-Za-z]+)(.*)$/);
+  if (!match) return word;
+  const [, lead, core, trail] = match;
+  const lower = core.toLowerCase();
+  if (!forceCapitalize && TASK_LABEL_SMALL_WORDS.has(lower)) {
+    return `${lead}${lower}${trail}`;
+  }
+  return `${lead}${lower.charAt(0).toUpperCase()}${lower.slice(1)}${trail}`;
+}
+
+/** Title-case task label text (e.g. "check the floor" → "Check the Floor"). */
+export function formatTaskLabelTitleCase(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  const parts = trimmed.split(/(\s+)/);
+  let wordIndex = 0;
+
+  return parts
+    .map((part) => {
+      if (/^\s+$/.test(part)) return part;
+      const formatted = capitalizeTaskWordToken(part, wordIndex === 0);
+      wordIndex += 1;
+      return formatted;
+    })
+    .join("");
+}
+
+export function formatTaskLabelTitleCaseOnWordBoundary(input: string): string {
+  if (!input.endsWith(" ")) return input;
+  const body = input.replace(/\s+$/, "");
+  if (!body) return input;
+  return `${formatTaskLabelTitleCase(body)} `;
+}

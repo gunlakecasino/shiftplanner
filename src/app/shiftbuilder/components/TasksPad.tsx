@@ -6,13 +6,15 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Bold, Italic, Underline, Strikethrough, Type } from "lucide-react";
 import { premiumSpring, premiumTap } from "@/lib/premiumSpring";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import { usePortalPlacementStyle } from "./PlacementPad";
+import { usePortalPlacementStyle, type PlacementPadAnchor } from "./PlacementPad";
 import { TASK_COLOR_SPHERES } from "./TaskRow";
 import { TaskMarkerLabel } from "./TaskMarkerLabel";
 import { resolveTaskAppearanceColor } from "@/lib/shiftbuilder/taskMarkerStyle";
 import {
   applySpanFormat,
   applyTaskLevelFormat,
+  formatTaskLabelTitleCase,
+  formatTaskLabelTitleCaseOnWordBoundary,
   getSelectionOffsets,
   isTaskTextStyleEqual,
   normalizeTaskTextStyle,
@@ -27,6 +29,8 @@ export interface TasksPadProps {
   task?: NightSlotTask;
   slotTasks?: NightSlotTask[];
   hostId?: string;
+  /** Flyout anchor — matches Placement Pad for the same slot. */
+  anchor?: PlacementPadAnchor;
   /** When true, start in add-new-task mode (even if the slot already has tasks). */
   addMode?: boolean;
   onClose: () => void;
@@ -57,6 +61,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
   task: initialTask,
   slotTasks = [],
   hostId,
+  anchor = "right",
   addMode: initialAddMode = false,
   onClose,
   onEditTask,
@@ -97,7 +102,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
-  const portalStyle = usePortalPlacementStyle(hostId, "right");
+  const portalStyle = usePortalPlacementStyle(hostId, anchor);
   const usePortal = !!hostId && !!portalStyle;
 
   React.useEffect(() => {
@@ -249,8 +254,42 @@ const TasksPad: React.FC<TasksPadProps> = ({
     if (onSetTaskMarker) onSetTaskMarker(slotKey, label, markerType);
   };
 
+  const syncEditorText = useCallback((text: string, focusEnd = false) => {
+    setLabelDraft(text);
+    if (!editorRef.current) return;
+    editorRef.current.innerText = text;
+    if (!focusEnd) return;
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(editorRef.current);
+    range.collapse(false);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }, []);
+
+  const handleEditorInput = useCallback(
+    (e: React.FormEvent<HTMLDivElement>) => {
+      const raw = e.currentTarget.innerText;
+      const formatted = formatTaskLabelTitleCaseOnWordBoundary(raw);
+      if (formatted !== raw) {
+        syncEditorText(formatted, true);
+        return;
+      }
+      setLabelDraft(raw);
+    },
+    [syncEditorText],
+  );
+
+  const handleEditorBlur = useCallback(() => {
+    const raw = editorRef.current?.innerText ?? labelDraft;
+    const formatted = formatTaskLabelTitleCase(raw);
+    if (formatted !== raw) {
+      syncEditorText(formatted);
+    }
+  }, [labelDraft, syncEditorText]);
+
   const handleSave = async () => {
-    const newLabel = labelDraft.trim();
+    const newLabel = formatTaskLabelTitleCase(labelDraft);
     if (!newLabel) {
       onClose();
       return;
@@ -476,7 +515,8 @@ const TasksPad: React.FC<TasksPadProps> = ({
               ref={editorRef}
               contentEditable
               suppressContentEditableWarning
-              onInput={(e) => setLabelDraft(e.currentTarget.innerText)}
+              onInput={handleEditorInput}
+              onBlur={handleEditorBlur}
               className="w-full min-h-[52px] rounded-md border border-[var(--ios-gray-4)]/20 bg-[var(--ios-background-secondary)] px-2.5 py-2 font-medium focus:outline-none focus:border-[var(--ios-blue)]/60 whitespace-pre-wrap break-words"
               style={{ fontSize: TASK_LABEL_SIZE_PX.default }}
             />
