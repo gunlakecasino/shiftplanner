@@ -29,7 +29,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
-import { CardTaskZone, assignZoneOpenHandlers, padUsesSingleTap } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick, padUsesSingleTap } from "./CardTaskZone";
 
 export interface ZoneCardProps {
   def: any;
@@ -255,7 +255,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             >
               <UnassignedInvite
                 size="zone"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
                 title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · drop to assign`}
               />
             </div>

@@ -523,7 +523,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const usePortalLocal = !isDock && !!hostId && !!portalStyleLocal;
 
   const refinedCard = (
-    <div className="w-full bg-white rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.09),0_1px_3px_rgba(0,0,0,0.05)] flex flex-col">
+    <div className="w-full bg-white rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.09),0_1px_3px_rgba(0,0,0,0.05)] flex flex-col min-h-0 flex-1">
       {/* Header - smaller & tighter */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2.5">
@@ -563,8 +563,16 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
       <div className="h-px bg-gray-100" />
 
-      {/* Body - adaptive height, minimal scroll only when needed */}
-      <div className={`px-4 py-3 space-y-3 ${showTmPicker || coverageMode || analystDetailsOpen ? "overflow-y-auto max-h-[380px]" : "overflow-visible"}`}>
+      {/* Body — picker uses one inner scroll region (Safari breaks on nested overflow-y). */}
+      <div
+        className={`px-4 py-3 flex flex-col min-h-0 ${
+          showTmPicker
+            ? "flex-1 overflow-hidden"
+            : coverageMode || analystDetailsOpen
+              ? "space-y-3 overflow-y-auto max-h-[380px]"
+              : "space-y-3 overflow-visible"
+        }`}
+      >
         {!a.tmName && !showTmPicker && (
           <div className="py-2">
             <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: accent }}>
@@ -574,7 +582,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
         )}
 
         {showTmPicker && (
-          <div className="min-h-[180px]">
+          <div className="flex flex-col flex-1 min-h-0">
             <TmPicker
               key={`${slotKey}:${nightIsoFromDate(selectedDay.date)}`}
               tms={scheduledUnassigned}
@@ -589,8 +597,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               accent={accent}
               isDark={false}
               variant={padLarge ? "tablet" : "default"}
-              enableDragAssign={enableTmDragAssign && !!a.tmId}
-              allowListScroll={!a.tmId}
+              enableDragAssign={false}
+              allowListScroll
+              listScrollMaxHeight={padLarge ? 320 : 252}
             />
           </div>
         )}
@@ -805,8 +814,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                 width: PAD_W, 
                 // Adaptive: only hard max when we are in tall modes (picker/details). Normal view sizes to content.
                 maxHeight: (showTmPicker || analystDetailsOpen) ? PAD_MAX_HEIGHT : undefined,
-                display: "flex", 
-                flexDirection: "column" 
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
               }
       }
       onClick={e => e.stopPropagation()}

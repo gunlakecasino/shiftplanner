@@ -1866,6 +1866,42 @@ body {
   background: rgba(120, 120, 128, 0.7);
 }
 
+/* Placement Pad TM picker — single scroll region (Safari breaks on nested overflow-y). */
+.placement-pad .sb-tm-picker-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.5) rgba(0, 0, 0, 0.04);
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+.placement-pad .sb-tm-picker-scroll::-webkit-scrollbar {
+  width: 6px;
+  -webkit-appearance: none;
+}
+
+.placement-pad .sb-tm-picker-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  margin: 2px 0;
+}
+
+.placement-pad .sb-tm-picker-scroll::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: rgba(120, 120, 128, 0.5);
+  min-height: 28px;
+}
+
+.placement-pad .sb-tm-picker-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.7);
+}
+
 /* Flex aux row — blank shells + slot chrome */
 .sb-builder-stage .sb-assignment-card.sb-aux-blank {
   border: 1px dashed var(--ios-gray-4);

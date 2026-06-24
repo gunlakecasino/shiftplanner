@@ -14,7 +14,10 @@ import {
   mirrorMainAssignmentsToLiveStore,
   setBoardAssignmentsDayKey,
 } from "@/lib/shiftbuilder/liveCache";
-import { patchNightCoreAssignmentsCache } from "@/lib/shiftbuilder/scheduleCacheSync";
+import {
+  invalidateNightBoardQueries,
+  patchNightCoreAssignmentsCache,
+} from "@/lib/shiftbuilder/scheduleCacheSync";
 import { nightFetchOptionsForPermissions } from "../lib/viewerNightPolicy";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 
@@ -73,6 +76,8 @@ export interface UseShiftDataReturn {
   nightAccessBlocked: boolean;
   boardColdLoading: boolean;
   boardBackgroundSync: boolean;
+  /** True while nightCore is still showing keepPreviousData from another day. */
+  isCorePlaceholder: boolean;
 
   // Live cross-day accumulator version (bump to force recompute of week-dependent memos)
   liveAssignVersion: number;
@@ -116,6 +121,8 @@ export function useShiftData(
   const storeDraftAssignments = useDraftAssignments();
   const selectedDateKey = formatLocalDateISO(selectedDay.date);
   const stabilizedDateKeyRef = React.useRef(selectedDateKey);
+  const rosterStabilizedForDateRef = React.useRef<string | null>(null);
+  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
 
   // === Stable refs for effective values ===
   // Prevents fresh {} / new Set() / new [] literals on every render from query ?? defaults
@@ -139,6 +146,7 @@ export function useShiftData(
   React.useEffect(() => {
     if (stabilizedDateKeyRef.current === selectedDateKey) return;
     stabilizedDateKeyRef.current = selectedDateKey;
+    rosterStabilizedForDateRef.current = null;
     stableRefs.current.realRoster = [];
     stableRefs.current.graveRoster = [];
     stableRefs.current.gravesScheduleRoster = [];
@@ -149,7 +157,13 @@ export function useShiftData(
     stableRefs.current.recentZoneHistory = null;
     stableRefs.current.cardBorders = {};
     stableRefs.current.assignments = {};
-  }, [selectedDateKey]);
+    hydratedAssignmentsDayRef.current = null;
+
+    const qc = currentNight.queryClient;
+    if (qc && nightCoreEnabled) {
+      void invalidateNightBoardQueries(qc, selectedDateKey);
+    }
+  }, [selectedDateKey, currentNight.queryClient, nightCoreEnabled]);
 
   const rosterDataAuthoritative = !currentNight.isCorePlaceholder;
 
@@ -196,13 +210,20 @@ export function useShiftData(
   const effectiveGravesScheduleRoster = React.useMemo(() => {
     if (!rosterDataAuthoritative) return stableRefs.current.gravesScheduleRoster;
     const src = currentNight.gravesScheduleRoster;
-    if (!src || src.length === 0) return stableRefs.current.gravesScheduleRoster;
-    const s = sigOf(src);
-    if (s !== sigOf(stableRefs.current.gravesScheduleRoster)) {
+    if (!src || src.length === 0) {
+      return stableRefs.current.gravesScheduleRoster;
+    }
+    const s = `${selectedDateKey}|${sigOf(src)}`;
+    const prev =
+      rosterStabilizedForDateRef.current === selectedDateKey
+        ? `${selectedDateKey}|${sigOf(stableRefs.current.gravesScheduleRoster)}`
+        : "";
+    if (s !== prev) {
       stableRefs.current.gravesScheduleRoster = [...src];
+      rosterStabilizedForDateRef.current = selectedDateKey;
     }
     return stableRefs.current.gravesScheduleRoster;
-  }, [currentNight.gravesScheduleRoster, rosterDataAuthoritative]);
+  }, [currentNight.gravesScheduleRoster, rosterDataAuthoritative, selectedDateKey]);
 
   const stabilizeSet = (
     key: "fullGrave" | "pmOverlap" | "amOverlap" | "scheduledTm",
@@ -221,7 +242,7 @@ export function useShiftData(
       rosterDataAuthoritative
         ? stabilizeSet("fullGrave", currentNight.fullGraveScheduledTonight as Set<string> | undefined)
         : stableRefs.current.fullGrave,
-    [currentNight.fullGraveScheduledTonight, rosterDataAuthoritative],
+    [currentNight.fullGraveScheduledTonight, rosterDataAuthoritative, selectedDateKey],
   );
 
   const pmOverlapScheduledTonight = React.useMemo(
@@ -229,7 +250,7 @@ export function useShiftData(
       rosterDataAuthoritative
         ? stabilizeSet("pmOverlap", currentNight.pmOverlapScheduledTonight as Set<string> | undefined)
         : stableRefs.current.pmOverlap,
-    [currentNight.pmOverlapScheduledTonight, rosterDataAuthoritative],
+    [currentNight.pmOverlapScheduledTonight, rosterDataAuthoritative, selectedDateKey],
   );
 
   const amOverlapScheduledTonight = React.useMemo(
@@ -237,7 +258,7 @@ export function useShiftData(
       rosterDataAuthoritative
         ? stabilizeSet("amOverlap", currentNight.amOverlapScheduledTonight as Set<string> | undefined)
         : stableRefs.current.amOverlap,
-    [currentNight.amOverlapScheduledTonight, rosterDataAuthoritative],
+    [currentNight.amOverlapScheduledTonight, rosterDataAuthoritative, selectedDateKey],
   );
 
   const effectiveScheduledTmIdsTonight = React.useMemo(
@@ -245,7 +266,7 @@ export function useShiftData(
       rosterDataAuthoritative
         ? stabilizeSet("scheduledTm", currentNight.scheduledTmIdsTonight as Set<string> | undefined)
         : stableRefs.current.scheduledTm,
-    [currentNight.scheduledTmIdsTonight, rosterDataAuthoritative],
+    [currentNight.scheduledTmIdsTonight, rosterDataAuthoritative, selectedDateKey],
   );
 
   const effectiveRecentZoneHistory = React.useMemo(() => {
@@ -304,7 +325,6 @@ export function useShiftData(
   // === Hydration: query result → store + live cross-day accumulator (core of unification) ===
   // This effect (and its mirrors) is what allows the narrow store subscriptions in Board/cards
   // and the week-level consumers (Weekly Overview, repeats, fit/health, xAI context) to see data.
-  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
   const previousHydratedDayRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -409,6 +429,7 @@ export function useShiftData(
     nightAccessBlocked,
     boardColdLoading,
     boardBackgroundSync,
+    isCorePlaceholder: currentNight.isCorePlaceholder,
     liveAssignVersion,
     bumpLiveAssignVersion,
     mirrorCurrentDay,

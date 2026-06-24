@@ -175,14 +175,49 @@ export function formatCardPlacementTrailLabel(ui: string, fallback?: string): st
   return raw.replace(/\s+/g, "");
 }
 
+/** Merge DB history with in-app week plan entries (builder live layer). */
+export function collectPlacementTrailEvents(
+  history: ZoneDetailEntry | null | undefined,
+  beforeIso?: string,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+): Array<{ ui: string; d: string }> {
+  const events: Array<{ ui: string; d: string }> = [];
+
+  if (history?.zoneDates) {
+    for (const [ui, ds] of Object.entries(history.zoneDates)) {
+      for (const d of ds || []) {
+        if (beforeIso && d >= beforeIso) continue;
+        events.push({ ui, d });
+      }
+    }
+  }
+
+  const seen = new Set(events.map((e) => `${e.d}|${e.ui}`));
+
+  if (weekEntries?.length) {
+    for (const { nightDate, slotKey } of weekEntries) {
+      if (!slotKey) continue;
+      if (beforeIso && nightDate >= beforeIso) continue;
+      const key = `${nightDate}|${slotKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      events.push({ ui: slotKey, d: nightDate });
+    }
+  }
+
+  events.sort((a, b) => b.d.localeCompare(a.d));
+  return events;
+}
+
 export function buildPlacementTrailLabels(
   history: ZoneDetailEntry | null | undefined,
   beforeIso?: string,
   count = CARD_PLACEMENT_TRAIL_COUNT,
+  weekEntries?: Array<{ nightDate: string; slotKey: string }>,
 ): string[] {
-  return getLastPlacementSequence(history ?? null, count, beforeIso).map((ui) =>
-    formatCardPlacementTrailLabel(ui),
-  );
+  return collectPlacementTrailEvents(history, beforeIso, weekEntries)
+    .slice(0, count)
+    .map((e) => formatCardPlacementTrailLabel(e.ui));
 }
 
 export function isInPriorPlacementWindow(

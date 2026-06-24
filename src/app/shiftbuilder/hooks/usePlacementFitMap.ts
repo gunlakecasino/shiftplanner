@@ -28,6 +28,10 @@ import { applyGranularHealthToFitMap } from "@/lib/shiftbuilder/rotationHealthEn
 export type UsePlacementFitMapArgs = {
   enabled: boolean;
   assignments: Record<string, SlotAssignmentRow>;
+  /** Live assignments for card trails (non-deferred). Defaults to `assignments`. */
+  trailAssignments?: Record<string, SlotAssignmentRow>;
+  /** Keep fetching/computing trails even when fit chips are paused (e.g. night refetch). */
+  trailsEnabled?: boolean;
   isDraftMode?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
   members?: Array<Record<string, unknown>>;
@@ -42,6 +46,8 @@ export type UsePlacementFitMapArgs = {
 export function usePlacementFitMap({
   enabled,
   assignments,
+  trailAssignments,
+  trailsEnabled = true,
   isDraftMode = false,
   draftAssignments = {},
   members = [],
@@ -58,9 +64,11 @@ export function usePlacementFitMap({
   const [histories, setHistories] = useState<Record<string, ZoneDetailEntry | null>>({});
   const [historiesLoading, setHistoriesLoading] = useState(false);
 
+  const trailSource = trailAssignments ?? assignments;
+
   const tmIdsKey = useMemo(() => {
     const ids = new Set<string>();
-    for (const row of Object.values(assignments)) {
+    for (const row of Object.values(trailSource)) {
       if (row?.tmId) ids.add(row.tmId);
     }
     if (isDraftMode) {
@@ -69,7 +77,7 @@ export function usePlacementFitMap({
       }
     }
     return [...ids].sort().join(",");
-  }, [assignments, isDraftMode, draftAssignments]);
+  }, [trailSource, isDraftMode, draftAssignments]);
 
   // Ref guard: histories are per-TM (30-night spread) and relatively stable.
   // We only need to (re)fetch when the *set of TMs* on the current board/draft actually changes.
@@ -82,14 +90,21 @@ export function usePlacementFitMap({
   // stabilization done at useShiftData and useZoom levels.
   const lastHistoriesSigRef = useRef<string>("");
 
+  const shouldFetchHistories = (enabled || trailsEnabled) && !!tmIdsKey;
+
   useEffect(() => {
-    if (!enabled || !tmIdsKey) {
+    if (!tmIdsKey) {
       if (lastHistoriesSigRef.current !== "{}") {
         setHistories({});
         lastHistoriesSigRef.current = "{}";
       }
       setHistoriesLoading(false);
       lastFetchedKeyRef.current = null;
+      return;
+    }
+
+    if (!shouldFetchHistories) {
+      setHistoriesLoading(false);
       return;
     }
 
@@ -131,7 +146,7 @@ export function usePlacementFitMap({
     return () => {
       cancelled = true;
     };
-  }, [enabled, tmIdsKey]);
+  }, [shouldFetchHistories, tmIdsKey]);
 
   const otherTmProfiles = useMemo(() => {
     const out: Record<string, PlacementTmProfile | null> = {};
@@ -252,15 +267,23 @@ export function usePlacementFitMap({
     scopedWeekHistory,
   ]);
 
+  const scopedWeekForTrails = useMemo(
+    () => filterWeeklyHistoryThroughNight(weeklyRecentHistory, currentIso),
+    [weeklyRecentHistory, currentIso],
+  );
+
   const placementTrailsByTmId = useMemo(() => {
+    if (!trailsEnabled) return {};
+
     const out: Record<string, string[]> = {};
-    for (const [tmId, history] of Object.entries(histories)) {
-      if (!tmId) continue;
-      const labels = buildPlacementTrailLabels(history, currentIso);
+    for (const tmId of tmIdsKey.split(",").filter(Boolean)) {
+      const history = histories[tmId] ?? null;
+      const weekEntries = scopedWeekForTrails?.get(tmId);
+      const labels = buildPlacementTrailLabels(history, currentIso, undefined, weekEntries);
       if (labels.length > 0) out[tmId] = labels;
     }
     return out;
-  }, [histories, currentIso]);
+  }, [trailsEnabled, histories, currentIso, tmIdsKey, scopedWeekForTrails]);
 
   return { fitBySlot, historiesLoading, placementTrailsByTmId };
 }

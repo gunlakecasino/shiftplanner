@@ -3836,8 +3836,10 @@ function AuthedShiftBuilder() {
       Object.values(src).forEach((a: any) => a?.tmId && set.add(a.tmId));
     };
 
-    // Query cache is authoritative while the board store is still hydrating another day.
-    absorb(currentNight?.assignments as Record<string, any> | undefined);
+    // Only absorb query assignments when nightCore is for this day (not keepPreviousData).
+    if (!shiftData.isCorePlaceholder) {
+      absorb(currentNight?.assignments as Record<string, any> | undefined);
+    }
 
     if (boardReadyForDay) {
       absorb(assignments);
@@ -3857,6 +3859,7 @@ function AuthedShiftBuilder() {
     storeDraftAssignments,
     selectedDay,
     liveAssignVersion,
+    shiftData.isCorePlaceholder,
   ]);
 
   // Fresh assignments view for PlacementPad / CMD-K / clear-board.
@@ -3871,6 +3874,10 @@ function AuthedShiftBuilder() {
   // 1. Default = scheduled tonight (correct band) + eligible + unassigned
   // 2. Search = all eligible roster TMs; can add on-call for tonight
   const [pickerScheduleEpoch, setPickerScheduleEpoch] = React.useState(0);
+
+  React.useEffect(() => {
+    setPickerScheduleEpoch((e) => e + 1);
+  }, [selectedDay.date]);
 
   React.useEffect(() => {
     idleResumeExtraRef.current = () => {
@@ -3983,7 +3990,9 @@ function AuthedShiftBuilder() {
 
   const { fitBySlot: deploymentFitBySlot, placementTrailsByTmId } = usePlacementFitMap({
       enabled: deploymentRotationFitEnabled,
+      trailsEnabled: currentView === "deployment",
       assignments: deferredAssignmentsForFit,
+      trailAssignments: storeAssignmentsForFit,
       isDraftMode,
       draftAssignments: deferredDraftAssignmentsForFit,
       members: effectiveRealRoster as Array<Record<string, unknown>>,
@@ -5570,13 +5579,9 @@ function AuthedShiftBuilder() {
   }, [effectiveCardBorders]);
 
   React.useEffect(() => {
-    // Use stabilized effective* (see useShiftData + bridge above) so that
-    // identity only changes on real content mutation. Prevents effect firing
-    // + setState on every render from fresh objects coming out of query layer.
-    if (effectiveScheduledTmIdsTonight && effectiveScheduledTmIdsTonight.size > 0) {
-      setScheduledTmIdsTonight(effectiveScheduledTmIdsTonight);
-    }
-  }, [effectiveScheduledTmIdsTonight]);
+    if (shiftData.isCorePlaceholder) return;
+    setScheduledTmIdsTonight(effectiveScheduledTmIdsTonight);
+  }, [effectiveScheduledTmIdsTonight, shiftData.isCorePlaceholder]);
 
   React.useEffect(() => {
     if (effectiveRecentZoneHistory) {

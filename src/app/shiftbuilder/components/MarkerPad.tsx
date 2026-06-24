@@ -770,6 +770,7 @@ const HistoryOverlay: React.FC<{
 function TmPickerRow({
   tm,
   enableDragAssign,
+  allowListScroll = false,
   isTablet,
   accent,
   rowBg,
@@ -780,6 +781,7 @@ function TmPickerRow({
 }: {
   tm: TmEntry;
   enableDragAssign: boolean;
+  allowListScroll?: boolean;
   isTablet: boolean;
   accent: string;
   rowBg: string;
@@ -807,7 +809,7 @@ function TmPickerRow({
         e.stopPropagation();
         onPick(tm);
       }}
-      onPointerDown={(e) => e.stopPropagation()}
+      onPointerDown={allowListScroll ? undefined : (e) => e.stopPropagation()}
       className="sb-list-row sb-interactive"
       style={{
         display: "flex",
@@ -822,7 +824,7 @@ function TmPickerRow({
         textAlign: "left",
         width: "100%",
         opacity: isDragging ? 0.45 : 1,
-        touchAction: enableDragAssign ? "none" : undefined,
+        touchAction: allowListScroll ? "pan-y" : enableDragAssign ? "none" : "manipulation",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.background = `${accent}22`;
@@ -923,8 +925,10 @@ export const TmPicker: React.FC<{
   variant?: "default" | "tablet";
   /** Drag TM rows onto slots (requires parent DndContext). Click-to-assign still works. */
   enableDragAssign?: boolean;
-  /** When true, list uses pan-y so touch drag scrolls (unassigned slot picker). */
+  /** When true, list uses pan-y so touch/wheel scroll works (placement pad). */
   allowListScroll?: boolean;
+  /** Explicit scroll region height — required for Safari nested flex scroll. */
+  listScrollMaxHeight?: number;
   /** Rotation-health preview per TM when assigning to a specific slot (default list only). */
   fitByTmId?: Record<string, PickerTmRotationFit>;
 }> = ({
@@ -941,6 +945,7 @@ export const TmPicker: React.FC<{
   variant = "default",
   enableDragAssign = false,
   allowListScroll = false,
+  listScrollMaxHeight,
   fitByTmId,
 }) => {
   const isTablet = variant === "tablet";
@@ -1043,17 +1048,20 @@ export const TmPicker: React.FC<{
             : "Default: Graves Default Schedule + on-call (unassigned)"}
       </div>
 
-      {/* TM list */}
+      {/* TM list — single scroll region; explicit max-height for Safari */}
       <div
-        className="no-scrollbar"
+        className={allowListScroll ? "sb-tm-picker-scroll" : "no-scrollbar"}
         style={{
-          overflowY: "auto",
-          flex: 1,
+          overflowY: allowListScroll ? "scroll" : "auto",
+          flex: allowListScroll ? undefined : 1,
+          flexShrink: allowListScroll ? undefined : undefined,
           minHeight: 0,
+          maxHeight: listScrollMaxHeight ?? (allowListScroll ? 240 : undefined),
           display: "flex",
           flexDirection: "column",
           gap: 3,
           WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
           touchAction: allowListScroll ? "pan-y" : enableDragAssign ? "none" : "pan-y",
         }}
       >
@@ -1075,6 +1083,7 @@ export const TmPicker: React.FC<{
               <TmPickerRow
                 tm={tm}
                 enableDragAssign={enableDragAssign}
+                allowListScroll={allowListScroll}
                 isTablet={isTablet}
                 accent={accent}
                 rowBg={rowBg}

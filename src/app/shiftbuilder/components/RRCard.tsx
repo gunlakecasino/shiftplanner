@@ -21,7 +21,7 @@ import {
   SlotAssignmentBody,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
-import { CardTaskZone, assignZoneOpenHandlers } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
 
 export interface RRCardProps {
   def: any;
@@ -167,7 +167,7 @@ const RRSide: React.FC<{
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
-          onUnassignedClick={(e) => e.stopPropagation()}
+          onUnassignedClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
         />
       </div>
 
