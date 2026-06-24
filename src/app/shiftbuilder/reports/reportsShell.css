@@ -1,0 +1,62 @@
+/**
+ * Reports dashboard — extends settings shell tokens with chart-specific polish.
+ */
+
+.sb-reports-shell {
+  --sb-reports-accent: #4d1a8a;
+}
+
+.sb-reports-stat-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sb-reports-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px -18px rgba(0, 0, 0, 0.18);
+}
+
+.sb-reports-panel {
+  background: var(--ios-background-secondary);
+}
+
+.sb-reports-icon-btn {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid var(--sb-settings-border-paper);
+  color: var(--ios-label-tertiary);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.sb-reports-icon-btn:hover:not(:disabled) {
+  color: var(--ios-label);
+  background: var(--ios-gray-6);
+}
+
+.sb-reports-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sb-gauge-arc {
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, currentColor 25%, transparent));
+}
+
+.sb-progress-bar {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+html.dark .sb-reports-stat-card:hover {
+  box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-reports-stat-card,
+  .sb-gauge-arc,
+  .sb-progress-bar {
+    transition: none !important;
+  }
+}

@@ -44,6 +44,25 @@ const OpsAuthContext = createContext<OpsAuthContextValue | null>(null);
 
 /** Legacy key — cleared on boot; sessions now live in httpOnly cookies. */
 const LEGACY_STORAGE_KEY = "oms_ops_auth_v1";
+/** Last successful PIN login on this device — attributes wrong-PIN attempts when PIN-only. */
+const LAST_OPS_USER_KEY = "oms_last_ops_user_id";
+
+function readLastOpsUserId(): string | undefined {
+  try {
+    const id = localStorage.getItem(LAST_OPS_USER_KEY)?.trim();
+    return id || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberLastOpsUserId(userId: string): void {
+  try {
+    localStorage.setItem(LAST_OPS_USER_KEY, userId);
+  } catch {
+    /* ignore */
+  }
+}
 
 function mapApiUser(raw: Record<string, unknown>): OpsUser {
   return {
@@ -191,7 +210,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, lastUserId: readLastOpsUserId() }),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -199,12 +218,17 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || !json.success || !json.user) {
         return {
           success: false,
-          error: humanizeLoginError(json.error, res.status),
+          error: humanizeLoginError(json.error, res.status, {
+            retryAfterSec: json.retryAfterSec,
+            requiresAdminContact: json.requiresAdminContact,
+            failedAttempts: json.failedAttempts,
+          }),
         };
       }
 
       const safeUser = mapApiUser(json.user);
       const requiresPinChange = !!json.requiresPinChange;
+      rememberLastOpsUserId(safeUser.id);
 
       if (requiresPinChange) {
         applySessionUser(safeUser);

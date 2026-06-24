@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { getActiveEngineConfig, type EngineConfig } from "@/lib/shiftbuilder/engineConfig";
 import type { SettingsTab } from "../settings/settingsConfig";
@@ -22,6 +23,7 @@ export function DashboardTab({
   currentOperator,
   onNavigate,
 }: DashboardTabProps) {
+  const router = useRouter();
   const [engineConfig, setEngineConfig] = React.useState<EngineConfig | null>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -123,7 +125,7 @@ export function DashboardTab({
             isDark={isDark}
             icon="bar_chart"
             label="View Reports"
-            onClick={() => handleNav("reports")}
+            onClick={() => router.push("/shiftbuilder/reports")}
           />
           <QuickAction
             isDark={isDark}

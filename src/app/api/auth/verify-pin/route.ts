@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: { pin?: string };
+  let body: { pin?: string; lastUserId?: string };
   try {
     body = await request.json();
   } catch {
@@ -51,18 +51,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "PIN must be exactly 6 digits" }, { status: 400 });
   }
 
+  const lastUserId =
+    typeof body.lastUserId === "string" && body.lastUserId.trim()
+      ? body.lastUserId.trim()
+      : undefined;
+
   const edgeRes = await fetch(edgeVerifyPinUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({ pin, lastUserId }),
   });
 
   const edgeJson = await edgeRes.json().catch(() => ({}));
 
   if (!edgeRes.ok || !edgeJson.success || !edgeJson.user?.id) {
+    const status =
+      edgeRes.status === 429 ? 429 : edgeRes.status === 403 ? 403 : 401;
     return NextResponse.json(
-      { error: edgeJson.error || "Invalid credentials" },
-      { status: edgeRes.status === 429 ? 429 : 401 },
+      {
+        error: edgeJson.error || "Invalid credentials",
+        retryAfterSec: edgeJson.retryAfterSec,
+        requiresAdminContact: edgeJson.requiresAdminContact,
+        failedAttempts: edgeJson.failedAttempts,
+      },
+      {
+        status,
+        ...(edgeJson.retryAfterSec
+          ? { headers: { "Retry-After": String(edgeJson.retryAfterSec) } }
+          : {}),
+      },
     );
   }
 

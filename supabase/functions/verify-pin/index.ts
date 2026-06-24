@@ -79,6 +79,49 @@ function isAccountLocked(lockedUntil: string | null): boolean {
   return !Number.isNaN(locked) && locked > Date.now();
 }
 
+function retryAfterSec(lockedUntil: string | null): number {
+  if (!lockedUntil) return 0;
+  const locked = new Date(lockedUntil).getTime();
+  if (Number.isNaN(locked)) return 0;
+  return Math.max(1, Math.ceil((locked - Date.now()) / 1000));
+}
+
+function requiresAdminContact(
+  failedAttempts: number,
+  lockedUntil: string | null,
+): boolean {
+  if (failedAttempts >= 8) return true;
+  if (!lockedUntil) return false;
+  const locked = new Date(lockedUntil).getTime();
+  return locked > Date.UTC(2099, 0, 1);
+}
+
+function lockoutPayload(user: {
+  failed_pin_attempts?: number | null;
+  locked_until?: string | null;
+}) {
+  const attempts = user.failed_pin_attempts ?? 0;
+  const admin = requiresAdminContact(attempts, user.locked_until ?? null);
+  return {
+    error: admin ? "account_locked_admin" : "account_locked",
+    retryAfterSec: admin ? 0 : retryAfterSec(user.locked_until ?? null),
+    failedAttempts: attempts,
+    requiresAdminContact: admin,
+  };
+}
+
+async function fetchUserLockState(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+) {
+  const { data } = await supabase
+    .from("users")
+    .select("failed_pin_attempts, locked_until")
+    .eq("id", userId)
+    .maybeSingle();
+  return data;
+}
+
 serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
 
@@ -106,7 +149,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pin } = await req.json();
+    const { pin, lastUserId } = await req.json();
 
     if (!pin || typeof pin !== "string" || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
       return new Response(JSON.stringify({ error: "Invalid PIN format" }), {
@@ -124,7 +167,7 @@ serve(async (req) => {
     const { data: candidates, error: lookupErr } = await supabase
       .from("users")
       .select(
-        "id, email, full_name, username, role, is_active, pin_hash, permissions, must_change_pin, pin_issued_at, locked_until",
+        "id, email, full_name, username, role, is_active, pin_hash, permissions, must_change_pin, pin_issued_at, locked_until, failed_pin_attempts",
       )
       .eq("is_active", true)
       .not("pin_hash", "is", null);
@@ -138,7 +181,7 @@ serve(async (req) => {
     }
 
     let matchedUser: any = null;
-    let pinMatchedBlockedUserId: string | null = null;
+    let lockedUser: any = null;
     const normalizeBcrypt = (h: string) => h.replace(/^\$2a\$/, "$2b$");
 
     for (const u of candidates) {
@@ -152,41 +195,77 @@ serve(async (req) => {
         if (!ok) continue;
 
         if (isAccountLocked(u.locked_until)) {
-          pinMatchedBlockedUserId = u.id;
-          continue;
+          lockedUser = u;
+        } else {
+          matchedUser = u;
         }
-
-        matchedUser = u;
         break;
       } catch (compareErr) {
         console.error(`[verify-pin] compare error for user ${u.username}:`, compareErr);
       }
     }
 
-    if (!matchedUser) {
-      if (pinMatchedBlockedUserId) {
-        await supabase.rpc("record_failed_pin_attempt", { p_user_id: pinMatchedBlockedUserId });
-      }
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
+    if (matchedUser) {
+      console.log(`[verify-pin] authenticated (${matchedUser.role})`);
+
+      const safeUser = {
+        id: matchedUser.id,
+        email: matchedUser.email,
+        full_name: matchedUser.full_name,
+        username: matchedUser.username,
+        role: matchedUser.role,
+        permissions: matchedUser.permissions ?? null,
+        must_change_pin: Boolean(matchedUser.must_change_pin),
+      };
+
+      return new Response(JSON.stringify({ success: true, user: safeUser }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[verify-pin] authenticated (${matchedUser.role})`);
+    if (lockedUser) {
+      const payload = lockoutPayload(lockedUser);
+      return new Response(JSON.stringify(payload), {
+        status: 403,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          ...(payload.retryAfterSec
+            ? { "Retry-After": String(payload.retryAfterSec) }
+            : {}),
+        },
+      });
+    }
 
-    const safeUser = {
-      id: matchedUser.id,
-      email: matchedUser.email,
-      full_name: matchedUser.full_name,
-      username: matchedUser.username,
-      role: matchedUser.role,
-      permissions: matchedUser.permissions ?? null,
-      must_change_pin: Boolean(matchedUser.must_change_pin),
-    };
+    // Wrong PIN — attribute to last operator on this device when known.
+    let attemptUserId: string | null =
+      typeof lastUserId === "string" && lastUserId.trim() ? lastUserId.trim() : null;
+    if (!attemptUserId && candidates.length === 1) {
+      attemptUserId = candidates[0].id;
+    }
 
-    return new Response(JSON.stringify({ success: true, user: safeUser }), {
-      status: 200,
+    if (attemptUserId) {
+      await supabase.rpc("record_failed_pin_attempt", { p_user_id: attemptUserId });
+      const lockState = await fetchUserLockState(supabase, attemptUserId);
+      if (lockState && isAccountLocked(lockState.locked_until)) {
+        const payload = lockoutPayload(lockState);
+        return new Response(JSON.stringify(payload), {
+          status: 403,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            ...(payload.retryAfterSec
+              ? { "Retry-After": String(payload.retryAfterSec) }
+              : {}),
+          },
+        });
+      }
+    }
+
+    await bcrypt.compare("000000", "$2a$12$dummyhashforsecuritytimingonlynotreal");
+    return new Response(JSON.stringify({ error: "Invalid credentials" }), {
+      status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

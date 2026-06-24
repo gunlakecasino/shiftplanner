@@ -107,7 +107,7 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     shortLabel: "Reports",
     section: "insights",
     icon: BarChart3,
-    description: "Zone frequency and placement analytics",
+    description: "Rotation fairness, zone frequency, and placement analytics",
   },
   {
     id: "auditLog",

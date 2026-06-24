@@ -3,7 +3,7 @@ import type { ShiftBuilderPermissions } from "./opsAuth";
 /** Operator surface after PIN authentication. */
 export type OpsSurface = "admin" | "team";
 
-const ADMIN_PREFIX = "/shiftbuilder/settings";
+const ADMIN_PREFIXES = ["/shiftbuilder/settings", "/shiftbuilder/reports"] as const;
 const TEAM_HOME = "/shiftbuilder";
 const ADMIN_HOME = "/shiftbuilder";
 
@@ -21,7 +21,7 @@ export function guardAuthenticatedRoute(
   pathname: string,
   surface: OpsSurface,
 ): string | null {
-  if (surface === "team" && pathname.startsWith(ADMIN_PREFIX)) {
+  if (surface === "team" && ADMIN_PREFIXES.some((p) => pathname.startsWith(p))) {
     return TEAM_HOME;
   }
   return null;
@@ -40,5 +40,5 @@ export function postPinDestination(
 }
 
 export function isAdminRoute(pathname: string): boolean {
-  return pathname.startsWith(ADMIN_PREFIX);
+  return ADMIN_PREFIXES.some((p) => pathname.startsWith(p));
 }
