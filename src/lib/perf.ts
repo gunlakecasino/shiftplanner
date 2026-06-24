@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — Final Debug Pass + Full Audit Trail — UI frozen June 24 2026
 /**
  * Velvet Performance Telemetry — Phase 0 Foundation
  *
@@ -36,12 +37,13 @@ export function reportWebVitals(onReport?: (metric: VelvetMetric) => void) {
       route: typeof window !== "undefined" ? window.location.pathname : undefined,
     };
 
-    // Phase 0: Always log (helps during Railway/Vercel deploys)
-    console.log(`[Velvet Vitals] ${metric.name}`, {
-      value: Math.round(metric.value),
-      rating: metric.rating,
-      route: enhanced.route,
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[Velvet Vitals] ${metric.name}`, {
+        value: Math.round(metric.value),
+        rating: metric.rating,
+        route: enhanced.route,
+      });
+    }
 
     // Future: write to Supabase here (non-blocking, with batching)
     // if (onReport) onReport(enhanced);

@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 import type { NextConfig } from "next";
 
 const withBundleAnalyzer = require("@next/bundle-analyzer")({

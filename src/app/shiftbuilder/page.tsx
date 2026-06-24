@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 "use client";
 
 /**
@@ -18,17 +19,29 @@
 import dynamic from "next/dynamic";
 import { QueryProvider } from "./providers";
 import PwaRegister from "./components/PwaRegister";
+import ShiftBuilderHelpButton from "./components/ShiftBuilderHelpButton";
+import ShiftBuilderAuthenticatedShell from "./components/ShiftBuilderAuthenticatedShell";
+import DaySwitchTransitionBridge from "./components/DaySwitchTransitionBridge";
+import { BuilderArtboardSkeletonPreview } from "./components/builderPrimitives";
 
 const ShiftBuilderClient = dynamic(() => import("./ShiftBuilderClient"), {
   ssr: false,
-  loading: () => null,
+  loading: () => (
+    <div className="sb-content-enter p-6" aria-busy="true" aria-label="Loading shift builder">
+      <BuilderArtboardSkeletonPreview />
+    </div>
+  ),
 });
 
 export default function ShiftBuilderPage() {
   return (
     <QueryProvider>
       <PwaRegister />
-      <ShiftBuilderClient />
+      <DaySwitchTransitionBridge />
+      <ShiftBuilderAuthenticatedShell>
+        <ShiftBuilderClient />
+      </ShiftBuilderAuthenticatedShell>
+      <ShiftBuilderHelpButton />
     </QueryProvider>
   );
 }

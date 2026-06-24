@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 import { createHmac, timingSafeEqual } from "crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import {
@@ -39,6 +40,12 @@ function sessionSecret(): string | null {
       "[opsSession] No session signing secret — set OPS_SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY on Railway",
     );
     return null;
+  }
+
+  if (!fallback) {
+    console.error(
+      "[opsSession] No session signing secret in development — add OPS_SESSION_SECRET to .env.local (recommended) or SUPABASE_SERVICE_ROLE_KEY, then restart `pnpm dev`.",
+    );
   }
 
   return fallback || null;

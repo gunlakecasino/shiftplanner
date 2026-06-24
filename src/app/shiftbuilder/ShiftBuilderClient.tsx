@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useTransition, useDeferredValue } from "react";
@@ -174,7 +175,6 @@ if (typeof window !== 'undefined') {
     liveAssignments: liveAssignmentsStore.getState(),
     shiftBuilder: useShiftBuilderStore.getState(),
   });
-  console.log('%c[ShiftBuilder] Debug stores exposed on window: __liveAssignmentsStore, __useShiftBuilderStore, __getShiftBuilderDebugState()', 'color:#0a0; font-weight: bold');
 }
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
 // Extracted components now imported from ./components (Phase cleanups).
@@ -2780,7 +2780,6 @@ function AuthedShiftBuilder() {
             setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
           }
         } catch {}
-        console.log('[shiftbuilder] night_tm_status changed — refreshed via API');
       });
       createdChannels.push(statusChannel);
 
@@ -2788,7 +2787,6 @@ function AuthedShiftBuilder() {
         const { getCallOffsForDate } = await import("@/lib/shiftbuilder/tmCommands");
         const freshCalledOff = await getCallOffsForDate(selectedDay.date);
         setCalledOffIds(freshCalledOff);
-        console.log('[shiftbuilder] call_offs changed — refreshed called off set');
       });
       createdChannels.push(callOffChannel);
 
@@ -2807,7 +2805,6 @@ function AuthedShiftBuilder() {
 
       const gravesScheduleChannels = createGravesScheduleChannels(async () => {
         await refreshScheduledRoster();
-        console.log('[shiftbuilder] graves schedule changed — refreshed via API');
       });
       createdChannels.push(...gravesScheduleChannels);
 
@@ -4681,7 +4678,6 @@ function AuthedShiftBuilder() {
               try {
                 useShiftBuilderStore.getState().addAiUsage(grokResult.usage);
                 updateOpsStatusBarContent?.();
-                console.log(`[ai-usage-engine] recorded ${grokResult.usage.inputTokens || 0}+${grokResult.usage.outputTokens || 0} tok for ${grokResult.usage.model || 'grok'} effort=${grokResult.usage.reasoningEffort || ''} (usedGrok=${grokResult.usedGrok})`);
                 recordedRealEngineUsage = true;
               } catch {
                 /* ignore */
@@ -4699,18 +4695,6 @@ function AuthedShiftBuilder() {
             };
           }
 
-          const proposedCount = grokResult.picks.length; // after guard
-          console.groupCollapsed(
-            `[GrokEngineCapture] ${selectedDay.name} — ${grokResult.usedGrok ? "Grok used" : "Grok skipped/failed"} (valid overrides: ${proposedCount})`,
-          );
-          console.log("Placement Method:", options?.forceXai ? "xai-button-forced" : engineConfig.placementMethod);
-          console.log("Tools:", useTools ? "enabled" : "off");
-          console.log("Grok warnings:", grokResult.warnings);
-          console.log("Grok explanation:", grokResult.explanation || "(none provided)");
-          if (!grokResult.usedGrok && grokResult.warnings.length === 0) {
-            console.log("Note: Grok returned 0 picks (or all filtered) — no overrides applied; using full planner result.");
-          }
-          console.groupEnd();
         }
 
         // Ensure the xAI engine run is always tracked in the usage bar / 30d ledger (even if Grok call failed or produced 0 valid picks/overrides).
@@ -4725,7 +4709,6 @@ function AuthedShiftBuilder() {
           try {
             useShiftBuilderStore.getState().addAiUsage(zeroOrFallbackUsage);
             updateOpsStatusBarContent?.();
-            console.log(`[ai-usage-engine] ensured tracking (0 or fallback tokens) for xAI engine run (usedGrok=${grokResult?.usedGrok})`);
           } catch {
             /* ignore */
           }
@@ -5445,13 +5428,6 @@ function AuthedShiftBuilder() {
 
     // Already-assigned TM being moved
     if (a.type === "assigned") {
-      console.log('[DRAG ASSIGNED] drop detected', {
-        from: a.fromSlot,
-        overType: over?.data?.current?.type,
-        overKey: over?.data?.current?.slotKey,
-        liveAvailable: !!live?.assign,
-      });
-
       // → another slot: atomic swap (or move if target empty)
       if (over?.data.current?.type === "slot") {
         const rawToKey = (over.data.current as any).slotKey;
@@ -5518,14 +5494,6 @@ function AuthedShiftBuilder() {
             }
             return next;
           });
-          const isSwap = !!displacedTmId;
-        console.log('[DRAG ASSIGNED] optimistic store patch applied', { 
-          fromKey, 
-          toKey, 
-          movingTmId, 
-          displacedTmId,
-          operation: isSwap ? 'SWAP' : 'MOVE_TO_EMPTY'
-        });
         } catch (e) {
           console.warn("[drag] direct store patch failed", e);
         }
@@ -6716,24 +6684,6 @@ function AuthedShiftBuilder() {
     // persistAssign) and the board never sees it.
     // Aux cards (Z9SR etc.) have their own header × wired to onLiveUnassign and worked.
 
-    // === TEMPORARY TARGETED DIAGNOSTIC for "only Jared on 2026-06-01 Z9 cannot clear" ===
-    const isProblemDate = selectedDay.date.toISOString().slice(0, 10) === "2026-06-01";
-    const isZ9 = slotKey === "Z9";
-    if (isProblemDate && isZ9) {
-      const currentAssignment = padAssignments?.[slotKey] || assignments[slotKey];
-      console.log('%c[DEBUG] Clear attempt on problematic assignment (2026-06-01 Z9)', 'color: orange; font-weight: bold', {
-        slotKey,
-        currentAssignment,
-        isLocked: currentAssignment?.isLocked,
-        tmId: currentAssignment?.tmId,
-        tmName: currentAssignment?.tmName,
-        queryNightId,
-        legacyNightId: nightId,
-        liveUnassignAvailable: !!live?.unassign,
-        dateKey: "2026-06-01",
-      });
-    }
-
     const prevAssignment = padAssignments[slotKey] ?? assignments[slotKey];
     const reliableNightId = queryNightId || nightId;
     if (live?.unassign) {
@@ -7334,7 +7284,6 @@ function AuthedShiftBuilder() {
       void handleRequestRotationAdvisor({ focusWeek: true });
 
       // Optional: if the user had a pad open for one of the affected slots, it will pick up the live change.
-      console.log('[WeekLens] applied move', fromName, fromSlot, '→', toSlot, 'on', dateKey);
     } catch (e) {
       console.warn('[WeekLens] apply failed', e);
     }

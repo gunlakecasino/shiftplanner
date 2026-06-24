@@ -1,4 +1,6 @@
+// v1.0 Release-Ready — Final Debug Pass + Full Audit Trail — UI frozen June 24 2026
 import { NextRequest, NextResponse } from "next/server";
+import { opsLog } from "@/lib/opsLogger";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
 
   const client = createAdminClientSafe();
   if (!client) {
-    console.warn("[shiftbuilder/log-change] service role unavailable — skipping persist");
+    opsLog("shiftbuilder/audit", "audit_persist_skipped", { reason: "no_service_role" }, "warn");
     return NextResponse.json({ ok: true, persisted: false });
   }
 
@@ -137,12 +139,24 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    console.error("[shiftbuilder/log-change] insert failed", error);
+    opsLog(
+      "shiftbuilder/audit",
+      "audit_persist_failed",
+      { code: error.code, message: error.message, action, nightDate },
+      "error",
+    );
     return NextResponse.json(
       { error: error.message, code: error.code },
       { status: 500 },
     );
   }
+
+  opsLog(
+    "shiftbuilder/audit",
+    "audit_persisted",
+    { action, nightDate, slotKey: effectiveSlotKey, operatorName },
+    "debug",
+  );
 
   return NextResponse.json({ ok: true, persisted: true });
 }

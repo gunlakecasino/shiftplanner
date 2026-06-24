@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 "use client";
 
 import React, { useEffect } from "react";
@@ -212,7 +213,6 @@ export function ensureOpsStatusBar(): void {
     pill.style.cssText = getPillShellStyles();
     document.body.appendChild(pill);
     buildOpsStatusBarShell(pill);
-    console.log("[OpsStatusBar] ensure: created #ops-status-bar");
   } else {
     pill.style.cssText = getPillShellStyles();
     pill.style.display = "flex";

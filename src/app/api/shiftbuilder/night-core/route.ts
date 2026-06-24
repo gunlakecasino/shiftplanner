@@ -1,74 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { unstable_noStore } from "next/cache";
-import { assertActorCanReadNight } from "@/lib/auth/assertNightEditable.server";
-import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
-import {
-  getNightCoreBundleForDate,
-  isNightCoreAllowedForTodayPolicy,
-} from "@/lib/shiftbuilder/nightCoreBundle.server";
-import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+// v1.0 Release-Ready — Final Debug Pass + Full Audit Trail — UI frozen June 24 2026
+import { NextRequest } from "next/server";
+import { handleNightLayerGet } from "../_handlers/night";
 
-/**
- * GET /api/shiftbuilder/night-core?date=YYYY-MM-DD
- *
- * Single-hop builder critical path: night id + assignments + roster + schedule.
- * Runs parallel Supabase reads on the server (close to Postgres).
- */
 export const dynamic = "force-dynamic";
 
+/** @deprecated Alias — prefer GET /api/shiftbuilder/night?layer=core */
 export async function GET(request: NextRequest) {
-  unstable_noStore();
-
-  const session = await requireOpsSession(request);
-  if (!session.ok) {
-    return NextResponse.json({ error: session.error }, { status: session.status });
-  }
-
-  const dateParam = request.nextUrl.searchParams.get("date");
-
-  if (!dateParam) {
-    return NextResponse.json({ error: "Missing ?date=YYYY-MM-DD" }, { status: 400 });
-  }
-
-  const parsed = parseLocalDateISO(dateParam);
-  if (isNaN(parsed.getTime())) {
-    return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
-  }
-
-  try {
-    const readCheck = await assertActorCanReadNight(session.actor.permissions, {
-      date: dateParam,
-    });
-    if (!readCheck.ok) {
-      return NextResponse.json({ error: readCheck.error }, { status: 403 });
-    }
-
-    const policy = request.nextUrl.searchParams.get("policy");
-    if (policy === "today") {
-      const allowed = await isNightCoreAllowedForTodayPolicy(dateParam);
-      if (!allowed) {
-        return NextResponse.json(
-          { error: "Schedule not available for this date" },
-          { status: 403 },
-        );
-      }
-    }
-
-    const payload = await getNightCoreBundleForDate(dateParam);
-
-    return NextResponse.json(payload, {
-      headers: {
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
-      },
-    });
-  } catch (error) {
-    console.error("[night-core] Error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to load night core bundle",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
-  }
+  return handleNightLayerGet(request, "core");
 }

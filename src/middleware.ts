@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -69,10 +70,42 @@ export function middleware(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-Frame-Options", "SAMEORIGIN");
+  response.headers.set("X-DNS-Prefetch-Control", "off");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
 
   const pathname = url.pathname;
 
   if (process.env.NODE_ENV === "production") {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+    let supabaseHost = "";
+    try {
+      supabaseHost = supabaseUrl ? new URL(supabaseUrl).host : "";
+    } catch {
+      supabaseHost = "";
+    }
+
+    const connectSrc = ["'self'", "https://api.x.ai", "wss:"];
+    if (supabaseHost) {
+      connectSrc.push(`https://${supabaseHost}`, `wss://${supabaseHost}`);
+    }
+
+    const csp = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+      "object-src 'none'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      `connect-src ${connectSrc.join(" ")}`,
+      "font-src 'self' data:",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+    ].join("; ");
+
+    response.headers.set("Content-Security-Policy", csp);
+    response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
     if (pathname.startsWith("/shiftbuilder")) {
       response.headers.set(
         "Cache-Control",

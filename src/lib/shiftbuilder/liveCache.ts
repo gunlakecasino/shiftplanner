@@ -64,12 +64,29 @@ export function nightDateKey(date: Date): string {
  */
 let boardAssignmentsDayKey: string | null = null;
 
+type BoardAssignmentsDayKeyListener = (dayKey: string | null) => void;
+const boardAssignmentsDayKeyListeners = new Set<BoardAssignmentsDayKeyListener>();
+
 export function getBoardAssignmentsDayKey(): string | null {
   return boardAssignmentsDayKey;
 }
 
+export function subscribeBoardAssignmentsDayKey(
+  listener: BoardAssignmentsDayKeyListener,
+): () => void {
+  boardAssignmentsDayKeyListeners.add(listener);
+  return () => boardAssignmentsDayKeyListeners.delete(listener);
+}
+
 export function setBoardAssignmentsDayKey(dayKey: string | null): void {
   boardAssignmentsDayKey = dayKey;
+  boardAssignmentsDayKeyListeners.forEach((listener) => {
+    try {
+      listener(dayKey);
+    } catch {
+      /* ignore subscriber errors */
+    }
+  });
 }
 
 /**

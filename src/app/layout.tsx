@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import {
@@ -139,11 +140,8 @@ export default function RootLayout({
       .then(function(reg) {
         // Optional: expose version for Sudo debugging
         if (reg.active) {
-          const ch = new MessageChannel();
-          ch.port1.onmessage = function(e) { console.log('[Velvet SW] version', e.data.version); };
-          reg.active.postMessage({ type: 'GET_VERSION' }, [ch.port2]);
+          reg.active.postMessage({ type: 'GET_VERSION' });
         }
-        console.log('[Velvet] Service Worker registered');
       })
       .catch(function(err) {
         console.warn('[Velvet] SW registration failed (non-fatal):', err?.message);

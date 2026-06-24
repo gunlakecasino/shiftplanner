@@ -1,3 +1,4 @@
+// v1.0 Release-Ready — UI frozen June 24 2026
 "use server";
 
 // Heavy xai / grokIntelligence symbols dynamically imported inside the functions below.

@@ -174,10 +174,10 @@ export default function EngineAILab() {
       useShiftBuilderStore.getState().setLiveEngineConfigForAI(next);
 
       const msg = `Applied: ${suggestion.type} ${suggestion.key || suggestion.rule || ''}${persisted ? ' (persisted to DB)' : ''}\n\nLive config updated. Future Grok calls and placements will see the change.`;
-      alert(msg);
+      console.info("[AI Lab]", msg);
     } catch (err: any) {
       console.error(err);
-      alert(`Apply partially succeeded locally but failed to persist: ${err?.message || err}`);
+      console.error(`[AI Lab] Apply partially succeeded locally but failed to persist: ${err?.message || err}`);
       useShiftBuilderStore.getState().setLiveEngineConfigForAI(next); // still surface locally
     }
   };

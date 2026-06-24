@@ -175,7 +175,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Server session signing unavailable — set OPS_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY) on Railway",
+          process.env.NODE_ENV === "production"
+            ? "Server session signing unavailable — set OPS_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY) on Railway"
+            : "Server session signing unavailable — add OPS_SESSION_SECRET to .env.local and restart pnpm dev",
       },
       { status: 503 },
     );

@@ -1,3 +1,4 @@
+/* v1.0 Release-Ready — UI frozen June 24 2026 */
 /* Material Symbols Rounded — self-hosted via npm, no CDN dependency */
 @import "material-symbols/rounded";
 
@@ -805,10 +806,6 @@ body {
 
    All builder-only enhancements are gated so they never touch Preview or print.
    ========================================================================== */
-
-/* (Old broad stage + header overrides removed — they affected FloatingNav and the internal sheet-header.
-   Builder now uses a dedicated non-framed .builder-workspace render path in ShiftBuilderClient + Board.
-   Preview/Golden .print-artboard contract is sacred and unchanged.) */
 
 /* ==========================================================================
    BUILDER WORKSPACE — Apple-level sophisticated digital authoring surface

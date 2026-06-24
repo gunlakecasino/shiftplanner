@@ -615,3 +615,104 @@
   opacity: 1;
   transform: translateY(0) scale(1);
 }
+
+/* ── v1.0 UX states — card population + empty slot hints (additive only) ── */
+
+@keyframes sb-card-populate-kf {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sb-card-populate {
+  animation: sb-card-populate-kf 0.34s var(--sb-spring-gentle) both;
+}
+
+.sb-card-populate--d0 {
+  animation-delay: 0ms;
+}
+.sb-card-populate--d1 {
+  animation-delay: 24ms;
+}
+.sb-card-populate--d2 {
+  animation-delay: 48ms;
+}
+.sb-card-populate--d3 {
+  animation-delay: 72ms;
+}
+.sb-card-populate--d4 {
+  animation-delay: 96ms;
+}
+.sb-card-populate--d5 {
+  animation-delay: 120ms;
+}
+.sb-card-populate--d6 {
+  animation-delay: 144ms;
+}
+.sb-card-populate--d7 {
+  animation-delay: 168ms;
+}
+.sb-card-populate--d8 {
+  animation-delay: 192ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-card-populate {
+    animation: none;
+  }
+}
+
+.sb-empty-slot-hint {
+  opacity: 0;
+  transition: opacity var(--sb-dur-mid) var(--sb-spring-gentle);
+}
+
+.sb-empty-slot-hint--visible {
+  opacity: 1;
+}
+
+.sb-empty-slot-hint__text {
+  font-size: 7px;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--sb-text-muted, #9ca3af);
+  opacity: 0.38;
+  font-weight: 600;
+}
+
+/* ── v1.0 day-switch inner-content veil (~250ms, additive only) ──
+   Card shells stay fixed; accent stripe + chrome sharp; assignment interior blurs. */
+
+.sb-day-content-veil .sb-day-card-host {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
+.sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
+  filter: blur(7px);
+  opacity: 0.4;
+  transition:
+    filter 0.22s var(--sb-spring-gentle),
+    opacity 0.22s var(--sb-spring-gentle);
+  pointer-events: none;
+}
+
+.sb-day-content-veil.sb-day-content-ready .sb-builder-card-grid .assignment-card > :not(:first-child) {
+  filter: blur(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
+    filter: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
