@@ -7123,7 +7123,7 @@ function AuthedShiftBuilder() {
 
   return (
     <div
-      className="sb-builder-shell flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder"
+      className={`sb-builder-shell flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}`}
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,

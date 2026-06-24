@@ -149,7 +149,10 @@ function GoldenBreakWaveColumn({
                   return (
                     <div key={`${a.slotKey}-${idx}`} className="flex items-center gap-1.5">
                       <div className="flex-1 border-b border-dashed border-[#C8C8CC] dark:border-[#48484A] pb-px min-w-0">
-                        <div className="font-semibold text-[#111] dark:text-[#F2F2F4] truncate text-[9px] leading-tight">
+                        <div
+                          className="sb-golden-assignee-name font-bold text-[#111] dark:text-[#F2F2F4] truncate text-[9px] leading-tight"
+                          style={{ fontFamily: "var(--font-atkinson)", fontWeight: 700 }}
+                        >
                           {a.tmName || " "}
                         </div>
                       </div>

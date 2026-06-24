@@ -39,6 +39,8 @@
   --font-display: var(--font-bricolage), 'Inter Tight', system-ui;
   /* Inter Tight — UI body: top bar, labels, buttons, roster chips          */
   --font-ui: var(--font-inter-tight), 'Inter', system-ui;
+  /* Builder canvas — Helvetica Neue family (live builder only; print uses Atkinson) */
+  --font-builder: "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* JetBrains Mono — time codes, slot keys, counts, ⌘K hints              */
   --font-jetbrains: var(--font-jetbrains), ui-monospace, monospace;
 
@@ -718,6 +720,20 @@ body {
    are left visually pristine (exact same JSX + base styles as preview).
    Cards use refined glass matching the nav language: calm, tactile, premium.
    ========================================================================== */
+
+/* Live builder shell — remap Velvet/Atkinson tokens to Helvetica variants.
+   Scoped to sb-canvas-builder so print preview + export keep Atkinson. */
+.sb-builder-shell.sb-canvas-builder {
+  --font-atkinson: var(--font-builder);
+  --font-bricolage: var(--font-builder);
+  --font-inter-tight: var(--font-builder);
+  --font-ui: var(--font-builder);
+  --font-display: var(--font-builder);
+  --font-geist-sans: var(--font-builder);
+  font-family: var(--font-builder);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 .builder-workspace {
   /* Assignment card design tokens — builder only (print/preview unchanged). */

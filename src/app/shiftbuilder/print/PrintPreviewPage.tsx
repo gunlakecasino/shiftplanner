@@ -106,7 +106,7 @@ function OverlapRowsSection({
       <div className="space-y-2">
         {overlapRows.map((row) => (
           <div key={row.key}>
-            <div className="sb-overlap-row-meta flex items-end justify-center gap-2 mb-1.5 flex-wrap text-center">
+            <div className="sb-overlap-row-meta flex items-end justify-end gap-2 mb-1.5 flex-wrap text-right w-full">
               <div
                 className="font-black tabular-nums leading-none text-[22px] text-[#1C1C1E]"
                 style={{ fontFamily: "var(--font-atkinson)" }}
@@ -180,7 +180,7 @@ export function PrintPreviewPage({
       ["--sb-print-task-dense-px" as string]: `${officialLayout.taskDenseFontPx}px`,
       ["--sb-print-task-leading" as string]: String(officialLayout.taskLineHeight),
       ["--sb-print-task-gap" as string]: `${officialLayout.taskGapPx}px`,
-      ["--sb-print-task-weight" as string]: "600",
+      ["--sb-print-task-weight" as string]: "700",
       ["--sb-print-coverage-font-px" as string]: "11px",
     };
   }, [officialLayout]);
@@ -329,7 +329,10 @@ export function PrintPreviewPage({
                             {items.map((p) => (
                               <div key={p.slotKey} className="flex items-center gap-1.5">
                                 <div className="flex-1 border-b border-dashed border-[#C8C8CC] pb-px min-w-0">
-                                  <div className="font-semibold text-[#111] truncate text-[9px] leading-tight">
+                                  <div
+                                    className="sb-golden-assignee-name font-bold text-[#111] truncate text-[9px] leading-tight"
+                                    style={{ fontFamily: "var(--font-atkinson)", fontWeight: 700 }}
+                                  >
                                     {p.tmName}
                                   </div>
                                 </div>

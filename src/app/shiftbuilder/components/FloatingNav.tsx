@@ -276,7 +276,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           border: "1px solid rgba(0,0,0,0.075)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.06)",
           padding: "8px 14px",
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "var(--font-ui, var(--font-builder, 'Helvetica Neue', Helvetica, Arial, sans-serif))",
           userSelect: "none",
           display: "flex",
           alignItems: "center",

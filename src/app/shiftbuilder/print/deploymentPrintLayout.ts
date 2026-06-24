@@ -123,7 +123,7 @@ export function applyOfficialDeploymentLayoutAttrs(
   artboard.style.setProperty("--sb-print-task-dense-px", `${layout.taskDenseFontPx}px`);
   artboard.style.setProperty("--sb-print-task-leading", String(layout.taskLineHeight));
   artboard.style.setProperty("--sb-print-task-gap", `${layout.taskGapPx}px`);
-  artboard.style.setProperty("--sb-print-task-weight", "600");
+  artboard.style.setProperty("--sb-print-task-weight", "700");
   artboard.style.setProperty("--sb-print-coverage-font-px", "11px");
 }
 

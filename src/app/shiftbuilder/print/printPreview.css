@@ -156,7 +156,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   --sb-print-accent-blue: #007aff;
   --sb-print-accent-pink: #ff2d55;
   --sb-print-accent-brown: #a2845e;
-  --sb-print-task-weight: 600;
+  --sb-print-task-weight: 700;
   --sb-print-coverage-font-px: 11px;
 }
 
@@ -341,13 +341,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   flex: 1 1 auto;
   min-height: 0;
   justify-content: flex-start;
-  font-weight: var(--sb-print-task-weight, 600);
+  font-weight: var(--sb-print-task-weight, 700);
 }
 
 .print-stage-inner .print-artboard[data-print-variant="official"] [data-task-label] span,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] [data-task-label] span,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] [data-task-label] span {
-  font-weight: 600 !important;
+  font-weight: 700 !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-coverage-bar .sb-coverage-bar-label,
@@ -432,14 +432,34 @@ body.golden-export-raster .print-dual-container .print-artboard .overlaps-sectio
   width: 100%;
 }
 
-/* Break sheet overlaps — align grid gutters with wave columns; center row labels */
+/* Break sheet overlaps — align grid gutters with wave columns; right-align row labels */
+.print-stage-inner .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta {
+  justify-content: flex-end !important;
+  text-align: right !important;
+  width: 100%;
+}
+
 .print-stage-inner .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-grid {
   width: 100%;
   max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+}
+
+/* Golden print — assignee names + task lines use Atkinson Hyperlegible Bold */
+.print-stage-inner .print-artboard .sb-golden-assignee-name,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-assignee-name,
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-assignee-name,
+.print-stage-inner .print-artboard .sb-golden-task-list,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-task-list,
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-task-list,
+.print-stage-inner .print-artboard .sb-golden-task-list [data-task-label],
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-task-list [data-task-label],
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-task-list [data-task-label] {
+  font-family: var(--font-atkinson), var(--font-geist-sans), system-ui, sans-serif !important;
+  font-weight: 700 !important;
 }
 
 .print-stage-inner .print-artboard .sheet-footer,

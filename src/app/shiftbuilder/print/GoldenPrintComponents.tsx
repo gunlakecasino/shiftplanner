@@ -58,7 +58,8 @@ function GoldenCoveredByBlock({
         style={{
           fontSize: GOLDEN_COVERED_NAME[scale],
           lineHeight: 1.08,
-          fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+          fontFamily: "var(--font-atkinson)",
+          fontWeight: 700,
         }}
       >
         {formatCoveredByNames(coveredByNames)}
@@ -107,7 +108,7 @@ export function GoldenTaskRow({
           isPrintPreview
           fontSize={`${TASK_LABEL_SIZE_PX.print}px`}
           textColor={textColor}
-          className="block rounded-sm font-semibold py-px"
+          className="block rounded-sm font-bold py-px"
           hanging={{ textIndent: "0", paddingLeft: "0" }}
         />
       </div>
@@ -138,7 +139,7 @@ export function GoldenTaskList({
       style={{
         fontFamily: "var(--font-atkinson)",
         fontSize,
-        fontWeight: "var(--sb-print-task-weight, 600)",
+        fontWeight: "var(--sb-print-task-weight, 700)",
         lineHeight: "var(--sb-print-task-leading, 1.12)",
         gap: "var(--sb-print-task-gap, 2px)",
       }}
@@ -285,7 +286,8 @@ export function GoldenZoneCard({
               style={{
                 fontSize: 21,
                 lineHeight: 1,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                fontFamily: "var(--font-atkinson)",
+                fontWeight: 700,
               }}
             >
               {tmName}
@@ -382,7 +384,8 @@ export function GoldenRRSide({
             style={{
               fontSize: 18,
               lineHeight: 1.02,
-              fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+              fontFamily: "var(--font-atkinson)",
+              fontWeight: 700,
             }}
           >
             {tmName}
@@ -603,7 +606,8 @@ export function GoldenAuxCard({
               style={{
                 fontSize: 18,
                 lineHeight: 1.02,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                fontFamily: "var(--font-atkinson)",
+                fontWeight: 700,
               }}
             >
               {tmName}
@@ -681,7 +685,8 @@ export function GoldenOverlapSlot({
               style={{
                 fontSize: 16,
                 lineHeight: 1.05,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                fontFamily: "var(--font-atkinson)",
+                fontWeight: 700,
               }}
             >
               {tmName}

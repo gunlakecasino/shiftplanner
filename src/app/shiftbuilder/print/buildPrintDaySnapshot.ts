@@ -261,7 +261,7 @@ export function buildOverlapRows(snapshot: PrintDaySnapshot): PrintOverlapRow[] 
   return [
     {
       key: "PM",
-      time: "11p – 1a (swings)",
+      time: "11p – 1a",
       dayName: snapshot.day.name,
       dateNum: snapshot.day.dateNum,
       headerColor: snapshot.day.color,
@@ -269,7 +269,7 @@ export function buildOverlapRows(snapshot: PrintDaySnapshot): PrintOverlapRow[] 
     },
     {
       key: "AM",
-      time: "5a – 7a (days)",
+      time: "5a – 7a",
       dayName: snapshot.amOverlapDayName,
       dateNum: snapshot.amOverlapDateNum,
       headerColor: snapshot.nextDayColor,

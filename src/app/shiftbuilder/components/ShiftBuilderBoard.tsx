@@ -1679,14 +1679,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 <div className="space-y-2">
                   {[
                     {
-                      time: "11p – 1a (swings)",
+                      time: "11p – 1a",
                       key: "PM" as const,
                       dayName: selectedDay.name,
                       dateNum: selectedDay.dateNum,
                       headerColor: selectedDay.color,
                     },
                     {
-                      time: "5a – 7a (days)",
+                      time: "5a – 7a",
                       key: "AM" as const,
                       dayName: amOverlapDayName,
                       dateNum: amOverlapDateNum,
@@ -1824,14 +1824,14 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               <div className={isPrintPreview ? "space-y-2" : "sb-breaks-overlap-strips flex-1 min-h-0 flex flex-col gap-2.5"}>
                 {[
                   {
-                    time: "11p – 1a (swings)",
+                    time: "11p – 1a",
                     key: "PM" as const,
                     dayName: selectedDay.name,
                     dateNum: selectedDay.dateNum,
                     headerColor: selectedDay.color,
                   },
                   {
-                    time: "5a – 7a (days)",
+                    time: "5a – 7a",
                     key: "AM" as const,
                     dayName: amOverlapDayName,
                     dateNum: amOverlapDateNum,
@@ -1844,7 +1844,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   >
                     {isPrintPreview ? (
                       <>
-                        <div className="sb-overlap-row-meta flex items-end justify-center gap-2 mb-1.5 flex-wrap text-center">
+                        <div className="sb-overlap-row-meta flex items-end justify-end gap-2 mb-1.5 flex-wrap text-right w-full">
                           <div
                             className="font-black tabular-nums leading-none"
                             style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
