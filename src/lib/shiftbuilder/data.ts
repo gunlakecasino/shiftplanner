@@ -4,6 +4,7 @@ import {
   writeNightIdCache,
   readSlotDefaultsCache,
   writeSlotDefaultsCache,
+  invalidateSlotDefaultsCache,
 } from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
 import type { BreakGroupValue } from './breakGroupResolve';
@@ -525,8 +526,8 @@ export async function getOrCreateNightForDate(
   // so a seeding failure never blocks night creation. Errors are logged but
   // do not propagate; the operator can always add tasks/breaks manually.
   Promise.all([
-    seedDefaultTasksForNight(newNightId).catch((e) =>
-      console.warn('[shiftbuilder/data] getOrCreateNightForDate: task seed failed', e)
+    pushTaskDefaultsToNight(newNightId).catch((e) =>
+      console.warn('[shiftbuilder/data] getOrCreateNightForDate: card-default task seed failed', e)
     ),
     seedDefaultBreaksForNight(newNightId).catch((e) =>
       console.warn('[shiftbuilder/data] getOrCreateNightForDate: break seed failed', e)
@@ -3342,6 +3343,8 @@ export async function upsertSlotDefault(params: {
     console.error('[shiftbuilder/data] upsertSlotDefault error:', error);
     throw new Error(`Failed to save slot default: ${(error as any).message ?? 'unknown'}`);
   }
+
+  invalidateSlotDefaultsCache();
 }
 
 /** Add a task chip default for a slot. Silently dedupes on (slot_key, rr_side, task_label). */

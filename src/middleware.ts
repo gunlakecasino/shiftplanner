@@ -32,6 +32,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (process.env.NODE_ENV === "production") {
+    const devOnly =
+      url.pathname.startsWith("/shiftbuilder/dev") ||
+      url.pathname.startsWith("/dev/") ||
+      url.pathname === "/shiftbuilder/components" ||
+      url.pathname === "/shiftbuilder/ai";
+    if (devOnly) {
+      return NextResponse.redirect(new URL("/shiftbuilder", request.url));
+    }
+  }
+
   if (url.pathname.startsWith("/frontman")) {
     return new NextResponse(
       "Frontman path reached src/middleware.ts (Edge runtime).\n" +

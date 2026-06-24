@@ -14,6 +14,7 @@ import ZoneCard from "./ZoneCard";
 import RRCard from "./RRCard";
 import AuxCard from "./AuxCard";
 import OverlapSlot from "./OverlapSlot";
+import BreakWaveColumn from "./BreakWaveColumn";
 import {
   GoldenZoneCard,
   GoldenRRColumn,
@@ -604,6 +605,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const overlapGridClass = isPrintPreview
     ? "sb-overlap-grid sb-overlap-card-grid flex-1 grid grid-cols-6 gap-1.5 min-w-0"
     : "sb-overlap-grid sb-overlap-card-grid flex-1 min-w-0";
+  const breaksOverlapGridClass =
+    "sb-overlap-grid sb-overlap-card-grid sb-breaks-overlap-grid grid grid-cols-6 gap-2 w-full flex-1 min-h-0";
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -1011,6 +1014,36 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     const def = auxDefs.find((d) => d.key === a.slotKey);
     return def ? def.label : a.slotKey;
   };
+
+  const renderBreaksOverlapSlot = (slotKey: string) => (
+    <>
+      <OverlapSlot
+        slotKey={slotKey}
+        assignments={displayAssignments}
+        selectedTasks={selectedTasks}
+        setBreakGroupForSlot={setBreakGroupForSlot}
+        onCardClick={handleCardClickForPad}
+        loading={loadingAssignments}
+        isDraftMode={isDraftMode}
+        draftInfo={draftAssignments[slotKey]}
+        onRemoveTask={onRemoveTask}
+        onSetTaskColor={onSetTaskColor}
+        onSetTaskMarker={onSetTaskMarker}
+        onEditTask={onEditTask}
+        onOpenTaskTextEdit={handleOpenTaskTextEdit}
+        isLocked={isCurrentNightLocked}
+        onLiveAssign={onLiveAssign}
+        onLiveUnassign={onLiveUnassign}
+        fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
+        showDigitalAssists={showDigitalAssists}
+        focusedTmId={focusedTmId}
+        conflictingTms={conflictingTms}
+        tmConflictSlots={tmConflictSlots}
+      />
+      {activePlacementPad?.hostId === slotKey &&
+        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, slotKey)}
+    </>
+  );
 
   // Helper: compute the locations from the *most recent N placement events* (chronological last assignments)
   // for a TM's pad history. Used to make the Last 30 Spread grid + counts reflect the last 30 nights
@@ -1735,13 +1768,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             ) : null}
           </>
         ) : (
-          <>
+          <div
+            className={
+              isPrintPreview
+                ? "contents"
+                : "sb-breaks-layout flex flex-col flex-1 min-h-0 w-full gap-2.5"
+            }
+          >
             {/* 4 Break Wave Columns — waves 1–3 + OL */}
             <div
               className={
                 isPrintPreview
                   ? "sb-breaks-wave-grid grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full"
-                  : "grid grid-cols-4 gap-1 mb-1.5 flex-1 min-h-0 w-full"
+                  : "sb-breaks-waves-band sb-breaks-wave-row shrink-0 w-full"
               }
             >
               {([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
@@ -1764,113 +1803,34 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   })
                   .filter(Boolean) as any[];
 
-                const count = waveAssignments.length;
-                const isOlWave = wave === BREAK_GROUP_OVERLAPS;
-                const waveColor =
-                  wave === 1
-                    ? "#1a2332"
-                    : wave === 2
-                      ? "#5a6b7d"
-                      : isOlWave
-                        ? "#B45309"
-                        : "#c8d3dc";
-
                 return (
-                  <div
+                  <BreakWaveColumn
                     key={wave}
-                    className="border border-[#E5E5E7] dark:border-[#3A3A3C] rounded-[3px] bg-white dark:bg-[#1C1C1E] overflow-hidden flex flex-col"
-                    style={{ borderTop: `3px solid ${waveColor}` }}
-                  >
-                    <div className="px-3 pt-2 pb-1 flex items-end gap-2.5 border-b border-[#F2F2F4] dark:border-[#2C2C2E]">
-                      <div
-                        className="font-black tabular-nums leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
-                        style={{
-                          fontSize: isOlWave ? 28 : 42,
-                          letterSpacing: isOlWave ? "-1px" : "-2px",
-                          fontFamily: "var(--font-atkinson)",
-                        }}
-                      >
-                        {breakGroupLabel(wave)}
-                      </div>
-                      <div className="-mb-0.5">
-                        <div
-                          className="font-extrabold tracking-[1px] uppercase leading-none text-[#1C1C1E] dark:text-[#F2F2F4]"
-                          style={{ fontSize: 13, fontFamily: "var(--font-atkinson)" }}
-                        >
-                          {isOlWave ? "Overlaps" : `Break ${wave}`}
-                        </div>
-                        <div className="text-[10px] text-[#6B7280] dark:text-[#8E8E93] mt-0.5">{count} people</div>
-                      </div>
-                    </div>
-
-                    <div className="px-2 pb-1 pt-1 space-y-1 text-[9px]">
-                      {(["zone", "rr", "aux", "overlap"] as const).map((cat) => {
-                        const items = waveAssignments.filter((a: any) => (a as any).type === cat);
-                        if (!items.length) return null;
-
-                        const label =
-                          cat === "zone"
-                            ? "ZONES"
-                            : cat === "rr"
-                              ? "RESTROOMS"
-                              : cat === "aux"
-                                ? "AUXILIARY"
-                                : "OVERLAPS";
-
-                        return (
-                          <div key={cat}>
-                            <div className="flex items-center gap-1 mb-1">
-                              <span className="text-[#6B7280] dark:text-[#8E8E93] font-bold tracking-[1.2px] uppercase text-[7.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>{label}</span>
-                              <div className="flex-1 h-px bg-[#E5E7EB] dark:bg-[#3A3A3C]" />
-                            </div>
-                            <div className="space-y-1">
-                              {items.map((a: any, idx: number) => {
-                                const accent = accentFor(a);
-                                const showChip = !a.notPlaced;
-                                return (
-                                  <div key={idx} className="flex items-center gap-1.5">
-                                    <div className="flex-1 border-b border-dashed border-[#C8C8CC] dark:border-[#48484A] pb-px min-w-0">
-                                      <div className="font-semibold text-[#111] dark:text-[#F2F2F4] truncate text-[9px] leading-tight">
-                                        {a.tmName || " "}
-                                      </div>
-                                    </div>
-                                    {showChip ? (
-                                      <div
-                                        className="text-[8.5px] font-extrabold tracking-[0.4px] px-1.5 py-px rounded-[2px] whitespace-nowrap border bg-white dark:bg-[#2C2C2E]"
-                                        style={{ borderColor: accent, color: accent, fontFamily: "var(--font-atkinson)" }}
-                                      >
-                                        {chipLabel(a)}
-                                      </div>
-                                    ) : (
-                                      <div className="w-3" />
-                                    )}
-                                    <span className="text-[7.5px] text-[#9CA3AF] uppercase tracking-[0.5px] w-3 text-center">
-                                      {showChip && a.type === "rr" ? ((a.slotKey || "").startsWith("M") ? "M" : "W") : ""}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    wave={wave}
+                    assignments={waveAssignments}
+                    accentFor={accentFor}
+                    chipLabel={chipLabel}
+                    variant={isPrintPreview ? "golden" : "builder"}
+                  />
                 );
               })}
             </div>
 
-            {/* OVERLAPS — Golden full-width pinned section */}
+            {/* OVERLAPS — pinned at bottom in print; fills remaining height in builder */}
             <section
-              className={`sb-builder-section pt-1.5 overlaps-section${isPrintPreview ? " mt-auto" : ""}`}
+              className={`sb-builder-section overlaps-section ${
+                isPrintPreview
+                  ? "pt-1.5 mt-auto"
+                  : "sb-breaks-overlaps-band flex-1 min-h-0 flex flex-col pt-0"
+              }`}
               data-print-target="overlaps"
             >
-              <div className="sheet-section-header">
+              <div className="sheet-section-header shrink-0">
                 <span className="label">OVERLAPS</span>
                 <div className="divider" />
               </div>
 
-              <div className="space-y-2">
+              <div className={isPrintPreview ? "space-y-2" : "sb-breaks-overlap-strips flex-1 min-h-0 flex flex-col gap-2.5"}>
                 {[
                   {
                     time: "11p – 1a (swings)",
@@ -1887,75 +1847,93 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     headerColor: nextDayColor,
                   },
                 ].map((row) => (
-                  <div key={row.key}>
-                    <div className="flex items-baseline gap-2 pl-1 mb-0.5">
-                      <div
-                        className="font-black tabular-nums leading-none"
-                        style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
-                      >
-                        {row.dateNum}
-                      </div>
-                      <div
-                        className="font-bold tracking-[-0.4px] leading-none"
-                        style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
-                      >
-                        {row.dayName}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
-                        {row.time}
-                      </div>
-                      <div className={overlapGridClass}>
-                        {Array.from({ length: 6 }).map((_, i) => {
-                          const slotKey = `OL-${row.key}-${i}`;
-                          return (
+                  <div
+                    key={row.key}
+                    className={isPrintPreview ? undefined : "sb-breaks-overlap-row flex flex-col min-h-0 flex-1"}
+                  >
+                    {isPrintPreview ? (
+                      <>
+                        <div className="flex items-baseline gap-2 pl-1 mb-0.5">
+                          <div
+                            className="font-black tabular-nums leading-none"
+                            style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
+                          >
+                            {row.dateNum}
+                          </div>
+                          <div
+                            className="font-bold tracking-[-0.4px] leading-none"
+                            style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
+                          >
+                            {row.dayName}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
+                            {row.time}
+                          </div>
+                          <div className={overlapGridClass}>
+                            {Array.from({ length: 6 }).map((_, i) => {
+                              const slotKey = `OL-${row.key}-${i}`;
+                              return (
+                                <div
+                                  key={i}
+                                  className={gridHostClass}
+                                  data-slot-key={slotKey}
+                                  data-placement-host={slotKey}
+                                >
+                                  {renderBreaksOverlapSlot(slotKey)}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="sb-breaks-overlap-row-header flex items-end justify-between gap-3 mb-1.5 px-0.5 shrink-0">
+                          <div className="flex items-baseline gap-2 min-w-0">
                             <div
-                              key={i}
-                              className={gridHostClass}
-                              data-slot-key={slotKey}
-                              data-placement-host={slotKey}
+                              className="font-black tabular-nums leading-none"
+                              style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
                             >
-                              <OverlapSlot
-                                slotKey={slotKey}
-                                assignments={displayAssignments}
-                                selectedTasks={selectedTasks}
-                                setBreakGroupForSlot={setBreakGroupForSlot}
-                                onCardClick={handleCardClickForPad}
-                                loading={loadingAssignments}
-                                isDraftMode={isDraftMode}
-                                draftInfo={draftAssignments[slotKey]}
-                                onRemoveTask={onRemoveTask}
-                                onSetTaskColor={onSetTaskColor}
-                        onSetTaskMarker={onSetTaskMarker}
-                                onEditTask={onEditTask}
-                                onOpenTaskTextEdit={handleOpenTaskTextEdit}
-                                isLocked={isCurrentNightLocked}
-                                onLiveAssign={onLiveAssign}
-                                onLiveUnassign={onLiveUnassign}
-                                fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
-                                showDigitalAssists={showDigitalAssists}
-                                focusedTmId={focusedTmId}
-                                conflictingTms={conflictingTms}
-                                tmConflictSlots={tmConflictSlots}
-                              />
-                              {activePlacementPad?.hostId === slotKey &&
-                                renderPlacementPad(
-                                  activePlacementPad.slotKey,
-                                  activePlacementPad.anchor,
-                                  slotKey,
-                                )}
+                              {row.dateNum}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                            <div
+                              className="font-bold tracking-[-0.4px] leading-none truncate"
+                              style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
+                            >
+                              {row.dayName}
+                            </div>
+                          </div>
+                          <div
+                            className="text-[10px] font-bold tracking-[0.35px] text-[#6B7280] dark:text-[#8E8E93] shrink-0"
+                            style={{ fontFamily: "var(--font-atkinson)" }}
+                          >
+                            {row.time}
+                          </div>
+                        </div>
+                        <div className={breaksOverlapGridClass}>
+                          {Array.from({ length: 6 }).map((_, i) => {
+                            const slotKey = `OL-${row.key}-${i}`;
+                            return (
+                              <div
+                                key={i}
+                                className={gridHostClass}
+                                data-slot-key={slotKey}
+                                data-placement-host={slotKey}
+                              >
+                                {renderBreaksOverlapSlot(slotKey)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
             </section>
-          </>
+          </div>
         )}
       </div>
 

@@ -1,7 +1,7 @@
 import React from "react";
 import type { PrintPlanningCardModel } from "./printPreviewTypes";
 
-import { breakGroupLabel } from "@/lib/shiftbuilder/constants";
+import { breakHeaderMark } from "@/lib/shiftbuilder/constants";
 
 export type PrintPlanningCardProps = {
   model: PrintPlanningCardModel;
@@ -51,8 +51,15 @@ export function PrintPlanningCard({ model }: PrintPlanningCardProps) {
             {sideLabel ? `${sideLabel} · ${headerLabel}` : headerLabel}
           </span>
         </div>
-        {kind !== "overlap" && breakGroup > 0 ? (
-          <span className="ppc-break-pill">{breakGroupLabel(breakGroup)}</span>
+        {kind !== "overlap" ? (
+          <span
+            className={`sb-golden-break-num shrink-0 leading-none tabular-nums ${
+              breakGroup > 0 ? "sb-golden-break-num--on" : "sb-golden-break-num--off"
+            }`}
+            style={{ fontFamily: "var(--font-atkinson)" }}
+          >
+            {breakHeaderMark(breakGroup)}
+          </span>
         ) : null}
       </div>
 

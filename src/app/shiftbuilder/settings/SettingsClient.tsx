@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { OpsAuthProvider, useOpsAuth } from "@/lib/auth/opsAuth";
 import { OpsAuthGate } from "../components/OpsAuthGate";
 import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
@@ -8,7 +10,14 @@ import { SettingsShell } from "./SettingsShell";
 import "./settingsShell.css";
 
 function SettingsGate() {
-  const { permissions } = useOpsAuth();
+  const router = useRouter();
+  const { permissions, isLoading } = useOpsAuth();
+
+  useEffect(() => {
+    if (!isLoading && !permissions?.canAccessSudo) {
+      router.replace("/shiftbuilder");
+    }
+  }, [isLoading, permissions?.canAccessSudo, router]);
 
   return (
     <OpsAuthGate loadingSublabel="Preparing settings">

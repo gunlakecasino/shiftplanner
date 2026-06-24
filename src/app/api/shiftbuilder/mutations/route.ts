@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
 import type { PermissionKey } from "@/lib/auth/auditActionPermission";
+import {
+  assertActorCanEditNight,
+  nightRefFromMutationBody,
+} from "@/lib/auth/assertNightEditable.server";
 import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import {
   addNightSlotTaskServer,
@@ -73,6 +77,16 @@ export async function POST(request: NextRequest) {
   const session = await requireOpsPermission(request, permission);
   if (!session.ok) {
     return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
+  if (permission === "canEditAssignments" || permission === "canLockUnlock") {
+    const editCheck = await assertActorCanEditNight(
+      session.actor.permissions,
+      nightRefFromMutationBody(body),
+    );
+    if (!editCheck.ok) {
+      return NextResponse.json({ error: editCheck.error }, { status: 403 });
+    }
   }
 
   const rateKey = `mutations:${clientIpFromRequest(request)}:${session.actor.user.id}`;

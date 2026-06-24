@@ -1649,9 +1649,122 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Breaks view — legacy flex row (print / fallback). */
+.sb-breaks-wave-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.sb-breaks-wave-col {
+  flex: 0 1 auto;
+  width: clamp(118px, 13vw, 168px);
+  min-width: 108px;
+  max-width: 180px;
+}
+
+.sb-breaks-wave-col--ol {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 128px;
+  max-width: none;
+}
+
+/* Builder breaks — two-band layout: compact wave grid on top, overlaps fill remainder. */
+.sb-breaks-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.sb-breaks-waves-band.sb-breaks-wave-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  max-height: min(36vh, 360px);
+}
+
+.sb-breaks-waves-band .sb-breaks-wave-col,
+.sb-breaks-waves-band .sb-breaks-wave-col--ol {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  flex: unset;
+}
+
+.sb-breaks-overlaps-band {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 0 !important;
+}
+
+.sb-breaks-overlap-strips {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-breaks-overlap-row {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.sb-breaks-overlap-grid.sb-overlap-card-grid > * {
+  height: 100%;
+  min-height: 0;
+}
+
+.sb-breaks-overlap-grid .assignment-card,
+.sb-breaks-overlap-grid .sb-assignment-card {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 84px;
+}
+
+/* Builder breaks view — wave summary columns use deployment card chrome. */
+.sb-break-wave-col-card {
+  background: var(--ios-background-secondary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.dark .sb-break-wave-col-card {
+  background: #1c1c1e;
+}
+
+.sb-break-wave-col-card .sheet-section-header {
+  margin: 0 0 4px;
+  padding: 0 2px;
+}
+
+.sb-break-wave-col-card .sheet-section-header .label {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.sb-break-wave-person {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sb-breaks-wave-row:not(.sb-breaks-waves-band) .sb-breaks-wave-col {
+  width: clamp(132px, 14vw, 188px);
+  min-width: 120px;
+  max-width: 200px;
+}
+
 /* Overlap strips are always 6 slots wide (OL-*-0..5), unlike zone/RR/aux responsive grids. */
 .sb-overlap-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
 }
 
 .sb-builder-stage .sb-overlap-grid {
@@ -2196,12 +2309,22 @@ body {
 .sb-overlap-card-grid .sb-assignment-card {
   flex: 1 1 auto;
   height: 100%;
-  min-height: 48px;
+  min-height: 72px;
 }
 
 .builder-workspace .sb-overlap-card-grid .assignment-card.empty,
 .builder-workspace .sb-overlap-card-grid .assignment-card.sb-card-empty {
-  min-height: 48px;
+  min-height: 72px;
+}
+
+/* Overlap slots in breaks view — zone-card chrome at compact scale. */
+.sb-overlap-zone-card {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.dark .sb-overlap-zone-card {
+  background: #1c1c1e;
 }
 
 /* Frame relaxation ONLY when the stageHost carries the sb-builder-stage marker.
@@ -2595,6 +2718,64 @@ button,
   .sb-break-badge-btn {
     touch-action: manipulation;
   }
+}
+
+/* Break header mark — plain bold number in the card header (builder). */
+.sb-break-header-num {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  min-width: 1.1em;
+  font-family: var(--font-atkinson, var(--font-ui, system-ui));
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  color: #48484a;
+}
+
+.sb-break-header-num--sm {
+  font-size: 12px;
+}
+
+.sb-break-header-num--md {
+  font-size: 13px;
+}
+
+.sb-break-header-num--tablet-sm {
+  font-size: 14px;
+}
+
+.sb-break-header-num--tablet-md {
+  font-size: 15px;
+}
+
+.sb-break-header-num--kiosk {
+  font-size: 16px;
+}
+
+.sb-break-header-num--on {
+  color: #3a3a3c;
+}
+
+.sb-break-header-num--off {
+  color: #c7c7cc;
+  font-weight: 600;
+}
+
+.sb-break-header-num--ol {
+  font-size: 0.92em;
+  letter-spacing: 0.02em;
+}
+
+.dark .sb-break-header-num--on {
+  color: #e5e5ea;
+}
+
+.dark .sb-break-header-num--off {
+  color: #636366;
 }
 
 /* Break imprint — grey debossed divot stamped into the card surface. */

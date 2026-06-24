@@ -21,11 +21,20 @@ type TokenPayload = {
 const usedPinChangeTokens = new Map<string, number>();
 
 function sessionSecret(): string | null {
-  const secret =
-    process.env.OPS_SESSION_SECRET?.trim() ||
+  const dedicated = process.env.OPS_SESSION_SECRET?.trim();
+  if (dedicated) return dedicated;
+
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[opsSession] OPS_SESSION_SECRET is required in production — set a dedicated random secret on Railway",
+    );
+    return null;
+  }
+
+  const fallback =
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
-  return secret || null;
+  return fallback || null;
 }
 
 function b64url(input: string): string {

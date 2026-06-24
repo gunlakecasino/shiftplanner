@@ -12,10 +12,17 @@ import {
   getRRAccent,
   getAuxAccent,
   getAuxIcon,
-  COVERAGE_BAR_FONT_SIZE,
+  cardAccentInk,
+  isGoldAccent,
+  coverageBarBg,
+  getOverlapAccent,
+  overlapSlotLabel,
+  COVERAGE_BAR_FONT_SIZE_PRINT,
   COVERAGE_BAR_H,
   BREAK_GROUP_FILTERS,
+  BREAK_GROUP_OVERLAPS,
   breakGroupLabel,
+  breakHeaderMark,
 } from "@/lib/shiftbuilder/constants";
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
@@ -64,14 +71,16 @@ const WEEK_LETTERS = ["F", "S", "S", "M", "T", "W", "T"] as const;
 
 export function GoldenBreakPill({ value }: { value: number }) {
   const isOff = value === 0;
+  const isOl = value === BREAK_GROUP_OVERLAPS;
   return (
     <span
-      className={`w-[18px] h-[14px] text-[9px] font-bold rounded-[2px] flex items-center justify-center select-none leading-none shrink-0 ${
-        isOff ? "bg-[#9CA3AF] text-white" : "bg-[#1C1C1E] text-white"
-      }`}
-      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+      className={`sb-golden-break-num shrink-0 select-none leading-none tabular-nums ${
+        isOff ? "sb-golden-break-num--off" : "sb-golden-break-num--on"
+      } ${isOl ? "sb-golden-break-num--ol" : ""}`}
+      style={{ fontFamily: "var(--font-atkinson)" }}
+      aria-hidden={isOff}
     >
-      {isOff ? "–" : breakGroupLabel(value)}
+      {breakHeaderMark(value)}
     </span>
   );
 }
@@ -98,7 +107,7 @@ export function GoldenTaskRow({
           isPrintPreview
           fontSize={`${TASK_LABEL_SIZE_PX.print}px`}
           textColor={textColor}
-          className="block rounded-sm font-medium py-px"
+          className="block rounded-sm font-semibold py-px"
           hanging={{ textIndent: "0", paddingLeft: "0" }}
         />
       </div>
@@ -129,6 +138,7 @@ export function GoldenTaskList({
       style={{
         fontFamily: "var(--font-atkinson)",
         fontSize,
+        fontWeight: "var(--sb-print-task-weight, 600)",
         lineHeight: "var(--sb-print-task-leading, 1.12)",
         gap: "var(--sb-print-task-gap, 2px)",
       }}
@@ -147,7 +157,7 @@ export function GoldenCoverageBar({
   label: string;
   color: string;
 }) {
-  const bg = color || "#6B7280";
+  const bg = coverageBarBg(color || "#6B7280");
   return (
     <div
       className="sb-coverage-bar group flex items-center justify-between px-2 select-none"
@@ -169,7 +179,10 @@ export function GoldenCoverageBar({
     >
       <span
         className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
-        style={{ fontSize: COVERAGE_BAR_FONT_SIZE, fontFamily: "var(--font-atkinson)" }}
+        style={{
+          fontSize: "var(--sb-print-coverage-font-px, " + COVERAGE_BAR_FONT_SIZE_PRINT + "px)",
+          fontFamily: "var(--font-atkinson)",
+        }}
       >
         {label}
       </span>
@@ -209,6 +222,7 @@ export function GoldenZoneCard({
 } & React.HTMLAttributes<HTMLDivElement>) {
   const def = ZONE_DEFS.find((d) => d.key === slotKey)!;
   const color = getZoneColor(slotKey);
+  const ink = cardAccentInk(color);
   const icon = ZONE_ICONS[slotKey] ?? "●";
   const isEmpty = empty || !tmName?.trim();
   const regular = tasks.filter((t) => !t.isCoverage);
@@ -227,12 +241,15 @@ export function GoldenZoneCard({
       onContextMenu={onContextMenu}
       {...rest}
     >
-      <div className="h-[3px] w-full shrink-0" style={{ background: color }} />
+      <div
+        className={`h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
+        style={{ background: color }}
+      />
       <div
         className="flex items-center justify-between gap-1 px-2 pt-1.5 pb-1.5"
         style={{ borderBottom: `1px solid ${color}22` }}
       >
-        <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color }}>
+        <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: ink }}>
           <span className="text-[12px] leading-none">{icon}</span>
           <span
             className="font-extrabold tracking-[0.4px] uppercase truncate"
@@ -281,13 +298,13 @@ export function GoldenZoneCard({
         ) : null}
       </div>
       {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={coverage.color || "#6B7280"} />
+        <GoldenCoverageBar label={coverage.label} color={color} />
       ) : null}
     </div>
   );
 }
 
-function GoldenRRSide({
+export function GoldenRRSide({
   slotKey,
   headerLabel,
   icon,
@@ -312,21 +329,25 @@ function GoldenRRSide({
   const coverage = tasks.find((t) => t.isCoverage);
   const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 6;
   const isEmpty = empty || !tmName?.trim();
+  const ink = cardAccentInk(accentColor);
 
   return (
     <div
-      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] flex-1 ${
+      className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col rounded-[3px] h-full ${
         isEmpty ? "empty sb-card-empty" : ""
       }`}
       style={{ ["--card-accent" as string]: accentColor }}
       data-slot-key={slotKey}
     >
-      <div className="h-[3px] w-full shrink-0" style={{ background: accentColor }} />
+      <div
+        className={`h-[3px] w-full shrink-0 ${isGoldAccent(accentColor) ? "sb-accent-stripe--gold" : ""}`}
+        style={{ background: accentColor }}
+      />
       <div
         className="flex items-center justify-between gap-1 px-2 pt-0.5 pb-0.5 leading-none"
-        style={{ color: accentColor, borderBottom: `1px solid ${accentColor}33` }}
+        style={{ color: ink, borderBottom: `1px solid ${accentColor}33` }}
       >
-        <div className="flex items-center gap-1 leading-none min-w-0" style={{ color: accentColor }}>
+        <div className="flex items-center gap-1 leading-none min-w-0" style={{ color: ink }}>
           <span className="text-[11px] leading-none">{icon}</span>
           <span
             className="font-extrabold tracking-[0.4px] uppercase truncate"
@@ -370,7 +391,7 @@ function GoldenRRSide({
         <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
       </div>
       {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={coverage.color || "#6B7280"} />
+        <GoldenCoverageBar label={coverage.label} color={accentColor} />
       ) : null}
     </div>
   );
@@ -401,7 +422,7 @@ export function GoldenRRColumn({
 
   return (
     <div
-      className={`relative overflow-hidden flex flex-col gap-1 h-full ${wEmpty && mEmpty ? "empty" : ""}`}
+      className={`relative overflow-hidden grid grid-rows-2 gap-1 h-full ${wEmpty && mEmpty ? "empty" : ""}`}
       style={{ ["--card-accent" as string]: color }}
       data-slot-key={`RR${rrNum}`}
     >
@@ -431,6 +452,67 @@ export function GoldenRRColumn({
   );
 }
 
+/** Two-row RR grid: women's row then men's — equalizes heights across columns. */
+export function GoldenRRPrintGrid({
+  assignments,
+  tasksBySlot,
+  coveredByIndex = {},
+}: {
+  assignments: Record<string, { tmName?: string | null; breakGroup?: number }>;
+  tasksBySlot: Record<string, NightSlotTask[] | PrintTaskLine[] | undefined>;
+  coveredByIndex?: Record<string, string[]>;
+}) {
+  const toLines = (key: string): PrintTaskLine[] =>
+    toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined);
+
+  return (
+    <>
+      {RR_DEFS.map((def) => {
+        const wKey = `WRR${def.num}`;
+        const a = assignments[wKey] || {};
+        const color = getRRAccent(def.num);
+        const icon = RR_ICONS[def.num] ?? "●";
+        return (
+          <div key={wKey} className="relative h-full min-h-0 flex flex-col" data-slot-key={wKey}>
+            <GoldenRRSide
+              slotKey={wKey}
+              headerLabel={`${def.label} WOMEN'S`}
+              icon={icon}
+              accentColor={color}
+              tmName={a.tmName}
+              breakGroup={a.breakGroup ?? 0}
+              tasks={toLines(wKey)}
+              empty={!a.tmName}
+              coveredByNames={coveredByIndex[wKey]}
+            />
+          </div>
+        );
+      })}
+      {RR_DEFS.map((def) => {
+        const mKey = `MRR${def.num}`;
+        const a = assignments[mKey] || {};
+        const color = getRRAccent(def.num);
+        const icon = RR_ICONS[def.num] ?? "●";
+        return (
+          <div key={mKey} className="relative h-full min-h-0 flex flex-col" data-slot-key={mKey}>
+            <GoldenRRSide
+              slotKey={mKey}
+              headerLabel={`${def.label} MEN'S`}
+              icon={icon}
+              accentColor={color}
+              tmName={a.tmName}
+              breakGroup={a.breakGroup ?? 0}
+              tasks={toLines(mKey)}
+              empty={!a.tmName}
+              coveredByNames={coveredByIndex[mKey]}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function GoldenAuxCard({
   def,
   tmName,
@@ -449,6 +531,7 @@ export function GoldenAuxCard({
   const role = def.role ?? "blank";
   const isBlank = role === "blank" && !def.label;
   const color = getAuxAccent(def.key, role);
+  const ink = isBlank ? "#9CA3AF" : cardAccentInk(color);
   const icon = getAuxIcon(def.key, role);
   const isEmpty = (empty || !tmName?.trim()) && !isBlank;
   // Aux cards never show coverage banners (builder AuxCard filters isCoverage out).
@@ -464,7 +547,10 @@ export function GoldenAuxCard({
       data-slot-key={def.key}
       data-aux-role={role}
     >
-      <div className="h-[3px] w-full shrink-0" style={{ background: isBlank ? "#D1D5DB" : color }} />
+      <div
+        className={`h-[3px] w-full shrink-0 ${!isBlank && isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
+        style={{ background: isBlank ? "#D1D5DB" : color }}
+      />
       <div
         className="flex items-start justify-between gap-1 px-2 pt-1 pb-1"
         style={{ borderBottom: `1px solid ${isBlank ? "#E5E7EB" : `${color}33`}` }}
@@ -480,7 +566,7 @@ export function GoldenAuxCard({
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color }}>
+          <div className="flex items-center gap-1 leading-none min-w-0" style={{ color: ink }}>
             <span className="text-[11px] leading-none shrink-0">{icon}</span>
             <span
               className="font-extrabold tracking-[0.4px] uppercase truncate"
@@ -542,32 +628,74 @@ export function GoldenOverlapSlot({
   tmName?: string | null;
   tasks: PrintTaskLine[];
 }) {
+  const accent = getOverlapAccent(slotKey);
+  const ink = cardAccentInk(accent);
+  const label = overlapSlotLabel(slotKey);
   const isEmpty = !tmName?.trim();
   const regular = tasks.filter((t) => !t.isCoverage);
+  const coverage = tasks.find((t) => t.isCoverage);
+  const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 8;
 
   return (
     <div
-      className={`assignment-card sb-assignment-card relative border border-[#E5E5E7] rounded-[3px] bg-white min-h-[48px] px-2.5 py-1.5 h-full ${
-        isEmpty ? "sb-card-empty" : ""
+      className={`assignment-card sb-assignment-card sb-golden-overlap-card relative overflow-hidden flex flex-col h-full rounded-[3px] ${
+        isEmpty ? "empty sb-card-empty" : ""
       }`}
+      style={{ ["--card-accent" as string]: accent }}
       data-slot-key={slotKey}
     >
-      {isEmpty ? (
-        <div
-          className="unassigned-label flex flex-col items-center text-[9.5px] tracking-[0.3px]"
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          <span className="sb-unassigned-primary px-1 py-[1px] inline-block">— Unassigned —</span>
-        </div>
-      ) : (
+      <div
+        className={`h-[3px] w-full shrink-0 ${isGoldAccent(accent) ? "sb-accent-stripe--gold" : ""}`}
+        style={{ background: accent }}
+      />
+      <div
+        className="flex items-center gap-1 px-2 pt-1 pb-1 leading-none min-w-0"
+        style={{ color: ink, borderBottom: `1px solid ${accent}33` }}
+      >
+        <span className="text-[10px] leading-none shrink-0">◆</span>
         <span
-          className="font-bold tracking-[-0.2px] text-[#111] truncate px-1 py-[1px] inline-block"
-          style={{ fontSize: 13, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
+          className="font-bold tracking-[0.02em] truncate"
+          style={{
+            fontSize: 9.5,
+            fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+          }}
         >
-          {tmName}
+          {label}
         </span>
-      )}
-      <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
+      </div>
+      <div
+        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        style={{ paddingBottom: coveragePad }}
+      >
+        {isEmpty ? (
+          <div
+            className="unassigned-label text-[9.5px] tracking-[0.3px] px-1 py-[1px] flex items-center justify-center flex-1"
+            style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+          >
+            <span className="sb-unassigned-primary">— Unassigned —</span>
+          </div>
+        ) : (
+          <>
+            <span
+              className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
+              style={{
+                fontSize: 16,
+                lineHeight: 1.05,
+                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+              }}
+            >
+              {tmName}
+            </span>
+            <GoldenTaskList tasks={regular} hasTM dense />
+          </>
+        )}
+        {isEmpty && regular.length > 0 ? (
+          <GoldenTaskList tasks={regular} hasTM={false} dense />
+        ) : null}
+      </div>
+      {coverage ? (
+        <GoldenCoverageBar label={coverage.label} color={accent} />
+      ) : null}
     </div>
   );
 }

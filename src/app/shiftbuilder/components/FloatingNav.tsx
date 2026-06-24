@@ -64,6 +64,8 @@ export interface FloatingNavProps {
   onCopyYesterdayTasks?: () => void;
   onRestoreDefaultBreaks?: () => void;
   restoreDefaultBreaksBusy?: boolean;
+  onApplyDefaultTasks?: () => void;
+  applyDefaultTasksBusy?: boolean;
   onToggleWeekHealth?: () => void;
   weekHealthVisible?: boolean;
   weekHealthPercent?: number | null;
@@ -128,6 +130,9 @@ export default function FloatingNav(props: FloatingNavProps) {
     onCopyPriorWeekTasks,
     onCopyYesterdayTasks,
     onRestoreDefaultBreaks,
+    restoreDefaultBreaksBusy = false,
+    onApplyDefaultTasks,
+    applyDefaultTasksBusy = false,
     onPrint,
     isDark = false,
     contentMaxWidth,
@@ -155,7 +160,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     permissions,
   } = props;
 
-  const canEditAssignments = permissions?.canEditAssignments ?? true;
+  const canEditAssignments = permissions?.canEditAssignments ?? false;
   const canPublish = permissions?.canPublish ?? false;
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
@@ -218,7 +223,7 @@ export default function FloatingNav(props: FloatingNavProps) {
   };
 
   const handleDefaultTasks = () => {
-    onOpenSettings?.("tasks");
+    onApplyDefaultTasks?.();
     setMoreOpen(false);
   };
 
@@ -811,9 +816,15 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Coffee size={14} /> Default Breaks
                   </button>
                 )}
-                {showAdminLinks && (
-                  <button type="button" className={menuItemClass} onClick={handleDefaultTasks}>
-                    <LayoutGrid size={14} /> Default Tasks
+                {onApplyDefaultTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={handleDefaultTasks}
+                    disabled={applyDefaultTasksBusy}
+                  >
+                    <LayoutGrid size={14} />
+                    {applyDefaultTasksBusy ? "Applying…" : "Default Tasks"}
                   </button>
                 )}
                 {showAdminLinks && <div className={menuDividerClass} />}

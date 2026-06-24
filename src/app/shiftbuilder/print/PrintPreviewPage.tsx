@@ -8,7 +8,7 @@ import {
   GoldenDeploymentHeader,
   GoldenOverlapSlot,
   GoldenPlanningHeaderBadge,
-  GoldenRRColumn,
+  GoldenRRPrintGrid,
   GoldenSectionHeader,
   GoldenSheetFooter,
   GoldenPlanningNotesPanel,
@@ -27,6 +27,11 @@ import {
   type OfficialDeploymentLayout,
 } from "./deploymentPrintLayout";
 import "./printPreview.css";
+
+/** Visual row 1: Z1 | Z3 | Z4 | Z5 | Z9 — content-sized, pinned under header. */
+const ZONE_PRINT_ROW_1 = ZONE_VISUAL_ORDER.slice(0, 5);
+/** Visual row 2: Z2 | Z6 | Z7 | Z8 | Z10 — flexes to absorb task overflow. */
+const ZONE_PRINT_ROW_2 = ZONE_VISUAL_ORDER.slice(5);
 
 function filledCount(
   assignments: Record<string, { tmName?: string }>,
@@ -177,6 +182,8 @@ export function PrintPreviewPage({
       ["--sb-print-task-dense-px" as string]: `${officialLayout.taskDenseFontPx}px`,
       ["--sb-print-task-leading" as string]: String(officialLayout.taskLineHeight),
       ["--sb-print-task-gap" as string]: `${officialLayout.taskGapPx}px`,
+      ["--sb-print-task-weight" as string]: "600",
+      ["--sb-print-coverage-font-px" as string]: "11px",
     };
   }, [officialLayout]);
 
@@ -403,63 +410,114 @@ export function PrintPreviewPage({
           isPlanning ? "sb-print-deployment-body--planning-zones-rr" : ""
         }`}
       >
-        <section
-          className={`sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-col ${
-            isPlanning ? "flex-[6]" : ""
-          }`}
-          style={sectionFlexStyle("zones")}
+        <div
+          className={
+            isPlanning
+              ? "contents"
+              : "sb-print-deployment-main flex flex-col flex-1 min-h-0 overflow-hidden"
+          }
         >
-          <GoldenSectionHeader label="ZONES" count={`${zoneFilled} / 10 FILLED`} />
-          <div
-            className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
-            style={{ gridAutoRows: "minmax(0, 1fr)" }}
+          <section
+            className={`sb-builder-section sb-print-section sb-print-section-zones mb-1 min-h-0 flex flex-col ${
+              isPlanning ? "flex-[6]" : "flex-1"
+            }`}
+            style={isPlanning ? sectionFlexStyle("zones") : { flexGrow: 1, flexShrink: 1, flexBasis: 0 }}
           >
-            {ZONE_VISUAL_ORDER.map((zKey) => {
-              const a = assignments[zKey] || {};
-              const tasks = toTaskLines(tasksBySlot[zKey]);
-              return (
-                <div key={zKey} className="relative h-full" data-slot-key={zKey}>
-                  <GoldenZoneCard
-                    slotKey={zKey}
-                    tmName={a.tmName}
-                    breakGroup={a.breakGroup ?? 0}
-                    tasks={tasks}
-                    empty={!slotShowsFilled(zKey, assignments)}
-                    coveredByNames={coveredByIndex[zKey]}
-                  />
+            <GoldenSectionHeader label="ZONES" count={`${zoneFilled} / 10 FILLED`} />
+            {isPlanning ? (
+              <div
+                className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
+                style={{ gridAutoRows: "minmax(0, 1fr)" }}
+              >
+                {ZONE_VISUAL_ORDER.map((zKey) => {
+                  const a = assignments[zKey] || {};
+                  const tasks = toTaskLines(tasksBySlot[zKey]);
+                  return (
+                    <div key={zKey} className="relative h-full" data-slot-key={zKey}>
+                      <GoldenZoneCard
+                        slotKey={zKey}
+                        tmName={a.tmName}
+                        breakGroup={a.breakGroup ?? 0}
+                        tasks={tasks}
+                        empty={!slotShowsFilled(zKey, assignments)}
+                        coveredByNames={coveredByIndex[zKey]}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="sb-print-zones-stack flex flex-col flex-1 min-h-0 gap-1.5 w-full">
+                <div
+                  className="sb-print-zone-row sb-print-zone-row-1 sb-print-card-grid grid grid-cols-5 gap-1.5 w-full shrink-0"
+                  style={{ gridAutoRows: "auto" }}
+                >
+                  {ZONE_PRINT_ROW_1.map((zKey) => {
+                    const a = assignments[zKey] || {};
+                    const tasks = toTaskLines(tasksBySlot[zKey]);
+                    return (
+                      <div key={zKey} className="relative" data-slot-key={zKey}>
+                        <GoldenZoneCard
+                          slotKey={zKey}
+                          tmName={a.tmName}
+                          breakGroup={a.breakGroup ?? 0}
+                          tasks={tasks}
+                          empty={!slotShowsFilled(zKey, assignments)}
+                          coveredByNames={coveredByIndex[zKey]}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        </section>
+                <div
+                  className="sb-print-zone-row sb-print-zone-row-2 sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
+                  style={{ gridAutoRows: "minmax(0, 1fr)" }}
+                >
+                  {ZONE_PRINT_ROW_2.map((zKey) => {
+                    const a = assignments[zKey] || {};
+                    const tasks = toTaskLines(tasksBySlot[zKey]);
+                    return (
+                      <div key={zKey} className="relative h-full min-h-0" data-slot-key={zKey}>
+                        <GoldenZoneCard
+                          slotKey={zKey}
+                          tmName={a.tmName}
+                          breakGroup={a.breakGroup ?? 0}
+                          tasks={tasks}
+                          empty={!slotShowsFilled(zKey, assignments)}
+                          coveredByNames={coveredByIndex[zKey]}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
 
         <section
           className={`sb-builder-section sb-print-section sb-print-section-rr mb-1 min-h-0 flex flex-col ${
-            isPlanning ? "flex-[5] mb-0" : ""
+            isPlanning ? "flex-[5] mb-0" : "sb-print-rr-pinned shrink-0"
           }`}
-          style={sectionFlexStyle("rr")}
+          style={
+            isPlanning
+              ? sectionFlexStyle("rr")
+              : { flexGrow: 0, flexShrink: 0, flexBasis: "auto" }
+          }
         >
           <GoldenSectionHeader label="RESTROOMS" count={`${rrFilled} / 10 FILLED`} />
           <div
-            className="sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
-            style={{ gridAutoRows: "minmax(0, 1fr)" }}
+            className="sb-print-card-grid sb-print-rr-grid grid grid-cols-5 gap-1.5 w-full"
+            style={{
+              gridTemplateRows: isPlanning ? "minmax(0, 1fr) minmax(0, 1fr)" : "auto auto",
+              gridAutoRows: isPlanning ? "minmax(0, 1fr)" : "auto",
+            }}
           >
-            {RR_DEFS.map((def) => {
-              const wKey = `WRR${def.num}`;
-              const mKey = `MRR${def.num}`;
-              return (
-                <div key={def.num} className="relative h-full" data-slot-key={`RR${def.num}`}>
-                  <GoldenRRColumn
-                    rrNum={def.num}
-                    wAssignment={assignments[wKey] || {}}
-                    mAssignment={assignments[mKey] || {}}
-                    wTasks={toTaskLines(tasksBySlot[wKey])}
-                    mTasks={toTaskLines(tasksBySlot[mKey])}
-                    coveredByIndex={coveredByIndex}
-                  />
-                </div>
-              );
-            })}
+            <GoldenRRPrintGrid
+              assignments={assignments}
+              tasksBySlot={tasksBySlot}
+              coveredByIndex={coveredByIndex}
+            />
           </div>
         </section>
 
@@ -471,8 +529,8 @@ export function PrintPreviewPage({
             coveredByIndex={coveredByIndex}
             auxFilled={auxFilled}
             auxTotal={auxTotal}
-            className={`mb-2 ${officialLayout ? "" : "flex-[2]"}`}
-            sectionStyle={sectionFlexStyle("aux")}
+            className="sb-print-aux-pinned shrink-0 mb-2"
+            sectionStyle={{ flexGrow: 0, flexShrink: 0, flexBasis: "auto" }}
           />
         ) : null}
       </div>

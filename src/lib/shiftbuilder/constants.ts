@@ -161,6 +161,25 @@ export function isGoldAccent(displayColor: string): boolean {
   return key === "#ffcc00" || key === "#ffdb4d";
 }
 
+/** Slightly muted gold for coverage banners (less harsh than #ffcc00 stripe). */
+export function coverageBarBg(displayColor: string): string {
+  const key = displayColor.trim().toLowerCase();
+  if (key === "#ffcc00" || key === "#ffdb4d") return "#D4A800";
+  return displayColor;
+}
+
+export function getOverlapAccent(slotKey: string): string {
+  if (slotKey.includes("-PM-")) return "#B45309";
+  if (slotKey.includes("-AM-")) return "#059669";
+  return "#B45309";
+}
+
+export function overlapSlotLabel(slotKey: string): string {
+  const match = slotKey.match(/^OL-(PM|AM)-(\d+)$/);
+  if (!match) return "Overlap";
+  return `${match[1]} Overlap ${Number(match[2]) + 1}`;
+}
+
 // RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)
 export const RR_COLORS: Record<number, string> = {
   1:  '#ffcc00', // yellow (Main Entry, paired with Z1/Z2)
@@ -224,6 +243,11 @@ export function breakGroupLabel(g: number): string {
   return String(g);
 }
 
+/** Header break mark for assignment cards (plain number, not a pill). */
+export function breakHeaderMark(g: number): string {
+  return breakGroupLabel(g);
+}
+
 export function isInBreakRotation(g: number): boolean {
   return g === 1 || g === 2 || g === 3 || g === BREAK_GROUP_OVERLAPS;
 }
@@ -261,3 +285,5 @@ export const COVERAGE_BAR_H = 19;
 
 /** Label text size for coverage banners (builder + print/PDF). */
 export const COVERAGE_BAR_FONT_SIZE = 10;
+/** Slightly larger coverage label for Golden print / PDF export. */
+export const COVERAGE_BAR_FONT_SIZE_PRINT = 11;

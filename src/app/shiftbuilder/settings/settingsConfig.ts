@@ -2,10 +2,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Bolt,
-  CalendarClock,
   Layers,
   LayoutDashboard,
-  ListChecks,
   ScrollText,
   SlidersHorizontal,
   Table2,
@@ -15,8 +13,6 @@ import {
 
 export type SettingsTab =
   | "dashboard"
-  | "tmDefaults"
-  | "tasks"
   | "defaults"
   | "team"
   | "weeklyRoster"
@@ -49,22 +45,6 @@ export const SETTINGS_SECTIONS: Array<{
 ];
 
 export const SETTINGS_TABS: SettingsTabDef[] = [
-  {
-    id: "tmDefaults",
-    label: "TM Defaults",
-    shortLabel: "Defaults",
-    section: "operations",
-    icon: CalendarClock,
-    description: "Static weekly shift patterns and on-call groups",
-  },
-  {
-    id: "tasks",
-    label: "Tasks",
-    shortLabel: "Tasks",
-    section: "operations",
-    icon: ListChecks,
-    description: "Task catalog and nightly assignments",
-  },
   {
     id: "defaults",
     label: "Card Defaults",
@@ -142,7 +122,6 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
 /** Tabs that need a tall scroll region inside the paper artboard */
 export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "defaults",
-  "tasks",
   "team",
   "weeklyRoster",
   "users",
@@ -150,7 +129,6 @@ export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "auditLog",
   "engine",
   "planner",
-  "tmDefaults",
 ]);
 
 export const VALID_SETTINGS_TABS = new Set<string>(SETTINGS_TABS.map((t) => t.id));
@@ -159,8 +137,17 @@ export function isSettingsTab(tab: string): tab is SettingsTab {
   return VALID_SETTINGS_TABS.has(tab);
 }
 
+/** Legacy ?tab= values removed from the settings shell. */
+const DEPRECATED_SETTINGS_TAB_REDIRECTS: Record<string, SettingsTab> = {
+  tasks: "defaults",
+  tmDefaults: "weeklyRoster",
+};
+
 export function resolveSettingsTab(param: string | null): SettingsTab {
   if (param && isSettingsTab(param)) return param;
+  if (param && param in DEPRECATED_SETTINGS_TAB_REDIRECTS) {
+    return DEPRECATED_SETTINGS_TAB_REDIRECTS[param];
+  }
   return "dashboard";
 }
 

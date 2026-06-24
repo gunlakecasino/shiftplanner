@@ -1029,6 +1029,7 @@ function AuthedShiftBuilder() {
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
+  const [applyDefaultTasksBusy, setApplyDefaultTasksBusy] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
@@ -4212,6 +4213,7 @@ function AuthedShiftBuilder() {
     currentView === "deployment" &&
     engineRunPhase === "idle" &&
     !restoreDefaultBreaksBusy &&
+    !applyDefaultTasksBusy &&
     !currentNight.isFetching;
 
   const { fitBySlot: deploymentFitBySlot } = usePlacementFitMap({
@@ -6269,6 +6271,69 @@ function AuthedShiftBuilder() {
     startHeavyTransition,
   ]);
 
+  const handleApplyDefaultTasks = React.useCallback(async () => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — cannot apply default tasks", "error");
+      return;
+    }
+
+    const existingCount = Object.values(selectedTasks).reduce(
+      (sum, rows) => sum + rows.length,
+      0,
+    );
+    const confirmMsg =
+      existingCount > 0
+        ? `Apply card-default task chips to tonight? This replaces existing task chips on every slot that has defaults configured (${existingCount} task${existingCount === 1 ? "" : "s"} on the board now).`
+        : "Apply card-default task chips to tonight? This installs defaults from Settings → Card Defaults.";
+    if (!confirm(confirmMsg)) return;
+
+    setApplyDefaultTasksBusy(true);
+    try {
+      let nid = queryNightId || nightId;
+      if (!nid) {
+        nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+      }
+      if (!nid) {
+        showToast("No night loaded — pick a day first", "error");
+        return;
+      }
+
+      const { pushTaskDefaultsToNight } = await import("@/lib/shiftbuilder/data");
+      const { applied } = await pushTaskDefaultsToNight(nid);
+
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+
+      const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
+      await yieldToMain();
+      await refreshNightTasksFromServer(nid, selectedDay.date);
+
+      showToast(
+        `Applied card-default tasks — ${applied} chip${applied !== 1 ? "s" : ""} installed`,
+        "success",
+      );
+    } catch (e: unknown) {
+      console.error("[shiftbuilder] apply default tasks failed", e);
+      const msg = e instanceof Error ? e.message : "Failed to apply default tasks";
+      showToast(msg, "error");
+    } finally {
+      setApplyDefaultTasksBusy(false);
+    }
+  }, [
+    isCurrentNightLocked,
+    selectedTasks,
+    queryNightId,
+    nightId,
+    selectedDay.date,
+    selectedDay.name,
+    showToast,
+    currentNight.queryClient,
+    resolveNightIdForDate,
+    refreshNightTasksFromServer,
+  ]);
+
   const persistRemoveTask = React.useCallback(
     async (
       targetNightId: string | null,
@@ -6960,6 +7025,7 @@ function AuthedShiftBuilder() {
   }, [handleEditTask]);
 
   const handleBoardLiveAssign = React.useCallback((uiKey: string, tmId: string, tmName: string) => {
+    if (!requireEdit()) return;
     if (/^RR\d+$/.test(uiKey)) {
       console.warn('[shiftbuilder] live assign physical RR blocked');
       return;
@@ -6976,9 +7042,10 @@ function AuthedShiftBuilder() {
       targetNightId: reliableNightId,
       isDraftMode,
     });
-  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot]);
+  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot, requireEdit]);
 
   const handleBoardLiveUnassign = React.useCallback((uiKey: string) => {
+    if (!requireEdit()) return;
     if (/^RR\d+$/.test(uiKey)) {
       console.warn('[shiftbuilder] live unassign physical RR blocked');
       return;
@@ -6994,7 +7061,7 @@ function AuthedShiftBuilder() {
       targetNightId: reliableNightId,
       isDraftMode,
     });
-  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot]);
+  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot, requireEdit]);
 
   // Marker pad engine insight handler.
   // Accepts optional context (rationale, fairnessSignals, recentPlacements, rrSide) from the unilateral pad
@@ -7395,6 +7462,10 @@ function AuthedShiftBuilder() {
           viewMode === "canvas" ? handleRestoreDefaultBreaks : undefined
         }
         restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
+        onApplyDefaultTasks={
+          viewMode === "canvas" && canAccessSudo ? handleApplyDefaultTasks : undefined
+        }
+        applyDefaultTasksBusy={applyDefaultTasksBusy}
         onToggleWeekHealth={
           viewMode === "canvas" ? handleToggleWeekHealthTracker : undefined
         }

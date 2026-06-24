@@ -13,6 +13,8 @@ import {
   getRRAccent,
   getAuxAccent,
   getAuxIcon,
+  getOverlapAccent,
+  overlapSlotLabel,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
@@ -242,15 +244,15 @@ export function buildOverlapRows(snapshot: PrintDaySnapshot): PrintOverlapRow[] 
       const slotKey = `OL-${half}-${i}`;
       const a = snapshot.assignments[slotKey] || {};
       const taskLines = toTaskLines(snapshot.tasksBySlot[slotKey]);
-      const regular = taskLines.filter((t) => !t.isCoverage);
       return {
         key: slotKey,
         kind: "overlap",
-        headerLabel: `OL ${i + 1}`,
-        accentColor: "#6b7280",
+        headerLabel: overlapSlotLabel(slotKey),
+        accentColor: getOverlapAccent(slotKey),
         tmName: a.tmName ?? null,
         locationLines: [],
-        tasks: regular,
+        tasks: taskLines,
+        breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3 | 4,
         empty: !a.tmName,
         minHeightPx: 54,
       };

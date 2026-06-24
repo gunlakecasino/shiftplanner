@@ -35,14 +35,15 @@ function snapshotWithTasks(
 }
 
 describe("deploymentPrintLayout", () => {
-  it("keeps default flex weights for light task loads", () => {
+  it("keeps default flex weights for light task loads with RR and aux pinned", () => {
     const layout = solveOfficialDeploymentLayout(snapshotWithTasks({}));
-    expect(layout.zonesFlexGrow).toBeCloseTo(5, 1);
-    expect(layout.auxFlexGrow).toBe(2);
+    expect(layout.zonesFlexGrow).toBeCloseTo(6, 1);
+    expect(layout.rrFlexGrow).toBe(0);
+    expect(layout.auxFlexGrow).toBe(0);
     expect(layout.density).toBe("normal");
   });
 
-  it("shrinks aux and tightens typography under heavy zone tasks", () => {
+  it("grows zones under heavy tasks without stealing RR or aux flex", () => {
     const tasks = Object.fromEntries(
       Array.from({ length: 6 }, (_, i) => [
         `Z${i + 1}`,
@@ -54,8 +55,9 @@ describe("deploymentPrintLayout", () => {
     );
     const layout = solveOfficialDeploymentLayout(snapshotWithTasks(tasks));
     expect(measureDeploymentTaskPressure(snapshotWithTasks(tasks))).toBe(7);
-    expect(layout.auxFlexGrow).toBeLessThan(2);
-    expect(layout.zonesFlexGrow).toBeGreaterThan(5);
+    expect(layout.auxFlexGrow).toBe(0);
+    expect(layout.rrFlexGrow).toBe(0);
+    expect(layout.zonesFlexGrow).toBeGreaterThan(8);
     expect(layout.density).toBe("tight");
   });
 });

@@ -1,23 +1,26 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import BreakBadge from "./BreakBadge";
+
 import { PlacementFitChip } from "./PlacementFitChip";
-import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import { CardTaskZone, handleAssignZoneDoubleClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import { premiumSpring } from "@/lib/premiumSpring";
 import {
-  nextBreakGroup,
   type BreakGroup,
+  cardAccentInk,
+  overlapSlotLabel,
 } from "@/lib/shiftbuilder/constants";
-
-/** OverlapSlot — Phase 1 Live layer prep (identical pattern). */
+import {
+  CardAccentStripe,
+  CardSlotHeader,
+  SlotAssignmentBody,
+  TaskListDivider,
+  type SlotAssignmentState,
+} from "./assignmentCardChrome";
 
 export interface OverlapSlotProps {
   slotKey: string;
@@ -34,42 +37,30 @@ export interface OverlapSlotProps {
   };
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
-  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
+  onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: "highlight" | "underline" | "circle" | "none" | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  /** Opens the dedicated pop-up text/font attributes pad for a task (double-click path). */
   onOpenTaskTextEdit?: (
     slotKey: string,
     task?: NightSlotTask,
     options?: { addMode?: boolean },
   ) => void;
-
-  // Phase 1 Live optimistic layer
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
   setBreakGroupForSlot?: (k: string, g: BreakGroup) => void;
-
-  // Locked state for the night (disables interactions)
   isLocked?: boolean;
-
-  /** Digital builder only (suppressed in print-preview mode for exact Golden fidelity). */
   fitChip?: PrerenderedPlacementFit | null;
-  /** Builder mode flag for subtle digital-only UI sugar. */
   showDigitalAssists?: boolean;
-
-  /** Weekly Overview focus for this small overlap cell. */
   focusedTmId?: string | null;
-
-  /** Duplicate TM flagging (same TM in >1 position this night) — high-class digital assist only. */
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
 }
 
-// One overlap cell (Break Sheet view) — a small assignable card. Backed by
-// zone_assignments rows with slot_type='overlap', so it uses the same
-// race-free persist path as zones / RRs / aux.
-//
-// SlotKey shape is OL-PM-0..5 and OL-AM-0..5. uiToDb / dbToUi know how to
-// translate these.
+function getOverlapAccent(slotKey: string): string {
+  if (slotKey.includes("-PM-")) return "#B45309";
+  if (slotKey.includes("-AM-")) return "#059669";
+  return "#B45309";
+}
+
 const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   slotKey,
   assignments,
@@ -83,8 +74,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
-  onLiveAssign,
-  onLiveUnassign,
   setBreakGroupForSlot,
   isLocked = false,
   fitChip,
@@ -100,30 +89,45 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
     tmId: draftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
-  const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
+  const accent = getOverlapAccent(slotKey);
   const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
     slotKey,
     "overlap",
     slotTm,
     isLocked,
   );
-  const dim = !hasTM && !loading;
-  const cycleBreak = () => {
-    if (setBreakGroupForSlot) {
-      setBreakGroupForSlot(slotKey, nextBreakGroup(currentBreak));
-    }
-  };
 
-  // Phase 1 Live layer ready.
-  const tasks = selectedTasks[slotKey];
+  const tasks = selectedTasks[slotKey] ?? [];
+  const regularTasks = tasks.filter((t) => !t.isCoverage);
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
-
+  const isEmpty = !hasTM && !loading;
   const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
-  const otherSlotsForTm = currentTmId && tmConflictSlots?.[currentTmId]
-    ? tmConflictSlots[currentTmId].filter(s => s !== slotKey)
-    : [];
+  const otherSlotsForTm =
+    currentTmId && tmConflictSlots?.[currentTmId]
+      ? tmConflictSlots[currentTmId].filter((s) => s !== slotKey)
+      : [];
+
+  let assignmentState: SlotAssignmentState;
+  if (loading && !hasTM) {
+    assignmentState = { kind: "loading" };
+  } else if (draftActive) {
+    assignmentState = {
+      kind: "draft",
+      proposedName: draftInfo!.proposedTmName,
+      previousName: draftInfo?.previousTmName,
+    };
+  } else if (hasTM) {
+    assignmentState = {
+      kind: "assigned",
+      tmName: a.tmName,
+      tmId: currentTmId,
+      isLocked: a.isLocked,
+    };
+  } else {
+    assignmentState = { kind: "unassigned" };
+  }
 
   return (
     <div
@@ -131,70 +135,68 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card relative h-full min-h-[48px] flex flex-col overflow-hidden border border-[#E5E5E7] rounded-[3px] bg-white px-2.5 py-1.5 touch-none ${
+      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      } ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
+        isDimmed ? "sb-weekly-dim" : ""
+      } ${isFocused ? "sb-weekly-highlight" : ""} ${
+        showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""
+      }`}
+      style={{ ["--card-accent" as string]: accent }}
     >
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-1 min-h-[16px] shrink-0">
-        {showDigitalAssists && setBreakGroupForSlot ? (
-          <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" />
-        ) : (
-          <span className="w-0" />
-        )}
-        {fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} compact /> : null}
+      <CardAccentStripe color={accent} />
+
+      <CardSlotHeader
+        icon="◆"
+        label={overlapSlotLabel(slotKey)}
+        accentColor={accent}
+        compact
+        titleClassName="!normal-case tracking-[0.02em]"
+        trailing={
+          fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} compact /> : null
+        }
+      />
+
+      <div
+        className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-2.5 pb-2"
+        onDoubleClick={(e) => {
+          if (!isLocked && onCardClick) {
+            handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
+          }
+        }}
+      >
+        <SlotAssignmentBody
+          state={assignmentState}
+          scale="rr"
+          showDigitalAssists={showDigitalAssists}
+          isDuplicate={isDuplicate}
+          otherSlotsForTm={otherSlotsForTm}
+          inviteSize="rr"
+          nameSizeOverride={showDigitalAssists ? 18 : 16}
+          onUnassignedClick={(e) => {
+            if (!isLocked && onCardClick) {
+              handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
+            }
+          }}
+        />
       </div>
-      {loading && !hasTM ? (
-        <AssignmentSkeleton size="md" />
-      ) : hasTM ? (
-        <div
-          className="sb-card-assign-zone flex items-center gap-1 min-w-0 shrink-0"
-          onDoubleClick={(e) => {
-            if (!isLocked && onCardClick) handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
-          }}
-        >
-          {a.isLocked && (
-            <span className="ms shrink-0 text-[#FF9500]" aria-label="Locked" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
-          )}
-          <motion.span
-            className="font-bold tracking-[-0.2px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block"
-            style={{ fontSize: 13, lineHeight: 1.1, fontFamily: "var(--font-atkinson)" }}
-            whileHover={showDigitalAssists ? { scale: 1.01 } : {}}
-            transition={premiumSpring}
-          >
-            {slotTm.tmName}
-          </motion.span>
-          {isDuplicate && showDigitalAssists && (
-            <span
-              className="sb-gold-chip ml-1 inline-flex items-center rounded px-0.5 py-px text-[8px] font-mono tracking-[0.5px] font-semibold"
-              title={`Duplicate — also in: ${otherSlotsForTm.join(', ')}`}
-            >
-              2×
-            </span>
-          )}
-        </div>
-      ) : (
-        <div
-          className="sb-card-assign-zone unassigned-label flex flex-1 flex-col items-center justify-center text-[9.5px] tracking-[0.3px]"
-          style={{ fontFamily: "var(--font-atkinson)" }}
-          onDoubleClick={(e) => {
-            if (!isLocked && onCardClick) handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
-          }}
-        >
-          <span className="sb-unassigned-primary px-1 py-[1px] inline-block">— Unassigned —</span>
-          <UnassignedDropHint className="mt-px" />
-        </div>
-      )}
+
+      {regularTasks.length > 0 ? (
+        <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
+      ) : null}
+
       {showDigitalAssists ? (
         <CardTaskZone
           slotKey={slotKey}
           onOpenTasksPad={onOpenTaskTextEdit}
           isLocked={isLocked}
           enabled={showDigitalAssists}
-          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-[24px] overflow-y-auto ${taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)} leading-tight ${taskLabelColorClass(hasTM)}`}
-          style={{ fontFamily: "var(--font-atkinson)" }}
+          className={`sb-card-task-scroll mx-2.5 mb-2 flex-1 min-h-[20px] overflow-y-auto ${taskLabelSizeClass(
+            TASK_LABEL_SIZE_PX.rrOverlap,
+          )} leading-tight ${taskLabelColorClass(hasTM)}`}
+          style={{ fontFamily: "var(--font-atkinson)", color: cardAccentInk(accent) }}
         >
-          {(tasks ?? []).map((t) => (
+          {regularTasks.map((t) => (
             <TaskRow
               key={t.id}
               task={t}
@@ -210,12 +212,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
             />
           ))}
         </CardTaskZone>
-      ) : tasks && tasks.length > 0 ? (
+      ) : regularTasks.length > 0 ? (
         <div
-          className={`sb-card-task-scroll mt-0.5 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(TASK_LABEL_SIZE_PX.rrOverlap)} leading-tight ${taskLabelColorClass(hasTM)}`}
+          className={`sb-card-task-scroll mx-2.5 mb-2 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(
+            TASK_LABEL_SIZE_PX.rrOverlap,
+          )} leading-tight ${taskLabelColorClass(hasTM)}`}
           style={{ fontFamily: "var(--font-atkinson)" }}
         >
-          {tasks.map((t) => (
+          {regularTasks.map((t) => (
             <TaskRow
               key={t.id}
               task={t}
@@ -232,7 +236,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           ))}
         </div>
       ) : null}
-      </div>
     </div>
   );
 });

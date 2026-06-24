@@ -38,7 +38,7 @@ export const TASK_LABEL_SIZE_PX = {
   rrOverlap: 10.5,
   dense: 10,
   denseSmall: 9.5,
-  print: 10,
+  print: 10.5,
   printDense: 9.5,
 } as const;
 

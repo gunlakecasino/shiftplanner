@@ -148,6 +148,23 @@ interface LocalToast { id: number; message: string; kind: ToastKind; }
 
 let _toastId = 0;
 
+const PUSH_CONFIRM_MESSAGES: Record<
+  "breaks-today" | "breaks-week" | "tasks-today" | "tasks-week",
+  string
+> = {
+  "breaks-today":
+    "Push card-default break groups to tonight? This overwrites any per-shift break overrides on assigned slots.",
+  "breaks-week":
+    "Push card-default break groups to the entire GRAVE week (Fri–Thu)? This overwrites per-shift break overrides on all existing nights with assignments.",
+  "tasks-today":
+    "Push card-default task chips to tonight? This replaces existing task chips on every slot that has defaults configured.",
+  "tasks-week":
+    "Push card-default task chips to the entire GRAVE week? This replaces existing task chips on affected slots across all existing nights.",
+};
+
+const SAVE_GRAVE_BREAK_MAP_CONFIRM =
+  "Save the canonical GRAVE break map to Card Defaults? This overwrites every stored break default with the built-in rotation map.";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,6 +244,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   // ── Break group cycling ───────────────────────────────────────────────────
   const handleSaveGraveBreakMap = useCallback(async () => {
     if (seedingGrave) return;
+    if (!confirm(SAVE_GRAVE_BREAK_MAP_CONFIRM)) return;
     setSeedingGrave(true);
     try {
       const { seedGraveBreakGroupDefaults } = await import("@/lib/shiftbuilder/data");
@@ -354,6 +372,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   const handlePush = useCallback(
     async (op: "breaks-today" | "breaks-week" | "tasks-today" | "tasks-week") => {
       if (pushing) return;
+      if (!confirm(PUSH_CONFIRM_MESSAGES[op])) return;
       setPushing(op);
 
       try {

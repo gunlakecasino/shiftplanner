@@ -31,14 +31,12 @@ import {
 import { shiftBuilderVersionLabel } from "../version";
 import { GoldHairline } from "../sudo/SudoGlass";
 import { TeamTab } from "../sudo/TeamTab";
-import { TasksTab } from "../sudo/TasksTab";
 import { ReportsTab } from "../sudo/ReportsTab";
 import { AuditLogTab } from "../sudo/AuditLogTab";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
 import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
-import { TMDefaultsTab } from "../sudo/TMDefaultsTab";
 import { WeeklyRosterTab } from "../sudo/WeeklyRosterTab";
 import {
   SETTINGS_SECTIONS,
@@ -153,14 +151,6 @@ function SettingsTabPanel({
           permissions={permissions}
         />
       )}
-      {activeTab === "tmDefaults" && (
-        <TMDefaultsTab
-          onDataChanged={() => onDataChanged("tmDefaults", { area: "tm_defaults" })}
-          isDark={isDark}
-          currentOperator={currentOperator}
-          weekStart={weekStart}
-        />
-      )}
       {activeTab === "team" &&
         (canManageTeam ? (
           <TeamTab
@@ -180,13 +170,6 @@ function SettingsTabPanel({
         <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
           Only sudo_admins can manage user privileges.
         </div>
-      )}
-      {activeTab === "tasks" && (
-        <TasksTab
-          onDataChanged={() => onDataChanged("tasks", { area: "task_catalog" })}
-          currentNightId={currentNightId}
-          isDark={isDark}
-        />
       )}
       {activeTab === "reports" && <ReportsTab isDark={isDark} />}
       {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}

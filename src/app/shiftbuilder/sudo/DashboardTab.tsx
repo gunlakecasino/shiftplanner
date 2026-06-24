@@ -152,12 +152,6 @@ export function DashboardTab({
           />
           <QuickAction
             isDark={isDark}
-            icon="table_chart"
-            label="TM Weekly Defaults"
-            onClick={() => handleNav("tmDefaults")}
-          />
-          <QuickAction
-            isDark={isDark}
             icon="tune"
             label="Engine Config"
             onClick={() => handleNav("engine")}
@@ -167,12 +161,6 @@ export function DashboardTab({
             icon="bar_chart"
             label="View Reports"
             onClick={() => handleNav("reports")}
-          />
-          <QuickAction
-            isDark={isDark}
-            icon="checklist"
-            label="Task Catalog"
-            onClick={() => handleNav("tasks")}
           />
           <QuickAction
             isDark={isDark}
@@ -217,7 +205,7 @@ export function DashboardTab({
             ))}
             {unpublished.length > 4 && (
               <button
-                onClick={() => handleNav("tmDefaults")}
+                onClick={() => handleNav("weeklyRoster")}
                 className={cn(
                   "flex items-center justify-center rounded-2xl border text-sm font-medium",
                   isDark ? "border-white/10 hover:bg-white/5" : "border-black/10 hover:bg-[#F8F8F6]"
