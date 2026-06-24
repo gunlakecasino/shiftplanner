@@ -197,6 +197,37 @@ const HARD_COVERAGE_SLOTS = new Set(
   COVERAGE_TIERS.filter((t) => t.isHardCoverage).flatMap((t) => t.slots),
 );
 
+/** Full-grave TM — required for zone deployment (Z1–Z10, Z9SR). */
+export function isFullGraveForPlacement(tm: any): boolean {
+  const isAMOverlapAssigned = !!(tm.isAMOverlap || tm.isAMOverlapTonight);
+  const isPMOverlapAssigned = !!(tm.isPMOverlap || tm.isPMOverlapTonight);
+  const isFullGraveBySchedule = !!(tm.isFullGrave || tm.isFullGraveTonight);
+  const gravePoolKind = String(tm.gravePool ?? "").toUpperCase();
+  const isOverlapByPool = gravePoolKind === "AM" || gravePoolKind === "PM";
+  const isGrave =
+    !!tm.gravePool || isFullGraveBySchedule || isAMOverlapAssigned || isPMOverlapAssigned;
+  return (
+    isFullGraveBySchedule ||
+    (isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned)
+  );
+}
+
+/** Admin + main zones (not RR / trash / support / overlap). */
+export function isCoreZoneAdminSlot(slotKey: string): boolean {
+  if (isOptionalDeploymentSlot(slotKey)) return false;
+  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return false;
+  if (slotKey === "Z9SR" || slotKey.startsWith("TR") || slotKey.startsWith("SP")) return false;
+  if (slotKey.startsWith("OL-") || slotKey.includes("Overlap")) return false;
+  if (slotKey.startsWith("Z")) return true;
+  if (slotKey === "ADM" || slotKey.toUpperCase().includes("ADMIN")) return true;
+  if (/^AUX\d+$/i.test(slotKey)) return true;
+  return false;
+}
+
+export function countFullGraveInRoster(roster: any[]): number {
+  return roster.filter((tm) => isFullGraveForPlacement(tm)).length;
+}
+
 /**
  * Walks PLACEMENT_ORDER. For each slot, scores all eligible candidates not
  * already used in this draft and picks the highest-scoring TM.
@@ -220,14 +251,15 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
 
   // === World-class Coverage Feasibility (using skill tier model) ===
   const availableUnique = roster.length;
-  const feasibility = calculateCoverageFeasibility(availableUnique);
+  const fullGraveCount = countFullGraveInRoster(roster);
+  const feasibility = calculateCoverageFeasibility(fullGraveCount);
 
   notes.push(`Coverage Feasibility: ${feasibility.explanation}`);
 
   if (feasibility.shortfall > 0) {
     notes.push(
-      `REALITY CHECK: With only ${availableUnique} TMs it is impossible to clear Tier 1 + Tier 2. ` +
-      `The engine will protect the highest possible tiers and leave lower coverage unfilled.`
+      `REALITY CHECK: With only ${fullGraveCount} full-grave TMs (${availableUnique} in engine pool) it is impossible to clear Tier 1 + Tier 2. ` +
+      `Restrooms fill first; remaining full-grave staff go to Admin + zones. Overlap TMs are manual-only.`
     );
   }
 
@@ -346,9 +378,38 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       preserved: false,
     };
 
-    if (picked) {
-      proposedAssignments[slotKey] = picked.tmId;
-      currentDraft.set(slotKey, picked.tmId);
+    let finalPick = picked;
+
+    // Core zones/admin: never leave open while unused full-grave TMs remain — prefer
+    // coverage over rotation/preference gates (restrooms already claimed first in order).
+    if (!finalPick && isCoreZoneAdminSlot(slotKey) && candidates.length > 0) {
+      const rescue = candidates.find((tm) => isFullGraveForPlacement(tm)) ?? candidates[0];
+      const rescueId = assignmentTmId(rescue);
+      if (rescueId) {
+        finalPick = {
+          tmId: rescueId,
+          tmName: rescue.name || rescue.fullName || rescueId,
+          total: 0,
+          breakdown: {},
+          excluded: false,
+          excludeReason: undefined,
+        };
+        notes.push(
+          `Core zone coverage: ${slotKey} ← ${finalPick.tmName} (best available full-grave TM)`,
+        );
+      }
+    }
+
+    if (finalPick) {
+      proposedAssignments[slotKey] = finalPick.tmId;
+      currentDraft.set(slotKey, finalPick.tmId);
+      if (!picked) {
+        breakdown[slotKey] = {
+          topCandidates: scored.slice(0, topK),
+          pickedTmId: finalPick.tmId,
+          preserved: false,
+        };
+      }
     } else {
       const isHardCoverage = HARD_COVERAGE_SLOTS.has(slotKey);
 
@@ -439,16 +500,18 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
     return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
   }
 
-  // Men's Restrooms — full-night, male TMs only (null/unknown gender = eligible as safe fallback)
+  // Men's Restrooms — full-night grave shift, male TMs only
   if (slotKey.startsWith("MRR")) {
+    if (!isGrave) return false;
     if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
     const g = normalizeGender(tm.gender);
     if (g === 'F') return false;
     return true;
   }
 
-  // Women's Restrooms — full-night, female TMs only (null/unknown gender = eligible as safe fallback)
+  // Women's Restrooms — full-night grave shift, female TMs only
   if (slotKey.startsWith("WRR")) {
+    if (!isGrave) return false;
     if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
     const g = normalizeGender(tm.gender);
     if (g === 'M') return false;

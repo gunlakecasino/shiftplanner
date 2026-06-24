@@ -38,6 +38,12 @@ import {
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
   weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { assignmentTmId } from "./tmIdentity";
+
+/** Canonical TM id for scoring lookups (matches assignment rows + planner draft). */
+function scoringTmId(tm: { id?: string; tmId?: string; tm_id?: string }): string {
+  return assignmentTmId(tm);
+}
 // (uiToDb intentionally unused — slot_difficulty uses its own key scheme; see uiKeyToSlotDifficultyKey)
 
 // =====================================================================
@@ -125,8 +131,9 @@ export function scoreAssignment(
 
   // ---- within_repeat (hard) -----------------------------------------
   // If this TM is already proposed in another slot this run, exclude.
+  const tmKey = scoringTmId(tm);
   for (const [otherSlot, tmId] of ctx.currentDraft) {
-    if (otherSlot !== slotKey && tmId === tm.id) {
+    if (otherSlot !== slotKey && tmId === tmKey) {
       excluded = true;
       excludeReason = `Already placed in ${otherSlot} this draft`;
       breakdown.within_repeat = {
@@ -145,10 +152,10 @@ export function scoreAssignment(
   // ---- prior_placement_repeat (hard) --------------------------------
   // Same deployment area in the TM's last 3 placement events (RR number / zone key).
   if (!excluded && ctx.placementHistories && ctx.tonightIso) {
-    const history = ctx.placementHistories[tm.id] ?? null;
+    const history = ctx.placementHistories[tmKey] ?? null;
     const weekEntries = weekEntriesForTm(
       ctx.weeklyRecentHistory,
-      tm.id,
+      tmKey,
       ctx.tonightIso,
     );
     if (
@@ -287,7 +294,7 @@ function scorePreference(
   strength: "hard" | "soft"
 ): SignalScore {
   const weights = resolvedWeights(ctx.config);
-  const rows = ctx.preferencesByTm.get(tm.id) ?? [];
+  const rows = ctx.preferencesByTm.get(scoringTmId(tm)) ?? [];
   // Match by exact slotKey (UI form) — preferences may also target a
   // category like "RR" or "Z9SR". We match exact and prefix (e.g. a
   // preference for "MRR" applies to all MRR* slots).
@@ -329,7 +336,7 @@ function scorePairAffinity(
   ctx: ScoringContext
 ): SignalScore {
   const weights = resolvedWeights(ctx.config);
-  const rows = ctx.pairAffinitiesByTm.get(tm.id) ?? [];
+  const rows = ctx.pairAffinitiesByTm.get(scoringTmId(tm)) ?? [];
   if (rows.length === 0) return { raw: 0, weighted: 0 };
 
   // Find the neighbors (already placed) we have affinity rows for.
@@ -459,7 +466,7 @@ function scoreMatrixFairnessSignals(
   // promises were being treated as ScoreResult objects).
   // Falls back to zeros if not provided (graceful degradation).
   const matrix = ctx.zoneMatrix ?? new Map<string, Map<string, TmZoneMatrixRow>>();
-  const zoneData = matrix.get(tm.id)?.get(slotKey);
+  const zoneData = matrix.get(scoringTmId(tm))?.get(slotKey);
   const matrixRow = zoneData
     ? {
         count_4w: zoneData.count4w ?? 0,

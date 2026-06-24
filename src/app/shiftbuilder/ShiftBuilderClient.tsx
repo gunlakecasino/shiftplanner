@@ -4455,7 +4455,10 @@ function AuthedShiftBuilder() {
 
       try {
         const orderedSlots = getSlotsInPlacementOrder(auxDefs);
-        const rosterForEngine = graveOnly ? availableGraveRoster : availableRealRoster;
+        // Core deployment (RR + zones + admin) requires full-grave TMs only.
+        // Overlap-band staff stay manual (OL-AM/PM) — including them in the engine pool
+        // starves zones after restrooms fill.
+        const rosterForEngine = availableGraveRoster;
 
         // Enforce graves_default_schedule as the sole source of truth for who is working/scheduled this night.
         // Only pass scheduled TMs to the placement engine (planner + Grok) when schedule data is loaded.
