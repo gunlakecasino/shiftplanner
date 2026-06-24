@@ -34,6 +34,7 @@ import {
   CalendarDays,
   BarChart2,
   RefreshCw,
+  BookOpen,
 } from "lucide-react";
 
 export interface DayItem {
@@ -80,6 +81,7 @@ export interface FloatingNavProps {
   isZoomed?: boolean;
   onThemeToggle?: () => void;
   onPrint?: () => void;
+  onOpenCoverGuide?: () => void;
   isDark?: boolean;
   contentMaxWidth?: number;
   userInitials?: string;
@@ -139,6 +141,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     onApplyDefaultTasks,
     applyDefaultTasksBusy = false,
     onPrint,
+    onOpenCoverGuide,
     isDark = false,
     contentMaxWidth,
     userInitials = "OP",
@@ -882,6 +885,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                     disabled={!canPublishDay}
                   >
                     {isDayPublished ? "Unpublish Day" : "Publish Day"}
+                  </button>
+                )}
+                {onOpenCoverGuide && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onOpenCoverGuide();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <BookOpen size={14} />
+                    Grave Cover Guide
                   </button>
                 )}
                 {onPrint && (

@@ -115,6 +115,10 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import { installShiftBuilderViewportLock } from "@/lib/shiftbuilder/viewportLock";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import FloatingNav from "./components/FloatingNav";
+import {
+  GraveCoverGuideTutorial,
+  isGraveCoverGuideCompleted,
+} from "./components/GraveCoverGuideTutorial";
 import { useCurrentNight } from "./hooks/useCurrentNight";
 import WeeklyOverview from "./components/WeeklyOverview";
 // useShiftData: small, data-only orchestration hook (Slice 1 of Production Stabilization).
@@ -964,6 +968,15 @@ function AuthedShiftBuilder() {
     [permissions?.canAccessSudo, router],
   );
 
+  // First-time floor coverers (viewer role) see the interactive grave guide once.
+  React.useEffect(() => {
+    if (!currentOperator) return;
+    if (isGraveCoverGuideCompleted()) return;
+    if (isPublishedOnlyViewer(permissions)) {
+      setCoverGuideOpen(true);
+    }
+  }, [currentOperator, permissions]);
+
   // Persist the exact selected GRAVE day (calendar date) so refresh restores
   // both the correct weekStart and the day index within that week.
   useEffect(() => {
@@ -1008,6 +1021,7 @@ function AuthedShiftBuilder() {
 
   // === Print Command Center ===
   const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
+  const [coverGuideOpen, setCoverGuideOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printBusyMode, setPrintBusyMode] = useState<"print" | "export">("print");
   const [printProgress, setPrintProgress] = useState<{ current: number; total: number; label: string } | null>(null);
@@ -7429,6 +7443,7 @@ function AuthedShiftBuilder() {
         onLogout={logoutOperator}
         onOpenSettings={canAccessSudo ? handleOpenSettings : undefined}
         onPrint={() => setIsPrintCenterOpen(true)}
+        onOpenCoverGuide={() => setCoverGuideOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
         onRosterToggle={() => setRosterOpen((v) => !v)}
@@ -8486,6 +8501,14 @@ function AuthedShiftBuilder() {
       </div>
 
       {/* Night picker edge arrows removed — navigation lives in the bottom dock ← / → buttons */}
+
+      <GraveCoverGuideTutorial
+        open={coverGuideOpen}
+        isDark={isDark}
+        onClose={() => setCoverGuideOpen(false)}
+        onFinish={() => setCoverGuideOpen(false)}
+        onRequestPrint={() => setIsPrintCenterOpen(true)}
+      />
 
       {/* Print Command Center — full overlay with day selection, page order, margins */}
       <PrintCommandCenter
