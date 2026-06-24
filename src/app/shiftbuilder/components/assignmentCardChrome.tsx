@@ -6,7 +6,14 @@ import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
-import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
+import {
+  coveredByNamesFromEntries,
+  formatCoverageSideLabel,
+  formatCoveredByNames,
+  formatCoveredDisplayName,
+  resolveDualCoverageSides,
+  type CoveredByEntry,
+} from "@/lib/shiftbuilder/coverageHelpers";
 import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import { placementRepeatKeysMatch } from "./placementPadHelpers";
 
@@ -309,31 +316,259 @@ const COVERED_LABEL_SIZE_PRINT: Record<CardNameScale, number> = {
   aux: 7,
 };
 
+/** Covered-by row type — badge + name share one size token. */
+const COVERED_NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
+  zone: 20,
+  rr: 16,
+  aux: 15,
+};
+
+const COVERED_NAME_SIZE_PRINT: Record<CardNameScale, number> = {
+  zone: 17,
+  rr: 14,
+  aux: 13,
+};
+
+function coveredNameDisplayMaxLen(scale: CardNameScale): number {
+  if (scale === "zone") return 12;
+  if (scale === "rr") return 10;
+  return 9;
+}
+
+const COVERED_ROW_FONT = "var(--font-bricolage, var(--font-atkinson))";
+
+function CoveredBySideBadge({
+  label,
+  fontSize,
+  interactive,
+  onClick,
+}: {
+  label: string;
+  fontSize: number;
+  interactive?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const className = `sb-covered-by-side font-semibold tabular-nums tracking-[-0.28px] text-[var(--ios-label-tertiary)] ${
+    interactive ? "sb-covered-by-side--interactive" : ""
+  }`;
+  const style = {
+    fontSize,
+    lineHeight: 1.12,
+    fontFamily: COVERED_ROW_FONT,
+  };
+
+  if (interactive && onClick) {
+    return (
+      <button
+        type="button"
+        className={className}
+        style={style}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(e);
+        }}
+        title="Swap A/B coverage positions"
+      >
+        {label}
+      </button>
+    );
+  }
+  return (
+    <span className={className} style={style}>
+      {label}
+    </span>
+  );
+}
+
+function CoveredByNameCell({
+  tmName,
+  nameFontSize,
+  maxLen,
+  showDigitalAssists,
+}: {
+  tmName: string;
+  nameFontSize: number;
+  maxLen: number;
+  showDigitalAssists: boolean;
+}) {
+  const { display, full } = formatCoveredDisplayName(tmName, maxLen);
+  const showTitle = showDigitalAssists && display !== full;
+
+  return (
+    <span
+      className="sb-covered-by-name font-semibold tracking-[-0.28px] truncate text-[var(--ios-label-tertiary)] min-w-0"
+      style={{
+        fontSize: nameFontSize,
+        lineHeight: 1.12,
+        fontFamily: COVERED_ROW_FONT,
+      }}
+      title={showTitle ? full : undefined}
+    >
+      {display}
+    </span>
+  );
+}
+
+function CoveredByStackRow({
+  entry,
+  targetSlotKey,
+  rowFontSize,
+  maxLen,
+  showDigitalAssists,
+  canSwap,
+  onSwapSides,
+}: {
+  entry: CoveredByEntry;
+  targetSlotKey?: string;
+  rowFontSize: number;
+  maxLen: number;
+  showDigitalAssists: boolean;
+  canSwap?: boolean;
+  onSwapSides?: () => void;
+}) {
+  const badge =
+    entry.side && targetSlotKey
+      ? formatCoverageSideLabel(targetSlotKey, entry.side)
+      : null;
+
+  return (
+    <div
+      className={`sb-covered-by-stack-row ${badge ? "" : "sb-covered-by-stack-row--solo"}`}
+    >
+      {badge ? (
+        <CoveredBySideBadge
+          label={badge}
+          fontSize={rowFontSize}
+          interactive={canSwap}
+          onClick={canSwap ? () => onSwapSides?.() : undefined}
+        />
+      ) : null}
+      <CoveredByNameCell
+        tmName={entry.tmName}
+        nameFontSize={rowFontSize}
+        maxLen={maxLen}
+        showDigitalAssists={showDigitalAssists}
+      />
+    </div>
+  );
+}
+
+function CoveredByNamesRow({
+  entries,
+  targetSlotKey,
+  scale,
+  rowFontSize,
+  showDigitalAssists,
+  onSwapSides,
+}: {
+  entries: CoveredByEntry[];
+  targetSlotKey?: string;
+  scale: CardNameScale;
+  rowFontSize: number;
+  showDigitalAssists: boolean;
+  onSwapSides?: () => void;
+}) {
+  const resolved =
+    entries.length === 2 ? resolveDualCoverageSides(entries) : entries;
+  const dual =
+    resolved.length === 2 &&
+    resolved[0].side &&
+    resolved[1].side &&
+    targetSlotKey;
+  const canSwap = showDigitalAssists && !!onSwapSides && !!dual;
+  const maxLen = coveredNameDisplayMaxLen(scale);
+
+  if (resolved.length >= 2) {
+    return (
+      <div
+        className={`sb-covered-by-stack ${
+          canSwap ? "sb-covered-by-stack--interactive" : ""
+        }`}
+        onClick={
+          canSwap
+            ? (e) => {
+                e.stopPropagation();
+                onSwapSides?.();
+              }
+            : undefined
+        }
+        role={canSwap ? "button" : undefined}
+        title={canSwap ? "Tap to swap A/B positions" : undefined}
+      >
+        {resolved.map((entry) => (
+          <CoveredByStackRow
+            key={`${entry.sourceKey}-${entry.tmName}-${entry.side ?? ""}`}
+            entry={entry}
+            targetSlotKey={dual ? targetSlotKey : undefined}
+            rowFontSize={rowFontSize}
+            maxLen={maxLen}
+            showDigitalAssists={showDigitalAssists}
+            canSwap={canSwap}
+            onSwapSides={onSwapSides}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (resolved.length === 1) {
+    return (
+      <div className="sb-covered-by-single min-w-0 w-full">
+        <CoveredByNameCell
+          tmName={resolved[0].tmName}
+          nameFontSize={rowFontSize}
+          maxLen={maxLen + 4}
+          showDigitalAssists={showDigitalAssists}
+        />
+      </div>
+    );
+  }
+
+  const namesLine = formatCoveredByNames(coveredByNamesFromEntries(resolved));
+  return (
+    <span
+      className="sb-covered-by-names font-semibold tracking-[-0.28px] px-1 py-[1px] inline-block leading-tight text-center text-[var(--ios-label-tertiary)] w-full"
+      style={{
+        fontSize: rowFontSize,
+        lineHeight: 1.12,
+        fontFamily: COVERED_ROW_FONT,
+      }}
+    >
+      {namesLine}
+    </span>
+  );
+}
+
 function CoveredByBlock({
-  coveredByNames,
+  coveredBy,
+  targetSlotKey,
   scale,
   showDigitalAssists,
   nameSizeOverride,
+  onSwapSides,
 }: {
-  coveredByNames: string[];
+  coveredBy: CoveredByEntry[];
+  targetSlotKey?: string;
   scale: CardNameScale;
   showDigitalAssists: boolean;
   nameSizeOverride?: number;
+  onSwapSides?: () => void;
 }) {
-  const namesLine = formatCoveredByNames(coveredByNames);
-  const nameFontSize =
+  const rowFontSize =
     nameSizeOverride ??
-    (showDigitalAssists ? NAME_SIZE_BUILDER[scale] : NAME_SIZE_PRINT[scale]);
+    (showDigitalAssists
+      ? COVERED_NAME_SIZE_BUILDER[scale]
+      : COVERED_NAME_SIZE_PRINT[scale]);
   const labelFontSize = showDigitalAssists
     ? COVERED_LABEL_SIZE_BUILDER[scale]
     : COVERED_LABEL_SIZE_PRINT[scale];
 
   return (
     <div
-      className={`sb-covered-by-block flex flex-col min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
+      className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col items-center min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
     >
       <span
-        className={`sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block text-[var(--ios-label-tertiary)]`}
+        className="sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block text-center text-[var(--ios-label-tertiary)]"
         style={{
           fontSize: labelFontSize,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
@@ -342,16 +577,14 @@ function CoveredByBlock({
       >
         Covered by
       </span>
-      <span
-        className={`sb-covered-by-names font-bold tracking-[-0.35px] px-1 py-[1px] inline-block leading-tight text-[var(--ios-label-tertiary)]`}
-        style={{
-          fontSize: nameFontSize,
-          lineHeight: 1.08,
-          fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-        }}
-      >
-        {namesLine}
-      </span>
+      <CoveredByNamesRow
+        entries={coveredBy}
+        targetSlotKey={targetSlotKey}
+        scale={scale}
+        rowFontSize={rowFontSize}
+        showDigitalAssists={showDigitalAssists}
+        onSwapSides={onSwapSides}
+      />
     </div>
   );
 }
@@ -359,21 +592,25 @@ function CoveredByBlock({
 /** Builder covered-by row — top-pinned like assigned TM names. */
 export function CoveredByOverlay({
   scale,
-  coveredByNames,
+  coveredBy,
+  targetSlotKey,
   onClick,
+  onSwapSides,
   nameSizeOverride,
   title = "Covered by another placement — tap to open slot",
 }: {
   scale: CardNameScale;
-  coveredByNames: string[];
+  coveredBy: CoveredByEntry[];
+  targetSlotKey?: string;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onSwapSides?: () => void;
   nameSizeOverride?: number;
   title?: string;
 }) {
   return (
     <motion.div
       key="covered-by-overlay"
-      className="sb-covered-by-overlay min-w-0 cursor-pointer"
+      className="sb-covered-by-overlay min-w-0 w-full"
       initial={{ opacity: 0.92, y: 2 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ opacity: 0.92 }}
@@ -383,10 +620,12 @@ export function CoveredByOverlay({
       title={title}
     >
       <CoveredByBlock
-        coveredByNames={coveredByNames}
+        coveredBy={coveredBy}
+        targetSlotKey={targetSlotKey}
         scale={scale}
         showDigitalAssists
         nameSizeOverride={nameSizeOverride}
+        onSwapSides={onSwapSides}
       />
     </motion.div>
   );
@@ -394,17 +633,20 @@ export function CoveredByOverlay({
 
 /** Print / preview covered-by row — top-pinned, extra-muted vs builder. */
 export function CoveredByPrintLabel({
-  coveredByNames,
+  coveredBy,
+  targetSlotKey,
   scale = "zone",
   nameSizeOverride,
 }: {
-  coveredByNames: string[];
+  coveredBy: CoveredByEntry[];
+  targetSlotKey?: string;
   scale?: CardNameScale;
   nameSizeOverride?: number;
 }) {
   return (
     <CoveredByBlock
-      coveredByNames={coveredByNames}
+      coveredBy={coveredBy}
+      targetSlotKey={targetSlotKey}
       scale={scale}
       showDigitalAssists={false}
       nameSizeOverride={nameSizeOverride}
@@ -439,7 +681,7 @@ export type SlotAssignmentState =
   | { kind: "loading" }
   | { kind: "draft"; proposedName: string; previousName?: string }
   | { kind: "assigned"; tmName: string; tmId?: string; isLocked?: boolean }
-  | { kind: "covered"; coveredByNames: string[] }
+  | { kind: "covered"; coveredBy: CoveredByEntry[] }
   | { kind: "unassigned" };
 
 /** Unified name / empty / draft row used inside Zone, RR side, and Aux cards. */
@@ -456,6 +698,7 @@ export function SlotAssignmentBody({
   criticalRepeat = false,
   placementTrail,
   placementTrailMatchSlotKey,
+  onSwapCoverageSides,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -474,6 +717,8 @@ export function SlotAssignmentBody({
   placementTrail?: string[];
   /** Slot key for highlighting a matching RR/zone in the prior-3 trail. */
   placementTrailMatchSlotKey?: string;
+  /** Swap A/B when exactly two coverers (builder only). */
+  onSwapCoverageSides?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -636,14 +881,17 @@ export function SlotAssignmentBody({
           <CoveredByOverlay
             key="covered"
             scale={scale}
-            coveredByNames={state.coveredByNames}
+            coveredBy={state.coveredBy}
+            targetSlotKey={placementTrailMatchSlotKey}
             onClick={onUnassignedClick}
+            onSwapSides={onSwapCoverageSides}
             nameSizeOverride={nameSizeOverride}
           />
         ) : (
           <CoveredByPrintLabel
             key="covered-print"
-            coveredByNames={state.coveredByNames}
+            coveredBy={state.coveredBy}
+            targetSlotKey={placementTrailMatchSlotKey}
             scale={scale}
             nameSizeOverride={nameSizeOverride}
           />

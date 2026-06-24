@@ -54,7 +54,11 @@ export interface RRCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
-  coveredByIndex?: Record<string, string[]>;
+  coveredByIndex?: Record<string, import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[]>;
+  onSwapCoverageSides?: (
+    targetSlotKey: string,
+    entries: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[],
+  ) => void;
   isTodayKiosk?: boolean;
   isPeerDimmed?: boolean;
   isCardSelected?: boolean;
@@ -85,7 +89,11 @@ const RRSide: React.FC<{
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
   showDigitalAssists?: boolean;
-  coveredByNames?: string[];
+  coveredBy?: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[];
+  onSwapCoverageSides?: (
+    targetSlotKey: string,
+    entries: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[],
+  ) => void;
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
 }> = ({
@@ -106,7 +114,8 @@ const RRSide: React.FC<{
   conflictingTms,
   tmConflictSlots,
   showDigitalAssists = false,
-  coveredByNames = [],
+  coveredBy = [],
+  onSwapCoverageSides,
   fitChip,
   placementTrail,
 }) => {
@@ -140,8 +149,8 @@ const RRSide: React.FC<{
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
-  } else if (coveredByNames.length > 0) {
-    assignmentState = { kind: "covered", coveredByNames };
+  } else if (coveredBy.length > 0) {
+    assignmentState = { kind: "covered", coveredBy };
   } else {
     assignmentState = { kind: "unassigned" };
   }
@@ -168,6 +177,11 @@ const RRSide: React.FC<{
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
           placementTrailMatchSlotKey={slotKey}
+          onSwapCoverageSides={
+            showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
+              ? () => onSwapCoverageSides(slotKey, coveredBy)
+              : undefined
+          }
           onUnassignedClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
         />
       </div>
@@ -324,6 +338,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   conflictingTms,
   tmConflictSlots,
   coveredByIndex = {},
+  onSwapCoverageSides,
   isTodayKiosk = false,
   isPeerDimmed = false,
   isCardSelected = false,
@@ -385,6 +400,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
     conflictingTms,
     tmConflictSlots,
     showDigitalAssists,
+    onSwapCoverageSides,
   };
 
   return (
@@ -422,7 +438,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[wKey]}
             tasks={wRegular}
             draftInfo={draftInfoW}
-            coveredByNames={wCoveredBy}
+            coveredBy={wCoveredBy}
             fitChip={fitChipW}
             placementTrail={placementTrailW}
             {...sideProps}
@@ -449,7 +465,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             assignment={assignments[mKey]}
             tasks={mRegular}
             draftInfo={draftInfoM}
-            coveredByNames={mCoveredBy}
+            coveredBy={mCoveredBy}
             fitChip={fitChipM}
             placementTrail={placementTrailM}
             {...sideProps}

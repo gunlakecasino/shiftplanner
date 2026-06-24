@@ -29,6 +29,7 @@ export type AddTaskParams = {
   sortOrder?: number;
   color?: string | null;
   isCoverage?: boolean;
+  coverageSide?: "A" | "B" | null;
 };
 
 export type RemoveTaskParams = {
@@ -342,6 +343,7 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
     sortOrder = 0,
     color = null,
     isCoverage = false,
+    coverageSide = null,
   } = params;
 
   const { error } = await client.from("night_slot_tasks").insert({
@@ -354,6 +356,7 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
     sort_order: sortOrder,
     color,
     is_coverage: isCoverage,
+    coverage_side: coverageSide,
   });
 
   if (error && (error as { code?: string }).code !== "23505") {
@@ -378,6 +381,28 @@ export async function removeNightSlotTaskServer(params: RemoveTaskParams): Promi
 
   const { error } = await q;
   if (error) throw new Error(`Failed to remove task: ${error.message}`);
+}
+
+export async function updateNightSlotTaskCoverageSideServer(
+  nightId: string,
+  slotKey: string,
+  taskLabel: string,
+  coverageSide: "A" | "B" | null,
+  rrSide: "mens" | "womens" | null = null,
+): Promise<void> {
+  const client = adminClient();
+  let q = client
+    .from("night_slot_tasks")
+    .update({ coverage_side: coverageSide })
+    .eq("night_id", nightId)
+    .eq("slot_key", slotKey)
+    .eq("task_label", taskLabel);
+
+  if (rrSide) q = q.eq("rr_side", rrSide);
+  else q = q.is("rr_side", null);
+
+  const { error } = await q;
+  if (error) throw new Error(`Failed to set coverage side: ${error.message}`);
 }
 
 export async function updateNightSlotTaskStyleServer(
@@ -560,4 +585,73 @@ export async function replaceAllNightSlotTasksServer(
 
   const { error: insErr } = await client.from("night_slot_tasks").insert(inserts);
   if (insErr) throw new Error(`Failed to copy tasks: ${insErr.message}`);
+}
+
+/** Mark a TM unavailable tonight — clears their placements and records call_offs. */
+export async function markTmCallOffServer(params: {
+  nightId: string;
+  tmId: string;
+  date: string;
+  reason?: string | null;
+}): Promise<{ ok: true }> {
+  const { nightId, tmId, date, reason } = params;
+  const client = adminClient();
+
+  const zoneClear = await client
+    .from("zone_assignments")
+    .update({ tm_id: null, is_filled: false, is_locked: false })
+    .eq("night_id", nightId)
+    .eq("tm_id", tmId);
+  if (zoneClear.error) {
+    throw new Error(`markTmCallOff: zone clear failed: ${zoneClear.error.message}`);
+  }
+
+  const overlapClear = await client
+    .from("overlap_assignments")
+    .delete()
+    .eq("night_id", nightId)
+    .eq("tm_id", tmId);
+  if (overlapClear.error) {
+    throw new Error(`markTmCallOff: overlap clear failed: ${overlapClear.error.message}`);
+  }
+
+  const breakClear = await client
+    .from("break_assignments")
+    .delete()
+    .eq("night_id", nightId)
+    .eq("tm_id", tmId);
+  if (breakClear.error) {
+    throw new Error(`markTmCallOff: break clear failed: ${breakClear.error.message}`);
+  }
+
+  const upsert = await client.from("call_offs").upsert(
+    {
+      tm_id: tmId,
+      night_date: date,
+      reason: reason ?? null,
+    },
+    { onConflict: "tm_id,night_date" },
+  );
+  if (upsert.error) {
+    throw new Error(`markTmCallOff: call_offs upsert failed: ${upsert.error.message}`);
+  }
+
+  return { ok: true };
+}
+
+/** Remove a call_offs row so the TM is available again tonight (does not restore prior slots). */
+export async function unmarkTmCallOffServer(params: {
+  tmId: string;
+  date: string;
+}): Promise<{ ok: true }> {
+  const client = adminClient();
+  const { error } = await client
+    .from("call_offs")
+    .delete()
+    .eq("tm_id", params.tmId)
+    .eq("night_date", params.date);
+  if (error) {
+    throw new Error(`unmarkTmCallOff: delete failed: ${error.message}`);
+  }
+  return { ok: true };
 }

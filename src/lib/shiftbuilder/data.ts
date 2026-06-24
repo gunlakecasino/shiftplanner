@@ -1192,6 +1192,8 @@ export interface NightSlotTask {
   markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null; // text marker style for the task label
   textStyle?: TaskTextStyle | null;
   isCoverage: boolean;  // true for "Add Coverage" bars — distinct from regular tasks
+  /** A/B position when two TMs cover the same target slot (e.g. 6A / 6B). */
+  coverageSide?: "A" | "B" | null;
 }
 
 /**
@@ -1266,6 +1268,7 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     markerType: (r.marker_type ?? r.markerType ?? null) as any,
     textStyle: normalizeTaskTextStyle(r.text_style ?? r.textStyle ?? null),
     isCoverage: r.is_coverage ?? false,
+    coverageSide: (r.coverage_side ?? null) as "A" | "B" | null,
   }));
 }
 
@@ -1284,6 +1287,7 @@ export interface AddTaskParams {
   sortOrder?: number;
   color?: string | null; // optional highlight color for the task sphere
   isCoverage?: boolean;  // true for "Add Coverage" bars
+  coverageSide?: "A" | "B" | null;
 }
 
 export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
@@ -1293,6 +1297,7 @@ export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
     catalogTaskId = null, sortOrder = 0,
     color = null,
     isCoverage = false,
+    coverageSide = null,
   } = params;
 
   if (!nightId || !slotKey || !taskLabel) {
@@ -1468,6 +1473,37 @@ export async function updateNightSlotTaskStyle(
     async () => {
       const { updateNightSlotTaskStyleServer } = await import('./opsMutations.server');
       await updateNightSlotTaskStyleServer(nightId, slotKey, taskLabel, textStyle, rrSide);
+      return { ok: true };
+    },
+  );
+}
+
+export async function updateNightSlotTaskCoverageSide(
+  nightId: string,
+  slotKey: string,
+  taskLabel: string,
+  coverageSide: "A" | "B" | null,
+  rrSide: "mens" | "womens" | null = null,
+): Promise<void> {
+  if (!nightId || !slotKey || !taskLabel) {
+    throw new Error("updateNightSlotTaskCoverageSide requires nightId, slotKey, taskLabel");
+  }
+
+  const payload = { nightId, slotKey, taskLabel, coverageSide, rrSide };
+  await runBoardMutation(
+    "update_night_slot_task_coverage_side",
+    payload,
+    async () => {
+      const { updateNightSlotTaskCoverageSideServer } = await import(
+        "./opsMutations.server"
+      );
+      await updateNightSlotTaskCoverageSideServer(
+        nightId,
+        slotKey,
+        taskLabel,
+        coverageSide,
+        rrSide,
+      );
       return { ok: true };
     },
   );

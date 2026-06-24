@@ -44,6 +44,8 @@ export interface RosterRailProps {
   isDark: boolean;
   isCurrentNightLocked: boolean;
   canEditAssignments: boolean;
+  /** Remove TM from Called Off — returns them to the assignable pool (slots stay cleared). */
+  onUnmarkCalledOff?: (tmId: string, tmName: string) => void | Promise<void>;
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   selectedDay: { name: string; dateNum: number };
@@ -159,11 +161,15 @@ const RosterRail = React.memo(function RosterRail({
   isDark,
   isCurrentNightLocked,
   canEditAssignments,
+  onUnmarkCalledOff,
   amOverlapDayName,
   amOverlapDateNum,
   selectedDay,
   isRosterLoading = false,
 }: RosterRailProps) {
+  const [unmarkingId, setUnmarkingId] = React.useState<string | null>(null);
+  const canUnmarkCalledOff =
+    canEditAssignments && !isCurrentNightLocked && !!onUnmarkCalledOff;
   const graveOnly = useGraveOnly();
   const rosterSearch = useRosterSearch();
   const storeAssignments = useAssignments() ?? {};
@@ -564,12 +570,36 @@ const RosterRail = React.memo(function RosterRail({
               tone="warn"
             />
             {calledOffExpanded &&
-              filteredCalledOff.map((tm) => (
-                <div key={tm.id} className="sb-roster-called-chip">
-                  <span className="sb-roster-called-chip__name">{tm.name || tm.fullName || tm.id}</span>
-                  <span className="sb-roster-called-chip__badge">off</span>
-                </div>
-              ))}
+              filteredCalledOff.map((tm) => {
+                const displayName = tm.name || tm.fullName || tm.id;
+                const busy = unmarkingId === tm.id;
+                return (
+                  <div key={tm.id} className="sb-roster-called-chip">
+                    <span className="sb-roster-called-chip__name">{displayName}</span>
+                    <span className="sb-roster-called-chip__badge">off</span>
+                    {canUnmarkCalledOff ? (
+                      <button
+                        type="button"
+                        className="sb-roster-called-chip__restore sb-interactive"
+                        disabled={busy}
+                        title="Return to tonight's assignable pool"
+                        aria-label={`Restore ${displayName} to assignable roster`}
+                        onClick={() => {
+                          if (busy) return;
+                          setUnmarkingId(tm.id);
+                          void Promise.resolve(onUnmarkCalledOff!(tm.id, displayName))
+                            .catch(() => {})
+                            .finally(() => {
+                              setUnmarkingId((current) => (current === tm.id ? null : current));
+                            });
+                        }}
+                      >
+                        {busy ? "…" : "Restore"}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
           </section>
         )}
 

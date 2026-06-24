@@ -2,6 +2,16 @@ import { ZONE_DEFS, RR_DEFS, getRRAccent, getZoneColor } from "@/lib/shiftbuilde
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
 
+export type CoverageSide = "A" | "B";
+
+export type CoveredByEntry = {
+  tmName: string;
+  tmId?: string;
+  side?: CoverageSide | null;
+  sourceKey: string;
+  taskLabel: string;
+};
+
 /** Returns the accent hex for any UI slot key (zone, RR side, aux). */
 export function getSlotAccentColor(uiKey: string): string {
   if (uiKey.startsWith("MRR") || uiKey.startsWith("WRR")) {
@@ -23,6 +33,23 @@ export function getSlotCoverageLabel(uiKey: string): string {
   return uiKey;
 }
 
+/** Numeric / short suffix for A/B badges (Z6 → 6, MRR8 → 8, Z9SR → 9SR). */
+export function coveragePositionSuffix(targetSlotKey: string): string {
+  if (targetSlotKey === "Z9SR") return "9SR";
+  if (targetSlotKey.startsWith("Z")) return targetSlotKey.slice(1);
+  const rr = targetSlotKey.match(/^[MW]RR(\d+)$/);
+  if (rr) return rr[1];
+  return targetSlotKey.replace(/\s+/g, "");
+}
+
+/** Display label for one coverer's A/B position (e.g. 6A, 8B). */
+export function formatCoverageSideLabel(
+  targetSlotKey: string,
+  side: CoverageSide,
+): string {
+  return `${coveragePositionSuffix(targetSlotKey)}${side}`;
+}
+
 /** For an RR key (MRR7, WRR7) return both sides. For others return [key]. */
 export function expandCoverageToKeys(uiKey: string): string[] {
   if (uiKey.startsWith("MRR")) return [uiKey, `WRR${uiKey.slice(3)}`];
@@ -30,7 +57,11 @@ export function expandCoverageToKeys(uiKey: string): string[] {
   return [uiKey];
 }
 
-type CoverageTaskRow = { taskLabel: string; isCoverage?: boolean };
+type CoverageTaskRow = {
+  taskLabel: string;
+  isCoverage?: boolean;
+  coverageSide?: CoverageSide | null;
+};
 type AssignmentRow = { tmName?: string; tmId?: string };
 
 /** Register every label that may appear in an "And …" coverage task. */
@@ -79,40 +110,110 @@ export function parseCoverageTargetFromTaskLabel(
   return labelToKey.get(label) ?? null;
 }
 
+function sideSortOrder(side: CoverageSide | null | undefined): number {
+  if (side === "A") return 0;
+  if (side === "B") return 1;
+  return 2;
+}
+
+/** Apply default A/B when exactly two coverers and sides are missing. */
+export function resolveDualCoverageSides(
+  entries: CoveredByEntry[],
+): CoveredByEntry[] {
+  if (entries.length !== 2) return entries;
+
+  const hasA = entries.some((e) => e.side === "A");
+  const hasB = entries.some((e) => e.side === "B");
+  if (hasA && hasB) {
+    return [...entries].sort(
+      (a, b) => sideSortOrder(a.side) - sideSortOrder(b.side),
+    );
+  }
+
+  const sorted = [...entries].sort((a, b) => a.tmName.localeCompare(b.tmName));
+  return [
+    { ...sorted[0], side: sorted[0].side ?? "A" },
+    { ...sorted[1], side: sorted[1].side ?? "B" },
+  ];
+}
+
 /**
- * Inverse coverage map: target slot → TM names covering it.
- * Only includes TMs assigned to a source card that has an isCoverage banner
- * whose parsed target matches that exact slot key (no M/W mirroring).
+ * Inverse coverage map: target slot → coverer entries (with optional A/B side).
  */
 export function buildCoveredByIndex(
   assignments: Record<string, AssignmentRow>,
   selectedTasks: Record<string, CoverageTaskRow[]>,
   auxDefs: AuxDef[] = [],
-): Record<string, string[]> {
+): Record<string, CoveredByEntry[]> {
   const labelToKey = buildCoverageLabelIndex(auxDefs);
-  const index: Record<string, Set<string>> = {};
+  const index: Record<string, CoveredByEntry[]> = {};
 
   for (const [sourceKey, tasks] of Object.entries(selectedTasks)) {
-    const tmName = assignments[sourceKey]?.tmName?.trim();
+    const row = assignments[sourceKey];
+    const tmName = row?.tmName?.trim();
     if (!tmName) continue;
 
     for (const t of tasks) {
       if (!t.isCoverage) continue;
       const targetKey = parseCoverageTargetFromTaskLabel(t.taskLabel, labelToKey);
       if (!targetKey) continue;
-      if (!index[targetKey]) index[targetKey] = new Set();
-      index[targetKey].add(tmName);
+
+      if (!index[targetKey]) index[targetKey] = [];
+      index[targetKey].push({
+        tmName,
+        tmId: row?.tmId,
+        side: t.coverageSide ?? null,
+        sourceKey,
+        taskLabel: t.taskLabel,
+      });
     }
   }
 
-  const result: Record<string, string[]> = {};
-  for (const [key, names] of Object.entries(index)) {
-    result[key] = [...names].sort((a, b) => a.localeCompare(b));
+  const result: Record<string, CoveredByEntry[]> = {};
+  for (const [key, entries] of Object.entries(index)) {
+    const deduped = entries.sort((a, b) => a.tmName.localeCompare(b.tmName));
+    result[key] =
+      deduped.length === 2 ? resolveDualCoverageSides(deduped) : deduped;
   }
   return result;
+}
+
+/** Legacy name list for print paths that only need strings. */
+export function coveredByNamesFromEntries(entries: CoveredByEntry[]): string[] {
+  return entries.map((e) => e.tmName).filter(Boolean);
 }
 
 /** Format coverer names for card display: "Gary / Tawnya". */
 export function formatCoveredByNames(names: string[]): string {
   return names.filter(Boolean).join(" / ");
+}
+
+/** Compact display name for tight card interiors — first name when full name is long. */
+export function formatCoveredDisplayName(
+  fullName: string,
+  maxLen = 11,
+): { display: string; full: string } {
+  const trimmed = fullName.trim();
+  if (!trimmed) return { display: "", full: "" };
+  if (trimmed.length <= maxLen) return { display: trimmed, full: trimmed };
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const first = parts[0];
+  if (first && parts.length > 1 && first.length <= maxLen) {
+    return { display: first, full: trimmed };
+  }
+
+  return { display: `${trimmed.slice(0, maxLen)}…`, full: trimmed };
+}
+
+/** Suggest side when adding a new coverer to a target that already has one. */
+export function suggestCoverageSideForNewCoverer(
+  existingEntries: CoveredByEntry[],
+): CoverageSide {
+  const used = new Set(
+    existingEntries.map((e) => e.side).filter((s): s is CoverageSide => !!s),
+  );
+  if (!used.has("A")) return "A";
+  if (!used.has("B")) return "B";
+  return "B";
 }

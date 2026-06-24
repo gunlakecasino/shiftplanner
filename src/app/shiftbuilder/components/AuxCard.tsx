@@ -61,7 +61,11 @@ export interface AuxCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
-  coveredByNames?: string[];
+  coveredBy?: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[];
+  onSwapCoverageSides?: (
+    targetSlotKey: string,
+    entries: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[],
+  ) => void;
   onSetAuxRole?: (slotKey: string, role: AuxRole) => void;
   onSetAuxLabel?: (slotKey: string, label: string) => void;
   isTodayKiosk?: boolean;
@@ -95,7 +99,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
-  coveredByNames = [],
+  coveredBy = [],
+  onSwapCoverageSides,
   onSetAuxRole,
   onSetAuxLabel,
   isTodayKiosk = false,
@@ -122,7 +127,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
 
   // Relax configured if we have an assignment/draft/covered, so assigned TMs always show
   // even on cards that haven't had a role/label explicitly set yet.
-  const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) || coveredByNames.length > 0 || !isUnsetBlank;
+  const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) || coveredBy.length > 0 || !isUnsetBlank;
 
   const icon = getAuxIcon(def.key, role);
   const isEmpty = !hasTM && !loading;
@@ -314,8 +319,8 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
-  } else if (coveredByNames.length > 0) {
-    assignmentState = { kind: "covered", coveredByNames };
+  } else if (coveredBy.length > 0) {
+    assignmentState = { kind: "covered", coveredBy };
   } else {
     assignmentState = { kind: "unassigned" };
   }
@@ -363,7 +368,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
-            {hasTM && coveredByNames.length === 0 && (
+            {hasTM && coveredBy.length === 0 && (
               <PlacementFitChip fit={fitChip} compact />
             )}
             <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
@@ -439,6 +444,11 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}
+            onSwapCoverageSides={
+              showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
+                ? () => onSwapCoverageSides(def.key, coveredBy)
+                : undefined
+            }
             nameSizeOverride={
               hasTM
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)

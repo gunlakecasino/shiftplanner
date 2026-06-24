@@ -83,7 +83,7 @@ function AuxCardsSection({
                 breakGroup={a.breakGroup ?? 0}
                 tasks={toTaskLines(tasksBySlot[def.key])}
                 empty={!isBlank && !slotShowsFilled(def.key, assignments)}
-                coveredByNames={coveredByIndex[def.key]}
+                coveredBy={coveredByIndex[def.key]}
               />
             </div>
           );
@@ -441,7 +441,7 @@ export function PrintPreviewPage({
                         breakGroup={a.breakGroup ?? 0}
                         tasks={tasks}
                         empty={!slotShowsFilled(zKey, assignments)}
-                        coveredByNames={coveredByIndex[zKey]}
+                        coveredBy={coveredByIndex[zKey]}
                       />
                     </div>
                   );
@@ -464,7 +464,7 @@ export function PrintPreviewPage({
                           breakGroup={a.breakGroup ?? 0}
                           tasks={tasks}
                           empty={!slotShowsFilled(zKey, assignments)}
-                          coveredByNames={coveredByIndex[zKey]}
+                          coveredBy={coveredByIndex[zKey]}
                         />
                       </div>
                     );
@@ -485,7 +485,7 @@ export function PrintPreviewPage({
                           breakGroup={a.breakGroup ?? 0}
                           tasks={tasks}
                           empty={!slotShowsFilled(zKey, assignments)}
-                          coveredByNames={coveredByIndex[zKey]}
+                          coveredBy={coveredByIndex[zKey]}
                         />
                       </div>
                     );

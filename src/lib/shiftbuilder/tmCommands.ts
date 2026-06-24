@@ -160,64 +160,24 @@ export async function removeTMFromSchedule(args: {
   const { tmId, nightId, nightDate, reason } = args;
   const iso = toIsoDate(nightDate);
 
-  // 1) Null out zone_assignments rows that point to this TM tonight.
-  //    Don't delete the row — the slot still exists, it just has nobody.
-  const zoneClear = await supabase
-    .from("zone_assignments")
-    .update({ tm_id: null, is_filled: false, is_locked: false })
-    .eq("night_id", nightId)
-    .eq("tm_id", tmId);
-
-  if (zoneClear.error) {
-    throw new Error(
-      `removeTMFromSchedule: clearing zone_assignments failed: ${zoneClear.error.message}`
-    );
+  if (typeof window !== "undefined") {
+    const { postOpsMutation } = await import("./opsMutationClient");
+    await postOpsMutation("mark_tm_call_off", {
+      nightId,
+      tmId,
+      date: iso,
+      reason: reason ?? "called_off",
+    });
+    return;
   }
 
-  // 2) Delete overlap_assignments rows for this TM tonight.
-  const overlapClear = await supabase
-    .from("overlap_assignments")
-    .delete()
-    .eq("night_id", nightId)
-    .eq("tm_id", tmId);
-
-  if (overlapClear.error) {
-    throw new Error(
-      `removeTMFromSchedule: clearing overlap_assignments failed: ${overlapClear.error.message}`
-    );
-  }
-
-  // 3) Delete break_assignments rows for this TM tonight.
-  const breakClear = await supabase
-    .from("break_assignments")
-    .delete()
-    .eq("night_id", nightId)
-    .eq("tm_id", tmId);
-
-  if (breakClear.error) {
-    throw new Error(
-      `removeTMFromSchedule: clearing break_assignments failed: ${breakClear.error.message}`
-    );
-  }
-
-  // 4) Insert / upsert the call_offs row so the roster can show them as
-  //    called-off. Use upsert so re-running the command is idempotent.
-  const upsert = await supabase
-    .from("call_offs")
-    .upsert(
-      {
-        tm_id: tmId,
-        night_date: iso,
-        reason: reason ?? null,
-      },
-      { onConflict: "tm_id,night_date" }
-    );
-
-  if (upsert.error) {
-    throw new Error(
-      `removeTMFromSchedule: inserting call_offs failed: ${upsert.error.message}`
-    );
-  }
+  const { markTmCallOffServer } = await import("./opsMutations.server");
+  await markTmCallOffServer({
+    nightId,
+    tmId,
+    date: iso,
+    reason: reason ?? "called_off",
+  });
 }
 
 /**
@@ -232,15 +192,14 @@ export async function undoRemoveFromSchedule(args: {
   const { tmId, nightDate } = args;
   const iso = toIsoDate(nightDate);
 
-  const { error } = await supabase
-    .from("call_offs")
-    .delete()
-    .eq("tm_id", tmId)
-    .eq("night_date", iso);
-
-  if (error) {
-    throw new Error(`undoRemoveFromSchedule failed: ${error.message}`);
+  if (typeof window !== "undefined") {
+    const { postOpsMutation } = await import("./opsMutationClient");
+    await postOpsMutation("unmark_tm_call_off", { tmId, date: iso });
+    return;
   }
+
+  const { unmarkTmCallOffServer } = await import("./opsMutations.server");
+  await unmarkTmCallOffServer({ tmId, date: iso });
 }
 
 /**

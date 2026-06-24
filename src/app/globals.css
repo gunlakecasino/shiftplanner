@@ -685,6 +685,106 @@ body {
   border: 1px dashed var(--ios-gray-4);
 }
 
+/* Covered-by block — stacked A/B rows (badge column + name column). */
+.sb-covered-by-block {
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+}
+
+.sb-covered-by-label {
+  margin-bottom: 1px;
+  opacity: 0.82;
+}
+
+.sb-covered-by-stack {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  justify-content: center;
+  column-gap: 6px;
+  row-gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0 2px;
+}
+
+.sb-covered-by-stack-row {
+  display: contents;
+}
+
+.sb-covered-by-stack-row--solo .sb-covered-by-name {
+  grid-column: 1 / -1;
+  justify-self: center;
+  text-align: center;
+}
+
+.sb-covered-by-block--zone .sb-covered-by-stack {
+  max-width: 13.5rem;
+}
+
+.sb-covered-by-block--rr .sb-covered-by-stack {
+  max-width: 10.5rem;
+  column-gap: 5px;
+  row-gap: 1px;
+}
+
+.sb-covered-by-block--aux .sb-covered-by-stack {
+  max-width: 9.5rem;
+  column-gap: 4px;
+  row-gap: 1px;
+}
+
+.sb-covered-by-single {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0 4px;
+}
+
+.sb-covered-by-side {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sb-covered-by-name {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+
+.sb-covered-by-side--interactive {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  border-radius: 4px;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.sb-covered-by-stack--interactive {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms ease;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+
+.builder-workspace .sb-covered-by-stack--interactive:hover,
+.builder-workspace .sb-covered-by-side--interactive:hover {
+  background: color-mix(in srgb, var(--ios-fill-tertiary) 50%, transparent);
+}
+
+.builder-workspace .sb-covered-by-stack--interactive:hover .sb-covered-by-side,
+.builder-workspace .sb-covered-by-side--interactive:hover {
+  color: var(--ios-label);
+  opacity: 0.95;
+}
+
 /* ==========================================================================
    BUILDER DIGITAL SHEET — the refined, adaptive authoring experience
    This is NOT the print sheet.
@@ -1429,6 +1529,30 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: color-mix(in srgb, #ff9500 80%, #1c1c1e);
+}
+
+.sb-roster-called-chip__restore {
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1c1c1e;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid color-mix(in srgb, #ff9500 35%, transparent);
+}
+
+.sb-roster-called-chip__restore:hover:not(:disabled) {
+  background: #fff;
+  border-color: color-mix(in srgb, #22c55e 45%, transparent);
+  color: #15803d;
+}
+
+.sb-roster-called-chip__restore:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .sb-roster-empty {

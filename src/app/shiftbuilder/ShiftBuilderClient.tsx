@@ -40,7 +40,7 @@ import {
   defaultAuxDefsForNewNight,
   ensureAdminFirst,
 } from "@/lib/shiftbuilder/auxLayout";
-import { updateNightTmStatus } from "@/lib/shiftbuilder/sudoActions";
+
 // tmCommands functions are dynamically imported below to avoid pulling heavy deps
 // (e.g. useCommandActions transitive) into the static module graph of this giant file.
 // This follows the established pattern to prevent Turbopack "module factory is not available" HMR errors.
@@ -3751,7 +3751,12 @@ function AuthedShiftBuilder() {
     async (tmId: string, date: Date) => {
       if (!nightId) throw new Error("No night context — pick a day first");
       const { removeTMFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
-      await removeTMFromSchedule({ tmId, nightId, nightDate: date });
+      await removeTMFromSchedule({ tmId, nightId, nightDate: date, reason: "called_off" });
+      setCalledOffIds((prev) => {
+        const next = new Set(prev);
+        next.add(tmId);
+        return next;
+      });
       setTMCommandEpoch((e) => e + 1);
     },
     [nightId, setTMCommandEpoch]
@@ -3780,6 +3785,13 @@ function AuthedShiftBuilder() {
 
       try {
         const { addNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        const {
+          buildCoveredByIndex,
+          suggestCoverageSideForNewCoverer,
+        } = await import("@/lib/shiftbuilder/coverageHelpers");
+        const existingCoverers =
+          buildCoveredByIndex(assignments, selectedTasks, auxDefs)[targetKey] ?? [];
+        const coverageSide = suggestCoverageSideForNewCoverer(existingCoverers);
         const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
         await addNightSlotTask({
           nightId,
@@ -3790,6 +3802,7 @@ function AuthedShiftBuilder() {
           isCoverage: true,
           color: accentColor,
           sortOrder: 99,
+          coverageSide,
         });
         logBuilderChange({
           action: "coverage_add",
@@ -3820,7 +3833,67 @@ function AuthedShiftBuilder() {
         showToast("Failed to add coverage bar", "error");
       }
     },
-    [nightId, showToast, logBuilderChange, auxDefs, patchNightSecondaryTasksCache, currentNight.queryClient, selectedDay]
+    [nightId, showToast, logBuilderChange, auxDefs, assignments, selectedTasks, patchNightSecondaryTasksCache, currentNight.queryClient, selectedDay]
+  );
+
+  const handleSwapCoverageSides = React.useCallback(
+    async (
+      targetSlotKey: string,
+      entries: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[],
+    ) => {
+      if (!nightId || entries.length !== 2) return;
+
+      const {
+        resolveDualCoverageSides,
+      } = await import("@/lib/shiftbuilder/coverageHelpers");
+      const [left, right] = resolveDualCoverageSides(entries);
+      if (!left.side || !right.side) return;
+
+      const captureDate = selectedDay.date;
+      try {
+        const { updateNightSlotTaskCoverageSide, getNightSlotTasks } = await import(
+          "@/lib/shiftbuilder/data"
+        );
+        const { uiToDb } = await import("@/lib/shiftbuilder/slot-keys");
+
+        const updates: Array<Promise<void>> = [];
+        for (const entry of [left, right]) {
+          const swappedSide = entry.side === "A" ? "B" : "A";
+          const { slot_key, rr_side } = uiToDb(entry.sourceKey);
+          updates.push(
+            updateNightSlotTaskCoverageSide(
+              nightId,
+              slot_key,
+              entry.taskLabel,
+              swappedSide,
+              rr_side,
+            ),
+          );
+        }
+        await Promise.all(updates);
+
+        const fresh = await getNightSlotTasks(nightId);
+        const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+        setSelectedTasks(byKey);
+        const qc = currentNight?.queryClient;
+        if (qc) {
+          patchNightSecondaryTasksCache(qc, formatLocalDateISO(captureDate), fresh);
+        }
+        showToast("Swapped A/B coverage positions", "success");
+      } catch (err) {
+        console.error("[SBC] coverage side swap failed:", err);
+        showToast("Failed to swap coverage positions", "error");
+      }
+    },
+    [
+      nightId,
+      auxDefs,
+      mapNightTasksToUiKeys,
+      patchNightSecondaryTasksCache,
+      currentNight?.queryClient,
+      selectedDay,
+      showToast,
+    ],
   );
 
   // Single source of truth for "which TMs are already placed this night (committed + draft + live optimistic)".
@@ -4955,29 +5028,101 @@ function AuthedShiftBuilder() {
     [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
   );
 
+  const handleUnmarkCalledOff = React.useCallback(
+    async (tmId: string, tmName: string) => {
+      if (!requireEdit()) return;
+
+      try {
+        const { undoRemoveFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
+        await undoRemoveFromSchedule({ tmId, nightDate: selectedDay.date });
+
+        setCalledOffIds((prev) => {
+          const next = new Set(prev);
+          next.delete(tmId);
+          return next;
+        });
+
+        const dateKey = formatLocalDateISO(selectedDay.date);
+        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        setPickerScheduleEpoch((e) => e + 1);
+        showToast(`${tmName} restored to tonight's roster`, "success");
+      } catch (e) {
+        console.error("[shiftbuilder] unmark called off failed", e);
+        showToast("Failed to restore team member", "error");
+      }
+    },
+    [requireEdit, selectedDay.date, currentNight.queryClient, showToast],
+  );
+
   const handlePadMarkUnavailable = React.useCallback(
     async (tmId: string, tmName: string, status: string = "called_off") => {
-      const reliableNightId = queryNightId || nightId;
-      const dateStr = formatLocalDateISO(selectedDay.date);
+      if (!requireEdit()) return;
+
+      const statusLabel: Record<string, string> = {
+        called_off: "called off",
+        pto: "PTO",
+        loa: "LOA",
+        off: "off",
+      };
+
       try {
-        if (!reliableNightId) throw new Error("No night id");
-      await updateNightTmStatus({
-          nightId: reliableNightId,
+        let nid = queryNightId || nightId;
+        if (!nid) {
+          const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+          nid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+          setNightId(nid);
+        }
+
+        const { removeTMFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
+        await removeTMFromSchedule({
           tmId,
-          status,
-          note: `Marked from placement picker (${status})`,
-          tmName,
+          nightId: nid,
+          nightDate: selectedDay.date,
+          reason: status,
         });
-        setPickerScheduleEpoch((e) => e + 1);
-        const dateKey = selectedDay.date.toISOString().slice(0, 10);
+
+        setCalledOffIds((prev) => {
+          const next = new Set(prev);
+          next.add(tmId);
+          return next;
+        });
+
+        const store = useShiftBuilderStore.getState();
+        const cleared: Record<string, unknown> = { ...store.assignments };
+        for (const [slotKey, row] of Object.entries(cleared)) {
+          const a = row as { tmId?: string | null };
+          if (a?.tmId === tmId) {
+            cleared[slotKey] = { ...a, tmId: null, tmName: null };
+          }
+        }
+        store.setAssignments(cleared);
+
+        const dateKey = formatLocalDateISO(selectedDay.date);
         await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-        showToast(`${tmName} marked ${status} for tonight`, "success");
+        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+        shiftData.mirrorCurrentDay();
+        setLiveAssignVersion((v) => v + 1);
+        setPickerScheduleEpoch((e) => e + 1);
+
+        showToast(
+          `${tmName} marked ${statusLabel[status] ?? status} for tonight`,
+          "success",
+        );
       } catch (e) {
         console.error("[shiftbuilder] mark unavailable failed", e);
         showToast("Failed to mark unavailable", "error");
       }
     },
-    [queryNightId, nightId, selectedDay.date, currentNight.queryClient, showToast],
+    [
+      requireEdit,
+      queryNightId,
+      nightId,
+      selectedDay.date,
+      selectedDay.name,
+      currentNight.queryClient,
+      shiftData,
+      showToast,
+    ],
   );
 
   const handleGenderClick = (slotKey: string) => {
@@ -7387,6 +7532,7 @@ function AuthedShiftBuilder() {
                 isDark={isDark}
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
+                onUnmarkCalledOff={handleUnmarkCalledOff}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}
@@ -7499,6 +7645,7 @@ function AuthedShiftBuilder() {
                 onDayPillClick={handleBoardDayPill}
                 onBreakGroupChange={handleBoardBreakGroupChange}
                 onRemoveTask={handleBoardRemoveTask}
+                onSwapCoverageSides={handleSwapCoverageSides}
                 onSetTaskColor={handleBoardSetTaskColor}
                 onSetTaskMarker={handleBoardSetTaskMarker}
                 onSetTaskAppearance={handleBoardSetTaskAppearance}
@@ -8112,6 +8259,7 @@ function AuthedShiftBuilder() {
                 onDayPillClick={handleBoardDayPill}
                 onBreakGroupChange={handleBoardBreakGroupChange}
                 onRemoveTask={handleBoardRemoveTask}
+                onSwapCoverageSides={handleSwapCoverageSides}
                 onSetTaskColor={handleBoardSetTaskColor}
                 onSetTaskMarker={handleBoardSetTaskMarker}
                 onSetTaskAppearance={handleBoardSetTaskAppearance}

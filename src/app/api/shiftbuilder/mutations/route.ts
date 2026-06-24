@@ -12,6 +12,8 @@ import {
   batchApplyDraftAssignmentsServer,
   deleteBreakAssignmentServer,
   deleteZoneAssignmentServer,
+  markTmCallOffServer,
+  unmarkTmCallOffServer,
   removeNightCardBorderServer,
   removeNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
@@ -21,6 +23,7 @@ import {
   setNightPublishedServer,
   toggleAssignmentLockServer,
   updateNightSlotTaskColorServer,
+  updateNightSlotTaskCoverageSideServer,
   updateNightSlotTaskLabelServer,
   updateNightSlotTaskStyleServer,
   upsertBreakAssignmentServer,
@@ -50,9 +53,12 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   remove_night_slot_task: "canEditAssignments",
   update_night_slot_task_color: "canEditAssignments",
   update_night_slot_task_style: "canEditAssignments",
+  update_night_slot_task_coverage_side: "canEditAssignments",
   update_night_slot_task_label: "canEditAssignments",
   replace_night_slot_tasks_for_slot: "canEditAssignments",
   replace_all_night_slot_tasks: "canEditAssignments",
+  mark_tm_call_off: "canEditAssignments",
+  unmark_tm_call_off: "canEditAssignments",
   add_slot_default_task: "canAccessSudo",
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
@@ -201,6 +207,17 @@ export async function POST(request: NextRequest) {
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
       }
+      case "update_night_slot_task_coverage_side": {
+        await updateNightSlotTaskCoverageSideServer(
+          String(body.nightId),
+          String(body.slotKey),
+          String(body.taskLabel),
+          (body.coverageSide as "A" | "B" | null) ?? null,
+          (body.rrSide as "mens" | "womens" | null) ?? null,
+        );
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json({ ok: true });
+      }
       case "update_night_slot_task_label": {
         await updateNightSlotTaskLabelServer(
           String(body.nightId),
@@ -224,6 +241,24 @@ export async function POST(request: NextRequest) {
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
+      }
+      case "mark_tm_call_off": {
+        const result = await markTmCallOffServer({
+          nightId: String(body.nightId),
+          tmId: String(body.tmId),
+          date: String(body.date),
+          reason: body.reason != null ? String(body.reason) : null,
+        });
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "unmark_tm_call_off": {
+        const result = await unmarkTmCallOffServer({
+          tmId: String(body.tmId),
+          date: String(body.date),
+        });
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
       }
       case "add_slot_default_task": {
         const task = await addSlotDefaultTaskServer({

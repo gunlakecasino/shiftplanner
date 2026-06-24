@@ -135,10 +135,26 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-p
 
 body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-names,
 body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-names,
-.print-stage-inner .sb-covered-by-print .sb-covered-by-names {
+.print-stage-inner .sb-covered-by-print .sb-covered-by-names,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-name,
+body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-name,
+.print-stage-inner .sb-covered-by-print .sb-covered-by-name {
   color: #b0b0b8 !important;
   opacity: 0.82;
   font-weight: 600 !important;
+}
+
+body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-side,
+body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-side,
+.print-stage-inner .sb-covered-by-print .sb-covered-by-side {
+  color: #b0b0b8 !important;
+  opacity: 0.82;
+  font-weight: 600 !important;
+}
+
+.print-stage-inner .sb-covered-by-print .sb-covered-by-stack {
+  max-width: 11.5rem;
+  column-gap: 5px;
 }
 
 body.printing-dual-mode .print-dual-container .print-artboard .sb-builder-section,

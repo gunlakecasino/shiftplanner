@@ -27,44 +27,26 @@ import {
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import { formatCoveredByNames } from "@/lib/shiftbuilder/coverageHelpers";
+import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
+import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 
 type CoveredScale = "zone" | "rr" | "aux";
 
-const GOLDEN_COVERED_LABEL: Record<CoveredScale, number> = { zone: 7.5, rr: 7, aux: 7 };
-const GOLDEN_COVERED_NAME: Record<CoveredScale, number> = { zone: 18, rr: 14, aux: 14 };
-
 function GoldenCoveredByBlock({
-  coveredByNames,
+  coveredBy,
+  targetSlotKey,
   scale,
 }: {
-  coveredByNames: string[];
+  coveredBy: CoveredByEntry[];
+  targetSlotKey?: string;
   scale: CoveredScale;
 }) {
   return (
-    <div className="sb-covered-by-print sb-covered-by-block flex flex-col min-w-0 w-full">
-      <span
-        className="sb-covered-by-label font-bold uppercase tracking-[0.22em] text-[#B0B0B8] px-1 py-[1px] inline-block"
-        style={{
-          fontSize: GOLDEN_COVERED_LABEL[scale],
-          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-          lineHeight: 1.15,
-        }}
-      >
-        Covered by
-      </span>
-      <span
-        className="sb-covered-by-names font-bold tracking-[-0.35px] text-[#9CA3AF] px-1 py-[1px] inline-block leading-tight"
-        style={{
-          fontSize: GOLDEN_COVERED_NAME[scale],
-          lineHeight: 1.08,
-          fontFamily: "var(--font-atkinson)",
-          fontWeight: 700,
-        }}
-      >
-        {formatCoveredByNames(coveredByNames)}
-      </span>
-    </div>
+    <CoveredByPrintLabel
+      coveredBy={coveredBy}
+      targetSlotKey={targetSlotKey}
+      scale={scale}
+    />
   );
 }
 
@@ -208,7 +190,7 @@ export function GoldenZoneCard({
   breakGroup = 0,
   tasks,
   empty,
-  coveredByNames,
+  coveredBy,
   onClick,
   onMouseDown,
   onContextMenu,
@@ -219,7 +201,7 @@ export function GoldenZoneCard({
   breakGroup?: number;
   tasks: PrintTaskLine[];
   empty?: boolean;
-  coveredByNames?: string[];
+  coveredBy?: CoveredByEntry[];
 } & React.HTMLAttributes<HTMLDivElement>) {
   const def = ZONE_DEFS.find((d) => d.key === slotKey)!;
   const color = getZoneColor(slotKey);
@@ -269,8 +251,8 @@ export function GoldenZoneCard({
         style={{ paddingBottom: coveragePad }}
       >
         {isEmpty ? (
-          coveredByNames && coveredByNames.length > 0 ? (
-            <GoldenCoveredByBlock coveredByNames={coveredByNames} scale="zone" />
+          coveredBy && coveredBy.length > 0 ? (
+            <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="zone" />
           ) : (
             <div
               className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
@@ -315,7 +297,7 @@ export function GoldenRRSide({
   breakGroup,
   tasks,
   empty,
-  coveredByNames,
+  coveredBy,
 }: {
   slotKey: string;
   headerLabel: string;
@@ -325,7 +307,7 @@ export function GoldenRRSide({
   breakGroup: number;
   tasks: PrintTaskLine[];
   empty: boolean;
-  coveredByNames?: string[];
+  coveredBy?: CoveredByEntry[];
 }) {
   const regular = tasks.filter((t) => !t.isCoverage);
   const coverage = tasks.find((t) => t.isCoverage);
@@ -368,8 +350,8 @@ export function GoldenRRSide({
         style={{ paddingBottom: coveragePad }}
       >
         {isEmpty ? (
-          coveredByNames && coveredByNames.length > 0 ? (
-            <GoldenCoveredByBlock coveredByNames={coveredByNames} scale="rr" />
+          coveredBy && coveredBy.length > 0 ? (
+            <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="rr" />
           ) : (
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
@@ -413,7 +395,7 @@ export function GoldenRRColumn({
   mAssignment: { tmName?: string | null; breakGroup?: number };
   wTasks: PrintTaskLine[];
   mTasks: PrintTaskLine[];
-  coveredByIndex?: Record<string, string[]>;
+  coveredByIndex?: Record<string, CoveredByEntry[]>;
 }) {
   const def = RR_DEFS.find((r) => r.num === rrNum)!;
   const color = getRRAccent(rrNum);
@@ -438,7 +420,7 @@ export function GoldenRRColumn({
         breakGroup={wAssignment.breakGroup ?? 0}
         tasks={wTasks}
         empty={wEmpty}
-        coveredByNames={coveredByIndex[wKey]}
+        coveredBy={coveredByIndex[wKey]}
       />
       <GoldenRRSide
         slotKey={mKey}
@@ -449,7 +431,7 @@ export function GoldenRRColumn({
         breakGroup={mAssignment.breakGroup ?? 0}
         tasks={mTasks}
         empty={mEmpty}
-        coveredByNames={coveredByIndex[mKey]}
+        coveredBy={coveredByIndex[mKey]}
       />
     </div>
   );
@@ -463,7 +445,7 @@ export function GoldenRRPrintGrid({
 }: {
   assignments: Record<string, { tmName?: string | null; breakGroup?: number }>;
   tasksBySlot: Record<string, NightSlotTask[] | PrintTaskLine[] | undefined>;
-  coveredByIndex?: Record<string, string[]>;
+  coveredByIndex?: Record<string, CoveredByEntry[]>;
 }) {
   const toLines = (key: string): PrintTaskLine[] =>
     toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined);
@@ -486,7 +468,7 @@ export function GoldenRRPrintGrid({
               breakGroup={a.breakGroup ?? 0}
               tasks={toLines(wKey)}
               empty={!a.tmName}
-              coveredByNames={coveredByIndex[wKey]}
+              coveredBy={coveredByIndex[wKey]}
             />
           </div>
         );
@@ -507,7 +489,7 @@ export function GoldenRRPrintGrid({
               breakGroup={a.breakGroup ?? 0}
               tasks={toLines(mKey)}
               empty={!a.tmName}
-              coveredByNames={coveredByIndex[mKey]}
+              coveredBy={coveredByIndex[mKey]}
             />
           </div>
         );
@@ -522,14 +504,14 @@ export function GoldenAuxCard({
   breakGroup = 0,
   tasks,
   empty,
-  coveredByNames,
+  coveredBy,
 }: {
   def: AuxDef;
   tmName?: string | null;
   breakGroup?: number;
   tasks: PrintTaskLine[];
   empty?: boolean;
-  coveredByNames?: string[];
+  coveredBy?: CoveredByEntry[];
 }) {
   const role = def.role ?? "blank";
   const isBlank = role === "blank" && !def.label;
@@ -589,8 +571,8 @@ export function GoldenAuxCard({
         style={{ paddingBottom: bodyPadBottom }}
       >
         {isEmpty ? (
-          coveredByNames && coveredByNames.length > 0 ? (
-            <GoldenCoveredByBlock coveredByNames={coveredByNames} scale="aux" />
+          coveredBy && coveredBy.length > 0 ? (
+            <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={def.key} scale="aux" />
           ) : (
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px] flex items-center justify-center flex-1"

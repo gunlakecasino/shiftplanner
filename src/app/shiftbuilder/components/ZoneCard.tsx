@@ -17,6 +17,7 @@ import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import { CriticalRepeatNameMark, TmPlacementTrail } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
+import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import {
   CardAccentStripe,
@@ -64,8 +65,10 @@ export interface ZoneCardProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
-  /** TM names covering this slot via coverage tasks on other placements. */
-  coveredByNames?: string[];
+  /** TMs covering this slot via coverage tasks on other placements. */
+  coveredBy?: CoveredByEntry[];
+  /** Swap A/B labels when exactly two coverers. */
+  onSwapCoverageSides?: (targetSlotKey: string, entries: CoveredByEntry[]) => void;
   /** /today kiosk UX */
   isTodayKiosk?: boolean;
   isPeerDimmed?: boolean;
@@ -97,7 +100,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
-  coveredByNames = [],
+  coveredBy = [],
+  onSwapCoverageSides,
   isTodayKiosk = false,
   isPeerDimmed = false,
   isCardSelected = false,
@@ -119,7 +123,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     def.key, "zone", slotTm, isLocked,
   );
 
-  const isCovered = coveredByNames.length > 0;
+  const isCovered = coveredBy.length > 0;
   const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading && !isCovered;
   const currentTmId = slotTm.tmId;
@@ -154,8 +158,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
-  } else if (coveredByNames.length > 0) {
-    assignmentState = { kind: "covered", coveredByNames };
+  } else if (coveredBy.length > 0) {
+    assignmentState = { kind: "covered", coveredBy };
   } else {
     assignmentState = { kind: "unassigned" };
   }
@@ -218,9 +222,14 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           {assignmentState.kind === "covered" ? (
             <CoveredByOverlay
               scale="zone"
-              coveredByNames={coveredByNames}
+              coveredBy={coveredBy}
+              targetSlotKey={def.key}
               onClick={(e) => e.stopPropagation()}
-              nameSizeOverride={25}
+              onSwapSides={
+                showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
+                  ? () => onSwapCoverageSides(def.key, coveredBy)
+                  : undefined
+              }
             />
           ) : (
             <div className="min-w-0">

@@ -33,6 +33,7 @@ type NightSlotTaskRow = {
   text_style?: unknown;
   textStyle?: unknown;
   is_coverage: boolean;
+  coverage_side?: "A" | "B" | null;
 };
 
 type BreakAssignmentRow = {
@@ -57,6 +58,7 @@ function mapNightSlotTask(r: NightSlotTaskRow) {
     markerType: (r.marker_type ?? r.markerType ?? null) as any,
     textStyle: normalizeTaskTextStyle(r.text_style ?? r.textStyle ?? null),
     isCoverage: r.is_coverage ?? false,
+    coverageSide: (r.coverage_side ?? null) as "A" | "B" | null,
   };
 }
 

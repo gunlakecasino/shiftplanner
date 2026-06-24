@@ -141,6 +141,10 @@ export interface ShiftBuilderBoardProps {
   onCardClick?: any;
   onGenderClick?: (k: string, el?: HTMLElement, e?: React.MouseEvent) => void;
   onRemoveTask?: any;
+  onSwapCoverageSides?: (
+    targetSlotKey: string,
+    entries: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[],
+  ) => void;
   onSetTaskColor?: any;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onSetTaskAppearance?: (
@@ -308,6 +312,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onCardClick,
   onGenderClick,
   onRemoveTask,
+  onSwapCoverageSides,
   onSetTaskColor,
   onSetTaskMarker,
   onSetTaskAppearance,
@@ -1279,7 +1284,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       breakGroup={a.breakGroup ?? 0}
                       tasks={toTaskLines(selectedTasks[key])}
                       empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
-                      coveredByNames={coveredByIndex[key]}
+                      coveredBy={coveredByIndex[key]}
                     />
                   ) : (
                     <>
@@ -1307,7 +1312,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         focusedTmId={focusedTmId}
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
-                        coveredByNames={coveredByIndex[key]}
+                        coveredBy={coveredByIndex[key]}
+                        onSwapCoverageSides={onSwapCoverageSides}
                         {...kioskCardFlags(key, accent)}
                       />
                       {activePlacementPad?.hostId === key &&
@@ -1411,6 +1417,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         conflictingTms={conflictingTms}
                         tmConflictSlots={tmConflictSlots}
                         coveredByIndex={coveredByIndex}
+                        onSwapCoverageSides={onSwapCoverageSides}
                         isTodayKiosk={isTodayBoard}
                         isPeerDimmed={
                           kioskPeerDimActive &&
@@ -1547,7 +1554,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           breakGroup={a.breakGroup ?? 0}
                           tasks={toTaskLines(selectedTasks[key])}
                           empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
-                          coveredByNames={coveredByIndex[key]}
+                          coveredBy={coveredByIndex[key]}
                         />
                       ) : (
                         <>
@@ -1575,7 +1582,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             focusedTmId={focusedTmId}
                             conflictingTms={conflictingTms}
                             tmConflictSlots={tmConflictSlots}
-                            coveredByNames={coveredByIndex[key]}
+                            coveredBy={coveredByIndex[key]}
+                            onSwapCoverageSides={onSwapCoverageSides}
                             onSetAuxRole={onSetAuxRole}
                             onSetAuxLabel={onSetAuxLabel}
                             {...kioskCardFlags(key, accent)}
@@ -1619,7 +1627,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         breakGroup={a.breakGroup ?? 0}
                         tasks={toTaskLines(selectedTasks[key])}
                         empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
-                        coveredByNames={coveredByIndex[key]}
+                        coveredBy={coveredByIndex[key]}
                       />
                     ) : (
                       <>
@@ -1647,7 +1655,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           focusedTmId={focusedTmId}
                           conflictingTms={conflictingTms}
                           tmConflictSlots={tmConflictSlots}
-                          coveredByNames={coveredByIndex[key]}
+                          coveredBy={coveredByIndex[key]}
+                          onSwapCoverageSides={onSwapCoverageSides}
                           onSetAuxRole={onSetAuxRole}
                           onSetAuxLabel={onSetAuxLabel}
                           {...kioskCardFlags(key, accent)}
