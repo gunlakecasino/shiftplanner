@@ -24,16 +24,23 @@ function sessionSecret(): string | null {
   const dedicated = process.env.OPS_SESSION_SECRET?.trim();
   if (dedicated) return dedicated;
 
+  const fallback =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
+
   if (process.env.NODE_ENV === "production") {
+    if (fallback) {
+      console.warn(
+        "[opsSession] OPS_SESSION_SECRET missing — using SUPABASE_SERVICE_ROLE_KEY fallback. Set a dedicated OPS_SESSION_SECRET on Railway.",
+      );
+      return fallback;
+    }
     console.error(
-      "[opsSession] OPS_SESSION_SECRET is required in production — set a dedicated random secret on Railway",
+      "[opsSession] No session signing secret — set OPS_SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY on Railway",
     );
     return null;
   }
 
-  const fallback =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
   return fallback || null;
 }
 

@@ -35,7 +35,7 @@ export function isTempPinExpired(
   return !Number.isNaN(issued) && issued < Date.now() - TEMP_PIN_TTL_MS;
 }
 
-async function verifyOpsPin(pin: string, storedHash: string): Promise<boolean> {
+export async function verifyOpsPin(pin: string, storedHash: string): Promise<boolean> {
   return bcrypt.compare(pin, normalizeBcryptHash(storedHash));
 }
 

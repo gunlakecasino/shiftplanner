@@ -33,34 +33,45 @@ export function humanizeLoginError(
   }
 
   if (
-    (status === 403 || msg.includes("account_locked")) &&
-    typeof details?.retryAfterSec === "number" &&
-    details.retryAfterSec > 0
+    msg.includes("account_locked") ||
+    ((status === 403) &&
+      typeof details?.retryAfterSec === "number" &&
+      details.retryAfterSec > 0)
   ) {
-    return formatLockoutWait(details.retryAfterSec);
+    return formatLockoutWait(details!.retryAfterSec!);
   }
 
   if (status === 429 || msg.includes("too many")) {
     return "Too many attempts — wait a moment and try again.";
   }
-  if (status === 403 || msg.includes("unavailable") || msg.includes("forbidden")) {
-    return "This account isn't available right now. Contact an administrator.";
-  }
+
   if (
     status === 503 ||
     msg.includes("session signing") ||
+    msg.includes("server_config") ||
     msg.includes("service unavailable")
   ) {
     return "Sign-in is temporarily unavailable. Try again shortly.";
   }
+
   if (msg.includes("network") || msg.includes("failed to reach")) {
     return "Can't reach the server. Check your connection and try again.";
   }
+
   if (msg.includes("pin must") || msg.includes("6 digit")) {
     return "Enter a 6-digit PIN.";
   }
+
   if (status === 401 || msg.includes("invalid") || msg.includes("credentials")) {
     return "Incorrect PIN. Try again.";
+  }
+
+  if (msg.includes("unavailable") || msg === "account unavailable") {
+    return "This account isn't available right now. Contact an administrator.";
+  }
+
+  if (status === 403 || msg.includes("forbidden")) {
+    return "Sign-in was blocked. Refresh the page and try again.";
   }
 
   return "Sign-in didn't work. Try again.";

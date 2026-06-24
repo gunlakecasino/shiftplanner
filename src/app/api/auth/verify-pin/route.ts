@@ -11,6 +11,7 @@ import {
   resolveOpsUserAfterPinVerify,
   type VerifyPinEdgeUser,
 } from "@/lib/auth/opsUser.server";
+import { verifyOpsPinLogin } from "@/lib/auth/verifyOpsPinLogin.server";
 
 function edgeVerifyPinUrl(): string {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,9 +26,66 @@ function edgeVerifyPinUrl(): string {
   }
 }
 
+type EdgeVerifyPayload = {
+  success?: boolean;
+  user?: VerifyPinEdgeUser;
+  error?: string;
+  retryAfterSec?: number;
+  requiresAdminContact?: boolean;
+  failedAttempts?: number;
+};
+
+function failureResponse(
+  status: number,
+  body: {
+    error: string;
+    retryAfterSec?: number;
+    requiresAdminContact?: boolean;
+    failedAttempts?: number;
+  },
+): NextResponse {
+  return NextResponse.json(body, {
+    status,
+    ...(body.retryAfterSec
+      ? { headers: { "Retry-After": String(body.retryAfterSec) } }
+      : {}),
+  });
+}
+
+async function verifyViaEdge(
+  pin: string,
+  lastUserId?: string,
+): Promise<
+  | { ok: true; user: VerifyPinEdgeUser }
+  | { ok: false; status: number; error: string; retryAfterSec?: number; requiresAdminContact?: boolean; failedAttempts?: number }
+> {
+  const edgeRes = await fetch(edgeVerifyPinUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin, lastUserId }),
+  });
+
+  const edgeJson = (await edgeRes.json().catch(() => ({}))) as EdgeVerifyPayload;
+
+  if (!edgeRes.ok || !edgeJson.success || !edgeJson.user?.id) {
+    const status =
+      edgeRes.status === 429 ? 429 : edgeRes.status === 403 ? 403 : 401;
+    return {
+      ok: false,
+      status,
+      error: edgeJson.error || "Invalid credentials",
+      retryAfterSec: edgeJson.retryAfterSec,
+      requiresAdminContact: edgeJson.requiresAdminContact,
+      failedAttempts: edgeJson.failedAttempts,
+    };
+  }
+
+  return { ok: true, user: edgeJson.user };
+}
+
 /**
  * POST /api/auth/verify-pin — PIN login with httpOnly session cookie.
- * Proxies to the Supabase edge function, then issues signed server session.
+ * Prefers server-native verification (Railway + service role); edge is fallback.
  */
 export async function POST(request: NextRequest) {
   if (!isSameOriginOpsRequest(request)) {
@@ -60,43 +118,39 @@ export async function POST(request: NextRequest) {
       ? body.lastUserId.trim()
       : undefined;
 
-  const edgeRes = await fetch(edgeVerifyPinUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin, lastUserId }),
-  });
+  let verifiedUser: VerifyPinEdgeUser | null = null;
 
-  const edgeJson = await edgeRes.json().catch(() => ({}));
-
-  if (!edgeRes.ok || !edgeJson.success || !edgeJson.user?.id) {
-    const status =
-      edgeRes.status === 429 ? 429 : edgeRes.status === 403 ? 403 : 401;
-    return NextResponse.json(
-      {
-        error: edgeJson.error || "Invalid credentials",
-        retryAfterSec: edgeJson.retryAfterSec,
-        requiresAdminContact: edgeJson.requiresAdminContact,
-        failedAttempts: edgeJson.failedAttempts,
-      },
-      {
-        status,
-        ...(edgeJson.retryAfterSec
-          ? { headers: { "Retry-After": String(edgeJson.retryAfterSec) } }
-          : {}),
-      },
-    );
+  const serverResult = await verifyOpsPinLogin(pin, lastUserId);
+  if (serverResult.ok) {
+    verifiedUser = serverResult.user;
+  } else if (serverResult.error === "server_config_unavailable") {
+    const edgeResult = await verifyViaEdge(pin, lastUserId);
+    if (!edgeResult.ok) {
+      return failureResponse(edgeResult.status, {
+        error: edgeResult.error,
+        retryAfterSec: edgeResult.retryAfterSec,
+        requiresAdminContact: edgeResult.requiresAdminContact,
+        failedAttempts: edgeResult.failedAttempts,
+      });
+    }
+    verifiedUser = edgeResult.user;
+  } else {
+    return failureResponse(serverResult.status, {
+      error: serverResult.error,
+      retryAfterSec: serverResult.retryAfterSec,
+      requiresAdminContact: serverResult.requiresAdminContact,
+      failedAttempts: serverResult.failedAttempts,
+    });
   }
 
   const client = createAdminClientSafe();
   if (client) {
-    await client.rpc("reset_pin_attempts", { p_user_id: edgeJson.user.id });
+    await client.rpc("reset_pin_attempts", { p_user_id: verifiedUser.id });
   }
 
-  const freshUser = await resolveOpsUserAfterPinVerify(
-    edgeJson.user as VerifyPinEdgeUser,
-  );
+  const freshUser = await resolveOpsUserAfterPinVerify(verifiedUser);
   if (!freshUser) {
-    console.error("[verify-pin] Could not resolve user after edge auth:", edgeJson.user?.id);
+    console.error("[verify-pin] Could not resolve user after PIN auth:", verifiedUser.id);
     return NextResponse.json({ error: "Account unavailable" }, { status: 403 });
   }
 
