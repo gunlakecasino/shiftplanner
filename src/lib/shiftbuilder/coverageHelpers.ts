@@ -116,24 +116,41 @@ function sideSortOrder(side: CoverageSide | null | undefined): number {
   return 2;
 }
 
-/** Apply default A/B when exactly two coverers and sides are missing. */
+/** Apply default A/B when exactly two coverers and sides are missing or duplicated. */
 export function resolveDualCoverageSides(
   entries: CoveredByEntry[],
 ): CoveredByEntry[] {
   if (entries.length !== 2) return entries;
 
-  const hasA = entries.some((e) => e.side === "A");
-  const hasB = entries.some((e) => e.side === "B");
-  if (hasA && hasB) {
+  const withA = entries.find((e) => e.side === "A");
+  const withB = entries.find((e) => e.side === "B");
+  const unset = entries.find((e) => e.side !== "A" && e.side !== "B");
+
+  if (withA && withB) {
     return [...entries].sort(
       (a, b) => sideSortOrder(a.side) - sideSortOrder(b.side),
     );
   }
 
+  if (withA && unset) {
+    return [
+      { ...withA, side: "A" },
+      { ...unset, side: "B" },
+    ];
+  }
+
+  if (withB && unset) {
+    return [
+      { ...unset, side: "A" },
+      { ...withB, side: "B" },
+    ];
+  }
+
+  // Both null, both A, both B, or any other duplicate — stable A/B by name
   const sorted = [...entries].sort((a, b) => a.tmName.localeCompare(b.tmName));
   return [
-    { ...sorted[0], side: sorted[0].side ?? "A" },
-    { ...sorted[1], side: sorted[1].side ?? "B" },
+    { ...sorted[0], side: "A" },
+    { ...sorted[1], side: "B" },
   ];
 }
 
@@ -210,9 +227,14 @@ export function formatCoveredDisplayName(
 export function suggestCoverageSideForNewCoverer(
   existingEntries: CoveredByEntry[],
 ): CoverageSide {
+  if (existingEntries.length === 0) return "A";
+
   const used = new Set(
     existingEntries.map((e) => e.side).filter((s): s is CoverageSide => !!s),
   );
+
+  // First coverer often has no persisted side — treat as implicit A
+  if (existingEntries.length === 1 && used.size === 0) return "B";
   if (!used.has("A")) return "A";
   if (!used.has("B")) return "B";
   return "B";

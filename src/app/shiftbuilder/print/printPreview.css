@@ -139,9 +139,15 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-p
 body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-name,
 body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-name,
 .print-stage-inner .sb-covered-by-print .sb-covered-by-name {
-  color: #b0b0b8 !important;
-  opacity: 0.82;
+  color: #9a9aa3 !important;
+  opacity: 0.9;
   font-weight: 600 !important;
+}
+
+.print-stage-inner .sb-covered-by-block--rr .sb-covered-by-label,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-block--rr .sb-covered-by-label,
+body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-block--rr .sb-covered-by-label {
+  opacity: 0.92;
 }
 
 body.printing-dual-mode .print-dual-container .print-artboard .sb-covered-by-print .sb-covered-by-side,

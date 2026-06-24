@@ -306,26 +306,26 @@ export function UnassignedInvite({
 
 const COVERED_LABEL_SIZE_BUILDER: Record<CardNameScale, number> = {
   zone: 8.5,
-  rr: 7.5,
+  rr: 10,
   aux: 7.5,
 };
 
 const COVERED_LABEL_SIZE_PRINT: Record<CardNameScale, number> = {
   zone: 7.5,
-  rr: 7,
+  rr: 9,
   aux: 7,
 };
 
 /** Covered-by row type — badge + name share one size token. */
 const COVERED_NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
   zone: 20,
-  rr: 16,
+  rr: 22,
   aux: 15,
 };
 
 const COVERED_NAME_SIZE_PRINT: Record<CardNameScale, number> = {
   zone: 17,
-  rr: 14,
+  rr: 18,
   aux: 13,
 };
 

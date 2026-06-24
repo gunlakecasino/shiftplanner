@@ -726,7 +726,7 @@ body {
 }
 
 .sb-covered-by-block--rr .sb-covered-by-stack {
-  max-width: 10.5rem;
+  max-width: 12rem;
   column-gap: 5px;
   row-gap: 1px;
 }
