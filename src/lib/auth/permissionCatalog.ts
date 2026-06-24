@@ -179,7 +179,13 @@ export function effectivePermissionsForUser(
   role: OpsRole,
   overrides: Partial<ShiftBuilderPermissions> | null | undefined,
 ): ShiftBuilderPermissions {
-  if (role === "admin" || role === "viewer") {
+  if (
+    role === "admin" ||
+    role === "viewer" ||
+    role === "sudo_admin" ||
+    role === "ops_director" ||
+    role === "ops_manager"
+  ) {
     return getPermissionsForRole(role);
   }
   const base = getPermissionsForRole(role);

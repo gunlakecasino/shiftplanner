@@ -29,12 +29,16 @@ async function loadNightStatus(ref: NightRef): Promise<string | null> {
   return null;
 }
 
-/** Viewers may only read or mutate published nights; planning roles may access drafts. */
+/** Viewers may only read or mutate published nights; sudo / planning roles may access drafts. */
 export async function assertActorCanReadNight(
   permissions: ShiftBuilderPermissions,
   ref: NightRef,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!permissions.canEditPublishedOnly || permissions.canSeeDraftData) {
+  if (
+    permissions.canAccessSudo ||
+    permissions.canSeeDraftData ||
+    !permissions.canEditPublishedOnly
+  ) {
     return { ok: true };
   }
 
@@ -49,12 +53,16 @@ export async function assertActorCanReadNight(
   return { ok: true };
 }
 
-/** Viewers may only mutate published nights; planning roles may edit drafts. */
+/** Viewers may only mutate published nights; sudo / planning roles may edit drafts. */
 export async function assertActorCanEditNight(
   permissions: ShiftBuilderPermissions,
   ref: NightRef,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (permissions.canSeeDraftData || !permissions.canEditPublishedOnly) {
+  if (
+    permissions.canAccessSudo ||
+    permissions.canSeeDraftData ||
+    !permissions.canEditPublishedOnly
+  ) {
     return { ok: true };
   }
 

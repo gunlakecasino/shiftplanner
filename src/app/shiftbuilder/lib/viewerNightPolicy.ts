@@ -8,13 +8,20 @@ import type { FetchNightSecondaryOptions } from "../hooks/fetchNightSecondaryDat
  * (see assertNightEditable.server.ts and useShiftData publishedOnlyPolicy).
  */
 export function isPublishedOnlyViewer(
-  permissions: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null | undefined,
+  permissions: Pick<
+    ShiftBuilderPermissions,
+    "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
+  > | null | undefined,
 ): boolean {
-  return Boolean(permissions?.canEditPublishedOnly && !permissions?.canSeeDraftData);
+  if (permissions?.canAccessSudo || permissions?.canSeeDraftData) return false;
+  return Boolean(permissions?.canEditPublishedOnly);
 }
 
 export function nightFetchOptionsForPermissions(
-  permissions: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null | undefined,
+  permissions: Pick<
+    ShiftBuilderPermissions,
+    "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
+  > | null | undefined,
 ): FetchNightCoreOptions & FetchNightSecondaryOptions {
   return { publishedOnlyPolicy: isPublishedOnlyViewer(permissions) };
 }

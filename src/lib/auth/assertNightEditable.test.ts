@@ -29,6 +29,19 @@ const admin: ShiftBuilderPermissions = {
   canAccessReports: true,
 };
 
+const sudoAdmin: ShiftBuilderPermissions = {
+  canEditAssignments: true,
+  canLockUnlock: true,
+  canApplySchedules: true,
+  canPublish: true,
+  canSeeDraftData: true,
+  canAccessSudo: true,
+  canAccessReports: true,
+  canRunEngine: true,
+  canManageTeam: true,
+  canEditPublishedOnly: false,
+};
+
 const planner: ShiftBuilderPermissions = {
   ...viewer,
   canEditPublishedOnly: false,
@@ -46,6 +59,12 @@ function mockNightStatus(status: string | null) {
 describe("assertActorCanReadNight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("allows sudo admin to read draft nights without status lookup", async () => {
+    const result = await assertActorCanReadNight(sudoAdmin, { date: "2026-06-20" });
+    expect(result).toEqual({ ok: true });
+    expect(createAdminClientSafe).not.toHaveBeenCalled();
   });
 
   it("allows planners to read draft nights", async () => {

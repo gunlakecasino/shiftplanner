@@ -26,6 +26,29 @@ describe("getEffectivePermissions", () => {
     expect(effective.canEditAssignments).toBe(true);
   });
 
+  it("canonicalizes sudo_admin — legacy overrides cannot restrict draft access", () => {
+    const effective = getEffectivePermissions({
+      id: "u0",
+      email: "",
+      full_name: "Brian",
+      username: "brian",
+      role: "sudo_admin",
+      permissions: {
+        canAccessSudo: false,
+        canSeeDraftData: false,
+        canEditPublishedOnly: true,
+        canAccessReports: false,
+        canPublish: false,
+      },
+    });
+
+    expect(effective.canAccessSudo).toBe(true);
+    expect(effective.canSeeDraftData).toBe(true);
+    expect(effective.canEditPublishedOnly).toBe(false);
+    expect(effective.canAccessReports).toBe(true);
+    expect(effective.canPublish).toBe(true);
+  });
+
   it("canonicalizes viewer role", () => {
     const effective = getEffectivePermissions({
       id: "u2",

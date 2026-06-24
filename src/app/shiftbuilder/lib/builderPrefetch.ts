@@ -41,7 +41,10 @@ export function getBuilderWeekDayDefs(): DayDef[] {
  */
 export function prefetchBuilderWeek(
   queryClient: QueryClient,
-  permissions?: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null,
+  permissions?: Pick<
+    ShiftBuilderPermissions,
+    "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
+  > | null,
 ): void {
   const dayDefs = getBuilderWeekDayDefs();
   const todayKey = formatLocalDateISO(currentShiftDate());

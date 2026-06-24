@@ -10,8 +10,24 @@ function permissionsBaseRole(user: Pick<OpsUser, "role" | "permissions">): OpsRo
   return user.role;
 }
 
-/** Primary roles with a fixed capability contract — legacy DB overrides cannot widen access. */
-const CANONICAL_TEMPLATE_ROLES: OpsRole[] = ["admin", "viewer"];
+/**
+ * Roles with a fixed capability contract — stored DB overrides must not change access.
+ * - admin / viewer: legacy overrides cannot widen access
+ * - sudo_admin (+ leadership aliases): zero restrictions — all nights, settings, reports
+ */
+const CANONICAL_TEMPLATE_ROLES: OpsRole[] = [
+  "admin",
+  "viewer",
+  "sudo_admin",
+  "ops_director",
+  "ops_manager",
+];
+
+export function isUnrestrictedOpsRole(
+  permissions: Pick<ShiftBuilderPermissions, "canAccessSudo" | "canSeeDraftData"> | null | undefined,
+): boolean {
+  return Boolean(permissions?.canAccessSudo && permissions?.canSeeDraftData);
+}
 
 export function getEffectivePermissions(user: Pick<OpsUser, "role" | "permissions">): ShiftBuilderPermissions {
   const baseRole = permissionsBaseRole(user);

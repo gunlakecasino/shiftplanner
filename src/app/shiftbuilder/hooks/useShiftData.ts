@@ -91,7 +91,10 @@ export type UseShiftDataOptions = {
   /** Viewer role — only published nights are loaded. */
   publishedOnlyPolicy?: boolean;
   /** When set, derives publishedOnlyPolicy from effective permissions. */
-  permissions?: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null;
+  permissions?: Pick<
+    ShiftBuilderPermissions,
+    "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
+  > | null;
 };
 
 export function useShiftData(

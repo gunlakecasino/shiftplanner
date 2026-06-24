@@ -18,6 +18,16 @@ describe("viewerNightPolicy", () => {
     ).toBe(false);
   });
 
+  it("excludes sudo admin even when stale overrides mark published-only", () => {
+    expect(
+      isPublishedOnlyViewer({
+        canEditPublishedOnly: true,
+        canSeeDraftData: false,
+        canAccessSudo: true,
+      }),
+    ).toBe(false);
+  });
+
   it("maps permissions to fetch options", () => {
     expect(
       nightFetchOptionsForPermissions({
