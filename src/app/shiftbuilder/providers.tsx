@@ -3,7 +3,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { reportWebVitals } from "@/lib/perf";
+import {
+  clearBuilderNightQueries,
+  registerOpsSessionQueryCacheHandler,
+} from "@/lib/auth/opsSessionQueryCache";
 import { getSupabaseRestOrigin, warmSupabaseConnection } from "@/lib/supabase";
+import { resetLiveCrossDayCache } from "@/lib/shiftbuilder/liveCache";
+import { useShiftBuilderStore } from "./store/useShiftBuilderStore";
 import { BuilderDataPrefetch } from "./components/BuilderDataPrefetch";
 
 /**
@@ -37,6 +43,15 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     }
     void warmSupabaseConnection();
   }, []);
+
+  useEffect(() => {
+    return registerOpsSessionQueryCacheHandler(() => {
+      clearBuilderNightQueries(queryClient);
+      resetLiveCrossDayCache();
+      useShiftBuilderStore.getState().setAssignments({});
+      useShiftBuilderStore.getState().clearDraft();
+    });
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

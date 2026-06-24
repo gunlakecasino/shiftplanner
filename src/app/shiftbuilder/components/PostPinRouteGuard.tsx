@@ -8,10 +8,13 @@ import {
   resolveOpsSurface,
   type OpsSurface,
 } from "@/lib/auth/postPinRoute";
+import { BuilderLoadingShell } from "./builderPrimitives";
 
 /**
- * Enforces admin vs team route boundaries after PIN authentication.
- * Team operators cannot remain on /shiftbuilder/settings.
+ * Enforces sudo / admin / team route boundaries after PIN authentication.
+ * - Team (Viewer): canvas only — published nights, no settings or reports
+ * - Admin: canvas (viewer rules) + reports — no settings
+ * - Sudo: full access
  */
 export function PostPinRouteGuard({
   children,
@@ -25,16 +28,32 @@ export function PostPinRouteGuard({
   const router = useRouter();
 
   const surface = resolveOpsSurface(permissions);
+  const redirect =
+    isAuthenticated ? guardAuthenticatedRoute(pathname, surface) : null;
 
   useEffect(() => {
     onSurfaceResolved?.(surface);
   }, [surface, onSurfaceResolved]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const redirect = guardAuthenticatedRoute(pathname, surface);
-    if (redirect) router.replace(redirect);
-  }, [isAuthenticated, pathname, router, surface]);
+    if (!redirect) return;
+    router.replace(redirect);
+  }, [redirect, router]);
+
+  if (redirect) {
+    return (
+      <BuilderLoadingShell
+        label="REDIRECTING"
+        sublabel={
+          surface === "reports"
+            ? "Reports access only"
+            : surface === "admin"
+              ? "Settings are not available for your role"
+              : "This area is not available for your role"
+        }
+      />
+    );
+  }
 
   return <>{children}</>;
 }

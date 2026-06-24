@@ -56,15 +56,22 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   },
   {
     key: "canAccessSudo",
-    label: "Access Settings (Admin)",
+    label: "Access Settings (Sudo)",
     group: "Administrative",
-    description: "Open OMS Settings — engine, users, defaults, reports",
+    description: "Open OMS Settings — engine, users, defaults, and full admin tools",
+  },
+  {
+    key: "canAccessReports",
+    label: "Access Reports",
+    group: "Administrative",
+    description: "Open /shiftbuilder/reports placement analytics",
   },
   {
     key: "canEditPublishedOnly",
     label: "Published Nights Only",
     group: "Editing",
-    description: "Floor viewer marker — edits allowed only on published nights",
+    description:
+      "Floor viewer marker — read and write allowed only on published nights (locks Viewer role)",
   },
 ];
 
@@ -72,7 +79,7 @@ export type OpsRoleOption = {
   value: OpsRole;
   label: string;
   description: string;
-  surface: "admin" | "team";
+  surface: "sudo" | "admin" | "reports" | "team";
 };
 
 /** Primary roles shown in Settings → Users. Legacy roles remain valid for existing accounts. */
@@ -81,34 +88,34 @@ export const OPS_ROLE_OPTIONS: OpsRoleOption[] = [
     value: "sudo_admin",
     label: "Sudo Admin",
     description: "Full control — settings, publish, engine, all nights",
+    surface: "sudo",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    description: "Viewer + Reports — published nights on canvas and placement analytics",
     surface: "admin",
   },
   {
     value: "viewer",
     label: "Viewer",
-    description: "Floor operator — view all days, edit placements/tasks/coverage on published nights only",
+    description: "Floor operator — published nights only (view and edit placements, tasks, coverage)",
     surface: "team",
   },
 ];
 
 const LEGACY_ROLE_OPTIONS: OpsRoleOption[] = [
   {
-    value: "admin",
-    label: "Admin (legacy)",
-    description: "Legacy full-access role — prefer Sudo Admin",
-    surface: "admin",
-  },
-  {
     value: "ops_director",
     label: "Ops Director (legacy)",
     description: "Legacy leadership role",
-    surface: "admin",
+    surface: "sudo",
   },
   {
     value: "ops_manager",
     label: "Ops Manager (legacy)",
     description: "Legacy manager role",
-    surface: "admin",
+    surface: "sudo",
   },
   {
     value: "graves_ops_super",
@@ -142,7 +149,7 @@ export function roleLabel(role: string): string {
   return ALL_ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role;
 }
 
-export function roleSurface(role: string): "admin" | "team" {
+export function roleSurface(role: string): "sudo" | "admin" | "reports" | "team" {
   return ALL_ROLE_OPTIONS.find((r) => r.value === role)?.surface ?? "team";
 }
 
@@ -172,6 +179,9 @@ export function effectivePermissionsForUser(
   role: OpsRole,
   overrides: Partial<ShiftBuilderPermissions> | null | undefined,
 ): ShiftBuilderPermissions {
+  if (role === "admin" || role === "viewer") {
+    return getPermissionsForRole(role);
+  }
   const base = getPermissionsForRole(role);
   const merged = { ...base, ...(sanitizePermissionOverrides(overrides) ?? {}) };
   if (!["sudo_admin", "graves_ops_super"].includes(role)) {

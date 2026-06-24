@@ -33,6 +33,13 @@ export function resolveStoredUserRole(
     };
   }
 
+  if (role === "admin") {
+    return {
+      role: "admin",
+      permissions: sanitizePermissionOverrides(getPermissionsForRole("admin")),
+    };
+  }
+
   return {
     role: role.trim() || "viewer",
     permissions: sanitizePermissionOverrides(permissions),

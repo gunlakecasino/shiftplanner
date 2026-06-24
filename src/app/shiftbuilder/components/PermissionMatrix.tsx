@@ -56,6 +56,8 @@ export function PermissionMatrix({
     !["sudo_admin", "graves_ops_super"].includes(role) &&
     (overrides?.canSeeDraftData === true || effective.canSeeDraftData);
 
+  const publishedOnlyLocked = role === "viewer" || role === "admin";
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -90,12 +92,16 @@ export function PermissionMatrix({
               const isOverridden = overrideValue !== undefined;
               const checked = isOverridden ? !!overrideValue : !!effective[p.key];
               const baseValue = base[p.key];
+              const isLocked =
+                (p.key === "canEditPublishedOnly" && publishedOnlyLocked) ||
+                (p.key === "canSeeDraftData" && draftClamped);
 
               return (
                 <label
                   key={p.key}
                   className={cn(
-                    "flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors",
+                    "flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors",
+                    isLocked ? "cursor-not-allowed opacity-80" : "cursor-pointer",
                     isDark
                       ? "border-white/10 hover:bg-white/5"
                       : "border-black/8 hover:bg-black/[0.02]",
@@ -106,6 +112,7 @@ export function PermissionMatrix({
                     type="checkbox"
                     className="mt-1 shrink-0"
                     checked={checked}
+                    disabled={isLocked}
                     onChange={(e) => setOverride(p.key, e.target.checked)}
                   />
                   <div className="min-w-0 flex-1">
@@ -136,6 +143,12 @@ export function PermissionMatrix({
       {draftClamped && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
           Draft visibility is hard-clamped off for this role at login — the override is stored but will not grant unpublished access.
+        </div>
+      )}
+
+      {publishedOnlyLocked && (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 px-3 py-2 text-[11px] text-sky-900 dark:text-sky-200">
+          Published-nights-only is required for the Viewer role — disabling it would grant draft access at the API layer.
         </div>
       )}
     </div>

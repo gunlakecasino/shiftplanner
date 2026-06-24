@@ -17,9 +17,15 @@ export interface ShiftBuilderPermissions {
   canPublish: boolean;
   canSeeDraftData: boolean;
   canAccessSudo: boolean;
+  /** Admin role — /shiftbuilder/reports placement analytics. */
+  canAccessReports: boolean;
   canRunEngine: boolean;
   canManageTeam: boolean;
-  /** Marker: floor viewer — edits limited to published nights (stored on legacy DB role). */
+  /**
+   * Floor viewer marker — when true (and canSeeDraftData is false), read and write
+   * paths are gated to published nights only. Also used for legacy DB accounts
+   * stored as utility_ops_super + this flag. Prefer isPublishedOnlyViewer() in app code.
+   */
   canEditPublishedOnly: boolean;
 }
 

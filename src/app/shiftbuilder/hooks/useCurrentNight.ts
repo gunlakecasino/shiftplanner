@@ -18,6 +18,8 @@ export type UseCurrentNightOptions = {
   enabled?: boolean;
   /** When true, night-core API enforces /today publish policy server-side. */
   todayPolicy?: boolean;
+  /** Viewer role — server rejects unpublished nights; client clears stale day data. */
+  publishedOnlyPolicy?: boolean;
 };
 
 export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOptions) {
@@ -28,7 +30,10 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
     queryFn: () =>
-      fetchNightCoreData(selectedDay, { todayPolicy: options?.todayPolicy }),
+      fetchNightCoreData(selectedDay, {
+        todayPolicy: options?.todayPolicy,
+        publishedOnlyPolicy: options?.publishedOnlyPolicy,
+      }),
     enabled: coreEnabled,
     // Long stale window keeps UI stable during live session; we rely on patches + server busts.
     // refetchOnMount: 'always' ensures hard refresh / remount sees latest server data
@@ -37,12 +42,15 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
     gcTime: 1000 * 60 * 30,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
+    placeholderData: options?.publishedOnlyPolicy ? undefined : keepPreviousData,
   });
 
   const secondaryQuery = useQuery({
     queryKey: ["nightSecondary", dateKey],
-    queryFn: () => fetchNightSecondaryData(selectedDay),
+    queryFn: () =>
+      fetchNightSecondaryData(selectedDay, {
+        publishedOnlyPolicy: options?.publishedOnlyPolicy,
+      }),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
     refetchOnMount: 'always',
@@ -53,6 +61,14 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
   const combinedData = {
     ...coreQuery.data,
     ...secondaryQuery.data,
+    accessBlocked: Boolean(
+      (coreQuery.data as { accessBlocked?: boolean } | undefined)?.accessBlocked,
+    ),
+  };
+
+  const fetchOptions = {
+    todayPolicy: options?.todayPolicy,
+    publishedOnlyPolicy: options?.publishedOnlyPolicy,
   };
 
   const prefetchNight = (date: Date) => {
@@ -70,13 +86,13 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
 
     queryClient.prefetchQuery({
       queryKey: ["nightCore", prefetchDateKey],
-      queryFn: () => fetchNightCoreData(dayDef),
+      queryFn: () => fetchNightCoreData(dayDef, fetchOptions),
       staleTime: 1000 * 60 * 5,
     });
 
     queryClient.prefetchQuery({
       queryKey: ["nightSecondary", prefetchDateKey],
-      queryFn: () => fetchNightSecondaryData(dayDef),
+      queryFn: () => fetchNightSecondaryData(dayDef, fetchOptions),
       staleTime: 1000 * 60 * 5,
     });
   };

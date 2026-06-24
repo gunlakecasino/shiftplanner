@@ -57,8 +57,28 @@ function hydrateSecondaryPayload(data: NightSecondaryApiPayload) {
   };
 }
 
+export type FetchNightSecondaryOptions = {
+  publishedOnlyPolicy?: boolean;
+};
+
+function emptyNightSecondaryResult(accessBlocked = false) {
+  return {
+    notes: "",
+    tasks: [] as ReturnType<typeof mapNightSlotTaskRow>[],
+    breakAssignments: [] as ReturnType<typeof mapBreakAssignmentRow>[],
+    cardBorders: {} as Record<string, string>,
+    recentZoneHistory: null,
+    calledOffIds: new Set<string>(),
+    rawBreakRows: [] as ReturnType<typeof mapBreakAssignmentRow>[],
+    accessBlocked,
+  };
+}
+
 /** Shared nightSecondary queryFn — fully API-backed on the happy path (no client Supabase). */
-export async function fetchNightSecondaryData(selectedDay: DayDef) {
+export async function fetchNightSecondaryData(
+  selectedDay: DayDef,
+  options?: FetchNightSecondaryOptions,
+) {
   const dateStr = formatLocalDateISO(selectedDay.date);
 
   try {
@@ -69,12 +89,19 @@ export async function fetchNightSecondaryData(selectedDay: DayDef) {
       credentials: "same-origin",
       cache: "no-store",
     });
+    if (res.status === 403) {
+      return emptyNightSecondaryResult(true);
+    }
     if (res.ok) {
       const data = (await res.json()) as NightSecondaryApiPayload;
       return hydrateSecondaryPayload(data);
     }
   } catch (e) {
     console.warn("[fetchNightSecondaryData] API path failed, using fallback", e);
+  }
+
+  if (options?.publishedOnlyPolicy) {
+    return emptyNightSecondaryResult(true);
   }
 
   const {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
+import { assertActorCanReadNight } from "@/lib/auth/assertNightEditable.server";
 import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import {
   getNightCoreBundleForDate,
@@ -35,6 +36,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const readCheck = await assertActorCanReadNight(session.actor.permissions, {
+      date: dateParam,
+    });
+    if (!readCheck.ok) {
+      return NextResponse.json({ error: readCheck.error }, { status: 403 });
+    }
+
     const policy = request.nextUrl.searchParams.get("policy");
     if (policy === "today") {
       const allowed = await isNightCoreAllowedForTodayPolicy(dateParam);

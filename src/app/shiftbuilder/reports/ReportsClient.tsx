@@ -10,18 +10,20 @@ import { ReportsShell } from "./components/ReportsShell";
 function ReportsGate() {
   const router = useRouter();
   const { permissions, isLoading } = useOpsAuth();
+  const canViewReports =
+    (permissions?.canAccessReports ?? false) || (permissions?.canAccessSudo ?? false);
 
   useEffect(() => {
-    if (!isLoading && !permissions?.canAccessSudo) {
+    if (!isLoading && !canViewReports) {
       router.replace("/shiftbuilder");
     }
-  }, [isLoading, permissions?.canAccessSudo, router]);
+  }, [isLoading, canViewReports, router]);
 
-  if (!permissions?.canAccessSudo) {
+  if (!canViewReports) {
     return (
       <BuilderLoadingShell
         label="REDIRECTING"
-        sublabel="Reports require sudo access"
+        sublabel="Reports access required"
       />
     );
   }

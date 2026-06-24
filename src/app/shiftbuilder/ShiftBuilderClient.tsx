@@ -186,7 +186,12 @@ import {
   rosterPanelWidth,
 } from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
-import { BuilderCanvasVeil, BuilderLoadingShell } from "./components/builderPrimitives";
+import { isPublishedOnlyViewer } from "./lib/viewerNightPolicy";
+import {
+  BuilderCanvasVeil,
+  BuilderLoadingShell,
+  BuilderUnpublishedNightShell,
+} from "./components/builderPrimitives";
 import RosterRail from "./components/RosterRail";
 import { ProvenanceGlass } from "./components/ProvenanceGlass";
 import { OpsStatusBar, ensureOpsStatusBar, updateOpsStatusBarContent } from "./components/OpsStatusBar";
@@ -949,6 +954,7 @@ function AuthedShiftBuilder() {
     canAccessSudo = false,
     canEditAssignments = false,
     canLockUnlock = false,
+    canEditPublishedOnly = false,
   } = permissions || {};
 
   const handleOpenSettings = useCallback(
@@ -1979,7 +1985,9 @@ function AuthedShiftBuilder() {
   // Full data orchestration (Slice 1 — Production Stabilization).
   // useShiftData centralizes useCurrentNight + hydration bridges + effective values + store selectors.
   // This removes a large amount of unification/effect boilerplate from the orchestrator.
-  const shiftData = useShiftData(selectedDay);
+  const shiftData = useShiftData(selectedDay, {
+    permissions,
+  });
 
   // Force fresh data on bfcache restore (common on Safari / iPad). A pageshow with
   // persisted=true means the page was restored from cache without a full reload,
@@ -2108,6 +2116,14 @@ function AuthedShiftBuilder() {
   const effectiveAssignments = shiftData.effectiveAssignments ?? assignments;
 
   const hasBoardPayload = shiftData.hasBoardPayload;
+  const nightAccessBlocked = shiftData.nightAccessBlocked;
+  const publishedOnlyRestricted = isPublishedOnlyViewer(permissions);
+  const showUnpublishedNight =
+    nightAccessBlocked ||
+    (publishedOnlyRestricted &&
+      currentNightStatus != null &&
+      currentNightStatus !== "published");
+  const boardInteractionLocked = isCurrentNightLocked || showUnpublishedNight;
   const boardColdLoading = shiftData.boardColdLoading;
   const boardBackgroundSync = shiftData.boardBackgroundSync;
   const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
@@ -3060,7 +3076,7 @@ function AuthedShiftBuilder() {
       return false;
     }
     if (!isNightEditable) {
-      showToast("This night is unpublished — your role can only edit published days", "error");
+      showToast("This night is unpublished — your role can only access published days", "error");
       return false;
     }
     return true;
@@ -7312,7 +7328,7 @@ function AuthedShiftBuilder() {
                 scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
                 calledOffIds={calledOffIds}
                 isDark={isDark}
-                isCurrentNightLocked={isCurrentNightLocked}
+                isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
@@ -7393,6 +7409,11 @@ function AuthedShiftBuilder() {
             >
               <div className="sb-builder-fluid-viewport w-full min-h-0 flex-1 flex flex-col">
               <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col">
+              <BuilderUnpublishedNightShell
+                show={showUnpublishedNight}
+                dayLabel={selectedDay.name}
+                className="flex min-h-0 flex-1 flex-col"
+              >
               <ShiftBuilderBoard
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
@@ -7416,7 +7437,7 @@ function AuthedShiftBuilder() {
                 isDark={isDark}
                 onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
                 isDraftMode={isDraftMode}
-                isCurrentNightLocked={isCurrentNightLocked}
+                isCurrentNightLocked={boardInteractionLocked}
                 loadingAssignments={boardColdLoading}
                 onDayPillClick={handleBoardDayPill}
                 onBreakGroupChange={handleBoardBreakGroupChange}
@@ -7472,6 +7493,7 @@ function AuthedShiftBuilder() {
                 onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
+              </BuilderUnpublishedNightShell>
               </div>
               </div>
               <BuilderPinnedFooter
@@ -7501,8 +7523,13 @@ function AuthedShiftBuilder() {
             }}
           >
             {/* The actual scaled artboard (original print-stage-inner) */}
+            <BuilderUnpublishedNightShell
+              show={showUnpublishedNight}
+              dayLabel={selectedDay.name}
+              className={`print-stage-inner ${isPrintPreview ? "overflow-visible" : "overflow-hidden"} ${relaxedFrameClass}`}
+            >
             <div
-              className={`print-stage-inner relative ${isPrintPreview ? "overflow-visible" : "overflow-hidden"} ${relaxedFrameClass}`}
+              className="relative h-full w-full"
               ref={positioningRef}
               style={{
                 width: goldenFrameWidth,
@@ -8023,7 +8050,7 @@ function AuthedShiftBuilder() {
                 isDark={isDark}
                 onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
                 isDraftMode={isDraftMode}
-                isCurrentNightLocked={isCurrentNightLocked}
+                isCurrentNightLocked={boardInteractionLocked}
                 loadingAssignments={boardColdLoading}
                 // auxDefs now from narrow Zustand selector in Board (3.4)
                 onDayPillClick={handleBoardDayPill}
@@ -8076,7 +8103,8 @@ function AuthedShiftBuilder() {
             {/* End of isolated board / weekly sheet. */}
 
             {/* Quick Action Fan removed... */}
-          </div> {/* /print-stage-inner (the scaled content) */}
+          </div> {/* /scaled artboard content */}
+            </BuilderUnpublishedNightShell>
 
           {/* Unscaled artboard overlay — centered inside the visual (scaled-size) frame.
               This + the relative wrapper above restore proper containment while giving

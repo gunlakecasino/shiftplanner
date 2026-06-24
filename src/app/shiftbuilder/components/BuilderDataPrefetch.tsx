@@ -2,23 +2,32 @@
 
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { warmSupabaseConnection } from "@/lib/supabase";
 import { prefetchBuilderWeek } from "../lib/builderPrefetch";
 
 /**
- * Runs during PIN gate + auth hydration — seeds week cache before AuthedShiftBuilder mounts.
+ * Seeds the operational week cache after PIN auth — never prefetches on the
+ * unauthenticated client fallback path (which could bypass publish policy).
  */
 export function BuilderDataPrefetch() {
   const queryClient = useQueryClient();
-  const startedRef = useRef(false);
+  const { isAuthenticated, user, permissions } = useOpsAuth();
+  const lastPrefetchedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
     void warmSupabaseConnection();
-    prefetchBuilderWeek(queryClient);
-  }, [queryClient]);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      lastPrefetchedUserIdRef.current = null;
+      return;
+    }
+    if (lastPrefetchedUserIdRef.current === user.id) return;
+    lastPrefetchedUserIdRef.current = user.id;
+    prefetchBuilderWeek(queryClient, permissions);
+  }, [isAuthenticated, user, permissions, queryClient]);
 
   return null;
 }

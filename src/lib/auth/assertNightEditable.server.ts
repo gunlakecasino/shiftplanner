@@ -29,6 +29,26 @@ async function loadNightStatus(ref: NightRef): Promise<string | null> {
   return null;
 }
 
+/** Viewers may only read or mutate published nights; planning roles may access drafts. */
+export async function assertActorCanReadNight(
+  permissions: ShiftBuilderPermissions,
+  ref: NightRef,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!permissions.canEditPublishedOnly || permissions.canSeeDraftData) {
+    return { ok: true };
+  }
+
+  const status = await loadNightStatus(ref);
+  if (status !== "published") {
+    return {
+      ok: false,
+      error: "This night is unpublished — your role can only access published days",
+    };
+  }
+
+  return { ok: true };
+}
+
 /** Viewers may only mutate published nights; planning roles may edit drafts. */
 export async function assertActorCanEditNight(
   permissions: ShiftBuilderPermissions,
@@ -42,7 +62,7 @@ export async function assertActorCanEditNight(
   if (status !== "published") {
     return {
       ok: false,
-      error: "This night is unpublished — your role can only edit published days",
+      error: "This night is unpublished — your role can only access published days",
     };
   }
 

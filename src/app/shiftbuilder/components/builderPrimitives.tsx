@@ -190,6 +190,61 @@ export function BuilderLoadingLine({
   );
 }
 
+/**
+ * Wraps the board so unpublished nights blur the card shell and show the status module.
+ * Use on both live-canvas and golden-frame render paths.
+ */
+export function BuilderUnpublishedNightShell({
+  show,
+  dayLabel,
+  children,
+  className = "",
+}: {
+  show: boolean;
+  dayLabel?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`relative min-h-0 ${show ? "sb-board-unpublished" : ""} ${className}`.trim()}
+    >
+      {children}
+      {show ? <BuilderViewerBlockedDay dayLabel={dayLabel} /> : null}
+    </div>
+  );
+}
+
+/** Compact “Unpublished” module centered over the blurred board. */
+export function BuilderViewerBlockedDay({
+  dayLabel,
+}: {
+  /** Screen readers only — not shown in the module UI. */
+  dayLabel?: string;
+}) {
+  const ariaLabel = dayLabel ? `${dayLabel} is unpublished` : "This night is unpublished";
+
+  return (
+    <>
+      <div
+        className="sb-unpublished-night-frost absolute inset-0 z-[180] no-print pointer-events-none"
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-0 z-[190] flex items-center justify-center p-8 no-print pointer-events-none"
+        role="status"
+        aria-live="polite"
+        aria-label={ariaLabel}
+      >
+        <div className="sb-unpublished-module">
+          <span className="sb-unpublished-module__dot" aria-hidden="true" />
+          <span className="sb-unpublished-module__label">Unpublished</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /** Subtle artboard veil during background sync only (not cold load). */
 export function BuilderCanvasVeil({ active }: { active: boolean }) {
   return (

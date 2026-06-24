@@ -7,8 +7,10 @@ import {
   startOfShiftWeek,
   type DayDef,
 } from "@/lib/shiftbuilder/dateUtils";
+import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { fetchNightCoreData } from "../hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "../hooks/fetchNightSecondaryData";
+import { nightFetchOptionsForPermissions } from "./viewerNightPolicy";
 
 export const OMS_SELECTED_DATE_KEY = "oms_selected_date";
 
@@ -37,9 +39,13 @@ export function getBuilderWeekDayDefs(): DayDef[] {
  * Seed TanStack cache for the operational week.
  * Safe to call during PIN gate, dynamic import shell, or post-auth.
  */
-export function prefetchBuilderWeek(queryClient: QueryClient): void {
+export function prefetchBuilderWeek(
+  queryClient: QueryClient,
+  permissions?: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null,
+): void {
   const dayDefs = getBuilderWeekDayDefs();
   const todayKey = formatLocalDateISO(currentShiftDate());
+  const fetchOptions = nightFetchOptionsForPermissions(permissions);
 
   dayDefs.forEach((def, i) => {
     const dateKey = formatLocalDateISO(def.date);
@@ -48,12 +54,12 @@ export function prefetchBuilderWeek(queryClient: QueryClient): void {
     window.setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ["nightCore", dateKey],
-        queryFn: () => fetchNightCoreData(def),
+        queryFn: () => fetchNightCoreData(def, fetchOptions),
         staleTime: 1000 * 60 * 5,
       });
       queryClient.prefetchQuery({
         queryKey: ["nightSecondary", dateKey],
-        queryFn: () => fetchNightSecondaryData(def),
+        queryFn: () => fetchNightSecondaryData(def, fetchOptions),
         staleTime: 1000 * 60 * 5,
       });
     }, delay);

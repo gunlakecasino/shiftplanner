@@ -2,7 +2,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BuilderBusyLabel, BuilderLoadingLine } from "./builderPrimitives";
+import { useRouter } from "next/navigation";
+import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { BuilderBusyLabel, BuilderLoadingLine, BuilderLoadingShell } from "./builderPrimitives";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifyGravesDefaultScheduleChanged } from "@/lib/shiftbuilder/scheduleCacheSync";
 import {
@@ -286,6 +288,9 @@ function ScheduleSection({
 }
 
 export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boolean }) {
+  const router = useRouter();
+  const { isAuthenticated, permissions } = useOpsAuth();
+  const canApplySchedules = permissions?.canApplySchedules ?? false;
   const queryClient = useQueryClient();
   const [grid, setGrid] = useState<GridData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -297,6 +302,13 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
     Map<string, { tmId: string; band: GravesBand; days: GravesDaysMap }>
   >(new Map());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!canApplySchedules) {
+      router.replace("/shiftbuilder");
+    }
+  }, [isAuthenticated, canApplySchedules, router]);
 
   const applyGrid = useCallback((data: unknown) => {
     setGrid(parseGridPayload(data));
@@ -318,8 +330,9 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
   }, [applyGrid]);
 
   useEffect(() => {
+    if (!canApplySchedules) return;
     load();
-  }, [load]);
+  }, [load, canApplySchedules]);
 
   const flushSave = useCallback(async () => {
     const pending = Array.from(pendingRef.current.values());
@@ -442,6 +455,15 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
     },
     [grid, applyGrid, load, queryClient],
   );
+
+  if (!isAuthenticated || !canApplySchedules) {
+    return (
+      <BuilderLoadingShell
+        label="REDIRECTING"
+        sublabel="Graves default schedule requires planning access"
+      />
+    );
+  }
 
   return (
     <div

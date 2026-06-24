@@ -18,7 +18,10 @@ export function ReportsShell() {
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
-  const { user: currentOperator, logout: logoutOperator } = useOpsAuth();
+  const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  const canAccessSudo = permissions?.canAccessSudo ?? false;
+  const canAccessReports = permissions?.canAccessReports ?? false;
+  const showShiftBuilderLink = canAccessSudo || canAccessReports;
   const [now, setNow] = React.useState(() => new Date());
 
   React.useEffect(() => {
@@ -64,24 +67,28 @@ export function ReportsShell() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => router.push("/shiftbuilder/settings?tab=reports")}
-              className="sb-settings-back-btn sb-interactive"
-            >
-              <Settings2 size={15} strokeWidth={2.1} />
-              Settings
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/shiftbuilder")}
-              className="sb-settings-back-btn sb-interactive"
-            >
-              <ArrowLeft size={15} strokeWidth={2.25} />
-              Shift Builder
-            </button>
-          </div>
+          {showShiftBuilderLink ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {canAccessSudo ? (
+                <button
+                  type="button"
+                  onClick={() => router.push("/shiftbuilder/settings?tab=reports")}
+                  className="sb-settings-back-btn sb-interactive"
+                >
+                  <Settings2 size={15} strokeWidth={2.1} />
+                  Settings
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => router.push("/shiftbuilder")}
+                className="sb-settings-back-btn sb-interactive"
+              >
+                <ArrowLeft size={15} strokeWidth={2.25} />
+                Shift Builder
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <nav className="sb-settings-glass-pill mb-5" aria-label="Reports chrome">
@@ -115,7 +122,9 @@ export function ReportsShell() {
                 onClick={() => {
                   if (confirm(`Sign out ${currentOperator.full_name}?`)) {
                     logoutOperator();
-                    router.push("/shiftbuilder");
+                    router.push(
+                      showShiftBuilderLink ? "/shiftbuilder" : "/shiftbuilder/reports",
+                    );
                   }
                 }}
                 className="sb-settings-user-btn sb-interactive"

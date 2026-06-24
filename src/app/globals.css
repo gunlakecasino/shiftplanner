@@ -2967,3 +2967,91 @@ button,
 .dark .builder-workspace .sb-coverage-bar.sb-coverage-bar--gold-accent .sb-coverage-bar-label {
   color: #ffdb4d !important;
 }
+
+/* Unpublished night — viewer / admin roles see blurred card shell, not a blank board */
+.sb-board-unpublished {
+  isolation: isolate;
+}
+
+.sb-board-unpublished .builder-workspace {
+  filter: blur(5px) grayscale(0.55) saturate(0.65);
+  opacity: 0.38;
+  pointer-events: none;
+  user-select: none;
+  transform: scale(0.992);
+  transform-origin: center top;
+}
+
+.sb-unpublished-night-frost {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #f5f3ef 42%, transparent) 0%,
+    color-mix(in srgb, #ebe8e2 58%, transparent) 100%
+  );
+  backdrop-filter: blur(2px);
+}
+
+.dark .sb-board-unpublished .builder-workspace {
+  filter: blur(6px) grayscale(0.4) saturate(0.5);
+  opacity: 0.32;
+}
+
+.dark .sb-unpublished-night-frost {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #1c1c1e 55%, transparent) 0%,
+    color-mix(in srgb, #0f0f10 72%, transparent) 100%
+  );
+}
+
+/* Compact unpublished status module — centered over blurred board */
+.sb-unpublished-module {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px 11px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, #000 8%, transparent);
+  background: color-mix(in srgb, #faf9f7 78%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 65%, transparent) inset,
+    0 12px 32px color-mix(in srgb, #000 10%, transparent),
+    0 2px 8px color-mix(in srgb, #000 6%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  font-family: var(--font-atkinson, var(--font-ui, system-ui));
+}
+
+.sb-unpublished-module__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #8e8e93 88%, #fff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, #8e8e93 18%, transparent);
+  flex-shrink: 0;
+}
+
+.sb-unpublished-module__label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, #1c1c1e 82%, #6c6c72);
+  line-height: 1;
+}
+
+.dark .sb-unpublished-module {
+  border-color: color-mix(in srgb, #fff 12%, transparent);
+  background: color-mix(in srgb, #2c2c2e 72%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset,
+    0 12px 36px color-mix(in srgb, #000 42%, transparent);
+}
+
+.dark .sb-unpublished-module__dot {
+  background: color-mix(in srgb, #aeaeb2 90%, #fff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, #aeaeb2 22%, transparent);
+}
+
+.dark .sb-unpublished-module__label {
+  color: color-mix(in srgb, #f2f2f7 88%, #aeaeb2);
+}

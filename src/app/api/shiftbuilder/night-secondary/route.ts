@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache, unstable_noStore } from "next/cache";
+import { assertActorCanReadNight } from "@/lib/auth/assertNightEditable.server";
 import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import { parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { buildNightSecondaryBundle } from "@/lib/shiftbuilder/nightSecondaryBundle.server";
@@ -31,6 +32,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const readCheck = await assertActorCanReadNight(session.actor.permissions, {
+      date: dateParam,
+    });
+    if (!readCheck.ok) {
+      return NextResponse.json({ error: readCheck.error }, { status: 403 });
+    }
+
     const cached = unstable_cache(
       () => buildNightSecondaryBundle(dateParam),
       ["shiftbuilder-night-secondary", dateParam],

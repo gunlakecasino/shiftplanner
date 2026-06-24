@@ -72,3 +72,19 @@ export async function requireOpsPermission(
 
   return session;
 }
+
+/** Require an authenticated session with at least one of the given permission bits. */
+export async function requireOpsAnyPermission(
+  request: NextRequest | Request,
+  keys: PermissionKey[],
+): Promise<OpsSessionResult> {
+  const session = await requireOpsSession(request);
+  if (!session.ok) return session;
+
+  const allowed = keys.some((key) => hasOpsPermission(session.actor.permissions, key));
+  if (!allowed) {
+    return { ok: false, status: 403, error: "Insufficient permissions" };
+  }
+
+  return session;
+}

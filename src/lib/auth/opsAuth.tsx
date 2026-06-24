@@ -8,6 +8,8 @@ import {
   mergePermissions,
 } from "./permissions";
 import { humanizeLoginError } from "./loginErrors";
+import { notifyOpsSessionChanged } from "./opsSessionQueryCache";
+import { resolveDisplayRole } from "./roleStorage";
 
 export type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
 import type { OpsRole, OpsUser, ShiftBuilderPermissions } from "./opsAuthTypes";
@@ -65,13 +67,15 @@ function rememberLastOpsUserId(userId: string): void {
 }
 
 function mapApiUser(raw: Record<string, unknown>): OpsUser {
+  const permissions = (raw.permissions as Partial<ShiftBuilderPermissions> | null) ?? null;
+  const storedRole = String(raw.role ?? "viewer");
   return {
     id: String(raw.id),
     email: String(raw.email ?? ""),
     full_name: String(raw.full_name ?? ""),
     username: String(raw.username ?? ""),
-    role: raw.role as OpsRole,
-    permissions: (raw.permissions as Partial<ShiftBuilderPermissions> | null) ?? null,
+    role: resolveDisplayRole(storedRole, permissions) as OpsRole,
+    permissions,
     must_change_pin: Boolean(raw.must_change_pin),
   };
 }
@@ -123,10 +127,17 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     if (!nextUser) {
       setUser(null);
       setPinChangeToken(null);
+      notifyOpsSessionChanged();
       return;
     }
-    if (!prev || permissionsChanged(prev, nextUser) || prev.must_change_pin !== nextUser.must_change_pin) {
+    const identityChanged =
+      !prev ||
+      prev.id !== nextUser.id ||
+      permissionsChanged(prev, nextUser) ||
+      prev.must_change_pin !== nextUser.must_change_pin;
+    if (identityChanged) {
       setUser(nextUser);
+      notifyOpsSessionChanged();
     }
   }, []);
 
@@ -269,7 +280,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
 
   const completePinChange = useCallback((updated: OpsUser) => {
     const safeUser: OpsUser = { ...updated, must_change_pin: false };
-    setUser(safeUser);
+    applySessionUser(safeUser);
     setPinChangeToken(null);
     logOpsAudit({
       action: "session_start",
@@ -278,7 +289,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
       payload: { role: safeUser.role, source: "pin_gate_after_change" },
     });
     void refreshSession();
-  }, [refreshSession]);
+  }, [applySessionUser, refreshSession]);
 
   const logout = useCallback(async () => {
     if (user) {
@@ -296,6 +307,7 @@ export function OpsAuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     setPinChangeToken(null);
+    notifyOpsSessionChanged();
   }, [user]);
 
   const hasRole = useCallback(

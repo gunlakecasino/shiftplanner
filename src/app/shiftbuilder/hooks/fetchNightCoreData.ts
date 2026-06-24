@@ -59,7 +59,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
   };
 }
 
-function emptyNightCoreResult() {
+function emptyNightCoreResult(accessBlocked = false) {
   return {
     nightId: null,
     assignments: {} as Record<string, unknown>,
@@ -75,12 +75,15 @@ function emptyNightCoreResult() {
     rawDbAssignments: [] as unknown[],
     rawBreakRows: [] as unknown[],
     slotDefaultBreaks: {} as Record<string, number>,
+    accessBlocked,
   };
 }
 
 export type FetchNightCoreOptions = {
   /** When true, server rejects unpublished historical nights (403). */
   todayPolicy?: boolean;
+  /** When true, treat 403 as blocked access (viewer published-only policy). */
+  publishedOnlyPolicy?: boolean;
 };
 
 /** Primary path: one browser → Next server hop with parallel Supabase on the server. */
@@ -93,8 +96,8 @@ async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOpt
     credentials: "same-origin",
     cache: "no-store",
   });
-  if (res.status === 403 && options?.todayPolicy) {
-    return emptyNightCoreResult();
+  if (res.status === 403) {
+    return emptyNightCoreResult(true);
   }
   if (!res.ok) return null;
   const raw = (await res.json()) as NightCoreApiPayload;
@@ -227,8 +230,8 @@ export async function fetchNightCoreData(
     console.warn("[fetchNightCoreData] API path failed, using fallback", e);
   }
 
-  if (options?.todayPolicy) {
-    return emptyNightCoreResult();
+  if (options?.todayPolicy || options?.publishedOnlyPolicy) {
+    return emptyNightCoreResult(options?.publishedOnlyPolicy ?? false);
   }
 
   return fetchNightCoreClientFallback(selectedDay);

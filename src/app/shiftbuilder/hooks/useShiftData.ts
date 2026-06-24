@@ -15,6 +15,8 @@ import {
   setBoardAssignmentsDayKey,
 } from "@/lib/shiftbuilder/liveCache";
 import { patchNightCoreAssignmentsCache } from "@/lib/shiftbuilder/scheduleCacheSync";
+import { nightFetchOptionsForPermissions } from "../lib/viewerNightPolicy";
+import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 
 /**
  * useShiftData
@@ -67,6 +69,8 @@ export interface UseShiftDataReturn {
 
   // Loading / UI state derived from query + local payload check
   hasBoardPayload: boolean;
+  /** Viewer on an unpublished night — schedule data is withheld. */
+  nightAccessBlocked: boolean;
   boardColdLoading: boolean;
   boardBackgroundSync: boolean;
 
@@ -84,6 +88,10 @@ export type UseShiftDataOptions = {
   nightCoreEnabled?: boolean;
   /** Server-side publish gate for /today night-core requests. */
   todayPolicy?: boolean;
+  /** Viewer role — only published nights are loaded. */
+  publishedOnlyPolicy?: boolean;
+  /** When set, derives publishedOnlyPolicy from effective permissions. */
+  permissions?: Pick<ShiftBuilderPermissions, "canEditPublishedOnly" | "canSeeDraftData"> | null;
 };
 
 export function useShiftData(
@@ -91,9 +99,14 @@ export function useShiftData(
   options?: UseShiftDataOptions,
 ): UseShiftDataReturn {
   const nightCoreEnabled = options?.nightCoreEnabled !== false;
+  const permissionFetchOptions = nightFetchOptionsForPermissions(options?.permissions);
+  const publishedOnlyPolicy =
+    options?.publishedOnlyPolicy ?? permissionFetchOptions.publishedOnlyPolicy;
+
   const currentNight = useCurrentNight(selectedDay, {
     enabled: nightCoreEnabled,
     todayPolicy: options?.todayPolicy,
+    publishedOnlyPolicy,
   });
 
   const storeAssignments = useAssignments();
@@ -233,9 +246,15 @@ export function useShiftData(
     return stableRefs.current.assignments;
   }, [currentNight.assignments]);
 
+  const nightAccessBlocked = Boolean(
+    (currentNight as { accessBlocked?: boolean }).accessBlocked,
+  );
+
   const hasBoardPayload = React.useMemo(
-    () => Object.keys(effectiveAssignments).length > 0 || currentNight.nightId != null,
-    [effectiveAssignments, currentNight.nightId]
+    () =>
+      !nightAccessBlocked &&
+      (Object.keys(effectiveAssignments).length > 0 || currentNight.nightId != null),
+    [effectiveAssignments, currentNight.nightId, nightAccessBlocked],
   );
   const boardColdLoading = currentNight.isCoreLoading && !hasBoardPayload;
   const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
@@ -256,6 +275,13 @@ export function useShiftData(
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (hydratedAssignmentsDayRef.current === dayKey) return;
     if (boardColdLoading || currentNight.isCoreFetching) return;
+
+    if (nightAccessBlocked) {
+      useShiftBuilderStore.getState().setAssignments({});
+      setBoardAssignmentsDayKey(dayKey);
+      hydratedAssignmentsDayRef.current = dayKey;
+      return;
+    }
 
     const fromQuery = currentNight.assignments;
     if (fromQuery === undefined) return;
@@ -307,6 +333,7 @@ export function useShiftData(
     currentNight.queryClient,
     currentNight.assignments,
     bumpLiveAssignVersion,
+    nightAccessBlocked,
   ]);
 
   // Public helpers for action paths (applyDraft, drag persist, engine runs, etc.)
@@ -343,6 +370,7 @@ export function useShiftData(
     effectiveRecentZoneHistory,
     effectiveCardBorders,
     hasBoardPayload,
+    nightAccessBlocked,
     boardColdLoading,
     boardBackgroundSync,
     liveAssignVersion,

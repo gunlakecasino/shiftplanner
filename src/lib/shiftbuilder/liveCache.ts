@@ -220,6 +220,16 @@ export const liveAssignmentsStore = create<LiveAssignmentsState>()(
     })),
 })));
 
+/** Wipe cross-day assignment mirrors after PIN session change (prevents role-to-role bleed). */
+export function resetLiveCrossDayCache(): void {
+  liveAssignmentsStore.setState({
+    assignmentsByNight: {},
+    breakAssignmentsByNight: {},
+    lastUpdated: {},
+  });
+  setBoardAssignmentsDayKey(null);
+}
+
 // ============================================================================
 // REALTIME BRIDGE
 // ============================================================================

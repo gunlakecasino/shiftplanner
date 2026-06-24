@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { QueryProvider } from "../providers";
+import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
+
 const GravesDefaultSchedulePage = dynamic(
   () =>
     import("../components/GravesDefaultSchedulePage").then((m) => ({
@@ -16,7 +18,9 @@ const GravesDefaultSchedulePage = dynamic(
 export default function GravesScheduleRoute() {
   return (
     <QueryProvider>
-      <GravesDefaultSchedulePage />
+      <PostPinRouteGuard>
+        <GravesDefaultSchedulePage />
+      </PostPinRouteGuard>
     </QueryProvider>
   );
 }

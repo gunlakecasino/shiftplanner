@@ -1,19 +1,36 @@
 import type { ShiftBuilderPermissions } from "./opsAuth";
 
 /** Operator surface after PIN authentication. */
-export type OpsSurface = "admin" | "team";
+export type OpsSurface = "sudo" | "admin" | "reports" | "team";
 
-const ADMIN_PREFIXES = ["/shiftbuilder/settings", "/shiftbuilder/reports"] as const;
-const TEAM_HOME = "/shiftbuilder";
-const ADMIN_HOME = "/shiftbuilder";
+const BUILDER_HOME = "/shiftbuilder";
+const REPORTS_HOME = "/shiftbuilder/reports";
+const SETTINGS_PREFIX = "/shiftbuilder/settings";
+const GRAVES_SCHEDULE_PREFIX = "/shiftbuilder/graves-schedule";
 
 export function resolveOpsSurface(permissions: ShiftBuilderPermissions): OpsSurface {
-  return permissions.canAccessSudo ? "admin" : "team";
+  if (permissions.canAccessSudo) return "sudo";
+  if (permissions.canAccessReports && permissions.canEditPublishedOnly) return "admin";
+  if (permissions.canAccessReports) return "reports";
+  return "team";
 }
 
 /** Default landing route immediately after a successful PIN entry. */
 export function homeRouteForSurface(surface: OpsSurface): string {
-  return surface === "admin" ? ADMIN_HOME : TEAM_HOME;
+  if (surface === "reports") return REPORTS_HOME;
+  return BUILDER_HOME;
+}
+
+function isReportsPath(pathname: string): boolean {
+  return pathname.startsWith(REPORTS_HOME);
+}
+
+function isSettingsPath(pathname: string): boolean {
+  return pathname.startsWith(SETTINGS_PREFIX);
+}
+
+function isGravesSchedulePath(pathname: string): boolean {
+  return pathname.startsWith(GRAVES_SCHEDULE_PREFIX);
 }
 
 /** Returns a redirect target when the operator cannot access `pathname`, else null. */
@@ -21,13 +38,30 @@ export function guardAuthenticatedRoute(
   pathname: string,
   surface: OpsSurface,
 ): string | null {
-  if (surface === "team" && ADMIN_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return TEAM_HOME;
+  if (surface === "team") {
+    if (isSettingsPath(pathname) || isReportsPath(pathname) || isGravesSchedulePath(pathname)) {
+      return BUILDER_HOME;
+    }
+    return null;
   }
+
+  if (surface === "admin") {
+    if (isSettingsPath(pathname) || isGravesSchedulePath(pathname)) return BUILDER_HOME;
+    return null;
+  }
+
+  if (surface === "reports") {
+    if (isSettingsPath(pathname)) return REPORTS_HOME;
+    if (pathname.startsWith("/shiftbuilder") && !isReportsPath(pathname)) {
+      return REPORTS_HOME;
+    }
+    return null;
+  }
+
   return null;
 }
 
-/** Post-login destination: honor admin deep links; team always lands on canvas. */
+/** Post-login destination: honor deep links the operator is allowed to use. */
 export function postPinDestination(
   pathname: string,
   permissions: ShiftBuilderPermissions,
@@ -40,5 +74,9 @@ export function postPinDestination(
 }
 
 export function isAdminRoute(pathname: string): boolean {
-  return ADMIN_PREFIXES.some((p) => pathname.startsWith(p));
+  return isSettingsPath(pathname);
+}
+
+export function isReportsRoute(pathname: string): boolean {
+  return isReportsPath(pathname);
 }

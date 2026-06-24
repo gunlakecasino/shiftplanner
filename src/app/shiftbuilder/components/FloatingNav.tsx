@@ -32,6 +32,7 @@ import {
   FilePenLine,
   Check,
   CalendarDays,
+  BarChart2,
 } from "lucide-react";
 
 export interface DayItem {
@@ -164,11 +165,13 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canPublish = permissions?.canPublish ?? false;
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
+  const canAccessReports = permissions?.canAccessReports ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
   const showDraftTools = canSeeDraftData && canEditAssignments;
   const showPublishControls = canPublish;
   const showEngineTools = canRunEngine;
   const showAdminLinks = canAccessSudo;
+  const showReportsLink = canAccessReports;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -700,6 +703,16 @@ export default function FloatingNav(props: FloatingNavProps) {
                   >
                     Settings
                   </button>
+                )}
+                {showReportsLink && (
+                  <Link
+                    href="/shiftbuilder/reports"
+                    className={menuItemClass}
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <BarChart2 size={14} />
+                    Reports
+                  </Link>
                 )}
                 <button type="button" className={menuItemClass} onClick={() => { onLogout?.(); setProfileOpen(false); }}>
                   Sign out

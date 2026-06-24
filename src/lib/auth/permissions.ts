@@ -10,8 +10,16 @@ function permissionsBaseRole(user: Pick<OpsUser, "role" | "permissions">): OpsRo
   return user.role;
 }
 
+/** Primary roles with a fixed capability contract — legacy DB overrides cannot widen access. */
+const CANONICAL_TEMPLATE_ROLES: OpsRole[] = ["admin", "viewer"];
+
 export function getEffectivePermissions(user: Pick<OpsUser, "role" | "permissions">): ShiftBuilderPermissions {
   const baseRole = permissionsBaseRole(user);
+
+  if (CANONICAL_TEMPLATE_ROLES.includes(baseRole)) {
+    return getPermissionsForRole(baseRole);
+  }
+
   const base = getPermissionsForRole(baseRole);
   let effective = mergePermissions(base, user.permissions);
   if (!["sudo_admin", "graves_ops_super"].includes(user.role)) {
@@ -30,13 +38,27 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: false,
         canSeeDraftData: false,
         canAccessSudo: false,
+        canAccessReports: false,
+        canRunEngine: false,
+        canManageTeam: false,
+        canEditPublishedOnly: true,
+      };
+
+    case "admin":
+      return {
+        canEditAssignments: true,
+        canLockUnlock: false,
+        canApplySchedules: false,
+        canPublish: false,
+        canSeeDraftData: false,
+        canAccessSudo: false,
+        canAccessReports: true,
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
       };
 
     case "sudo_admin":
-    case "admin":
     case "ops_director":
       return {
         canEditAssignments: true,
@@ -45,6 +67,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: true,
         canSeeDraftData: true,
         canAccessSudo: true,
+        canAccessReports: true,
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
@@ -58,6 +81,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: true,
         canSeeDraftData: true,
         canAccessSudo: true,
+        canAccessReports: true,
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
@@ -71,6 +95,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: false,
         canSeeDraftData: false,
         canAccessSudo: false,
+        canAccessReports: false,
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
@@ -85,6 +110,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: false,
         canSeeDraftData: false,
         canAccessSudo: false,
+        canAccessReports: false,
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
@@ -100,6 +126,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canPublish: false,
         canSeeDraftData: false,
         canAccessSudo: false,
+        canAccessReports: false,
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
@@ -120,6 +147,9 @@ export function mergePermissions(
   if (typeof overrides.canPublish === "boolean") sanitized.canPublish = overrides.canPublish;
   if (typeof overrides.canSeeDraftData === "boolean") sanitized.canSeeDraftData = overrides.canSeeDraftData;
   if (typeof overrides.canAccessSudo === "boolean") sanitized.canAccessSudo = overrides.canAccessSudo;
+  if (typeof overrides.canAccessReports === "boolean") {
+    sanitized.canAccessReports = overrides.canAccessReports;
+  }
   if (typeof overrides.canRunEngine === "boolean") sanitized.canRunEngine = overrides.canRunEngine;
   if (typeof overrides.canManageTeam === "boolean") sanitized.canManageTeam = overrides.canManageTeam;
   if (typeof overrides.canEditPublishedOnly === "boolean") {
