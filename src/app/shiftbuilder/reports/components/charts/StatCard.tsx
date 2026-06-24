@@ -24,7 +24,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "sb-reports-stat-card group relative overflow-hidden rounded-2xl border p-4",
+        "sb-reports-stat-card group rounded-2xl border p-4",
         className,
       )}
       style={{
@@ -32,11 +32,7 @@ export function StatCard({
         background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 6%, var(--ios-background-secondary)) 0%, var(--ios-background-secondary) 55%)`,
       }}
     >
-      <div
-        className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-[0.12]"
-        style={{ background: accent }}
-      />
-      <div className="relative flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-[1.2px] text-[var(--ios-label-tertiary)]">
             {label}
