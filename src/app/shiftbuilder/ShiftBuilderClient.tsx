@@ -124,6 +124,7 @@ import WeeklyOverview from "./components/WeeklyOverview";
 // See the long comments below about Lazy* + effect-driven dynamic imports for
 // anything that must not be required at Client evaluation time.
 import { useShiftData } from "./hooks/useShiftData";
+import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
   initLiveCacheForNight,
@@ -1984,29 +1985,24 @@ function AuthedShiftBuilder() {
     permissions,
   });
 
-  // Force fresh data on bfcache restore (common on Safari / iPad). A pageshow with
-  // persisted=true means the page was restored from cache without a full reload,
-  // so our 'always' refetchOnMount may not have run. Invalidate to pull latest.
-  React.useEffect(() => {
-    const onPageShow = (evt: Event) => {
-      const e = evt as PageTransitionEvent;
-      if (e.persisted) {
-        const qc = shiftData.currentNight?.queryClient;
-        const dayKey = formatLocalDateISO(selectedDay.date);
-        if (qc) {
-          // Invalidate so the queries refetch fresh bundles (server reval + bust params ensure latest)
-          qc.invalidateQueries({ queryKey: ["nightCore", dayKey] }).catch(() => {});
-          qc.invalidateQueries({ queryKey: ["nightSecondary", dayKey] }).catch(() => {});
-        }
-      }
-    };
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, [selectedDay.date, shiftData.currentNight?.queryClient]);
-
   // Back-compat aliases so the rest of this file (hundreds of references) continues to work
   // with minimal further edits in this slice. Over time these can be inlined to shiftData.* .
   const currentNight = shiftData.currentNight;
+
+  const [realtimeResumeEpoch, setRealtimeResumeEpoch] = React.useState(0);
+  const idleResumeExtraRef = React.useRef<(() => void) | null>(null);
+
+  useShiftBuilderIdleResume({
+    enabled: true,
+    queryClient: currentNight.queryClient,
+    nightId: currentNight.nightId ?? null,
+    dateKey: formatLocalDateISO(selectedDay.date),
+    onResume: () => {
+      setRealtimeResumeEpoch((e) => e + 1);
+      shiftData.bumpLiveAssignVersion();
+      idleResumeExtraRef.current?.();
+    },
+  });
 
   // Flex aux row — immediate persist (resolves nightId if needed, patches query cache)
   const auxDefsLatestRef = React.useRef(auxDefs);
@@ -2691,7 +2687,7 @@ function AuthedShiftBuilder() {
         cleanup?.();
       };
     }
-  }, [queryNightId, selectedDay.date, currentNight.queryClient]);
+  }, [queryNightId, selectedDay.date, currentNight.queryClient, realtimeResumeEpoch]);
 
   const builderOperatorName =
     currentOperator?.full_name?.trim() ||
@@ -2826,7 +2822,7 @@ function AuthedShiftBuilder() {
         }
       });
     };
-  }, [nightId, selectedDay.date]);
+  }, [nightId, selectedDay.date, realtimeResumeEpoch]);
 
   // Day arrow navigation — cross GRAVE week boundaries seamlessly.
   const goPrevDay = React.useCallback(() => {
@@ -3832,22 +3828,36 @@ function AuthedShiftBuilder() {
   // (optimistic writes + realtime bridge from useLiveAssignments + liveCache).
   const alreadyAssignedThisNight = React.useMemo(() => {
     const set = new Set<string>();
-    // Local legacy
-    Object.values(assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    Object.values(draftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    // TanStack Query (initial load + some updates)
-    if (currentNight?.assignments) {
-      Object.values(currentNight.assignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    }
-    // The actual source the cards render from (Zustand + live layer)
-    Object.values(storeAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    Object.values(storeDraftAssignments).forEach((a: any) => a?.tmId && set.add(a.tmId));
-    // Live optimistic + realtime (for anything that bypasses the main store)
     const dateKey = formatLocalDateISO(selectedDay.date);
+    const boardReadyForDay = getBoardAssignmentsDayKey() === dateKey;
+
+    const absorb = (src: Record<string, any> | undefined | null) => {
+      if (!src) return;
+      Object.values(src).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    };
+
+    // Query cache is authoritative while the board store is still hydrating another day.
+    absorb(currentNight?.assignments as Record<string, any> | undefined);
+
+    if (boardReadyForDay) {
+      absorb(assignments);
+      absorb(draftAssignments);
+      absorb(storeAssignments);
+      absorb(storeDraftAssignments);
+    }
+
     const liveForNight = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
-    Object.values(liveForNight).forEach((a: any) => a?.tmId && set.add(a.tmId));
+    absorb(liveForNight);
     return set;
-  }, [assignments, draftAssignments, currentNight?.assignments, storeAssignments, storeDraftAssignments, selectedDay, liveAssignVersion]);
+  }, [
+    assignments,
+    draftAssignments,
+    currentNight?.assignments,
+    storeAssignments,
+    storeDraftAssignments,
+    selectedDay,
+    liveAssignVersion,
+  ]);
 
   // Fresh assignments view for PlacementPad / CMD-K / clear-board.
   // Must mirror the board store exactly — layering legacy/query/live with Object.assign
@@ -3861,6 +3871,12 @@ function AuthedShiftBuilder() {
   // 1. Default = scheduled tonight (correct band) + eligible + unassigned
   // 2. Search = all eligible roster TMs; can add on-call for tonight
   const [pickerScheduleEpoch, setPickerScheduleEpoch] = React.useState(0);
+
+  React.useEffect(() => {
+    idleResumeExtraRef.current = () => {
+      setPickerScheduleEpoch((e) => e + 1);
+    };
+  });
 
   const effectiveGrave = fullGraveScheduledTonight;
   const effectivePM = pmOverlapScheduledTonight;

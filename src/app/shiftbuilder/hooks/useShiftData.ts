@@ -114,6 +114,8 @@ export function useShiftData(
 
   const storeAssignments = useAssignments();
   const storeDraftAssignments = useDraftAssignments();
+  const selectedDateKey = formatLocalDateISO(selectedDay.date);
+  const stabilizedDateKeyRef = React.useRef(selectedDateKey);
 
   // === Stable refs for effective values ===
   // Prevents fresh {} / new Set() / new [] literals on every render from query ?? defaults
@@ -132,6 +134,24 @@ export function useShiftData(
     cardBorders: {} as Record<string, string>,
     assignments: {} as Record<string, any>,
   });
+
+  // Day switch: drop stabilized roster/scheduled snapshots so picker rails don't show the prior night.
+  React.useEffect(() => {
+    if (stabilizedDateKeyRef.current === selectedDateKey) return;
+    stabilizedDateKeyRef.current = selectedDateKey;
+    stableRefs.current.realRoster = [];
+    stableRefs.current.graveRoster = [];
+    stableRefs.current.gravesScheduleRoster = [];
+    stableRefs.current.fullGrave = new Set<string>();
+    stableRefs.current.pmOverlap = new Set<string>();
+    stableRefs.current.amOverlap = new Set<string>();
+    stableRefs.current.scheduledTm = new Set<string>();
+    stableRefs.current.recentZoneHistory = null;
+    stableRefs.current.cardBorders = {};
+    stableRefs.current.assignments = {};
+  }, [selectedDateKey]);
+
+  const rosterDataAuthoritative = !currentNight.isCorePlaceholder;
 
   // Lightweight content signature for small collections (roster ids, border keys, set members).
   // Handles Map (used by recentZoneHistory) so that sig diffing works for stabilization
@@ -174,6 +194,7 @@ export function useShiftData(
   }, [currentNight.graveRoster]);
 
   const effectiveGravesScheduleRoster = React.useMemo(() => {
+    if (!rosterDataAuthoritative) return stableRefs.current.gravesScheduleRoster;
     const src = currentNight.gravesScheduleRoster;
     if (!src || src.length === 0) return stableRefs.current.gravesScheduleRoster;
     const s = sigOf(src);
@@ -181,7 +202,7 @@ export function useShiftData(
       stableRefs.current.gravesScheduleRoster = [...src];
     }
     return stableRefs.current.gravesScheduleRoster;
-  }, [currentNight.gravesScheduleRoster]);
+  }, [currentNight.gravesScheduleRoster, rosterDataAuthoritative]);
 
   const stabilizeSet = (
     key: "fullGrave" | "pmOverlap" | "amOverlap" | "scheduledTm",
@@ -196,23 +217,35 @@ export function useShiftData(
   };
 
   const fullGraveScheduledTonight = React.useMemo(
-    () => stabilizeSet("fullGrave", currentNight.fullGraveScheduledTonight as Set<string> | undefined),
-    [currentNight.fullGraveScheduledTonight],
+    () =>
+      rosterDataAuthoritative
+        ? stabilizeSet("fullGrave", currentNight.fullGraveScheduledTonight as Set<string> | undefined)
+        : stableRefs.current.fullGrave,
+    [currentNight.fullGraveScheduledTonight, rosterDataAuthoritative],
   );
 
   const pmOverlapScheduledTonight = React.useMemo(
-    () => stabilizeSet("pmOverlap", currentNight.pmOverlapScheduledTonight as Set<string> | undefined),
-    [currentNight.pmOverlapScheduledTonight],
+    () =>
+      rosterDataAuthoritative
+        ? stabilizeSet("pmOverlap", currentNight.pmOverlapScheduledTonight as Set<string> | undefined)
+        : stableRefs.current.pmOverlap,
+    [currentNight.pmOverlapScheduledTonight, rosterDataAuthoritative],
   );
 
   const amOverlapScheduledTonight = React.useMemo(
-    () => stabilizeSet("amOverlap", currentNight.amOverlapScheduledTonight as Set<string> | undefined),
-    [currentNight.amOverlapScheduledTonight],
+    () =>
+      rosterDataAuthoritative
+        ? stabilizeSet("amOverlap", currentNight.amOverlapScheduledTonight as Set<string> | undefined)
+        : stableRefs.current.amOverlap,
+    [currentNight.amOverlapScheduledTonight, rosterDataAuthoritative],
   );
 
   const effectiveScheduledTmIdsTonight = React.useMemo(
-    () => stabilizeSet("scheduledTm", currentNight.scheduledTmIdsTonight as Set<string> | undefined),
-    [currentNight.scheduledTmIdsTonight],
+    () =>
+      rosterDataAuthoritative
+        ? stabilizeSet("scheduledTm", currentNight.scheduledTmIdsTonight as Set<string> | undefined)
+        : stableRefs.current.scheduledTm,
+    [currentNight.scheduledTmIdsTonight, rosterDataAuthoritative],
   );
 
   const effectiveRecentZoneHistory = React.useMemo(() => {

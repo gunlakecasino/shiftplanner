@@ -465,18 +465,53 @@ export async function replaceNightSlotTasksForSlotServer(params: {
     taskColor?: string | null;
     isCoverage?: boolean;
   }>;
+  /** When true, re-insert existing is_coverage rows after applying the new task list. */
+  preserveCoverage?: boolean;
 }): Promise<number> {
   const client = adminClient();
-  const { nightId, slotKey, rrSide, slotType, tasks } = params;
+  const { nightId, slotKey, rrSide, slotType, tasks, preserveCoverage = false } = params;
+
+  let preservedCoverage: Array<{
+    taskLabel: string;
+    sortOrder?: number;
+    taskColor?: string | null;
+    isCoverage: boolean;
+  }> = [];
+
+  if (preserveCoverage) {
+    let covQ = client
+      .from("night_slot_tasks")
+      .select("task_label, sort_order, color")
+      .eq("night_id", nightId)
+      .eq("slot_key", slotKey)
+      .eq("is_coverage", true);
+    covQ = rrSide ? covQ.eq("rr_side", rrSide) : covQ.is("rr_side", null);
+    const { data: covRows, error: covErr } = await covQ.order("sort_order", { ascending: true });
+    if (covErr) throw new Error(`Task replace coverage read failed: ${covErr.message}`);
+    preservedCoverage = (covRows ?? []).map((r, idx) => ({
+      taskLabel: r.task_label as string,
+      sortOrder: (r.sort_order as number | null) ?? idx,
+      taskColor: (r.color as string | null) ?? null,
+      isCoverage: true,
+    }));
+  }
 
   let del = client.from("night_slot_tasks").delete().eq("night_id", nightId).eq("slot_key", slotKey);
   del = rrSide ? del.eq("rr_side", rrSide) : del.is("rr_side", null);
   const { error: delErr } = await del;
   if (delErr) throw new Error(`Task replace delete failed: ${delErr.message}`);
 
-  if (!tasks.length) return 0;
+  const mergedTasks = [
+    ...tasks,
+    ...preservedCoverage.map((t, idx) => ({
+      ...t,
+      sortOrder: tasks.length + idx,
+    })),
+  ];
 
-  const inserts = tasks.map((t, idx) => ({
+  if (!mergedTasks.length) return 0;
+
+  const inserts = mergedTasks.map((t, idx) => ({
     night_id: nightId,
     slot_key: slotKey,
     slot_type: slotType,
@@ -490,7 +525,7 @@ export async function replaceNightSlotTasksForSlotServer(params: {
 
   const { error: insErr } = await client.from("night_slot_tasks").insert(inserts);
   if (insErr) throw new Error(`Task replace insert failed: ${insErr.message}`);
-  return tasks.length;
+  return mergedTasks.length;
 }
 
 export async function replaceAllNightSlotTasksServer(

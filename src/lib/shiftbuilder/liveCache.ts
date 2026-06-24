@@ -235,6 +235,54 @@ export function resetLiveCrossDayCache(): void {
 // ============================================================================
 
 const activeChannels: Record<string, RealtimeChannel> = {};
+const channelQueryClients: Record<string, QueryClient> = {};
+const reconnectTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function parseChannelKey(channelKey: string): { nightId: string; dateKey: string } | null {
+  const sep = channelKey.indexOf(":");
+  if (sep <= 0) return null;
+  return {
+    nightId: channelKey.slice(0, sep),
+    dateKey: channelKey.slice(sep + 1),
+  };
+}
+
+function scheduleLiveCacheReconnect(
+  nightId: string,
+  dateKey: string,
+  queryClient: QueryClient,
+  reason: string,
+): void {
+  const channelKey = `${nightId}:${dateKey}`;
+  if (reconnectTimers[channelKey]) return;
+
+  reconnectTimers[channelKey] = setTimeout(() => {
+    delete reconnectTimers[channelKey];
+    console.warn(`[liveCache] Reconnecting realtime (${reason}) for ${nightId} (${dateKey})`);
+    teardownLiveCacheForNight(nightId, dateKey);
+    initLiveCacheForNight(nightId, dateKey, queryClient);
+  }, 1200);
+}
+
+/** Tear down and re-open all active assignment realtime channels. */
+export function reconnectAllActiveLiveCache(queryClient?: QueryClient): void {
+  const keys = Object.keys(activeChannels);
+  for (const channelKey of keys) {
+    const parsed = parseChannelKey(channelKey);
+    if (!parsed) continue;
+    const qc = queryClient ?? channelQueryClients[channelKey];
+    if (!qc) continue;
+    scheduleLiveCacheReconnect(parsed.nightId, parsed.dateKey, qc, "manual-resume");
+  }
+
+  // If channels were torn down but we still know the night, ensure at least one resubscribe attempt.
+  for (const [channelKey, qc] of Object.entries(channelQueryClients)) {
+    if (activeChannels[channelKey]) continue;
+    const parsed = parseChannelKey(channelKey);
+    if (!parsed) continue;
+    initLiveCacheForNight(parsed.nightId, parsed.dateKey, qc);
+  }
+}
 
 /** Routes that mount live cache (/today + ShiftBuilder). Global teardown only when last unmounts. */
 let liveCacheMountCount = 0;
@@ -364,12 +412,17 @@ export function initLiveCacheForNight(
           (window as any).__realtimeState = "LIVE";
         }
         console.log(`[liveCache] Realtime connected for night ${nightId} (${dateKey})`);
-      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      } else if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
         liveAssignmentsStore.getState().setConnectionStatus(dateKey, "error");
         if (typeof window !== "undefined") {
           (window as any).__realtimeState = "OFFLINE";
         }
-        console.warn(`[liveCache] Realtime error for night ${nightId}`);
+        console.warn(`[liveCache] Realtime ${status} for night ${nightId}`);
+        scheduleLiveCacheReconnect(nightId, dateKey, queryClient, status);
       } else if (status === "SUBSCRIBING") {
         if (typeof window !== "undefined") {
           (window as any).__realtimeState = "SYNCING";
@@ -377,6 +430,7 @@ export function initLiveCacheForNight(
       }
     });
 
+  channelQueryClients[channelKey] = queryClient;
   activeChannels[channelKey] = channel;
 
   return () => teardownLiveCacheForNight(nightId, dateKey);
@@ -384,6 +438,10 @@ export function initLiveCacheForNight(
 
 function teardownLiveCacheForNight(nightId: string, dateKey: string) {
   const channelKey = `${nightId}:${dateKey}`;
+  if (reconnectTimers[channelKey]) {
+    clearTimeout(reconnectTimers[channelKey]);
+    delete reconnectTimers[channelKey];
+  }
   const ch = activeChannels[channelKey];
   if (ch) {
     ch.unsubscribe();
@@ -517,9 +575,16 @@ function handleAssignmentChange(
 
 // Convenience: full teardown (used on unmount / day change in the client)
 export function teardownAllLiveCache() {
+  Object.keys(reconnectTimers).forEach((key) => {
+    clearTimeout(reconnectTimers[key]);
+    delete reconnectTimers[key];
+  });
   Object.keys(activeChannels).forEach((key) => {
     activeChannels[key]?.unsubscribe();
+    delete activeChannels[key];
   });
-  // Clear zustand connection state (optional – keeps last known data)
+  Object.keys(channelQueryClients).forEach((key) => {
+    delete channelQueryClients[key];
+  });
   console.log("[liveCache] All realtime channels torn down");
 }

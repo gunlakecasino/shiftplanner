@@ -106,7 +106,7 @@ function OverlapRowsSection({
       <div className="space-y-2">
         {overlapRows.map((row) => (
           <div key={row.key}>
-            <div className="sb-overlap-row-meta flex items-end justify-end gap-2 mb-1.5 flex-wrap text-right w-full">
+            <div className="sb-overlap-row-meta flex items-end justify-start gap-2 mb-1.5 flex-wrap text-left w-full">
               <div
                 className="font-black tabular-nums leading-none text-[22px] text-[#1C1C1E]"
                 style={{ fontFamily: "var(--font-atkinson)" }}
@@ -450,14 +450,14 @@ export function PrintPreviewPage({
             ) : (
               <div className="sb-print-zones-stack flex flex-col flex-1 min-h-0 gap-1.5 w-full">
                 <div
-                  className="sb-print-zone-row sb-print-zone-row-1 sb-print-card-grid grid grid-cols-5 gap-1.5 w-full shrink-0"
-                  style={{ gridAutoRows: "auto" }}
+                  className="sb-print-zone-row sb-print-zone-row-1 sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 min-h-0 w-full"
+                  style={{ gridAutoRows: "minmax(0, 1fr)" }}
                 >
                   {ZONE_PRINT_ROW_1.map((zKey) => {
                     const a = assignments[zKey] || {};
                     const tasks = toTaskLines(tasksBySlot[zKey]);
                     return (
-                      <div key={zKey} className="relative" data-slot-key={zKey}>
+                      <div key={zKey} className="relative h-full min-h-0" data-slot-key={zKey}>
                         <GoldenZoneCard
                           slotKey={zKey}
                           tmName={a.tmName}

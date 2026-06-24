@@ -1844,7 +1844,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   >
                     {isPrintPreview ? (
                       <>
-                        <div className="sb-overlap-row-meta flex items-end justify-end gap-2 mb-1.5 flex-wrap text-right w-full">
+                        <div className="sb-overlap-row-meta flex items-end justify-start gap-2 mb-1.5 flex-wrap text-left w-full">
                           <div
                             className="font-black tabular-nums leading-none"
                             style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}

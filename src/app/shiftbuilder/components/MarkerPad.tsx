@@ -923,6 +923,8 @@ export const TmPicker: React.FC<{
   variant?: "default" | "tablet";
   /** Drag TM rows onto slots (requires parent DndContext). Click-to-assign still works. */
   enableDragAssign?: boolean;
+  /** When true, list uses pan-y so touch drag scrolls (unassigned slot picker). */
+  allowListScroll?: boolean;
   /** Rotation-health preview per TM when assigning to a specific slot (default list only). */
   fitByTmId?: Record<string, PickerTmRotationFit>;
 }> = ({
@@ -938,6 +940,7 @@ export const TmPicker: React.FC<{
   isDark,
   variant = "default",
   enableDragAssign = false,
+  allowListScroll = false,
   fitByTmId,
 }) => {
   const isTablet = variant === "tablet";
@@ -1041,7 +1044,19 @@ export const TmPicker: React.FC<{
       </div>
 
       {/* TM list */}
-      <div className="no-scrollbar" style={{ overflowY: "auto", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+      <div
+        className="no-scrollbar"
+        style={{
+          overflowY: "auto",
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 3,
+          WebkitOverflowScrolling: "touch",
+          touchAction: allowListScroll ? "pan-y" : enableDragAssign ? "none" : "pan-y",
+        }}
+      >
         {filtered.length === 0 ? (
           <div style={{ fontSize: isTablet ? 17 : 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
             {filter.trim() ? "No match" : tms.length === 0 ? "All TMs placed" : "No match"}

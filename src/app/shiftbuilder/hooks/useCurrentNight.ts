@@ -106,6 +106,8 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
     queryClient,
     isCoreLoading: coreQuery.isLoading,
     isCoreFetching: coreQuery.isFetching,
+    /** True while nightCore is showing keepPreviousData from another day. */
+    isCorePlaceholder: coreQuery.isPlaceholderData,
     isSecondaryLoading: secondaryQuery.isLoading,
   };
 }

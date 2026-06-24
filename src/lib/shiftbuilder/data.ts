@@ -2041,10 +2041,9 @@ export function createNightScheduleStatusChannel(
   nightId: string,
   onChange: (payload: any) => void
 ) {
-  const client = getSupabaseClient();
+  const channel = freshChannel(`shiftbuilder-night-tm-status-${nightId}`);
 
-  return client
-    .channel(`shiftbuilder-night-tm-status-${nightId}`)
+  return channel
     .on(
       'postgres_changes',
       {
@@ -3588,6 +3587,7 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
             rrSide: rrSide || null,
             slotType,
             tasks: mappedTasks,
+            preserveCoverage: true,
           });
           return { ok: true, applied: count };
         },

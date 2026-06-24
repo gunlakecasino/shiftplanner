@@ -411,7 +411,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setRotationDisplay(null); setDeepInsight(null); setInsightStructured(null);
     setAnalystDetailsOpen(false); setPadGoodExamples([]); setRotationBasics(null);
     rotationSigRef.current = null; setTaskInput(""); setSweeperOpen(false); setMatrixExpanded(false); setEvidenceOpen(false);
-  }, [slotKey, insightsEnabled]);
+  }, [slotKey, selectedDay.date, insightsEnabled]);
 
   useEffect(() => {
     if (!a.tmId) { setPadHistory(null); setPadHistoryLoading(false); return; }
@@ -575,7 +575,23 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {showTmPicker && (
           <div className="min-h-[180px]">
-            <TmPicker tms={scheduledUnassigned} allTms={allEligibleTms} fitByTmId={pickerFitByTmId} currentTmName={a.tmId ? a.tmName : undefined} onPick={handlePickTm} onAddOnCall={onAddOnCall ? (tm) => void onAddOnCall(tm.tmId, tm.tmName) : undefined} onMarkUnavailable={onMarkUnavailable ? (tm, s) => void onMarkUnavailable(tm.tmId, tm.tmName, s) : undefined} onCancel={a.tmId ? () => setAssignMode(false) : undefined} confirmed={assignConfirmed} accent={accent} isDark={false} variant={padLarge ? "tablet" : "default"} enableDragAssign={enableTmDragAssign} />
+            <TmPicker
+              key={`${slotKey}:${nightIsoFromDate(selectedDay.date)}`}
+              tms={scheduledUnassigned}
+              allTms={allEligibleTms}
+              fitByTmId={pickerFitByTmId}
+              currentTmName={a.tmId ? a.tmName : undefined}
+              onPick={handlePickTm}
+              onAddOnCall={onAddOnCall ? (tm) => void onAddOnCall(tm.tmId, tm.tmName) : undefined}
+              onMarkUnavailable={onMarkUnavailable ? (tm, s) => void onMarkUnavailable(tm.tmId, tm.tmName, s) : undefined}
+              onCancel={a.tmId ? () => setAssignMode(false) : undefined}
+              confirmed={assignConfirmed}
+              accent={accent}
+              isDark={false}
+              variant={padLarge ? "tablet" : "default"}
+              enableDragAssign={enableTmDragAssign && !!a.tmId}
+              allowListScroll={!a.tmId}
+            />
           </div>
         )}
 

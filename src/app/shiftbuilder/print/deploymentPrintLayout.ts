@@ -193,8 +193,35 @@ function pinRRSection(rr: HTMLElement | null): void {
   }
 }
 
-/** Prevent zone row 2 from stealing height from pinned RR / aux bands. */
-function capZoneRow2(
+function rowDomTaskPressure(row: HTMLElement): number {
+  return row.querySelectorAll(".sb-golden-task-list li").length;
+}
+
+function rowTasksClip(row: HTMLElement): boolean {
+  return [...row.querySelectorAll<HTMLElement>(".sb-golden-task-list")].some(
+    (list) => list.scrollHeight > list.clientHeight + 1,
+  );
+}
+
+/** Equal 50/50 zone rows with a light nudge toward the row that needs more task space. */
+function balanceTwoRowFlex(row1: HTMLElement, row2: HTMLElement): void {
+  let grow1 = 1;
+  let grow2 = 1;
+
+  const pressure1 = rowDomTaskPressure(row1);
+  const pressure2 = rowDomTaskPressure(row2);
+  if (pressure1 > pressure2) grow1 += 0.15;
+  else if (pressure2 > pressure1) grow2 += 0.15;
+
+  if (rowTasksClip(row1)) grow1 += 0.2;
+  if (rowTasksClip(row2)) grow2 += 0.2;
+
+  row1.style.flex = `${grow1} 1 0`;
+  row2.style.flex = `${grow2} 1 0`;
+}
+
+/** Prevent the zones stack from stealing height from pinned RR / aux bands. */
+function capZonesStack(
   body: HTMLElement | null,
   zones: HTMLElement | null,
   rr: HTMLElement | null,
@@ -202,29 +229,43 @@ function capZoneRow2(
 ): void {
   if (!body || !zones) return;
 
-  const row2 = zones.querySelector(".sb-print-zone-row-2") as HTMLElement | null;
-  if (!row2) return;
+  const stack = zones.querySelector(".sb-print-zones-stack") as HTMLElement | null;
+  if (!stack) return;
 
   const bodyH = body.clientHeight;
   if (bodyH <= 0) return;
 
   const zonesHeader =
     zones.querySelector(".sheet-section-header")?.getBoundingClientRect().height ?? 0;
-  const row1 =
-    zones.querySelector(".sb-print-zone-row-1")?.getBoundingClientRect().height ?? 0;
   const rrH = rr?.getBoundingClientRect().height ?? 0;
   const auxH = aux?.getBoundingClientRect().height ?? 0;
 
   // Section margins + stack gap (row1 ↔ row2).
   const chrome = 18;
-  const maxRow2 = Math.floor(bodyH - zonesHeader - row1 - rrH - auxH - chrome);
+  const maxStack = Math.floor(bodyH - zonesHeader - rrH - auxH - chrome);
 
-  if (maxRow2 > 48) {
-    row2.style.maxHeight = `${maxRow2}px`;
-    row2.style.overflow = "hidden";
+  if (maxStack > 96) {
+    stack.style.maxHeight = `${maxStack}px`;
+    stack.style.overflow = "hidden";
+    zones.style.overflow = "hidden";
   } else {
-    row2.style.removeProperty("max-height");
+    stack.style.removeProperty("max-height");
+    stack.style.removeProperty("overflow");
+    zones.style.removeProperty("overflow");
   }
+}
+
+function styleZoneRow(row: HTMLElement): void {
+  row.style.width = "100%";
+  row.style.minHeight = "0";
+  row.style.alignContent = "stretch";
+  row.style.gridAutoRows = "minmax(0, 1fr)";
+  row.querySelectorAll<HTMLElement>("[data-slot-key]").forEach((cell) => {
+    cell.style.height = "100%";
+    cell.style.minHeight = "0";
+    cell.style.display = "flex";
+    cell.style.flexDirection = "column";
+  });
 }
 
 function applyZoneRowFlex(zones: HTMLElement | null): void {
@@ -243,24 +284,9 @@ function applyZoneRowFlex(zones: HTMLElement | null): void {
   const row1 = zones.querySelector(".sb-print-zone-row-1") as HTMLElement | null;
   const row2 = zones.querySelector(".sb-print-zone-row-2") as HTMLElement | null;
 
-  if (row1) {
-    row1.style.flexShrink = "0";
-    row1.style.flexGrow = "0";
-    row1.style.width = "100%";
-  }
-
-  if (row2) {
-    row2.style.flex = "1 1 auto";
-    row2.style.minHeight = "0";
-    row2.style.width = "100%";
-    row2.style.alignContent = "stretch";
-    row2.querySelectorAll<HTMLElement>("[data-slot-key]").forEach((cell) => {
-      cell.style.height = "100%";
-      cell.style.minHeight = "0";
-      cell.style.display = "flex";
-      cell.style.flexDirection = "column";
-    });
-  }
+  if (row1) styleZoneRow(row1);
+  if (row2) styleZoneRow(row2);
+  if (row1 && row2) balanceTwoRowFlex(row1, row2);
 }
 
 function bumpDensity(artboard: HTMLElement): DeploymentPrintDensity | null {
@@ -286,7 +312,7 @@ function bumpDensity(artboard: HTMLElement): DeploymentPrintDensity | null {
 
 /**
  * Post-process official deployment artboards before print/PDF rasterization.
- * Pins RR + aux; row-2 zones flex within remaining height (capped).
+ * Pins RR + aux; zone rows share remaining height equally (capped).
  */
 export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
   const el = artboard as HTMLElement;
@@ -323,7 +349,7 @@ export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
   pinRRSection(rr);
   pinAuxSection(aux);
   applyZoneRowFlex(zones);
-  capZoneRow2(body, zones, rr, aux);
+  capZonesStack(body, zones, rr, aux);
 
   el.querySelectorAll<HTMLElement>(".sb-print-card-grid").forEach((grid) => {
     if (grid.closest(".sb-print-section-rr")) return;
@@ -344,7 +370,7 @@ export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
     pinRRSection(rr);
     pinAuxSection(aux);
     applyZoneRowFlex(zones);
-    capZoneRow2(body, zones, rr, aux);
+    capZonesStack(body, zones, rr, aux);
 
     if (!taskListsClip(el)) break;
 

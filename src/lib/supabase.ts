@@ -112,8 +112,14 @@ export type SupabaseClientType = SupabaseClient;
  * Fire a lightweight read so TLS + HTTP/2 to Supabase are warm before the board asks.
  * Idempotent — safe to call from loading shells, providers, and route entry.
  */
-export function warmSupabaseConnection(): Promise<void> {
+export type WarmSupabaseOptions = {
+  /** Drop the in-flight warm guard and ping again (after idle / tab resume). */
+  force?: boolean;
+};
+
+export function warmSupabaseConnection(options?: WarmSupabaseOptions): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
+  if (options?.force) _warmPromise = null;
   if (_warmPromise) return _warmPromise;
 
   _warmPromise = (async () => {

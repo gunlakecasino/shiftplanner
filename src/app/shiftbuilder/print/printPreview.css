@@ -267,17 +267,17 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-print-zone-row-1,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-1,
-body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-1 {
-  flex: 0 0 auto;
-}
-
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-1,
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-print-zone-row-2,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-2,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-2 {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
 }
 
+.print-stage-inner .print-artboard[data-print-variant="official"] .sb-print-zone-row-1 > [data-slot-key],
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-1 > [data-slot-key],
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-1 > [data-slot-key],
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-print-zone-row-2 > [data-slot-key],
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-2 > [data-slot-key],
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="official"] .sb-print-zone-row-2 > [data-slot-key] {
@@ -432,12 +432,12 @@ body.golden-export-raster .print-dual-container .print-artboard .overlaps-sectio
   width: 100%;
 }
 
-/* Break sheet overlaps — align grid gutters with wave columns; right-align row labels */
+/* Break sheet overlaps — align grid gutters with wave columns; left-align row labels */
 .print-stage-inner .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-view="breaks"] .sb-overlap-row-meta {
-  justify-content: flex-end !important;
-  text-align: right !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
   width: 100%;
 }
 
