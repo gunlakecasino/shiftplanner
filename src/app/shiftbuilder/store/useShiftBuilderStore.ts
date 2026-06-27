@@ -1,12 +1,15 @@
 // v1.0.0 — Production Release — UI frozen & shipped June 24 2026
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { useShallow } from 'zustand/shallow';
 import {
   estimateAiCostUsd,
   hydrateAiUsageGlobals,
   recordAiUsageEvent,
 } from '@/lib/shiftbuilder/aiUsageTracker';
 import type { AuxDef } from '@/lib/shiftbuilder/placement';
+// EngineRunPhase type - using string union for store to avoid circular import issues in this slice
+type EngineRunPhase = "idle" | "running" | "complete";
 import type { EngineAnalysis, HumanFeedback, TrainingExample } from '@/lib/shiftbuilder/ai/types';
 
 /**
@@ -84,9 +87,45 @@ interface ShiftBuilderState {
   };
   setPendingDrag: (drag: ShiftBuilderState['pendingDrag']) => void;
 
+  // Draft mode state moved to store for narrow subscription (Phase 1/3 consistency)
+  isDraftMode: boolean;
+  setIsDraftMode: (v: boolean) => void;
+
+  // Draft UI state for narrow subscriptions (world-class: only Why panel, buttons etc re-render)
+  draftBreakdown: Record<string, any>;
+  setDraftBreakdown: (b: Record<string, any>) => void;
+  draftGrokReasoning: Record<string, any>;
+  setDraftGrokReasoning: (r: Record<string, any>) => void;
+  draftGrokExplanation: string;
+  setDraftGrokExplanation: (e: string) => void;
+  draftEngineWarnings: string[];
+  setDraftEngineWarnings: (w: string[]) => void;
+
+  engineRunPhase: EngineRunPhase;
+  setEngineRunPhase: (p: EngineRunPhase) => void;
+
   // auxDefs moved to store for narrow subscription in Board/cards (changes infrequently but reduces prop surface)
   auxDefs: AuxDef[];
   setAuxDefs: (updater: AuxDef[] | ((prev: AuxDef[]) => AuxDef[])) => void;
+
+  // More UI chrome moved to store (Phase 3/4 continuation) for narrow updates on view/break changes
+  currentView: "deployment" | "breaks" | "weekly";
+  setCurrentView: (v: "deployment" | "breaks" | "weekly") => void;
+
+  breakGroup: any; // ActiveBreakGroupFilter | null
+  setBreakGroup: (g: any) => void;
+
+  // Week lens UI state moved to store for narrow updates (affects WeeklyOverview, health, AI suggestions)
+  weekLensFilters: Set<string>;
+  setWeekLensFilters: (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  weekLensSearch: string;
+  setWeekLensSearch: (v: string) => void;
+  weekLensSidebarOpen: boolean;
+  setWeekLensSidebarOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
+
+  // Week health tracker dismissed state (persisted, narrow)
+  isWeekHealthTrackerDismissed: boolean;
+  setIsWeekHealthTrackerDismissed: (v: boolean) => void;
 
   // =================================================================
   // AI Engine Lab + Training Loop (full port from previous work) — strongly typed
@@ -190,6 +229,36 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         auxDefs: typeof updater === 'function' ? updater(state.auxDefs) : updater,
       })),
 
+    currentView: (typeof window !== 'undefined' ? (localStorage.getItem("oms_current_view") as any) : null) || "deployment",
+    setCurrentView: (v: any) =>
+      set((state) => ({
+        currentView: typeof v === 'function' ? v(state.currentView) : v,
+      })),
+
+    breakGroup: null,
+    setBreakGroup: (g) => set({ breakGroup: g }),
+
+    weekLensFilters: new Set<string>(),
+    setWeekLensFilters: (updater) =>
+      set((state) => ({
+        weekLensFilters: typeof updater === 'function' ? updater(state.weekLensFilters) : updater,
+      })),
+    weekLensSearch: '',
+    setWeekLensSearch: (v) => set({ weekLensSearch: v }),
+    weekLensSidebarOpen: true,
+    setWeekLensSidebarOpen: (v: any) =>
+      set((state) => ({
+        weekLensSidebarOpen: typeof v === 'function' ? v(state.weekLensSidebarOpen) : v,
+      })),
+
+    isWeekHealthTrackerDismissed: (typeof window !== 'undefined' && localStorage.getItem("oms_week_health_tracker_dismissed") === "false") ? false : true,
+    setIsWeekHealthTrackerDismissed: (v: boolean) => {
+      set({ isWeekHealthTrackerDismissed: v });
+      try {
+        localStorage.setItem("oms_week_health_tracker_dismissed", v ? "true" : "false");
+      } catch {}
+    },
+
     // AI Lab slices (full training loop port) — typed
     engineAnalyses: [],
     addEngineAnalysis: (analysis) =>
@@ -269,6 +338,22 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     setLiveEngineConfigForAI: (cfg) => set({ liveEngineConfigForAI: cfg }),
 
     setPendingDrag: (drag) => set({ pendingDrag: drag }),
+
+    // Draft mode
+    isDraftMode: false,
+    setIsDraftMode: (v) => set({ isDraftMode: v }),
+
+    draftBreakdown: {},
+    setDraftBreakdown: (b) => set({ draftBreakdown: b }),
+    draftGrokReasoning: {},
+    setDraftGrokReasoning: (r) => set({ draftGrokReasoning: r }),
+    draftGrokExplanation: "",
+    setDraftGrokExplanation: (e) => set({ draftGrokExplanation: e }),
+    draftEngineWarnings: [],
+    setDraftEngineWarnings: (w) => set({ draftEngineWarnings: w }),
+
+    engineRunPhase: "idle" as EngineRunPhase,
+    setEngineRunPhase: (p: EngineRunPhase) => set({ engineRunPhase: p }),
   }))
 );
 
@@ -320,10 +405,10 @@ if (process.env.NODE_ENV === 'development') {
 // when the selected slice actually changes (thanks to subscribeWithSelector + zustand's equality).
 
 export const useAssignments = () =>
-  useShiftBuilderStore((state) => state.assignments);
+  useShiftBuilderStore(useShallow((state) => state.assignments));
 
 export const useDraftAssignments = () =>
-  useShiftBuilderStore((state) => state.draftAssignments);
+  useShiftBuilderStore(useShallow((state) => state.draftAssignments));
 
 // Convenience: get current draft for a specific slot (used by cards)
 export const useDraftForSlot = (slotKey: string) =>
@@ -357,3 +442,134 @@ export const useLiveEngineConfigForAI = () =>
 
 export const useAiSessionUsage = () =>
   useShiftBuilderStore((state) => state.aiSessionUsage);
+
+// === Narrow derived selectors for ultra-responsive narrow updates ===
+// These allow header badges, status, and other islands to subscribe only to
+// the derived values they need instead of full assignments or local memos in
+// the giant orchestrator. Promotes consistency + reduces re-render surface.
+//
+// IMPORTANT: For selectors that return new objects/arrays/sets, we pass a
+// custom equality function (shallow or setsAreEqual). This prevents
+// "getSnapshot should be cached to avoid an infinite loop" warnings from
+// useSyncExternalStore (used internally by Zustand).
+
+
+
+export const useBreakCounts = () =>
+  useShiftBuilderStore(
+    useShallow((state) => {
+      const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+      Object.values(state.assignments || {}).forEach((a: any) => {
+        if (!a?.tmId && !a?.tmName) return;
+        const g = (a.breakGroup ?? 0) as number;
+        // Off-the-sheet (0) intentionally excluded; 4 = overlaps wave
+        if (g === 1) counts[1]++;
+        else if (g === 2) counts[2]++;
+        else if (g === 3) counts[3]++;
+        else if (g === 4) counts[4]++;
+      });
+      return counts;
+    })
+  );
+
+export const useInRotationCount = () =>
+  useShiftBuilderStore((state) => {
+    let sum = 0;
+    Object.values(state.assignments || {}).forEach((a: any) => {
+      if (!a?.tmId && !a?.tmName) return;
+      const g = (a.breakGroup ?? 0) as number;
+      if (g >= 1 && g <= 4) sum++;
+    });
+    return sum;
+  });
+
+export const useHasPlacedAssignments = () =>
+  useShiftBuilderStore((state) =>
+    Object.values(state.assignments || {}).some((a: any) => !!(a?.tmId || a?.tmName))
+  );
+
+export const usePlacedTmIds = () =>
+  useShiftBuilderStore(
+    useShallow((state) => {
+      const ids: string[] = [];
+      Object.values(state.assignments || {}).forEach((a: any) => {
+        if (a?.tmId) ids.push(a.tmId);
+      });
+      return ids.sort(); // return sorted array for stable shallow comparison with useShallow
+    })
+  );
+
+export const useIsDraftMode = () =>
+  useShiftBuilderStore((state) => state.isDraftMode);
+
+export const useSetIsDraftMode = () =>
+  useShiftBuilderStore((state) => state.setIsDraftMode);
+
+export const useDraftBreakdown = () =>
+  useShiftBuilderStore(useShallow((state) => state.draftBreakdown));
+
+export const useDraftGrokReasoning = () =>
+  useShiftBuilderStore(useShallow((state) => state.draftGrokReasoning));
+
+export const useDraftGrokExplanation = () =>
+  useShiftBuilderStore((state) => state.draftGrokExplanation);
+
+export const useDraftEngineWarnings = () =>
+  useShiftBuilderStore(useShallow((state) => state.draftEngineWarnings));
+
+export const useEngineRunPhase = () =>
+  useShiftBuilderStore((state) => state.engineRunPhase ?? "idle");
+
+export const useSetEngineRunPhase = () =>
+  useShiftBuilderStore((state) => state.setEngineRunPhase ?? (() => {}));
+
+export const useSetDraftBreakdown = () =>
+  useShiftBuilderStore((state) => state.setDraftBreakdown);
+
+export const useCurrentView = () =>
+  useShiftBuilderStore((state) => state.currentView);
+
+export const useSetCurrentView = () =>
+  useShiftBuilderStore((state) => state.setCurrentView);
+
+export const useBreakGroup = () =>
+  useShiftBuilderStore((state) => state.breakGroup);
+
+export const useSetBreakGroup = () =>
+  useShiftBuilderStore((state) => state.setBreakGroup);
+
+export const useWeekLensFilters = () =>
+  useShiftBuilderStore(useShallow((state) => state.weekLensFilters));
+
+export const useSetWeekLensFilters = () =>
+  useShiftBuilderStore((state) => state.setWeekLensFilters);
+
+export const useWeekLensSearch = () =>
+  useShiftBuilderStore((state) => state.weekLensSearch);
+
+export const useSetWeekLensSearch = () =>
+  useShiftBuilderStore((state) => state.setWeekLensSearch);
+
+export const useWeekLensSidebarOpen = () =>
+  useShiftBuilderStore((state) => state.weekLensSidebarOpen);
+
+export const useSetWeekLensSidebarOpen = () =>
+  useShiftBuilderStore((state) => state.setWeekLensSidebarOpen) as (v: boolean | ((prev: boolean) => boolean)) => void;
+
+export const useIsWeekHealthTrackerDismissed = () =>
+  useShiftBuilderStore((state) => state.isWeekHealthTrackerDismissed);
+
+export const useSetIsWeekHealthTrackerDismissed = () =>
+  useShiftBuilderStore((state) => state.setIsWeekHealthTrackerDismissed);
+
+export const useSetDraftGrokReasoning = () =>
+  useShiftBuilderStore((state) => state.setDraftGrokReasoning);
+
+export const useSetDraftGrokExplanation = () =>
+  useShiftBuilderStore((state) => state.setDraftGrokExplanation);
+
+export const useSetDraftEngineWarnings = () =>
+  useShiftBuilderStore((state) => state.setDraftEngineWarnings);
+
+export const useSetDraftAssignments = () =>
+  useShiftBuilderStore((state) => state.setDraftAssignments);

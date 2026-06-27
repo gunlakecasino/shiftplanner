@@ -33,39 +33,36 @@ const CoverageBar = React.memo(function CoverageBar({
     <div
       className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""} ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
       style={{
-        ...(builderCalm || goldBanner
-          ? {}
-          : { position: "absolute", bottom: 0, left: 0, right: 0 }),
         background: goldBanner
           ? "var(--sb-gold-surface)"
           : builderCalm
-            ? `color-mix(in srgb, ${accent} 65%, var(--ios-background-secondary))`
+            ? `color-mix(in srgb, ${accent} 55%, var(--ios-background-secondary))`
             : accent,
-        borderRadius: "0 0 3px 3px",
-        paddingTop: 3,
-        paddingBottom: 3,
+        borderRadius: "0 0 6px 6px",
+        paddingTop: 2,
+        paddingBottom: 2,
         height: COVERAGE_BAR_H,
         minHeight: COVERAGE_BAR_H,
-        zIndex: 2,
+        zIndex: 1,
         borderTop: goldBanner
           ? "1px solid var(--sb-gold-border)"
-          : builderCalm
-            ? "1px solid color-mix(in srgb, var(--ios-background-secondary) 20%, transparent)"
-            : "1px solid rgba(255,255,255,0.25)",
+          : "1px solid rgba(0,0,0,0.06)",
+        boxShadow: builderCalm ? "none" : undefined,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={task.taskLabel}
     >
       <span
-        className="sb-coverage-bar-label font-extrabold uppercase tracking-[0.6px] leading-none truncate"
+        className="sb-coverage-bar-label font-semibold uppercase tracking-[0.3px] leading-none truncate"
         style={{
           fontSize: COVERAGE_BAR_FONT_SIZE,
           fontFamily: "var(--font-atkinson)",
           color: goldBanner ? "var(--sb-gold-ink)" : "#ffffff",
+          opacity: builderCalm ? 0.75 : 0.95,
         }}
       >
-        {task.taskLabel}
+        {builderCalm ? task.taskLabel.replace(/^AND\s+/i, '+ ') : task.taskLabel}
       </span>
       {onRemoveTask && (
         <button
@@ -73,7 +70,7 @@ const CoverageBar = React.memo(function CoverageBar({
             e.stopPropagation();
             onRemoveTask(slotKey, task.taskLabel);
           }}
-          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all"
+          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all sb-tablet-touch-target"
           style={{
             color: goldBanner
               ? hovered
@@ -82,8 +79,12 @@ const CoverageBar = React.memo(function CoverageBar({
               : hovered
                 ? "var(--ios-white)"
                 : "color-mix(in srgb, var(--ios-white) 55%, transparent)",
-            fontSize: 13,
-            opacity: hovered ? 1 : 0.55,
+            fontSize: 15,
+            opacity: hovered ? 1 : 0.6,
+            padding: "2px 6px",
+            minWidth: 28,
+            minHeight: 28,
+            borderRadius: 4,
           }}
           title="Remove coverage"
         >

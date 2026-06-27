@@ -2,7 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
+import { useAssignments } from "../store/useShiftBuilderStore";
 
 interface ProvenanceGlassProps {
   slotKey: string | null;
@@ -40,10 +40,10 @@ export function ProvenanceGlass({
   onClose,
   advisorText,
 }: ProvenanceGlassProps) {
-  // Live lookup from the established store so we always get the latest engine output
+  // Live lookup from the established store (narrow selector) so we always get the latest engine output
   // (including provenance populated by the placement engine / scoring).
   // This brings the "engine heart" into the main page without any card appearance changes.
-  const assignments = useShiftBuilderStore((s) => s.assignments);
+  const assignments = useAssignments();
 
   if (!slotKey) return null;
 

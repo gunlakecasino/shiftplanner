@@ -27,7 +27,7 @@ export interface RosterRailProps {
   /** Canonical pool from graves_default_schedule (+ night_on_call) for tonight. */
   scheduleRoster: GravesScheduleRosterRow[];
   /** Placed tonight (committed + draft + live) — alias-expanded in rail. */
-  placedTmIds: Set<string>;
+  placedTmIds: Set<string> | string[];
   /** Profile rows for resolving placed TMs missing from the schedule slice. */
   profileRoster?: Array<{
     id?: string;
@@ -176,7 +176,8 @@ const RosterRail = React.memo(function RosterRail({
   const storeDraftAssignments = useDraftAssignments() ?? {};
 
   const placedTmIds = React.useMemo(() => {
-    const merged = new Set(placedTmIdsProp);
+    const source = Array.isArray(placedTmIdsProp) ? placedTmIdsProp : Array.from(placedTmIdsProp);
+    const merged = new Set(source);
     collectPlacedTmIds(storeAssignments, storeDraftAssignments).forEach((id) => merged.add(id));
     return merged;
   }, [placedTmIdsProp, storeAssignments, storeDraftAssignments]);

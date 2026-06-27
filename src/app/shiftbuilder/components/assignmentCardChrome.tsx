@@ -568,11 +568,12 @@ function CoveredByBlock({
       className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col items-center min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
     >
       <span
-        className="sb-covered-by-label font-bold uppercase tracking-[0.22em] px-1 py-[1px] inline-block text-center text-[var(--ios-label-tertiary)]"
+        className="sb-covered-by-label font-semibold uppercase tracking-[0.18em] px-1 py-[1px] inline-block text-center text-[var(--ios-label-tertiary)]"
         style={{
           fontSize: labelFontSize,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
           lineHeight: 1.15,
+          opacity: 0.8,
         }}
       >
         Covered by

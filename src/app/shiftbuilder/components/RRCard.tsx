@@ -292,7 +292,7 @@ function RRSideShell({
         </div>
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1">
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1 ${coverageTasks.length > 0 ? 'sb-card-content-with-footer' : ''}`}>
         {body}
       </div>
       {coverageTasks.length > 0 && (

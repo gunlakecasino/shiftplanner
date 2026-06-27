@@ -213,7 +213,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         </div>
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${zoneCoverageTasks.length > 0 ? 'sb-card-content-with-footer' : ''}`}>
         {/* Large name / covered area */}
         <div
           className="sb-card-assign-zone px-3.5 pt-1.5 pb-2 shrink-0"
@@ -236,6 +236,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               <h3
                 className={`flex items-baseline gap-1 min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
                 style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
+                title={displayName}
               >
                 <span className="truncate">{displayName}</span>
                 {showDigitalAssists ? (

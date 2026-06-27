@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useWeekLensFilters, useWeekLensSearch, useWeekLensSidebarOpen } from "../store/useShiftBuilderStore";
 import { buildOverviewSlotRows, layoutForWeekly } from "../print/printOverviewTables";
 import type { OverviewNight, OverviewSlotRow } from "../print/printOverviewTables";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
