@@ -1,4 +1,4 @@
-// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
+// v1.1 — iPad UI/UX world-class release
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { useShallow } from 'zustand/shallow';

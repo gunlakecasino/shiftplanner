@@ -1,8 +1,8 @@
 /**
  * ShiftBuilder UI version (sheet footer).
- * Bump +0.001 on routine ships; major releases use explicit semver (e.g. 1.0.0).
+ * Bump for releases. Use semver (e.g. 1.1).
  */
-export const SHIFTBUILDER_VERSION = "1.0.29";
+export const SHIFTBUILDER_VERSION = "1.1";
 
 export function shiftBuilderVersionLabel(): string {
   return `v${SHIFTBUILDER_VERSION}`;

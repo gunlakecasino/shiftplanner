@@ -1,5 +1,5 @@
-// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
-// World-class revisions ongoing (worktree only):
+// v1.1 — iPad UI/UX world-class release (coverage polish, responsiveness, store unification)
+// v1.1 — merged from ultra worktree. iPad UI/UX complete.
 // - usePrintManager, weekLens* + health dismissed, currentView/breakGroup to store (narrow selectors)
 // - Draft helpers + buildFromDraft in engineRunner, apply/toggle/clear wrapped in heavy transition
 // - More deferredValue (week health, marker, lens)
