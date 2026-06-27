@@ -1,4 +1,15 @@
 // v1.0.0 — Production Release — UI frozen & shipped June 24 2026
+// World-class revisions ongoing (worktree only):
+// - usePrintManager, weekLens* + health dismissed, currentView/breakGroup to store (narrow selectors)
+// - Draft helpers + buildFromDraft in engineRunner, apply/toggle/clear wrapped in heavy transition
+// - More deferredValue (week health, marker, lens)
+// - Slim + responsiveness + consistency iterations. LOC ~7950, tsc clean. Keep going...
+// - Phase 2 decomp: useAuxLayout, useDayNavigation, useEngineRunner, useNotes extracted + integrated.
+// - Phase 3 consistency: store-first for draft*, auxDefs, rosterUI, enginePhase, narrow selectors everywhere (useShallow).
+// - Phase 4 responsiveness: startDayTransition + useDeferredValue on day/draft/fit/rosters; heavy ops non-blocking.
+// - Phase 5 polish: TDZ hoists fixed, effective rosters cleaned (no lets), setters unified, Board/Rail/Provenance use store selectors, tsc clean, LOC slimmed.
+// - Remaining orchestrator thinned; no more snapshot loops or init errors.
+// Goal: ultra-responsive (snappy), consistent (store), world-class (modular, reliable). All in /oms_shiftbuilder_ultra.
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useTransition, useDeferredValue } from "react";
@@ -35,7 +46,6 @@ import {
 } from "@/lib/shiftbuilder/placement";
 import {
   createBlankAuxSlot,
-  findRemovableEmptyAuxSlot,
   applyAuxRole,
   applyAuxLabel,
   defaultAuxDefsForNewNight,
@@ -75,15 +85,7 @@ import {
   type PrintConfig,
 } from "./components/PrintCommandCenter";
 import { PrintExportProgressOverlay } from "./components/PrintExportProgressOverlay";
-import {
-  buildPrintQueue,
-  applyCustomQueueOrder,
-  normalizePrintConfigForExecution,
-  loadLastPrintConfig,
-  saveLastPrintConfig,
-  tonightPrintConfig,
-  fullWeekPrintConfig,
-} from "./print/printConfigUtils";
+// print config utils now used inside usePrintManager hook (no longer needed at top level in Client)
 import type { OverviewNight } from "./print/printOverviewTables";
 import { useShiftCompletion } from "@/hooks/useShiftCompletion";
 // ── Phase 1 extractions — pure code moved to lib/shiftbuilder ─────────────────
@@ -132,6 +134,11 @@ import WeeklyOverview from "./components/WeeklyOverview";
 // anything that must not be required at Client evaluation time.
 import { useShiftData } from "./hooks/useShiftData";
 import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
+import { useAuxLayout } from "./hooks/useAuxLayout";
+import { useDayNavigation } from "./hooks/useDayNavigation";
+import { useEngineRunner } from "./hooks/useEngineRunner";
+import { useNotes } from "./hooks/useNotes";
+import { usePrintManager } from "./hooks/usePrintManager";
 import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
@@ -160,10 +167,7 @@ import {
 } from "./print/printSession";
 import { PrintPreviewStage } from "./print/PrintPreviewStage";
 import type { PrintPreviewFocus } from "./print/LivePrintPreviewArtboard";
-import {
-  printPreviewStageHeight,
-  printPreviewStageWidth,
-} from "./print/PrintPreviewScaledSheet";
+// printPreviewStage* helpers no longer needed here (moved into usePrintManager)
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -176,6 +180,9 @@ if (typeof window !== 'undefined') {
   (window as any).__getShiftBuilderDebugState = () => ({
     liveAssignments: liveAssignmentsStore.getState(),
     shiftBuilder: useShiftBuilderStore.getState(),
+    // New for plan slices
+    hasPlaced: useShiftBuilderStore.getState().auxDefs ? 'aux in store' : null,
+    isDraft: useShiftBuilderStore.getState().isDraftMode,
   });
 }
 // ── Phase 2 extractions — primitive UI components ─────────────────────────────
@@ -247,6 +254,32 @@ import {
   useDraftAssignments,
   useAuxDefs,
   useGraveOnly,
+  useBreakCounts,
+  useInRotationCount,
+  useHasPlacedAssignments,
+  useIsDraftMode,
+  useSetIsDraftMode,
+  useDraftBreakdown,
+  useDraftGrokReasoning,
+  useDraftGrokExplanation,
+  useDraftEngineWarnings,
+  useSetDraftBreakdown,
+  useSetDraftGrokReasoning,
+  useSetDraftGrokExplanation,
+  useSetDraftEngineWarnings,
+  useSetDraftAssignments,
+  useCurrentView,
+  useSetCurrentView,
+  useBreakGroup,
+  useSetBreakGroup,
+  useWeekLensFilters,
+  useSetWeekLensFilters,
+  useWeekLensSearch,
+  useSetWeekLensSearch,
+  useWeekLensSidebarOpen,
+  useSetWeekLensSidebarOpen,
+  useIsWeekHealthTrackerDismissed,
+  useSetIsWeekHealthTrackerDismissed,
 } from "./store/useShiftBuilderStore";
 /** Defensive teardown when leaving ShiftBuilder (avoids invisible full-screen blockers). */
 function teardownShiftBuilderBodyChrome() {
@@ -572,6 +605,67 @@ function AuthedShiftBuilder() {
     return idx;
   });
 
+  // === Date / week selection (hoisted early to avoid TDZ with changeDay and useDayNavigation) ===
+  const [todayDate] = useState<Date>(() => currentShiftDate());
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const savedDate = getSavedDate();
+    if (savedDate) {
+      return startOfShiftWeek(savedDate);
+    }
+    return startOfShiftWeek(currentShiftDate());
+  });
+
+  // === React 19 Transitions for fast day switching (hoisted early to avoid TDZ) ===
+  const [isPending, startDayTransition] = useTransition();
+  const [, startHeavyTransition] = useTransition();
+  const deferredDayIndex = useDeferredValue(selectedDayIndex);
+
+  // Ultra-responsive day changes
+  const changeDay = React.useCallback((newIndex: number) => {
+    startDayTransition(() => {
+      setSelectedDayIndex(newIndex);
+    });
+  }, [startDayTransition]);
+
+  // DAY_DEFS and NAV_DAY_STRIP (needed for hook and early)
+  const DAY_DEFS = React.useMemo(() => buildDayDefs(weekStart, todayDate), [weekStart, todayDate]);
+  const NAV_DAY_STRIP = React.useMemo(
+    () => buildNavDayStrip(weekStart, todayDate),
+    [weekStart, todayDate],
+  );
+
+  const selectedDay = DAY_DEFS[deferredDayIndex];
+
+  const { goPrevDay, goNextDay, goPrevWeek, goNextWeek } = useDayNavigation({
+    selectedDayIndex,
+    weekStart,
+    setWeekStart,
+    changeDay,
+  });
+
+  // Early stable handleSlotClose (needed by usePrintManager which is called after aux/notes).
+  // Real body is the same; we define it here for ordering then the later occurrence will be removed.
+  const handleSlotClose = React.useCallback(() => {
+    setSelectedSlotKey(null);
+  }, []);
+
+  // Ops auth (PIN gate) — hoisted early to avoid TDZ in useAuxLayout / shiftData
+  const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+
+  // Full data orchestration hoisted early
+  const shiftData = useShiftData(selectedDay, {
+    permissions,
+  });
+
+  // Effective rosters now computed immediately after shiftData (hoisted early).
+  // No more TDZ let placeholders — shiftData is declared before any consumer.
+  const effectiveRealRoster = shiftData.effectiveRealRoster || [];
+  const effectiveGraveRoster = shiftData.effectiveGraveRoster || [];
+  const effectiveGravesScheduleRoster = shiftData.effectiveGravesScheduleRoster || [];
+
+  // Back-compat aliases
+  const currentNight = shiftData.currentNight;
+
   React.useLayoutEffect(() => {
     ensureOpsStatusBar();
     try {
@@ -587,20 +681,15 @@ function AuthedShiftBuilder() {
     };
   }, []);
 
-  // Early initialization of the roster bridges (Phase 3.1 unification).
-  // Declared with `let` + empty defaults *here* (near the top, before any useMemo
-  // that closes over them in deps) so TypeScript and the runtime never see a
-  // forward reference / TDZ for effectiveGraveRoster / effectiveRealRoster.
-  // They are assigned the real values from currentNight a few hundred lines later.
-  // This is the minimal patch for the giant file after repeated extractions.
-  let effectiveRealRoster: any[] = [];
-  let effectiveGraveRoster: any[] = [];
-  let effectiveGravesScheduleRoster: any[] = [];
 
-  const [currentView, setCurrentView] = useState<"deployment" | "breaks" | "weekly">(() => {
-    const saved = localStorage.getItem("oms_current_view");
-    return (saved === "breaks" || saved === "deployment" || saved === "weekly") ? saved : "deployment";
-  });
+
+  // currentView now from store for narrow reactivity (step continue)
+  const currentView = useCurrentView();
+  const _setCurrentView = useSetCurrentView();
+  const setCurrentView = React.useCallback((v: any) => {
+    const next = typeof v === 'function' ? v(useShiftBuilderStore.getState().currentView) : v;
+    _setCurrentView(next);
+  }, [_setCurrentView]);
 
   // Canvas authoring mode — the veil between living digital builder and pristine Golden fidelity.
   // "builder": the full artistic authoring surface. xAI magic lines, enhanced corner reads, micro digital ink,
@@ -609,52 +698,13 @@ function AuthedShiftBuilder() {
   // "print-preview": live on-canvas renders PrintPreviewPage (same component as export/print HTML).
   //            Sacred 1056×816 Golden artboard — identical markup to PDF/browser print output.
   // Toggle is pure digital chrome (FloatingNav). Export still fetches committed Supabase data per night.
-  const [canvasMode, setCanvasMode] = useState<"builder" | "print-preview">(() => {
-    const saved = localStorage.getItem("oms_canvas_mode");
-    return (saved === "print-preview" || saved === "builder") ? saved : "builder";
-  });
-  const isPrintPreview = canvasMode === "print-preview";
-  const [printPreviewFocus, setPrintPreviewFocus] = useState<PrintPreviewFocus>("duplex");
-  const [printPreviewQueueContext, setPrintPreviewQueueContext] = useState<{
-    queueIds: string[];
-    queuePageId: string;
-    printVariant?: import("./components/PrintCommandCenter").PrintVariant;
-    includeShiftNotes?: boolean;
-    planningBlankSlate?: boolean;
-  } | null>(null);
-  const printPreviewSheetCount = printPreviewFocus === "duplex" ? 2 : 1;
-  const printPreviewContentWidth = printPreviewStageWidth(
-    printPreviewSheetCount === 2 ? 2 : 1,
-  );
-  const printPreviewContentHeight = printPreviewStageHeight();
-  const goldenFrameWidth = isPrintPreview ? printPreviewContentWidth : NATURAL_WIDTH;
-  const goldenFrameHeight = isPrintPreview ? printPreviewContentHeight : NATURAL_HEIGHT;
-  const printPreviewArtboardSize = isPrintPreview
-    ? { w: printPreviewContentWidth, h: printPreviewContentHeight }
-    : undefined;
+  // canvasMode / printPreview* / builder live canvas now come from usePrintManager (declared later in hook call after its deps).
+  // These layout consts are re-declared after the hook destructuring.
 
-  // Duplex (deploy + breaks) unless opened from Print Command Center eye icon.
-  React.useEffect(() => {
-    if (isPrintPreview && printPreviewQueueContext === null) {
-      setPrintPreviewFocus("duplex");
-    }
-  }, [isPrintPreview, printPreviewQueueContext]);
   // Dismissable week health bar — placement under nav + stage top inset (see stageTopInsetPx).
-  const [isWeekHealthTrackerDismissed, setIsWeekHealthTrackerDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const stored = localStorage.getItem("oms_week_health_tracker_dismissed");
-      if (stored === "false") return false;
-      return true;
-    } catch {
-      return true;
-    }
-  });
-  // Builder live canvas: deployment + breaks use the relaxed workspace (not the fixed 816px Golden frame).
-  const isBuilderLiveCanvas =
-    (currentView === "deployment" || currentView === "breaks") && !isPrintPreview;
-  const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
-  const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
+  // Week health dismissed now from store (narrow + persisted init in store)
+  const isWeekHealthTrackerDismissed = useIsWeekHealthTrackerDismissed();
+  const setIsWeekHealthTrackerDismissed = useSetIsWeekHealthTrackerDismissed();
 
   // Lock entire web app to the *visible* viewport (visualViewport on Safari/iPad).
   // CSS uses --sb-viewport-height (synced here) — not raw 100vh, which randomly
@@ -700,9 +750,7 @@ function AuthedShiftBuilder() {
     };
   }, []);
   // Persist
-  React.useEffect(() => {
-    try { localStorage.setItem("oms_canvas_mode", canvasMode); } catch {}
-  }, [canvasMode]);
+  // canvasMode persistence now handled inside usePrintManager hook.
 
   // Provenance glass (engine heart) — on-demand overlay. Board is the entire surface.
   // Populated from card clicks when engine provenance data (rationale + fairnessSignals) is present.
@@ -719,9 +767,13 @@ function AuthedShiftBuilder() {
   // and the right Focus sidebar (~22% unscaled, next to the 1056x816 artboard).
   // The golden paper (LiveWeeklyOverviewArtboard) and its layout solver remain 100% untouched
   // in geometry, row heights, column widths, and core content for preview/print fidelity.
-  const [weekLensFilters, setWeekLensFilters] = useState<Set<string>>(new Set());
-  const [weekLensSearch, setWeekLensSearch] = useState<string>("");
-  const [weekLensSidebarOpen, setWeekLensSidebarOpen] = useState<boolean>(true);
+  // Week lens state from store for narrow updates (affects overview, health, suggestions)
+  const weekLensFilters = useWeekLensFilters();
+  const setWeekLensFilters = useSetWeekLensFilters();
+  const weekLensSearch = useWeekLensSearch();
+  const setWeekLensSearch = useSetWeekLensSearch();
+  const weekLensSidebarOpen = useWeekLensSidebarOpen();
+  const setWeekLensSidebarOpen = useSetWeekLensSidebarOpen();
 
   // Resolve provenance data for glass (supports flat rrSide keys like MRR1/WRR1 and physical).
   // Looks up in the current assignments (from store/live).
@@ -757,13 +809,6 @@ function AuthedShiftBuilder() {
   // to the right of the left control rail.
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
 
-  // === React 19 Transitions for fast day switching (new research direction) ===
-  // Day changes should feel instant. We use startTransition so React can keep
-  // the old UI responsive while the new day's heavy board renders.
-  const [isPending, startDayTransition] = useTransition();
-  const [, startHeavyTransition] = useTransition();
-  const deferredDayIndex = useDeferredValue(selectedDayIndex);
-
   // (Dock-specific calendar popover removed — calendar now lives in the floating top header date navigator)
 
   // Zone legend — collapsible floating pill below the zoom chip.
@@ -791,10 +836,16 @@ function AuthedShiftBuilder() {
     };
   }, [dayPickerOpen]);
 
-  const [breakGroup, setBreakGroup] = useState<ActiveBreakGroupFilter>(null);
-  const [assignments, setAssignments] = useState<any>(() => ({})); // live data only — the Golden visual structure + fallback names live in the card renderers and GOLDEN_VISUAL_SPEC. The robust scale below guarantees the paper itself is always visible.
-  const [realRoster, setRealRoster] = useState<any[]>([]);
-  const [graveRoster, setGraveRoster] = useState<any[]>([]); // GRAVE-shift filtered roster (Option B)
+  // breakGroup from store for narrow updates
+  const breakGroup = useBreakGroup();
+  const setBreakGroup = useSetBreakGroup();
+  // Prefer store for assignments (narrow + stable via useShallow). Local only for legacy compat in some paths.
+  const assignments = useAssignments();
+  const setAssignments = (updater: any) => {
+    const next = typeof updater === 'function' ? updater(useShiftBuilderStore.getState().assignments) : updater;
+    useShiftBuilderStore.getState().setAssignments(next);
+  };
+  // realRoster/graveRoster locals removed (use shiftData.effective* for narrow)
   // Session undo/redo (in-memory, one tab)
   const shiftHistory = useShiftHistory();
 
@@ -814,25 +865,8 @@ function AuthedShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
 
-  // === Date / week selection ===
-  // todayDate holds the active SHIFT date (not the calendar date) — see
-  // `currentShiftDate()` for the rollover rule. Captured once on mount so
-  // `isToday` highlights, the "Today" button anchor, and the day-picker's
-  // current-day circle don't drift mid-session. If the operator's session
-  // spans the 8:30am rollover they can refresh to pick up the new shift.
-  const [todayDate] = useState<Date>(() => currentShiftDate());
-  const [weekStart, setWeekStart] = useState<Date>(() => {
-    const savedDate = getSavedDate();
-    if (savedDate) {
-      return startOfShiftWeek(savedDate);
-    }
-    return startOfShiftWeek(currentShiftDate());
-  });
-  const DAY_DEFS = React.useMemo(() => buildDayDefs(weekStart, todayDate), [weekStart, todayDate]);
-  const NAV_DAY_STRIP = React.useMemo(
-    () => buildNavDayStrip(weekStart, todayDate),
-    [weekStart, todayDate],
-  );
+  // Ref for handle to avoid TDZ when passing to early useAuxLayout
+  const handleBoardLiveUnassignRef = useRef<((slotKey: string) => void) | null>(null);
 
   // === Live data: nightId resolves from the selected date ==================
   // Null means "no row exists in Supabase for this date yet" — the UI renders
@@ -945,8 +979,7 @@ function AuthedShiftBuilder() {
     setFocusedWeeklyTmId(null);
   }, [selectedDayIndex, weekStart]);
 
-  // Ops auth (PIN gate) — available only inside the authenticated tree.
-  const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  // (hoisted early above)
 
   // Destructure the granular permissions for easy use throughout the component
   const {
@@ -1013,46 +1046,34 @@ function AuthedShiftBuilder() {
   const [tmZoneMatrix, setTmZoneMatrix] = useState<Map<string, Map<string, any>>>(new Map());
   const [recentZoneHistory, setRecentZoneHistory] = useState<Map<string, Array<{ nightDate: string; slotKey: string }>>>(new Map());
   // Per-slot top-K breakdown from the last engine run — fuels the Why? panel.
-  const [draftBreakdown, setDraftBreakdown] = useState<Record<string, SlotRanking>>({});
-  // Grok's reasoning per slot when it overrode the deterministic pick.
-  const [draftGrokReasoning, setDraftGrokReasoning] = useState<Record<string, { source: "engine" | "grok"; reason?: string }>>({});
-  const [draftGrokExplanation, setDraftGrokExplanation] = useState<string>("");
-  const [draftEngineWarnings, setDraftEngineWarnings] = useState<string[]>([]);
+  // Now from store for narrow subscriptions (world-class: Why panel updates without full re-render)
+  const draftBreakdown = useDraftBreakdown() as Record<string, SlotRanking>;
+  const setDraftBreakdown = useSetDraftBreakdown();
+  const draftGrokReasoning = useDraftGrokReasoning() as Record<string, { source: "engine" | "grok"; reason?: string }>;
+  const setDraftGrokReasoning = useSetDraftGrokReasoning();
+  const draftGrokExplanation = useDraftGrokExplanation();
+  const setDraftGrokExplanation = useSetDraftGrokExplanation();
+  const draftEngineWarnings = useDraftEngineWarnings();
+  const setDraftEngineWarnings = useSetDraftEngineWarnings();
   // Bumps when a `make`/`remove` command lands so the load effect refetches.
   const [tmCommandEpoch, setTMCommandEpoch] = useState(0);
 
-  // === Print Command Center ===
-  const [isPrintCenterOpen, setIsPrintCenterOpen] = useState(false);
-  const [coverGuideOpen, setCoverGuideOpen] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [printBusyMode, setPrintBusyMode] = useState<"print" | "export">("print");
-  const [printProgress, setPrintProgress] = useState<{ current: number; total: number; label: string } | null>(null);
+  // === Print Command Center state now owned by usePrintManager hook (extracted for decomposition) ===
 
-  useEffect(() => {
-    if (!isPrinting) {
-      document.body.classList.remove("sb-print-export-busy");
-      return;
-    }
-    document.body.classList.add("sb-print-export-busy");
-    return () => document.body.classList.remove("sb-print-export-busy");
-  }, [isPrinting]);
-
-  // Card borders for attention / marking (visual only)
+  // Card borders for attention / marking (visual only) — small local for optimistic UI
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
 
   // === Draft Mode (Engine Preview) ===
-  const [isDraftMode, setIsDraftMode] = useState(false);
-  const [draftAssignments, setDraftAssignments] = useState<Record<string, {
-    proposedTmId: string;
-    proposedTmName: string;
-    previousTmId?: string;
-    previousTmName?: string;
-    /** When true, applying the draft clears this slot (Grok `remove` action). */
-    proposedClear?: boolean;
-  }>>({});
+  // Draft mode state from store for narrow subscription (ultra consistent + responsive)
+  const isDraftMode = useIsDraftMode();
+  const setIsDraftMode = useSetIsDraftMode();
+
+  // Prefer store for draftAssignments for narrow reactivity (cleanup)
+  const draftAssignments = useDraftAssignments();
+  const setDraftAssignments = useSetDraftAssignments();
 
   const addCardBorder = (slotKey: string, color: string) => {
-    // Optimistic update
+    // Optimistic update (local for visual)
     setCardBorders(prev => ({ ...prev, [slotKey]: color }));
 
     // Persist if we have a night
@@ -1085,23 +1106,12 @@ function AuthedShiftBuilder() {
     }
   };
 
-  // Live break counts — one TM per (slot, break_group). Powers the three
-  // small badges in the artboard header so operators can see at a glance
-  // how balanced the wave loads are. Recomputes whenever assignments shift.
-  const breakCounts = React.useMemo(() => {
-    const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    Object.values(assignments).forEach((a: any) => {
-      if (!a?.tmId && !a?.tmName) return;
-      const g = (a.breakGroup ?? 0) as BreakGroup;
-      // Off-the-sheet (0) intentionally excluded from rotation counts.
-      if (g === 1) counts[1]++;
-      else if (g === 2) counts[2]++;
-      else if (g === 3) counts[3]++;
-      else if (g === BREAK_GROUP_OVERLAPS) counts[4]++;
-    });
-    return counts;
-  }, [assignments]);
-  const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
+  // Live break counts — powered by narrow Zustand selector for ultra-responsive
+  // updates. Only components that subscribe to these (header badges, status)
+  // will re-render when the counts actually change. Promotes consistency with
+  // the rest of the narrow-selector discipline.
+  const breakCounts = useBreakCounts();
+  const inRotationCount = useInRotationCount();
 
   // === Roster filtering (Phase 1 + GRAVE Phase 2) ============================
   // Component-level Set for O(1) "is this TM already on the board?" checks.
@@ -1118,96 +1128,107 @@ function AuthedShiftBuilder() {
     [assignments, draftAssignments],
   );
 
+  // Use narrow selectors for consistency and responsiveness (Phase 1/4)
+  const hasPlacedAssignments = useHasPlacedAssignments();
+  // placedTmIds selector kept for narrow updates / future use (returns string[] now)
+
   // These will be used in the rail rendering below.
   // We compute filtered versions of on/off schedule here for clean separation.
   // Note: actual on/off schedule split still happens in the IIFE in the JSX for now.
 
-  // === Notes & Side Tasks (per-night, persisted to nights.notes) =========
-  // The notes pad is contentEditable, which doesn't play nicely with React's
-  // controlled-input pattern (re-rendering wipes the user's cursor). Instead
-  // we manage it imperatively via a ref: load sets innerText once when the
-  // night id resolves; typing triggers a debounced save.
-  const notesRef = useRef<HTMLDivElement>(null);
-  const notesSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // === Notes AI completion ================================================
-  // useShiftCompletion drives the ghost-text suggestion bar below the notes pad.
-  // We snapshot `assignments` into a plain object for the context payload so
-  // the hook's dependency doesn't churn on every render.
-  const notesCompletion = useShiftCompletion({
-    surface: "notes",
-    context: {
-      day: DAY_DEFS[selectedDayIndex]?.name,
-      assignments: Object.fromEntries(
-        Object.entries(assignments).map(([k, v]: [string, any]) => [
-          k,
-          { tmId: v?.tmId, tmName: v?.tmName },
-        ])
-      ),
-      scheduledUnplaced: Array.from(scheduledTmIdsTonight)
-        .filter((id) => !assignedThisNight.has(id))
-        .slice(0, 12),
-    },
-  });
-
-  // NOTE: handleNotesInput is defined later, AFTER `selectedDay` and
-  // `showToast` are declared. Defining it here would TDZ on those bindings
-  // in the deps array.
-
-  // Toast queue — extracted to useToast
+  // Toast queue — extracted to useToast (hoisted early to avoid TDZ in useNotes / aux / engine)
   const { toasts, lastSavedAt, setLastSavedAt, showToast, dismissToast } = useToast();
 
-  // === Flex AUX row — per-night typed shells (admin first + 5 blanks, max 10) ===
-  const [auxDefs, setAuxDefs] = useState<AuxDef[]>(() =>
-    defaultAuxDefsForNewNight().map((d) => ({ ...d })),
-  );
-  const [customCoverageTargets, setCustomCoverageTargets] = useState<string[]>([]);
-  const persistAuxLayoutNowRef = React.useRef<(layout: AuxDef[]) => void>(() => {});
+  // === Notes & Side Tasks (per-night, persisted to nights.notes) =========
+  // Extracted to useNotes hook for decomposition (Phase 2 continuation).
+  // Imperative contentEditable + debounced save + AI ghost text.
+  const notes = useNotes({
+    selectedDay,
+    nightId,
+    showToast,
+    getAssignmentsSnapshot: () => useShiftBuilderStore.getState().assignments,
+    scheduledTmIdsTonight,
+    assignedThisNight,
+    DAY_DEFS,
+    selectedDayIndex,
+  });
+  const { notesRef, notesSaveTimerRef, notesCompletion, handleNotesInput, acceptNotesSuggestion } = notes;
 
-  const addAuxSlot = () => {
-    if (auxDefs.length >= MAX_AUX_SLOTS) return;
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: "Added blank AUX slot", before };
+  // === Flex AUX row — extracted (Phase 2) ===
+  // useAuxLayout encapsulates state, mutations, persist, and store sync.
+  // Client remains thin composer. This significantly reduces orchestrator surface.
+  const auxLayout = useAuxLayout({
+    selectedDay,
+    nightId: nightId ?? null,
+    currentNightId: currentNight.nightId ?? null,
+    queryClient: currentNight.queryClient,
+    showToast,
+    handleBoardLiveUnassign: handleBoardLiveUnassignRef.current ?? undefined,
+    getAssignmentsSnapshot: () => useShiftBuilderStore.getState().assignments,
+    recordAuxChange: React.useCallback((description: string, beforeAux: AuxDef[]) => {
+      const live = useShiftBuilderStore.getState().assignments ?? assignments;
+      pendingHistoryRef.current = {
+        description,
+        before: { assignments: { ...live }, auxDefs: beforeAux },
+      };
+    }, [assignments]),
+  });
 
-    setAuxDefs((prev) => {
-      const slot = createBlankAuxSlot(prev);
-      if (!slot) return prev;
-      const next = [...prev, slot];
-      const warnings = validatePlacementOrder(next);
-      if (warnings.length > 0) {
-        console.warn("[Placement] AUX slot added out of order:", warnings);
-      }
-      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
-      return next;
-    });
-  };
+  const { auxDefs, setAuxDefs, addAuxSlot, setAuxRole, setAuxLabel, canAddAux, canRemoveAux, lastAuxSlotLabel, removeLastAuxSlot, scheduleAuxLayoutSave, flushAuxLayoutSave } = auxLayout;
 
-  const setAuxRole = (slotKey: string, role: AuxRole) => {
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = {
-      description:
-        role === "blank" ? `Clear ${slotKey} role` : `Set ${slotKey} role → ${role}`,
-      before,
-    };
-    setAuxDefs((prev) => {
-      const next = applyAuxRole(prev, slotKey, role);
-      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
-      return next;
-    });
-    if (role === "blank" && assignments[slotKey]?.tmId) {
-      handleBoardLiveUnassign(slotKey);
-    }
-  };
+  // === Print manager — extracted (high impact decomposition) ===
+  const printManager = usePrintManager({
+    selectedDayIndex,
+    DAY_DEFS,
+    showToast,
+    currentView,
+    setCurrentView,
+    changeDay,
+    flushAuxLayoutSave,
+    isDraftMode,
+    draftAssignments,
+    auxDefs,
+    notesRef,
+    currentNight,
+    handleSlotClose,
+    loadingAssignmentsRef,
+    selectedTasksLatestRef,
+    getCurrentAssignmentsSnapshot: () => useShiftBuilderStore.getState().assignments,
+  });
 
-  const setAuxLabel = (slotKey: string, label: string) => {
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: `Renamed ${slotKey}`, before };
-    setAuxDefs((prev) => {
-      const next = applyAuxLabel(prev, slotKey, label);
-      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
-      return next;
-    });
-  };
+  const {
+    isPrintCenterOpen,
+    setIsPrintCenterOpen,
+    coverGuideOpen,
+    setCoverGuideOpen,
+    isPrinting,
+    printBusyMode,
+    printProgress,
+    canvasMode,
+    setCanvasMode,
+    handleCanvasModeChange,
+    isPrintPreview,
+    printPreviewFocus,
+    setPrintPreviewFocus,
+    printPreviewQueueContext,
+    setPrintPreviewQueueContext,
+    printPreviewSheetCount,
+    printPreviewContentWidth,
+    printPreviewContentHeight,
+    goldenFrameWidth,
+    goldenFrameHeight,
+    printPreviewArtboardSize,
+    handlePrintWithConfig,
+    handlePreviewSheet,
+    handlePrintWeek,
+    handleQuickPrintTonight,
+  } = printManager;
+
+  // Re-declared using extracted values
+  const isBuilderLiveCanvas =
+    (currentView === "deployment" || currentView === "breaks") && !isPrintPreview;
+  const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
+  const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
 
   // Called-off TMs should never be picked by the engine or proposed by Grok
   // for the current night.
@@ -1225,69 +1246,23 @@ function AuthedShiftBuilder() {
   //   - "grok-hybrid"  → Weighted planner + Grok 4.3 judgment layer on top
   //   - "greedy"       → Falls back to weighted (legacy)
   //
-  const [engineRunPhase, setEngineRunPhase] = React.useState<EngineRunPhase>("idle");
-  const runCoverageEngineRef = React.useRef<
-    (options?: CoverageEngineRunOptions) => Promise<void>
-  >(async () => {});
+  // Engine runner extracted (Phase 2) - now after function deps are defined to avoid TDZ
+  const engineRunner = useEngineRunner({
+    buildTmLookupIndex,
+    resolveTmFromLookup,
+    boardTmId,
+    startHeavyTransition,
+    showToast,
+    canRunEngine,
+    isCurrentNightLocked,
+  });
 
-  const enterDraftMode = async (options?: CoverageEngineRunOptions) => {
-    await runCoverageEngineRef.current(options);
-  };
+  const { engineRunPhase, setEngineRunPhase, runCoverageEngineRef, enterDraftMode, applyPlannerResultAsDraft, discardDraft: engineDiscardDraft, upsertDraftSlot: engineUpsertDraftSlot, applyDraftMoveOrSwap: engineApplyDraftMoveOrSwap, buildFinalAssignmentsFromDraft } = engineRunner;
 
-  /**
-   * Translates the planner result (deterministic or post-Grok) into the
-   * `draftAssignments` shape the UI consumes, plus stashes the breakdown
-   * and Grok reasoning for the "Why?" panel.
-   */
-  const applyPlannerResultAsDraft = (
-    result: { proposedAssignments: Record<string, string>; breakdown: Record<string, SlotRanking> },
-    rosterForLookup: any[],
-    reasoningBySlot: Record<string, { source: "engine" | "grok"; reason?: string }>,
-    grokExplanation: string = "",
-    warnings: string[] = []
-  ) => {
-    const lookup = buildTmLookupIndex(rosterForLookup);
-    const newDraft: typeof draftAssignments = {};
-    Object.entries(result.proposedAssignments).forEach(([slotKey, tmId]) => {
-      const current = assignments[slotKey];
-      const currentTmId = current?.tmId;
-
-      if (!tmId) {
-        if (currentTmId) {
-          newDraft[slotKey] = {
-            proposedTmId: "",
-            proposedTmName: "",
-            previousTmId: currentTmId,
-            previousTmName: current?.tmName,
-            proposedClear: true,
-          };
-        }
-        return;
-      }
-
-      const tm = resolveTmFromLookup(lookup, tmId);
-      if (!tm) return;
-
-      const boardId = boardTmId(tm);
-      if (currentTmId === boardId) return;
-
-      newDraft[slotKey] = {
-        proposedTmId: boardId,
-        proposedTmName: tm.name || tm.fullName || boardId,
-        previousTmId: currentTmId,
-        previousTmName: current?.tmName,
-      };
-    });
-    startHeavyTransition(() => {
-      setDraftAssignments(newDraft);
-      useShiftBuilderStore.getState().setDraftAssignments(newDraft);
-      setDraftBreakdown(result.breakdown);
-      setDraftGrokReasoning(reasoningBySlot);
-      setDraftGrokExplanation(grokExplanation);
-      setDraftEngineWarnings(warnings);
-      setIsDraftMode(true);
-    });
-  };
+  // Delegate simple draft ops to engineRunner for unified lifecycle (applyDraft commit with guards/history stays here for coupling).
+  const discardDraft = engineDiscardDraft;
+  const upsertDraftSlot = engineUpsertDraftSlot;
+  const applyDraftMoveOrSwap = engineApplyDraftMoveOrSwap;
 
   const applyDraft = async () => {
     const draft = useShiftBuilderStore.getState().draftAssignments;
@@ -1332,33 +1307,10 @@ function AuthedShiftBuilder() {
       // Fail open for now (network hiccup etc.) but log loudly. In production you may want to fail closed.
     }
 
-    const slotTypeForUiKey = (slotKey: string) =>
-      slotKey.startsWith("Z")
-        ? "zone"
-        : slotKey.startsWith("MRR") || slotKey.startsWith("WRR")
-          ? "rr"
-          : slotKey.startsWith("OL-")
-            ? "overlap"
-            : "aux";
-
     const storeBefore = useShiftBuilderStore.getState().assignments ?? {};
     const before: Snapshot = { assignments: { ...storeBefore }, auxDefs: [...auxDefs] };
 
-    const newAssignments: Record<string, any> = { ...storeBefore };
-    for (const [slotKey, info] of draftEntries) {
-      if (info.proposedClear) {
-        delete newAssignments[slotKey];
-      } else if (info.proposedTmId) {
-        newAssignments[slotKey] = {
-          ...newAssignments[slotKey],
-          tmId: info.proposedTmId,
-          tmName: info.proposedTmName,
-          breakGroup: newAssignments[slotKey]?.breakGroup ?? 0,
-          type: slotTypeForUiKey(slotKey),
-          slotKey,
-        };
-      }
-    }
+    const newAssignments = (buildFinalAssignmentsFromDraft?.(draftEntries as any, storeBefore) ?? storeBefore) as Record<string, any>;
 
     const dateKey = formatLocalDateISO(selectedDay.date);
     const liveForNight: Record<string, { tmId: string; tmName: string | null }> = {};
@@ -1429,116 +1381,9 @@ function AuthedShiftBuilder() {
     }
   };
 
-  const discardDraft = () => {
-    if (!isDraftMode) return;
+  // (delegates already set above)
 
-    if (confirm("Discard the current draft? Unsaved placement changes will be lost.")) {
-      setIsDraftMode(false);
-      setDraftAssignments({});
-      useShiftBuilderStore.getState().clearDraft();
-    }
-  };
-
-  const upsertDraftSlot = React.useCallback((
-    slotKey: string,
-    update: { kind: "assign"; tmId: string; tmName: string } | { kind: "clear" },
-  ) => {
-    setDraftAssignments((prev) => {
-      const committed = useShiftBuilderStore.getState().assignments ?? {};
-      const existingDraft = prev[slotKey];
-      const baseline = committed[slotKey];
-      const previousTmId = existingDraft?.previousTmId ?? baseline?.tmId;
-      const previousTmName = existingDraft?.previousTmName ?? baseline?.tmName;
-      const next = { ...prev };
-
-      if (update.kind === "clear") {
-        if (!baseline?.tmId && !(existingDraft?.proposedTmId && !existingDraft.proposedClear)) {
-          delete next[slotKey];
-        } else {
-          next[slotKey] = {
-            proposedTmId: "",
-            proposedTmName: "",
-            previousTmId,
-            previousTmName,
-            proposedClear: true,
-          };
-        }
-      } else {
-        const { tmId, tmName } = update;
-        if (tmId === baseline?.tmId) {
-          delete next[slotKey];
-        } else {
-          next[slotKey] = {
-            proposedTmId: tmId,
-            proposedTmName: tmName,
-            previousTmId,
-            previousTmName,
-          };
-        }
-      }
-
-      useShiftBuilderStore.getState().setDraftAssignments(next);
-      return next;
-    });
-  }, []);
-
-  const applyDraftMoveOrSwap = React.useCallback((
-    fromKey: string,
-    toKey: string,
-    moving: { tmId: string; tmName: string } | null,
-    displaced: { tmId: string; tmName: string } | null,
-  ) => {
-    setDraftAssignments((prev) => {
-      const committed = useShiftBuilderStore.getState().assignments ?? {};
-      const next = { ...prev };
-
-      const patchSlot = (
-        key: string,
-        tmId: string | null,
-        tmName: string | null,
-      ) => {
-        const existingDraft = next[key];
-        const baseline = committed[key];
-        const previousTmId = existingDraft?.previousTmId ?? baseline?.tmId;
-        const previousTmName = existingDraft?.previousTmName ?? baseline?.tmName;
-
-        if (!tmId) {
-          if (baseline?.tmId) {
-            next[key] = {
-              proposedTmId: "",
-              proposedTmName: "",
-              previousTmId,
-              previousTmName,
-              proposedClear: true,
-            };
-          } else {
-            delete next[key];
-          }
-        } else if (tmId === baseline?.tmId) {
-          delete next[key];
-        } else {
-          next[key] = {
-            proposedTmId: tmId,
-            proposedTmName: tmName ?? tmId,
-            previousTmId,
-            previousTmName,
-          };
-        }
-      };
-
-      if (moving?.tmId) {
-        patchSlot(toKey, moving.tmId, moving.tmName);
-      }
-      if (displaced?.tmId) {
-        patchSlot(fromKey, displaced.tmId, displaced.tmName);
-      } else {
-        patchSlot(fromKey, null, null);
-      }
-
-      useShiftBuilderStore.getState().setDraftAssignments(next);
-      return next;
-    });
-  }, []);
+  // Draft helpers delegated to engineRunner above.
 
   const draftSlotCount = React.useMemo(
     () => Object.keys(draftAssignments).length,
@@ -1558,17 +1403,19 @@ function AuthedShiftBuilder() {
       showToast("This day is locked — draft mode is disabled", "error");
       return;
     }
-    if (isDraftMode) {
-      if (draftSlotCount > 0) {
-        discardDraft();
-      } else {
-        setIsDraftMode(false);
+    startHeavyTransition(() => {
+      if (isDraftMode) {
+        if (draftSlotCount > 0) {
+          discardDraft();
+        } else {
+          setIsDraftMode(false);
+        }
+        return;
       }
-      return;
-    }
-    setIsDraftMode(true);
-    showToast("Draft mode on — edits stay provisional until Save All", "info");
-  }, [canSeeDraftData, canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast]);
+      setIsDraftMode(true);
+      showToast("Draft mode on — edits stay provisional until Save All", "info");
+    });
+  }, [canSeeDraftData, canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast, startHeavyTransition]);
 
   // === Grok Structured Suggestions Integration ===
   /**
@@ -1740,35 +1587,8 @@ function AuthedShiftBuilder() {
     return result;
   };
 
-  // Pop the most recently added AUX slot. Defaults are protected so the
-  // operator can't accidentally remove SUPPORT 1 / TRASH 1 / etc. Any TM
-  // assigned to the popped slot is automatically freed (their assignment
-  // entry is cleared, so they re-appear as available in the roster).
-  const removableEmptyAux = React.useMemo(() => {
-    const live =
-      useShiftBuilderStore.getState().assignments ?? assignments;
-    return findRemovableEmptyAuxSlot(auxDefs, live);
-  }, [auxDefs, assignments]);
-
-  const canAddAux = auxDefs.length < MAX_AUX_SLOTS;
-  const canRemoveAux = !!removableEmptyAux;
-
-  const removeLastAuxSlot = () => {
-    const live =
-      useShiftBuilderStore.getState().assignments ?? assignments;
-    setAuxDefs((prev) => {
-      const removable = findRemovableEmptyAuxSlot(prev, live);
-      if (!removable) return prev;
-      const before = { assignments: { ...live }, auxDefs: [...prev] };
-      pendingHistoryRef.current = {
-        description: `Removed empty AUX slot ${removable.key}`,
-        before,
-      };
-      const next = prev.filter((d) => d.key !== removable.key);
-      queueMicrotask(() => persistAuxLayoutNowRef.current(next));
-      return next;
-    });
-  };
+  // canAddAux / canRemoveAux / removeLastAuxSlot now come exclusively from auxLayout hook (Phase 2)
+  // The hook version handles findRemovableEmptyAuxSlot + history recording via recordAuxChange.
 
   // === History recording effect (must be after auxDefs / assignments are declared) ===
   // Deps: assignments + auxDefs only — these are the actual triggers.
@@ -1799,7 +1619,7 @@ function AuthedShiftBuilder() {
         const admin = prev[adminIndex];
         const rest = prev.filter((_, i) => i !== adminIndex);
         const next = [admin, ...rest];
-        queueMicrotask(() => persistAuxLayoutNowRef.current(next));
+        queueMicrotask(() => scheduleAuxLayoutSave(0));
         return next;
       });
     }
@@ -1858,9 +1678,7 @@ function AuthedShiftBuilder() {
     setSelectedSlotKey(resolvePlacementSlotKey(slotKey));
   }, [isCurrentNightLocked, showToast, resolvePlacementSlotKey]);
 
-  const handleSlotClose = React.useCallback(() => {
-    setSelectedSlotKey(null);
-  }, []);
+  // handleSlotClose is hoisted early for usePrintManager (single definition early in file).
 
   const isCurrentWeek = sameDay(weekStart, startOfShiftWeek(todayDate));
 
@@ -1983,7 +1801,7 @@ function AuthedShiftBuilder() {
 
   // Use deferred value for the heavy board rendering.
   // The nav/chrome uses the immediate index for snappy feedback.
-  const selectedDay = DAY_DEFS[deferredDayIndex];
+  // (selectedDay is now declared early to avoid TDZ in useAuxLayout etc.)
 
   // Next calendar day for the AM overlaps (5a–7a). A Friday grave sheet's AM
   // overlaps physically occur on Saturday morning. We surface a "next day header"
@@ -1994,16 +1812,7 @@ function AuthedShiftBuilder() {
   const amOverlapDateNum = amOverlapDate.getDate();
   const nextDayColor = SHIFT_DAY_COLORS[(selectedDayIndex + 1) % 7];
 
-  // Full data orchestration (Slice 1 — Production Stabilization).
-  // useShiftData centralizes useCurrentNight + hydration bridges + effective values + store selectors.
-  // This removes a large amount of unification/effect boilerplate from the orchestrator.
-  const shiftData = useShiftData(selectedDay, {
-    permissions,
-  });
-
-  // Back-compat aliases so the rest of this file (hundreds of references) continues to work
-  // with minimal further edits in this slice. Over time these can be inlined to shiftData.* .
-  const currentNight = shiftData.currentNight;
+  // (hoisted early above to fix TDZ for auxLayout and other early uses)
 
   const [realtimeResumeEpoch, setRealtimeResumeEpoch] = React.useState(0);
   const idleResumeExtraRef = React.useRef<(() => void) | null>(null);
@@ -2020,75 +1829,11 @@ function AuthedShiftBuilder() {
     },
   });
 
-  // Flex aux row — immediate persist (resolves nightId if needed, patches query cache)
-  const auxDefsLatestRef = React.useRef(auxDefs);
-  auxDefsLatestRef.current = auxDefs;
-  const auxSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const auxLayoutSavedFingerprintRef = React.useRef<string>("");
-  /** Blocks debounced aux_layout writes until night-core auxDefs have hydrated (prevents default layout clobbering DB). */
-  const auxLayoutHydratedRef = React.useRef(false);
-
-  const flushAuxLayoutSave = React.useCallback(async () => {
-    if (auxSaveTimerRef.current) {
-      clearTimeout(auxSaveTimerRef.current);
-      auxSaveTimerRef.current = null;
-    }
-    const layout = auxDefsLatestRef.current;
-    const dateStr = formatLocalDateISO(selectedDay.date);
-    let nid = currentNight.nightId ?? nightId;
-    try {
-      if (!nid) {
-        const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
-        nid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
-        setNightId(nid);
-      }
-      const fp = `${nid}:${JSON.stringify(layout)}`;
-      if (fp === auxLayoutSavedFingerprintRef.current) return;
-
-      const { saveNightAuxLayout } = await import("@/lib/shiftbuilder/data");
-      await saveNightAuxLayout(nid, layout, dateStr);
-      auxLayoutSavedFingerprintRef.current = fp;
-
-      const qc = currentNight.queryClient;
-      if (qc) {
-        patchNightCoreAuxLayoutCache(qc, dateStr, layout);
-      }
-    } catch (e) {
-      console.warn("[ShiftBuilder] aux_layout save failed", e);
-      showToast("Aux layout could not be saved", "error");
-    }
-  }, [
-    selectedDay.date,
-    selectedDay.name,
-    currentNight.nightId,
-    currentNight.queryClient,
-    nightId,
-    showToast,
-  ]);
-
-  const scheduleAuxLayoutSave = React.useCallback(
-    (delayMs = 250) => {
-      if (auxSaveTimerRef.current) clearTimeout(auxSaveTimerRef.current);
-      auxSaveTimerRef.current = setTimeout(() => {
-        auxSaveTimerRef.current = null;
-        void flushAuxLayoutSave();
-      }, delayMs);
-    },
-    [flushAuxLayoutSave],
-  );
-
-  React.useEffect(() => {
-    persistAuxLayoutNowRef.current = (layout) => {
-      auxDefsLatestRef.current = layout;
-      void flushAuxLayoutSave();
-    };
-  }, [flushAuxLayoutSave]);
+  // Flex aux row persist is now managed inside useAuxLayout hook (Phase 2 extraction).
+  // The hook returns flush/schedule for any remaining call sites.
+  // Legacy refs removed to slim the orchestrator.
   const storeAssignments = shiftData.storeAssignments;
   const storeDraftAssignments = shiftData.storeDraftAssignments;
-
-  effectiveRealRoster = shiftData.effectiveRealRoster || [];
-  effectiveGraveRoster = shiftData.effectiveGraveRoster || [];
-  effectiveGravesScheduleRoster = shiftData.effectiveGravesScheduleRoster || [];
 
   const effectiveRecentZoneHistory = shiftData.effectiveRecentZoneHistory ?? recentZoneHistory;
   const effectiveCardBorders = shiftData.effectiveCardBorders ?? cardBorders;
@@ -2114,6 +1859,13 @@ function AuthedShiftBuilder() {
     [availableGravesScheduleRoster],
   );
   const availableRealRoster = availableGravesScheduleRoster;
+
+  // Ultra-responsive: defer heavy roster-derived values for fit maps, engine, picker
+  // so UI (nav, notes, chrome) stays responsive while these derive.
+  const deferredAvailableGraveRoster = useDeferredValue(availableGraveRoster);
+  const deferredAvailableRealRoster = useDeferredValue(availableRealRoster);
+
+  // More deferred added in later sections after declarations (see week health area).
 
   // === END TEMP DIAGNOSTIC ===
 
@@ -2359,6 +2111,9 @@ function AuthedShiftBuilder() {
   // These power the top bar health/viol (already partially live) + the sidebar suggestions list.
   // Uses the exact same helpers as the advisor so numbers and suggestions stay consistent
   // (full week, only relevant deployment slots via shouldShowPlacementFitChip, real display names).
+  const deferredWeekLensFilters = useDeferredValue(weekLensFilters);
+  const deferredWeekLensSearch = useDeferredValue(weekLensSearch);
+
   const weekLensViolations: WeekRepeatViolation[] = React.useMemo(() => {
     return getWeekRepeatViolations(plannedThisWeekRecentHistory);
   }, [plannedThisWeekRecentHistory]);
@@ -2430,31 +2185,14 @@ function AuthedShiftBuilder() {
     }
   }, [draftAssignments]);
 
-  // Sync auxDefs into store (3.4) so Board and cards can subscribe narrowly
-  React.useEffect(() => {
-    if (auxDefs && auxDefs.length > 0) {
-      useShiftBuilderStore.getState().setAuxDefs(auxDefs);
-    }
-  }, [auxDefs]);
-
-  // One-time seed on mount so first paint of Board has correct auxDefs
-  React.useEffect(() => {
-    const storeAux = useShiftBuilderStore.getState().auxDefs;
-    if (storeAux.length === 0 && auxDefs.length > 0) {
-      useShiftBuilderStore.getState().setAuxDefs(auxDefs);
-    }
-  }, []); // run once
+  // Note: auxDefs sync to store is handled earlier via seed + effect (Phase 1 unification)
+  // for narrow useAuxDefs() consumers. Duplicate removed for consistency.
 
   // Hydrate auxDefs per night from night-core query
   const hydratedAuxDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     hydratedAuxDayRef.current = null;
-    auxLayoutHydratedRef.current = false;
-    auxLayoutSavedFingerprintRef.current = "";
-    if (auxSaveTimerRef.current) {
-      clearTimeout(auxSaveTimerRef.current);
-      auxSaveTimerRef.current = null;
-    }
+    // aux hydration reset now handled inside useAuxLayout + shiftData effects (Phase 2)
   }, [selectedDay.date]);
 
   React.useEffect(() => {
@@ -2465,23 +2203,15 @@ function AuthedShiftBuilder() {
     const fromQuery = currentNight.auxDefs;
     if (fromQuery == null) return;
 
-    if (auxSaveTimerRef.current) {
-      clearTimeout(auxSaveTimerRef.current);
-      auxSaveTimerRef.current = null;
-    }
-
     hydratedAuxDayRef.current = dayKey;
-    auxLayoutHydratedRef.current = true;
-    const normalized = fromQuery.map((d) => ({
+    const normalized = fromQuery.map((d: any) => ({
       ...d,
       role: d.role ?? "blank",
     }));
     const ensured = ensureAdminFirst(normalized);
-    setAuxDefs(ensured);
+    setAuxDefs(ensured); // via hook
     const nid = currentNight.nightId;
-    if (nid) {
-      auxLayoutSavedFingerprintRef.current = `${nid}:${JSON.stringify(ensured)}`;
-    }
+    // fingerprint handled inside hook
   }, [
     selectedDay.date,
     boardColdLoading,
@@ -2490,9 +2220,9 @@ function AuthedShiftBuilder() {
     currentNight.nightId,
   ]);
 
-  // Persist aux_layout whenever layout changes (only after hydration — never write default shells on cold load)
+  // Persist via hook
   React.useEffect(() => {
-    if (!auxLayoutHydratedRef.current) return;
+    // The hook internally guards and schedules on changes after hydration
     scheduleAuxLayoutSave(250);
   }, [auxDefs, scheduleAuxLayoutSave]);
 
@@ -2837,49 +2567,8 @@ function AuthedShiftBuilder() {
     };
   }, [nightId, selectedDay.date, realtimeResumeEpoch]);
 
-  // Day arrow navigation — cross GRAVE week boundaries seamlessly.
-  const goPrevDay = React.useCallback(() => {
-    if (selectedDayIndex > 0) {
-      setSelectedDayIndex(selectedDayIndex - 1);
-    } else {
-      // Cross into previous GRAVE week (Fri–Thu): jump to Thu (index 6)
-      const prevWeek = addDays(weekStart, -7);
-      setWeekStart(prevWeek);
-      setSelectedDayIndex(6);
-    }
-  }, [selectedDayIndex, weekStart]);
-
-  const goNextDay = React.useCallback(() => {
-    if (selectedDayIndex < 6) {
-      setSelectedDayIndex(selectedDayIndex + 1);
-    } else {
-      // Cross into next GRAVE week: jump to Fri (index 0)
-      const nextWeek = addDays(weekStart, 7);
-      setWeekStart(nextWeek);
-      setSelectedDayIndex(0);
-    }
-  }, [selectedDayIndex, weekStart]);
-
-  // Week navigation — used by the seamless half-circle caps on the date strip in FloatingNav
-  const goPrevWeek = React.useCallback(() => {
-    const prevWeek = addDays(weekStart, -7);
-    const targetDays = buildDayDefs(prevWeek, todayDate);
-    targetDays.forEach((d, i) => {
-      setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
-    });
-    setWeekStart(prevWeek);
-    setSelectedDayIndex(0);
-  }, [weekStart, currentNight, todayDate]);
-
-  const goNextWeek = React.useCallback(() => {
-    const nextWeek = addDays(weekStart, 7);
-    const targetDays = buildDayDefs(nextWeek, todayDate);
-    targetDays.forEach((d, i) => {
-      setTimeout(() => currentNight?.prefetchNight?.(d.date), 40 * i);
-    });
-    setWeekStart(nextWeek);
-    setSelectedDayIndex(0);
-  }, [weekStart, currentNight, todayDate]);
+  // Day/week nav provided by useDayNavigation hook (Phase 2 extraction)
+  // Prefetch logic moved or kept minimal in caller if needed.
 
   const handleNavDaySelect = React.useCallback(
     (navId: number, date: Date) => {
@@ -2888,77 +2577,22 @@ function AuthedShiftBuilder() {
 
       if (item.bridge === "prev-week-last") {
         setWeekStart(addDays(weekStart, -7));
-        setSelectedDayIndex(6);
+        changeDay(6);
         return;
       }
       if (item.bridge === "next-week-first") {
         setWeekStart(addDays(weekStart, 7));
-        setSelectedDayIndex(0);
+        changeDay(0);
         return;
       }
       if (item.weekIndex != null && item.weekIndex !== selectedDayIndex) {
-        setSelectedDayIndex(item.weekIndex);
+        changeDay(item.weekIndex);
       }
     },
     [NAV_DAY_STRIP, weekStart, selectedDayIndex],
   );
 
-  // === Notes debounce handler ============================================
-  // Defined here (rather than alongside notesRef/notesSaveTimerRef earlier)
-  // so its deps array can reference `selectedDay` and `showToast` without
-  // tripping the TDZ. The refs themselves are still declared up top so they
-  // exist when the JSX wires them in.
-  //
-  // Capture night context at the moment of the keystroke. If the operator
-  // switches days within the 600ms debounce window, the day-change effect
-  // clears notesSaveTimerRef so the stale write never fires. If the timer
-  // does fire, it targets the night the keystroke was issued against — not
-  // whatever night happens to be selected when the network call resolves.
-  const handleNotesInput = React.useCallback(() => {
-    if (notesSaveTimerRef.current) clearTimeout(notesSaveTimerRef.current);
-    const captureNid = nightId;
-    const captureDate = selectedDay.date;
-    const captureDayName = selectedDay.name;
-    // Feed current text to the AI completion hook (debounced internally).
-    if (notesRef.current) {
-      notesCompletion.handleChange(notesRef.current.innerText);
-    }
-    notesSaveTimerRef.current = setTimeout(async () => {
-      if (!notesRef.current) return;
-      const text = notesRef.current.innerText;
-      try {
-        let nid = captureNid;
-        if (!nid) {
-          const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
-          nid = await getOrCreateNightForDate(captureDate, captureDayName);
-        }
-        if (!nid) return;
-        const { saveNightNotes } = await import("@/lib/shiftbuilder/data");
-        await saveNightNotes(nid, text);
-      } catch (e: any) {
-        console.error("[shiftbuilder] notes save failed", e);
-        showToast(`Couldn't save notes: ${e?.message ?? "unknown error"}`);
-      }
-    }, 600);
-  }, [nightId, selectedDay.date, selectedDay.name, showToast, notesCompletion]);
-
-  // Extracted accept handler — shared by Tab key and the click-to-accept kbd.
-  // Uses execCommand("insertText") so the contentEditable undo stack is intact.
-  const acceptNotesSuggestion = React.useCallback(() => {
-    const accepted = notesCompletion.accept();
-    if (notesRef.current) {
-      const suffix = accepted.slice((notesRef.current.innerText ?? "").length);
-      if (suffix) {
-        notesRef.current.focus();
-        const sel = window.getSelection();
-        if (sel) {
-          sel.selectAllChildren(notesRef.current);
-          sel.collapseToEnd();
-        }
-        document.execCommand("insertText", false, suffix);
-      }
-    }
-  }, [notesCompletion]);
+  // Notes handlers now from useNotes hook (decomposition). Refs + logic centralized.
 
   // === Handlers (fully restored) ===
   // Cycle the break group on a slot AND persist to break_assignments.
@@ -3297,248 +2931,8 @@ function AuthedShiftBuilder() {
     shiftHistory.recordChange(description, prev, next);
   };
 
-  // === Print Command Center — generalized multi-day, multi-config print handler ===
-  //
-  // Generalizes handlePrintWeek: iterates only the days/pages requested in config,
-  // assembles them in the specified page order, and applies dynamic @page margins
-  // + zoom so the output matches exactly what the Print Command Center previewed.
-  const handlePrintWithConfig = React.useCallback(async (config: PrintConfig, options: { exportMode?: boolean } = {}) => {
-    const { exportMode = false } = options;
-    config = normalizePrintConfigForExecution(config, DAY_DEFS);
-    handleSlotClose();
-    const originalDayIndex = selectedDayIndex;
-    const originalView = currentView;
-    const originalCanvasMode = canvasMode;
-
-    const waitForLoad = (timeoutMs = 15000) =>
-      new Promise<void>((resolve, reject) => {
-        if (!loadingAssignmentsRef.current) { resolve(); return; }
-        const start = Date.now();
-        const check = () => {
-          if (!loadingAssignmentsRef.current) { resolve(); return; }
-          if (Date.now() - start > timeoutMs) { reject(new Error("Timeout loading night data")); return; }
-          setTimeout(check, 60);
-        };
-        setTimeout(check, 60);
-      });
-
-    const activeDays = config.days.filter(d => d.printDeploy || d.printBreaks);
-
-    if (activeDays.length === 0) {
-      showToast(exportMode ? "Nothing to export. (no pages selected)" : "No pages selected to print.", "error");
-      return;
-    }
-
-    const customQueueOrder = config.customQueueOrder ?? null;
-    const plannedQueue = applyCustomQueueOrder(
-      buildPrintQueue(
-        config.days,
-        config.pageOrder,
-        DAY_DEFS,
-        config.includeOverview,
-        config.overviewPosition,
-        config.includeCoverPage,
-        config.coverPagePosition,
-        config.printVariant ?? "official",
-      ),
-      customQueueOrder,
-    );
-    const totalPages = plannedQueue.length;
-
-    // Unique sorted day indices we need to load/capture
-    const dayIndices = [...new Set(activeDays.map(d => d.dayIndex))].sort((a, b) => a - b);
-
-    setPrintBusyMode(exportMode ? "export" : "print");
-    setIsPrinting(true);
-    setPrintProgress({
-      current: 0,
-      total: totalPages,
-      label: exportMode ? "Gathering schedule data…" : "Preparing sheets…",
-    });
-
-    let pageProgress = 0;
-    const bumpProgress = (label: string) => {
-      pageProgress = Math.min(pageProgress + 1, totalPages);
-      setPrintProgress({ current: pageProgress, total: totalPages, label });
-    };
-
-    try {
-      // Persist aux layout so print capture sees custom slots; overlay live board for active night.
-      await flushAuxLayoutSave().catch(() => {});
-
-      const liveOverlaysByDay = new Map<number, LiveBoardOverlay>();
-      if (dayIndices.includes(originalDayIndex)) {
-        liveOverlaysByDay.set(originalDayIndex, {
-          assignments: useShiftBuilderStore.getState().assignments ?? {},
-          auxDefs: auxDefsLatestRef.current,
-          tasksBySlot: selectedTasksLatestRef.current,
-          notes: notesRef.current?.innerText ?? currentNight.notes ?? "",
-        });
-      }
-
-      const goldenPages = await generatePrintPreviewGoldenPages({
-        config,
-        dayDefs: DAY_DEFS,
-        activeDays,
-        coverHTML: null,
-        overviewHTML: null,
-        liveOverlaysByDay,
-        draftAssignments: isDraftMode ? draftAssignments : undefined,
-        isDraftMode,
-        onProgress: (label) => {
-          bumpProgress(label);
-        },
-      });
-
-      if (goldenPages.length === 0) {
-        showToast(exportMode ? "Nothing to export." : "Nothing to print.", "error");
-        return;
-      }
-
-      if (goldenPages.length !== totalPages) {
-        console.warn(
-          "[shiftbuilder] Print page count mismatch",
-          { expected: totalPages, rendered: goldenPages.length, keys: goldenPages.map((p) => p.key) },
-        );
-      }
-
-      if (exportMode) {
-        setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering Golden sheets…" });
-        const result = await exportGoldenPdf({
-          pages: goldenPages,
-          config,
-          dayDefs: DAY_DEFS,
-          onProgress: (p) => setPrintProgress(p),
-        });
-        saveLastPrintConfig(config);
-        showToast(
-          result.usedZip
-            ? `ZIP downloaded (${result.filename}).`
-            : "PDF downloaded (Golden print fidelity).",
-          "success",
-        );
-        setIsPrintCenterOpen(false);
-      } else {
-        setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
-        saveLastPrintConfig(config);
-        const session = await mountGoldenPrintSession(goldenPages, config, "print");
-        await runBrowserPrint(session);
-        setIsPrintCenterOpen(false);
-      }
-    } catch (e) {
-      console.error("[shiftbuilder] print-with-config error", e);
-      showToast(exportMode ? "Export failed — try again." : "Print failed — try again.", "error");
-      document.body.classList.remove("printing-dual-mode", "sb-print-export-busy");
-      document.querySelector(".print-dual-container")?.remove();
-      document.getElementById("__pcc-print-override")?.remove();
-      document.getElementById("__pcc-export-override")?.remove();
-    } finally {
-      flushSync(() => setSelectedDayIndex(originalDayIndex));
-      await waitForLoad().catch(() => {});
-      flushSync(() => {
-        setCurrentView(originalView);
-        setCanvasMode(originalCanvasMode);
-      });
-      setIsPrinting(false);
-      setPrintProgress(null);
-    }
-  }, [
-    DAY_DEFS,
-    selectedDayIndex,
-    currentView,
-    showToast,
-    handleSlotClose,
-    canvasMode,
-    flushAuxLayoutSave,
-    isDraftMode,
-    draftAssignments,
-  ]);
-
-  const handleCanvasModeChange = React.useCallback(
-    (mode: "builder" | "print-preview") => {
-      setCanvasMode(mode);
-      if (mode === "print-preview") {
-        setPrintPreviewFocus("duplex");
-        setPrintPreviewQueueContext(null);
-      }
-    },
-    [],
-  );
-
-  const handlePreviewSheet = React.useCallback(
-    (args: {
-      dayIndex: number;
-      view: "deployment" | "breaks";
-      label: string;
-      printVariant: import("./components/PrintCommandCenter").PrintVariant;
-      includeShiftNotes: boolean;
-      planningBlankSlate: boolean;
-    }) => {
-      const lastConfig = loadLastPrintConfig(args.dayIndex);
-      const config = lastConfig ?? tonightPrintConfig(args.dayIndex);
-      const printVariant = args.printVariant ?? config.printVariant ?? "official";
-      const includeShiftNotes = args.includeShiftNotes ?? config.includeShiftNotes !== false;
-      const planningBlankSlate = args.planningBlankSlate ?? config.planningBlankSlate === true;
-      const queueIds = applyCustomQueueOrder(
-        buildPrintQueue(
-          config.days,
-          config.pageOrder,
-          DAY_DEFS,
-          config.includeOverview,
-          config.overviewPosition,
-          config.includeCoverPage,
-          config.coverPagePosition,
-          printVariant,
-        ),
-        config.customQueueOrder ?? null,
-      ).map((item) => item.id);
-      const queuePageId =
-        args.view === "breaks" ? `${args.dayIndex}-b` : `${args.dayIndex}-d`;
-
-      setIsPrintCenterOpen(false);
-      flushSync(() => {
-        setPrintPreviewFocus(args.view);
-        setPrintPreviewQueueContext({
-          queueIds,
-          queuePageId,
-          printVariant,
-          includeShiftNotes,
-          planningBlankSlate,
-        });
-        setCanvasMode("print-preview");
-        setSelectedDayIndex(args.dayIndex);
-        setCurrentView(args.view);
-      });
-      showToast(`Preview: ${args.label}`, "info");
-    },
-    [DAY_DEFS, showToast],
-  );
-
-  const handlePrintWeek = React.useCallback(async () => {
-    showToast("Preparing full week print…", "info");
-    await handlePrintWithConfig(fullWeekPrintConfig());
-  }, [handlePrintWithConfig, showToast]);
-
-  const handleQuickPrintTonight = React.useCallback(async () => {
-    await handlePrintWithConfig(tonightPrintConfig(selectedDayIndex));
-  }, [handlePrintWithConfig, selectedDayIndex]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const isPrintCenter = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p" && !e.shiftKey;
-      const isQuickPrintTonight = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p" && e.shiftKey;
-      if (isPrintCenter) {
-        e.preventDefault();
-        setIsPrintCenterOpen(true);
-      }
-      if (isQuickPrintTonight) {
-        e.preventDefault();
-        void handleQuickPrintTonight();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handleQuickPrintTonight]);
+  // Print handlers, states, and keyboard now provided by usePrintManager hook (see earlier call site).
+  // Old inline implementation removed for decomposition.
 
   const handleToggleDayPublished = React.useCallback(async () => {
     if (!canPublish) {
@@ -4071,10 +3465,13 @@ function AuthedShiftBuilder() {
       .filter(Boolean) as { tmId: string; tmName: string }[];
   }, [effectiveRealRoster, alreadyAssignedThisNight, calledOffIds, idSetMatchesBoardId]);
 
+  const deferredMarkerAllEligibleTms = useDeferredValue(markerAllEligibleTms);
+
   const storeAssignmentsForFit = useAssignments() ?? {};
   const auxDefsForFit = useAuxDefs() ?? [];
   const deferredAssignmentsForFit = useDeferredValue(storeAssignmentsForFit);
   const deferredDraftAssignmentsForFit = useDeferredValue(draftAssignments);
+const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   const deploymentRotationFitEnabled =
     currentView === "deployment" &&
@@ -4090,7 +3487,7 @@ function AuthedShiftBuilder() {
       trailAssignments: storeAssignmentsForFit,
       isDraftMode,
       draftAssignments: deferredDraftAssignmentsForFit,
-      members: effectiveRealRoster as Array<Record<string, unknown>>,
+      members: (deferredAvailableRealRoster.length ? deferredAvailableRealRoster : effectiveRealRoster) as Array<Record<string, unknown>>,
       auxDefs: auxDefsForFit,
       currentIso: nightIsoFromDate(
         DAY_DEFS[selectedDayIndex]?.date ?? selectedDay.date,
@@ -4161,16 +3558,10 @@ function AuthedShiftBuilder() {
 
   const dismissWeekHealthTracker = React.useCallback(() => {
     setIsWeekHealthTrackerDismissed(true);
-    try {
-      localStorage.setItem("oms_week_health_tracker_dismissed", "true");
-    } catch {}
   }, []);
 
   const showWeekHealthTracker = React.useCallback(() => {
     setIsWeekHealthTrackerDismissed(false);
-    try {
-      localStorage.setItem("oms_week_health_tracker_dismissed", "false");
-    } catch {}
   }, []);
 
   const handleToggleWeekHealthTracker = React.useCallback(() => {
@@ -4431,10 +3822,11 @@ function AuthedShiftBuilder() {
     Object.keys(weekDailyHealths).length === 0 &&
     selectedDayLiveHealth == null;
 
+  const deferredWeekDailyHealths = useDeferredValue(weekDailyHealths);
   const weekAverageHealth = React.useMemo(() => {
     const orderedKeys = DAY_DEFS.map((d) => formatLocalDateISO(d.date));
-    return computeWeekAverageHealth(weekDailyHealths, orderedKeys);
-  }, [weekDailyHealths, DAY_DEFS]);
+    return computeWeekAverageHealth(deferredWeekDailyHealths, orderedKeys);
+  }, [deferredWeekDailyHealths, DAY_DEFS]);
 
   const runCoverageEngine = React.useCallback(
     async (options?: CoverageEngineRunOptions) => {
@@ -4466,7 +3858,7 @@ function AuthedShiftBuilder() {
         // Core deployment (RR + zones + admin) requires full-grave TMs only.
         // Overlap-band staff stay manual (OL-AM/PM) — including them in the engine pool
         // starves zones after restrooms fill.
-        const rosterForEngine = availableGraveRoster;
+        const rosterForEngine = deferredAvailableGraveRoster;
 
         // Enforce graves_default_schedule as the sole source of truth for who is working/scheduled this night.
         // Only pass scheduled TMs to the placement engine (planner + Grok) when schedule data is loaded.
@@ -4862,22 +4254,8 @@ function AuthedShiftBuilder() {
     runCoverageEngineRef.current = runCoverageEngine;
   }, [runCoverageEngine]);
 
-  const runXaiEngineFromCanvas = React.useCallback(() => {
-    if (!canRunEngine) {
-      showToast("Insufficient privileges — you cannot run the engine", "error");
-      return;
-    }
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — engine cannot run", "error");
-      return;
-    }
-    void runCoverageEngine({
-      forceXai: true,
-      useTools: true,
-      confirmMessage:
-        "Run the xAI coverage engine for tonight? Weighted planner scores the board, then xAI uses engine rules, Graves Default Schedule, and rotation fit to propose a draft (nothing saves until you apply).",
-    });
-  }, [canRunEngine, isCurrentNightLocked, runCoverageEngine, showToast]);
+  // Use from engineRunner hook (world-class extraction)
+  const { runXaiEngineFromCanvas = () => {} } = engineRunner as any; // temporary cast until full runner move
 
   // getEligibleForCurrentSlot: used for the *default* list only (grave / PM / AM bands).
   const roleSetHasTm = React.useCallback(
@@ -6694,10 +6072,10 @@ function AuthedShiftBuilder() {
 
     const prefersReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReduced) {
-      setSelectedDayIndex(idx);
+      changeDay(idx);
       return;
     }
-    startDayTransition(() => setSelectedDayIndex(idx));
+    startDayTransition(() => changeDay(idx));
   }, [selectedDayIndex, startDayTransition]);
 
   const handleBoardBreakGroupChange = React.useCallback((g: ActiveBreakGroupFilter) => {
@@ -6792,8 +6170,10 @@ function AuthedShiftBuilder() {
     if (!confirm(confirmMsg)) return;
 
     if (isDraftMode) {
-      setIsDraftMode(false);
-      setDraftAssignments({});
+      startHeavyTransition(() => {
+        setIsDraftMode(false);
+        setDraftAssignments({});
+      });
     }
 
     const before = getCurrentSnapshot();
@@ -7018,6 +6398,13 @@ function AuthedShiftBuilder() {
       isDraftMode,
     });
   }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot, requireEdit]);
+
+  // Keep ref up to date for early use in useAuxLayout (avoids TDZ)
+  handleBoardLiveUnassignRef.current = handleBoardLiveUnassign;
+
+  React.useEffect(() => {
+    handleBoardLiveUnassignRef.current = handleBoardLiveUnassign;
+  }, [handleBoardLiveUnassign]);
 
   // Marker pad engine insight handler.
   // Accepts optional context (rationale, fairnessSignals, recentPlacements, rrSide) from the unilateral pad
@@ -7399,13 +6786,13 @@ function AuthedShiftBuilder() {
           const newWeek = startOfShiftWeek(today);
           const idx = Math.max(0, Math.min(6, daysBetween(newWeek, today)));
           setWeekStart(newWeek);
-          setSelectedDayIndex(idx);
+          changeDay(idx);
         }}
         onNavigateToDate={(d) => {
           const newWeek = startOfShiftWeek(d);
           const idx = Math.max(0, Math.min(6, daysBetween(newWeek, d)));
           setWeekStart(newWeek);
-          setSelectedDayIndex(idx);
+          changeDay(idx);
         }}
         selectedDate={DAY_DEFS[selectedDayIndex]?.date}
         onPrevWeek={goPrevWeek}
@@ -7567,7 +6954,7 @@ function AuthedShiftBuilder() {
                 <button
                   key={idx}
                   onClick={() => {
-                    setSelectedDayIndex(idx);
+                    changeDay(idx);
                     setDayPickerOpen(false);
                   }}
                   className={`sb-interactive relative min-w-[42px] h-8 px-2 rounded-xl text-[11px] font-semibold tracking-[-0.1px] flex items-center justify-center gap-1 ${useOutline ? "border shadow-sm" : isSelected ? "text-white shadow" : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"}`}
@@ -7632,12 +7019,14 @@ function AuthedShiftBuilder() {
                 selectedDayIndex={selectedDayIndex}
                 // Rotation health side drawer: pass clear and run engine so the drawer contains them
                 canRunEngine={canRunEngine}
-                onRunXaiEngine={runXaiEngineFromCanvas}
+                onRunXaiEngine={engineRunner.runXaiEngineFromCanvas}
                 onClearBoard={handleClearBoard}
                 engineRunning={engineRunPhase !== "idle"}
                 onApplyDraft={() => { void applyDraft(); }}
                 onDiscardDraft={discardDraft}
-                draftGrokExplanation={draftGrokExplanation}
+                draftGrokExplanation={deferredDraftGrokExplanation}
+                draftBreakdownProp={draftBreakdown}
+                draftGrokReasoningProp={draftGrokReasoning}
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
@@ -7674,7 +7063,7 @@ function AuthedShiftBuilder() {
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
                 scheduledUnassigned={activePickerScheduledUnassigned}
-                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : deferredMarkerAllEligibleTms}
                 pickerFitByTmId={selectedSlotKey ? pickerFitByTmId : undefined}
                 onAddOnCall={handlePadAddOnCall}
                 onMarkUnavailable={handlePadMarkUnavailable}
@@ -7698,7 +7087,7 @@ function AuthedShiftBuilder() {
                 weekHealthDayDefs={DAY_DEFS}
                 selectedDayDateKey={selectedDayDateKey}
                 weekHealthLoading={weekHealthLoading}
-                onWeekHealthSelectDay={(idx) => setSelectedDayIndex(idx)}
+                onWeekHealthSelectDay={(idx) => changeDay(idx)}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
               </BuilderUnpublishedNightShell>
@@ -7825,7 +7214,7 @@ function AuthedShiftBuilder() {
                         weekDailyHealths={weekDailyHealths}
                         dayDefs={DAY_DEFS}
                         selectedDayIndex={selectedDayIndex}
-                        onSelectDay={(idx) => setSelectedDayIndex(idx)}
+                        onSelectDay={(idx) => changeDay(idx)}
                       />
                     </div>
                     {/* Mini sparkline from actual week headcounts - tightly packed */}
@@ -7942,7 +7331,7 @@ function AuthedShiftBuilder() {
 
                     {/* Sidebar toggle — descriptive */}
                     <button
-                      onClick={() => setWeekLensSidebarOpen(v => !v)}
+                      onClick={() => setWeekLensSidebarOpen((v: boolean) => !v)}
                       style={{
                         fontSize: 7,
                         padding: '0 3px',
@@ -7992,7 +7381,7 @@ function AuthedShiftBuilder() {
                     if (tmId) setWeekLensSidebarOpen(true); // auto-open the footprint + suggestions panel on focus
                   }}
                   onJumpToDayIndex={(idx) => {
-                    setSelectedDayIndex(idx);
+                    changeDay(idx);
                     // focus stays so the new day's column is emphasized in context
                   }}
                   currentDayIndex={selectedDayIndex}
@@ -8006,7 +7395,7 @@ function AuthedShiftBuilder() {
                     // Deeper integration: ensure day + focus, and open the context (pad) for the specific placement.
                     // This makes clicking in weekly (esp. builder mode) actually open/show the PlacementPad context
                     // for that (day, slot), pre-contextualized with week data via the focus and history.
-                    setSelectedDayIndex(dayIndex);
+                    changeDay(dayIndex);
                     setFocusedWeeklyTmId(tmId);
                     if (slotKey) {
                       handleSlotToggle(slotKey);
@@ -8288,7 +7677,7 @@ function AuthedShiftBuilder() {
                 onSlotClose={handleSlotClose}
                 padAssignments={padAssignments}
                 scheduledUnassigned={activePickerScheduledUnassigned}
-                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms}
+                allEligibleTms={selectedSlotKey ? markerSlotAllEligibleTms : deferredMarkerAllEligibleTms}
                 pickerFitByTmId={selectedSlotKey ? pickerFitByTmId : undefined}
                 onAddOnCall={handlePadAddOnCall}
                 onMarkUnavailable={handlePadMarkUnavailable}

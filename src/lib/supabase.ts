@@ -25,6 +25,13 @@ export function getSupabaseRestOrigin(): string | null {
   }
 }
 
+function hasSupabaseConfig(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+  return !!(url && (anonKey || serviceKey));
+}
+
 // Use the standard Next.js pattern. process.env.NODE_ENV is replaced at build time
 // by Turbopack/webpack. This avoids fragile runtime "process" polyfill dependencies
 // that trigger "module factory is not available" errors on large client pages
@@ -32,6 +39,19 @@ export function getSupabaseRestOrigin(): string | null {
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export function getSupabaseClient(): SupabaseClient {
+  if (typeof window !== 'undefined' && !hasSupabaseConfig()) {
+    // In dev, if no config, return the dummy immediately without logging "failed".
+    // (warmSupabaseConnection already guards, but direct calls from data paths may happen.)
+    if (!_supabaseClient) {
+      _supabaseClient = new Proxy({} as SupabaseClient, {
+        get() {
+          throw new Error('Supabase is not configured (no NEXT_PUBLIC_SUPABASE_* keys). Add .env.local and restart.');
+        }
+      });
+    }
+    return _supabaseClient;
+  }
+
   if (!_supabaseClient) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
@@ -45,19 +65,40 @@ export function getSupabaseClient(): SupabaseClient {
       if (!url) missing.push('NEXT_PUBLIC_SUPABASE_URL');
       if (!serviceKey && !anonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY (or SERVICE_ROLE_KEY)');
 
-      console.error('[supabase] Initialization failed in', isProd ? 'PRODUCTION' : 'development', {
-        hasUrl: !!url,
-        hasAnonKey: !!anonKey,
-        hasServiceKey: !!serviceKey,
-        nodeEnv: process.env.NODE_ENV ?? 'unknown',
-      });
+      // In development we often intentionally run without a local Supabase (UI review, worktrees, etc.).
+      // Only log a one-time warning (not error) so the console isn't full of red during normal dev.
+      if (typeof window !== 'undefined' && !(window as any).__supabaseInitLogged) {
+        (window as any).__supabaseInitLogged = true;
+        if (isProd) {
+          console.error('[supabase] Initialization failed in PRODUCTION', {
+            hasUrl: !!url,
+            hasAnonKey: !!anonKey,
+            hasServiceKey: !!serviceKey,
+            nodeEnv: process.env.NODE_ENV ?? 'unknown',
+          });
+        } else {
+          console.warn('[supabase] No Supabase config found in development (common / expected).', {
+            hint: 'Add NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local and restart the dev server if you need live data or auth.',
+          });
+        }
+      }
 
-      throw new Error(
-        `Supabase config missing: ${missing.join(', ')}. ` +
-        (isProd
-          ? 'Make sure NEXT_PUBLIC_SUPABASE_* variables are set in Railway (they must be available at build time for NEXT_PUBLIC_ vars).'
-          : 'Set them in .env.local')
-      );
+      // Never hard-throw in development from this path (prevents module-eval crashes in loading/auth shells).
+      // Real usage will get a clear error from the dummy below (or from data layer).
+      if (isProd) {
+        throw new Error(
+          `Supabase config missing: ${missing.join(', ')}. ` +
+          'Make sure NEXT_PUBLIC_SUPABASE_* variables are set in Railway (they must be available at build time for NEXT_PUBLIC_ vars).'
+        );
+      }
+
+      const devDummy = new Proxy({} as SupabaseClient, {
+        get() {
+          throw new Error('Supabase not configured — set the NEXT_PUBLIC_SUPABASE_* keys in .env.local and restart dev.');
+        }
+      });
+      _supabaseClient = devDummy;
+      return devDummy;
     }
 
     const usingService = !!serviceKey;
@@ -120,6 +161,11 @@ export function warmSupabaseConnection(options?: WarmSupabaseOptions): Promise<v
 
   _warmPromise = (async () => {
     try {
+      // Avoid triggering getSupabaseClient (and its console.error) during early module/useEffect
+      // evaluation in development when env vars are not yet set (common in fresh clones or worktrees).
+      if (!hasSupabaseConfig()) {
+        return;
+      }
       const client = getSupabaseClient();
       const t0 = performance.now();
       await client.from('nights').select('id').limit(1).maybeSingle();

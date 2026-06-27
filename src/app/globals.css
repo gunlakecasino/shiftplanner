@@ -645,7 +645,7 @@ body {
   mix-blend-mode: multiply;
 }
 
-/* Card children sit above the spotlight layer (coverage bars stay absolute at card foot) */
+/* Card children sit above the spotlight layer (coverage bars are in-flow footer in builder) */
 .assignment-card > *:not(.sb-coverage-bar) {
   position: relative;
   z-index: 1;
@@ -1784,6 +1784,13 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+@media (pointer: coarse) and (min-width: 1024px) {
+  .sb-builder-stage .sb-zone-grid,
+  .sb-builder-stage .sb-rr-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)); /* better use iPad real-estate */
+  }
+}
+
 .sb-builder-stage .sb-aux-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1939,6 +1946,7 @@ body {
   flex: 1 1 auto;
   height: 100%;
   min-height: 0;
+  min-height: 128px; /* reduce ragged grid on iPad / relaxed builder when coverage or content varies */
 }
 
 .sb-builder-stage .sb-rr-grid > .sb-day-card-host > div {
@@ -2424,22 +2432,16 @@ body {
   letter-spacing: 0.2px !important;
 }
 
-/* Coverage bars — in-flow at card foot in builder (flex footer); absolute for print paths */
+/* Coverage bars — in-flow at card foot in live builder (via footer flex).
+   Prevents overlap with card content. Print paths may use absolute for fidelity if needed. */
 .builder-workspace .assignment-card .sb-coverage-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  border-radius: 0 0 7px 7px;
-}
-
-.builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-bar--builder-calm,
-.sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar {
   position: relative;
   bottom: auto;
   left: auto;
   right: auto;
+  z-index: 1;
+  border-radius: 0 0 6px 6px;
+  margin-top: 0;
   flex-shrink: 0;
 }
 
@@ -2449,6 +2451,12 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
+  padding-top: 2px;
+}
+
+/* Reserve a bit of space in content area above footer */
+.builder-workspace .assignment-card .sb-card-content-with-footer {
+  padding-bottom: 4px;
 }
 
 /* Zone accent stripe — gold zones stay bright; others slightly softened. */

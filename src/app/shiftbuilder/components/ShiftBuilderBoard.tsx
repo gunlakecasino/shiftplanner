@@ -38,7 +38,8 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore } from "../store/useShiftBuilderStore";
+import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore, useIsDraftMode, useBreakCounts, useDraftBreakdown, useDraftGrokReasoning } from "../store/useShiftBuilderStore";
+import { useShallow } from 'zustand/shallow';
 import PlacementPad, { resolvePadAnchorHost, type PlacementPadAnchor } from "./PlacementPad";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 import TasksPad from "./TasksPad";
@@ -127,6 +128,8 @@ export interface ShiftBuilderBoardProps {
   isDark: boolean;
   isDraftMode: boolean;
   draftAssignments?: Record<string, any>; // optional — prefer store selector (3.4)
+  draftBreakdownProp?: Record<string, any>;
+  draftGrokReasoningProp?: Record<string, any>;
   isCurrentNightLocked: boolean;
   loadingAssignments?: boolean;
   auxDefs?: AuxDef[]; // optional — prefer store selector (3.4)
@@ -301,7 +304,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   currentView,
   breakGroup,
   isDark,
-  isDraftMode,
+  isDraftMode: isDraftModeProp,
   draftAssignments: draftAssignmentsProp,
   isCurrentNightLocked,
   loadingAssignments,
@@ -385,6 +388,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onApplyDraft,
   onDiscardDraft,
   draftGrokExplanation,
+  draftBreakdownProp,
+  draftGrokReasoningProp,
 }: ShiftBuilderBoardProps) {
   const reducedMotion = useReducedMotion();
   /** After first paint, day changes get a short enter fade (not first mount). */
@@ -417,11 +422,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const assignments = useAssignments() ?? assignmentsProp ?? {};
   const draftAssignments = useDraftAssignments() ?? draftAssignmentsProp ?? {};
   const auxDefs = useAuxDefs() ?? auxDefsProp ?? {};
+  const isDraftModeFromStore = useIsDraftMode();
+  const breakCountsFromStore = useBreakCounts();
+  const isDraftMode = isDraftModeProp ?? isDraftModeFromStore ?? false;
+  // Use store for draft UI too when available for narrow updates
+  const draftBreakdown = useDraftBreakdown() ?? draftBreakdownProp ?? {};
+  const draftGrokReasoning = useDraftGrokReasoning() ?? draftGrokReasoningProp ?? {};
 
   // Respect pending drag so source cards do not lose their draggable state
   // or visual TM during an active reassignment drag. This is critical for
   // making assigned TM drag feel solid like task drag.
-  const pendingDrag = useShiftBuilderStore(s => s.pendingDrag) ?? null;
+  const pendingDrag = useShiftBuilderStore(useShallow((s) => s.pendingDrag)) ?? null;
 
   // Refs for grids (used for ResizeObserver in some paths, but in builder we let cards
   // size naturally to their content — strict padding + tasks + wrapped text determine height.
@@ -515,7 +526,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return counts;
   }, [assignments]);
 
-  const breakCounts = processedBreakCounts ?? computedBreakCounts;
+  const breakCounts = processedBreakCounts ?? breakCountsFromStore ?? computedBreakCounts;
   const breakGroupsWithCounts = ([1, 2, 3, 4] as const).filter((g) => breakCounts[g] > 0);
 
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
