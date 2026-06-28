@@ -187,8 +187,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             onPointerCancel: longPress.onPointerCancel,
           }
         : {})}
-      {...(hasTM && !isLocked ? listeners : {})}
-      {...(hasTM && !isLocked ? attributes : {})}
+      {...(!isLocked ? listeners : {})}
+      {...(!isLocked ? attributes : {})}
       data-slot-key={def.key}
       className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
@@ -268,7 +268,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               <UnassignedInvite
                 size="zone"
                 onClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
-                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · drop to assign`}
+                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · Option/Alt-drag the card to an assigned zone to assign coverage`}
               />
             </div>
           </>

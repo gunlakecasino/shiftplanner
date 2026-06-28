@@ -37,10 +37,14 @@ export function useSlotDnd(
     disabled,
   });
   const hasTM = !!tm.tmName;
+  const dragData = hasTM
+    ? { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName }
+    : { type: "unassigned-slot", fromSlot: slotKey, slotType };
+  const dragId = hasTM ? `assigned:${slotKey}` : `unassigned-slot:${slotKey}`;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-    id: `assigned:${slotKey}`,
-    data: { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName },
-    disabled: disabled || !hasTM,
+    id: dragId,
+    data: dragData,
+    disabled,
   });
   const setRef = (el: HTMLElement | null) => {
     setDropRef(el);

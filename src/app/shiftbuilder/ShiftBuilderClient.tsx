@@ -887,8 +887,8 @@ function AuthedShiftBuilder() {
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
   const [activeDrag, setActiveDrag] = useState<{
-    kind: "tm" | "assigned" | "task";
-    label: string;
+    kind: "tm" | "assigned" | "task" | "coverage-request";
+    label?: string;
     fromSlot?: string;
     isDuplicate?: boolean;
   } | null>(null);
@@ -4675,6 +4675,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     else if (d.type === "task") {
       const isAltAtStart = altPressed || (typeof window !== 'undefined' && (window as any).event?.altKey);
       setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot, isDuplicate: isAltAtStart });
+    } else if (d.type === "unassigned-slot" || d.type === "unassigned-zone") {
+      const activatorEvent = event.activatorEvent as any;
+      const isAltAtStart =
+        altPressed ||
+        (activatorEvent && (activatorEvent.altKey || activatorEvent.optionKey || activatorEvent.getModifierState?.('Alt'))) ||
+        (typeof window !== 'undefined' && (window as any).event?.altKey);
+
+      if (isAltAtStart) {
+        // For coverage gesture (Option/Alt + drag): drag unassigned zone as a coverage target.
+        // This works on iPad with external keyboard + Pencil (key events + pointer activation).
+        const label = getSlotCoverageLabel(d.fromSlot);
+        setActiveDrag({ kind: "coverage-request", fromSlot: d.fromSlot, label });
+      }
+      // Non-Alt drags of unassigned cards are ignored (no ghost, no action on drop).
+      // This preserves normal iPad tap-to-assign and other interactions.
     }
   };
 
@@ -4720,6 +4735,33 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         const normalizedSlot = safeNormalizeSlotKey((over.data.current as any).slotKey);
         assign(normalizedSlot, a.tmId, a.tmName);
       }
+      return;
+    }
+
+    // Special gesture: Option/Alt + drag an unassigned zone card onto an assigned zone.
+    // Effect: the TM on the drop target (provider) gets a coverage task ("And ...") for the dragged zone.
+    // The dragged (unassigned) zone becomes covered (shows COVERED BY).
+    // You can repeat the gesture from the same unassigned card to additional providers to accumulate names.
+    if (a.type === "unassigned-slot" || a.type === "unassigned-zone") {
+      const activatorEvent = event.activatorEvent as any;
+      const usedAlt =
+        altPressed ||
+        (activatorEvent && (activatorEvent.altKey || activatorEvent.optionKey || activatorEvent.getModifierState?.('Alt'))) ||
+        (typeof window !== 'undefined' && (window as any).event?.altKey);
+      if (!usedAlt) return;
+
+      const overData = over?.data.current as any;
+      if (!overData || overData.type !== "slot") return;
+
+      const providerKey = overData.slotKey;
+      const coveredKey = a.fromSlot;
+
+      if (providerKey === coveredKey) return;
+
+      const provider = assignments[providerKey] || useShiftBuilderStore.getState().assignments?.[providerKey];
+      if (!provider?.tmName) return;
+
+      handleCmdkAddCoverage(providerKey, coveredKey);
       return;
     }
 
