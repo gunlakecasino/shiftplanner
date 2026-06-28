@@ -268,7 +268,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               <UnassignedInvite
                 size="zone"
                 onClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
-                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · Option/Alt-drag the card to an assigned zone to assign coverage`}
+                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · drag this card to an assigned zone (with Option/Alt on desktop) to assign coverage from that TM`}
               />
             </div>
           </>
