@@ -64,13 +64,13 @@ interface ShiftBuilderState {
     expanded: {
       otherTms: boolean;
       calledOff: boolean;
-      deployed: boolean;
       pmOverlaps: boolean;
       amOverlaps: boolean;
       porters: boolean;
       scheduledGraves: boolean;
       scheduledPM: boolean;
       scheduledAM: boolean;
+      placed: boolean;
     };
     graveOnly: boolean;
     rosterSearch: string;
@@ -198,13 +198,13 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       expanded: {
         otherTms: false,
         calledOff: true,
-        deployed: false,
         pmOverlaps: false,
         amOverlaps: false,
         porters: false,
         scheduledGraves: true,
         scheduledPM: true,
         scheduledAM: true,
+        placed: false,
       },
       graveOnly: true,
       rosterSearch: '',

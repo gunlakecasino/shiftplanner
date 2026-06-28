@@ -1070,9 +1070,11 @@ body {
 /* ── TM Roster rail — premium liquid-glass chrome ─────────────────────── */
 .sb-roster-shell {
   position: fixed !important;
-  z-index: 30;
+  z-index: 55;
   --sb-roster-accent: var(--sb-gold);
-  background: color-mix(in srgb, var(--sb-paper, #fcfcfa) 88%, transparent);
+  /* Glass popup / floating module aesthetic.
+     Now content-sized (with min/max) so it doesn't cover half the page or become a tall slab. */
+  background: var(--sb-glass);
   backdrop-filter: var(--sb-glass-blur);
   -webkit-backdrop-filter: var(--sb-glass-blur);
   border: 1px solid var(--sb-glass-border);
@@ -1081,6 +1083,8 @@ body {
     0 24px 64px -12px rgba(0, 0, 0, 0.14),
     0 8px 20px -8px rgba(0, 0, 0, 0.08);
   isolation: isolate;
+  contain: layout paint;
+  box-sizing: border-box;
 }
 
 .sb-roster-shell::before {
@@ -1102,7 +1106,8 @@ body {
 }
 
 .dark .sb-roster-shell {
-  background: color-mix(in srgb, var(--sb-substrate, #141316) 78%, transparent);
+  /* Dark glass popup variant */
+  background: color-mix(in srgb, var(--sb-substrate, #141316) 82%, transparent);
   box-shadow:
     inset 0 1px 0 var(--sb-glass-highlight),
     0 28px 72px -16px rgba(0, 0, 0, 0.62);
@@ -1351,6 +1356,12 @@ body {
   overflow: auto;
   padding: 8px 12px 20px;
   scroll-behavior: smooth;
+  /* Slightly filled for list readability while keeping the outer glass popup feel */
+  background: color-mix(in srgb, var(--sb-paper, #fcfcfa) 94%, transparent);
+}
+
+.dark .sb-roster-body {
+  background: color-mix(in srgb, var(--sb-substrate, #141316) 92%, transparent);
 }
 
 .sb-roster-body::-webkit-scrollbar {
@@ -1552,6 +1563,33 @@ body {
 .sb-roster-called-chip__restore:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+/* Placed list items in the glass roster (collapsed by default) */
+.sb-roster-placed-item {
+  /* Slightly different tone for placed vs called-off */
+}
+.sb-roster-placed-item .sb-roster-called-chip__name {
+  text-decoration: none;
+  color: var(--sb-text-2);
+}
+.sb-roster-placed-item .sb-roster-called-chip__restore {
+  font-size: 10px;
+  opacity: 0.35;
+  transition: opacity 120ms ease;
+  background: rgba(255, 59, 48, 0.08);
+  border-color: color-mix(in srgb, #ff3b30 30%, transparent);
+  color: #c62828;
+}
+.sb-roster-placed-item:hover .sb-roster-called-chip__restore,
+.sb-roster-placed-item .sb-roster-called-chip__restore:hover {
+  opacity: 1;
+  background: rgba(255, 59, 48, 0.16);
+}
+.sb-roster-placed-item .sb-roster-called-chip__restore:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
 }
 
 .sb-roster-empty {

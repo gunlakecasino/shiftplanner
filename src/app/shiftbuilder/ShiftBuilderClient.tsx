@@ -527,8 +527,9 @@ function useCollapsiblePill() {
 const RosterDropZone: React.FC<{ 
   children: React.ReactNode; 
   className?: string; 
+  style?: React.CSSProperties;
   isLocked?: boolean;
-}> = ({ children, className, isLocked = false }) => {
+}> = ({ children, className, style, isLocked = false }) => {
   const { setNodeRef, isOver, active } = useDroppable({
     id: "roster",
     data: { type: "roster" },
@@ -546,6 +547,7 @@ const RosterDropZone: React.FC<{
     <div
       ref={setNodeRef}
       className={`sb-drop-target ${className ?? ""} ${highlight ? "roster-drop-active" : ""} relative`}
+      style={style}
     >
       {children}
 
@@ -1714,7 +1716,7 @@ function AuthedShiftBuilder() {
       top: stageTopInsetPx(),
       right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
-      left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
+      left: rosterOpen ? (tablet ? rosterPanelWidth() + 16 : rosterPanelWidth() + 16) : tablet ? 32 : 40,
     };
   }, [rosterOpen, isBuilderLiveCanvas]);
 
@@ -2888,6 +2890,43 @@ function AuthedShiftBuilder() {
       })();
     }
   };
+
+  // Helper to support the "Placed" section remove button in the glass roster popup.
+  // Scans the various assignment sources to locate the slot for a given TM then unassigns it.
+  const getSlotForTmId = React.useCallback((targetTmId: string): string | null => {
+    const target = String(targetTmId);
+    const candidates = [assignments, draftAssignments, storeAssignments, storeDraftAssignments];
+    for (const map of candidates) {
+      if (!map) continue;
+      for (const [slotKey, a] of Object.entries(map)) {
+        if (!a) continue;
+        const id = (a as any).tmId || (a as any).proposedTmId;
+        if (id && String(id) === target) return slotKey;
+      }
+    }
+    try {
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      const liveMap = (liveAssignmentsStore as any)?.getState?.().assignmentsByNight?.[dateKey] ?? {};
+      for (const [slotKey, a] of Object.entries(liveMap)) {
+        if ((a as any)?.tmId && String((a as any).tmId) === target) return slotKey;
+      }
+    } catch {}
+    return null;
+  }, [assignments, draftAssignments, storeAssignments, storeDraftAssignments, selectedDay]);
+
+  const handleUnplaceTm = React.useCallback((tmId: string, tmName: string) => {
+    if (!requireEdit()) return;
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — changes are disabled", "error");
+      return;
+    }
+    const slotKey = getSlotForTmId(tmId);
+    if (!slotKey) {
+      showToast(`Could not locate placement for ${tmName}`, "error");
+      return;
+    }
+    unassign(slotKey);
+  }, [getSlotForTmId, requireEdit, isCurrentNightLocked, showToast, unassign]);
 
   const toggleLock = (slotKey: string) => {
     if (!requireLock()) return;
@@ -6902,14 +6941,19 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         {mounted &&
           isBuilderLiveCanvas &&
           createPortal(
-            <div
-              aria-hidden={!rosterOpen}
-              className={`sb-roster-shell z-30 rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
+            <RosterDropZone
+              isLocked={boardInteractionLocked || !canEditAssignments}
+              className={`sb-roster-shell z-[55] rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
               style={{
                 width: rosterPanelWidth(),
                 top: stageTopInsetPx() + 8,
                 left: 12,
-                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 20}px)`,
+                // Floating module (not a full-height slab covering half the page).
+                // Auto-sizes to its content (Placed list etc), min for nice module presence,
+                // max caps the coverage on iPad + MacBook. Inner body scrolls when long.
+                height: "auto",
+                minHeight: isTabletTouchDevice() ? 340 : 380,
+                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 80}px)`,
                 transformOrigin: "0% 50%",
                 transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
                 opacity: rosterOpen ? 1 : 0,
@@ -6927,12 +6971,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
                 onUnmarkCalledOff={handleUnmarkCalledOff}
+                onUnplaceTm={handleUnplaceTm}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}
                 isRosterLoading={boardColdLoading}
               />
-            </div>,
+            </RosterDropZone>,
             document.body,
           )}
         {/* Floating day-of-week picker (appears to the right of the left rail
