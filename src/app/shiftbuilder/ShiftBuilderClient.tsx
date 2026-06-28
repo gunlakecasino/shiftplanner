@@ -280,6 +280,8 @@ import {
   useSetWeekLensSidebarOpen,
   useIsWeekHealthTrackerDismissed,
   useSetIsWeekHealthTrackerDismissed,
+  useEngineConfig,
+  useSetEngineConfig,
 } from "./store/useShiftBuilderStore";
 /** Defensive teardown when leaving ShiftBuilder (avoids invisible full-screen blockers). */
 function teardownShiftBuilderBodyChrome() {
@@ -686,8 +688,9 @@ function AuthedShiftBuilder() {
   // currentView now from store for narrow reactivity (step continue)
   const currentView = useCurrentView();
   const _setCurrentView = useSetCurrentView();
-  const setCurrentView = React.useCallback((v: any) => {
-    const next = typeof v === 'function' ? v(useShiftBuilderStore.getState().currentView) : v;
+  const setCurrentView = React.useCallback((v: "deployment" | "breaks" | "weekly" | ((prev: "deployment" | "breaks" | "weekly") => "deployment" | "breaks" | "weekly")) => {
+    const current = useShiftBuilderStore.getState().currentView;
+    const next = typeof v === 'function' ? v(current) : v;
     _setCurrentView(next);
   }, [_setCurrentView]);
 
@@ -1037,7 +1040,8 @@ function AuthedShiftBuilder() {
   const [scheduledTmIdsTonight, setScheduledTmIdsTonight] = useState<Set<string>>(new Set());
 
   // === Engine config + reference data (Phase 1 weighted scoring) ===
-  const [engineConfig, setEngineConfig] = useState<EngineConfig | null>(null);
+  const engineConfig = useEngineConfig() as EngineConfig | null;
+  const setEngineConfig = useSetEngineConfig();
   const [tmSkillScores, setTmSkillScores] = useState<Map<string, number>>(new Map());
   const [slotDifficulty, setSlotDifficulty] = useState<Map<string, number>>(new Map());
   const [tmPreferencesByTm, setTmPreferencesByTm] = useState<Map<string, any[]>>(new Map());
