@@ -127,6 +127,16 @@ interface ShiftBuilderState {
   isWeekHealthTrackerDismissed: boolean;
   setIsWeekHealthTrackerDismissed: (v: boolean) => void;
 
+  // Engine / scoring data for narrow subs and better ownership (refinement from debug)
+  engineConfig: any | null;
+  setEngineConfig: (cfg: any | null) => void;
+  scoringData: {
+    skillScores: Map<string, number>;
+    slotDifficulty: Map<string, number>;
+    // ... other maps as needed
+  };
+  setScoringData: (partial: any) => void;
+
   // =================================================================
   // AI Engine Lab + Training Loop (full port from previous work) — strongly typed
   // =================================================================
@@ -258,6 +268,11 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
         localStorage.setItem("oms_week_health_tracker_dismissed", v ? "true" : "false");
       } catch {}
     },
+
+    engineConfig: null,
+    setEngineConfig: (cfg) => set({ engineConfig: cfg }),
+    scoringData: { skillScores: new Map(), slotDifficulty: new Map() },
+    setScoringData: (partial) => set((s) => ({ scoringData: { ...s.scoringData, ...partial } })),
 
     // AI Lab slices (full training loop port) — typed
     engineAnalyses: [],
@@ -561,6 +576,15 @@ export const useIsWeekHealthTrackerDismissed = () =>
 
 export const useSetIsWeekHealthTrackerDismissed = () =>
   useShiftBuilderStore((state) => state.setIsWeekHealthTrackerDismissed);
+
+export const useEngineConfig = () =>
+  useShiftBuilderStore((state) => state.engineConfig);
+
+export const useSetEngineConfig = () =>
+  useShiftBuilderStore((state) => state.setEngineConfig);
+
+export const useScoringData = () =>
+  useShiftBuilderStore((state) => state.scoringData);
 
 export const useSetDraftGrokReasoning = () =>
   useShiftBuilderStore((state) => state.setDraftGrokReasoning);
