@@ -451,8 +451,42 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const rrCount = rrLocs.length;
   const zoneCount = ZONE_DEFS.length;
-  const z9Days = getDaysSinceForKey(padHistory, "Z9", currentIso);
-  const z9srDays = getDaysSinceForKey(padHistory, "Z9SR", currentIso);
+  // Augment DB history with current week's planned ("not yet happened") scheduled dates
+  // for this TM so "days since last Z9/Z9SR" correctly counts intervening planned days in the
+  // week leading up to the selected day (per rotation tracking rules). Only dates < currentIso.
+  let effectivePadHistory = padHistory;
+  if (padHistory && weeklyRecentHistory && a.tmId) {
+    const records = weeklyRecentHistory.get(a.tmId) || [];
+    const z9Add = records
+      .filter((r: any) => r.slotKey === "Z9" && r.nightDate < currentIso)
+      .map((r: any) => r.nightDate);
+    const z9srAdd = records
+      .filter((r: any) => r.slotKey === "Z9SR" && r.nightDate < currentIso)
+      .map((r: any) => r.nightDate);
+    if (z9Add.length || z9srAdd.length) {
+      const zd = { ...(padHistory.zoneDates || {}) };
+      if (z9Add.length) {
+        zd["Z9"] = Array.from(new Set([...(zd["Z9"] || []), ...z9Add]));
+      }
+      if (z9srAdd.length) {
+        zd["Z9SR"] = Array.from(new Set([...(zd["Z9SR"] || []), ...z9srAdd]));
+      }
+      effectivePadHistory = { ...padHistory, zoneDates: zd };
+    }
+  }
+
+  const getRecencyClass = (val: string): string => {
+    if (val === "—") return "text-gray-400";
+    const n = parseInt(val, 10);
+    if (isNaN(n)) return "text-gray-500";
+    if (n === 0) return "text-emerald-600";
+    if (n <= 3) return "text-red-600";
+    if (n <= 7) return "text-amber-600";
+    return "text-gray-700";
+  };
+
+  const z9Days = getDaysSinceForKey(effectivePadHistory, "Z9", currentIso);
+  const z9srDays = getDaysSinceForKey(effectivePadHistory, "Z9SR", currentIso);
 
   const last5Pills: Array<string | null> = [...last5Sequence];
   while (last5Pills.length < LAST5_COUNT) last5Pills.push(null);
@@ -720,13 +754,25 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
             <div>
               <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
 
-              <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
+              <div className="flex items-center gap-2 mb-1 flex-wrap text-[10px]">
                 <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span><span className="font-bold text-gray-800">{rrLocs.length}</span>
                 <span className="text-gray-300 mx-0.5">|</span>
                 <span className="text-gray-500">Zone</span><span className="font-bold text-gray-800">{ZONE_DEFS.length}</span>
                 <span className="text-gray-300 mx-0.5">|</span>
-                <span className="text-gray-500">Z9</span><span className="font-semibold text-gray-500">{z9Days}</span>
-                <span className="text-gray-500">Z9SR</span><span className="font-semibold text-gray-500">{z9srDays}</span>
+
+                {/* Enhanced Z9 / Z9SR recency tracker (rotation) */}
+                <span
+                  className="inline-flex items-center rounded-md bg-red-50 px-1.5 py-0.5 text-[9px] font-medium text-red-600 border border-red-100"
+                  title="Days since last scheduled in Z9 (excludes today; counts planned intervening days in week)"
+                >
+                  Z9 <span className={`ml-1 font-mono font-semibold ${getRecencyClass(z9Days)}`}>{z9Days}</span>
+                </span>
+                <span
+                  className="inline-flex items-center rounded-md bg-red-50 px-1.5 py-0.5 text-[9px] font-medium text-red-600 border border-red-100"
+                  title="Days since last scheduled in Z9SR (excludes today; counts planned intervening days in week)"
+                >
+                  Z9SR <span className={`ml-1 font-mono font-semibold ${getRecencyClass(z9srDays)}`}>{z9srDays}</span>
+                </span>
               </div>
 
               <div className="flex items-center gap-2 mb-2 flex-wrap text-[9px] text-gray-500">
