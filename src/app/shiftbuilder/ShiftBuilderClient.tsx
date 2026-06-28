@@ -2746,7 +2746,8 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    if (isDraftMode) {
+    const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
+    if (freshIsDraft) {
       upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
       return;
     }
@@ -2808,7 +2809,8 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    if (isDraftMode) {
+    const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
+    if (freshIsDraft) {
       upsertDraftSlot(slotKey, { kind: "clear" });
       return;
     }
@@ -4708,6 +4710,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     } else {
       useShiftBuilderStore.setState({ pendingDrag: null });
     }
+
+    // Read fresh draft flag from store at event time (avoids stale closure).
+    // This ensures that after entering draft (e.g. from engine), manual edits
+    // via drag/assign immediately target the draft layer without requiring
+    // "save" first.
+    const isDraftMode = store.isDraftMode ?? false;
 
     const { active, over } = event;
     const a = active.data.current as any;
