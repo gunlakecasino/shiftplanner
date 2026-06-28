@@ -26,7 +26,9 @@ import {
 export interface RosterRailProps {
   /** Canonical pool from graves_default_schedule (+ night_on_call) for tonight. */
   scheduleRoster: GravesScheduleRosterRow[];
-  /** Placed tonight (committed + draft + live) — alias-expanded in rail. */
+  /** Placed tonight (committed + draft + live) — used to seamlessly filter
+   * already-placed TMs out of the visible roster (unplaced scheduled lists only).
+   */
   placedTmIds: Set<string> | string[];
   /** Profile rows for resolving placed TMs missing from the schedule slice. */
   profileRoster?: Array<{
@@ -46,6 +48,8 @@ export interface RosterRailProps {
   canEditAssignments: boolean;
   /** Remove TM from Called Off — returns them to the assignable pool (slots stay cleared). */
   onUnmarkCalledOff?: (tmId: string, tmName: string) => void | Promise<void>;
+  /** Unplace a TM that is already on the board (from the Placed section). Provides explicit remove from roster. */
+  onUnplaceTm?: (tmId: string, tmName: string) => void | Promise<void>;
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   selectedDay: { name: string; dateNum: number };
@@ -162,14 +166,18 @@ const RosterRail = React.memo(function RosterRail({
   isCurrentNightLocked,
   canEditAssignments,
   onUnmarkCalledOff,
+  onUnplaceTm,
   amOverlapDayName,
   amOverlapDateNum,
   selectedDay,
   isRosterLoading = false,
 }: RosterRailProps) {
   const [unmarkingId, setUnmarkingId] = React.useState<string | null>(null);
+  const [unplacingId, setUnplacingId] = React.useState<string | null>(null);
   const canUnmarkCalledOff =
     canEditAssignments && !isCurrentNightLocked && !!onUnmarkCalledOff;
+  const canUnplace =
+    canEditAssignments && !isCurrentNightLocked && !!onUnplaceTm;
   const graveOnly = useGraveOnly();
   const rosterSearch = useRosterSearch();
   const storeAssignments = useAssignments() ?? {};
@@ -188,10 +196,10 @@ const RosterRail = React.memo(function RosterRail({
   );
 
   const calledOffExpanded = useRosterSectionExpanded("calledOff");
-  const deployedExpanded = useRosterSectionExpanded("deployed");
   const scheduledGravesExpanded = useRosterSectionExpanded("scheduledGraves");
   const scheduledPMExpanded = useRosterSectionExpanded("scheduledPM");
   const scheduledAMExpanded = useRosterSectionExpanded("scheduledAM");
+  const placedExpanded = useRosterSectionExpanded("placed");
 
   type ExpandedKey = keyof ReturnType<typeof useShiftBuilderStore.getState>["rosterUI"]["expanded"];
 
@@ -209,22 +217,13 @@ const RosterRail = React.memo(function RosterRail({
     useShiftBuilderStore.getState().setRosterSearch(v);
   };
 
-  /** Band-filtered schedule pool + any placed TMs (always visible even in Graves-only mode). */
+  /** Band-filtered schedule pool for unplaced TMs.
+   * Placed TMs are completely removed from the roster (not shown in any list),
+   * so they cannot be (re)placed from the roster. They only affect the header stats.
+   */
   const rawPool = React.useMemo(() => {
-    const bandPool = filterGravesScheduleRosterByBand(scheduleRoster, graveOnly);
-    const byId = new Map(bandPool.map((t) => [t.id, t]));
-
-    for (const pid of placedTmIds) {
-      const resolved = resolveTmFromLookup(identityLookup, pid);
-      if (!resolved) continue;
-      const row = rowFromLookupEntry(resolved);
-      if (row.id && !byId.has(row.id)) {
-        byId.set(row.id, row);
-      }
-    }
-
-    return Array.from(byId.values());
-  }, [scheduleRoster, graveOnly, placedTmIds, identityLookup]);
+    return filterGravesScheduleRosterByBand(scheduleRoster, graveOnly);
+  }, [scheduleRoster, graveOnly]);
 
   const isPlaced = React.useCallback(
     (tm: GravesScheduleRosterRow) => isTmPlacedTonight(tm, placedTmIds, identityLookup),
@@ -238,11 +237,6 @@ const RosterRail = React.memo(function RosterRail({
         isPlaced: isPlaced(tm),
       })),
     [rawPool, isPlaced],
-  );
-
-  const placedCount = React.useMemo(
-    () => sourceRoster.filter((t) => t.isPlaced && !calledOffIds.has(t.id)).length,
-    [sourceRoster, calledOffIds],
   );
 
   const unplacedCount = React.useMemo(
@@ -264,15 +258,45 @@ const RosterRail = React.memo(function RosterRail({
     [sourceRoster, calledOffIds],
   );
 
+  /** Full list of placed TMs (from schedule pool + resolved profiles).
+   * Shown in a separate collapsed "Placed" section (glass popup roster).
+   * Excluded from the main unplaced selectable lists.
+   * Remove button (visible on expand/hover) unplaces via parent handler.
+   */
+  const placedList = React.useMemo(() => {
+    const list: GravesScheduleRosterRow[] = [];
+    const seen = new Set<string>();
+
+    for (const t of sourceRoster) {
+      if (t.isPlaced && !calledOffIds.has(t.id) && !seen.has(t.id)) {
+        list.push(t);
+        seen.add(t.id);
+      }
+    }
+
+    for (const pid of placedTmIds) {
+      if (seen.has(pid)) continue;
+      const resolved = resolveTmFromLookup(identityLookup, pid);
+      if (resolved) {
+        const row = rowFromLookupEntry(resolved);
+        if (!calledOffIds.has(row.id) && !seen.has(row.id)) {
+          list.push(row);
+          seen.add(row.id);
+        }
+      }
+    }
+    return list;
+  }, [sourceRoster, placedTmIds, identityLookup, calledOffIds]);
+
+  const placedCount = React.useMemo(() => placedList.length, [placedList]);
+
   const {
-    onThisNight,
     scheduledUnplacedGraves,
     scheduledUnplacedPM,
     scheduledUnplacedAM,
     pmSwingLabel,
     amDayShiftLabel,
   } = React.useMemo(() => {
-    const onThisNight = notCalledOff.filter((t) => t.isPlaced);
     const notAssignedThisNight = notCalledOff.filter((t) => !t.isPlaced);
 
     const scheduledUnplaced = notAssignedThisNight.filter((t) => {
@@ -297,7 +321,6 @@ const RosterRail = React.memo(function RosterRail({
     const amDayShiftLabel = `${amOverlapDayName?.slice(0, 3) || ""} ${amOverlapDateNum || ""} day shift (5am)`;
 
     return {
-      onThisNight,
       scheduledUnplacedGraves,
       scheduledUnplacedPM,
       scheduledUnplacedAM,
@@ -332,10 +355,6 @@ const RosterRail = React.memo(function RosterRail({
     () => (filterTerm ? calledOff.filter(matchesSearch) : calledOff),
     [calledOff, filterTerm, matchesSearch],
   );
-  const filteredOnThisNight = React.useMemo(
-    () => (filterTerm ? onThisNight.filter(matchesSearch) : onThisNight),
-    [onThisNight, filterTerm, matchesSearch],
-  );
   const filteredSchedGraves = React.useMemo(
     () =>
       filterTerm ? scheduledUnplacedGraves.filter(matchesSearch) : scheduledUnplacedGraves,
@@ -348,6 +367,11 @@ const RosterRail = React.memo(function RosterRail({
   const filteredSchedAM = React.useMemo(
     () => (filterTerm ? scheduledUnplacedAM.filter(matchesSearch) : scheduledUnplacedAM),
     [scheduledUnplacedAM, filterTerm, matchesSearch],
+  );
+
+  const filteredPlaced = React.useMemo(
+    () => (filterTerm ? placedList.filter(matchesSearch) : placedList),
+    [placedList, filterTerm, matchesSearch],
   );
 
   const hasAnyScheduledUnplaced =
@@ -462,28 +486,6 @@ const RosterRail = React.memo(function RosterRail({
           </div>
         )}
 
-        {filteredOnThisNight.length > 0 && (
-          <section className="sb-roster-section">
-            <RosterSectionHeader
-              label="Already Placed"
-              count={filteredOnThisNight.length}
-              total={filterTerm ? onThisNight.length : undefined}
-              expanded={deployedExpanded}
-              onToggle={() => setSection("deployed", (v) => !v)}
-              tone="placed"
-            />
-            {deployedExpanded && (
-              <VirtualRosterList
-                items={filteredOnThisNight}
-                estimateSize={listEstimate}
-                overscan={6}
-                useParentScroll
-                getItemProps={(tm) => itemProps(tm, "on")}
-              />
-            )}
-          </section>
-        )}
-
         {hasAnyScheduledUnplaced && (
           <section className="sb-roster-section">
             <div className="sb-roster-banner">
@@ -560,6 +562,53 @@ const RosterRail = React.memo(function RosterRail({
           </section>
         )}
 
+        {/* Placed section — collapsed by default ("column").
+            Shows every placed TM so user always sees who is working.
+            Expand to reveal "remove" buttons that unplace the TM.
+            These TMs are excluded from the selectable unplaced lists above. */}
+        {filteredPlaced.length > 0 && (
+          <section className="sb-roster-section">
+            <div className="sb-roster-divider" />
+            <RosterSectionHeader
+              label="Placed"
+              count={filteredPlaced.length}
+              expanded={placedExpanded}
+              onToggle={() => setSection("placed", (v) => !v)}
+              tone="placed"
+            />
+            {placedExpanded &&
+              filteredPlaced.map((tm) => {
+                const displayName = tm.name || tm.fullName || tm.id;
+                const busy = unplacingId === tm.id;
+                return (
+                  <div key={tm.id} className="sb-roster-called-chip sb-roster-placed-item">
+                    <span className="sb-roster-called-chip__name">{displayName}</span>
+                    {canUnplace ? (
+                      <button
+                        type="button"
+                        className="sb-roster-called-chip__restore sb-interactive"
+                        disabled={busy}
+                        title={`Remove ${displayName} from the schedule (unplace)`}
+                        aria-label={`Remove ${displayName} from schedule`}
+                        onClick={() => {
+                          if (busy || !onUnplaceTm) return;
+                          setUnplacingId(tm.id);
+                          void Promise.resolve(onUnplaceTm(tm.id, displayName))
+                            .catch(() => {})
+                            .finally(() => {
+                              setUnplacingId((current) => (current === tm.id ? null : current));
+                            });
+                        }}
+                      >
+                        {busy ? "…" : "remove"}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+          </section>
+        )}
+
         {filteredCalledOff.length > 0 && (
           <section className="sb-roster-section">
             <div className="sb-roster-divider" />
@@ -606,10 +655,13 @@ const RosterRail = React.memo(function RosterRail({
 
         {filterTerm &&
           filteredCalledOff.length === 0 &&
-          filteredOnThisNight.length === 0 &&
           !hasAnyScheduledUnplaced && (
             <div className="sb-roster-empty">No matches for “{rosterSearch}”</div>
           )}
+
+        {!filterTerm && !hasAnyScheduledUnplaced && filteredCalledOff.length === 0 && filteredPlaced.length === 0 && (
+          <div className="sb-roster-empty">No TMs to place or placed on this sheet.</div>
+        )}
       </div>
     </>
   );
