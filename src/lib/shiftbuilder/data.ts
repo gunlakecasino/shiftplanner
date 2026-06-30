@@ -67,7 +67,7 @@ type SlotDefaultsApiPayload = {
 let slotDefaultsBundleCache: { at: number; data: SlotDefaultsApiPayload } | null = null;
 const SLOT_DEFAULTS_BUNDLE_TTL_MS = 3000;
 
-function invalidateSlotDefaultsBundleCache(): void {
+export function invalidateSlotDefaultsBundleCache(): void {
   slotDefaultsBundleCache = null;
 }
 
@@ -80,9 +80,12 @@ async function fetchSlotDefaultsBundle(): Promise<SlotDefaultsApiPayload> {
     return slotDefaultsBundleCache.data;
   }
 
-  const res = await fetch("/api/shiftbuilder/slot-defaults", {
+  // Bust browser/edge cache similar to night fetches
+  const bust = `&_=${Date.now()}`;
+  const res = await fetch(`/api/shiftbuilder/slot-defaults?${bust}`, {
     method: "GET",
     credentials: "same-origin",
+    cache: "no-store",
   });
   const json = (await res.json().catch(() => ({}))) as SlotDefaultsApiPayload & { error?: string };
   if (!res.ok || json.error) {
@@ -3276,8 +3279,8 @@ export async function getTmPlacementHistory(
 //     already have a row in the `nights` table.
 
 export interface SlotDefault {
-  slotKey: string;           // DB key e.g. "zone_1", "rr_1_2", "admin"
-  slotType: 'zone' | 'rr' | 'aux';
+  slotKey: string;           // DB key e.g. "zone_1", "rr_1_2", "admin", "overlap_am_0"
+  slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide: string;            // '' for non-RR; 'mens'|'womens' for RR
   defaultBreakGroup: BreakGroupValue;
 }
@@ -3285,7 +3288,7 @@ export interface SlotDefault {
 export interface SlotDefaultTask {
   id: string;
   slotKey: string;
-  slotType: 'zone' | 'rr' | 'aux';
+  slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide: string;
   taskLabel: string;
   taskColor: string | null;
@@ -3401,7 +3404,7 @@ export async function seedGraveBreakGroupDefaults(): Promise<{ count: number }> 
 /** Upsert the break group default for a single slot. */
 export async function upsertSlotDefault(params: {
   slotKey: string;
-  slotType: 'zone' | 'rr' | 'aux';
+  slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide?: string;
   defaultBreakGroup: BreakGroupValue;
 }): Promise<void> {
@@ -3419,7 +3422,7 @@ export async function upsertSlotDefault(params: {
 /** Add a task chip default for a slot. Silently dedupes on (slot_key, rr_side, task_label). */
 export async function addSlotDefaultTask(params: {
   slotKey: string;
-  slotType: 'zone' | 'rr' | 'aux';
+  slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide?: string;
   taskLabel: string;
   taskColor?: string | null;
@@ -3583,12 +3586,60 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
   const defaults = await getSlotDefaultTasks();
   if (!defaults.length) return { applied: 0 };
 
-  // Group by "slot_key|rr_side"
+  // ── AM Overlap special case: random distribution of the task pool ─────────
+  // When "Default Tasks" is run from the navbar (or on new night creation),
+  // collect any tasks configured for overlap_am_* slots. Shuffle them and
+  // assign one-to-one (random permutation) across the 6 canonical AM Overlap
+  // cards (OL-AM-0..5 / overlap_am_0..5). This replaces fixed per-slot mapping
+  // so each run gives a fresh random layout of the same set of tasks.
+  const AM_OVERLAP_PREFIX = 'overlap_am_';
+  const amOverlapTasks: SlotDefaultTask[] = [];
+  const otherDefaults = defaults.filter((d) => {
+    if (d.slotKey.startsWith(AM_OVERLAP_PREFIX)) {
+      amOverlapTasks.push(d);
+      return false;
+    }
+    return true;
+  });
+
+  // Dedupe pool by label so user gets distinct tasks randomly assigned
+  const seen = new Set<string>();
+  const uniqueAmPool = amOverlapTasks.filter((t) => {
+    const key = t.taskLabel.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Group non-AM slots normally
   const bySlot = new Map<string, SlotDefaultTask[]>();
-  for (const t of defaults) {
+  for (const t of otherDefaults) {
     const key = `${t.slotKey}|${t.rrSide}`;
     if (!bySlot.has(key)) bySlot.set(key, []);
     bySlot.get(key)!.push(t);
+  }
+
+  // Inject shuffled assignments for the 6 AM Overlap targets (0-indexed)
+  if (uniqueAmPool.length > 0) {
+    const shuffled = [...uniqueAmPool];
+    // Fisher-Yates shuffle for unbiased random assignment
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const NUM_AM_OVERLAPS = 6;
+    for (let i = 0; i < NUM_AM_OVERLAPS; i++) {
+      const src = shuffled[i % shuffled.length];
+      const targetSlotKey = `${AM_OVERLAP_PREFIX}${i}`;
+      const compositeKey = `${targetSlotKey}|`; // rrSide empty for overlaps
+      bySlot.set(compositeKey, [
+        {
+          ...src,
+          slotKey: targetSlotKey,
+          slotType: (src.slotType as any) || 'overlap',
+        },
+      ]);
+    }
   }
 
   let applied = 0;

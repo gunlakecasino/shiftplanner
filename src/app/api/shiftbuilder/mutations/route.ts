@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
       case "add_slot_default_task": {
         const task = await addSlotDefaultTaskServer({
           slotKey: String(body.slotKey),
-          slotType: body.slotType as "zone" | "rr" | "aux",
+          slotType: body.slotType as "zone" | "rr" | "aux" | "overlap",
           rrSide: (body.rrSide as string | undefined) ?? "",
           taskLabel: String(body.taskLabel),
           taskColor: (body.taskColor as string | null | undefined) ?? null,
@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
       case "upsert_slot_default": {
         await upsertSlotDefaultServer({
           slotKey: String(body.slotKey),
-          slotType: body.slotType as "zone" | "rr" | "aux",
+          slotType: body.slotType as "zone" | "rr" | "aux" | "overlap",
           rrSide: (body.rrSide as string | undefined) ?? "",
           defaultBreakGroup: Number(body.defaultBreakGroup) as never,
         });
