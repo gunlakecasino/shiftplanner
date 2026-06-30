@@ -4768,13 +4768,17 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     else if (d.type === "task") {
       const isAltAtStart = altPressed || (typeof window !== 'undefined' && (window as any).event?.altKey);
       setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot, isDuplicate: isAltAtStart });
-    } else if (d.type === "unassigned-slot" || d.type === "unassigned-zone") {
+    } else if (
+      d?.type === "unassigned-slot" || d?.type === "unassigned-zone" ||
+      String(event.active.id).startsWith("unassigned-slot") || String(event.active.id).startsWith("unassigned-zone")
+    ) {
       // Coverage gesture: drag unassigned zone (target to cover) to an assigned zone (provider).
       // We no longer gate on Alt/Option here so the gesture works reliably on iPad
       // (Pencil drag or touch) without depending on external keyboard modifier timing.
       // A special coverage ghost is shown, and drop on an assigned slot adds coverage.
-      const label = getSlotCoverageLabel(d.fromSlot);
-      setActiveDrag({ kind: "coverage-request", fromSlot: d.fromSlot, label });
+      const fromSlot = d?.fromSlot || String(event.active.id).replace(/^(unassigned-(slot|zone):)/, '');
+      const label = getSlotCoverageLabel(fromSlot);
+      setActiveDrag({ kind: "coverage-request", fromSlot, label });
       currentDragKindRef.current = "coverage-request";
     }
   };
@@ -4838,11 +4842,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     // assigned zone card (the provider/TM). The provider gets the coverage task,
     // the unassigned shows COVERED BY. Repeatable from the same unassigned card.
     // No Alt gate: works directly on iPad Pencil/touch by dragging the unassigned card.
-    if (wasCoverageRequest || a.type === "unassigned-slot" || a.type === "unassigned-zone") {
+    if (wasCoverageRequest || a?.type === "unassigned-slot" || a?.type === "unassigned-zone" ||
+        String(active.id).startsWith("unassigned-slot") || String(active.id).startsWith("unassigned-zone")) {
       const overData = over?.data.current as any;
       if (!overData) return;
 
-      const coveredKey = safeNormalizeSlotKey(a.fromSlot || coverageFromSlot);      // the unassigned zone being covered
+      const fromSlot = a?.fromSlot || coverageFromSlot || String(active.id).replace(/^(unassigned-(slot|zone):)/, '');
+      const coveredKey = safeNormalizeSlotKey(fromSlot);      // the unassigned zone being covered
       let providerKey = overData.slotKey || overData.fromSlot;
       if (!providerKey) return;
       providerKey = safeNormalizeSlotKey(providerKey); // the assigned zone whose TM will cover it
