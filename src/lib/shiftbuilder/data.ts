@@ -3576,6 +3576,12 @@ export async function pushBreakDefaultsToWeek(
  * For each such slot: delete existing night_slot_tasks rows, then insert fresh
  * rows from slot_default_tasks (replace semantics).
  * Slots with no defaults are left untouched.
+ *
+ * Special behavior for AM Overlaps (OL-AM-0..5 / overlap_am_0..5):
+ * All tasks configured for any overlap_am_* slot are collected as a pool,
+ * randomly shuffled on every push, and assigned one-per-card across the 6
+ * AM Overlap positions. This gives a fresh random layout each time "Default Tasks"
+ * is clicked from the navbar (or on lazy night creation).
  */
 export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applied: number }> {
   if (!nightId) return { applied: 0 };
@@ -3583,12 +3589,51 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
   const defaults = await getSlotDefaultTasks();
   if (!defaults.length) return { applied: 0 };
 
-  // Group by "slot_key|rr_side"
+  // ── AM Overlap special case: random distribution of the task pool ─────────
+  // When "Default Tasks" is run from the navbar (or on new night creation),
+  // collect any tasks configured for overlap_am_* slots. Shuffle them and
+  // assign one-to-one (random permutation) across the 6 canonical AM Overlap
+  // cards (OL-AM-0..5 / overlap_am_0..5). This replaces fixed per-slot mapping
+  // so each run gives a fresh random layout of the same set of tasks.
+  const AM_OVERLAP_PREFIX = 'overlap_am_';
+  const amOverlapTasks: SlotDefaultTask[] = [];
+  const otherDefaults = defaults.filter((d) => {
+    if (d.slotKey.startsWith(AM_OVERLAP_PREFIX)) {
+      amOverlapTasks.push(d);
+      return false;
+    }
+    return true;
+  });
+
+  // Group non-AM slots normally
   const bySlot = new Map<string, SlotDefaultTask[]>();
-  for (const t of defaults) {
+  for (const t of otherDefaults) {
     const key = `${t.slotKey}|${t.rrSide}`;
     if (!bySlot.has(key)) bySlot.set(key, []);
     bySlot.get(key)!.push(t);
+  }
+
+  // Inject shuffled assignments for the 6 AM Overlap targets (0-indexed)
+  if (amOverlapTasks.length > 0) {
+    const shuffled = [...amOverlapTasks];
+    // Fisher-Yates shuffle for unbiased random assignment
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const NUM_AM_OVERLAPS = 6;
+    for (let i = 0; i < NUM_AM_OVERLAPS; i++) {
+      const src = shuffled[i % shuffled.length];
+      const targetSlotKey = `${AM_OVERLAP_PREFIX}${i}`;
+      const compositeKey = `${targetSlotKey}|`; // rrSide empty for overlaps
+      bySlot.set(compositeKey, [
+        {
+          ...src,
+          slotKey: targetSlotKey,
+          slotType: (src.slotType as any) || 'overlap',
+        },
+      ]);
+    }
   }
 
   let applied = 0;
