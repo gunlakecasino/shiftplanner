@@ -4770,6 +4770,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const onDragOver = undefined;
 
   const onDragEnd = (event: DragEndEvent) => {
+    // Capture coverage gesture info before clearing (the kind may be used to reliably detect even if data.type varies)
+    const wasCoverageRequest = activeDrag?.kind === "coverage-request";
+    const coverageFromSlot = activeDrag?.fromSlot;
     setActiveDrag(null);
     
     // Always clear pending drag when the gesture ends.
@@ -4820,11 +4823,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     // assigned zone card (the provider/TM). The provider gets the coverage task,
     // the unassigned shows COVERED BY. Repeatable from the same unassigned card.
     // No Alt gate: works directly on iPad Pencil/touch by dragging the unassigned card.
-    if (a.type === "unassigned-slot" || a.type === "unassigned-zone") {
+    if (wasCoverageRequest || a.type === "unassigned-slot" || a.type === "unassigned-zone") {
       const overData = over?.data.current as any;
       if (!overData) return;
 
-      const coveredKey = safeNormalizeSlotKey(a.fromSlot);      // the unassigned zone being covered
+      const coveredKey = safeNormalizeSlotKey(a.fromSlot || coverageFromSlot);      // the unassigned zone being covered
       let providerKey = overData.slotKey || overData.fromSlot;
       if (!providerKey) return;
       providerKey = safeNormalizeSlotKey(providerKey); // the assigned zone whose TM will cover it
