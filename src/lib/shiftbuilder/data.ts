@@ -3757,6 +3757,7 @@ export async function pushTaskDefaultsToNight(
           rrSide: rrSide || null,
           slotType,
           tasks: mappedTasks,
+          preserveCoverage: true,
         },
         async () => {
           const { replaceNightSlotTasksForSlotServer } = await import('./opsMutations.server');

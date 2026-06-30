@@ -4822,14 +4822,17 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     // No Alt gate: works directly on iPad Pencil/touch by dragging the unassigned card.
     if (a.type === "unassigned-slot" || a.type === "unassigned-zone") {
       const overData = over?.data.current as any;
-      if (!overData || overData.type !== "slot") return;
+      if (!overData) return;
 
-      const coveredKey = a.fromSlot;      // the unassigned zone being covered
-      const providerKey = overData.slotKey; // the assigned zone whose TM will cover it
+      const coveredKey = safeNormalizeSlotKey(a.fromSlot);      // the unassigned zone being covered
+      let providerKey = overData.slotKey || overData.fromSlot;
+      if (!providerKey) return;
+      providerKey = safeNormalizeSlotKey(providerKey); // the assigned zone whose TM will cover it
 
       if (providerKey === coveredKey) return;
 
-      const provider = assignments[providerKey] || useShiftBuilderStore.getState().assignments?.[providerKey];
+      const mainAssignments = useShiftBuilderStore.getState().assignments || {};
+      const provider = assignments[providerKey] || mainAssignments[providerKey];
       if (!provider?.tmName) return;
 
       handleCmdkAddCoverage(providerKey, coveredKey);
