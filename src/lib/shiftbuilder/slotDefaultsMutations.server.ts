@@ -23,7 +23,7 @@ function mapSlotDefaultTaskRow(r: Record<string, unknown>): SlotDefaultTask {
 
 export async function addSlotDefaultTaskServer(params: {
   slotKey: string;
-  slotType: "zone" | "rr" | "aux";
+  slotType: "zone" | "rr" | "aux" | "overlap";
   rrSide?: string;
   taskLabel: string;
   taskColor?: string | null;
@@ -76,7 +76,7 @@ export async function removeSlotDefaultTaskServer(id: string): Promise<void> {
 
 export async function upsertSlotDefaultServer(params: {
   slotKey: string;
-  slotType: "zone" | "rr" | "aux";
+  slotType: "zone" | "rr" | "aux" | "overlap";
   rrSide?: string;
   defaultBreakGroup: BreakGroupValue;
 }): Promise<void> {

@@ -4,7 +4,8 @@
  * DefaultsTab — configure per-slot default break groups and task chips,
  * then push them to the current night or the entire GRAVE week (Fri–Thu).
  *
- * Three sections: Zones (Z1–Z10) | Restrooms (RR pairs) | AUX slots.
+ * Sections: Zones | Restrooms | AUX | AM Overlaps (task pool, randomly assigned
+ * to the 6 cards when "Default Tasks" is run from navbar) | PM Overlaps.
  * Each row: accent strip, icon + label, BreakBadge (click to cycle + auto-save),
  *           task chips with × removal, inline "add task" input.
  *
@@ -29,6 +30,8 @@ import {
   getRRAccent,
   getAuxIconForRole,
   getAuxAccentForRole,
+  getOverlapAccent,
+  overlapSlotLabel,
 } from "@/lib/shiftbuilder/constants";
 import { nextBreakGroup, type BreakGroup } from "@/lib/shiftbuilder/constants";
 import {
@@ -47,14 +50,14 @@ import {
 
 interface SlotDef {
   compositeKey: string;   // "dbKey|rrSide" — the map key used everywhere
-  dbKey: string;          // e.g. "zone_1", "rr_1_2", "admin"
-  dbType: "zone" | "rr" | "aux";
-  rrSide: string;         // '' for zone/aux; 'mens'|'womens' for RR
+  dbKey: string;          // e.g. "zone_1", "rr_1_2", "admin", "overlap_am_0"
+  dbType: "zone" | "rr" | "aux" | "overlap";
+  rrSide: string;         // '' for zone/aux/overlap; 'mens'|'womens' for RR
   label: string;          // display label
   sublabel: string;       // location hint
   icon: string;
   accent: string;
-  section: "zone" | "rr" | "aux";
+  section: "zone" | "rr" | "aux" | "am-overlap" | "pm-overlap";
 }
 
 /** Build the ordered list of all slot descriptors once. */
@@ -123,6 +126,38 @@ function buildSlotDefs(): SlotDef[] {
       icon: getAuxIconForRole(role as import("@/lib/shiftbuilder/placement").AuxRole),
       accent: getAuxAccentForRole(role as import("@/lib/shiftbuilder/placement").AuxRole),
       section: "aux",
+    });
+  }
+
+  // AM Overlaps — single pool row (stored under overlap_am_0 for the pool).
+  // All tasks in this pool (plus any other overlap_am_* for legacy) are collected
+  // and randomly shuffled 1:1 across the 6 AM Overlap cards when Default Tasks is applied.
+  out.push({
+    compositeKey: `overlap_am_0|`,
+    dbKey: `overlap_am_0`,
+    dbType: "overlap",
+    rrSide: "",
+    label: "AM Overlap Pool",
+    sublabel: "Randomly assigned to AM Overlap 1–6 cards",
+    icon: "◆",
+    accent: "#059669",
+    section: "am-overlap",
+  });
+
+  // PM Overlaps — per-card (fixed) for now
+  for (let i = 0; i < 6; i++) {
+    const uiKey = `OL-PM-${i}`;
+    const dbKey = `overlap_pm_${i}`;
+    out.push({
+      compositeKey: `${dbKey}|`,
+      dbKey,
+      dbType: "overlap",
+      rrSide: "",
+      label: overlapSlotLabel(uiKey),
+      sublabel: "PM Overlap",
+      icon: "◆",
+      accent: getOverlapAccent(uiKey),
+      section: "pm-overlap",
     });
   }
 
@@ -329,7 +364,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
       setAddingFor(null);
 
       try {
-        const { addSlotDefaultTask } = await import("@/lib/shiftbuilder/data");
+        const { addSlotDefaultTask, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
         const saved = await addSlotDefaultTask({
           slotKey: def.dbKey,
           slotType: def.dbType,
@@ -337,6 +372,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
           taskLabel: label,
           sortOrder,
         });
+        invalidateSlotDefaultsBundleCache();
         setTasksBySlot((p) => {
           const list = (p[def.compositeKey] ?? []).filter((t) => t.id !== optimisticTask.id);
           const withoutDup = list.filter(
@@ -372,8 +408,9 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
       }));
 
       try {
-        const { removeSlotDefaultTask } = await import("@/lib/shiftbuilder/data");
+        const { removeSlotDefaultTask, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
         await removeSlotDefaultTask(task.id);
+        invalidateSlotDefaultsBundleCache();
       } catch (e: any) {
         // Revert
         setTasksBySlot((p) => ({
@@ -435,10 +472,12 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
-  const sections: Array<{ id: "zone" | "rr" | "aux"; label: string }> = [
+  const sections: Array<{ id: "zone" | "rr" | "aux" | "am-overlap" | "pm-overlap"; label: string }> = [
     { id: "zone", label: "Zones" },
     { id: "rr",   label: "Restrooms" },
     { id: "aux",  label: "AUX / Support" },
+    { id: "am-overlap", label: "AM Overlaps (task pool — randomly shuffled on apply)" },
+    { id: "pm-overlap", label: "PM Overlaps" },
   ];
 
   const atkinsonStyle = { fontFamily: "var(--font-atkinson), var(--font-geist-sans)" };

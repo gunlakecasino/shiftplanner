@@ -479,34 +479,6 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     }
   }
 
-  // Backfill pass: if any slots were left unfilled but there are still eligible
-  // unused TMs, assign them anyway (greedy to unfilled slots in order). This
-  // ensures the engine places as many TMs as possible and does not leave zones
-  // empty when available (eligible) TMs remain. Hard eligibility (full-grave,
-  // gender for RR, overlap rules) is still respected.
-  const unfilledAfterMain = orderedSlots.filter((k) => !proposedAssignments[k]);
-  for (const slotKey of unfilledAfterMain) {
-    if (proposedAssignments[slotKey]) continue;
-    const stillUsed = new Set(currentDraft.values());
-    const cands = roster.filter((tm: any) => {
-      const id = assignmentTmId(tm);
-      return id && !stillUsed.has(id) && isEligibleForSlot(tm, slotKey);
-    });
-    if (cands.length === 0) continue;
-    const pick = cands[0];
-    const pickId = assignmentTmId(pick);
-    proposedAssignments[slotKey] = pickId;
-    currentDraft.set(slotKey, pickId);
-    // minimal breakdown entry so UI has something
-    if (!breakdown[slotKey] || !breakdown[slotKey].pickedTmId) {
-      breakdown[slotKey] = {
-        topCandidates: [{ tmId: pickId, tmName: pick.name || pick.fullName || pickId, total: 0, breakdown: {}, excluded: false }],
-        pickedTmId: pickId,
-        preserved: false,
-      };
-    }
-  }
-
   const usedIds = new Set(currentDraft.values());
   const unassignedPeople = roster.filter((tm: any) => {
     const id = assignmentTmId(tm);

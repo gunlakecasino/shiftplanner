@@ -11,7 +11,7 @@ import type { SlotDefault } from "./data";
 
 export type GraveBreakGroupDefaultRow = {
   slotKey: string;
-  slotType: "zone" | "rr" | "aux";
+  slotType: "zone" | "rr" | "aux" | "overlap";
   rrSide: string;
   defaultBreakGroup: BreakGroupValue;
   /** Operator-facing label (docs / sudo UI). */
@@ -56,6 +56,22 @@ export const GRAVE_BREAK_GROUP_DEFAULT_ROWS: GraveBreakGroupDefaultRow[] = [
 
   // Admin aux (ADM / AUX1 admin shell)
   { slotKey: "admin", slotType: "aux", rrSide: "", defaultBreakGroup: 2, label: "ADMIN" },
+
+  // Overlaps default to the special OL group
+  ...Array.from({ length: 6 }, (_, i) => ({
+    slotKey: `overlap_am_${i}`,
+    slotType: "overlap" as const,
+    rrSide: "",
+    defaultBreakGroup: 4 as BreakGroupValue,
+    label: `AM Overlap ${i + 1}`,
+  })),
+  ...Array.from({ length: 6 }, (_, i) => ({
+    slotKey: `overlap_pm_${i}`,
+    slotType: "overlap" as const,
+    rrSide: "",
+    defaultBreakGroup: 4 as BreakGroupValue,
+    label: `PM Overlap ${i + 1}`,
+  })),
 ];
 
 const GRAVE_BREAK_GROUP_BY_KEY = new Map<string, BreakGroupValue>(

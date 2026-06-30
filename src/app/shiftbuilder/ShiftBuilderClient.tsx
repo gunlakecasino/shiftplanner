@@ -1,5 +1,5 @@
-// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
-// World-class revisions ongoing (worktree only):
+// v1.1 — iPad UI/UX world-class release (coverage polish, responsiveness, store unification)
+// v1.1 — merged from ultra worktree. iPad UI/UX complete.
 // - usePrintManager, weekLens* + health dismissed, currentView/breakGroup to store (narrow selectors)
 // - Draft helpers + buildFromDraft in engineRunner, apply/toggle/clear wrapped in heavy transition
 // - More deferredValue (week health, marker, lens)
@@ -527,9 +527,8 @@ function useCollapsiblePill() {
 const RosterDropZone: React.FC<{ 
   children: React.ReactNode; 
   className?: string; 
-  style?: React.CSSProperties;
   isLocked?: boolean;
-}> = ({ children, className, style, isLocked = false }) => {
+}> = ({ children, className, isLocked = false }) => {
   const { setNodeRef, isOver, active } = useDroppable({
     id: "roster",
     data: { type: "roster" },
@@ -547,7 +546,6 @@ const RosterDropZone: React.FC<{
     <div
       ref={setNodeRef}
       className={`sb-drop-target ${className ?? ""} ${highlight ? "roster-drop-active" : ""} relative`}
-      style={style}
     >
       {children}
 
@@ -887,8 +885,8 @@ function AuthedShiftBuilder() {
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
   const [activeDrag, setActiveDrag] = useState<{
-    kind: "tm" | "assigned" | "task" | "coverage-request";
-    label?: string;
+    kind: "tm" | "assigned" | "task";
+    label: string;
     fromSlot?: string;
     isDuplicate?: boolean;
   } | null>(null);
@@ -1716,7 +1714,7 @@ function AuthedShiftBuilder() {
       top: stageTopInsetPx(),
       right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
-      left: rosterOpen ? (tablet ? rosterPanelWidth() + 16 : rosterPanelWidth() + 16) : tablet ? 32 : 40,
+      left: rosterOpen ? (tablet ? 212 : 280) : tablet ? 32 : 40,
     };
   }, [rosterOpen, isBuilderLiveCanvas]);
 
@@ -2746,8 +2744,7 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
-    if (freshIsDraft) {
+    if (isDraftMode) {
       upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
       return;
     }
@@ -2809,8 +2806,7 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
-    if (freshIsDraft) {
+    if (isDraftMode) {
       upsertDraftSlot(slotKey, { kind: "clear" });
       return;
     }
@@ -2892,43 +2888,6 @@ function AuthedShiftBuilder() {
       })();
     }
   };
-
-  // Helper to support the "Placed" section remove button in the glass roster popup.
-  // Scans the various assignment sources to locate the slot for a given TM then unassigns it.
-  const getSlotForTmId = React.useCallback((targetTmId: string): string | null => {
-    const target = String(targetTmId);
-    const candidates = [assignments, draftAssignments, storeAssignments, storeDraftAssignments];
-    for (const map of candidates) {
-      if (!map) continue;
-      for (const [slotKey, a] of Object.entries(map)) {
-        if (!a) continue;
-        const id = (a as any).tmId || (a as any).proposedTmId;
-        if (id && String(id) === target) return slotKey;
-      }
-    }
-    try {
-      const dateKey = formatLocalDateISO(selectedDay.date);
-      const liveMap = (liveAssignmentsStore as any)?.getState?.().assignmentsByNight?.[dateKey] ?? {};
-      for (const [slotKey, a] of Object.entries(liveMap)) {
-        if ((a as any)?.tmId && String((a as any).tmId) === target) return slotKey;
-      }
-    } catch {}
-    return null;
-  }, [assignments, draftAssignments, storeAssignments, storeDraftAssignments, selectedDay]);
-
-  const handleUnplaceTm = React.useCallback((tmId: string, tmName: string) => {
-    if (!requireEdit()) return;
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — changes are disabled", "error");
-      return;
-    }
-    const slotKey = getSlotForTmId(tmId);
-    if (!slotKey) {
-      showToast(`Could not locate placement for ${tmName}`, "error");
-      return;
-    }
-    unassign(slotKey);
-  }, [getSlotForTmId, requireEdit, isCurrentNightLocked, showToast, unassign]);
 
   const toggleLock = (slotKey: string) => {
     if (!requireLock()) return;
@@ -4677,13 +4636,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     else if (d.type === "task") {
       const isAltAtStart = altPressed || (typeof window !== 'undefined' && (window as any).event?.altKey);
       setActiveDrag({ kind: "task", label: d.taskLabel, fromSlot: d.fromSlot, isDuplicate: isAltAtStart });
-    } else if (d.type === "unassigned-slot" || d.type === "unassigned-zone") {
-      // Coverage gesture: drag unassigned zone (target to cover) to an assigned zone (provider).
-      // We no longer gate on Alt/Option here so the gesture works reliably on iPad
-      // (Pencil drag or touch) without depending on external keyboard modifier timing.
-      // A special coverage ghost is shown, and drop on an assigned slot adds coverage.
-      const label = getSlotCoverageLabel(d.fromSlot);
-      setActiveDrag({ kind: "coverage-request", fromSlot: d.fromSlot, label });
     }
   };
 
@@ -4702,12 +4654,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     } else {
       useShiftBuilderStore.setState({ pendingDrag: null });
     }
-
-    // Read fresh draft flag from store at event time (avoids stale closure).
-    // This ensures that after entering draft (e.g. from engine), manual edits
-    // via drag/assign immediately target the draft layer without requiring
-    // "save" first.
-    const isDraftMode = store.isDraftMode ?? false;
 
     const { active, over } = event;
     const a = active.data.current as any;
@@ -4735,26 +4681,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         const normalizedSlot = safeNormalizeSlotKey((over.data.current as any).slotKey);
         assign(normalizedSlot, a.tmId, a.tmName);
       }
-      return;
-    }
-
-    // Coverage gesture: drag unassigned zone card (the coverage target) onto an
-    // assigned zone card (the provider/TM). The provider gets the coverage task,
-    // the unassigned shows COVERED BY. Repeatable from the same unassigned card.
-    // No Alt gate: works directly on iPad Pencil/touch by dragging the unassigned card.
-    if (a.type === "unassigned-slot" || a.type === "unassigned-zone") {
-      const overData = over?.data.current as any;
-      if (!overData || overData.type !== "slot") return;
-
-      const coveredKey = a.fromSlot;      // the unassigned zone being covered
-      const providerKey = overData.slotKey; // the assigned zone whose TM will cover it
-
-      if (providerKey === coveredKey) return;
-
-      const provider = assignments[providerKey] || useShiftBuilderStore.getState().assignments?.[providerKey];
-      if (!provider?.tmName) return;
-
-      handleCmdkAddCoverage(providerKey, coveredKey);
       return;
     }
 
@@ -6976,19 +6902,14 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         {mounted &&
           isBuilderLiveCanvas &&
           createPortal(
-            <RosterDropZone
-              isLocked={boardInteractionLocked || !canEditAssignments}
-              className={`sb-roster-shell z-[55] rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
+            <div
+              aria-hidden={!rosterOpen}
+              className={`sb-roster-shell z-30 rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
               style={{
                 width: rosterPanelWidth(),
                 top: stageTopInsetPx() + 8,
                 left: 12,
-                // Floating module (not a full-height slab covering half the page).
-                // Auto-sizes to its content (Placed list etc), min for nice module presence,
-                // max caps the coverage on iPad + MacBook. Inner body scrolls when long.
-                height: "auto",
-                minHeight: isTabletTouchDevice() ? 340 : 380,
-                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 80}px)`,
+                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 20}px)`,
                 transformOrigin: "0% 50%",
                 transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
                 opacity: rosterOpen ? 1 : 0,
@@ -7006,13 +6927,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
                 onUnmarkCalledOff={handleUnmarkCalledOff}
-                onUnplaceTm={handleUnplaceTm}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}
                 isRosterLoading={boardColdLoading}
               />
-            </RosterDropZone>,
+            </div>,
             document.body,
           )}
         {/* Floating day-of-week picker (appears to the right of the left rail
