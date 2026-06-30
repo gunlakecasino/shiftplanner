@@ -2973,9 +2973,17 @@ function AuthedShiftBuilder() {
       }
 
       const { setNightPublished } = await import("@/lib/shiftbuilder/data");
-      await setNightPublished(activeNightId, willPublish);
+      await setNightPublished(activeNightId, willPublish, dateIso);
 
-      setCurrentNightStatus(willPublish ? "published" : "draft");
+      // Reload authoritative status from DB (in case optimistic or direct read differs)
+      try {
+        const { getNightMeta } = await import("@/lib/shiftbuilder/data");
+        const meta = await getNightMeta(activeNightId);
+        setCurrentNightStatus(meta.status);
+      } catch {
+        setCurrentNightStatus(willPublish ? "published" : "draft");
+      }
+
       logBuilderChange({
         action: willPublish ? "publish" : "unpublish",
         targetNightId: activeNightId,
@@ -3016,17 +3024,29 @@ function AuthedShiftBuilder() {
         // DAY_DEFS are the 7 days of the current week (Fri–Thu)
         const dayDefs = DAY_DEFS;
         let processed = 0;
+        const dateIso = formatLocalDateISO(selectedDay.date);
         for (const def of dayDefs) {
           const nightIdForDay = await getOrCreateNightForDate(def.date, def.name);
-          await setNightPublished(nightIdForDay, publish);
+          const dIso = formatLocalDateISO(def.date);
+          await setNightPublished(nightIdForDay, publish, dIso);
           processed++;
         }
 
-        // Update local status for the currently viewed day
-        setCurrentNightStatus(publish ? "published" : "draft");
+        // Reload authoritative status for the currently viewed day from DB
+        try {
+          const { getNightMeta } = await import("@/lib/shiftbuilder/data");
+          // Re-resolve current night id in case it was just created
+          let currentNid = currentNight.nightId ?? nightId;
+          if (!currentNid) {
+            currentNid = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+          }
+          const meta = await getNightMeta(currentNid);
+          setCurrentNightStatus(meta.status);
+        } catch {
+          setCurrentNightStatus(publish ? "published" : "draft");
+        }
 
         // Invalidate current night queries so UI refreshes
-        const dateIso = formatLocalDateISO(selectedDay.date);
         currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateIso] });
         currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateIso] });
         currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateIso] });

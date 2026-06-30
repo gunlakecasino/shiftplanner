@@ -1037,14 +1037,14 @@ export async function setNightLocked(nightId: string, locked: boolean): Promise<
  * Publish or unpublish a single night by id (navbar day publish).
  * Only toggles publication status — does not lock/unlock the board.
  */
-export async function setNightPublished(nightId: string, published: boolean): Promise<void> {
+export async function setNightPublished(nightId: string, published: boolean, date?: string): Promise<void> {
   if (!nightId) {
     throw new Error('setNightPublished requires a nightId');
   }
 
   await runBoardMutation(
     'set_night_published',
-    { nightId, published },
+    { nightId, published, date },
     async () => {
       const { setNightPublishedServer } = await import('./opsMutations.server');
       await setNightPublishedServer(nightId, published);
