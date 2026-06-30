@@ -35,6 +35,8 @@ import {
   BarChart2,
   RefreshCw,
   BookOpen,
+  Copy,
+  Printer,
 } from "lucide-react";
 
 export interface DayItem {
@@ -70,6 +72,8 @@ export interface FloatingNavProps {
   restoreDefaultBreaksBusy?: boolean;
   onApplyDefaultTasks?: () => void;
   applyDefaultTasksBusy?: boolean;
+  onApplyOverlapTasks?: () => void;
+  applyOverlapTasksBusy?: boolean;
   onToggleWeekHealth?: () => void;
   weekHealthVisible?: boolean;
   weekHealthPercent?: number | null;
@@ -107,6 +111,9 @@ export interface FloatingNavProps {
   canPublishDay?: boolean;
   onToggleDayPublished?: () => void;
   publishDayBusy?: boolean;
+  onPublishWeek?: () => void;
+  onUnpublishWeek?: () => void;
+  publishWeekBusy?: boolean;
   top?: number;
   permissions?: ShiftBuilderPermissions;
 }
@@ -140,6 +147,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     restoreDefaultBreaksBusy = false,
     onApplyDefaultTasks,
     applyDefaultTasksBusy = false,
+    onApplyOverlapTasks,
+    applyOverlapTasksBusy = false,
     onPrint,
     onOpenCoverGuide,
     isDark = false,
@@ -164,6 +173,9 @@ export default function FloatingNav(props: FloatingNavProps) {
     isDayPublished = false,
     canPublishDay = false,
     onToggleDayPublished,
+    onPublishWeek,
+    onUnpublishWeek,
+    publishWeekBusy = false,
     onToggleWeekHealth,
     weekHealthVisible = false,
     top = 0,
@@ -753,6 +765,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Engine & Maintenance */}
                 {showEngineTools && onRunEngine && (
                   <button
                     type="button"
@@ -788,12 +801,15 @@ export default function FloatingNav(props: FloatingNavProps) {
                     }}
                   >
                     <RefreshCw size={14} className={refreshDayBusy ? "animate-spin" : undefined} />
-                    {refreshDayBusy ? "Refreshing day…" : "Refresh Day"}
+                    {refreshDayBusy ? "Refreshing Day…" : "Refresh Day"}
                   </button>
                 )}
+
                 {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
+
+                {/* Draft */}
                 {showDraftTools && onToggleDraftMode && (
                   <button
                     type="button"
@@ -821,7 +837,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     }}
                   >
                     <Check size={14} />
-                    Save All
+                    Save All Draft
                     {draftSlotCount > 0 && (
                       <span className="ml-auto text-[11px] tabular-nums opacity-60">{draftSlotCount}</span>
                     )}
@@ -839,7 +855,10 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <X size={14} /> Discard Draft
                   </button>
                 )}
+
                 {showDraftTools && (onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
+
+                {/* Defaults — grouped together by default breaks */}
                 {onRestoreDefaultBreaks && (
                   <button
                     type="button"
@@ -849,7 +868,21 @@ export default function FloatingNav(props: FloatingNavProps) {
                       setMoreOpen(false);
                     }}
                   >
-                    <Coffee size={14} /> Default Breaks
+                    <Coffee size={14} /> Restore Default Breaks
+                  </button>
+                )}
+                {onApplyOverlapTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onApplyOverlapTasks();
+                      setMoreOpen(false);
+                    }}
+                    disabled={applyOverlapTasksBusy}
+                  >
+                    <Layers size={14} />
+                    {applyOverlapTasksBusy ? "Applying…" : "Apply Overlap Tasks"}
                   </button>
                 )}
                 {onApplyDefaultTasks && (
@@ -860,10 +893,41 @@ export default function FloatingNav(props: FloatingNavProps) {
                     disabled={applyDefaultTasksBusy}
                   >
                     <LayoutGrid size={14} />
-                    {applyDefaultTasksBusy ? "Applying…" : "Default Tasks"}
+                    {applyDefaultTasksBusy ? "Applying…" : "Apply Default Tasks"}
                   </button>
                 )}
-                {showAdminLinks && <div className={menuDividerClass} />}
+
+                {/* Copies (task population) */}
+                {showDraftTools && onCopyPriorWeekTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onCopyPriorWeekTasks();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Copy size={14} /> Copy Tasks from Prior Week
+                  </button>
+                )}
+                {showDraftTools && onCopyYesterdayTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onCopyYesterdayTasks();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Copy size={14} /> Copy Tasks from Yesterday
+                  </button>
+                )}
+
+                {(onRestoreDefaultBreaks || onApplyOverlapTasks || onApplyDefaultTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
+                  <div className={menuDividerClass} />
+                )}
+
+                {/* Admin & Schedule */}
                 {showAdminLinks && (
                   <Link
                     href="/shiftbuilder/graves-schedule"
@@ -871,9 +935,10 @@ export default function FloatingNav(props: FloatingNavProps) {
                     onClick={() => setMoreOpen(false)}
                   >
                     <CalendarDays size={14} />
-                    Default Schedule
+                    Graves Default Schedule
                   </Link>
                 )}
+
                 {showPublishControls && (
                   <button
                     type="button"
@@ -887,6 +952,40 @@ export default function FloatingNav(props: FloatingNavProps) {
                     {isDayPublished ? "Unpublish Day" : "Publish Day"}
                   </button>
                 )}
+
+                {showPublishControls && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onPublishWeek?.();
+                      setMoreOpen(false);
+                    }}
+                    disabled={publishWeekBusy}
+                  >
+                    Publish Week
+                  </button>
+                )}
+
+                {showPublishControls && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onUnpublishWeek?.();
+                      setMoreOpen(false);
+                    }}
+                    disabled={publishWeekBusy}
+                  >
+                    Unpublish Week
+                  </button>
+                )}
+
+                {(showAdminLinks || showPublishControls) && (
+                  <div className={menuDividerClass} />
+                )}
+
+                {/* Guides & Output */}
                 {onOpenCoverGuide && (
                   <button
                     type="button"
@@ -900,6 +999,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Grave Cover Guide
                   </button>
                 )}
+
                 {onPrint && (
                   <button
                     type="button"
@@ -909,9 +1009,10 @@ export default function FloatingNav(props: FloatingNavProps) {
                       setMoreOpen(false);
                     }}
                   >
-                    Print
+                    <Printer size={14} /> Print
                   </button>
                 )}
+
                 {onCanvasModeChange && (
                   <button
                     type="button"
@@ -923,26 +1024,21 @@ export default function FloatingNav(props: FloatingNavProps) {
                   >
                     {canvasMode === "print-preview" ? (
                       <>
-                        <X size={14} /> Exit print preview
+                        <X size={14} /> Exit Print Preview
                       </>
                     ) : (
                       <>
-                        <Eye size={14} /> View print preview
+                        <Eye size={14} /> View Print Preview
                       </>
                     )}
                   </button>
                 )}
-                {showDraftTools && onCopyPriorWeekTasks && (
-                  <button type="button" className={menuItemClass} onClick={() => { onCopyPriorWeekTasks(); setMoreOpen(false); }}>
-                    Copy Prior Week Tasks
-                  </button>
+
+                {(onOpenCoverGuide || onPrint || onCanvasModeChange) && (
+                  <div className={menuDividerClass} />
                 )}
-                {showDraftTools && onCopyYesterdayTasks && (
-                  <button type="button" className={menuItemClass} onClick={() => { onCopyYesterdayTasks(); setMoreOpen(false); }}>
-                    Copy Yesterday Tasks
-                  </button>
-                )}
-                <div className={menuDividerClass} />
+
+                {/* Analytics */}
                 {showDraftTools && onToggleWeekHealth && (
                   <button type="button" className={menuItemClass} onClick={() => { onToggleWeekHealth(); setMoreOpen(false); }}>
                     {weekHealthVisible ? "Hide" : "Show"} Week Health

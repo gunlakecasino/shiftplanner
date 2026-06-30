@@ -515,8 +515,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Always call the hook (Rules of Hooks). Prefer worker value when available.
   const computedBreakCounts = React.useMemo(() => {
     const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    Object.values(assignments).forEach((a: any) => {
+    Object.entries(assignments).forEach(([slotKey, a]: [string, any]) => {
       if (!a?.tmId && !a?.tmName) return;
+      if (slotKey.startsWith("OL-")) return;
       const g = a.breakGroup ?? 0;
       if (g === 1) counts[1]++;
       else if (g === 2) counts[2]++;
@@ -1804,7 +1805,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                 // the on-screen "breaks" view and for what the operator just selected.)
                 const waveAssignments: any[] = Object.entries(assignments)
                   .map(([slotKey, a]: [string, any]) => {
-                    if (!a?.tmId || (a.breakGroup ?? 0) !== wave) return null;
+                    if (!a?.tmId || (a.breakGroup ?? 0) !== wave || slotKey.startsWith("OL-")) return null;
                     return {
                       ...a,
                       slotKey,

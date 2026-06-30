@@ -223,7 +223,7 @@ export function buildBreaksWaves(snapshot: PrintDaySnapshot): PrintBreaksWave[] 
   for (const wave of [1, 2, 3, 4] as const) {
     const people: PrintBreaksPerson[] = [];
     Object.entries(snapshot.assignments).forEach(([slotKey, a]) => {
-      if (!a?.tmId || (a.breakGroup ?? 0) !== wave) return;
+      if (!a?.tmId || (a.breakGroup ?? 0) !== wave || slotKey.startsWith("OL-")) return;
       people.push({
         slotKey,
         tmName: a.tmName || a.tmId,

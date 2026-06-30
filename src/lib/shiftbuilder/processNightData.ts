@@ -65,8 +65,9 @@ export function buildAssignmentsRecord(
 export function computeBreakCounts(assignments: Record<string, any> | undefined | null): BreakCounts {
   const counts: BreakCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
   if (!assignments) return counts;
-  Object.values(assignments).forEach((a: any) => {
+  Object.entries(assignments).forEach(([slotKey, a]: [string, any]) => {
     if (!a?.tmId && !a?.tmName) return;
+    if (slotKey.startsWith("OL-")) return;
     const g = a.breakGroup ?? 0;
     if (g === 1) counts[1]++;
     else if (g === 2) counts[2]++;
@@ -114,7 +115,7 @@ export function prepareBreaksWaveData(
   return ([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
     const items = Object.entries(assignments)
       .map(([slotKey, a]: [string, any]) => {
-        if (!a?.tmId || a.breakGroup !== wave) return null;
+        if (!a?.tmId || (a.breakGroup ?? 0) !== wave || slotKey.startsWith("OL-")) return null;
         return {
           slotKey,
           type: slotRefType(slotKey),

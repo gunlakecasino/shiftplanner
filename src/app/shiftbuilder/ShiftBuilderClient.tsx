@@ -881,8 +881,10 @@ function AuthedShiftBuilder() {
   const [isCurrentNightLocked, setIsCurrentNightLocked] = useState(false);
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
+  const [publishWeekBusy, setPublishWeekBusy] = useState(false);
   const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
   const [applyDefaultTasksBusy, setApplyDefaultTasksBusy] = useState(false);
+  const [applyOverlapTasksBusy, setApplyOverlapTasksBusy] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
@@ -2990,15 +2992,16 @@ function AuthedShiftBuilder() {
     const willPublish = currentNightStatus !== "published";
     const action = willPublish ? "publish" : "unpublish";
 
-    if (
-      !window.confirm(
-        `${willPublish ? "Publish" : "Unpublish"} ${dayLabel} (${dateIso})?` +
-          (willPublish
-            ? " Published nights are marked official for ops handoff."
-            : " Unpublished nights return to draft status."),
-      )
-    ) {
-      return;
+    // Disable confirm popup when publishing (user request: "disable the pop up confirm if i want to publish a night now").
+    // Keep a lightweight confirm only for unpublish (more destructive).
+    if (!willPublish) {
+      if (
+        !window.confirm(
+          `Unpublish ${dayLabel} (${dateIso})? Unpublished nights return to draft status.`,
+        )
+      ) {
+        return;
+      }
     }
 
     setPublishDayBusy(true);
@@ -3036,6 +3039,61 @@ function AuthedShiftBuilder() {
     currentNight.queryClient,
     logBuilderChange,
   ]);
+
+  const handleToggleWeekPublished = React.useCallback(
+    async (publish: boolean) => {
+      if (!canPublish) {
+        showToast("You don't have permission to publish schedules", "error");
+        return;
+      }
+
+      const action = publish ? "publish" : "unpublish";
+      setPublishWeekBusy(true);
+      try {
+        const { getOrCreateNightForDate, setNightPublished } = await import(
+          "@/lib/shiftbuilder/data"
+        );
+
+        // DAY_DEFS are the 7 days of the current week (Fri–Thu)
+        const dayDefs = DAY_DEFS;
+        let processed = 0;
+        for (const def of dayDefs) {
+          const nightIdForDay = await getOrCreateNightForDate(def.date, def.name);
+          await setNightPublished(nightIdForDay, publish);
+          processed++;
+        }
+
+        // Update local status for the currently viewed day
+        setCurrentNightStatus(publish ? "published" : "draft");
+
+        // Invalidate current night queries so UI refreshes
+        const dateIso = formatLocalDateISO(selectedDay.date);
+        currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateIso] });
+        currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateIso] });
+        currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateIso] });
+
+        logBuilderChange({
+          action: publish ? "publish-week" : "unpublish-week",
+        });
+
+        showToast(`Week ${publish ? "published" : "unpublished"} (${processed} nights)`, "success");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : `Failed to ${action} week`;
+        showToast(msg, "error");
+      } finally {
+        setPublishWeekBusy(false);
+      }
+    },
+    [
+      canPublish,
+      DAY_DEFS,
+      selectedDay,
+      showToast,
+      currentNight.queryClient,
+      logBuilderChange,
+      setCurrentNightStatus,
+    ]
+  );
 
   // Map DB task rows to UI keys, with special remapping for aux cards so that
   // tasks added/persisted under canonical DB keys (admin/trash_N/...) land on the
@@ -5728,7 +5786,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         return;
       }
 
-      const { pushTaskDefaultsToNight } = await import("@/lib/shiftbuilder/data");
+      const { pushTaskDefaultsToNight, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
+      invalidateSlotDefaultsBundleCache();
       const { applied } = await pushTaskDefaultsToNight(nid);
 
       const dateKey = formatLocalDateISO(selectedDay.date);
@@ -5754,6 +5813,66 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   }, [
     isCurrentNightLocked,
     selectedTasks,
+    queryNightId,
+    nightId,
+    selectedDay.date,
+    selectedDay.name,
+    showToast,
+    currentNight.queryClient,
+    resolveNightIdForDate,
+    refreshNightTasksFromServer,
+  ]);
+
+  const handleApplyOverlapTasks = React.useCallback(async () => {
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — cannot apply overlap tasks", "error");
+      return;
+    }
+
+    if (
+      !confirm(
+        "Apply default task chips to overlap slots (AM/PM) tonight? This replaces existing task chips on overlap slots that have defaults configured.",
+      )
+    ) {
+      return;
+    }
+
+    setApplyOverlapTasksBusy(true);
+    try {
+      let nid = queryNightId || nightId;
+      if (!nid) {
+        nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+      }
+      if (!nid) {
+        showToast("No night loaded — pick a day first", "error");
+        return;
+      }
+
+      const { pushTaskDefaultsToNight } = await import("@/lib/shiftbuilder/data");
+      const { applied } = await pushTaskDefaultsToNight(nid, { overlapsOnly: true });
+
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+      await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
+
+      const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
+      await yieldToMain();
+      await refreshNightTasksFromServer(nid, selectedDay.date);
+
+      showToast(
+        `Applied overlap tasks — ${applied} chip${applied !== 1 ? "s" : ""} installed`,
+        "success",
+      );
+    } catch (e: unknown) {
+      console.error("[shiftbuilder] apply overlap tasks failed", e);
+      const msg = e instanceof Error ? e.message : "Failed to apply overlap tasks";
+      showToast(msg, "error");
+    } finally {
+      setApplyOverlapTasksBusy(false);
+    }
+  }, [
+    isCurrentNightLocked,
     queryNightId,
     nightId,
     selectedDay.date,
@@ -6881,6 +7000,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
         onApplyDefaultTasks={canAccessSudo ? handleApplyDefaultTasks : undefined}
         applyDefaultTasksBusy={applyDefaultTasksBusy}
+        onApplyOverlapTasks={canAccessSudo ? handleApplyOverlapTasks : undefined}
+        applyOverlapTasksBusy={applyOverlapTasksBusy}
         onToggleWeekHealth={handleToggleWeekHealthTracker}
         weekHealthVisible={!isWeekHealthTrackerDismissed}
         weekHealthPercent={weekAverageHealth}
@@ -6908,6 +7029,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           canPublish ? () => void handleToggleDayPublished() : undefined
         }
         publishDayBusy={publishDayBusy}
+        onPublishWeek={
+          canPublish ? () => void handleToggleWeekPublished(true) : undefined
+        }
+        onUnpublishWeek={
+          canPublish ? () => void handleToggleWeekPublished(false) : undefined
+        }
+        publishWeekBusy={publishWeekBusy}
         onRunEngine={canRunEngine ? runXaiEngineFromCanvas : undefined}
         onClearDay={canSeeDraftData ? handleClearBoard : undefined}
         onRefreshDay={canEditAssignments ? () => void handleDeepRefreshDay() : undefined}
