@@ -895,6 +895,10 @@ function AuthedShiftBuilder() {
     isDuplicate?: boolean;
   } | null>(null);
 
+  // Ref to track current drag kind during the gesture (avoids stale closure in onDragEnd
+  // since dnd-kit may invoke the captured onDragEnd handler from before state updates).
+  const currentDragKindRef = React.useRef<string | null>(null);
+
   // Track Alt/Option key for cross-platform task duplicate on drag (Safari/iPad often needs this)
   const [altPressed, setAltPressed] = useState(false);
   useEffect(() => {
@@ -3293,7 +3297,16 @@ function AuthedShiftBuilder() {
 
   const handleCmdkAddCoverage = React.useCallback(
     async (sourceKey: string, targetKey: string) => {
-      if (!nightId) { showToast("No active night selected", "error"); return; }
+      let effectiveNightId = nightId;
+      if (!effectiveNightId) {
+        try {
+          const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
+          effectiveNightId = await getOrCreateNightForDate(selectedDay.date, selectedDay.name);
+        } catch (e) {
+          console.error("[shiftbuilder] failed to create night for coverage", e);
+        }
+      }
+      if (!effectiveNightId) { showToast("No active night selected", "error"); return; }
 
       const captureDate = selectedDay.date;
       const accentColor = getSlotAccentColor(sourceKey);
@@ -3323,7 +3336,7 @@ function AuthedShiftBuilder() {
         const coverageSide = suggestCoverageSideForNewCoverer(existingCoverers);
         const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
         await addNightSlotTask({
-          nightId,
+          nightId: effectiveNightId,
           slotKey: slot_key,
           slotType: slot_type,
           rrSide: rr_side,
@@ -3336,7 +3349,7 @@ function AuthedShiftBuilder() {
         logBuilderChange({
           action: "coverage_add",
           slotKey: sourceKey,
-          targetNightId: nightId,
+          targetNightId: effectiveNightId,
           payload: {
             taskLabel: `And ${targetLabel}`,
             targetKey,
@@ -3346,7 +3359,7 @@ function AuthedShiftBuilder() {
         });
         // Best-effort refresh after successful coverage write
         try {
-          const fresh = await getNightSlotTasks(nightId);
+          const fresh = await getNightSlotTasks(effectiveNightId);
           const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
           setSelectedTasks(byKey);
           const qc = currentNight?.queryClient;
@@ -4762,6 +4775,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       // A special coverage ghost is shown, and drop on an assigned slot adds coverage.
       const label = getSlotCoverageLabel(d.fromSlot);
       setActiveDrag({ kind: "coverage-request", fromSlot: d.fromSlot, label });
+      currentDragKindRef.current = "coverage-request";
     }
   };
 
@@ -4770,9 +4784,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const onDragOver = undefined;
 
   const onDragEnd = (event: DragEndEvent) => {
-    // Capture coverage gesture info before clearing (the kind may be used to reliably detect even if data.type varies)
-    const wasCoverageRequest = activeDrag?.kind === "coverage-request";
-    const coverageFromSlot = activeDrag?.fromSlot;
+    // Capture using ref first (reliable across stale closures), fallback to state.
+    const wasCoverageRequest = currentDragKindRef.current === "coverage-request" || activeDrag?.kind === "coverage-request";
+    const coverageFromSlot = activeDrag?.fromSlot || currentDragKindRef.current ? (activeDrag?.fromSlot) : undefined;
+    currentDragKindRef.current = null;
     setActiveDrag(null);
     
     // Always clear pending drag when the gesture ends.
