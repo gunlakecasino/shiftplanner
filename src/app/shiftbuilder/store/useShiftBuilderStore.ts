@@ -474,8 +474,9 @@ export const useBreakCounts = () =>
   useShiftBuilderStore(
     useShallow((state) => {
       const counts: Record<1 | 2 | 3 | 4, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-      Object.values(state.assignments || {}).forEach((a: any) => {
+      Object.entries(state.assignments || {}).forEach(([slotKey, a]: [string, any]) => {
         if (!a?.tmId && !a?.tmName) return;
+        if (slotKey.startsWith("OL-")) return;
         const g = (a.breakGroup ?? 0) as number;
         // Off-the-sheet (0) intentionally excluded; 4 = overlaps wave
         if (g === 1) counts[1]++;
@@ -490,8 +491,9 @@ export const useBreakCounts = () =>
 export const useInRotationCount = () =>
   useShiftBuilderStore((state) => {
     let sum = 0;
-    Object.values(state.assignments || {}).forEach((a: any) => {
+    Object.entries(state.assignments || {}).forEach(([slotKey, a]: [string, any]) => {
       if (!a?.tmId && !a?.tmName) return;
+      if (slotKey.startsWith("OL-")) return;
       const g = (a.breakGroup ?? 0) as number;
       if (g >= 1 && g <= 4) sum++;
     });

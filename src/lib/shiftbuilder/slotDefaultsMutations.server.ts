@@ -33,12 +33,13 @@ export async function addSlotDefaultTaskServer(params: {
   const {
     slotKey,
     slotType,
-    rrSide = "",
+    rrSide: rawRrSide = "",
     taskLabel,
     taskColor = null,
     isCoverage = false,
     sortOrder = 0,
   } = params;
+  const rrSide = rawRrSide ?? "";
 
   const { data, error } = await adminClient()
     .from("slot_default_tasks")
@@ -80,7 +81,8 @@ export async function upsertSlotDefaultServer(params: {
   rrSide?: string;
   defaultBreakGroup: BreakGroupValue;
 }): Promise<void> {
-  const { slotKey, slotType, rrSide = "", defaultBreakGroup } = params;
+  const { slotKey, slotType, rrSide: rawRrSide = "", defaultBreakGroup } = params;
+  const rrSide = rawRrSide ?? "";
 
   const { error } = await adminClient()
     .from("slot_defaults")

@@ -24,6 +24,8 @@ export function permissionRequiredForAuditAction(
       return "canLockUnlock";
     case "publish":
     case "unpublish":
+    case "publish-week":
+    case "unpublish-week":
       return "canPublish";
     case "schedule_apply":
       return "canApplySchedules";

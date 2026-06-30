@@ -3586,38 +3586,68 @@ export async function pushBreakDefaultsToWeek(
  * AM Overlap positions. This gives a fresh random layout each time "Default Tasks"
  * is clicked from the navbar (or on lazy night creation).
  */
-export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applied: number }> {
+export async function pushTaskDefaultsToNight(
+  nightId: string,
+  opts: { overlapsOnly?: boolean } = {}
+): Promise<{ applied: number }> {
   if (!nightId) return { applied: 0 };
 
-  const defaults = await getSlotDefaultTasks();
-  if (!defaults.length) return { applied: 0 };
+  // Force fresh read of slot defaults (bypass in-memory cache) so that
+  // changes made in Sudo Card Defaults (e.g. AM Overlap pool) are immediately
+  // visible when pressing "Default Tasks".
+  invalidateSlotDefaultsBundleCache();
 
-  // ── AM Overlap special case: random distribution of the task pool ─────────
-  // When "Default Tasks" is run from the navbar (or on new night creation),
-  // collect any tasks configured for overlap_am_* slots. Shuffle them and
-  // assign one-to-one (random permutation) across the 6 canonical AM Overlap
-  // cards (OL-AM-0..5 / overlap_am_0..5). This replaces fixed per-slot mapping
-  // so each run gives a fresh random layout of the same set of tasks.
-  const AM_OVERLAP_PREFIX = 'overlap_am_';
+  let rawDefaults = await getSlotDefaultTasks();
+  if (!rawDefaults.length) return { applied: 0 };
+
+  // When called from "Apply Overlap Tasks", only consider overlap pool/per-card defaults
+  // (do not touch zone/RR/AUX tasks).
+  const workingDefaults = opts.overlapsOnly
+    ? rawDefaults.filter(
+        (d) => d.slotKey.startsWith("overlap_am_") || d.slotKey.startsWith("overlap_pm_")
+      )
+    : rawDefaults;
+
+  // ── Overlap task pools (AM + PM) : random distribution only to cards with a TM ──
+  // "Apply Overlap Tasks" (and Default Tasks for overlaps) collects tasks from the
+  // AM pool (overlap_am_*) and (when overlapsOnly) PM slots (overlap_pm_*), dedupes,
+  // shuffles, and distributes randomly **only to overlap cards that currently have a TM assigned**.
+  // Empty overlap cards are left untouched. This applies to both the dedicated
+  // "Apply Overlap Tasks" button and the overlap portion of normal defaults.
+  const AM_OVERLAP_PREFIX = "overlap_am_";
+  const PM_OVERLAP_PREFIX = "overlap_pm_";
+
   const amOverlapTasks: SlotDefaultTask[] = [];
-  const otherDefaults = defaults.filter((d) => {
+  const pmOverlapTasks: SlotDefaultTask[] = [];
+
+  const otherDefaults = workingDefaults.filter((d) => {
     if (d.slotKey.startsWith(AM_OVERLAP_PREFIX)) {
       amOverlapTasks.push(d);
+      return false;
+    }
+    // Only treat PM as pooled/random when doing the dedicated overlap apply.
+    // For full "Default Tasks", keep per-pm slot behavior (backward).
+    if (opts.overlapsOnly && d.slotKey.startsWith(PM_OVERLAP_PREFIX)) {
+      pmOverlapTasks.push(d);
       return false;
     }
     return true;
   });
 
-  // Dedupe pool by label so user gets distinct tasks randomly assigned
-  const seen = new Set<string>();
-  const uniqueAmPool = amOverlapTasks.filter((t) => {
-    const key = t.taskLabel.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const dedupeByLabel = (tasks: SlotDefaultTask[]): SlotDefaultTask[] => {
+    const seen = new Set<string>();
+    return tasks.filter((t) => {
+      const key = (t.taskLabel || "").toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
 
-  // Group non-AM slots normally
+  const uniqueAmPool = dedupeByLabel(amOverlapTasks);
+  const uniquePmPool = dedupeByLabel(pmOverlapTasks);
+
+  // Group non-overlap (and non-pooled-pm) slots normally
   const bySlot = new Map<string, SlotDefaultTask[]>();
   for (const t of otherDefaults) {
     const key = `${t.slotKey}|${t.rrSide}`;
@@ -3625,24 +3655,85 @@ export async function pushTaskDefaultsToNight(nightId: string): Promise<{ applie
     bySlot.get(key)!.push(t);
   }
 
-  // Inject shuffled assignments for the 6 AM Overlap targets (0-indexed)
-  if (uniqueAmPool.length > 0) {
+  // Load which overlap cards are actually staffed tonight (have TM).
+  // Only distribute pool tasks to those.
+  let staffedAmDb: string[] = [];
+  let staffedPmDb: string[] = [];
+  try {
+    const assignRows = await getNightAssignments(nightId);
+    const overlapRows = assignRows.filter(
+      (r: any) =>
+        r?.tmId &&
+        (r.slotType === "overlap" || String(r.slotKey || "").startsWith("overlap_"))
+    );
+    for (const r of overlapRows) {
+      const sk = String(r.slotKey || "");
+      if (sk.startsWith(AM_OVERLAP_PREFIX)) staffedAmDb.push(sk);
+      else if (sk.startsWith(PM_OVERLAP_PREFIX)) staffedPmDb.push(sk);
+    }
+  } catch (e) {
+    console.warn(
+      "[shiftbuilder/data] pushTaskDefaultsToNight: could not load staffed overlaps; overlaps will receive no pooled tasks this run",
+      e
+    );
+    // Leave staffed* empty → no overlap pool distribution (per "only cards that have a TM")
+  }
+
+  // AM pool → random to staffed AM overlap cards only (distinct as possible)
+  if (uniqueAmPool.length > 0 && staffedAmDb.length > 0) {
+    const targets = [...staffedAmDb];
+    // Shuffle targets for fair random distribution
+    for (let i = targets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [targets[i], targets[j]] = [targets[j], targets[i]];
+    }
+
     const shuffled = [...uniqueAmPool];
-    // Fisher-Yates shuffle for unbiased random assignment
+    // Fisher-Yates shuffle for unbiased random from pool
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    const NUM_AM_OVERLAPS = 6;
-    for (let i = 0; i < NUM_AM_OVERLAPS; i++) {
-      const src = shuffled[i % shuffled.length];
-      const targetSlotKey = `${AM_OVERLAP_PREFIX}${i}`;
-      const compositeKey = `${targetSlotKey}|`; // rrSide empty for overlaps
+
+    const n = Math.min(shuffled.length, targets.length);
+    for (let i = 0; i < n; i++) {
+      const src = shuffled[i];
+      const targetSlotKey = targets[i];
+      const compositeKey = `${targetSlotKey}|`;
       bySlot.set(compositeKey, [
         {
           ...src,
           slotKey: targetSlotKey,
-          slotType: (src.slotType as any) || 'overlap',
+          slotType: (src.slotType as any) || "overlap",
+        },
+      ]);
+    }
+  }
+
+  // PM pool (only in overlapsOnly mode) → random to staffed PM cards only
+  if (opts.overlapsOnly && uniquePmPool.length > 0 && staffedPmDb.length > 0) {
+    const targets = [...staffedPmDb];
+    for (let i = targets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [targets[i], targets[j]] = [targets[j], targets[i]];
+    }
+
+    const shuffled = [...uniquePmPool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const n = Math.min(shuffled.length, targets.length);
+    for (let i = 0; i < n; i++) {
+      const src = shuffled[i];
+      const targetSlotKey = targets[i];
+      const compositeKey = `${targetSlotKey}|`;
+      bySlot.set(compositeKey, [
+        {
+          ...src,
+          slotKey: targetSlotKey,
+          slotType: (src.slotType as any) || "overlap",
         },
       ]);
     }

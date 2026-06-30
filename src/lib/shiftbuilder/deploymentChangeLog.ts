@@ -5,6 +5,8 @@ export type DeploymentChangeAction =
   | "unlock"
   | "publish"
   | "unpublish"
+  | "publish-week"
+  | "unpublish-week"
   | "night_lock"
   | "night_unlock"
   | "task_add"

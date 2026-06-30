@@ -52,7 +52,7 @@ interface SlotDef {
   compositeKey: string;   // "dbKey|rrSide" — the map key used everywhere
   dbKey: string;          // e.g. "zone_1", "rr_1_2", "admin", "overlap_am_0"
   dbType: "zone" | "rr" | "aux" | "overlap";
-  rrSide: string;         // '' for zone/aux/overlap; 'mens'|'womens' for RR
+  rrSide: string;         // '' for zone/aux/overlap (NOT NULL in DB); 'mens'/'womens' for RR
   label: string;          // display label
   sublabel: string;       // location hint
   icon: string;
@@ -239,7 +239,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
 
       const bg: Record<string, BreakGroup> = {};
       for (const d of defaults) {
-        const ck = `${d.slotKey}|${d.rrSide}`;
+        const ck = `${d.slotKey}|${d.rrSide ?? ''}`;
         bg[ck] = d.defaultBreakGroup;
       }
       for (const row of graveBreakGroupSlotDefaults()) {
@@ -252,7 +252,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
 
       const ts: Record<string, SlotDefaultTask[]> = {};
       for (const t of tasks) {
-        const ck = `${t.slotKey}|${t.rrSide}`;
+        const ck = `${t.slotKey}|${t.rrSide ?? ''}`;
         if (!ts[ck]) ts[ck] = [];
         ts[ck].push(t);
       }
