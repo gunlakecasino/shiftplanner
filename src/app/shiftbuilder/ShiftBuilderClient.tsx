@@ -4762,6 +4762,29 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       return;
     }
 
+    // Coverage gesture: drag unassigned zone card (the coverage target) onto an
+    // assigned zone card (the provider/TM). The provider gets the coverage task,
+    // the unassigned shows COVERED BY. Repeatable from the same unassigned card.
+    // No Alt gate: works directly on iPad Pencil/touch by dragging the unassigned card.
+    if (a.type === "unassigned-slot" || a.type === "unassigned-zone") {
+      const overData = over?.data.current as any;
+      if (!overData) return;
+
+      const coveredKey = safeNormalizeSlotKey(a.fromSlot);      // the unassigned zone being covered
+      let providerKey = overData.slotKey || overData.fromSlot;
+      if (!providerKey) return;
+      providerKey = safeNormalizeSlotKey(providerKey); // the assigned zone whose TM will cover it
+
+      if (providerKey === coveredKey) return;
+
+      const mainAssignments = useShiftBuilderStore.getState().assignments || {};
+      const provider = assignments[providerKey] || mainAssignments[providerKey];
+      if (!provider?.tmName) return;
+
+      handleCmdkAddCoverage(providerKey, coveredKey);
+      return;
+    }
+
     // Task being dragged between cards. Must be checked BEFORE the "assigned"
     // TM block — a.type cannot simultaneously be "assigned" and "task", so
     // nesting this check inside the assigned block made it unreachable.
