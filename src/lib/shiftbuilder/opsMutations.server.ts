@@ -244,12 +244,20 @@ export async function toggleAssignmentLockServer(params: {
     })
     .eq("night_id", nightId)
     .eq("slot_key", slotKey)
-    .eq("slot_type", slotType);
+    .eq("slot_type", slotType)
+    // Guard against a stale read-modify-write: only flip the lock if the row still
+    // matches the lock state the caller last observed. If another operator (or tab)
+    // already toggled it, this update matches zero rows instead of clobbering theirs.
+    .eq("is_locked", currentLocked);
 
   if (rrSide) q = q.eq("rr_side", rrSide);
+  else q = q.is("rr_side", null);
 
-  const { error } = await q;
+  const { data, error } = await q.select("slot_key");
   if (error) throw new Error(`Failed to toggle lock: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error("Lock state changed elsewhere — refresh and try again.");
+  }
   return { success: true, newLocked: !currentLocked };
 }
 

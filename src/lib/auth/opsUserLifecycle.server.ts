@@ -10,7 +10,8 @@ export type OpsPinChangeErrorCode =
   | "expired"
   | "not_authorized"
   | "not_found"
-  | "validation";
+  | "validation"
+  | "pin_taken";
 
 export class OpsPinChangeError extends Error {
   readonly code: OpsPinChangeErrorCode;
@@ -52,6 +53,44 @@ export async function hashOpsPin(pin: string): Promise<string> {
     throw new Error("PIN must be exactly 6 digits");
   }
   return bcrypt.hash(pin, BCRYPT_ROUNDS);
+}
+
+const MAX_PIN_GENERATION_ATTEMPTS = 25;
+
+/**
+ * True if `pin` matches any OTHER active user's stored PIN hash. PINs are bcrypt-hashed
+ * with per-row salts, so this can't be a DB unique constraint — it requires comparing
+ * against every active user's hash. Only used at PIN creation/change time (low frequency),
+ * never on the login hot path.
+ */
+async function isPinTakenByOtherActiveUser(
+  client: SupabaseClient,
+  pin: string,
+  excludeUserId?: string,
+): Promise<boolean> {
+  const { data, error } = await client
+    .from("users")
+    .select("id, pin_hash")
+    .eq("is_active", true)
+    .not("pin_hash", "is", null);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    if (excludeUserId && row.id === excludeUserId) continue;
+    if (!row.pin_hash) continue;
+    if (await bcrypt.compare(pin, normalizeBcryptHash(row.pin_hash))) return true;
+  }
+  return false;
+}
+
+/** Generate a random 6-digit PIN that no other active user currently holds. */
+async function generateUniqueSixDigitPin(client: SupabaseClient): Promise<string> {
+  for (let attempt = 0; attempt < MAX_PIN_GENERATION_ATTEMPTS; attempt++) {
+    const candidate = generateSixDigitPin();
+    if (!(await isPinTakenByOtherActiveUser(client, candidate))) return candidate;
+  }
+  throw new Error("Could not generate a unique PIN — contact an administrator");
 }
 
 export type CreateOpsUserInput = {
@@ -96,7 +135,7 @@ export async function createOpsUserWithPin(
     throw new Error("username already exists");
   }
 
-  const temporaryPin = generateSixDigitPin();
+  const temporaryPin = await generateUniqueSixDigitPin(client);
   const pin_hash = await hashOpsPin(temporaryPin);
   const now = new Date().toISOString();
 
@@ -128,7 +167,7 @@ export async function issueOpsTemporaryPin(
   client: SupabaseClient,
   userId: string,
 ): Promise<string> {
-  const temporaryPin = generateSixDigitPin();
+  const temporaryPin = await generateUniqueSixDigitPin(client);
   const pin_hash = await hashOpsPin(temporaryPin);
   const now = new Date().toISOString();
 
@@ -191,6 +230,13 @@ export async function changeOpsUserPin(
   const currentOk = await verifyOpsPin(currentPin, row.pin_hash);
   if (!currentOk) {
     throw new OpsPinChangeError("Current PIN is incorrect", "incorrect");
+  }
+
+  if (await isPinTakenByOtherActiveUser(client, newPin, userId)) {
+    throw new OpsPinChangeError(
+      "That PIN is already in use — choose a different one",
+      "pin_taken",
+    );
   }
 
   const pin_hash = await hashOpsPin(newPin);
