@@ -898,6 +898,10 @@ function AuthedShiftBuilder() {
   // Ref to track current drag kind during the gesture (avoids stale closure in onDragEnd
   // since dnd-kit may invoke the captured onDragEnd handler from before state updates).
   const currentDragKindRef = React.useRef<string | null>(null);
+  // Companion ref holding the coverage-request's source slot, since currentDragKindRef only
+  // tracks the kind string — without this, onDragEnd has no fallback value to read when
+  // activeDrag state was already cleared/stale by the time the gesture ends.
+  const currentDragFromSlotRef = React.useRef<string | null>(null);
 
   // Track Alt/Option key for cross-platform task duplicate on drag (Safari/iPad often needs this)
   const [altPressed, setAltPressed] = useState(false);
@@ -4766,6 +4770,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       const label = getSlotCoverageLabel(fromSlot);
       setActiveDrag({ kind: "coverage-request", fromSlot, label });
       currentDragKindRef.current = "coverage-request";
+      currentDragFromSlotRef.current = fromSlot;
     }
   };
 
@@ -4776,8 +4781,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const onDragEnd = (event: DragEndEvent) => {
     // Capture using ref first (reliable across stale closures), fallback to state.
     const wasCoverageRequest = currentDragKindRef.current === "coverage-request" || activeDrag?.kind === "coverage-request";
-    const coverageFromSlot = activeDrag?.fromSlot || currentDragKindRef.current ? (activeDrag?.fromSlot) : undefined;
+    const coverageFromSlot = activeDrag?.fromSlot ?? currentDragFromSlotRef.current ?? undefined;
     currentDragKindRef.current = null;
+    currentDragFromSlotRef.current = null;
     setActiveDrag(null);
     
     // Always clear pending drag when the gesture ends.
@@ -4885,6 +4891,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         const [moved] = reordered.splice(fromIdx, 1);
         reordered.splice(toIdx, 0, moved);
         const orderedLabels = reordered.map((t: any) => t.taskLabel);
+        const preReorderList = currentList;
 
         setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: reordered }));
 
@@ -4899,7 +4906,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             await reorderNightSlotTasks(nid, slot_key, slot_type, rr_side, orderedLabels);
           } catch (e: any) {
             console.error("[shiftbuilder] task reorder persist failed", e);
-            showToast("Tasks reordered in UI but failed to save — refresh may revert");
+            setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: preReorderList }));
+            showToast("Tasks reorder failed to save — reverted");
           }
         })();
         return;
@@ -4913,18 +4921,19 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKey);
 
-        // Optimistic add copy to target (keep source)
-        setSelectedTasks((prev) => {
-          const copied = {
-            ...taskToCopy,
-            slotKey: toSlotKey,
-            slotType: toSlotType,
-            rrSide: toRrSide,
-            // id will be server generated on refresh
-          };
-          const newTo = [...(prev[toUiKey] ?? []), copied];
-          return { ...prev, [toUiKey]: newTo };
-        });
+        // Optimistic add copy to target (keep source). Hoisted so the catch below can
+        // remove this exact object reference on persist failure.
+        const copied = {
+          ...taskToCopy,
+          slotKey: toSlotKey,
+          slotType: toSlotType,
+          rrSide: toRrSide,
+          // id will be server generated on refresh
+        };
+        setSelectedTasks((prev) => ({
+          ...prev,
+          [toUiKey]: [...(prev[toUiKey] ?? []), copied],
+        }));
 
         (async () => {
           let nid = nightId;
@@ -4953,7 +4962,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             }
           } catch (e: any) {
             console.error("[shiftbuilder] task duplicate persist failed", e);
-            showToast("Task duplicated in UI but failed to save — refresh may revert");
+            // Roll back the optimistic copy — remove this exact (un-persisted) object from the target slot.
+            setSelectedTasks((prev) => ({
+              ...prev,
+              [toUiKey]: (prev[toUiKey] ?? []).filter((t: any) => t !== copied),
+            }));
+            showToast("Task duplicate failed to save — reverted");
           }
         })();
         return;
@@ -4967,6 +4981,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         const { slot_key: toSlotKey, slot_type: toSlotType, rr_side: toRrSide } = uiToDb(toUiKeyMove);
         const { slot_key: fromSlotKey, slot_type: fromSlotType, rr_side: fromRrSide } = uiToDb(fromUiKeyMove);
+
+        // Snapshot pre-move lists so a persist failure can restore exact prior state.
+        const preMoveFromList = selectedTasks[fromUiKeyMove] ?? [];
+        const preMoveToList = selectedTasks[toUiKeyMove] ?? [];
 
         // Optimistic move in the selectedTasks buckets (same shape the card renderers use)
         setSelectedTasks((prev) => {
@@ -5005,7 +5023,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             });
           } catch (e: any) {
             console.error("[shiftbuilder] task move persist failed", e);
-            showToast("Task moved in UI but failed to save — refresh may revert it");
+            setSelectedTasks((prev) => ({
+              ...prev,
+              [fromUiKeyMove]: preMoveFromList,
+              [toUiKeyMove]: preMoveToList,
+            }));
+            showToast("Task move failed to save — reverted");
           }
         })();
       }

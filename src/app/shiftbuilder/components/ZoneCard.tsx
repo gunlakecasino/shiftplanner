@@ -78,6 +78,74 @@ export interface ZoneCardProps {
   onKioskLongPress?: (anchor: { x: number; y: number }) => void;
 }
 
+// ShiftBuilderBoard passes several props (assignments, selectedTasks, conflictingTms,
+// tmConflictSlots, coveredBy, placementTrail, fitChip) as whole-board maps/sets or
+// freshly-rebuilt-per-render values (buildCoveredByIndex/trailForTm construct brand new
+// objects on every call). Under plain React.memo's default shallow reference compare, any
+// single-slot change anywhere on the board makes every ZoneCard's props "different" by
+// reference, so every card re-renders. This comparator narrows the check to each card's own
+// slice, by content rather than reference, so unrelated cards can skip re-rendering.
+// Conservative on purpose: any prop not explicitly narrowed below falls through to a plain
+// Object.is check (identical to default React.memo behavior) rather than being assumed equal.
+function shallowObjectEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  const aRec = a as Record<string, unknown>;
+  const bRec = b as Record<string, unknown>;
+  const aKeys = Object.keys(aRec);
+  const bKeys = Object.keys(bRec);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.is(aRec[key], bRec[key])) return false;
+  }
+  return true;
+}
+
+function shallowArrayEqual<T>(a: T[] | undefined, b: T[] | undefined, itemEqual: (x: T, y: T) => boolean): boolean {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!itemEqual(a[i], b[i])) return false;
+  }
+  return true;
+}
+
+function zoneCardPropsAreEqual(prev: Readonly<ZoneCardProps>, next: Readonly<ZoneCardProps>): boolean {
+  if (prev.def !== next.def) return false;
+
+  const slotKey = next.def.key;
+  if (!shallowObjectEqual(prev.assignments?.[slotKey], next.assignments?.[slotKey])) return false;
+  if (!shallowArrayEqual(prev.selectedTasks[slotKey], next.selectedTasks[slotKey], Object.is)) return false;
+  if (!shallowObjectEqual(prev.draftInfo, next.draftInfo)) return false;
+  if (!shallowObjectEqual(prev.fitChip, next.fitChip)) return false;
+  if (!shallowArrayEqual(prev.placementTrail, next.placementTrail, Object.is)) return false;
+  if (!shallowArrayEqual(prev.coveredBy, next.coveredBy, shallowObjectEqual)) return false;
+
+  const nextTmId = (next.assignments?.[slotKey] as { tmId?: string } | undefined)?.tmId;
+  const prevHasConflict = nextTmId ? (prev.conflictingTms?.has(nextTmId) ?? false) : false;
+  const nextHasConflict = nextTmId ? (next.conflictingTms?.has(nextTmId) ?? false) : false;
+  if (prevHasConflict !== nextHasConflict) return false;
+  if (!shallowArrayEqual(
+    nextTmId ? prev.tmConflictSlots?.[nextTmId] : undefined,
+    nextTmId ? next.tmConflictSlots?.[nextTmId] : undefined,
+    Object.is,
+  )) return false;
+
+  // Everything else (callbacks, primitive flags, etc.) — same check React.memo does by default.
+  const narrowedKeys = new Set([
+    "def", "assignments", "selectedTasks", "draftInfo", "fitChip",
+    "placementTrail", "coveredBy", "conflictingTms", "tmConflictSlots",
+  ]);
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (narrowedKeys.has(key)) continue;
+    if (!Object.is((prev as any)[key], (next as any)[key])) return false;
+  }
+
+  return true;
+}
+
 const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   def,
   assignments,
@@ -338,6 +406,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       )}
     </div>
   );
-});
+}, zoneCardPropsAreEqual);
 
 export default ZoneCard;

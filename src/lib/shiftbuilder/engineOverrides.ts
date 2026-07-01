@@ -41,6 +41,7 @@ import type {
   FullyResolvedEngineConfig,
 } from "./engineConfig";
 import { FALLBACK_CONFIG, resolvedWeights, resolvedThresholds } from "./engineConfig";
+import { assignmentTmId } from "./tmIdentity";
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -131,12 +132,13 @@ export function applyOverridesToWeights(
  * Soft rules are handled as score adjustments in scoring.ts.
  */
 export function isEligibleUnderRules(
-  tm: { tmId: string; gravePool?: string; weeksInRole?: number },
+  tm: { id?: string; tmId?: string; tm_id?: string; gravePool?: string; weeksInRole?: number },
   slotKey: string,
   slotType: string,
   rules: EligibilityRule[]
 ): boolean {
   const activeHardRules = rules.filter(r => r.isActive && r.ruleType === "hard_exclude");
+  const resolvedTmId = assignmentTmId(tm);
 
   for (const rule of activeHardRules) {
     const cond = rule.condition || {};
@@ -144,7 +146,7 @@ export function isEligibleUnderRules(
     // Example rule shapes (extensible)
     if (cond.grave_pool && tm.gravePool !== cond.grave_pool) return false;
     if (cond.min_weeks && (tm.weeksInRole ?? 0) < cond.min_weeks) return false;
-    if (Array.isArray(cond.exclude_tm_ids) && cond.exclude_tm_ids.includes(tm.tmId)) return false;
+    if (Array.isArray(cond.exclude_tm_ids) && cond.exclude_tm_ids.includes(resolvedTmId)) return false;
     if (Array.isArray(cond.only_zones) && !cond.only_zones.includes(slotKey)) return false;
     if (Array.isArray(cond.slot_types) && !cond.slot_types.includes(slotType)) return false;
 
