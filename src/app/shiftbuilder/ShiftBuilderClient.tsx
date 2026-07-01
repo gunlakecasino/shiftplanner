@@ -2922,20 +2922,6 @@ function AuthedShiftBuilder() {
     return null;
   }, [assignments, draftAssignments, storeAssignments, storeDraftAssignments, selectedDay]);
 
-  const handleUnplaceTm = React.useCallback((tmId: string, tmName: string) => {
-    if (!requireEdit()) return;
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — changes are disabled", "error");
-      return;
-    }
-    const slotKey = getSlotForTmId(tmId);
-    if (!slotKey) {
-      showToast(`Could not locate placement for ${tmName}`, "error");
-      return;
-    }
-    unassign(slotKey);
-  }, [getSlotForTmId, requireEdit, isCurrentNightLocked, showToast, unassign]);
-
   const toggleLock = (slotKey: string) => {
     if (!requireLock()) return;
     const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
@@ -7181,7 +7167,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
                 onUnmarkCalledOff={handleUnmarkCalledOff}
-                onUnplaceTm={handleUnplaceTm}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}
