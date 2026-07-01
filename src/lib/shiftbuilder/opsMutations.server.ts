@@ -1,6 +1,7 @@
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";
 import type { BreakGroupValue } from "@/lib/shiftbuilder/breakGroupResolve";
+import type { MoveTaskParams } from "./data";
 
 export type UpsertAssignmentParams = {
   nightId: string;
@@ -381,6 +382,60 @@ export async function removeNightSlotTaskServer(params: RemoveTaskParams): Promi
 
   const { error } = await q;
   if (error) throw new Error(`Failed to remove task: ${error.message}`);
+}
+
+export async function moveNightSlotTaskServer(params: MoveTaskParams): Promise<void> {
+  const client = adminClient();
+  const {
+    nightId, taskLabel,
+    fromSlotKey, fromSlotType, fromRrSide = null,
+    toSlotKey, toSlotType, toRrSide = null,
+  } = params;
+
+  if (!nightId || !taskLabel || !fromSlotKey || !toSlotKey) {
+    throw new Error('moveNightSlotTaskServer requires nightId, taskLabel, from/to slot keys');
+  }
+
+  // Locate the row by old composite (label is stable within night+slot), with rr_side
+  let findQ = client
+    .from("night_slot_tasks")
+    .select('id, color, sort_order, catalog_task_id')
+    .eq("night_id", nightId)
+    .eq("slot_key", fromSlotKey)
+    .eq("slot_type", fromSlotType)
+    .eq("task_label", taskLabel);
+
+  if (fromRrSide) {
+    findQ = findQ.eq("rr_side", fromRrSide);
+  } else {
+    findQ = findQ.is("rr_side", null);
+  }
+
+  const { data: rows, error: findErr } = await findQ;
+  if (findErr) {
+    throw new Error(`Failed to locate task for move: ${findErr.message}`);
+  }
+  const existing = rows && rows.length > 0 ? rows[0] : null;
+  if (!existing) {
+    // Already moved or never existed — treat as success (idempotent for UI)
+    return;
+  }
+
+  // Update the targeting columns (preserves id, color, sort, catalog link)
+  const { error: updErr } = await client
+    .from("night_slot_tasks")
+    .update({
+      slot_key: toSlotKey,
+      slot_type: toSlotType,
+      rr_side: toRrSide,
+    })
+    .eq('id', existing.id);
+
+  if (updErr) {
+    throw new Error(
+      `Failed to move task: ${updErr.message || 'unknown error'} (code: ${updErr.code || 'unknown'})`
+    );
+  }
 }
 
 export async function updateNightSlotTaskCoverageSideServer(

@@ -1638,53 +1638,15 @@ export interface MoveTaskParams {
  * This is the persistence for "drag a task chip from one card to another".
  */
 export async function moveNightSlotTask(params: MoveTaskParams): Promise<void> {
-  const {
-    nightId, taskLabel,
-    fromSlotKey, fromSlotType, fromRrSide = null,
-    toSlotKey, toSlotType, toRrSide = null,
-  } = params;
-
-  if (!nightId || !taskLabel || !fromSlotKey || !toSlotKey) {
-    throw new Error('moveNightSlotTask requires nightId, taskLabel, from/to slot keys');
-  }
-
-  // Locate the row by the old composite key (label is the stable human key within a night+slot)
-  const { data: existing, error: findErr } = await supabase
-    .from('night_slot_tasks')
-    .select('id, color, sort_order, catalog_task_id')
-    .eq('night_id', nightId)
-    .eq('slot_key', fromSlotKey)
-    .eq('slot_type', fromSlotType)
-    .eq('task_label', taskLabel)
-    .maybeSingle();
-
-  if (findErr) {
-    console.error('[shiftbuilder/data] moveNightSlotTask find failed:', findErr);
-    throw new Error(`Failed to locate task for move: ${findErr.message}`);
-  }
-  if (!existing) {
-    // Already moved or never existed — treat as success (idempotent for UI)
-    return;
-  }
-
-  // Update the targeting columns on the existing row (preserves id, color, sort, catalog link)
-  const { error: updErr } = await supabase
-    .from('night_slot_tasks')
-    .update({
-      slot_key: toSlotKey,
-      slot_type: toSlotType,
-      rr_side: toRrSide,
-    })
-    .eq('id', existing.id);
-
-  if (updErr) {
-    logSupabaseError('moveNightSlotTask update failed', updErr);
-    throw new Error(
-      `Failed to move task: ${updErr.message || 'unknown error'} (code: ${updErr.code || 'unknown'})`
-    );
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    'move_night_slot_task',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { moveNightSlotTaskServer } = await import('./opsMutations.server');
+      await moveNightSlotTaskServer(params);
+      return { ok: true };
+    },
+  );
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   unmarkTmCallOffServer,
   removeNightCardBorderServer,
   removeNightSlotTaskServer,
+  moveNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
   replaceNightSlotTasksForSlotServer,
   setNightCardBorderServer,
@@ -51,6 +52,7 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   delete_break_assignment: "canEditAssignments",
   add_night_slot_task: "canEditAssignments",
   remove_night_slot_task: "canEditAssignments",
+  move_night_slot_task: "canEditAssignments",
   update_night_slot_task_color: "canEditAssignments",
   update_night_slot_task_style: "canEditAssignments",
   update_night_slot_task_coverage_side: "canEditAssignments",
@@ -181,6 +183,11 @@ export async function POST(request: NextRequest) {
       }
       case "remove_night_slot_task": {
         await removeNightSlotTaskServer(body as never);
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json({ ok: true });
+      }
+      case "move_night_slot_task": {
+        await moveNightSlotTaskServer(body as never);
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
       }
