@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { LayoutList, Kanban, Repeat } from "lucide-react";
+import { LayoutList, Kanban, Repeat, CalendarDays } from "lucide-react";
 
 export type SmartFilter = "all" | "open" | "overdue" | "tonight" | "complete";
-export type BoardView = "list" | "board" | "recurring";
+export type BoardView = "list" | "board" | "calendar" | "recurring";
 
 const SMART_FILTERS: { id: SmartFilter; label: string }[] = [
   { id: "open", label: "Open" },
@@ -30,8 +30,8 @@ export function TaskFilterBar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        {/* Smart filters describe instance state — not meaningful for templates. */}
-        {view !== "recurring" && SMART_FILTERS.map((f) => (
+        {/* Smart filters describe instance state — only relevant to List/Board. */}
+        {(view === "list" || view === "board") && SMART_FILTERS.map((f) => (
           <button
             key={f.id}
             type="button"
@@ -77,6 +77,17 @@ export function TaskFilterBar({
           }}
         >
           <Kanban size={13} /> Board
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("calendar")}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors"
+          style={{
+            background: view === "calendar" ? "var(--ios-background-primary)" : "transparent",
+            color: view === "calendar" ? "var(--ios-label)" : "var(--ios-label-tertiary)",
+          }}
+        >
+          <CalendarDays size={13} /> Calendar
         </button>
         <button
           type="button"

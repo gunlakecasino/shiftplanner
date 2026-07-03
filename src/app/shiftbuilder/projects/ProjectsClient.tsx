@@ -16,6 +16,7 @@ import { TaskQuickAdd } from "./components/TaskQuickAdd";
 import { TaskFilterBar, type BoardView, type SmartFilter } from "./components/TaskFilterBar";
 import { TaskListView } from "./components/TaskListView";
 import { TaskBoardView } from "./components/TaskBoardView";
+import { TaskCalendarView } from "./components/TaskCalendarView";
 import { RecurringView } from "./components/RecurringView";
 import { TaskDetailSheet } from "./components/TaskDetailSheet";
 import "../settings/settingsShell.css";
@@ -189,6 +190,9 @@ function ProjectsShell() {
                 onOpen={setSelectedTaskId}
                 onSetStatus={handleSetStatus}
               />
+            )}
+            {view === "calendar" && (
+              <TaskCalendarView tasks={tasks} onOpen={setSelectedTaskId} />
             )}
             {view === "recurring" && (
               <RecurringView
