@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -8,6 +8,8 @@ import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
 import { BuilderLoadingShell } from "../components/builderPrimitives";
 import { useTheme } from "../hooks/useTheme";
 import { useProjects, useTasks, useRoster } from "./hooks/useProjectsData";
+import { useUpdateTask } from "./hooks/useTaskMutations";
+import type { WorkItemStatus } from "@/lib/tasks/types";
 import { tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { TaskQuickAdd } from "./components/TaskQuickAdd";
@@ -82,6 +84,16 @@ function ProjectsShell() {
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
   const { data: tasks = [], isLoading: tasksLoading } = useTasks({ projectId: selectedProjectId });
   const { data: roster = [] } = useRoster();
+
+  // Hoisted here (a stable mount) so completing a task — which filters its row
+  // out of the current view — can't unmount the mutation observer mid-flight.
+  const updateTask = useUpdateTask();
+  const handleSetStatus = useCallback(
+    (taskId: string, status: WorkItemStatus, statusReason?: string) => {
+      updateTask.mutate({ taskId, patch: statusReason ? { status, statusReason } : { status } });
+    },
+    [updateTask],
+  );
 
   const filteredTasks = useMemo(() => applySmartFilter(tasks, smartFilter), [tasks, smartFilter]);
 
@@ -161,9 +173,15 @@ function ProjectsShell() {
                 roster={roster}
                 onOpen={setSelectedTaskId}
                 canComplete={canComplete}
+                onSetStatus={handleSetStatus}
               />
             ) : (
-              <TaskBoardView tasks={filteredTasks ?? []} roster={roster} onOpen={setSelectedTaskId} />
+              <TaskBoardView
+                tasks={filteredTasks ?? []}
+                roster={roster}
+                onOpen={setSelectedTaskId}
+                onSetStatus={handleSetStatus}
+              />
             )}
           </main>
         </div>

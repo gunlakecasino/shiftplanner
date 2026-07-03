@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { DndContext, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
+import { STATUS_REQUIRES_REASON } from "@/lib/tasks/types";
 import type { RosterMember } from "../hooks/useProjectsData";
 import { OpsTaskCard } from "./OpsTaskCard";
-import { useUpdateTask } from "../hooks/useTaskMutations";
 
 const COLUMNS: { status: WorkItemStatus; label: string }[] = [
   { status: "not_started", label: "Not Started" },
@@ -56,19 +56,37 @@ export function TaskBoardView({
   tasks,
   roster,
   onOpen,
+  onSetStatus,
 }: {
   tasks: WorkItem[];
   roster: RosterMember[];
   onOpen: (id: string) => void;
+  onSetStatus: (taskId: string, status: WorkItemStatus, statusReason?: string) => void;
 }) {
-  const updateTask = useUpdateTask();
   const open = tasks.filter((t) => t.status !== "cancelled" && t.status !== "on_hold");
+  // A drop onto Blocked (or any reason-required column) can't commit until the
+  // operator gives a reason — the API rejects a reasonless block. Hold it here.
+  const [pendingReason, setPendingReason] = useState<{ taskId: string; status: WorkItemStatus } | null>(null);
+  const [reasonDraft, setReasonDraft] = useState("");
 
   const handleDragEnd = (event: DragEndEvent) => {
     const taskId = (event.active.data.current as { taskId?: string } | undefined)?.taskId;
     const status = (event.over?.data.current as { status?: WorkItemStatus } | undefined)?.status;
     if (!taskId || !status) return;
-    updateTask.mutate({ taskId, patch: { status } });
+    if (STATUS_REQUIRES_REASON.has(status)) {
+      setPendingReason({ taskId, status });
+      setReasonDraft("");
+      return;
+    }
+    onSetStatus(taskId, status);
+  };
+
+  const confirmReason = () => {
+    if (!pendingReason) return;
+    const reason = reasonDraft.trim();
+    if (!reason) return;
+    onSetStatus(pendingReason.taskId, pendingReason.status, reason);
+    setPendingReason(null);
   };
 
   return (
@@ -85,6 +103,50 @@ export function TaskBoardView({
           />
         ))}
       </div>
+
+      {pendingReason && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/20"
+          onClick={() => setPendingReason(null)}
+        >
+          <div
+            className="sb-projects-card w-[320px] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-2 text-[12.5px] font-semibold text-[var(--ios-label)]">
+              Why is this {pendingReason.status}?
+            </p>
+            <input
+              autoFocus
+              value={reasonDraft}
+              onChange={(e) => setReasonDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmReason();
+                if (e.key === "Escape") setPendingReason(null);
+              }}
+              placeholder="Reason…"
+              className="h-8 w-full rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 text-[12.5px] outline-none focus:border-[var(--sb-projects-accent)]"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingReason(null)}
+                className="rounded-md px-2.5 py-1 text-[11.5px] text-[var(--ios-label-secondary)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmReason}
+                disabled={!reasonDraft.trim()}
+                className="rounded-md bg-[var(--sb-projects-accent)] px-2.5 py-1 text-[11.5px] font-semibold text-white disabled:opacity-40"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DndContext>
   );
 }

@@ -4,8 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Check, User, Repeat } from "lucide-react";
 import { premiumTap } from "@/lib/premiumSpring";
-import type { WorkItem } from "@/lib/tasks/types";
-import { useUpdateTask } from "../hooks/useTaskMutations";
+import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
 import { tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
 import type { RosterMember } from "../hooks/useProjectsData";
 
@@ -29,13 +28,17 @@ export function OpsTaskRow({
   roster,
   onOpen,
   canComplete,
+  onSetStatus,
 }: {
   task: WorkItem;
   roster: RosterMember[];
   onOpen: (taskId: string) => void;
   canComplete: boolean;
+  /** Hoisted so the mutation observer lives above the row — completing filters
+   *  the row out of "Open", and a row-local mutation would unmount mid-flight,
+   *  dropping onSettled reconciliation. */
+  onSetStatus: (taskId: string, status: WorkItemStatus) => void;
 }) {
-  const updateTask = useUpdateTask();
   const isDone = task.status === "complete";
   const assignee = roster.find((r) => r.tmId === task.assigneeTmId);
   const dueClass = dueBadgeClass(task.dueDate, task.status);
@@ -43,7 +46,7 @@ export function OpsTaskRow({
   const toggleDone = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canComplete) return;
-    updateTask.mutate({ taskId: task.id, patch: { status: isDone ? "not_started" : "complete" } });
+    onSetStatus(task.id, isDone ? "not_started" : "complete");
   };
 
   return (

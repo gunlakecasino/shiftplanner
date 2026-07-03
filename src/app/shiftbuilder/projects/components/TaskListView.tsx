@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { WorkItem } from "@/lib/tasks/types";
+import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
 import type { RosterMember } from "../hooks/useProjectsData";
 import { OpsTaskRow } from "./OpsTaskRow";
 import { tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
@@ -39,6 +39,7 @@ function Section({
   roster,
   onOpen,
   canComplete,
+  onSetStatus,
   accent,
 }: {
   label: string;
@@ -46,6 +47,7 @@ function Section({
   roster: RosterMember[];
   onOpen: (id: string) => void;
   canComplete: boolean;
+  onSetStatus: (taskId: string, status: WorkItemStatus) => void;
   accent?: string;
 }) {
   if (tasks.length === 0) return null;
@@ -70,7 +72,13 @@ function Section({
             exit={{ opacity: 0, x: 12, scale: 0.97 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
-            <OpsTaskRow task={t} roster={roster} onOpen={onOpen} canComplete={canComplete} />
+            <OpsTaskRow
+              task={t}
+              roster={roster}
+              onOpen={onOpen}
+              canComplete={canComplete}
+              onSetStatus={onSetStatus}
+            />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -84,12 +92,14 @@ export function TaskListView({
   roster,
   onOpen,
   canComplete,
+  onSetStatus,
 }: {
   tasks: WorkItem[];
   loading: boolean;
   roster: RosterMember[];
   onOpen: (id: string) => void;
   canComplete: boolean;
+  onSetStatus: (taskId: string, status: WorkItemStatus) => void;
 }) {
   const groups = useMemo(() => groupTasks(tasks), [tasks]);
 
@@ -115,6 +125,7 @@ export function TaskListView({
         roster={roster}
         onOpen={onOpen}
         canComplete={canComplete}
+        onSetStatus={onSetStatus}
         accent="var(--sb-projects-overdue)"
       />
       <Section
@@ -123,16 +134,32 @@ export function TaskListView({
         roster={roster}
         onOpen={onOpen}
         canComplete={canComplete}
+        onSetStatus={onSetStatus}
         accent="var(--sb-projects-due-soon)"
       />
-      <Section label="Upcoming" tasks={groups.upcoming} roster={roster} onOpen={onOpen} canComplete={canComplete} />
-      <Section label="No due date" tasks={groups.noDue} roster={roster} onOpen={onOpen} canComplete={canComplete} />
+      <Section
+        label="Upcoming"
+        tasks={groups.upcoming}
+        roster={roster}
+        onOpen={onOpen}
+        canComplete={canComplete}
+        onSetStatus={onSetStatus}
+      />
+      <Section
+        label="No due date"
+        tasks={groups.noDue}
+        roster={roster}
+        onOpen={onOpen}
+        canComplete={canComplete}
+        onSetStatus={onSetStatus}
+      />
       <Section
         label="Done"
         tasks={groups.done}
         roster={roster}
         onOpen={onOpen}
         canComplete={canComplete}
+        onSetStatus={onSetStatus}
         accent="var(--sb-projects-done)"
       />
     </div>
