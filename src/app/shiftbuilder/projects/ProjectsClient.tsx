@@ -16,6 +16,7 @@ import { TaskQuickAdd } from "./components/TaskQuickAdd";
 import { TaskFilterBar, type BoardView, type SmartFilter } from "./components/TaskFilterBar";
 import { TaskListView } from "./components/TaskListView";
 import { TaskBoardView } from "./components/TaskBoardView";
+import { RecurringView } from "./components/RecurringView";
 import { TaskDetailSheet } from "./components/TaskDetailSheet";
 import "../settings/settingsShell.css";
 import "../settings/settingsTheme.css";
@@ -82,7 +83,10 @@ function ProjectsShell() {
   }, []);
 
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks({ projectId: selectedProjectId });
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks({
+    projectId: selectedProjectId,
+    workType: "task",
+  });
   const { data: roster = [] } = useRoster();
 
   // Hoisted here (a stable mount) so completing a task — which filters its row
@@ -158,7 +162,9 @@ function ProjectsShell() {
           </aside>
 
           <main className="min-w-0 space-y-3">
-            <TaskQuickAdd projectId={selectedProjectId} projects={projects} canManage={canManage} />
+            {view !== "recurring" && (
+              <TaskQuickAdd projectId={selectedProjectId} projects={projects} canManage={canManage} />
+            )}
             <TaskFilterBar
               smartFilter={smartFilter}
               onSmartFilterChange={setSmartFilter}
@@ -166,7 +172,7 @@ function ProjectsShell() {
               onViewChange={setView}
               overdueCount={overdueCount}
             />
-            {view === "list" ? (
+            {view === "list" && (
               <TaskListView
                 tasks={filteredTasks ?? []}
                 loading={tasksLoading}
@@ -175,12 +181,20 @@ function ProjectsShell() {
                 canComplete={canComplete}
                 onSetStatus={handleSetStatus}
               />
-            ) : (
+            )}
+            {view === "board" && (
               <TaskBoardView
                 tasks={filteredTasks ?? []}
                 roster={roster}
                 onOpen={setSelectedTaskId}
                 onSetStatus={handleSetStatus}
+              />
+            )}
+            {view === "recurring" && (
+              <RecurringView
+                selectedProjectId={selectedProjectId}
+                projects={projects}
+                canManage={canManage}
               />
             )}
           </main>

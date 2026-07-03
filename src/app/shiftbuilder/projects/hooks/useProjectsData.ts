@@ -14,8 +14,21 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json;
 }
 
-export function tasksKey(filters: { projectId?: string | null; status?: string[] } = {}) {
-  return ["projects", "tasks", filters.projectId ?? "all", (filters.status ?? []).join(",")] as const;
+export interface TaskFilters {
+  projectId?: string | null;
+  status?: string[];
+  /** 'task' = one-off/generated instances (the List/Board), 'recurring' = templates. */
+  workType?: "task" | "recurring";
+}
+
+export function tasksKey(filters: TaskFilters = {}) {
+  return [
+    "projects",
+    "tasks",
+    filters.projectId ?? "all",
+    (filters.status ?? []).join(","),
+    filters.workType ?? "all",
+  ] as const;
 }
 
 /**
@@ -38,13 +51,14 @@ export function useProjects() {
   });
 }
 
-export function useTasks(filters: { projectId?: string | null; status?: string[] } = {}) {
+export function useTasks(filters: TaskFilters = {}) {
   return useQuery({
     queryKey: tasksKey(filters),
     queryFn: () => {
       const sp = new URLSearchParams();
       if (filters.projectId) sp.set("projectId", filters.projectId);
       if (filters.status?.length) sp.set("status", filters.status.join(","));
+      if (filters.workType) sp.set("workType", filters.workType);
       return fetchJson<{ tasks: WorkItem[] }>(`/api/shiftbuilder/projects/tasks?${sp.toString()}`);
     },
     select: (data) => data.tasks,
@@ -52,6 +66,11 @@ export function useTasks(filters: { projectId?: string | null; status?: string[]
     refetchOnWindowFocus: true,
     staleTime: 5_000,
   });
+}
+
+/** Recurring templates only (work_type='recurring') — the Recurring view. */
+export function useRecurringTemplates(projectId: string | null = null) {
+  return useTasks({ projectId, workType: "recurring" });
 }
 
 export function useTaskDetail(taskId: string | null) {
