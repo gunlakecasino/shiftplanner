@@ -7,6 +7,7 @@ const BUILDER_HOME = "/shiftbuilder";
 const REPORTS_HOME = "/shiftbuilder/reports";
 const SETTINGS_PREFIX = "/shiftbuilder/settings";
 const GRAVES_SCHEDULE_PREFIX = "/shiftbuilder/graves-schedule";
+const PROJECTS_PREFIX = "/shiftbuilder/projects";
 
 export function resolveOpsSurface(permissions: ShiftBuilderPermissions): OpsSurface {
   if (permissions.canAccessSudo) return "sudo";
@@ -33,11 +34,24 @@ function isGravesSchedulePath(pathname: string): boolean {
   return pathname.startsWith(GRAVES_SCHEDULE_PREFIX);
 }
 
+/**
+ * /shiftbuilder/projects has its own independent canAccessTasks gate (see
+ * ProjectsClient.tsx), the same way Reports gates itself on top of whatever
+ * this surface router allows. Every surface below exempts it so a per-user
+ * permission override (canAccessTasks without canAccessSudo/canAccessReports)
+ * still reaches the page instead of being bounced by surface routing.
+ */
+function isProjectsPath(pathname: string): boolean {
+  return pathname.startsWith(PROJECTS_PREFIX);
+}
+
 /** Returns a redirect target when the operator cannot access `pathname`, else null. */
 export function guardAuthenticatedRoute(
   pathname: string,
   surface: OpsSurface,
 ): string | null {
+  if (isProjectsPath(pathname)) return null;
+
   if (surface === "team") {
     if (isSettingsPath(pathname) || isReportsPath(pathname) || isGravesSchedulePath(pathname)) {
       return BUILDER_HOME;

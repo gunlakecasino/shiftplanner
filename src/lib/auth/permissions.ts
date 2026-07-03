@@ -58,6 +58,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
       };
 
     case "admin":
@@ -72,6 +75,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
       };
 
     case "sudo_admin":
@@ -87,6 +93,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
       };
 
     case "ops_manager":
@@ -101,6 +110,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
       };
 
     case "graves_ops_super":
@@ -115,6 +127,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
       };
 
     case "days_ops_super":
@@ -130,6 +145,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
       };
 
     case "utility_ops_super":
@@ -146,6 +164,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
       };
   }
 }
@@ -170,6 +191,11 @@ export function mergePermissions(
   if (typeof overrides.canManageTeam === "boolean") sanitized.canManageTeam = overrides.canManageTeam;
   if (typeof overrides.canEditPublishedOnly === "boolean") {
     sanitized.canEditPublishedOnly = overrides.canEditPublishedOnly;
+  }
+  if (typeof overrides.canAccessTasks === "boolean") sanitized.canAccessTasks = overrides.canAccessTasks;
+  if (typeof overrides.canManageTasks === "boolean") sanitized.canManageTasks = overrides.canManageTasks;
+  if (typeof overrides.canCompleteOwnTasks === "boolean") {
+    sanitized.canCompleteOwnTasks = overrides.canCompleteOwnTasks;
   }
 
   return { ...base, ...sanitized };

@@ -73,6 +73,24 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
     description:
       "Floor viewer marker — read and write allowed only on published nights (locks Viewer role)",
   },
+  {
+    key: "canAccessTasks",
+    label: "Access Projects & Tasks",
+    group: "Viewing",
+    description: "Open /shiftbuilder/projects — view projects, tasks, and assigned work",
+  },
+  {
+    key: "canManageTasks",
+    label: "Manage Projects & Tasks",
+    group: "Editing",
+    description: "Create/edit/assign/delete any project or task; complete tasks assigned to others",
+  },
+  {
+    key: "canCompleteOwnTasks",
+    label: "Complete Own Tasks",
+    group: "Editing",
+    description: "Mark tasks assigned to you complete without full task management access",
+  },
 ];
 
 export type OpsRoleOption = {

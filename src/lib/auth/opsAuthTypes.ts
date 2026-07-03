@@ -27,6 +27,12 @@ export interface ShiftBuilderPermissions {
    * stored as utility_ops_super + this flag. Prefer isPublishedOnlyViewer() in app code.
    */
   canEditPublishedOnly: boolean;
+  /** /shiftbuilder/projects — view projects, tasks, and their own assigned work. */
+  canAccessTasks: boolean;
+  /** Create/edit/assign/delete any Ops Task or Project; complete tasks assigned to others. */
+  canManageTasks: boolean;
+  /** Mark tasks assigned to *you* complete without full canManageTasks. */
+  canCompleteOwnTasks: boolean;
 }
 
 export interface OpsUser {
