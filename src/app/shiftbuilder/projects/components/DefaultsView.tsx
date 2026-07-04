@@ -12,8 +12,10 @@ function slotLabel(slotKey: string, rrSide: string | null): string {
   const side = rrSide === "mens" ? " (Men's)" : rrSide === "womens" ? " (Women's)" : "";
   if (slotKey.startsWith("zone_")) return `Zone ${slotKey.slice(5)}`;
   if (slotKey.startsWith("rr_")) return `Restroom ${slotKey.slice(3).replace(/_/g, "+")}${side}`;
-  if (slotKey.startsWith("overlap_am")) return "AM Overlap";
-  if (slotKey.startsWith("overlap_pm")) return "PM Overlap";
+  const overlapMatch = slotKey.match(/^overlap_(am|pm)_(\d+)$/);
+  if (overlapMatch) {
+    return `${overlapMatch[1].toUpperCase()} Overlap ${Number(overlapMatch[2]) + 1}`;
+  }
   return slotKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) + side;
 }
 
