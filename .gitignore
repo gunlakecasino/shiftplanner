@@ -56,6 +56,9 @@ _tmp_*
 # Playwright MCP browser snapshots (see Agentic/AGENT_ACTIVITY_LOG — leave untracked)
 .playwright-mcp/
 
+# Live test-account PIN — must never land in git history
+Agentic/Key-Information/test-account-credentials.md
+
 # IDE / editor
 .vscode/
 .idea/

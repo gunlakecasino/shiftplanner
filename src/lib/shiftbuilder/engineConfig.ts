@@ -254,9 +254,6 @@ export interface SignalOverride {
   signalName: string;                    // matches keys in EngineWeights
   overrideType: 'multiplier' | 'absolute' | 'disabled';
   value: number | null;
-  appliesToSlotTypes?: string[] | null;
-  appliesToSlotKeys?: string[] | null;
-  appliesToZones?: string[] | null;
   priority: number;
   isActive: boolean;
   notes?: string | null;
@@ -266,16 +263,20 @@ export interface SignalOverride {
  * A custom eligibility rule attached to a config version.
  * Stored in engine_eligibility_rules. The condition JSONB is intentionally
  * flexible so the placement layer can evolve without schema changes.
+ *
+ * ruleType: only "hard_exclude" is implemented today (isEligibleUnderRules
+ * in engineOverrides.ts only branches on that value). Other values are
+ * accepted/stored (the DB column has no enum constraint) but have zero
+ * effect until a soft-scoring or min-experience interpreter is written —
+ * don't assume a rule with ruleType "soft_prefer" etc. does anything yet.
  */
 export interface EligibilityRule {
   id: string;
   configId: string;
   ruleName: string;
-  ruleType: string;                      // 'hard_exclude', 'soft_prefer', 'min_experience', etc.
+  ruleType: string;
   description?: string | null;
   condition: Record<string, any>;
-  appliesToSlotTypes?: string[] | null;
-  appliesToSlotKeys?: string[] | null;
   priority: number;
   isActive: boolean;
 }
@@ -286,14 +287,10 @@ export interface EligibilityRule {
  * This is what scoring.ts and placement.ts should consume going forward.
  */
 export interface FullyResolvedEngineConfig extends EngineConfig {
-  /** The concrete version name the operator actually selected (or inherited) */
-  resolvedVersionName: string;
   /** All active signal overrides for this version (already sorted by priority) */
   signalOverrides: SignalOverride[];
   /** All active eligibility rules for this version */
   eligibilityRules: EligibilityRule[];
   /** Whether this config is a preset (affects UI copy + "reset to preset" behavior) */
   isPreset: boolean;
-  /** The parent chain (most recent first) for "Why this config?" explainability */
-  versionHistory: Array<{ id: string; versionName: string | null; createdAt: string }>;
 }

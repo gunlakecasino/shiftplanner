@@ -39,6 +39,7 @@ import {
   Printer,
   Wand2,
   ClipboardList,
+  CalendarRange,
 } from "lucide-react";
 
 export interface DayItem {
@@ -99,6 +100,9 @@ export interface FloatingNavProps {
   onDeepOptimize?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
+  /** Preview the unified week engine (rolling solve + cross-night polish + fairness ledger) for the visible grave week. Read-only — opens a results sheet, doesn't write. */
+  onRunWeek?: () => void;
+  weekRunBusy?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
   onRefreshDay?: () => void;
@@ -165,6 +169,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     onOpenSettings,
     onRunEngine,
     onDeepOptimize,
+    onRunWeek,
+    weekRunBusy = false,
     engineRunning = false,
     deepOptimizeRunning = false,
     onClearDay,
@@ -796,7 +802,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Engine & Maintenance */}
-                {showEngineTools && (onRunEngine || onDeepOptimize) && (
+                {showEngineTools && (onRunEngine || onDeepOptimize || onRunWeek) && (
                   <div
                     className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                   >
@@ -841,6 +847,28 @@ export default function FloatingNav(props: FloatingNavProps) {
                     )}
                   </button>
                 )}
+                {showEngineTools && onRunWeek && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    disabled={weekRunBusy}
+                    onClick={() => {
+                      onRunWeek();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <CalendarRange size={14} className="shrink-0" />
+                    <span className="flex min-w-0 flex-col items-start leading-tight">
+                      <span className="truncate">Run Week</span>
+                      <span className="truncate text-[10px] font-normal opacity-60">
+                        Fairness ledger · review only
+                      </span>
+                    </span>
+                    {weekRunBusy && (
+                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
+                    )}
+                  </button>
+                )}
                 {showDraftTools && onClearDay && (
                   <button
                     type="button"
@@ -868,7 +896,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay) || onRefreshDay) && (
+                {((showEngineTools && (onRunEngine || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
 

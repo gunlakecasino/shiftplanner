@@ -9,7 +9,6 @@ import {
   findRemovableEmptyAuxSlot,
 } from "@/lib/shiftbuilder/auxLayout";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
-import { validatePlacementOrder } from "@/lib/shiftbuilder/placement";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import {
   patchNightCoreAuxLayoutCache,
@@ -34,7 +33,9 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
  * making the orchestrator thinner and the aux logic testable/reusable.
  *
  * Non-negotiables:
- * - Graves / placement order respected via validatePlacementOrder
+ * - Placement order is enforced structurally by deriveTargetSlotsInOrder
+ *   (dynamic AUX slots always sort after the fixed order, regardless of
+ *   auxDefs array order), not validated here
  * - Persist only after hydration guard
  * - Draft/history snapshots still owned by caller (for undo)
  */
@@ -167,10 +168,6 @@ export function useAuxLayout({
       const slot = createBlankAuxSlot(prev);
       if (!slot) return prev;
       const next = [...prev, slot];
-      const warnings = validatePlacementOrder(next);
-      if (warnings.length > 0) {
-        console.warn("[Placement] AUX slot added out of order:", warnings);
-      }
       queueMicrotask(() => persistAuxLayoutNowRef.current(next));
       return next;
     });

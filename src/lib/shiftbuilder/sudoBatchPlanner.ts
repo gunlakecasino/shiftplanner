@@ -7,13 +7,12 @@
  */
 
 import { supabase } from "../supabase";
-import { getActiveEngineConfig } from "./engineConfig";
+import { getFullyResolvedEngineConfig } from "./engineOverrides";
 import {
-  runWeightedPlanner,
   getSlotsInPlacementOrder,
   logEngineRunSummary,
 } from "./placement";
-import { buildDefaultAdjacency } from "./scoring";
+import { runNightEngineFromClient, nightResultToLegacyDraft } from "./engine/adapters";
 import { uiToDb, dbToUi } from "./slot-keys";
 import type { ZoneDetailEntry } from "./data";
 
@@ -47,7 +46,8 @@ export interface BatchWeekResult {
 
 type WeekPlacementEntry = { nightDate: string; slotKey: string; tmId: string };
 
-async function loadPlacementHistoriesForRoster(
+/** Exported for reuse by the read-only week-preview action in actions.ts. */
+export async function loadPlacementHistoriesForRoster(
   tmIds: string[],
 ): Promise<Record<string, ZoneDetailEntry | null>> {
   if (tmIds.length === 0) return {};
@@ -176,7 +176,7 @@ export async function batchRunEngineForWeek(
 
   const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave, zoneMatrix] =
     await Promise.all([
-      getActiveEngineConfig(),
+      getFullyResolvedEngineConfig(),
       getTMSkillScores(),
       getSlotDifficultyRaw(),
       getTMPreferences(),
@@ -203,7 +203,6 @@ export async function batchRunEngineForWeek(
     accByTm.get(r.tmId)!.push(r);
   });
 
-  const adjacency = buildDefaultAdjacency();
   const results: BatchNightResult[] = [];
   const tmIds = grave.map((tm) => tm.id).filter(Boolean);
   const [placementHistories, weekPlacementEntries] = await Promise.all([
@@ -229,7 +228,6 @@ export async function batchRunEngineForWeek(
         prefByTm,
         pairByTm,
         accByTm,
-        adjacency,
         placementHistories,
         weeklyRecentHistory: buildWeeklyRecentHistoryForNight(mutableWeekEntries, nightDate),
         skipFilledNights,
@@ -307,7 +305,7 @@ export async function batchRunEngineForNight(
 
   const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave, zoneMatrix] =
     await Promise.all([
-      getActiveEngineConfig(),
+      getFullyResolvedEngineConfig(),
       getTMSkillScores(),
       getSlotDifficultyRaw(),
       getTMPreferences(),
@@ -356,7 +354,6 @@ export async function batchRunEngineForNight(
     prefByTm,
     pairByTm,
     accByTm,
-    adjacency: buildDefaultAdjacency(),
     zoneMatrix,
     placementHistories,
     weeklyRecentHistory: buildWeeklyRecentHistoryForNight(weekEntries, nightDate),
@@ -367,7 +364,7 @@ export async function batchRunEngineForNight(
 }
 
 /**
- * Internal: runs the weighted planner for one night and writes the proposals.
+ * Internal: runs the unified engine for one night and writes the proposals.
  * All session-stable data is pre-loaded by the caller.
  */
 async function runEngineForSingleNight(params: {
@@ -375,13 +372,12 @@ async function runEngineForSingleNight(params: {
   nightDate: string;
   dayName: string;
   grave: GraveTm[];
-  engineConfig: Awaited<ReturnType<typeof getActiveEngineConfig>>;
+  engineConfig: Awaited<ReturnType<typeof getFullyResolvedEngineConfig>>;
   skillScores: Map<string, number>;
   slotDifficulty: Map<string, number>;
   prefByTm: Map<string, any[]>;
   pairByTm: Map<string, any[]>;
   accByTm: Map<string, any[]>;
-  adjacency: Map<string, string[]>;
   zoneMatrix?: Map<string, Map<string, any>>;
   placementHistories?: Record<string, ZoneDetailEntry | null>;
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
@@ -400,7 +396,6 @@ async function runEngineForSingleNight(params: {
     prefByTm,
     pairByTm,
     accByTm,
-    adjacency,
     zoneMatrix,
     placementHistories = {},
     weeklyRecentHistory = new Map(),
@@ -429,9 +424,9 @@ async function runEngineForSingleNight(params: {
     return { nightId, nightDate, dayName, status: "skip", assigned: 0, preserved: zoneAssignments.length, unfilled: 0, notes: [`Skipped: ${zoneAssignments.length} zone(s) already filled`] };
   }
 
-  // Build assignments map in the shape runWeightedPlanner expects.
+  // Build assignments map in the shape the engine expects (SlotAssignmentRow).
   // Existing assignments come back with DB slot_keys (e.g. "zone_9", "rr_1_2",
-  // "admin"). The planner works with UI keys (e.g. "Z9", "MRR1", "ADM").
+  // "admin"). The engine works with UI keys (e.g. "Z9", "MRR1", "ADM").
   // Translate each DB row back to its UI key so preserve-detection works.
   const assignmentsMap: Record<string, { tmId: string; tmName: string; isLocked?: boolean }> = {};
   for (const a of existingAssignments) {
@@ -456,29 +451,35 @@ async function runEngineForSingleNight(params: {
     return { nightId, nightDate, dayName, status: "skip", assigned: 0, preserved: 0, unfilled: 0, notes: ["Skipped: no available TMs for this night"] };
   }
 
-  // Run the weighted planner
+  // Run the unified engine (F1 fix, 2026-07-04: batch now shares the same
+  // eligibility-rules-aware engine as the interactive board, instead of the
+  // legacy runWeightedPlanner which never saw engine_eligibility_rules /
+  // engine_signal_overrides). "no-ai" + "all-existing" reproduces the batch
+  // runner's prior deterministic, never-overwrite-a-filled-slot behavior.
   const orderedSlots = getSlotsInPlacementOrder();
-  const plannerResult = runWeightedPlanner({
-    orderedSlots,
-    assignments: assignmentsMap,
-    roster: rosterForEngine,
-    graveOnly: true,
-    scoringCtx: {
+  const engineResult = runNightEngineFromClient(
+    {
+      nightIso: nightDate,
       config: engineConfig,
+      eligibilityRules: engineConfig.eligibilityRules,
+      auxDefs: [],
+      members: rosterForEngine as unknown as Array<Record<string, unknown>>,
+      assignments: assignmentsMap,
+      histories: placementHistories,
+      weeklyRecentHistory,
+      zoneMatrix,
       skillScores,
       slotDifficulty,
       preferencesByTm: prefByTm,
       pairAffinitiesByTm: pairByTm,
       accommodationsByTm: accByTm,
-      adjacency,
-      zoneMatrix,
-      placementHistories,
-      weeklyRecentHistory,
-      tonightIso: nightDate,
     },
-  });
+    { mode: "no-ai", preserve: "all-existing" },
+  );
+  const plannerResult = nightResultToLegacyDraft(engineResult);
+  const engineNotes = engineResult.telemetry.stages.flatMap((s) => s.notes);
 
-  notes.push(...plannerResult.notes);
+  notes.push(...engineNotes);
 
   // === Rich engine telemetry (2026-05-30) ===
   const preservedCount = Object.values(plannerResult.breakdown).filter(b => b.preserved).length;
@@ -499,7 +500,7 @@ async function runEngineForSingleNight(params: {
     usedGrok: false,
     grokPicksApplied: 0,
     matrixPreloaded: !!zoneMatrix && zoneMatrix.size > 0,
-    warnings: plannerResult.notes,
+    warnings: engineNotes,
     topUnfilledSlots: unfilledSlots.slice(0, 6),
     placementMethod: engineConfig.placementMethod,
   });

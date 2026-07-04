@@ -56,9 +56,10 @@
   inset: 0;
   z-index: 9998;
   background: rgba(250, 250, 248, 0.42);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   pointer-events: none;
+  /* backdrop-filter is applied inline in OpsAuthGate.tsx — a class-level
+     backdrop-filter is stripped by this app's build (see the glass-backdrop
+     memory note); only the background/pointer-events belong here. */
 }
 
 .sb-auth-gate-modal-layer {
@@ -162,7 +163,38 @@
 }
 
 .sb-auth-accent {
+  position: relative;
   height: 3px;
+  overflow: hidden;
+}
+
+/* A whisper-thin highlight that drifts across the accent bar on a slow loop —
+   like light catching brushed metal. Idle-screen ambience; never distracting. */
+.sb-auth-accent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%);
+  animation: sb-accent-drift-kf 4.5s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
+
+@keyframes sb-accent-drift-kf {
+  0%, 8% { transform: translateX(-150%); }
+  55%, 100% { transform: translateX(350%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-auth-accent::after {
+    display: none;
+  }
 }
 
 .sb-auth-card--access .sb-auth-accent {
@@ -213,18 +245,43 @@
   background: linear-gradient(145deg, #fff5f5, #fee2e2);
   border: 1px solid rgba(248, 113, 113, 0.35);
   color: #dc2626;
+  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
+  --sb-icon-glow: rgba(239, 68, 68, 0.32);
 }
 
 .sb-auth-card--setup .sb-auth-icon {
   background: linear-gradient(145deg, #ecfdf5, #d1fae5);
   border: 1px solid rgba(52, 211, 153, 0.35);
   color: #059669;
+  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
+  --sb-icon-glow: rgba(16, 185, 129, 0.3);
 }
 
 .sb-auth-card--warn .sb-auth-icon {
   background: linear-gradient(145deg, #fffbeb, #fef3c7);
   border: 1px solid rgba(251, 191, 36, 0.4);
   color: #d97706;
+  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
+  --sb-icon-glow: rgba(245, 158, 11, 0.32);
+}
+
+/* Quiet ambient life for an otherwise static screen — a slow breathing glow,
+   not a pulse you'd consciously clock. */
+@keyframes sb-icon-breathe-kf {
+  0%, 100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 0 0 var(--sb-icon-glow, transparent);
+  }
+  50% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 14px 1px var(--sb-icon-glow, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-auth-card--access .sb-auth-icon,
+  .sb-auth-card--setup .sb-auth-icon,
+  .sb-auth-card--warn .sb-auth-icon {
+    animation: none;
+  }
 }
 
 .sb-auth-title {
@@ -393,6 +450,36 @@
   cursor: not-allowed;
 }
 
+.sb-auth-primary--success {
+  color: #fafafa;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 8px 18px -8px rgba(5, 150, 105, 0.45);
+}
+
+.sb-auth-primary__icon-pop {
+  display: inline-flex;
+  animation: sb-icon-pop-kf 0.36s var(--sb-spring-gentle) both;
+}
+
+@keyframes sb-icon-pop-kf {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-auth-primary__icon-pop {
+    animation: none;
+  }
+}
+
 .sb-auth-secondary {
   border-radius: 0.875rem;
   padding: 0.8rem 1.1rem;
@@ -434,22 +521,50 @@
   border: 1px solid #fecaca;
   border-radius: 0.75rem;
   padding: 0.65rem 0.85rem;
+  animation: sb-error-enter-kf 0.28s var(--sb-spring-gentle) both;
 }
 
-/* Modal enter / exit */
+@keyframes sb-error-enter-kf {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-auth-error {
+    animation: none;
+  }
+}
+
+/* Modal enter / exit — a hair of blur-in on top of the lift so the card
+   feels like it's materializing out of the scrim rather than just sliding
+   up. Barely perceptible on its own; that's the point. */
 @keyframes sb-modal-enter-kf {
   from {
     opacity: 0;
     transform: translateY(10px) scale(0.985);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
 .sb-modal-enter {
   animation: sb-modal-enter-kf 0.34s var(--sb-spring-gentle) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-modal-enter {
+    animation-duration: 0.01ms;
+  }
 }
 
 .sb-modal-exit {
@@ -459,24 +574,51 @@
 @keyframes sb-shake-kf {
   0%,
   100% {
-    transform: translateX(0);
+    transform: translateX(0) rotate(0deg);
   }
   20% {
-    transform: translateX(-7px);
+    transform: translateX(-7px) rotate(-0.4deg);
   }
   40% {
-    transform: translateX(7px);
+    transform: translateX(7px) rotate(0.4deg);
   }
   60% {
-    transform: translateX(-4px);
+    transform: translateX(-4px) rotate(-0.2deg);
   }
   80% {
-    transform: translateX(4px);
+    transform: translateX(4px) rotate(0.2deg);
   }
 }
 
 .animate-shake {
   animation: sb-shake-kf 0.42s ease;
+}
+
+/* Dots flash red in place, then the PIN clears — a beat of "that was wrong"
+   instead of the slots just snapping back to empty. */
+@keyframes sb-slot-error-flash-kf {
+  0%, 100% {
+    background: #e4e4e7;
+    border-color: rgba(0, 0, 0, 0.06);
+    transform: scale(1);
+  }
+  30% {
+    background: linear-gradient(145deg, #f87171, #ef4444);
+    border-color: rgba(220, 38, 38, 0.4);
+    transform: scale(1.15);
+  }
+}
+
+.sb-auth-slot--error-flash {
+  animation: sb-slot-error-flash-kf 0.5s ease;
+  animation-delay: calc(var(--sb-slot-i, 0) * 22ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake,
+  .sb-auth-slot--error-flash {
+    animation: none;
+  }
 }
 
 @keyframes sb-content-enter-kf {
@@ -695,11 +837,11 @@
 }
 
 .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  filter: blur(7px);
-  opacity: 0.4;
+  filter: blur(12px);
+  opacity: 0.22;
   transition:
-    filter 0.22s var(--sb-spring-gentle),
-    opacity 0.22s var(--sb-spring-gentle);
+    filter 0.3s var(--sb-spring-gentle),
+    opacity 0.3s var(--sb-spring-gentle);
   pointer-events: none;
 }
 
@@ -714,5 +856,53 @@
     filter: none;
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+/* ── Day-switch luminous sweep (rides the inner-content veil) ──
+   A soft light band glides across the board in the direction of travel:
+   forward (next day) →, backward (prev day) ←. Monochrome, echoing the engine
+   overlay's light-wave so the two read as one family. Anchored to and clipped
+   by .sb-builder-scale-viewport (already position:relative; overflow:hidden),
+   so nothing in the layout is disturbed. GPU-cheap: transform + opacity only. */
+
+.sb-day-content-veil .sb-builder-scale-viewport::after {
+  content: "";
+  position: absolute;
+  top: -6%;
+  bottom: -6%;
+  left: 0;
+  width: 40%;
+  z-index: 42;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--sb-day-sweep-edge, rgba(0, 0, 0, 0.05)) 44%,
+    var(--sb-day-sweep-core, rgba(255, 255, 255, 0.92)) 50%,
+    var(--sb-day-sweep-edge, rgba(0, 0, 0, 0.05)) 56%,
+    transparent 70%
+  );
+  filter: blur(5px);
+  will-change: transform, opacity;
+  transform: translateX(-130%);
+  /* One slow, luxurious pass that spans most of the 1.75s hold and settles
+     just before the board resolves. */
+  animation: sb-day-sweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+/* Backward switch — same band, reversed travel. */
+.sb-day-content-veil.sb-day-veil--prev .sb-builder-scale-viewport::after {
+  animation-direction: reverse;
+}
+@keyframes sb-day-sweep {
+  0%   { transform: translateX(-130%); opacity: 0; }
+  22%  { opacity: 1; }
+  78%  { opacity: 1; }
+  100% { transform: translateX(360%); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-day-content-veil .sb-builder-scale-viewport::after {
+    content: none;
+    animation: none;
   }
 }

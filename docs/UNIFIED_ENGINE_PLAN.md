@@ -1,9 +1,11 @@
 # Unified Placement Intelligence System — Project Plan
 
-**Status:** Draft for review — no implementation started
+**Status:** Substantially implemented, not fully cut over — see the 2026-07-04 status note below before trusting any "pending" claim in this document
 **Author:** Claude (Fable 5) with Brian Killian
-**Date:** 2026-07-02
+**Date:** 2026-07-02 (see note below — this header date does not match git history)
 **Branch:** `shiftbuilder-ultra-20260627`
+
+> **2026-07-04 status note:** an independent code audit found that most of Phases 0–4 below (unified `engine/` core, night pipeline, health model, AI provider abstraction, week engine) already exist in `src/lib/shiftbuilder/engine/` with 72 passing tests — they did not land incrementally after this doc's 2026-07-02 date; `git log` shows the entire module tree and this document were committed together in one commit on 2026-07-04. Treat this plan's phase breakdown as the *design*, not a changelog — check code/tests before repeating a "not done yet" claim from here. Confirmed done as of 2026-07-04: F1 (operator eligibility rules now reach the main interactive path, `sudoBatchPlanner.ts`, *and* the legacy fallback branch — see §16 update), the `validatePlacementOrder` half of F12 (function removed, not just fixed — see §16), the week engine now has a real UI entry point ("Run Week" button + results sheet, previously P3-4/zero callers), and several additional dead knobs beyond F11's original list (`appliesToZones`/`appliesToSlotTypes`/`appliesToSlotKeys` on `SignalOverride`/`EligibilityRule`, and the unused `versionHistory`/`resolvedVersionName` parent-chain walk) were removed from `engineConfig.ts`/`engineOverrides.ts`. Still open: the 3-way legacy-planner/Timefold/unified-engine architecture question (§15-style decision, not yet made), and Timefold ("Deep Optimize") is a fourth live system this doc's Phase 4/mission statement doesn't mention retiring.
 
 ---
 
@@ -549,21 +551,21 @@ Per run: `{ runId, scope, seed, flag, stages: [{stage, ms, scorecard, notes[]}],
 
 ## 16. Traceability — review findings → tasks
 
-| Finding | Fixed by |
-|---|---|
-| F1 eligibility rules dead | P0-1 (stopgap) → P1-2 (real) |
-| F2 health draft drops coverage | P0-2 → superseded by P2/P3 pipeline (health draft retired; optimizer takes its role) |
-| F3 hard-avoid disagreement | P1-6 (+D1, D7) |
-| F4 two health models | P1-3 (+P4-2 for AI-brief numbers) |
-| F5 meetsTarget blend | P0-3 (+D2) |
-| F6 weeklyHistories branch | P0-4 |
-| F7 fake constraint panel | P0-5 → P2-2 (guard-backed) |
-| F8 verdict sentinel + dead code | P0-6 |
-| F9 drag halo keys | P0-7 |
-| F10 gender-blind feasibility | P0-8 → `engine/feasibility.ts` in P2-3 |
-| F11 dead knobs | P5-1 (+D3) |
-| F12 stubs/lies/dupes | P0-9 |
-| F13 recursive fit cost | P5-3 (partially P1-3) |
+| Finding | Fixed by | Status (2026-07-04) |
+|---|---|---|
+| F1 eligibility rules dead | P0-1 (stopgap) → P1-2 (real) | **Resolved.** The unified engine's gate (`canPlaceInContext`/`isEligibleUnderRules`) always supported this; what was missing was wiring real rules into it. As of 2026-07-04: `ShiftBuilderClient.tsx`'s main interactive path and `sudoBatchPlanner.ts` both load `getFullyResolvedEngineConfig()` and pass `eligibilityRules` explicitly; the legacy fallback planner (`runWeightedPlanner`, reached only if the unified call throws or `sb_unified_engine="0"`) now also checks `isEligibleUnderRules` per candidate. No known live path still ignores operator rules. |
+| F2 health draft drops coverage | P0-2 → superseded by P2/P3 pipeline (health draft retired; optimizer takes its role) | Not independently re-verified this session |
+| F3 hard-avoid disagreement | P1-6 (+D1, D7) | Not independently re-verified this session |
+| F4 two health models | P1-3 (+P4-2 for AI-brief numbers) | Not independently re-verified this session |
+| F5 meetsTarget blend | P0-3 (+D2) | Not independently re-verified this session |
+| F6 weeklyHistories branch | P0-4 | Not independently re-verified this session |
+| F7 fake constraint panel | P0-5 → P2-2 (guard-backed) | Not independently re-verified this session |
+| F8 verdict sentinel + dead code | P0-6 | Not independently re-verified this session |
+| F9 drag halo keys | P0-7 | Not independently re-verified this session |
+| F10 gender-blind feasibility | P0-8 → `engine/feasibility.ts` in P2-3 | Confirmed present in `engine/feasibility.ts`, tested (`nightPipeline.test.ts` "gender feasibility (F10)") |
+| F11 dead knobs | P5-1 (+D3) | This entry's original 4 knobs (`fatigue_index`, `weekly_load_balance`, `skill_stretch_reward`, `sweeper_rotation_penalty`) — the latter two were removed 2026-07-02 per `engineConfig.ts`, the former two are now implemented (`weekEngine.test.ts` "fairness signals — weekly_load_balance + fatigue_index"). **2026-07-04: a separate, previously-uncatalogued set of dead knobs was found and removed** — `appliesToZones`/`appliesToSlotTypes`/`appliesToSlotKeys` on `SignalOverride`/`EligibilityRule` (populated from DB, never read as filters anywhere, no UI ever set them either) and `versionHistory`/`resolvedVersionName` on `FullyResolvedEngineConfig` (computed via an extra per-call DB round trip, zero consumers) — all removed from `engineConfig.ts`/`engineOverrides.ts`. |
+| F12 stubs/lies/dupes | P0-9 | **`validatePlacementOrder` stub: resolved by removal (2026-07-04)**, not by implementing it — the function's own premise (a dynamic AUX slot could be inserted "in the middle" of the fixed order) can't actually happen: `deriveTargetSlotsInOrder` always appends dynamic slots after the fixed set regardless of input order, so the check was validating something structurally impossible. Removed the function and its one caller (`useAuxLayout.ts`). The "fake `checkEligibility` tool" and "duplicated dead `fairnessSignals` fallback" parts of this finding were **not** touched this session. |
+| F13 recursive fit cost | P5-3 (partially P1-3) | Not independently re-verified this session |
 
 ---
 

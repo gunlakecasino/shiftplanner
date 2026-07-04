@@ -50,6 +50,8 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [errorFlash, setErrorFlash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -77,6 +79,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
 
     if (result.success && result.user) {
       if (!result.requiresPinChange) {
+        setSuccess(true);
         const permissions = getEffectivePermissions(result.user);
         const destination = postPinDestination(pathname, permissions);
         if (destination !== pathname) {
@@ -91,6 +94,8 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
         el.classList.add("animate-shake");
         setTimeout(() => el.classList.remove("animate-shake"), 420);
       }
+      setErrorFlash(true);
+      setTimeout(() => setErrorFlash(false), 550);
       setPin("");
       inputRef.current?.focus();
     }
@@ -130,7 +135,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
           </div>
           <div className="min-w-0 pt-0.5">
             <h2 id={titleId} className="sb-auth-title">
-              SheetBuilder Access
+              ShiftBuilder Access
             </h2>
             <p id={descId} className="sb-auth-subtitle mt-1.5">
               Enter your 6-digit ops PIN
@@ -161,8 +166,8 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               }}
               className={cn("sb-auth-input", error && "sb-auth-input--error")}
               placeholder="••••••"
-              disabled={submitting}
-              autoComplete="off"
+              disabled={submitting || success}
+              autoComplete="one-time-code"
               aria-invalid={!!error}
               aria-describedby={error ? "pin-gate-error" : undefined}
             />
@@ -171,7 +176,12 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className={cn("sb-auth-slot", i < pin.length && "sb-auth-slot--filled")}
+                style={{ "--sb-slot-i": i } as React.CSSProperties}
+                className={cn(
+                  "sb-auth-slot",
+                  i < pin.length && "sb-auth-slot--filled",
+                  errorFlash && "sb-auth-slot--error-flash",
+                )}
               />
             ))}
           </div>
@@ -186,15 +196,24 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            disabled={!isComplete || submitting}
+            disabled={!isComplete || submitting || success}
             className={cn(
               "sb-interactive sb-auth-primary sb-auth-primary--grow",
-              isComplete && !submitting
-                ? "sb-auth-primary--active"
-                : "sb-auth-primary--disabled",
+              success
+                ? "sb-auth-primary--success"
+                : isComplete && !submitting
+                  ? "sb-auth-primary--active"
+                  : "sb-auth-primary--disabled",
             )}
           >
-            {submitting ? (
+            {success ? (
+              <span key="success" className="sb-auth-primary__icon-pop inline-flex items-center gap-2">
+                <span className="ms" style={{ fontSize: 16 }} aria-hidden="true">
+                  check_circle
+                </span>
+                SIGNED IN
+              </span>
+            ) : submitting ? (
               <BuilderBusyLabel>VERIFYING</BuilderBusyLabel>
             ) : (
               <>
@@ -213,9 +232,12 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               setError(null);
               inputRef.current?.focus();
             }}
-            disabled={submitting}
-            className="sb-interactive sb-auth-secondary disabled:opacity-45"
+            disabled={submitting || success}
+            className="sb-interactive sb-auth-secondary disabled:opacity-45 inline-flex items-center gap-1.5"
           >
+            <span className="ms" style={{ fontSize: 14 }} aria-hidden="true">
+              backspace
+            </span>
             Clear
           </button>
         </div>

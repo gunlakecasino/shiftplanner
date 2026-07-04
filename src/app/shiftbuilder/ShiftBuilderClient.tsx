@@ -38,7 +38,6 @@ import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHisto
 import {
   // Single source of truth — do NOT re-declare these locally in this file.
   // (Some were extracted; unused imports cleaned in production pass.)
-  validatePlacementOrder,
   isEligibleForSlot,
   getSlotsInPlacementOrder,
   type AuxDef,
@@ -60,8 +59,8 @@ import {
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 // EngineRulesContext extracted; import removed to clean unused.
 // buildDefaultAdjacency dynamically imported inside the engine handler (any static edge into scoring still triggers Turbopack "module factory" errors on this giant file, per the pattern for placement/grok/data/etc.)
-// getActiveEngineConfig dynamically imported (engineConfig is small but any static edge into heavy modules still triggers Turbopack factory issues after the big refactor)
-import type { EngineConfig } from "@/lib/shiftbuilder/engineConfig";
+// getFullyResolvedEngineConfig dynamically imported (engineConfig is small but any static edge into heavy modules still triggers Turbopack factory issues after the big refactor)
+import type { EngineConfig, FullyResolvedEngineConfig } from "@/lib/shiftbuilder/engineConfig";
 // All remaining data.ts functions (preferences, channels, locked, etc.) dynamically imported to eliminate the last static edge causing Turbopack module factory HMR errors.
 // Scheduled data is now fetched via /api/shiftbuilder/scheduled-roster to avoid client-side admin client creation.
 // grokEngine (buildGrokEngineSnapshot / mergeGrokOverridesIntoDraft) dynamically imported in handlers to shrink HMR surface
@@ -140,6 +139,8 @@ import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useTimefoldOptimize } from "./hooks/useTimefoldOptimize";
 import { TimefoldResultsSheet } from "./components/timefold/TimefoldResultsSheet";
 import type { TimefoldProposal } from "@/lib/shiftbuilder/timefold/timefoldTypes";
+import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
+import { EngineRunningOverlay } from "./components/EngineRunningOverlay";
 import { useNotes } from "./hooks/useNotes";
 import { usePrintManager } from "./hooks/usePrintManager";
 import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
@@ -1069,7 +1070,7 @@ function AuthedShiftBuilder() {
   const [scheduledTmIdsTonight, setScheduledTmIdsTonight] = useState<Set<string>>(new Set());
 
   // === Engine config + reference data (Phase 1 weighted scoring) ===
-  const engineConfig = useEngineConfig() as EngineConfig | null;
+  const engineConfig = useEngineConfig() as FullyResolvedEngineConfig | null;
   const setEngineConfig = useSetEngineConfig();
   const [tmSkillScores, setTmSkillScores] = useState<Map<string, number>>(new Map());
   const [slotDifficulty, setSlotDifficulty] = useState<Map<string, number>>(new Map());
@@ -1503,6 +1504,113 @@ function AuthedShiftBuilder() {
   const draftSlotCount = React.useMemo(
     () => Object.keys(draftAssignments).length,
     [draftAssignments],
+  );
+
+  // === Run Week (read-only week-engine preview: fairness ledger + violations) ===
+  const [weekRunPreview, setWeekRunPreview] = React.useState<
+    import("./actions").WeekPreviewResult | null
+  >(null);
+  const [weekRunSheetOpen, setWeekRunSheetOpen] = React.useState(false);
+  const [weekRunBusy, setWeekRunBusy] = React.useState(false);
+
+  const runWeekPreview = React.useCallback(async () => {
+    if (!canRunEngine) {
+      showToast("Insufficient privileges — you cannot run the engine", "error");
+      return;
+    }
+    if (
+      !confirm(
+        "Preview the week engine for this grave week? This only computes and shows results — nothing is written until you open a specific night in Draft and Save.",
+      )
+    ) {
+      return;
+    }
+    setWeekRunBusy(true);
+    try {
+      const { previewWeekEngine } = await import("./actions");
+      const weekStartIso = formatLocalDateISO(weekStart);
+      const preview = await previewWeekEngine(weekStartIso);
+      setWeekRunPreview(preview);
+      setWeekRunSheetOpen(true);
+      if (preview.missingNightIsos.length > 0) {
+        showToast(
+          `Week preview ready — ${preview.missingNightIsos.length} night(s) skipped (visit them on the board first)`,
+          "info",
+        );
+      } else {
+        showToast("Week preview ready", "success");
+      }
+    } catch (err) {
+      console.error("[engine] week preview failed:", err);
+      showToast(
+        err instanceof Error ? err.message : "Week preview failed — try again",
+        "error",
+      );
+    } finally {
+      setWeekRunBusy(false);
+    }
+  }, [canRunEngine, showToast, weekStart]);
+
+  /** Seeds single-night Draft Mode from a week-preview night's computed Draft.
+   * Reuses the existing Draft Mode + Apply/Save flow — no bulk multi-night write. */
+  const openNightInDraftFromWeekRun = React.useCallback(
+    (nightIso: string, draft: import("@/lib/shiftbuilder/engine/types").Draft) => {
+      if (isDraftMode && draftSlotCount > 0) {
+        if (
+          !confirm(
+            "You have an unsaved draft for the currently open night. Discard it and open this night's week-run draft instead?",
+          )
+        ) {
+          return;
+        }
+      }
+
+      const nightIndex = DAY_DEFS.findIndex(
+        (d) => formatLocalDateISO(d.date) === nightIso,
+      );
+      if (nightIndex < 0) {
+        showToast("Couldn't find that night on the visible week strip", "error");
+        return;
+      }
+
+      const existing = weekRunPreview?.existingAssignmentsByNight[nightIso] ?? {};
+      const newDraft: Record<string, any> = {};
+      for (const [slotKey, placement] of Object.entries(draft)) {
+        const prev = existing[slotKey];
+        if (prev?.tmId === placement.tmId) continue; // already exactly this — nothing to propose
+        newDraft[slotKey] = {
+          proposedTmId: placement.tmId,
+          proposedTmName: placement.tmName,
+          previousTmId: prev?.tmId,
+          previousTmName: prev?.tmName,
+        };
+      }
+
+      changeDay(nightIndex);
+      startHeavyTransition(() => {
+        setIsDraftMode(true);
+        setDraftAssignments(newDraft);
+        setDraftBreakdown({});
+        setDraftGrokReasoning({});
+        setDraftEngineWarnings([]);
+      });
+      setWeekRunSheetOpen(false);
+      showToast(`Opened ${nightIso} in Draft — review and Save when ready`, "info");
+    },
+    [
+      isDraftMode,
+      draftSlotCount,
+      DAY_DEFS,
+      weekRunPreview,
+      changeDay,
+      startHeavyTransition,
+      setIsDraftMode,
+      setDraftAssignments,
+      setDraftBreakdown,
+      setDraftGrokReasoning,
+      setDraftEngineWarnings,
+      showToast,
+    ],
   );
 
   const toggleDraftMode = React.useCallback(() => {
@@ -4181,6 +4289,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             const engineInputs = {
               nightIso: formatLocalDateISO(selectedDay.date),
               config: engineConfig,
+              // F1 fix (2026-07-04): pass the operator's actual rules explicitly
+              // instead of relying on context.ts's `(config as any).eligibilityRules`
+              // fallback — engineConfig is now FullyResolvedEngineConfig, so this
+              // is real data from engine_eligibility_rules, not always [].
+              eligibilityRules: engineConfig.eligibilityRules,
               auxDefs,
               members: planningRoster as Array<Record<string, unknown>>,
               scheduledTmIds: scheduledSet,
@@ -4337,6 +4450,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           roster: planningRoster,
           graveOnly,
           preserveOnlyLocked: !!options?.forceXai,
+          eligibilityRules: engineConfig.eligibilityRules,
           scoringCtx: {
             config: engineConfig,
             skillScores: tmSkillScores,
@@ -5602,7 +5716,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           accommodationRows,
           zoneMatrixRaw,
         ] = await Promise.all([
-          (await import("@/lib/shiftbuilder/engineConfig")).getActiveEngineConfig(),
+          (await import("@/lib/shiftbuilder/engineOverrides")).getFullyResolvedEngineConfig(),
           getTMSkillScores(),
           getSlotDifficultyRaw(),
           getTMPreferences(),
@@ -7465,6 +7579,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onDeepOptimize={canRunEngine ? startDeepOptimize : undefined}
         engineRunning={engineRunPhase !== "idle"}
         deepOptimizeRunning={timefold.phase === "running"}
+        onRunWeek={canRunEngine ? () => void runWeekPreview() : undefined}
+        weekRunBusy={weekRunBusy}
         onClearDay={canSeeDraftData ? handleClearBoard : undefined}
         onRefreshDay={canEditAssignments ? () => void handleDeepRefreshDay() : undefined}
         refreshDayBusy={refreshDayBusy}
@@ -7496,6 +7612,15 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onImport={applyTimefoldProposal}
         showToast={showToast}
       />
+
+      <WeekEngineResultsSheet
+        open={weekRunSheetOpen}
+        onOpenChange={setWeekRunSheetOpen}
+        preview={weekRunPreview}
+        onOpenNightInDraft={openNightInDraftFromWeekRun}
+      />
+
+      <EngineRunningOverlay open={weekRunBusy} />
 
       {/* Beautiful seamless exit pill for print preview mode */}
       {isPrintPreview && (

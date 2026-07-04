@@ -36,6 +36,13 @@
 
 import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
 import { assignmentTmId } from "./tmIdentity";
+// engineOverrides.ts never imports from this module (no cycle) — safe to pull
+// operator-rule evaluation in here so the legacy fallback planner respects
+// engine_eligibility_rules too, not just the unified engine (F1 follow-up,
+// 2026-07-04). NOTE: engine/eligibility.ts must NOT be imported here — that
+// module imports FROM placement.ts, so doing so would create a cycle.
+import { isEligibleUnderRules } from "./engineOverrides";
+import type { EligibilityRule } from "./engineConfig";
 
 // Single source of truth for placement order now lives in the AI-modifiable skill
 import {
@@ -213,6 +220,19 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
    * Unlocked placements are re-scored so the engine can propose a full deployment.
    */
   preserveOnlyLocked?: boolean;
+  /** Operator rules (engine_eligibility_rules). Empty/omitted = none (F1 fix, 2026-07-04). */
+  eligibilityRules?: EligibilityRule[];
+}
+
+/** Coarse slot type used by operator rule filters. Deliberately duplicated from
+ * engine/eligibility.ts's identical helper — that module imports FROM this one,
+ * so this one can't import back from it without creating a cycle. */
+function slotTypeForKey(slotKey: string): string {
+  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return "rr";
+  if (slotKey.startsWith("OL-")) return "overlap";
+  if (slotKey.startsWith("Z")) return "zone";
+  if (isOptionalDeploymentSlot(slotKey)) return "zone";
+  return "aux";
 }
 
 const HARD_COVERAGE_SLOTS = new Set(
@@ -324,7 +344,7 @@ function pickBestCoverageRescueCandidate(
  * judgment to override the deterministic pick on individual slots.
  */
 export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlannerResult {
-  const { orderedSlots, assignments, roster, scoringCtx, topK = 5, preserveOnlyLocked = false } = input;
+  const { orderedSlots, assignments, roster, scoringCtx, topK = 5, preserveOnlyLocked = false, eligibilityRules = [] } = input;
 
   const proposedAssignments: Record<string, string> = {};
   const breakdown: Record<string, SlotRanking> = {};
@@ -438,16 +458,22 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       continue;
     }
 
-    // Build candidate set: eligible + not yet placed this run.
+    // Build candidate set: eligible (core liturgy + operator rules) + not yet placed this run.
+    const slotType = slotTypeForKey(slotKey);
+    const passesOperatorRules = (tm: any) =>
+      eligibilityRules.length === 0 ||
+      isEligibleUnderRules(tm, slotKey, slotType, eligibilityRules);
     const usedIds = new Set(currentDraft.values());
     const candidates = roster.filter((tm: any) => {
       const id = assignmentTmId(tm);
-      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey);
+      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey) && passesOperatorRules(tm);
     });
 
     // DEBUG — log details when candidates are unexpectedly empty
     if (candidates.length === 0) {
-      const eligible = roster.filter((tm: any) => isEligibleForSlot(tm, slotKey));
+      const eligible = roster.filter(
+        (tm: any) => isEligibleForSlot(tm, slotKey) && passesOperatorRules(tm),
+      );
       const notUsed = roster.filter((tm: any) => {
         const id = assignmentTmId(tm);
         return id && !usedIds.has(id);
@@ -709,33 +735,6 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
   }
 
   return true;
-}
-
-// ========================================================
-// VALIDATION
-// ========================================================
-
-/**
- * Validates that dynamically added AUX slots appear after the fixed placement order.
- * Returns warnings that can be surfaced in the UI.
- */
-export function validatePlacementOrder(auxDefs: AuxDef[]): string[] {
-  const warnings: string[] = [];
-  const fixedSet = new Set(PLACEMENT_ORDER);
-
-  const dynamicSlots = auxDefs
-    .map((d) => d.key)
-    .filter((key) => !fixedSet.has(key));
-
-  if (dynamicSlots.length === 0) return warnings;
-
-  // Check that all dynamic slots come after the last fixed slot in the order
-  const lastFixedIndex = PLACEMENT_ORDER.length - 1;
-
-  // For now we just warn if someone tries to insert a support slot in the middle
-  // (future: we can enforce strict ordering when AUX is added)
-
-  return warnings;
 }
 
 // ========================================================
