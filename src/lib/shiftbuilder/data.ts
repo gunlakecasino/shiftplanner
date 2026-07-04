@@ -3297,38 +3297,14 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
   return rows;
 }
 
+/**
+ * @deprecated Retired by the defaults cutover. The slot_default_tasks table has
+ * been dropped; nightly default chips now come from slot-default Ops Tasks
+ * (ops_work_items) via applySlotDefaultsToNight. Always returns []; kept only so
+ * any lingering caller degrades to "no legacy defaults" instead of erroring.
+ */
 export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
-  if (typeof window !== "undefined") {
-    try {
-      const { tasks } = await fetchSlotDefaultsBundle();
-      return tasks;
-    } catch (e) {
-      console.error("[shiftbuilder/data] getSlotDefaultTasks API error:", e);
-      return [];
-    }
-  }
-
-  const { data, error } = await supabase
-    .from('slot_default_tasks')
-    .select('id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order')
-    .order('sort_order', { ascending: true })
-    .order('task_label', { ascending: true });
-
-  if (error) {
-    console.error('[shiftbuilder/data] getSlotDefaultTasks error:', error);
-    return [];
-  }
-
-  return (data || []).map((r: any) => ({
-    id: r.id,
-    slotKey: r.slot_key,
-    slotType: r.slot_type,
-    rrSide: r.rr_side ?? '',
-    taskLabel: r.task_label,
-    taskColor: r.task_color ?? null,
-    isCoverage: r.is_coverage ?? false,
-    sortOrder: r.sort_order ?? 0,
-  }));
+  return [];
 }
 
 // ── Writers ──────────────────────────────────────────────────────────────────
@@ -3383,8 +3359,11 @@ export async function upsertSlotDefault(params: {
   );
 }
 
-/** Add a task chip default for a slot. Silently dedupes on (slot_key, rr_side, task_label). */
-export async function addSlotDefaultTask(params: {
+const SLOT_DEFAULT_TASKS_RETIRED =
+  "Default task chips were retired by the cutover — manage them in Projects → Defaults (ops_work_items).";
+
+/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Projects → Defaults. */
+export async function addSlotDefaultTask(_params: {
   slotKey: string;
   slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide?: string;
@@ -3393,27 +3372,12 @@ export async function addSlotDefaultTask(params: {
   isCoverage?: boolean;
   sortOrder?: number;
 }): Promise<SlotDefaultTask> {
-  return runSudoMutation(
-    "add_slot_default_task",
-    params as unknown as Record<string, unknown>,
-    async () => {
-      const { addSlotDefaultTaskServer } = await import("./slotDefaultsMutations.server");
-      return addSlotDefaultTaskServer(params);
-    },
-  );
+  throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }
 
-/** Remove a task chip default by id. */
-export async function removeSlotDefaultTask(id: string): Promise<void> {
-  await runSudoMutation(
-    "remove_slot_default_task",
-    { id },
-    async () => {
-      const { removeSlotDefaultTaskServer } = await import("./slotDefaultsMutations.server");
-      await removeSlotDefaultTaskServer(id);
-      return { ok: true };
-    },
-  );
+/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Projects → Defaults. */
+export async function removeSlotDefaultTask(_id: string): Promise<void> {
+  throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }
 
 // ── Push helpers (shared) ────────────────────────────────────────────────────

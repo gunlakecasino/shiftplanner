@@ -12,14 +12,15 @@
  * Push buttons live in a sticky action bar at the top.
  */
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import BreakBadge from "../components/BreakBadge";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
-// Slot defaults / task / break default helpers are dynamically imported inside the handlers that use them.
+// Break-default helpers are dynamically imported inside the handlers that use them.
 // This prevents the heavy data.ts module from being part of the top-level static import graph of Sudo tabs (Turbopack HMR fix).
-import type { SlotDefault, SlotDefaultTask } from "@/lib/shiftbuilder/data";
+// NOTE: task-chip defaults were retired by the cutover — they now live in Projects → Defaults.
+import type { SlotDefault } from "@/lib/shiftbuilder/data";
 import {
   ZONE_DEFS,
   RR_DEFS,
@@ -39,10 +40,6 @@ import {
   graveBreakGroupSlotDefaults,
 } from "@/lib/shiftbuilder/graveBreakGroupDefaults";
 import { sudoIosClasses, sudoPushButtonClasses } from "./sudoIosTheme";
-import {
-  formatTaskLabelTitleCase,
-  formatTaskLabelTitleCaseOnWordBoundary,
-} from "@/lib/shiftbuilder/taskTextStyle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slot descriptor — flattened list of all manageable slots
@@ -187,18 +184,11 @@ interface LocalToast { id: number; message: string; kind: ToastKind; }
 
 let _toastId = 0;
 
-const PUSH_CONFIRM_MESSAGES: Record<
-  "breaks-today" | "breaks-week" | "tasks-today" | "tasks-week",
-  string
-> = {
+const PUSH_CONFIRM_MESSAGES: Record<"breaks-today" | "breaks-week", string> = {
   "breaks-today":
     "Push card-default break groups to tonight? This overwrites any per-shift break overrides on assigned slots.",
   "breaks-week":
     "Push card-default break groups to the entire GRAVE week (Fri–Thu)? This overwrites per-shift break overrides on all existing nights with assignments.",
-  "tasks-today":
-    "Push card-default task chips to tonight? This replaces existing task chips on every slot that has defaults configured.",
-  "tasks-week":
-    "Push card-default task chips to the entire GRAVE week? This replaces existing task chips on affected slots across all existing nights.",
 };
 
 const SAVE_GRAVE_BREAK_MAP_CONFIRM =
@@ -215,27 +205,17 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
 
   // Default break groups: compositeKey → 0|1|2|3
   const [breakGroups, setBreakGroups] = useState<Record<string, BreakGroup>>({});
-  // Default tasks: compositeKey → SlotDefaultTask[]
-  const [tasksBySlot, setTasksBySlot] = useState<Record<string, SlotDefaultTask[]>>({});
-
-  // Per-slot "add task" input value
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [addInput, setAddInput] = useState("");
-  const addInputRef = useRef<HTMLInputElement>(null);
 
   // Push operation loading states
-  const [pushing, setPushing] = useState<"breaks-today" | "breaks-week" | "tasks-today" | "tasks-week" | null>(null);
+  const [pushing, setPushing] = useState<"breaks-today" | "breaks-week" | null>(null);
   const [seedingGrave, setSeedingGrave] = useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { getSlotDefaults, getSlotDefaultTasks } = await import("@/lib/shiftbuilder/data");
-      const [defaults, tasks] = await Promise.all([
-        getSlotDefaults(),
-        getSlotDefaultTasks(),
-      ]);
+      const { getSlotDefaults } = await import("@/lib/shiftbuilder/data");
+      const defaults = await getSlotDefaults();
 
       const bg: Record<string, BreakGroup> = {};
       for (const d of defaults) {
@@ -249,14 +229,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
         }
       }
       setBreakGroups(bg);
-
-      const ts: Record<string, SlotDefaultTask[]> = {};
-      for (const t of tasks) {
-        const ck = `${t.slotKey}|${t.rrSide ?? ''}`;
-        if (!ts[ck]) ts[ck] = [];
-        ts[ck].push(t);
-      }
-      setTasksBySlot(ts);
     } catch (e: any) {
       showToast("Failed to load defaults: " + (e?.message ?? "unknown"), "error");
     } finally {
@@ -265,13 +237,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  // Focus the add-task input whenever it becomes visible
-  useEffect(() => {
-    if (addingFor) {
-      setTimeout(() => addInputRef.current?.focus(), 50);
-    }
-  }, [addingFor]);
 
   // ── Toasts ────────────────────────────────────────────────────────────────
   const showToast = (message: string, kind: ToastKind = "info") => {
@@ -324,119 +289,15 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
     [breakGroups]
   );
 
-  // ── Add task ──────────────────────────────────────────────────────────────
-  const handleAddInputChange = useCallback((value: string) => {
-    const formatted = formatTaskLabelTitleCaseOnWordBoundary(value);
-    setAddInput(formatted !== value ? formatted : value);
-  }, []);
-
-  const handleAddTask = useCallback(
-    async (def: SlotDef) => {
-      const label = formatTaskLabelTitleCase(addInput);
-      if (!label) return;
-
-      const existing = tasksBySlot[def.compositeKey] ?? [];
-      if (existing.some((t) => t.taskLabel.toLowerCase() === label.toLowerCase())) {
-        showToast(`"${label}" is already a default for this slot`, "info");
-        setAddInput("");
-        setAddingFor(null);
-        return;
-      }
-
-      const sortOrder = existing.length;
-
-      const optimisticTask: SlotDefaultTask = {
-        id: `_optimistic_${Date.now()}`,
-        slotKey: def.dbKey,
-        slotType: def.dbType,
-        rrSide: def.rrSide,
-        taskLabel: label,
-        taskColor: null,
-        isCoverage: false,
-        sortOrder,
-      };
-
-      setTasksBySlot((p) => ({
-        ...p,
-        [def.compositeKey]: [...existing, optimisticTask],
-      }));
-      setAddInput("");
-      setAddingFor(null);
-
-      try {
-        const { addSlotDefaultTask, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
-        const saved = await addSlotDefaultTask({
-          slotKey: def.dbKey,
-          slotType: def.dbType,
-          rrSide: def.rrSide,
-          taskLabel: label,
-          sortOrder,
-        });
-        invalidateSlotDefaultsBundleCache();
-        setTasksBySlot((p) => {
-          const list = (p[def.compositeKey] ?? []).filter((t) => t.id !== optimisticTask.id);
-          const withoutDup = list.filter(
-            (t) => t.taskLabel.toLowerCase() !== saved.taskLabel.toLowerCase(),
-          );
-          return {
-            ...p,
-            [def.compositeKey]: [...withoutDup, saved].sort(
-              (a, b) => a.sortOrder - b.sortOrder || a.taskLabel.localeCompare(b.taskLabel),
-            ),
-          };
-        });
-      } catch (e: any) {
-        setTasksBySlot((p) => ({
-          ...p,
-          [def.compositeKey]: (p[def.compositeKey] ?? []).filter(
-            (t) => t.id !== optimisticTask.id,
-          ),
-        }));
-        showToast("Failed to add task: " + (e?.message ?? "unknown"), "error");
-      }
-    },
-    [addInput, tasksBySlot],
-  );
-
-  // ── Remove task ───────────────────────────────────────────────────────────
-  const handleRemoveTask = useCallback(
-    async (def: SlotDef, task: SlotDefaultTask) => {
-      // Optimistic remove
-      setTasksBySlot((p) => ({
-        ...p,
-        [def.compositeKey]: (p[def.compositeKey] ?? []).filter((t) => t.id !== task.id),
-      }));
-
-      try {
-        const { removeSlotDefaultTask, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
-        await removeSlotDefaultTask(task.id);
-        invalidateSlotDefaultsBundleCache();
-      } catch (e: any) {
-        // Revert
-        setTasksBySlot((p) => ({
-          ...p,
-          [def.compositeKey]: [...(p[def.compositeKey] ?? []), task],
-        }));
-        showToast("Failed to remove task: " + (e?.message ?? "unknown"), "error");
-      }
-    },
-    []
-  );
-
-  // ── Push operations ───────────────────────────────────────────────────────
+  // ── Push operations (break-group defaults only) ─────────────────────────────
   const handlePush = useCallback(
-    async (op: "breaks-today" | "breaks-week" | "tasks-today" | "tasks-week") => {
+    async (op: "breaks-today" | "breaks-week") => {
       if (pushing) return;
       if (!confirm(PUSH_CONFIRM_MESSAGES[op])) return;
       setPushing(op);
 
       try {
-        const {
-          pushBreakDefaultsToNight,
-          pushBreakDefaultsToWeek,
-          pushTaskDefaultsToNight,
-          pushTaskDefaultsToWeek,
-        } = await import("@/lib/shiftbuilder/data");
+        const { pushBreakDefaultsToNight, pushBreakDefaultsToWeek } = await import("@/lib/shiftbuilder/data");
 
         if (op === "breaks-today") {
           if (!currentNightId) { showToast("No current night loaded", "error"); return; }
@@ -447,16 +308,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
           if (!weekStart) { showToast("Week start date not available", "error"); return; }
           const { nights, applied } = await pushBreakDefaultsToWeek(weekStart);
           showToast(`Break defaults pushed — ${applied} slot${applied !== 1 ? "s" : ""} across ${nights} nights`, "success");
-          onDataChanged?.();
-        } else if (op === "tasks-today") {
-          if (!currentNightId) { showToast("No current night loaded", "error"); return; }
-          const { applied } = await pushTaskDefaultsToNight(currentNightId);
-          showToast(`Task defaults pushed — ${applied} task chip${applied !== 1 ? "s" : ""} installed`, "success");
-          onDataChanged?.();
-        } else if (op === "tasks-week") {
-          if (!weekStart) { showToast("Week start date not available", "error"); return; }
-          const { nights, applied } = await pushTaskDefaultsToWeek(weekStart);
-          showToast(`Task defaults pushed — ${applied} chips across ${nights} nights`, "success");
           onDataChanged?.();
         }
       } catch (e: any) {
@@ -524,24 +375,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
               onClick={handleSaveGraveBreakMap}
               isDark={isDark}
             />
-            <PushButton
-              label="Tasks → Today"
-              icon={<span className="ms" style={{ fontSize: 14 }}>calendar_month</span>}
-              loading={pushing === "tasks-today"}
-              disabled={!currentNightId || pushing !== null}
-              variant="tasks"
-              onClick={() => handlePush("tasks-today")}
-              isDark={isDark}
-            />
-            <PushButton
-              label="Tasks → Week"
-              icon={<span className="ms" style={{ fontSize: 14 }}>upload</span>}
-              loading={pushing === "tasks-week"}
-              disabled={!weekStart || pushing !== null}
-              variant="tasks"
-              onClick={() => handlePush("tasks-week")}
-              isDark={isDark}
-            />
           </div>
 
           {/* Refresh */}
@@ -599,26 +432,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
                       breakGroup={(breakGroups[def.compositeKey]
                         ?? graveBreakGroupForCompositeKey(def.compositeKey)
                         ?? 0) as BreakGroup}
-                      tasks={tasksBySlot[def.compositeKey] ?? []}
-                      isAdding={addingFor === def.compositeKey}
-                      addInput={addInput}
-                      addInputRef={addingFor === def.compositeKey ? addInputRef : undefined}
                       onCycleBreak={() => handleCycleBreak(def)}
-                      onStartAdd={() => {
-                        setAddingFor(def.compositeKey);
-                        setAddInput("");
-                      }}
-                      onCancelAdd={() => {
-                        setAddingFor(null);
-                        setAddInput("");
-                      }}
-                      onAddInputChange={handleAddInputChange}
-                      onAddInputBlur={() => {
-                        const formatted = formatTaskLabelTitleCase(addInput);
-                        if (formatted !== addInput) setAddInput(formatted);
-                      }}
-                      onAddSubmit={() => handleAddTask(def)}
-                      onRemoveTask={(t) => handleRemoveTask(def, t)}
                       isDark={isDark}
                     />
                   ))}
@@ -659,34 +473,14 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
 interface SlotRowProps {
   def: SlotDef;
   breakGroup: BreakGroup;
-  tasks: SlotDefaultTask[];
-  isAdding: boolean;
-  addInput: string;
-  addInputRef?: React.RefObject<HTMLInputElement | null>;
   onCycleBreak: () => void;
-  onStartAdd: () => void;
-  onCancelAdd: () => void;
-  onAddInputChange: (v: string) => void;
-  onAddInputBlur?: () => void;
-  onAddSubmit: () => void;
-  onRemoveTask: (t: SlotDefaultTask) => void;
   isDark?: boolean;
 }
 
 function SlotRow({
   def,
   breakGroup,
-  tasks,
-  isAdding,
-  addInput,
-  addInputRef,
   onCycleBreak,
-  onStartAdd,
-  onCancelAdd,
-  onAddInputChange,
-  onAddInputBlur,
-  onAddSubmit,
-  onRemoveTask,
   isDark = false,
 }: SlotRowProps) {
   const ios = sudoIosClasses(isDark);
@@ -725,64 +519,8 @@ function SlotRow({
         <span className={cn("text-[8px]", ios.legend)}>break</span>
       </div>
 
-      {/* Task chips + add input */}
-      <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0 mt-0.5">
-        {tasks.map((t) => (
-          <span key={t.id} className={ios.chip}>
-            {t.taskLabel}
-            <button
-              onClick={() => onRemoveTask(t)}
-              className="ml-0.5 transition-colors"
-              style={{ color: "var(--ios-label-quaternary)" }}
-              title="Remove default task"
-            >
-              <span className="ms" style={{ fontSize: 10 }}>close</span>
-            </button>
-          </span>
-        ))}
-
-        {isAdding ? (
-          <div className="flex items-center gap-1">
-            <input
-              ref={addInputRef}
-              value={addInput}
-              onChange={(e) => onAddInputChange(e.target.value)}
-              onBlur={onAddInputBlur}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); onAddSubmit(); }
-                if (e.key === "Escape") onCancelAdd();
-              }}
-              placeholder="Task label…"
-              className={cn("h-[22px] w-[120px] px-2", ios.input)}
-            />
-            <button
-              onClick={onAddSubmit}
-              disabled={!addInput.trim()}
-              className={cn(
-                "h-[22px] rounded border px-2 text-[10px] transition-colors disabled:opacity-40",
-                isDark
-                  ? "border-red-500/30 bg-red-500/20 text-red-300 hover:bg-red-500/30"
-                  : "border-[color-mix(in_srgb,var(--ios-red)_30%,transparent)] bg-[color-mix(in_srgb,var(--ios-red)_10%,var(--ios-background-secondary))] text-[var(--ios-red)] hover:bg-[color-mix(in_srgb,var(--ios-red)_16%,var(--ios-background-secondary))]",
-              )}
-            >
-              Add
-            </button>
-            <button
-              onClick={onCancelAdd}
-              className={cn("h-[22px] rounded px-1.5 transition-colors", ios.ghostBtn)}
-            >
-              <span className="ms" style={{ fontSize: 12 }}>close</span>
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={onStartAdd}
-            className={ios.dashedAdd}
-          >
-            <span className="ms" style={{ fontSize: 10 }}>add</span> task
-          </button>
-        )}
-      </div>
+      {/* Task chips retired — default tasks now live in Projects → Defaults. */}
+      <div className="flex-1 min-w-0 mt-0.5" />
     </div>
   );
 }
