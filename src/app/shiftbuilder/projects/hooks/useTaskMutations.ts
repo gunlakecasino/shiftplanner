@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import type { WorkItem, WorkItemDetail, WorkItemStatus } from "@/lib/tasks/types";
-import { PROJECTS_KEY, type ProjectWithCounts } from "./useProjectsData";
+import type { TaskPool, WorkItem, WorkItemDetail, WorkItemStatus } from "@/lib/tasks/types";
+import { POOLS_KEY, PROJECTS_KEY, type ProjectWithCounts } from "./useProjectsData";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -76,6 +76,7 @@ export interface UpdateTaskInput {
     priority: string;
     category: string | null;
     projectId: string | null;
+    poolId: string | null;
     dueDate: string | null;
     dueShift: string | null;
     assigneeTmId: string | null;
@@ -184,6 +185,54 @@ export function useAddChecklistItem(taskId: string) {
         body: JSON.stringify({ label }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", "task-detail", taskId] }),
+  });
+}
+
+export function useCreatePool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; description?: string; distributionMode?: string }) =>
+      api<{ pool: TaskPool }>("/api/shiftbuilder/projects/pools", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: POOLS_KEY }),
+  });
+}
+
+export function useUpdatePool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ poolId, patch }: { poolId: string; patch: Record<string, unknown> }) =>
+      api<{ pool: TaskPool }>(`/api/shiftbuilder/projects/pools/${poolId}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: POOLS_KEY }),
+  });
+}
+
+export function useDeletePool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (poolId: string) =>
+      api<{ ok: true }>(`/api/shiftbuilder/projects/pools/${poolId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: POOLS_KEY });
+      qc.invalidateQueries({ queryKey: ["projects", "tasks"] });
+    },
+  });
+}
+
+export function useDistributePool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (poolId: string) =>
+      api<{ distributed: number; message?: string }>(
+        `/api/shiftbuilder/projects/pools/${poolId}/distribute`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects", "tasks"] });
+      qc.invalidateQueries({ queryKey: POOLS_KEY });
+    },
   });
 }
 

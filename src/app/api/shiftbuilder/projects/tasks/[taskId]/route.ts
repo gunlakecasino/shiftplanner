@@ -72,6 +72,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (typeof body.priority === "string") patch.priority = body.priority;
   if (typeof body.category === "string" || body.category === null) patch.category = body.category;
   if (typeof body.projectId === "string" || body.projectId === null) patch.project_id = body.projectId;
+  if (typeof body.poolId === "string" || body.poolId === null) patch.pool_id = body.poolId;
   if (typeof body.dueDate === "string" || body.dueDate === null) patch.due_date = body.dueDate;
   if (typeof body.dueShift === "string" || body.dueShift === null) patch.due_shift = body.dueShift;
   if ("assigneeTmId" in body) {

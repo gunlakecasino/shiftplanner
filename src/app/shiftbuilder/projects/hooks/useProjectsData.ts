@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { WorkItem, WorkItemDetail } from "@/lib/tasks/types";
+import type { TaskPool, WorkItem, WorkItemDetail } from "@/lib/tasks/types";
 
 export type ProjectWithCounts = WorkItem & { taskCounts: { total: number; open: number } };
+export type PoolWithCounts = TaskPool & { taskCounts: { total: number; open: number } };
 
 const PROJECTS_KEY = ["projects"] as const;
 
@@ -80,6 +81,19 @@ export function useTaskDetail(taskId: string | null) {
     select: (data) => data.task,
     enabled: !!taskId,
     staleTime: 3_000,
+  });
+}
+
+export const POOLS_KEY = ["projects", "pools"] as const;
+
+export function usePools() {
+  return useQuery({
+    queryKey: POOLS_KEY,
+    queryFn: () => fetchJson<{ pools: PoolWithCounts[] }>("/api/shiftbuilder/projects/pools"),
+    select: (data) => data.pools,
+    refetchInterval: LIVE_ENOUGH_POLL_MS,
+    refetchOnWindowFocus: true,
+    staleTime: 5_000,
   });
 }
 

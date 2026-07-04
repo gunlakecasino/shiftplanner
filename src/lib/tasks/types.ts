@@ -31,6 +31,19 @@ export type WorkItemAssigneeType = "tm" | "staff";
 
 export type RecurrenceType = "daily" | "weekly" | "biweekly" | "monthly" | "custom";
 
+export type DistributionMode = "random" | "round_robin" | "manual";
+
+export interface TaskPool {
+  id: string;
+  name: string;
+  description: string | null;
+  distributionMode: DistributionMode;
+  active: boolean;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkItem {
   id: string;
   workType: WorkItemType;
@@ -44,6 +57,8 @@ export interface WorkItem {
   category: WorkItemCategory | null;
   /** Direct parent Project (a WorkItem with workType 'project'). Nullable — a task need not belong to a project. */
   projectId: string | null;
+  /** Pool this task belongs to, if any (ops_task_pools). Distribution assigns pooled tasks across the roster. */
+  poolId: string | null;
   assigneeType: WorkItemAssigneeType | null;
   /** Set when assigneeType === 'tm'. FKs to tm_profiles.tm_id. */
   assigneeTmId: string | null;

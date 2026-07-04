@@ -4,6 +4,7 @@
 import type {
   ChecklistItem,
   StatusHistoryEntry,
+  TaskPool,
   WorkItem,
   WorkItemComment,
 } from "./types";
@@ -14,7 +15,7 @@ import type {
 // narrows column types when it can see a literal type, not a `string`-widened
 // value produced by `+` concatenation across multiple string literals.
 export const WORK_ITEM_COLUMNS =
-  "id, work_type, title, description, department, is_overlap, priority, status, status_reason, category, project_id, assignee_type, assignee_tm_id, due_date, due_shift, blocker_note, hold_note, cancel_reason, completed_at, notes, recurrence_type, recurrence_days, advance_days, next_due_date, active, parent_template_id, created_by_name, updated_by_name, created_at, updated_at, archived_at";
+  "id, work_type, title, description, department, is_overlap, priority, status, status_reason, category, project_id, pool_id, assignee_type, assignee_tm_id, due_date, due_shift, blocker_note, hold_note, cancel_reason, completed_at, notes, recurrence_type, recurrence_days, advance_days, next_due_date, active, parent_template_id, created_by_name, updated_by_name, created_at, updated_at, archived_at";
 
 export function rowToWorkItem(r: any): WorkItem {
   return {
@@ -29,6 +30,7 @@ export function rowToWorkItem(r: any): WorkItem {
     statusReason: r.status_reason ?? null,
     category: r.category ?? null,
     projectId: r.project_id ?? null,
+    poolId: r.pool_id ?? null,
     assigneeType: r.assignee_type ?? null,
     assigneeTmId: r.assignee_tm_id ?? null,
     dueDate: r.due_date ?? null,
@@ -70,6 +72,19 @@ export function rowToComment(r: any): WorkItemComment {
     authorName: r.author_name ?? null,
     body: r.body,
     createdAt: r.created_at,
+  };
+}
+
+export function rowToPool(r: any): TaskPool {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    distributionMode: r.distribution_mode ?? "round_robin",
+    active: r.active ?? true,
+    createdByName: r.created_by_name ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 

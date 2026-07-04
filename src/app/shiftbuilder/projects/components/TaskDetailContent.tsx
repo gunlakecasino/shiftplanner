@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Plus, Trash2, Repeat } from "lucide-react";
 import { premiumTap } from "@/lib/premiumSpring";
-import { useTaskDetail, useRoster, type ProjectWithCounts } from "../hooks/useProjectsData";
+import { useTaskDetail, useRoster, usePools, type ProjectWithCounts } from "../hooks/useProjectsData";
 import {
   useAddChecklistItem,
   useAddComment,
@@ -45,6 +45,7 @@ export function TaskDetailContent({
 }) {
   const { data: task, isLoading } = useTaskDetail(taskId);
   const { data: roster } = useRoster();
+  const { data: pools = [] } = usePools();
   const updateTask = useUpdateTask();
   const archiveTask = useArchiveTask();
   const generateNext = useGenerateNextOccurrence();
@@ -243,6 +244,24 @@ export function TaskDetailContent({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Pool */}
+        <div>
+          <Label>Pool</Label>
+          <select
+            value={task.poolId ?? ""}
+            disabled={!canManage}
+            onChange={(e) => updateTask.mutate({ taskId, patch: { poolId: e.target.value || null } })}
+            className="w-full rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1.5 text-[12.5px] outline-none disabled:opacity-60"
+          >
+            <option value="">No pool</option>
+            {pools.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Due date */}

@@ -18,6 +18,7 @@ import { TaskListView } from "./components/TaskListView";
 import { TaskBoardView } from "./components/TaskBoardView";
 import { TaskCalendarView } from "./components/TaskCalendarView";
 import { RecurringView } from "./components/RecurringView";
+import { PoolsView } from "./components/PoolsView";
 import { TaskDetailSheet } from "./components/TaskDetailSheet";
 import "../settings/settingsShell.css";
 import "../settings/settingsTheme.css";
@@ -201,6 +202,7 @@ function ProjectsShell() {
                 canManage={canManage}
               />
             )}
+            {view === "pools" && <PoolsView canManage={canManage} />}
           </main>
         </div>
       </div>

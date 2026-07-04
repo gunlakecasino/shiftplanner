@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     description: body.description ? String(body.description).trim() : null,
     department: SHIFTBUILDER_DEPARTMENT,
     project_id: body.projectId || null,
+    pool_id: body.poolId || null,
     priority: body.priority ?? "normal",
     status: "not_started",
     category: body.category ?? null,
