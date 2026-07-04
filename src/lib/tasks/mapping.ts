@@ -15,7 +15,7 @@ import type {
 // narrows column types when it can see a literal type, not a `string`-widened
 // value produced by `+` concatenation across multiple string literals.
 export const WORK_ITEM_COLUMNS =
-  "id, work_type, title, description, department, is_overlap, priority, status, status_reason, category, project_id, pool_id, assignee_type, assignee_tm_id, due_date, due_shift, blocker_note, hold_note, cancel_reason, completed_at, notes, recurrence_type, recurrence_days, advance_days, next_due_date, active, parent_template_id, created_by_name, updated_by_name, created_at, updated_at, archived_at";
+  "id, work_type, title, description, department, is_overlap, priority, status, status_reason, category, project_id, pool_id, assignee_type, assignee_tm_id, due_date, due_shift, blocker_note, hold_note, cancel_reason, completed_at, notes, recurrence_type, recurrence_days, advance_days, next_due_date, active, parent_template_id, created_by_name, updated_by_name, created_at, updated_at, archived_at, is_slot_default, slot_key, slot_type, rr_side, task_color, is_coverage";
 
 export function rowToWorkItem(r: any): WorkItem {
   return {
@@ -51,6 +51,12 @@ export function rowToWorkItem(r: any): WorkItem {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     archivedAt: r.archived_at ?? null,
+    isSlotDefault: r.is_slot_default ?? false,
+    slotKey: r.slot_key ?? null,
+    slotType: r.slot_type ?? null,
+    rrSide: r.rr_side ?? null,
+    taskColor: r.task_color ?? null,
+    isCoverage: r.is_coverage ?? false,
   };
 }
 

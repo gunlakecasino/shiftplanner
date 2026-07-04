@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
     .select(WORK_ITEM_COLUMNS)
     .in("work_type", workType ? [workType] : ["task", "recurring"])
     .eq("department", SHIFTBUILDER_DEPARTMENT)
+    // Slot-default chip templates are managed in the Defaults view + consumed by
+    // the night materializer; they are not tracker instances.
+    .eq("is_slot_default", false)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 

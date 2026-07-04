@@ -83,6 +83,13 @@ export interface WorkItem {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Slot-default chip template (successor to slot_default_tasks). Excluded from tracker views; consumed by the night materializer. */
+  isSlotDefault: boolean;
+  slotKey: string | null;
+  slotType: string | null;
+  rrSide: string | null;
+  taskColor: string | null;
+  isCoverage: boolean;
 }
 
 export interface ChecklistItem {
