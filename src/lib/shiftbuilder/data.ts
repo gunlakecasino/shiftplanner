@@ -9,7 +9,7 @@ import {
 } from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
 import type { BreakGroupValue } from './breakGroupResolve';
-import { addDays, startOfRosterWeek, daysBetween } from './dateUtils';
+import { addDays, startOfRosterWeek, daysBetween, formatLocalDateISO } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
 import { isWorkingShift } from './types/schedules';
 import { normalizeTaskTextStyle, type TaskTextStyle } from './taskTextStyle';
@@ -2891,8 +2891,8 @@ export async function getZoneFrequencyReport(days: number): Promise<ZoneFrequenc
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
 
-  const todayIso = today.toISOString().slice(0, 10);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const todayIso = formatLocalDateISO(today);
+  const cutoffIso = formatLocalDateISO(cutoff);
 
   const empty: ZoneFrequencyReport = {
     byTm: [],
@@ -3028,14 +3028,14 @@ function graveWeekRange(which: "this-week" | "last-4-weeks"): { from: string; to
   if (which === "this-week") {
     const thu = new Date(thisFri);
     thu.setDate(thisFri.getDate() + 6);
-    return { from: thisFri.toISOString().slice(0, 10), to: thu.toISOString().slice(0, 10) };
+    return { from: formatLocalDateISO(thisFri), to: formatLocalDateISO(thu) };
   }
   // last-4-weeks: 4 complete Fri–Thu weeks ending the day before this Friday
   const to = new Date(thisFri);
   to.setDate(thisFri.getDate() - 1);
   const from = new Date(to);
   from.setDate(to.getDate() - 27);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  return { from: formatLocalDateISO(from), to: formatLocalDateISO(to) };
 }
 
 /**
@@ -3051,8 +3051,8 @@ export async function getZoneDetailReport(reportWindow: ReportWindow): Promise<Z
     const today = new Date();
     const cutoff = new Date(today);
     cutoff.setDate(cutoff.getDate() - reportWindow);
-    from = cutoff.toISOString().slice(0, 10);
-    to = today.toISOString().slice(0, 10);
+    from = formatLocalDateISO(cutoff);
+    to = formatLocalDateISO(today);
   } else {
     ({ from, to } = graveWeekRange(reportWindow));
   }
@@ -3156,8 +3156,8 @@ export async function getTmPlacementHistory(
   const today = new Date();
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
-  const from = cutoff.toISOString().slice(0, 10);
-  const to   = today.toISOString().slice(0, 10);
+  const from = formatLocalDateISO(cutoff);
+  const to   = formatLocalDateISO(today);
 
   const { data: nightRows } = await client
     .from("nights")

@@ -14,6 +14,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -30,17 +31,14 @@ import {
 } from "@/lib/shiftbuilder/dateUtils";
 import { shiftBuilderVersionLabel } from "../version";
 import { GoldHairline } from "../sudo/SudoGlass";
-import { TeamTab } from "../sudo/TeamTab";
-import { ReportsTab } from "../sudo/ReportsTab";
 import { AuditLogTab } from "../sudo/AuditLogTab";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
-import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
-import { GravesDefaultSchedulePage } from "../components/GravesDefaultSchedulePage";
 import {
   SETTINGS_SECTIONS,
   SETTINGS_TABS,
+  TEAM_REDIRECT_TABS,
   type SettingsSection,
   type SettingsTab,
   resolveSettingsTab,
@@ -119,60 +117,29 @@ function SettingsTabPanel({
   activeTab,
   isDark,
   canRunEngine,
-  canManageTeam,
   currentOperator,
   currentNightId,
   weekStart,
-  permissions,
   onDataChanged,
-  onNavigate,
 }: {
   activeTab: SettingsTab;
   isDark: boolean;
   canRunEngine: boolean;
-  canManageTeam: boolean;
   currentOperator: ReturnType<typeof useOpsAuth>["user"];
   currentNightId: string | null;
   weekStart: Date;
-  permissions: ReturnType<typeof useOpsAuth>["permissions"];
   onDataChanged: (tab: SettingsTab, details?: Record<string, unknown>) => void;
-  onNavigate: (tab: SettingsTab) => void;
 }) {
   return (
     <div className="sb-settings-panel" data-theme={isDark ? "dark" : "light"}>
-      {activeTab === "dashboard" && (
-        <DashboardTab
-          onDataChanged={() => onDataChanged("dashboard")}
-          isDark={isDark}
-          currentOperator={currentOperator}
+      {activeTab === "defaults" && (
+        <DefaultsTab
+          onDataChanged={() => onDataChanged("defaults", { area: "defaults_push" })}
           currentNightId={currentNightId}
           weekStart={weekStart}
-          onNavigate={onNavigate}
-          permissions={permissions}
-        />
-      )}
-      {activeTab === "team" &&
-        (canManageTeam ? (
-          <TeamTab
-            onDataChanged={() => onDataChanged("team", { area: "team_update" })}
-            isDark={isDark}
-          />
-        ) : (
-          <InsufficientPermNotice feature="Team Management" isDark={isDark} />
-        ))}
-      {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
-        <UsersTab
-          onDataChanged={() => onDataChanged("users", { area: "user_update" })}
           isDark={isDark}
         />
       )}
-      {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
-        <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
-          Only sudo_admins can manage user privileges.
-        </div>
-      )}
-      {activeTab === "reports" && <ReportsTab isDark={isDark} />}
-      {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}
       {activeTab === "engine" &&
         (canRunEngine ? (
           <EngineConfigTab
@@ -191,20 +158,18 @@ function SettingsTabPanel({
         ) : (
           <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
         ))}
-      {activeTab === "defaults" && (
-        <DefaultsTab
-          onDataChanged={() => onDataChanged("defaults", { area: "defaults_push" })}
-          currentNightId={currentNightId}
-          weekStart={weekStart}
+      {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
+        <UsersTab
+          onDataChanged={() => onDataChanged("users", { area: "user_update" })}
           isDark={isDark}
         />
       )}
-      {activeTab === "gravesSchedule" &&
-        (permissions?.canApplySchedules ? (
-          <GravesDefaultSchedulePage embedded />
-        ) : (
-          <InsufficientPermNotice feature="Graves Default Schedule" isDark={isDark} />
-        ))}
+      {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
+        <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
+          Only sudo_admins can manage user privileges.
+        </div>
+      )}
+      {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}
     </div>
   );
 }
@@ -217,7 +182,6 @@ export function SettingsShell() {
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
 
   const canRunEngine = permissions?.canRunEngine ?? false;
-  const canManageTeam = permissions?.canManageTeam ?? false;
 
   const [activeTab, setActiveTab] = React.useState<SettingsTab>(() =>
     resolveSettingsTab(searchParams.get("tab")),
@@ -232,6 +196,14 @@ export function SettingsShell() {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // People + schedule tools moved to /team — bounce any legacy deep link there.
+  React.useEffect(() => {
+    const raw = searchParams.get("tab");
+    if (raw && raw in TEAM_REDIRECT_TABS) {
+      router.replace(`/shiftbuilder/team?tab=${TEAM_REDIRECT_TABS[raw]}`);
+    }
+  }, [searchParams, router]);
 
   // Keep tab state in sync with ?tab= (back/forward, deep links)
   React.useEffect(() => {
@@ -316,10 +288,9 @@ export function SettingsShell() {
   const isTabDisabled = React.useCallback(
     (tab: SettingsTab) => {
       if (tab === "planner" || tab === "engine") return !canRunEngine;
-      if (tab === "team") return !canManageTeam;
       return false;
     },
-    [canRunEngine, canManageTeam],
+    [canRunEngine],
   );
 
   const formattedDate = `${MONTH_LONG[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
@@ -355,18 +326,29 @@ export function SettingsShell() {
             <p className="sb-settings-eyebrow">OMS BACKEND</p>
             <h1 className="sb-settings-hero-title">Settings</h1>
             <p className="sb-settings-hero-sub">
-              Team, tasks, engine, and roster — the quiet machinery behind every grave deployment.
+              Card defaults, engine, and access — the quiet machinery behind every grave deployment.
+              People &amp; schedule live on the Team page.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push("/shiftbuilder")}
-            className="sb-settings-back-btn sb-interactive"
-          >
-            <ArrowLeft size={15} strokeWidth={2.25} />
-            Shift Builder
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/shiftbuilder/team")}
+              className="sb-settings-back-btn sb-interactive"
+            >
+              <Users size={15} strokeWidth={2.25} />
+              Team
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/shiftbuilder")}
+              className="sb-settings-back-btn sb-interactive"
+            >
+              <ArrowLeft size={15} strokeWidth={2.25} />
+              Shift Builder
+            </button>
+          </div>
         </div>
 
         <nav className="sb-settings-glass-pill" aria-label="Settings sections">
@@ -482,13 +464,10 @@ export function SettingsShell() {
                   activeTab={activeTab}
                   isDark={isDark}
                   canRunEngine={canRunEngine}
-                  canManageTeam={canManageTeam}
                   currentOperator={currentOperator}
                   currentNightId={currentNightId}
                   weekStart={weekStart}
-                  permissions={permissions}
                   onDataChanged={auditedDataChanged}
-                  onNavigate={handleTabSelect}
                 />
               </motion.div>
             </AnimatePresence>

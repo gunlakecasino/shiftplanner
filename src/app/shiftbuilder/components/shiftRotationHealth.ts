@@ -1,8 +1,11 @@
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { isOptionalDeploymentSlot } from "@/lib/shiftbuilder/placement";
+import { ZONE_DEFS, RR_DEFS } from "@/lib/shiftbuilder/constants";
 import {
   collectDeploymentSlotKeys,
+  placementRepeatKey,
+  placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
 } from "./placementPadHelpers";
 import {
@@ -12,13 +15,29 @@ import {
 } from "./placementFitForSlot";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { signalNumber } from "./placementFitScore";
-import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 
 /** Operator target for a healthy grave board before break. */
 export const ROTATION_HEALTH_TARGET = 85;
 
 /** Amber band floor — below target, above this is warning (not green). */
 export const ROTATION_HEALTH_AMBER_MIN = 70;
+
+// === Week repeat-policy tuning (was inline magic numbers) =====================
+/** Base week score when no per-day daily healths are available. */
+export const WEEK_POLICY_FALLBACK_BASE = 92;
+/** Penalty when the worst TM×area repeat this week is exactly 2. */
+export const WEEK_POLICY_REPEAT2_PENALTY = 12;
+/** Penalty at 3 repeats; each repeat beyond 3 adds WEEK_POLICY_REPEAT_STEP more. */
+export const WEEK_POLICY_REPEAT3_PENALTY = 35;
+export const WEEK_POLICY_REPEAT_STEP = 9;
+/** Cap for the max-repeat penalty component. */
+export const WEEK_POLICY_REPEAT_PENALTY_CAP = 55;
+/** Per-violation drag (×2 each) capped here — spreads scores in the 70–95 band. */
+export const WEEK_POLICY_VIOLATION_PENALTY_CAP = 14;
+/** Week score never drops below this floor. */
+export const WEEK_POLICY_FLOOR = 40;
+/** Max total points xAI coverage justification can forgive per (tm, area) violator. */
+export const WEEK_POLICY_XAI_FORGIVENESS_CAP = 15;
 
 export type RotationHealthTier = "unknown" | "red" | "amber" | "green";
 
@@ -142,7 +161,11 @@ export function filterWeeklyHistoryThroughNight(
 }
 
 /**
- * Times a TM appears on slotKey in the grave week through throughIso (inclusive).
+ * Times a TM appears in slotKey's *repeat area* in the grave week through throughIso
+ * (inclusive). Area-merged via placementRepeatKey so MRR8/WRR8 count as the same
+ * restroom — aligned with the engine's prior-3 hard gate, which always merged them.
+ * (Previously exact-key: a TM alternating MRR8/WRR8 all week showed zero repeats
+ * here while the engine hard-blocked them nightly.)
  * Does not double-count tonight when the night is already in the history map.
  */
 export function getTmWeekRepeatForSlotThroughNight(
@@ -156,7 +179,7 @@ export function getTmWeekRepeatForSlotThroughNight(
   if (!weeklyRecentHistory || !tmId) return countTonightIfAssigned ? 1 : 0;
   const records = weeklyRecentHistory.get(tmId) || [];
   const matches = records.filter(
-    (r) => r.slotKey === slotKey && r.nightDate <= throughIso,
+    (r) => placementRepeatKeysMatch(r.slotKey, slotKey) && r.nightDate <= throughIso,
   );
   let count = matches.length;
   if (countTonightIfAssigned && !matches.some((r) => r.nightDate === throughIso)) {
@@ -243,8 +266,6 @@ export function computeShiftRotationHealth(
     draftAssignments?: Record<string, DraftAssignmentRow>;
     /** Recent 7-night history for computing real weekly balance (TM x area repeats). */
     weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
-    /** Optional full ZoneDetailEntry per-TM for this-week (preferred for exact grave week). */
-    weeklyHistories?: Record<string, any>;
     /**
      * Optional per-day daily health percentages (raw from fit verdicts), for insight and per-day
      * displays. The main week average numeric is computed independently from week repeat data for
@@ -287,6 +308,7 @@ export function computeShiftRotationHealth(
 
     const fit = fitBySlot[slotKey];
     if (!fit) continue;
+    if (fit.healthPending) continue; // placeholder verdict while history loads — don't score it
 
     scores.push(slotHealthPoints(fit));
     counts[fit.fitVerdict] += 1;
@@ -317,28 +339,15 @@ export function computeShiftRotationHealth(
   let repeatViolations = 0;
   let xaiRepeatPenaltyReduction = 0;
   let violations: WeekRepeatViolation[] | undefined;
-  const weeklyHist = (options as any)?.weeklyHistories as Record<string, ZoneDetailEntry> | undefined;
+  // F6 (2026-07-02): the old `weeklyHistories` branch was removed. It computed
+  // maxWeeklyRepeat/repeatViolations by *exact* slot key (so MRR8/WRR8
+  // alternation read as zero repeats), never computed weekPolicyPercent, and
+  // had no live callers. All week-repeat math now flows through the single
+  // area-merged builder (buildWeekRepeatData) via the recent-map path below.
   const weeklyRecent = (options as any)?.weeklyRecentHistory as Map<string, Array<{nightDate: string; slotKey: string}>> | undefined;
   let hasWeeklyData = false;
 
-  if (weeklyHist && Object.keys(weeklyHist).length > 0) {
-    // zoneDates already week-bounded by caller (graveWeekRange / this-week report)
-    const tmSlotCounts: Record<string, Record<string, number>> = {};
-    const tmSlotNights: Record<string, Record<string, string[]>> = {};
-    for (const entry of Object.values(weeklyHist)) {
-      for (const [zKey, dates] of Object.entries(entry.zoneDates || {})) {
-        if (!shouldShowPlacementFitChip(zKey)) continue; // only relevant slots for the health metric
-        const count = (dates as string[]).length;
-        // We don't have per-TM id from ZoneDetailEntry shape here in the hist path; the recent map path is preferred for violations list.
-        if (count > maxWeeklyRepeat) maxWeeklyRepeat = count;
-        if (count > 1) repeatViolations++;
-      }
-    }
-    hasWeeklyData = true;
-    // (violations list left undefined for pure hist path; callers using full week recent get the rich list)
-    // Note: numeric weeklyBalance now supports true per-day daily health mean via weekDailyHealths option
-    // (shared builder + distribution penalty). Hist path remains lighter.
-  } else if (weeklyRecent && weeklyRecent.size > 0) {
+  if (weeklyRecent && weeklyRecent.size > 0) {
     hasWeeklyData = true;
 
     // Use the shared pure builder — eliminates duplication with getWeekRepeatViolations
@@ -361,16 +370,19 @@ export function computeShiftRotationHealth(
       const r = row as any;
       const tmId = r?.tmId || (isDraftMode ? r?.proposedTmId : null);
       if (!tmId) continue;
-      const effCount = tmSlotCounts[tmId]?.[sk] || 0;
+      // Counts are keyed by repeat-area (see buildWeekRepeatData) — translate the
+      // assignment's raw slot key before lookup.
+      const areaKey = placementRepeatKey(sk);
+      const effCount = tmSlotCounts[tmId]?.[areaKey] || 0;
       if (effCount <= 1) continue;
-      const signals = r?.provenance?.fairnessSignals || (r as any)?.provenance?.fairnessSignals;
+      const signals = r?.provenance?.fairnessSignals;
       if (signals) {
         const coverage = signalNumber(signals, 'coverage') || 0;
         const repeatCost = signalNumber(signals, 'repeat') || 50;
         const justify = Math.max(0, coverage - repeatCost * 0.6);
-        xaiRepeatPenaltyReduction += Math.min(15, justify / 5);
+        xaiRepeatPenaltyReduction += Math.min(WEEK_POLICY_XAI_FORGIVENESS_CAP, justify / 5);
         // Mark the corresponding violation(s) as having xAI signal for UI (e.g. purple hint in lists).
-        const v = violList.find((vv) => vv.tmId === tmId && vv.slotKey === sk);
+        const v = violList.find((vv) => vv.tmId === tmId && placementRepeatKeysMatch(vv.slotKey, sk));
         if (v) v.hasXaiSignal = true;
       }
     }
@@ -395,25 +407,30 @@ export function computeShiftRotationHealth(
         const vals = Object.values(dailyHealths).filter((v) => typeof v === 'number');
         base = vals.length > 0
           ? roundRotationHealthValue(vals.reduce((a, b) => a + b, 0) / vals.length)
-          : 92;
+          : WEEK_POLICY_FALLBACK_BASE;
       } else {
-        base = 92;
+        base = WEEK_POLICY_FALLBACK_BASE;
       }
 
       let repeatPenalty = 0;
       if (maxWeeklyRepeat >= 3) {
-        repeatPenalty = Math.min(55, 35 + (maxWeeklyRepeat - 3) * 9);
+        repeatPenalty = Math.min(
+          WEEK_POLICY_REPEAT_PENALTY_CAP,
+          WEEK_POLICY_REPEAT3_PENALTY + (maxWeeklyRepeat - 3) * WEEK_POLICY_REPEAT_STEP,
+        );
       } else if (maxWeeklyRepeat === 2) {
-        repeatPenalty = 12;
+        repeatPenalty = WEEK_POLICY_REPEAT2_PENALTY;
       }
       repeatPenalty = Math.max(0, repeatPenalty - xaiRepeatPenaltyReduction);
 
       // Each violation drags policy score — scaled by severity for more spread in the 70–95 band.
       if (repeatViolations > 0) {
-        repeatPenalty += Math.min(14, repeatViolations * 2);
+        repeatPenalty += Math.min(WEEK_POLICY_VIOLATION_PENALTY_CAP, repeatViolations * 2);
       }
 
-      weeklyBalance = roundRotationHealthValue(Math.max(40, base - repeatPenalty));
+      weeklyBalance = roundRotationHealthValue(
+        Math.max(WEEK_POLICY_FLOOR, base - repeatPenalty),
+      );
     }
   }
 
@@ -452,8 +469,12 @@ export function computeShiftRotationHealth(
   return {
     dailyPercent: percent,
     percent: effectivePercentForDisplay,
+    // meetsTarget reads the SAME number the operator sees (the blended headline
+    // %), not the unblended daily. Before this fix the two could disagree — a
+    // board could display 85.2% with meetsTarget:false, or the reverse (F5).
+    // Per decision D2 the 0.7 daily / 0.3 week blend is the authoritative metric.
     meetsTarget: (() => {
-      const n = normalizeRotationHealthPercent(percent);
+      const n = normalizeRotationHealthPercent(effectivePercentForDisplay);
       return n !== null && n >= ROTATION_HEALTH_TARGET;
     })(),
     scoredCount: scores.length,
@@ -468,8 +489,9 @@ export function computeShiftRotationHealth(
   };
 }
 
-/** Pure helper: given the recent 7-night history map and a TM + target slot, return how many times
- * that exact slotKey appears for the TM in the window (this-week / recent repeats).
+/** Pure helper: given the recent 7-night history map and a TM + target slot, return how many
+ * times the TM appears in that slot's *repeat area* in the window (this-week / recent repeats).
+ * Area-merged via placementRepeatKey (MRR8/WRR8 = RR8) to match the engine's hard gate.
  * Does not include "tonight" — caller adds +1 when the current assignment is for this TM+slot.
  */
 export function getTmThisWeekRepeatForSlot(
@@ -479,7 +501,7 @@ export function getTmThisWeekRepeatForSlot(
 ): { count: number; dates: string[] } {
   if (!weeklyRecentHistory || !tmId) return { count: 0, dates: [] };
   const records = weeklyRecentHistory.get(tmId) || [];
-  const matches = records.filter((r) => r.slotKey === targetSlotKey);
+  const matches = records.filter((r) => placementRepeatKeysMatch(r.slotKey, targetSlotKey));
   return {
     count: matches.length,
     dates: matches.map((r) => r.nightDate).slice(-4), // recent few for display
@@ -638,6 +660,7 @@ export function computeDailyHealthPercent(
 
     const fit = fitBySlot[slotKey];
     if (!fit) continue;
+    if (fit.healthPending) continue; // placeholder verdict while history loads — don't score it
 
     scores.push(slotHealthPoints(fit));
     counts[fit.fitVerdict] += 1;
@@ -682,8 +705,10 @@ export function buildWeekRepeatData(
     tmSlotCounts[tmId] = tmSlotCounts[tmId] || {};
     tmSlotNights[tmId] = tmSlotNights[tmId] || {};
     for (const rec of records) {
-      const sk = rec.slotKey;
-      if (!shouldShowPlacementFitChip(sk)) continue; // only main deployment slots
+      if (!shouldShowPlacementFitChip(rec.slotKey)) continue; // only main deployment slots
+      // Aggregate by repeat-area key (MRR8/WRR8 → RR8) so the week policy counts
+      // the same physical area the engine's prior-3 hard gate does.
+      const sk = placementRepeatKey(rec.slotKey);
       tmSlotCounts[tmId][sk] = (tmSlotCounts[tmId][sk] || 0) + 1;
       if (!tmSlotNights[tmId][sk]) tmSlotNights[tmId][sk] = [];
       tmSlotNights[tmId][sk].push(rec.nightDate);
@@ -788,35 +813,45 @@ export function suggestLocalRotationMoves(
 
     // Candidate targets: other slots in same "tier" (Z* stay in zones, RR stay in RR, valid aux) that this TM has 0 on.
     // Only relevant deployment slots — never overlaps (OL-*) or admin (ADM*).
+    // Families derive from the real board defs (ZONE_DEFS / RR_DEFS) — the earlier hardcoded
+    // lists proposed restrooms that don't exist (MRR2–MRR5) and skipped Z9/Z10 entirely.
     const zoneMatch = /^Z\d/.test(slotKey);
     const rrMatch = /^([MW]RR)\d/.test(slotKey);
     const auxMatch = /^SP/.test(slotKey) || /^AUX/.test(slotKey);
 
-    let targetSlot: string | null = null;
-    // Simple heuristic: pick the first slot in the same family that this TM has never taken this week.
-    // (Real spread would use the full 30d pad history; here we use only the current week plan for "within this build".)
     const familySlots = zoneMatch
-      ? ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9SR"].filter((k) => k !== slotKey && shouldShowPlacementFitChip(k))
+      ? ZONE_DEFS.map((z) => z.key)
+          .concat("Z9SR")
+          .filter(
+            (k) =>
+              k !== slotKey &&
+              !isOptionalDeploymentSlot(k) && // Z1/Z2 are manual-only — never suggest them
+              shouldShowPlacementFitChip(k),
+          )
       : rrMatch
-      ? (slotKey.startsWith("M") ? ["MRR1","MRR2","MRR3","MRR4","MRR5","MRR6"] : ["WRR1","WRR2","WRR3","WRR4","WRR5","WRR6"]).filter((k) => k !== slotKey && shouldShowPlacementFitChip(k))
+      ? RR_DEFS.map((d) => `${slotKey.startsWith("M") ? "M" : "W"}RR${d.num}`).filter(
+          (k) => k !== slotKey && shouldShowPlacementFitChip(k),
+        )
       : auxMatch
       ? (auxDefs || []).map((d) => d.key).filter((k) => !k.startsWith("SP") && k !== slotKey && shouldShowPlacementFitChip(k))
       : [];
 
-    for (const cand of familySlots) {
-      if (!thisTmUsed.has(cand)) {
-        targetSlot = cand;
-        break;
-      }
-    }
+    const fromNight = nights[0];
+    // A target is only actionable when the TM hasn't held it this week AND nobody
+    // occupies it on the night we'd move — suggestions the operator can't act on
+    // cost more trust than they're worth.
+    const freshSlots = familySlots.filter((cand) => !thisTmUsed.has(cand));
+    const targetSlot =
+      freshSlots.find(
+        (cand) =>
+          !(occupantsBySlot[cand] || []).some((o) => o.night === fromNight),
+      ) ?? null;
 
     if (targetSlot) {
-      // Pick a plausible night for the move: a night where this TM is already placed on the viol slot, move that instance.
-      const fromNight = nights[0];
       suggestions.push({
         from: { tmId, tmName, slotKey, nightDate: fromNight },
         to: { slotKey: targetSlot },
-        reason: `Gives ${tmName || "TM"} a fresh ${targetSlot} (0× this week on it) while freeing a repeat on ${slotKey}.`,
+        reason: `Gives ${tmName || "TM"} a fresh ${targetSlot} (0× this week, open on ${fromNight}) while freeing a repeat on ${slotKey}.`,
         impact: count,
       });
       continue;

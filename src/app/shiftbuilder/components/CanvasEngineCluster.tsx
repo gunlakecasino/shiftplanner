@@ -7,7 +7,8 @@ import {
   computeWeekAverageHealth,
   GRAVE_WEEK_LABEL,
   ROTATION_HEALTH_TARGET,
-  rotationHealthFloaterColors,
+  rotationHealthTextColor,
+  rotationHealthIconColor,
   formatRotationHealthPercent,
   normalizeRotationHealthPercent,
   type WeekRepeatViolation,
@@ -157,8 +158,14 @@ export function CanvasEngineCluster({
   if (!visible) return null;
 
   const normalizedDaily = normalizeRotationHealthPercent(dailyPercent);
-  const colors = rotationHealthFloaterColors(normalizedDaily);
   const display = formatRotationHealthPercent(normalizedDaily);
+  // On-glass palette: the shell is velvet glass (matching the draft pill + all app
+  // chrome), so text is dark foreground and the health *tier* is carried as an
+  // accent — the big number's ink + a small status dot — not the whole background.
+  const healthInk = rotationHealthTextColor(normalizedDaily);
+  const healthDot = rotationHealthIconColor(normalizedDaily) ?? "#9ca3af";
+  const glassText = "var(--sb-text-1, #1c1c1e)";
+  const glassBorder = "var(--sb-glass-border, rgba(0,0,0,0.1))";
 
   const weekPolicyPercent = health.weekPolicyPercent ?? health.weeklyBalance;
   const weekPolicyDisplay = formatRotationHealthPercent(weekPolicyPercent);
@@ -211,9 +218,9 @@ export function CanvasEngineCluster({
     fontSize: 10,
     fontWeight: 700,
     letterSpacing: "0.05em",
-    border: `1px solid ${colors.border}`,
-    color: colors.text,
-    background: "rgba(0,0,0,0.18)",
+    border: `1px solid ${glassBorder}`,
+    color: glassText,
+    background: "rgba(0,0,0,0.045)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   };
@@ -287,13 +294,14 @@ export function CanvasEngineCluster({
       )}
 
       <div
-        className="flex flex-row items-stretch overflow-hidden rounded shadow-lg"
+        className="flex flex-row items-stretch overflow-hidden rounded-2xl"
         style={{
-          background: colors.bg,
-          border: `1px solid ${colors.border}`,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-          backdropFilter: "blur(6px) saturate(120%)",
-          WebkitBackdropFilter: "blur(6px) saturate(120%)",
+          background: "var(--sb-glass)",
+          border: `1px solid ${glassBorder}`,
+          boxShadow:
+            "inset 0 1px 0 var(--sb-glass-highlight), 0 8px 28px -10px rgba(0,0,0,0.4)",
+          backdropFilter: "var(--sb-glass-blur)",
+          WebkitBackdropFilter: "var(--sb-glass-blur)",
         }}
       >
         {/* Side drawer — actions slide out to the left */}
@@ -306,7 +314,7 @@ export function CanvasEngineCluster({
             paddingLeft: drawerOpen ? 6 : 0,
             paddingRight: drawerOpen ? 4 : 0,
             gap: drawerOpen ? 6 : 0,
-            borderRight: drawerOpen ? `1px solid ${colors.border}` : "none",
+            borderRight: drawerOpen ? `1px solid ${glassBorder}` : "none",
           }}
         >
           {isDraftMode && (
@@ -374,9 +382,9 @@ export function CanvasEngineCluster({
                 ...actionBtnBase,
                 fontSize: 9,
                 padding: "2px 6px",
-                background: "rgba(147,51,234,0.18)",
+                background: "rgba(147,51,234,0.14)",
                 border: "1px solid rgba(147,51,234,0.35)",
-                color: colors.text,
+                color: "#7c3aed",
                 cursor: "pointer",
               }}
             >
@@ -448,7 +456,7 @@ export function CanvasEngineCluster({
           className="flex items-center gap-2 px-4 py-2 text-left transition-opacity hover:opacity-95"
           style={{
             fontFamily: CANVAS_PILL_MONO,
-            color: colors.text,
+            color: glassText,
             background: "transparent",
             border: "none",
             cursor: "pointer",
@@ -466,9 +474,14 @@ export function CanvasEngineCluster({
           </span>
           <span className="flex flex-col items-end gap-0.5 min-w-[140px]">
             <span
-              className="text-[7.5px] font-semibold uppercase tracking-[0.5px] opacity-90"
+              className="flex items-center gap-1 text-[7.5px] font-semibold uppercase tracking-[0.5px] opacity-90"
               style={{ lineHeight: 1, fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
             >
+              <span
+                aria-hidden
+                className="inline-block size-1.5 shrink-0 rounded-full"
+                style={{ background: healthDot, boxShadow: `0 0 5px ${healthDot}` }}
+              />
               Rotation health
             </span>
             {onShowWeekHealthTracker && (
@@ -495,7 +508,7 @@ export function CanvasEngineCluster({
             <span className="flex items-baseline gap-1.5">
               <span
                 className="text-[20px] font-bold tabular-nums leading-none"
-                style={{ fontFamily: CANVAS_PILL_MONO }}
+                style={{ fontFamily: CANVAS_PILL_MONO, color: healthInk }}
                 title="Tonight fit — granular spread/swap quality for this night"
               >
                 {display}
@@ -506,6 +519,22 @@ export function CanvasEngineCluster({
               >
                 tonight
               </span>
+              {/* Coverage counter — the % scores placed TMs only, so a green number on a
+                  half-empty board is a lie of omission. Gaps get their own visible count. */}
+              {health.openGaps > 0 && (
+                <span
+                  className="rounded px-1 py-px text-[8px] font-bold tabular-nums uppercase tracking-[0.04em]"
+                  style={{
+                    fontFamily: CANVAS_PILL_MONO,
+                    lineHeight: 1.2,
+                    background: "rgba(255,59,48,0.22)",
+                    border: "1px solid rgba(255,59,48,0.4)",
+                  }}
+                  title={`${health.openGaps} required slot${health.openGaps === 1 ? "" : "s"} unfilled — the fit % scores placed TMs only and does not include these`}
+                >
+                  {health.openGaps} open
+                </span>
+              )}
             </span>
             <span
               className="flex items-baseline gap-2 text-[10px] font-semibold tabular-nums opacity-90"

@@ -1,4 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDragFitTier } from "./dragFit";
 
 /**
  * useSlotDnd
@@ -55,5 +56,9 @@ export function useSlotDnd(
   const incomingFromOther =
     isOver && active && active.data.current?.type !== undefined &&
     !(active.data.current?.type === "assigned" && active.data.current?.fromSlot === slotKey);
-  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM };
+  // Fit halo verdict for the in-flight TM drag (null outside a drag — see dragFit.ts).
+  const dragFitTier = useDragFitTier(slotKey);
+  const dragFitClass =
+    dragFitTier && !isDragging && !disabled ? `sb-dragfit-${dragFitTier}` : "";
+  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM, dragFitClass };
 }

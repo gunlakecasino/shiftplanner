@@ -99,19 +99,55 @@ Each zone has a **fixed identity** used consistently across the Golden:
 - Drag feedback and hover states should be subtle so they don't fight the print aesthetic.
 - Source badges ("M" for manual, "E" for engine) and lock indicators should feel like small stamps on the card, not loud UI.
 
+### 8a. Fit Halos (drag-time verdicts) — shipped July 2026
+
+While a TM (roster chip or assigned card) is in flight, every deployment drop target
+wears a verdict ring + corner glyph badge so the operator can survey the board
+*before* dropping:
+
+| Tier | Ring | Glyph | Meaning |
+|------|------|-------|---------|
+| great | green | ✓ | eligible, no same-slot repeat this week |
+| ok | gold | ~ | eligible, one same-slot night this week |
+| poor | orange | ! | eligible, 2+ same-slot nights this week (repeat streak) |
+| blocked | red + dimmed | ✕ | hard-ineligible (gender for RR, overlap pool, custom rules) |
+
+Rules: color is never the only channel (glyph is mandatory); halos are transient
+(drag-only) so they never fight the print aesthetic at rest; drops on "blocked"
+remain allowed — server guards stay the hard gate. Source: `lib/shiftbuilder/dragFit.ts`,
+rendered via `useSlotDnd` → `sb-dragfit-*` classes in `globals.css`.
+
+### 8b. Draft Ambiance — shipped July 2026
+
+Whenever Draft Mode holds unapplied changes, the scale viewport wears a gently
+breathing gold inner frame (`sb-draft-frame-active`) and a bottom-center
+`DraftStatusPill` reads "Draft — N changes, nothing live yet" with
+**Apply to Live** / **Discard** shortcuts (same guarded handlers as the nav —
+never a second mutation path). Static under `prefers-reduced-motion`.
+
+Microcopy register for consequential actions: name the stakes, never bare OK/Cancel —
+e.g. "Apply 7 draft changes to the live board? This is the real one — TMs will see it
+immediately, and it can't be auto-undone."
+
 ---
 
-## Current Gaps (as of May 2026)
+## Current Gaps (updated July 2026)
 
-- No per-zone icons in labels
-- No top-right status badges on cards
-- Location text is single-line and lacks symbols
-- RR cards lack clean internal "MEN'S / WOMEN'S" visual split
+Shipped since the May audit: per-zone icons in labels (`ZONE_ICONS`), top-right
+status badges (`PlacementFitChip` + break pill), RR internal "WOMEN'S / MEN'S"
+split (`RRSideShell`), fit halos (8a), draft ambiance (8b).
+
+Still open:
+
+- Location text is single-line and lacks the Golden's small symbols (□, ♦)
 - Header is missing the big left mark and precise pill/dot treatment
-- Card internal padding and typography not yet matching Golden density
+- Card internal padding and typography not yet fully matching Golden density
+- RR side header glyph is a uniform "◆" — Golden uses per-RR accents only, so this
+  is acceptable, but revisit if per-side glyphs would aid scanning
 
 ---
 
-**Next Work**: Phase 2 — Card System Overhaul (icons, badges, RR split, richer location text) using this spec as the source of truth.
+**Next Work**: Golden header block (big day numeral, day-color pills, group dots) and
+location-line typography pass, using this spec as the source of truth.
 
 This spec should be updated whenever we discover new details from the Golden PDF.

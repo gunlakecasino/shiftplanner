@@ -2423,6 +2423,101 @@ body {
   opacity: 0.5;
 }
 
+/* === Fit Halos — drag-time placement verdicts (see lib/shiftbuilder/dragFit.ts) ===
+   While a TM is being dragged, every drop target wears its verdict so the operator
+   can survey the whole board before dropping. Ring color + corner glyph badge, so
+   color is never the only channel. No !important on the rings: the drop-target-active
+   gold ring (below) intentionally wins while hovering a specific card — the glyph
+   badge stays visible so the verdict survives hover. Transient (drag-only), so it
+   never fights the print aesthetic at rest. */
+.sb-dragfit-great,
+.sb-dragfit-ok,
+.sb-dragfit-poor,
+.sb-dragfit-blocked {
+  position: relative;
+}
+/* !important beats the card's resting shadow (higher-specificity .dark/.sb-builder-stage
+   rules); drop-target-active still wins on hover — it is both !important and more specific. */
+.sb-dragfit-great {
+  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.5), 0 6px 18px -10px rgba(52, 199, 89, 0.45) !important;
+}
+.sb-dragfit-ok {
+  box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.48), 0 6px 18px -10px rgba(255, 204, 0, 0.4) !important;
+}
+.sb-dragfit-poor {
+  box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.5), 0 6px 18px -10px rgba(255, 149, 0, 0.4) !important;
+}
+.sb-dragfit-blocked {
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.34) !important;
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+/* Corner glyph badge — the non-color channel. ✓ great · ~ ok · ! poor · ✕ blocked */
+.sb-dragfit-great::after,
+.sb-dragfit-ok::after,
+.sb-dragfit-poor::after,
+.sb-dragfit-blocked::after {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.96);
+  pointer-events: none;
+}
+.sb-dragfit-great::after   { content: "✓"; color: #1f9d4d; border: 1.5px solid rgba(52, 199, 89, 0.8); }
+.sb-dragfit-ok::after      { content: "~"; color: #a07f00; border: 1.5px solid rgba(255, 204, 0, 0.85); }
+.sb-dragfit-poor::after    { content: "!"; color: #b25e00; border: 1.5px solid rgba(255, 149, 0, 0.85); }
+.sb-dragfit-blocked::after { content: "✕"; color: #c22d24; border: 1.5px solid rgba(255, 59, 48, 0.7); }
+.dark .sb-dragfit-great::after,
+.dark .sb-dragfit-ok::after,
+.dark .sb-dragfit-poor::after,
+.dark .sb-dragfit-blocked::after {
+  background: rgba(28, 28, 30, 0.94);
+}
+
+/* === Draft Ambiance — ambient gold frame while unapplied draft changes exist ===
+   Pairs with DraftStatusPill (bottom-center). Breathes gently; static under
+   prefers-reduced-motion. pointer-events: none — purely ambient. */
+.sb-draft-frame-active {
+  position: relative;
+}
+.sb-draft-frame-active::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: 60;
+  border-radius: 18px;
+  border: 2px solid var(--sb-gold-border);
+  box-shadow:
+    inset 0 0 28px -18px var(--sb-gold),
+    0 0 0 1px var(--sb-gold-tint);
+  pointer-events: none;
+  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+}
+@keyframes sb-draft-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+.sb-draft-pill-dot {
+  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-draft-frame-active::after,
+  .sb-draft-pill-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 /* Builder drop targets — lively gold ring */
 .builder-workspace .assignment-card.drop-target-active,
 .builder-workspace .drop-target-active {

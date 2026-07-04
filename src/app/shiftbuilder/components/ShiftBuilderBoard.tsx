@@ -261,13 +261,19 @@ export interface ShiftBuilderBoardProps {
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
-  /** Rotation health side drawer engine controls (clear + run xAI/rotation engine). Passed from orchestrator / cluster. */
+  /** Rotation health orb + unified engine drawer (Run Engine, Optimize Tonight, Clear). */
   canRunEngine?: boolean;
+  canEditAssignments?: boolean;
   onRunXaiEngine?: () => void;
+  onDeepOptimize?: () => void;
   onClearBoard?: () => void;
   engineRunning?: boolean;
+  deepOptimizeRunning?: boolean;
+  deepOptimizeTick?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldProgressTick | null;
+  onCancelDeepOptimize?: () => void;
   onApplyDraft?: () => void;
   onDiscardDraft?: () => void;
+  showDraftStatusPill?: boolean;
   draftGrokExplanation?: string;
 
 }
@@ -382,11 +388,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onWeekHealthDismiss,
 
   canRunEngine,
+  canEditAssignments,
   onRunXaiEngine,
+  onDeepOptimize,
   onClearBoard,
   engineRunning,
+  deepOptimizeRunning,
+  deepOptimizeTick,
+  onCancelDeepOptimize,
   onApplyDraft,
   onDiscardDraft,
+  showDraftStatusPill,
   draftGrokExplanation,
   draftBreakdownProp,
   draftGrokReasoningProp,
@@ -1964,6 +1976,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           selectedDayDateKey={selectedDayDateKeyProp ?? currentIso}
           weekHealthLoading={weekHealthLoading}
           weeklyRecentHistory={weeklyRecentHistory}
+          canRunEngine={canRunEngine}
+          canEditAssignments={canEditAssignments}
+          isCurrentNightLocked={isCurrentNightLocked}
+          onRunXaiEngine={onRunXaiEngine}
+          onDeepOptimize={onDeepOptimize}
+          onClearBoard={onClearBoard}
+          engineRunning={engineRunning}
+          deepOptimizeRunning={deepOptimizeRunning}
+          deepOptimizeTick={deepOptimizeTick}
+          onCancelDeepOptimize={onCancelDeepOptimize}
+          onApplyDraft={onApplyDraft}
+          onDiscardDraft={onDiscardDraft}
+          showDraftStatusPill={showDraftStatusPill}
         />
       )}
 

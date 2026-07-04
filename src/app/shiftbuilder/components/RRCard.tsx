@@ -120,7 +120,7 @@ const RRSide: React.FC<{
   placementTrail,
 }) => {
   const a = assignment || {};
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     slotKey, "rr", { tmId: a.tmId, tmName: a.tmName },
   );
 
@@ -161,7 +161,7 @@ const RRSide: React.FC<{
       {...(hasTM && !isLocked ? listeners : {})}
       {...(hasTM && !isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       <div
         className={`sb-card-assign-zone min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}

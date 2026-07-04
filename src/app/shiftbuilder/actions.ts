@@ -45,6 +45,54 @@ export type GrokContext = {
 };
 
 /**
+ * Unified engine AI stage (provider-agnostic). The client runs the deterministic
+ * pipeline locally, then calls this to get the AI's slot-level override proposals.
+ * Runs server-side so the API key never touches the browser. No tools — the brief
+ * already carries the candidate previews, scores, and rotation health the model
+ * needs; the client re-validates every override through the guard, so an illegal
+ * or empty response is only ever a no-op (never a regression).
+ */
+export async function runEngineAiStage(
+  system: string,
+  prompt: string,
+  opts?: {
+    provider?: "xai" | "anthropic";
+    reasoningEffort?: "none" | "low" | "medium" | "high";
+  },
+): Promise<{
+  overrides: Array<{ slotKey: string; tmId: string; rationale: string }>;
+  notes?: string;
+  usage?: { inputTokens: number; outputTokens: number; model: string; reasoningEffort: string };
+  error?: string;
+}> {
+  try {
+    const { createAiProvider } = await import("@/lib/shiftbuilder/engine/ai/factory");
+    const { AiNightOutputSchema } = await import("@/lib/shiftbuilder/engine/ai/schemas");
+    const provider = createAiProvider({ provider: opts?.provider });
+    const effort = opts?.reasoningEffort ?? "high";
+    const { output, usage } = await provider.completeStructured({
+      system,
+      prompt,
+      schema: AiNightOutputSchema,
+      reasoningEffort: effort,
+      maxTokens: 2000,
+    });
+    return {
+      overrides: output.overrides ?? [],
+      notes: output.notes,
+      usage: {
+        inputTokens: usage.promptTokens,
+        outputTokens: usage.completionTokens,
+        model: provider.id === "anthropic" ? "claude-fable-5" : "grok-4.3",
+        reasoningEffort: effort,
+      },
+    };
+  } catch (e: any) {
+    return { overrides: [], error: e?.message || "AI stage failed" };
+  }
+}
+
+/**
  * Legacy text-only flow (still used as fallback / for the simple button).
  */
 export async function askGrokForShiftSuggestions(context: GrokContext): Promise<string> {

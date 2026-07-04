@@ -37,6 +37,8 @@ import {
   BookOpen,
   Copy,
   Printer,
+  Wand2,
+  ClipboardList,
 } from "lucide-react";
 
 export interface DayItem {
@@ -93,6 +95,10 @@ export interface FloatingNavProps {
   onLogout?: () => void;
   onOpenSettings?: (tab?: string) => void;
   onRunEngine?: () => void;
+  /** Optimize tonight's board — same flow as the rotation-health engine drawer. */
+  onDeepOptimize?: () => void;
+  engineRunning?: boolean;
+  deepOptimizeRunning?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
   onRefreshDay?: () => void;
@@ -158,6 +164,9 @@ export default function FloatingNav(props: FloatingNavProps) {
     onLogout,
     onOpenSettings,
     onRunEngine,
+    onDeepOptimize,
+    engineRunning = false,
+    deepOptimizeRunning = false,
     onClearDay,
     onRefreshDay,
     refreshDayBusy = false,
@@ -187,12 +196,18 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
   const canAccessReports = permissions?.canAccessReports ?? false;
+  const canAccessTasks = permissions?.canAccessTasks ?? false;
+  const canManageTeam = permissions?.canManageTeam ?? false;
+  const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
   const showDraftTools = canSeeDraftData && canEditAssignments;
   const showPublishControls = canPublish;
   const showEngineTools = canRunEngine;
+  const engineBusy = engineRunning || deepOptimizeRunning;
   const showAdminLinks = canAccessSudo;
   const showReportsLink = canAccessReports;
+  const showProjectsLink = canAccessTasks;
+  const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -725,6 +740,26 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Settings
                   </button>
                 )}
+                {showTeamLink && (
+                  <Link
+                    href="/shiftbuilder/team"
+                    className={menuItemClass}
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <Users size={14} />
+                    Team
+                  </Link>
+                )}
+                {showProjectsLink && (
+                  <Link
+                    href="/shiftbuilder/projects"
+                    className={menuItemClass}
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <ClipboardList size={14} />
+                    Projects
+                  </Link>
+                )}
                 {showReportsLink && (
                   <Link
                     href="/shiftbuilder/reports"
@@ -761,21 +796,54 @@ export default function FloatingNav(props: FloatingNavProps) {
 
             {moreOpen && (
               <div
-                className={`absolute right-0 top-full mt-2 w-56 z-[70] ${menuPanelClass}`}
+                className={`absolute right-0 top-full mt-2 w-64 z-[70] ${menuPanelClass}`}
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Engine & Maintenance */}
+                {showEngineTools && (onRunEngine || onDeepOptimize) && (
+                  <div
+                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
+                  >
+                    Engine
+                  </div>
+                )}
                 {showEngineTools && onRunEngine && (
                   <button
                     type="button"
                     className={menuItemClass}
+                    disabled={engineBusy}
                     onClick={() => {
                       onRunEngine();
                       setMoreOpen(false);
                     }}
                   >
                     <Sparkles size={14} /> Run Engine
+                    {engineRunning && (
+                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
+                    )}
+                  </button>
+                )}
+                {showEngineTools && onDeepOptimize && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    disabled={engineBusy}
+                    onClick={() => {
+                      onDeepOptimize();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Wand2 size={14} className="shrink-0" />
+                    <span className="flex min-w-0 flex-col items-start leading-tight">
+                      <span className="truncate">Optimize Tonight</span>
+                      <span className="truncate text-[10px] font-normal opacity-60">
+                        Rotation-first · ~10s · Safe Draft
+                      </span>
+                    </span>
+                    {deepOptimizeRunning && (
+                      <span className="ml-auto text-[10px] opacity-60">…</span>
+                    )}
                   </button>
                 )}
                 {showDraftTools && onClearDay && (
@@ -928,14 +996,14 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
 
                 {/* Admin & Schedule */}
-                {showAdminLinks && (
+                {showTeamLink && (
                   <Link
-                    href="/shiftbuilder/graves-schedule"
+                    href="/shiftbuilder/team?tab=schedule"
                     className={menuItemClass}
                     onClick={() => setMoreOpen(false)}
                   >
                     <CalendarDays size={14} />
-                    Graves Default Schedule
+                    Graves Schedule
                   </Link>
                 )}
 

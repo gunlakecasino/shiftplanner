@@ -1,26 +1,18 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { QueryProvider } from "../providers";
-import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { BuilderLoadingShell } from "../components/builderPrimitives";
 
-const GravesDefaultSchedulePage = dynamic(
-  () =>
-    import("../components/GravesDefaultSchedulePage").then((m) => ({
-      default: m.GravesDefaultSchedulePage,
-    })),
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
+/**
+ * The graves default schedule now lives on the /team page (Graves Schedule tab).
+ * Keep this route as a redirect so old links / bookmarks still resolve.
+ */
+export default function GravesScheduleRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/shiftbuilder/team?tab=schedule");
+  }, [router]);
 
-export default function GravesScheduleRoute() {
-  return (
-    <QueryProvider>
-      <PostPinRouteGuard>
-        <GravesDefaultSchedulePage />
-      </PostPinRouteGuard>
-    </QueryProvider>
-  );
+  return <BuilderLoadingShell label="REDIRECTING" sublabel="Graves schedule moved to Team" />;
 }

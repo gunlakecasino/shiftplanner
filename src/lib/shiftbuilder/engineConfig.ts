@@ -36,11 +36,26 @@ export interface EngineWeights {
   cross_week_rotation?: number;
   weekly_load_balance?: number;
   prior_run_continuity?: number;
-  skill_stretch_reward?: number;
-  sweeper_rotation_penalty?: number;
 
-  /** Strongly incentivizes filling slots early in the declared PLACEMENT_ORDER */
+  // skill_stretch_reward + sweeper_rotation_penalty were removed 2026-07-02 (F11,
+  // decision D3): both were tunable in config but implemented by no signal — dead
+  // dials with no data source (there is no sweeper flag on tm_profiles today). DB
+  // rows carrying these keys are harmless (EngineWeights is non-exact and they are
+  // simply ignored). Reintroduce with a real signal + data source if ever needed.
+
+  /**
+   * @deprecated Retired from scoring (2026-07-01): the planner walks PLACEMENT_ORDER
+   * slot-by-slot, so a per-slot constant can never change a candidate pick — it only
+   * inflated Why?-panel totals. Kept in the type so existing config rows still parse.
+   */
   order_priority?: number;
+
+  /**
+   * Absolute penalty (positive number) applied when a candidate hits the RR
+   * side-family soft repeat (different RR, same side, in the prior-3 window).
+   * Deliberately large — a near-hard deterrent that coverage can still override.
+   */
+  rr_side_family_repeat?: number;
 }
 
 export interface EngineThresholds {
@@ -99,11 +114,12 @@ export const DEFAULT_WEIGHTS: Required<EngineWeights> = {
   cross_week_rotation: 0.5,
   weekly_load_balance: 0.5,
   prior_run_continuity: 0.4,
-  skill_stretch_reward: 0.3,
-  sweeper_rotation_penalty: 0.3,
 
-  // Strong incentive to fill high-priority slots first (per operator-specified order)
+  // Deprecated — no longer read by scoring (see EngineWeights.order_priority).
   order_priority: 2.5,
+
+  // Was hardcoded at 48 inside scoring.ts; now operator-tunable like every other weight.
+  rr_side_family_repeat: 48,
 };
 
 export const DEFAULT_THRESHOLDS: Required<EngineThresholds> = {

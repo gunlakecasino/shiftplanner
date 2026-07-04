@@ -92,7 +92,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
   const accent = getOverlapAccent(slotKey);
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     slotKey,
     "overlap",
     slotTm,
@@ -139,7 +139,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       data-slot-key={slotKey}
       className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl touch-none ${
         isOver ? "drop-target-active" : ""
-      } ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
+      } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
         isDimmed ? "sb-weekly-dim" : ""
       } ${isFocused ? "sb-weekly-highlight" : ""} ${
         showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""

@@ -137,6 +137,9 @@ import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
 import { useAuxLayout } from "./hooks/useAuxLayout";
 import { useDayNavigation } from "./hooks/useDayNavigation";
 import { useEngineRunner } from "./hooks/useEngineRunner";
+import { useTimefoldOptimize } from "./hooks/useTimefoldOptimize";
+import { TimefoldResultsSheet } from "./components/timefold/TimefoldResultsSheet";
+import type { TimefoldProposal } from "@/lib/shiftbuilder/timefold/timefoldTypes";
 import { useNotes } from "./hooks/useNotes";
 import { usePrintManager } from "./hooks/usePrintManager";
 import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
@@ -194,6 +197,7 @@ import VirtualRosterList from "./components/VirtualRosterList";
 import InteractiveStage from "./components/InteractiveStage";
 import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/ShiftBuilderBoard";
 import { BuilderPinnedFooter } from "./components/BuilderPinnedFooter";
+import EngineThoughtProcess from "./components/EngineThoughtProcess";
 import PlacementPad from "./components/PlacementPad";
 import { rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
@@ -239,6 +243,8 @@ import {
   nightIsoFromDate,
   shouldShowPlacementFitChip,
 } from "./components/placementPadHelpers";
+import { DragFitContext, computeDragFitMap } from "@/lib/shiftbuilder/dragFit";
+import DraftStatusPill from "./components/DraftStatusPill";
 import {
   allWeekPlacementHistoriesCached,
   ensureWeekPlacementHistories,
@@ -893,6 +899,8 @@ function AuthedShiftBuilder() {
     label?: string;
     fromSlot?: string;
     isDuplicate?: boolean;
+    /** TM identity for fit-halo verdicts during tm/assigned drags (see dragFit.ts). */
+    tmId?: string;
   } | null>(null);
 
   // Ref to track current drag kind during the gesture (avoids stale closure in onDragEnd
@@ -1280,6 +1288,84 @@ function AuthedShiftBuilder() {
   const upsertDraftSlot = engineUpsertDraftSlot;
   const applyDraftMoveOrSwap = engineApplyDraftMoveOrSwap;
 
+  // === Optimize Tonight (in-process deep optimizer) ===
+  // Backed by timefoldLocalSolver.ts; progress + controls live on RotationHealthFloater.
+  const timefold = useTimefoldOptimize();
+  const [timefoldSheetOpen, setTimefoldSheetOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (timefold.phase === "results") setTimefoldSheetOpen(true);
+  }, [timefold.phase]);
+
+  // startDeepOptimize is defined further down (after plannedThisWeekRecentHistory)
+  // so the local solver can receive the full board context — see that definition.
+
+  /**
+   * Lands an entire Timefold proposal into a fresh Draft, mirroring
+   * applyGrokSuggestions' shape: ensure Draft Mode, build the diff map,
+   * commit it, and record one atomic history entry so undo/audit behave
+   * exactly like every other draft-producing entry point.
+   */
+  const applyTimefoldProposal = React.useCallback(
+    (proposal: TimefoldProposal, selectedDiffs?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldSlotDiff[]) => {
+      if (isCurrentNightLocked) {
+        showToast("This day is locked — cannot import optimize results", "error");
+        return;
+      }
+
+      // Triage: the sheet can hand us a subset of the proposal's diffs
+      // (e.g. accept the fills + repeat fixes, skip the neutral shuffle).
+      const diffsToApply = selectedDiffs && selectedDiffs.length > 0 ? selectedDiffs : proposal.diffs;
+
+      timefold.markImporting();
+
+      if (!isDraftMode) {
+        setIsDraftMode(true);
+        setDraftAssignments({});
+      }
+
+      const before = {
+        assignments: { ...assignments },
+        auxDefs: [...auxDefs],
+        draft: { ...draftAssignments },
+      };
+
+      const newDraft: Record<string, any> = { ...draftAssignments };
+      diffsToApply.forEach((diff) => {
+        if (diff.proposedTmId) {
+          newDraft[diff.slotKey] = {
+            proposedTmId: diff.proposedTmId,
+            proposedTmName: diff.proposedTmName || diff.proposedTmId,
+            previousTmId: diff.previousTmId ?? undefined,
+            previousTmName: diff.previousTmName ?? undefined,
+          };
+        } else if (diff.previousTmId) {
+          newDraft[diff.slotKey] = {
+            proposedTmId: "",
+            proposedTmName: "",
+            previousTmId: diff.previousTmId,
+            previousTmName: diff.previousTmName ?? undefined,
+            proposedClear: true,
+          };
+        }
+      });
+
+      setDraftAssignments(newDraft);
+      const partial = diffsToApply.length !== proposal.diffs.length;
+      pendingHistoryRef.current = {
+        description: `Optimize Tonight — imported "${proposal.title}" (${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"})`,
+        before,
+      };
+
+      timefold.markImported();
+      showToast(
+        `Imported ${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"} to Draft — review and Save All Draft when ready`,
+        "success",
+      );
+    },
+    [isCurrentNightLocked, showToast, timefold, isDraftMode, setIsDraftMode, assignments, auxDefs, draftAssignments],
+  );
+
   const applyDraft = async () => {
     const draft = useShiftBuilderStore.getState().draftAssignments;
     const draftEntries = Object.entries(draft);
@@ -1289,7 +1375,11 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    if (!confirm("Apply the draft assignments and save them permanently? This cannot be undone automatically.")) {
+    const changeCount = draftEntries.length;
+    if (!confirm(
+      `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board? ` +
+      `This is the real one — TMs will see it immediately, and it can't be auto-undone.`,
+    )) {
       return;
     }
 
@@ -2067,6 +2157,52 @@ function AuthedShiftBuilder() {
     }
     return result;
   }, [DAY_DEFS, selectedDayIndex, assignments, storeAssignments, liveAssignVersion, currentNight?.queryClient]);
+
+  // Deep Optimize entry point — feeds the in-process local solver the full board
+  // context (profiles, week history, preferences, skill/difficulty, schedule gate)
+  // so it optimizes the real objective hierarchy: coverage > rotation > preferences > skill.
+  // Defined here (not with the timefold hook above) because several context pieces
+  // are declared between there and here.
+  const startDeepOptimize = React.useCallback(() => {
+    if (!canRunEngine) {
+      showToast("Insufficient privileges — you cannot run Optimize Tonight", "error");
+      return;
+    }
+    if (isCurrentNightLocked) {
+      showToast("This day is locked — Optimize Tonight is disabled", "error");
+      return;
+    }
+    timefold.start({
+      nightId: nightId ?? null,
+      dateLabel: `${selectedDay.name} · ${selectedDay.date.toLocaleDateString()}`,
+      assignments,
+      auxDefs,
+      roster: deferredAvailableGraveRoster,
+      members: effectiveRealRoster as Array<Record<string, unknown>>,
+      currentIso: formatLocalDateISO(selectedDay.date),
+      weeklyRecentHistory: plannedThisWeekRecentHistory,
+      scheduledTmIds: effectiveScheduledTmIdsTonight,
+      preferencesByTm: tmPreferencesByTm,
+      skillScores: tmSkillScores,
+      slotDifficulty,
+    });
+  }, [
+    canRunEngine,
+    isCurrentNightLocked,
+    showToast,
+    timefold,
+    nightId,
+    selectedDay,
+    assignments,
+    auxDefs,
+    deferredAvailableGraveRoster,
+    effectiveRealRoster,
+    plannedThisWeekRecentHistory,
+    effectiveScheduledTmIdsTonight,
+    tmPreferencesByTm,
+    tmSkillScores,
+    slotDifficulty,
+  ]);
 
   // Data for the weekly overview on the sheet (built from live assignments across the week days).
   // This feeds the print-preview style weekly table directly on the artboard (replacing the old side panel).
@@ -3488,11 +3624,17 @@ function AuthedShiftBuilder() {
 
   React.useEffect(() => {
     setPickerScheduleEpoch((e) => e + 1);
+    // 30-night placement-history spread/"days since" data is keyed by calendar date server-side;
+    // without this, a session left open across a day boundary (same TM roster set, so the
+    // tmIdsKey-based fetch guard in usePlacementFitMap never re-fires) would keep showing
+    // pre-rollover history until something else happened to change the roster set.
+    setFitHistoryRefreshEpoch((e) => e + 1);
   }, [selectedDay.date]);
 
   React.useEffect(() => {
     idleResumeExtraRef.current = () => {
       setPickerScheduleEpoch((e) => e + 1);
+      setFitHistoryRefreshEpoch((e) => e + 1);
     };
   });
 
@@ -3997,6 +4139,184 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             })
           : rosterForEngine;
 
+        // ── Unified Placement Intelligence System (opt-in, behind a local flag) ──
+        // Default OFF: the live board runs the legacy path below untouched. When
+        // enabled (localStorage sb_unified_engine="1"), the whole run — coverage
+        // planner, rotation-health optimizer, guard — flows through the unified
+        // engine and feeds Draft Mode via the same applyPlannerResultAsDraft seam,
+        // so the board, Why? panel, and per-card provenance render with no UI work.
+        // ── Unified Placement Intelligence System — now the DEFAULT engine path.
+        // Opt out with localStorage sb_unified_engine="0". Wrapped in try/catch:
+        // any runtime error falls through to the legacy planner below, so the
+        // board is never left broken.
+        const unifiedEngineOff =
+          typeof window !== "undefined" &&
+          window.localStorage?.getItem("sb_unified_engine") === "0";
+        if (!unifiedEngineOff) {
+          try {
+            console.info("[engine] unified pipeline running", { forceXai: !!options?.forceXai });
+            const {
+              runNightEngineFromClientWithContext,
+              nightResultToLegacyDraft,
+              nightResultExplanation,
+              nightResultToThoughtProcess,
+            } = await import("@/lib/shiftbuilder/engine/adapters");
+            const { yieldToMain: yieldUnified } = await import("@/lib/shiftbuilder/yieldToMain");
+            await yieldUnified();
+
+            // Supervisor Brain — fail-soft (empty knowledge = engine unchanged).
+            const opsKnowledge = await import("@/lib/shiftbuilder/opsKnowledge/data")
+              .then((m) => m.loadOpsKnowledge())
+              .catch(() => undefined);
+
+            const engineInputs = {
+              nightIso: formatLocalDateISO(selectedDay.date),
+              config: engineConfig,
+              auxDefs,
+              members: planningRoster as Array<Record<string, unknown>>,
+              scheduledTmIds: scheduledSet,
+              assignments,
+              histories: effectiveWeekHistories,
+              weeklyRecentHistory: plannedThisWeekRecentHistory,
+              zoneMatrix: tmZoneMatrix,
+              skillScores: tmSkillScores,
+              slotDifficulty,
+              preferencesByTm: tmPreferencesByTm,
+              pairAffinitiesByTm: tmPairAffinitiesByTm,
+              accommodationsByTm: tmAccommodationsByTm,
+              knowledge: opsKnowledge,
+            };
+            const { result: deterministic, ctx: engineCtx } =
+              runNightEngineFromClientWithContext(engineInputs, {
+                mode: "no-ai",
+                preserve: options?.forceXai ? "locked-only" : "all-existing",
+              });
+            await yieldUnified();
+
+            let finalResult = deterministic;
+            let aiInfo:
+              | import("@/lib/shiftbuilder/engine/adapters").EngineThoughtAi
+              | undefined;
+
+            // AI refinement — server-side provider call (API key stays off the
+            // browser). The guard re-validates every override client-side.
+            const wantAi =
+              options?.useTools !== false &&
+              (!!options?.forceXai || engineConfig.placementMethod === "grok-hybrid");
+            if (wantAi) {
+              setEngineRunPhase("xai");
+              try {
+                const { buildNightBrief, AI_SYSTEM_PROMPT } = await import(
+                  "@/lib/shiftbuilder/engine/ai/briefs"
+                );
+                const { validateAiDraft } = await import(
+                  "@/lib/shiftbuilder/engine/ai/guard"
+                );
+                const { runEngineAiStage } = await import("./actions");
+                // Few-shot training memory — the supervisor's past accept/reject calls.
+                const recentFeedback = await import(
+                  "@/lib/shiftbuilder/opsKnowledge/feedback"
+                )
+                  .then((m) => m.loadRecentFeedback(40))
+                  .catch(() => []);
+                const brief = buildNightBrief(engineCtx, deterministic, recentFeedback);
+                const aiOut = await runEngineAiStage(AI_SYSTEM_PROMPT, brief, {
+                  reasoningEffort: engineConfig.grokReasoningEffort,
+                });
+                if (aiOut.usage) {
+                  try {
+                    useShiftBuilderStore.getState().addAiUsage(aiOut.usage);
+                    updateOpsStatusBarContent?.();
+                  } catch {
+                    /* ignore usage tracking errors */
+                  }
+                }
+                const guarded = validateAiDraft(
+                  engineCtx,
+                  deterministic.draft,
+                  aiOut.overrides ?? [],
+                );
+                const placedIds = new Set(
+                  Object.values(guarded.draft).map((p) => p.tmId),
+                );
+                finalResult = {
+                  ...deterministic,
+                  draft: guarded.draft,
+                  unassignedTmIds: engineCtx.roster
+                    .filter((t) => !placedIds.has(t.id))
+                    .map((t) => t.id),
+                };
+                aiInfo = {
+                  provider: aiOut.usage?.model?.includes("claude") ? "Fable" : "Grok",
+                  accepted: guarded.accepted.map((a) => ({
+                    slot: a.slotKey,
+                    tmId: a.tmId,
+                    tmName: engineCtx.rosterById.get(a.tmId)?.name ?? a.tmId,
+                    rationale: a.rationale,
+                  })),
+                  rejected: guarded.rejected.map((r) => ({ slot: r.slotKey, reason: r.reason })),
+                  notes: aiOut.notes,
+                };
+                if (aiOut.error) console.warn("[engine] AI stage note:", aiOut.error);
+              } catch (aiErr) {
+                console.error("[engine] AI stage failed (kept deterministic draft):", aiErr);
+              }
+            }
+
+            const legacyShapes = nightResultToLegacyDraft(finalResult);
+            applyPlannerResultAsDraft(
+              {
+                proposedAssignments: legacyShapes.proposedAssignments,
+                breakdown: legacyShapes.breakdown,
+              },
+              rosterForEngine,
+              legacyShapes.reasoningBySlot,
+              nightResultExplanation(finalResult),
+              [],
+            );
+
+            try {
+              const tpLookup = buildTmLookupIndex(rosterForEngine);
+              const tp = nightResultToThoughtProcess(
+                finalResult,
+                (id) => {
+                  const tm = resolveTmFromLookup(tpLookup, id);
+                  return tm?.name || tm?.fullName || id;
+                },
+                aiInfo,
+              );
+              const setTp = useShiftBuilderStore.getState().setEngineThoughtProcess;
+              if (typeof setTp === "function") {
+                setTp(tp);
+                console.info("[engine] thought process published:", tp.summary);
+              } else {
+                console.warn("[engine] setEngineThoughtProcess missing — restart the dev server");
+              }
+            } catch (tpErr) {
+              console.error("[engine] failed to publish thought process:", tpErr);
+            }
+
+            const rescueNote = finalResult.telemetry.relaxationsUsed.length
+              ? " · coverage rescues applied"
+              : "";
+            const aiNote =
+              aiInfo && aiInfo.accepted.length
+                ? ` · ${aiInfo.accepted.length} AI refinement${aiInfo.accepted.length === 1 ? "" : "s"}`
+                : "";
+            showToast(
+              `Unified engine draft: ${finalResult.scorecard.coverage} placements${rescueNote}${aiNote}`,
+              "success",
+            );
+            return;
+          } catch (unifiedErr) {
+            console.error(
+              "[engine] unified pipeline failed — falling back to legacy planner:",
+              unifiedErr,
+            );
+            // fall through to the legacy path below
+          }
+        }
+
         const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
         const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
         const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
@@ -4380,6 +4700,14 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     runCoverageEngineRef.current = runCoverageEngine;
   }, [runCoverageEngine]);
 
+  // Clear the unified-engine Thought Process panel whenever Draft Mode exits
+  // (apply or discard) — the reasoning belongs to a specific draft.
+  React.useEffect(() => {
+    if (!isDraftMode) {
+      useShiftBuilderStore.getState().setEngineThoughtProcess(null);
+    }
+  }, [isDraftMode]);
+
   // Use from engineRunner hook (world-class extraction)
   const { runXaiEngineFromCanvas = () => {} } = engineRunner as any; // temporary cast until full runner move
 
@@ -4730,10 +5058,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     if (!d) return;
 
     if (d.type === "tm") {
-      setActiveDrag({ kind: "tm", label: d.tmName });
-    } 
+      setActiveDrag({ kind: "tm", label: d.tmName, tmId: d.tmId });
+    }
     else if (d.type === "assigned") {
-      setActiveDrag({ kind: "assigned", label: d.tmName, fromSlot: d.fromSlot });
+      setActiveDrag({ kind: "assigned", label: d.tmName, fromSlot: d.fromSlot, tmId: d.tmId });
       
       // CRITICAL: Mark this as a pending drag so the source card does NOT lose its
       // draggable state mid-gesture.
@@ -4773,6 +5101,38 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       currentDragFromSlotRef.current = fromSlot;
     }
   };
+
+  // Fit halos: while a TM (roster chip or assigned card) is in flight, precompute a
+  // cheap per-slot verdict map so every drop target can show great/ok/poor/blocked
+  // *before* the drop (rendered via useSlotDnd → sb-dragfit-* classes). Null outside
+  // tm/assigned drags, so task/coverage gestures never pay for it.
+  const dragFitSnapshot = React.useMemo(() => {
+    if (!activeDrag?.tmId) return null;
+    if (activeDrag.kind !== "tm" && activeDrag.kind !== "assigned") return null;
+    const profile = memberToPlacementProfile(
+      (effectiveRealRoster || []) as Array<Record<string, unknown>>,
+      activeDrag.tmId,
+    );
+    return {
+      map: computeDragFitMap({
+        profile,
+        tmId: activeDrag.tmId,
+        slotKeys: collectDeploymentSlotKeys(auxDefsForFit),
+        fromSlot: activeDrag.fromSlot ?? null,
+        currentIso: nightIsoFromDate(DAY_DEFS[selectedDayIndex]?.date ?? selectedDay.date),
+        weeklyRecentHistory: plannedThisWeekRecentHistory,
+      }),
+      tmName: activeDrag.label,
+    };
+  }, [
+    activeDrag,
+    effectiveRealRoster,
+    auxDefsForFit,
+    plannedThisWeekRecentHistory,
+    DAY_DEFS,
+    selectedDayIndex,
+    selectedDay.date,
+  ]);
 
   // Task reorder commits on drag end (not live onDragOver) so the source row stays
   // stable under the cursor — same feel as TM/name drags with the drag ghost.
@@ -7093,6 +7453,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         }
         publishWeekBusy={publishWeekBusy}
         onRunEngine={canRunEngine ? runXaiEngineFromCanvas : undefined}
+        onDeepOptimize={canRunEngine ? startDeepOptimize : undefined}
+        engineRunning={engineRunPhase !== "idle"}
+        deepOptimizeRunning={timefold.phase === "running"}
         onClearDay={canSeeDraftData ? handleClearBoard : undefined}
         onRefreshDay={canEditAssignments ? () => void handleDeepRefreshDay() : undefined}
         refreshDayBusy={refreshDayBusy}
@@ -7108,6 +7471,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         }
         onDiscardDraft={discardDraft}
         permissions={permissions}
+      />
+
+      <TimefoldResultsSheet
+        open={timefoldSheetOpen}
+        onOpenChange={(open) => {
+          setTimefoldSheetOpen(open);
+          if (!open && (timefold.phase === "results" || timefold.phase === "imported")) {
+            timefold.reset();
+          }
+        }}
+        result={timefold.result}
+        importing={timefold.phase === "importing"}
+        imported={timefold.phase === "imported"}
+        onImport={applyTimefoldProposal}
+        showToast={showToast}
       />
 
       {/* Beautiful seamless exit pill for print preview mode */}
@@ -7142,6 +7520,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       {/* DndContext now lives inside InteractiveStage (narrowed surface).
           Only the actual droppable artboard + roster participate in the drag context.
           This is the major INP win for iPad drags + Pencil. */}
+      {/* DragFitContext: non-null only while a TM drag is in flight — cards read their
+          verdict via useSlotDnd and render fit halos (globals.css "Fit Halos"). */}
+      <DragFitContext.Provider value={dragFitSnapshot}>
       <InteractiveStage
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -7268,7 +7649,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
             >
               <div className="sb-builder-fluid-viewport w-full min-h-0 flex-1 flex flex-col">
-              <div className="sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col">
+              <div className={`sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col ${isDraftMode && draftSlotCount > 0 ? "sb-draft-frame-active" : ""}`}>
               <BuilderUnpublishedNightShell
                 show={showUnpublishedNight}
                 dayLabel={selectedDay.name}
@@ -7284,13 +7665,20 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 hideDateHeader={isBuilderLiveCanvas}
                 selectedDay={selectedDay}
                 selectedDayIndex={selectedDayIndex}
-                // Rotation health side drawer: pass clear and run engine so the drawer contains them
                 canRunEngine={canRunEngine}
+                canEditAssignments={canEditAssignments}
                 onRunXaiEngine={engineRunner.runXaiEngineFromCanvas}
+                onDeepOptimize={canRunEngine ? startDeepOptimize : undefined}
                 onClearBoard={handleClearBoard}
                 engineRunning={engineRunPhase !== "idle"}
+                deepOptimizeRunning={timefold.phase === "running"}
+                deepOptimizeTick={timefold.tick}
+                onCancelDeepOptimize={timefold.cancel}
                 onApplyDraft={() => { void applyDraft(); }}
                 onDiscardDraft={discardDraft}
+                showDraftStatusPill={
+                  mounted && isBuilderLiveCanvas && isDraftMode && !isPrintPreview
+                }
                 draftGrokExplanation={deferredDraftGrokExplanation}
                 draftBreakdownProp={draftBreakdown}
                 draftGrokReasoningProp={draftGrokReasoning}
@@ -7367,6 +7755,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               />
             </div>
           )}
+
+          {/* Unified engine reasoning panel — self-guards (renders null unless a
+              unified run has published its thought process). Fixed-position. */}
+          <EngineThoughtProcess />
 
           {/* Golden / preview / weekly frame — unmounted in builder deployment so dnd-kit never
               registers duplicate slot:* droppables from a hidden copy of the board. */}
@@ -7997,6 +8389,19 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     </div> {/* /sb-builder-main — canvas column only */}
 
       </InteractiveStage>
+      </DragFitContext.Provider>
+
+      {/* Draft Ambiance: ambient, always-visible draft state — pairs with the gold
+          frame on the scale viewport so "am I in Draft, and how much is unapplied?"
+          is answerable at a glance without opening the engine drawer. */}
+      {mounted && isBuilderLiveCanvas && isDraftMode && !isPrintPreview && (
+        <DraftStatusPill
+          count={draftSlotCount}
+          applying={engineRunPhase !== "idle"}
+          onApply={() => { void applyDraft(); }}
+          onDiscard={discardDraft}
+        />
+      )}
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of

@@ -118,7 +118,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key, role);
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key,
     "aux",
     { tmId: a.tmId, tmName: a.tmName },
@@ -352,7 +352,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(hasTM && !isLocked && ! (isUnsetBlank && !hasTM) ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl touch-none ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
