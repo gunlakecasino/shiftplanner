@@ -12,14 +12,14 @@ export function isTabletTouchDevice(): boolean {
   return window.matchMedia(TABLET_TOUCH_MQ).matches;
 }
 
-/** Floating roster width — compact "module" so it doesn't cover half the board on iPad or MacBook. */
+/** Floating roster width — compact on tablet for more artboard space. */
 export function rosterPanelWidth(): number {
-  return isTabletTouchDevice() ? 192 : 232;
+  return isTabletTouchDevice() ? 200 : 268;
 }
 
 /** Stage left inset when roster is open (panel width + breathing room). */
 export function rosterStageLeftInset(): number {
-  return rosterPanelWidth() + 16;
+  return rosterPanelWidth() + 12;
 }
 
 /** Pencil long-hover opens pad faster on tablet (squeeze unavailable in Safari). */

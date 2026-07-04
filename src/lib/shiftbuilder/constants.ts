@@ -270,13 +270,6 @@ export function shouldShowSlotForBreakFilter(
   const g = assignment?.breakGroup ?? 0;
   const hasTm = !!(assignment?.tmId || assignment?.tmName);
 
-  // Custom AUX slots are independent of main zone wave / break-group filters.
-  // Always render them (whether assigned or not) so users can see/assign TMs to custom aux consistently.
-  // Previously returning only hasTm could hide assigned cards under active filters.
-  if (slotKey.toUpperCase().startsWith("AUX")) {
-    return true;
-  }
-
   if (filter === BREAK_GROUP_OVERLAPS) {
     if (slotKey.startsWith("OL-")) return true;
     return hasTm && g === BREAK_GROUP_OVERLAPS;

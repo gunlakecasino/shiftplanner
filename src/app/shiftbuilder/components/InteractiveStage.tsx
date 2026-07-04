@@ -205,39 +205,6 @@ export default function InteractiveStage({
                       <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>reassign</span>
                     )}
                   </motion.div>
-                ) : activeDrag.kind === "coverage-request" ? (
-                  // Enhanced ghost for option+dragging an unassigned zone for coverage assignment.
-                  // Similar glass pill to TM drags, but dashed border + coverage-specific styling + enhanced text.
-                  // This replaces the previous static dashed box on cards; the ghost "drags with you".
-                  <motion.div
-                    className="flex items-center gap-2 rounded-lg pointer-events-none whitespace-nowrap"
-                    style={{
-                      padding: "6px 12px",
-                      background: isDark ? "rgba(36,35,40,0.92)" : "rgba(255,255,255,0.92)",
-                      color: isDark ? "#E5E5E7" : "#1C1C1E",
-                      border: "1px dashed #ff3b30",
-                      boxShadow: isDark
-                        ? "0 10px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)"
-                        : "0 10px 28px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.85)",
-                      backdropFilter: "blur(22px)",
-                      fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-                    }}
-                    initial={{ scale: 0.94, y: 3, opacity: 0.8 }}
-                    animate={{ scale: reducedMotion ? 1 : 1.05, y: reducedMotion ? 0 : -5, opacity: 1 }}
-                    transition={reducedMotion ? premiumSpringReduced : { ...premiumSpring, stiffness: 280 }}
-                  >
-                    {/* Small coverage indicator */}
-                    <span style={{ fontSize: 11, opacity: 0.65 }}>⬚</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>
-                      {activeDrag.label || activeDrag.fromSlot}
-                    </span>
-                    <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 4, padding: "1px 5px", border: "1px solid currentColor", borderRadius: 3, lineHeight: 1 }}>
-                      COVERAGE
-                    </span>
-                    {activeDrag.fromSlot && (
-                      <span style={{ fontSize: 10, opacity: 0.4, marginLeft: 6 }}>{activeDrag.fromSlot}</span>
-                    )}
-                  </motion.div>
                 ) : null
               ) : null}
             </DragOverlay>,

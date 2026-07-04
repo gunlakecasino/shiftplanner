@@ -1,4 +1,4 @@
-// v1.0.0 — Production Release — UI frozen & shipped June 24 2026
+// v1.1 — iPad UI/UX world-class release
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { useShallow } from 'zustand/shallow';
@@ -64,13 +64,13 @@ interface ShiftBuilderState {
     expanded: {
       otherTms: boolean;
       calledOff: boolean;
+      deployed: boolean;
       pmOverlaps: boolean;
       amOverlaps: boolean;
       porters: boolean;
       scheduledGraves: boolean;
       scheduledPM: boolean;
       scheduledAM: boolean;
-      placed: boolean;
     };
     graveOnly: boolean;
     rosterSearch: string;
@@ -201,13 +201,13 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
       expanded: {
         otherTms: false,
         calledOff: true,
+        deployed: false,
         pmOverlaps: false,
         amOverlaps: false,
         porters: false,
         scheduledGraves: true,
         scheduledPM: true,
         scheduledAM: true,
-        placed: false,
       },
       graveOnly: true,
       rosterSearch: '',

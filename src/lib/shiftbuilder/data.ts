@@ -3541,6 +3541,12 @@ export async function pushBreakDefaultsToWeek(
  * For each such slot: delete existing night_slot_tasks rows, then insert fresh
  * rows from slot_default_tasks (replace semantics).
  * Slots with no defaults are left untouched.
+ *
+ * Special behavior for AM Overlaps (OL-AM-0..5 / overlap_am_0..5):
+ * All tasks configured for any overlap_am_* slot are collected as a pool,
+ * randomly shuffled on every push, and assigned one-per-card across the 6
+ * AM Overlap positions. This gives a fresh random layout each time "Default Tasks"
+ * is clicked from the navbar (or on lazy night creation).
  */
 export async function pushTaskDefaultsToNight(
   nightId: string,
