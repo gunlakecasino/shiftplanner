@@ -19,6 +19,7 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import { CardTaskBadge } from "./CardTaskBadge";
+import { auxDbSlotKey } from "@/lib/shiftbuilder/slotCatalog";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -372,7 +373,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
-            {showTaskBadge && <CardTaskBadge tmId={currentTmId} />}
+            {showTaskBadge && <CardTaskBadge tmId={currentTmId} slotKey={auxDbSlotKey(role, def.key)} />}
             {hasTM && coveredBy.length === 0 && (
               <PlacementFitChip fit={fitChip} compact />
             )}

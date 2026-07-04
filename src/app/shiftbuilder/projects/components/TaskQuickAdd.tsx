@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, User, FolderKanban } from "lucide-react";
+import { Plus, User, FolderKanban, MapPin } from "lucide-react";
+import { SlotSelect, type SlotSelection } from "./SlotSelect";
 import { premiumTap } from "@/lib/premiumSpring";
 import { useCreateTask } from "../hooks/useTaskMutations";
 import { useRoster, type ProjectWithCounts } from "../hooks/useProjectsData";
@@ -26,6 +27,7 @@ export function TaskQuickAdd({
   const [assigneeTmId, setAssigneeTmId] = useState<string>("");
   const [targetProjectId, setTargetProjectId] = useState<string>(projectId ?? "");
   const [syncedProjectId, setSyncedProjectId] = useState<string | null>(projectId);
+  const [slot, setSlot] = useState<SlotSelection>({ slotKey: null, slotType: null, rrSide: null });
   const createTask = useCreateTask();
   const { data: roster } = useRoster();
 
@@ -47,8 +49,12 @@ export function TaskQuickAdd({
       projectId: targetProjectId || null,
       assigneeTmId: assigneeTmId || null,
       dueDate: tonightDateISO(),
+      slotKey: slot.slotKey,
+      slotType: slot.slotType,
+      rrSide: slot.rrSide,
     });
     setTitle("");
+    setSlot({ slotKey: null, slotType: null, rrSide: null });
   };
 
   return (
@@ -95,6 +101,17 @@ export function TaskQuickAdd({
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-md border border-[var(--sb-settings-border-paper)] px-1.5 py-1">
+          <MapPin size={12} className="text-[var(--ios-label-tertiary)]" />
+          <SlotSelect
+            slotKey={slot.slotKey}
+            rrSide={slot.rrSide}
+            onChange={setSlot}
+            className="bg-transparent text-[11px] outline-none"
+            placeholder="No location"
+          />
         </div>
       </div>
 

@@ -2,7 +2,8 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Check, User, Repeat } from "lucide-react";
+import { Check, User, Repeat, MapPin } from "lucide-react";
+import { slotCatalogLabel } from "@/lib/shiftbuilder/slotCatalog";
 import { premiumTap } from "@/lib/premiumSpring";
 import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
 import { tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
@@ -41,6 +42,7 @@ export function OpsTaskRow({
 }) {
   const isDone = task.status === "complete";
   const assignee = roster.find((r) => r.tmId === task.assigneeTmId);
+  const locationLabel = slotCatalogLabel(task.slotKey, task.rrSide);
   const dueClass = dueBadgeClass(task.dueDate, task.status);
 
   const toggleDone = (e: React.MouseEvent) => {
@@ -81,11 +83,15 @@ export function OpsTaskRow({
             <Repeat size={11} className="shrink-0 text-[var(--sb-projects-accent)]" />
           )}
         </div>
-        {task.category && (
-          <span className="text-[10.5px] capitalize text-[var(--ios-label-tertiary)]">
-            {task.category.replace("_", " ")}
-          </span>
-        )}
+        <div className="flex items-center gap-2 text-[10.5px] text-[var(--ios-label-tertiary)]">
+          {locationLabel && (
+            <span className="inline-flex items-center gap-0.5 text-[var(--sb-projects-accent)]">
+              <MapPin size={9} strokeWidth={2.4} />
+              {locationLabel}
+            </span>
+          )}
+          {task.category && <span className="capitalize">{task.category.replace("_", " ")}</span>}
+        </div>
       </div>
 
       {assignee && (

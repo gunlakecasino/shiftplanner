@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Check, Plus, Trash2, Repeat } from "lucide-react";
 import { premiumTap } from "@/lib/premiumSpring";
 import { useTaskDetail, useRoster, usePools, type ProjectWithCounts } from "../hooks/useProjectsData";
+import { SlotSelect } from "./SlotSelect";
 import {
   useAddChecklistItem,
   useAddComment,
@@ -244,6 +245,18 @@ export function TaskDetailContent({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Location (zone / restroom / aux / overlap) */}
+        <div>
+          <Label>Location</Label>
+          <SlotSelect
+            slotKey={task.slotKey}
+            rrSide={task.rrSide}
+            disabled={!canManage}
+            onChange={(sel) => updateTask.mutate({ taskId, patch: sel })}
+            className="w-full rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1.5 text-[12.5px] outline-none disabled:opacity-60"
+          />
         </div>
 
         {/* Pool */}

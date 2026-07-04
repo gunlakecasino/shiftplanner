@@ -10,6 +10,7 @@ import {
   WORK_ITEM_COLUMNS,
 } from "@/lib/tasks/mapping";
 import { STATUS_REQUIRES_REASON, type WorkItemStatus } from "@/lib/tasks/types";
+import { resolveSlotTriple } from "@/lib/shiftbuilder/slotCatalog";
 
 type RouteParams = { params: Promise<{ taskId: string }> };
 
@@ -78,6 +79,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if ("assigneeTmId" in body) {
     patch.assignee_tm_id = body.assigneeTmId || null;
     patch.assignee_type = body.assigneeTmId ? "tm" : null;
+  }
+  // Optional location (zone/RR/aux/overlap); set atomically from the catalog so a
+  // partial payload can't leave slot_key set with slot_type/rr_side stale. null
+  // clears it. is_slot_default untouched.
+  if ("slotKey" in body || "slotType" in body || "rrSide" in body) {
+    const slot = resolveSlotTriple(body.slotKey, body.rrSide);
+    patch.slot_key = slot.slotKey;
+    patch.slot_type = slot.slotType;
+    patch.rr_side = slot.rrSide;
   }
 
   let fromStatus: WorkItemStatus | null = null;

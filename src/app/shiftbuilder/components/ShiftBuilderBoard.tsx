@@ -1420,6 +1420,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
                         onGenderClick={handleGenderClickForPad}
+                        showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
                         borderColor={cardBorders[`RR${def.num}`] || cardBorders[mKey] || cardBorders[wKey]}
                         isDraftMode={isDraftMode}

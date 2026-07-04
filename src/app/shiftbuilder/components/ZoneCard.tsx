@@ -277,7 +277,9 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           {def.label}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-          {showTaskBadge && <CardTaskBadge tmId={currentTmId} />}
+          {showTaskBadge && (
+            <CardTaskBadge tmId={currentTmId} slotKey={`zone_${String(def.key).replace(/^Z/, "")}`} />
+          )}
           {/* Status badge - dynamic fit or omitted for covered + unassigned (no assignee). */}
           {assignmentState.kind !== "covered" && assignmentState.kind !== "unassigned" && (
             <PlacementFitChip fit={fitChip} compact />

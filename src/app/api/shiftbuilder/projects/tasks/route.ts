@@ -4,6 +4,7 @@ import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLi
 import { requireTasksAccess } from "../_lib/requireTasksAccess.server";
 import { logStatusChange } from "../_lib/workItemActivity.server";
 import { rowToWorkItem, WORK_ITEM_COLUMNS } from "@/lib/tasks/mapping";
+import { resolveSlotTriple } from "@/lib/shiftbuilder/slotCatalog";
 import { computeNextDueDate } from "@/lib/tasks/recurrence";
 import { SHIFTBUILDER_DEPARTMENT, SHIFTBUILDER_DEFAULT_DUE_SHIFT, tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
 
@@ -92,6 +93,15 @@ export async function POST(request: NextRequest) {
     created_by_name: actor.operatorName,
     updated_by_name: actor.operatorName,
   };
+
+  // Optional location (zone/RR/aux/overlap). Resolve the (key, type, side) triple
+  // authoritatively from the catalog so a partial/inconsistent payload can't corrupt
+  // the row. A located tracked task is NOT a slot-default template — is_slot_default
+  // stays false (its column default).
+  const slot = resolveSlotTriple(body.slotKey, body.rrSide);
+  insert.slot_key = slot.slotKey;
+  insert.slot_type = slot.slotType;
+  insert.rr_side = slot.rrSide;
 
   if (workType === "recurring") {
     const recurrenceType = body.recurrenceType;

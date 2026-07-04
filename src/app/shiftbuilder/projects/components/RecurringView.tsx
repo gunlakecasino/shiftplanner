@@ -12,6 +12,7 @@ import {
   useGenerateNextOccurrence,
 } from "../hooks/useTaskMutations";
 import { EmptyState } from "./EmptyState";
+import { SlotSelect, type SlotSelection } from "./SlotSelect";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 type Frequency = "daily" | "weekly" | "biweekly" | "monthly";
@@ -163,6 +164,7 @@ function NewRecurringForm({
   const [assigneeTmId, setAssigneeTmId] = useState("");
   const [projectId, setProjectId] = useState(defaultProjectId ?? "");
   const [category, setCategory] = useState("");
+  const [slot, setSlot] = useState<SlotSelection>({ slotKey: null, slotType: null, rrSide: null });
 
   const toggleWeekday = (d: number) =>
     setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
@@ -188,6 +190,9 @@ function NewRecurringForm({
       assigneeTmId: assigneeTmId || null,
       projectId: projectId || null,
       category: category || null,
+      slotKey: slot.slotKey,
+      slotType: slot.slotType,
+      rrSide: slot.rrSide,
     });
     onDone();
   };
@@ -307,6 +312,14 @@ function NewRecurringForm({
           ))}
         </select>
       </div>
+
+      <SlotSelect
+        slotKey={slot.slotKey}
+        rrSide={slot.rrSide}
+        onChange={setSlot}
+        className="w-full rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1.5 text-[11.5px] outline-none"
+        placeholder="No location"
+      />
 
       <div className="flex justify-end gap-2">
         <button

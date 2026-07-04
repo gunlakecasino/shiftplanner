@@ -2,20 +2,33 @@
 
 import * as React from "react";
 import { ClipboardList } from "lucide-react";
-import { useBoardTasksStore, useTmTaskCount } from "../hooks/useBoardTaskSummary";
+import { useBoardTasksStore, useTmTaskCount, useSlotTaskCount } from "../hooks/useBoardTaskSummary";
 
 /**
- * Small counter badge shown on a deployment card when its occupant TM has open
- * Ops Tasks due by the viewed night. Teal (tasks accent) normally, red when any
- * are overdue. Informational only — never affects placement (T1). Builder-only;
- * never rendered in print (guarded by isPrintPreview at the call site).
+ * Small counter badge shown on a deployment card when EITHER its occupant TM or
+ * its slot has open Ops Tasks due by the viewed night. Teal (tasks accent)
+ * normally, red when any are overdue. Informational only — never affects
+ * placement (T1). Builder-only; never rendered in print (guarded at the call site).
+ *
+ * slotKey is the DB slot composite (e.g. "zone_1", "admin", "rr_6|mens").
  */
-export function CardTaskBadge({ tmId }: { tmId: string | null | undefined }) {
+export function CardTaskBadge({
+  tmId,
+  slotKey,
+}: {
+  tmId: string | null | undefined;
+  slotKey?: string | null;
+}) {
   const hidden = useBoardTasksStore((s) => s.hidden);
-  const count = useTmTaskCount(tmId);
+  const tmCount = useTmTaskCount(tmId);
+  const slotCount = useSlotTaskCount(slotKey);
 
-  if (hidden || !count || count.open <= 0) return null;
-  const overdue = count.overdue > 0;
+  // Combine so a card lights up if its occupant OR its slot has tasks.
+  const open = (tmCount?.open ?? 0) + (slotCount?.open ?? 0);
+  const overdueN = (tmCount?.overdue ?? 0) + (slotCount?.overdue ?? 0);
+  if (hidden || open <= 0) return null;
+  const count = { open, overdue: overdueN };
+  const overdue = overdueN > 0;
 
   return (
     <span

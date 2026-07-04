@@ -54,6 +54,9 @@ export interface CreateTaskInput {
   recurrenceType?: string;
   recurrenceDays?: number[];
   advanceDays?: number;
+  slotKey?: string | null;
+  slotType?: string | null;
+  rrSide?: string | null;
 }
 
 export function useCreateTask() {
@@ -80,6 +83,9 @@ export interface UpdateTaskInput {
     dueDate: string | null;
     dueShift: string | null;
     assigneeTmId: string | null;
+    slotKey: string | null;
+    slotType: string | null;
+    rrSide: string | null;
     status: WorkItemStatus;
     statusReason: string;
   }>;

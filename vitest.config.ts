@@ -18,6 +18,7 @@ export default defineConfig({
   test: {
     include: [
       "src/lib/shiftbuilder/engine/**/*.test.ts",
+      "src/lib/shiftbuilder/*.test.ts",
       "src/lib/tasks/**/*.test.ts",
     ],
     environment: "node",

@@ -23,10 +23,17 @@ interface BoardTasksState {
   total: number;
   overdue: number;
   byTm: Record<string, TmTaskCount>;
+  /** Keyed by DB slot composite: `slot_key` (zone/aux/overlap) or `slot_key|rrSide` (RR). */
+  bySlot: Record<string, TmTaskCount>;
   loaded: boolean;
   /** Operator dismissed the task overlay for this session (hides pill + badges). */
   hidden: boolean;
-  setSummary: (s: { total: number; overdue: number; byTm: Record<string, TmTaskCount> }) => void;
+  setSummary: (s: {
+    total: number;
+    overdue: number;
+    byTm: Record<string, TmTaskCount>;
+    bySlot: Record<string, TmTaskCount>;
+  }) => void;
   setHidden: (hidden: boolean) => void;
 }
 
@@ -34,15 +41,26 @@ export const useBoardTasksStore = create<BoardTasksState>((set) => ({
   total: 0,
   overdue: 0,
   byTm: {},
+  bySlot: {},
   loaded: false,
   hidden: false,
   setSummary: (s) => set({ ...s, loaded: true }),
   setHidden: (hidden) => set({ hidden }),
 }));
 
+/** DB slot composite key for a task's location (zone/aux/overlap have no side). */
+export function slotCompositeKey(slotKey: string, rrSide: string | null | undefined): string {
+  return rrSide ? `${slotKey}|${rrSide}` : slotKey;
+}
+
 /** Per-TM count selector — cards subscribe narrowly to their occupant. */
 export function useTmTaskCount(tmId: string | null | undefined): TmTaskCount | null {
   return useBoardTasksStore((s) => (tmId ? s.byTm[tmId] ?? null : null));
+}
+
+/** Per-slot count selector — cards subscribe narrowly to their own slot. */
+export function useSlotTaskCount(slotCompositeKey: string | null | undefined): TmTaskCount | null {
+  return useBoardTasksStore((s) => (slotCompositeKey ? s.bySlot[slotCompositeKey] ?? null : null));
 }
 
 const POLL_MS = 60_000;
@@ -56,8 +74,9 @@ export function useBoardTaskSummary(nightDateISO: string | null, enabled: boolea
   const setSummary = useBoardTasksStore((s) => s.setSummary);
 
   useEffect(() => {
+    const empty = { total: 0, overdue: 0, byTm: {}, bySlot: {} };
     if (!enabled) {
-      setSummary({ total: 0, overdue: 0, byTm: {} });
+      setSummary(empty);
       return;
     }
     let cancelled = false;
@@ -74,30 +93,38 @@ export function useBoardTaskSummary(nightDateISO: string | null, enabled: boolea
           credentials: "same-origin",
         });
         if (!res.ok) {
-          if (!cancelled) setSummary({ total: 0, overdue: 0, byTm: {} });
+          if (!cancelled) setSummary(empty);
           return;
         }
         const json = await res.json();
-        const tasks: Array<{ dueDate: string | null; assigneeTmId: string | null }> = json.tasks ?? [];
+        const tasks: Array<{
+          dueDate: string | null;
+          assigneeTmId: string | null;
+          slotKey: string | null;
+          rrSide: string | null;
+        }> = json.tasks ?? [];
 
         let total = 0;
         let overdue = 0;
         const byTm: Record<string, TmTaskCount> = {};
+        const bySlot: Record<string, TmTaskCount> = {};
+        const bump = (map: Record<string, TmTaskCount>, key: string, od: boolean) => {
+          const e = map[key] ?? { open: 0, overdue: 0 };
+          e.open += 1;
+          if (od) e.overdue += 1;
+          map[key] = e;
+        };
         for (const t of tasks) {
           if (!t.dueDate || t.dueDate > tonight) continue;
           total += 1;
           const od = t.dueDate < tonight;
           if (od) overdue += 1;
-          if (t.assigneeTmId) {
-            const e = byTm[t.assigneeTmId] ?? { open: 0, overdue: 0 };
-            e.open += 1;
-            if (od) e.overdue += 1;
-            byTm[t.assigneeTmId] = e;
-          }
+          if (t.assigneeTmId) bump(byTm, t.assigneeTmId, od);
+          if (t.slotKey) bump(bySlot, slotCompositeKey(t.slotKey, t.rrSide), od);
         }
-        if (!cancelled) setSummary({ total, overdue, byTm });
+        if (!cancelled) setSummary({ total, overdue, byTm, bySlot });
       } catch {
-        if (!cancelled) setSummary({ total: 0, overdue: 0, byTm: {} });
+        if (!cancelled) setSummary(empty);
       }
     };
 
