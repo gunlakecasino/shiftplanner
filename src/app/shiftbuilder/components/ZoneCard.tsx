@@ -31,6 +31,7 @@ import {
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick, padUsesSingleTap } from "./CardTaskZone";
+import { CardTaskBadge } from "./CardTaskBadge";
 
 export interface ZoneCardProps {
   def: any;
@@ -62,6 +63,8 @@ export interface ZoneCardProps {
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
   showDigitalAssists?: boolean;
+  /** Live board only (never print): render the occupant's open-task badge. */
+  showTaskBadge?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
@@ -165,6 +168,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   fitChip,
   placementTrail,
   showDigitalAssists = false,
+  showTaskBadge = false,
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
@@ -273,6 +277,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           {def.label}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          {showTaskBadge && <CardTaskBadge tmId={currentTmId} />}
           {/* Status badge - dynamic fit or omitted for covered + unassigned (no assignee). */}
           {assignmentState.kind !== "covered" && assignmentState.kind !== "unassigned" && (
             <PlacementFitChip fit={fitChip} compact />

@@ -18,6 +18,7 @@ import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
+import { CardTaskBadge } from "./CardTaskBadge";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -58,6 +59,8 @@ export interface AuxCardProps {
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
   showDigitalAssists?: boolean;
+  /** Live board only (never print): render the occupant's open-task badge. */
+  showTaskBadge?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
@@ -96,6 +99,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   fitChip,
   placementTrail,
   showDigitalAssists = false,
+  showTaskBadge = false,
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
@@ -368,6 +372,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
+            {showTaskBadge && <CardTaskBadge tmId={currentTmId} />}
             {hasTM && coveredBy.length === 0 && (
               <PlacementFitChip fit={fitChip} compact />
             )}
