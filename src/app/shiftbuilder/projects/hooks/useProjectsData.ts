@@ -33,13 +33,11 @@ export function tasksKey(filters: TaskFilters = {}) {
 }
 
 /**
- * Polling-based live-enough sync for this foundation pass. True Postgres CDC
- * realtime (matching liveCache.ts) needs an anon-readable RLS policy on
- * ops_work_items — the same tradeoff zone_assignments already made — which is
- * a deliberate access-control call, not something to flip silently for a
- * nicer checkbox animation. See docs/TASKS_SYSTEM_PLAN.md T10 for the plan.
+ * Fallback poll. Primary live sync is now Postgres realtime (useProjectsRealtime)
+ * backed by the ops_work_items / ops_task_pools anon read policies. This slow
+ * poll only catches up if the realtime socket drops.
  */
-const LIVE_ENOUGH_POLL_MS = 12_000;
+const LIVE_ENOUGH_POLL_MS = 30_000;
 
 export function useProjects() {
   return useQuery({

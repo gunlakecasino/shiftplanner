@@ -8,6 +8,7 @@ import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
 import { BuilderLoadingShell } from "../components/builderPrimitives";
 import { useTheme } from "../hooks/useTheme";
 import { useProjects, useTasks, useRoster } from "./hooks/useProjectsData";
+import { useProjectsRealtime } from "./hooks/useProjectsRealtime";
 import { useUpdateTask } from "./hooks/useTaskMutations";
 import type { WorkItemStatus } from "@/lib/tasks/types";
 import { tonightDateISO } from "@/lib/shiftbuilder/tasksAdapter";
@@ -78,6 +79,8 @@ function ProjectsShell() {
   const [view, setView] = useState<BoardView>("list");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+
+  useProjectsRealtime();
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
