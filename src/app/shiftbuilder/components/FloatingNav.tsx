@@ -261,11 +261,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     setCalendarOpen(false);
   };
 
-  const handleDefaultTasks = () => {
-    onApplyDefaultTasks?.();
-    setMoreOpen(false);
-  };
-
   const menuPanelClass = isDark
     ? "rounded-xl border border-white/10 bg-zinc-900 shadow-xl py-1 text-[13px] text-zinc-100"
     : "rounded-xl border bg-white shadow-xl py-1 text-[13px] text-zinc-900";
@@ -939,31 +934,9 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Coffee size={14} /> Restore Default Breaks
                   </button>
                 )}
-                {onApplyOverlapTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onApplyOverlapTasks();
-                      setMoreOpen(false);
-                    }}
-                    disabled={applyOverlapTasksBusy}
-                  >
-                    <Layers size={14} />
-                    {applyOverlapTasksBusy ? "Applying…" : "Apply Overlap Tasks"}
-                  </button>
-                )}
-                {onApplyDefaultTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={handleDefaultTasks}
-                    disabled={applyDefaultTasksBusy}
-                  >
-                    <LayoutGrid size={14} />
-                    {applyDefaultTasksBusy ? "Applying…" : "Apply Default Tasks"}
-                  </button>
-                )}
+                {/* Apply Default / Overlap Tasks retired by the defaults cutover —
+                    nightly defaults now materialize from slot-default Ops Tasks
+                    (managed in /shiftbuilder/projects → Defaults) on night creation. */}
 
                 {/* Copies (task population) */}
                 {showDraftTools && onCopyPriorWeekTasks && (

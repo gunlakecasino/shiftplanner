@@ -20,6 +20,7 @@ import { TaskBoardView } from "./components/TaskBoardView";
 import { TaskCalendarView } from "./components/TaskCalendarView";
 import { RecurringView } from "./components/RecurringView";
 import { PoolsView } from "./components/PoolsView";
+import { DefaultsView } from "./components/DefaultsView";
 import { TaskDetailSheet } from "./components/TaskDetailSheet";
 import "../settings/settingsShell.css";
 import "../settings/settingsTheme.css";
@@ -167,7 +168,7 @@ function ProjectsShell() {
           </aside>
 
           <main className="min-w-0 space-y-3">
-            {view !== "recurring" && (
+            {(view === "list" || view === "board") && (
               <TaskQuickAdd projectId={selectedProjectId} projects={projects} canManage={canManage} />
             )}
             <TaskFilterBar
@@ -206,6 +207,7 @@ function ProjectsShell() {
               />
             )}
             {view === "pools" && <PoolsView canManage={canManage} />}
+            {view === "defaults" && <DefaultsView canManage={canManage} />}
           </main>
         </div>
       </div>

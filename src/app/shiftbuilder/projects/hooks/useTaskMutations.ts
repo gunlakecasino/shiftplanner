@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import type { TaskPool, WorkItem, WorkItemDetail, WorkItemStatus } from "@/lib/tasks/types";
-import { POOLS_KEY, PROJECTS_KEY, type ProjectWithCounts } from "./useProjectsData";
+import { DEFAULTS_KEY, POOLS_KEY, PROJECTS_KEY, type ProjectWithCounts } from "./useProjectsData";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -233,6 +233,33 @@ export function useDistributePool() {
       qc.invalidateQueries({ queryKey: ["projects", "tasks"] });
       qc.invalidateQueries({ queryKey: POOLS_KEY });
     },
+  });
+}
+
+export interface CreateDefaultInput {
+  title: string;
+  slotKey: string;
+  slotType: string;
+  rrSide?: string | null;
+  taskColor?: string | null;
+  isCoverage?: boolean;
+}
+
+export function useCreateSlotDefault() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateDefaultInput) =>
+      api<{ default: WorkItem }>("/api/shiftbuilder/projects/defaults", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: DEFAULTS_KEY }),
+  });
+}
+
+export function useDeleteSlotDefault() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ ok: true }>(`/api/shiftbuilder/projects/defaults/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: DEFAULTS_KEY }),
   });
 }
 

@@ -82,6 +82,17 @@ export function useTaskDetail(taskId: string | null) {
   });
 }
 
+export const DEFAULTS_KEY = ["projects", "defaults"] as const;
+
+export function useSlotDefaults() {
+  return useQuery({
+    queryKey: DEFAULTS_KEY,
+    queryFn: () => fetchJson<{ defaults: WorkItem[] }>("/api/shiftbuilder/projects/defaults"),
+    select: (data) => data.defaults,
+    staleTime: 10_000,
+  });
+}
+
 export const POOLS_KEY = ["projects", "pools"] as const;
 
 export function usePools() {

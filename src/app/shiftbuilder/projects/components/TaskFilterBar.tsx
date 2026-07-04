@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { LayoutList, Kanban, Repeat, CalendarDays, Layers } from "lucide-react";
+import { LayoutList, Kanban, Repeat, CalendarDays, Layers, LayoutGrid } from "lucide-react";
 
 export type SmartFilter = "all" | "open" | "overdue" | "tonight" | "complete";
-export type BoardView = "list" | "board" | "calendar" | "recurring" | "pools";
+export type BoardView = "list" | "board" | "calendar" | "recurring" | "pools" | "defaults";
 
 const SMART_FILTERS: { id: SmartFilter; label: string }[] = [
   { id: "open", label: "Open" },
@@ -110,6 +110,17 @@ export function TaskFilterBar({
           }}
         >
           <Layers size={13} /> Pools
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("defaults")}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors"
+          style={{
+            background: view === "defaults" ? "var(--ios-background-primary)" : "transparent",
+            color: view === "defaults" ? "var(--ios-label)" : "var(--ios-label-tertiary)",
+          }}
+        >
+          <LayoutGrid size={13} /> Defaults
         </button>
       </div>
     </div>

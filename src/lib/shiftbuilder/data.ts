@@ -595,7 +595,9 @@ export async function getOrCreateNightForDate(
   // so a seeding failure never blocks night creation. Errors are logged but
   // do not propagate; the operator can always add tasks/breaks manually.
   Promise.all([
-    pushTaskDefaultsToNight(newNightId).catch((e) =>
+    // Cutover: night defaults now come from slot-default Ops Tasks (ops_work_items),
+    // not the legacy slot_default_tasks table. See applySlotDefaultsToNight.
+    applySlotDefaultsToNight(newNightId).catch((e) =>
       console.warn('[shiftbuilder/data] getOrCreateNightForDate: card-default task seed failed', e)
     ),
     seedDefaultBreaksForNight(newNightId).catch((e) =>
@@ -3774,6 +3776,109 @@ export async function pushTaskDefaultsToWeek(
   }
 
   return { nights: nightIds.length, applied: totalApplied };
+}
+
+/**
+ * Cutover successor to pushTaskDefaultsToNight: seed a night's default card
+ * chips from slot-default Ops Tasks (ops_work_items where is_slot_default=true)
+ * instead of the legacy slot_default_tasks table.
+ *
+ * Simplified per the cutover decision — every slot (zones, RRs, AUX, AND
+ * overlaps) is treated uniformly as fixed per-slot defaults; the old AM/PM
+ * random-to-staffed pool distribution is gone. Reuses the exact same per-slot
+ * replace mutation (delete + reinsert, preserving coverage bars), so chip shape
+ * and Golden print output are unchanged from the legacy path.
+ */
+export async function applySlotDefaultsToNight(
+  nightId: string,
+): Promise<{ applied: number }> {
+  if (!nightId) return { applied: 0 };
+
+  const { data, error } = await supabase
+    .from('ops_work_items')
+    .select('slot_key, slot_type, rr_side, title, task_color, is_coverage')
+    .eq('is_slot_default', true)
+    .eq('active', true)
+    .eq('department', 'graves')
+    .is('archived_at', null)
+    .not('slot_key', 'is', null);
+
+  if (error) {
+    logSupabaseError('applySlotDefaultsToNight read failed', error);
+    return { applied: 0 };
+  }
+  if (!data || data.length === 0) return { applied: 0 };
+
+  type Group = {
+    slotKey: string;
+    slotType: string;
+    rrSide: string | null;
+    tasks: Array<{ taskLabel: string; taskColor: string | null; isCoverage: boolean }>;
+  };
+  const bySlot = new Map<string, Group>();
+  const rows = (data ?? []) as Array<{
+    slot_key: string;
+    slot_type: string | null;
+    rr_side: string | null;
+    title: string;
+    task_color: string | null;
+    is_coverage: boolean | null;
+  }>;
+  for (const r of rows) {
+    const slotKey = r.slot_key as string;
+    const rrSide = (r.rr_side as string | null) || null;
+    const key = `${slotKey}|${rrSide ?? ''}`;
+    let group = bySlot.get(key);
+    if (!group) {
+      group = { slotKey, slotType: (r.slot_type as string) || 'zone', rrSide, tasks: [] };
+      bySlot.set(key, group);
+    }
+    group.tasks.push({
+      taskLabel: r.title as string,
+      taskColor: (r.task_color as string | null) ?? null,
+      isCoverage: (r.is_coverage as boolean | null) ?? false,
+    });
+  }
+
+  let applied = 0;
+  for (const group of bySlot.values()) {
+    const mappedTasks = group.tasks.map((t, idx) => ({
+      taskLabel: t.taskLabel,
+      sortOrder: idx,
+      taskColor: t.taskColor,
+      isCoverage: t.isCoverage,
+    }));
+    try {
+      const result = await runBoardMutation(
+        'replace_night_slot_tasks_for_slot',
+        {
+          nightId,
+          slotKey: group.slotKey,
+          rrSide: group.rrSide,
+          slotType: group.slotType,
+          tasks: mappedTasks,
+          preserveCoverage: true,
+        },
+        async () => {
+          const { replaceNightSlotTasksForSlotServer } = await import('./opsMutations.server');
+          const count = await replaceNightSlotTasksForSlotServer({
+            nightId,
+            slotKey: group.slotKey,
+            rrSide: group.rrSide,
+            slotType: group.slotType,
+            tasks: mappedTasks,
+            preserveCoverage: true,
+          });
+          return { ok: true, applied: count };
+        },
+      );
+      applied += (result as { applied?: number }).applied ?? mappedTasks.length;
+    } catch (err) {
+      console.error('[shiftbuilder/data] applySlotDefaultsToNight replace error:', err);
+    }
+  }
+
+  return { applied };
 }
 
 /** Sweeper tasks excluded when copying prior-week same-day tasks (day-specific). */
