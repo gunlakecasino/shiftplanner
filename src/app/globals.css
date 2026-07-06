@@ -2203,42 +2203,26 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* ── Portrait reflow ─────────────────────────────────────────────────────────
-   The aux-sidebar board is landscape-shaped: ZONES + RESTROOMS on the left, a
-   fixed 165px AUX rail on the right, packed into two fr-rows. In a tall/narrow
-   PORTRAIT viewport that rail eats ~20% of the width and the whole board grows
-   taller than the height-locked, overflow:hidden shell — so RESTROOMS + AUX get
-   clipped off the bottom (unreachable) and zone cards get crushed.
-
-   In portrait we stack the three bands full-width instead: ZONES, then
-   RESTROOMS, then AUX as a horizontal bottom band. Freed of the rail, the zone/
-   RR grids take the full width (the container queries give more, wider columns →
-   fewer rows), and the 3-row fr budget keeps everything inside the viewport
-   (cards scroll their own tasks rather than the board clipping). Live builder
-   only — print preview (no .sb-builder-live) keeps its fixed landscape grid. */
+/* ── Portrait scale-to-fit ───────────────────────────────────────────────────
+   This board is landscape-shaped (ZONES + RESTROOMS + a right AUX rail). Rather
+   than reflow/crush it into a tall/narrow portrait viewport, we render the exact
+   landscape layout at a fixed design size and scale the whole thing down to fit
+   the portrait width — a faithful miniature, never clipped or crushed. The design
+   box (--sb-portrait-dw/dh) and fit factor (--sb-portrait-fit) are measured in JS
+   and published on .sb-builder-scale-viewport. transform-origin is top-left so the
+   scaled board aligns to the container's left edge (the fit is derived from the
+   container width, so it fills it exactly). Pads/overlays are body-portaled, so the
+   transform doesn't affect their anchoring. Live builder only. */
 @media (orientation: portrait) {
-  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.6fr);
+  .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport {
+    align-items: flex-start;
   }
-  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
-    grid-column: 1;
-    grid-row: 3;
-  }
-  /* AUX becomes a full-width horizontal band (was a vertical flex strip). */
-  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar .sb-aux-grid {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-flow: row;
-    flex: 1 1 auto;
+  .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport > * {
+    flex: none !important;
+    width: var(--sb-portrait-dw, 1180px);
+    height: var(--sb-portrait-dh, 800px);
+    transform: scale(var(--sb-portrait-fit, 1));
+    transform-origin: top left;
   }
 }
 

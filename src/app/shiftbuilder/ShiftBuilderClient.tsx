@@ -1956,6 +1956,71 @@ function AuthedShiftBuilder() {
     recomputeScaleRef.current = recomputeScale;
   }, [recomputeScale]);
 
+  // Portrait scale-to-fit: this board is landscape-shaped (ZONES + RESTROOMS + a
+  // right AUX rail). In a tall/narrow portrait viewport, reflowing it crushes/clips
+  // content, so instead we render the exact landscape layout at a fixed design size
+  // and scale the whole thing down to fit the portrait width — a faithful miniature.
+  // The design box + fit factor are published as CSS vars on the scale viewport and
+  // consumed by the transform in globals.css ("Portrait scale-to-fit"). Pads/overlays
+  // are body-portaled, so the transform doesn't affect their anchoring; dnd hit-testing
+  // stays correct via MeasuringStrategy.Always (post-transform rects).
+  useEffect(() => {
+    if (!isBuilderLiveCanvas) return;
+    const DESIGN_W = 1180;
+    const DESIGN_H = 800;
+    const findViewport = () =>
+      document.querySelector<HTMLElement>(".sb-builder-scale-viewport");
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const sv = findViewport();
+      if (!sv) return;
+      const portrait = window.matchMedia("(orientation: portrait)").matches;
+      if (!portrait) {
+        sv.style.removeProperty("--sb-portrait-fit");
+        sv.style.removeProperty("--sb-portrait-dw");
+        sv.style.removeProperty("--sb-portrait-dh");
+        return;
+      }
+      const cw = sv.clientWidth;
+      const ch = sv.clientHeight;
+      if (cw < 80 || ch < 80) return;
+      const fit = Math.min(cw / DESIGN_W, ch / DESIGN_H, 1);
+      sv.style.setProperty("--sb-portrait-dw", `${DESIGN_W}px`);
+      sv.style.setProperty("--sb-portrait-dh", `${DESIGN_H}px`);
+      sv.style.setProperty("--sb-portrait-fit", String(Math.round(fit * 1000) / 1000));
+    };
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(apply);
+    };
+    schedule();
+    const mq = window.matchMedia("(orientation: portrait)");
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
+    mq.addEventListener?.("change", schedule);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", schedule);
+    let ro: ResizeObserver | null = null;
+    const svEl = findViewport();
+    if (svEl && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(schedule);
+      ro.observe(svEl);
+    }
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
+      mq.removeEventListener?.("change", schedule);
+      vv?.removeEventListener("resize", schedule);
+      ro?.disconnect();
+      const sv = findViewport();
+      sv?.style.removeProperty("--sb-portrait-fit");
+      sv?.style.removeProperty("--sb-portrait-dw");
+      sv?.style.removeProperty("--sb-portrait-dh");
+    };
+  }, [isBuilderLiveCanvas]);
+
   useEffect(() => {
     onViewportSyncRef.current = () => {
       recomputeScaleRef.current();
