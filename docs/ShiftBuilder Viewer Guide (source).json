@@ -1,0 +1,215 @@
+{
+  "title": "Running the Night in ShiftBuilder",
+  "eyebrow": "Gun Lake Operations · Grave Shift · Deployment Board",
+  "header_right": "SHIFTBUILDER GUIDE",
+  "sop_num": "",
+  "footer_note": "ShiftBuilder Guide · Gun Lake Casino Resort · Operations. The on-screen board is the live Zone Deployment Sheet; for the reading standard, see IM-SOP-600, Reading the Grave Zone Deployment Sheet.",
+  "pages": [
+    {
+      "blocks": [
+        {
+          "type": "lead",
+          "text": "ShiftBuilder is where you read and run the nightly Grave Zone Deployment Sheet. The board on your screen is the live sheet: what you change is the real assignment the moment you make it. This guide covers signing in, finding the night, reading the board, covering gaps, the Overlaps page, and printing."
+        },
+        {
+          "type": "rulebox",
+          "label": "The One Rule",
+          "text": "The board is <em>live</em>. What you change is the real assignment the instant you make it: there is no separate save step."
+        },
+        {
+          "type": "h2",
+          "n": "01",
+          "text": "Signing In"
+        },
+        {
+          "type": "steps",
+          "items": [
+            "Open ShiftBuilder. The lock screen reads <b>ShiftBuilder Access</b>.",
+            "Enter your 6-digit ops PIN. It submits on the sixth digit; <b>Clear</b> starts over.",
+            "On <b>SIGNED IN</b>, the board opens on tonight's Grave date. The first time you sign in, the <b>Grave Cover Guide</b> walks you through the board once; reopen it any time from the (&#8943;) menu."
+          ]
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "02",
+          "text": "Finding the Night"
+        },
+        {
+          "type": "p",
+          "text": "You see a night once it has been published. Use the week strip or the calendar to land on the night you need, or tap Today to jump to tonight."
+        },
+        {
+          "type": "html",
+          "html": "<div style=\"border:1px solid #D8DBE1;border-radius:10px;background:#F4F5F7;padding:10px 11px;margin:8px 0 4px;\"><div style=\"display:flex;align-items:center;gap:7px;flex-wrap:wrap;\"><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">1</span>JULY 2026 &#9662;</span><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">2</span>&#9678; Today</span><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">3</span>F S <b style=\"color:#1A2744;\">&#9679;25</b> M T W T &nbsp;&#8249; &#8250;</span><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">4</span>&#9776; Deployment | Overlap</span><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">5</span><span style=\"color:#34C759;\">&#9679;</span> PUBLISHED</span><span style=\"display:inline-flex;align-items:center;gap:4px;border:1px solid #D0D4DA;border-radius:6px;background:#fff;padding:3px 8px;font-size:8.3px;font-weight:600;color:#2B2B2B;white-space:nowrap;\"><span style=\"display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;background:#C9A84C;color:#1A2744;font-family:'Barlow Condensed';font-weight:700;font-size:8.5px;\">6</span>BK &nbsp; &#8943;</span></div></div>"
+        },
+        {
+          "type": "callouts",
+          "items": [
+            [
+              "1",
+              "<b>Month and date.</b> Click the month (for example, JULY 2026) to open the calendar and jump to any date."
+            ],
+            [
+              "2",
+              "<b>Today.</b> Snaps you to tonight's Grave date."
+            ],
+            [
+              "3",
+              "<b>The week strip.</b> Seven day pills for the current Grave week; the arrows step to the previous or next week. The highlighted pill is the night you are viewing."
+            ],
+            [
+              "4",
+              "<b>Roster and view.</b> Show or hide the Team roster, and use the layers icon to flip between the <b>Deployment</b> board and the <b>Overlap sheet</b>."
+            ],
+            [
+              "5",
+              "<b>The night.</b> A published night shows as posted and live. That is the night you work."
+            ],
+            [
+              "6",
+              "<b>Your menu.</b> Your initials open your account (Sign out). The (&#8943;) menu holds Refresh Day, the Grave Cover Guide, and Print."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "03",
+          "text": "Reading the Board"
+        },
+        {
+          "type": "p",
+          "text": "The board is the Zone Deployment Sheet, live. It reads top to bottom, the same as the printed book: <b>ZONES</b>, then <b>RESTROOMS</b>, then <b>AUXILIARY</b>, each with its fill count (for example, ZONES 5 / 10 FILLED). For the full reading standard, use IM-SOP-600."
+        },
+        {
+          "type": "callwrap",
+          "side_html": "<div class=\"mock\"><div class=\"mh\" style=\"border-top:3.5px solid #007AFF;\"><div class=\"zn\" style=\"color:#007AFF;\">&#9679; ZONE 7</div><div class=\"bw\">2</div></div><div class=\"body\"><div class=\"nm\">Marcus</div><div class=\"tk\">Zone 7 Smoking Room<br/>Zone 7 Self Serve Station</div></div><div class=\"band\" style=\"background:#007AFF;\">+ ZONE 2</div></div>",
+          "items": [
+            [
+              "1",
+              "<b>Accent bar and label.</b> The color and zone symbol are the area's fixed identity, the same as on the printed sheet."
+            ],
+            [
+              "2",
+              "<b>Corner mark.</b> The badge in the top-right is the break group (1, 2, 3, or OL)."
+            ],
+            [
+              "3",
+              "<b>The name.</b> Who owns the area tonight, or “Unfilled” when the slot is open."
+            ],
+            [
+              "4",
+              "<b>Location lines.</b> The area's posts and task notes, in muted gray."
+            ],
+            [
+              "5",
+              "<b>Coverage band.</b> A colored band names an area this person also carries (see Section 05)."
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "n": "04",
+          "text": "Working a Card"
+        },
+        {
+          "type": "p",
+          "text": "Double-click any card to open its placement pad. The pad has three actions:"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "In the pad, tap",
+            "To"
+          ],
+          "rows": [
+            [
+              "Swap",
+              "Put a different Team Member in the slot, or fill an open slot."
+            ],
+            [
+              "Clear",
+              "Remove the Team Member; the slot goes open."
+            ],
+            [
+              "Coverage",
+              "Have this person also carry another area. See Section 05."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "05",
+          "text": "Covering a Gap"
+        },
+        {
+          "type": "p",
+          "text": "When an area has no one, you do not edit the empty area. You assign the coverage from the card of the person who will carry it."
+        },
+        {
+          "type": "steps",
+          "items": [
+            "Double-click the card of the person who will cover the gap.",
+            "In the placement pad, tap <b>Coverage</b>.",
+            "Under <b>Add coverage</b>, pick the area they will carry from <b>Zones</b>, <b>Restrooms</b>, or <b>Aux / Support</b>. For anything else, type it in the <b>Custom text</b> field (for example, “High Limit Slots”) and tap <b>Add</b>.",
+            "A coverage band appears at the bottom of that person's card, naming the area in its color (for example, + ZONE 2). To undo it, tap the ✕ on the band."
+          ]
+        },
+        {
+          "type": "goldbox",
+          "label": "Where the Band Lives",
+          "text": "The coverage band always sits on the <b>coverer's</b> card, never on the covered area's card. That is how the board shows one person carrying two areas at once."
+        },
+        {
+          "type": "h2",
+          "n": "06",
+          "text": "The Overlaps Page"
+        },
+        {
+          "type": "p",
+          "text": "Tap the layers icon in the navigation to open the <b>Overlap sheet</b>. It lays the night out by break wave (groups 1, 2, 3, and OL) and shows the PM and AM overlap crews. It works exactly like the deployment board: double-click a card to Swap, Clear, or add Coverage. Tap the layers icon again to return to the board."
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "07",
+          "text": "Printing"
+        },
+        {
+          "type": "p",
+          "text": "Open the (&#8943;) menu and choose <b>Print</b>. ShiftBuilder lays out the Zone Deployment Sheet and the Overlap sheet. Set the options as needed: <b>Official</b> prints the full sheet, <b>Planning</b> leaves slots blank; you can set page order, margins, and a cover page. <b>View Print Preview</b> shows the print layout on screen first."
+        },
+        {
+          "type": "h2",
+          "n": "08",
+          "text": "The Quick Routine"
+        },
+        {
+          "type": "steps",
+          "items": [
+            "Sign in with your PIN.",
+            "Open tonight's published night.",
+            "Read the board top to bottom: ZONES, RESTROOMS, AUXILIARY.",
+            "Swap in replacements and cover any gaps.",
+            "Check the Overlap sheet.",
+            "Print the book for the floor."
+          ]
+        }
+      ]
+    }
+  ]
+}

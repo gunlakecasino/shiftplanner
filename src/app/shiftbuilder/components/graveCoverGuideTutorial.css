@@ -51,10 +51,10 @@
 .sb-guide-coach__eyebrow {
   margin: 0 0 4px;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--sb-text-3);
+  color: #B8941F;
 }
 
 .sb-guide-coach__title {
@@ -84,11 +84,12 @@
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(123, 50, 38, 0.1);
-  border: 1px solid rgba(123, 50, 38, 0.2);
+  background: #FBF4E2;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-left: 4px solid #C9A84C;
   font-size: 12px;
   font-weight: 600;
-  color: #7b3226;
+  color: #6B5514;
 }
 
 .sb-guide-coach__reference {
@@ -106,7 +107,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sb-text-3);
+  color: #B8941F;
 }
 
 .sb-guide-coach__reference ul {
@@ -127,7 +128,7 @@
   padding: 11px 14px;
   border: none;
   border-radius: 14px;
-  background: #7b3226;
+  background: #1A2744;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -137,9 +138,9 @@
 .sb-guide-coach__secondary {
   padding: 10px 14px;
   border-radius: 14px;
-  border: 1px solid #7b3226;
+  border: 1px solid #1A2744;
   background: transparent;
-  color: #7b3226;
+  color: #1A2744;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -332,17 +333,17 @@
 }
 
 .sb-guide-target {
-  outline: 2px solid #7b3226;
+  outline: 2px solid #C9A84C;
   outline-offset: 2px;
 }
 
 @keyframes sb-guide-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(123, 50, 38, 0.45);
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.5);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(123, 50, 38, 0);
+    box-shadow: 0 0 0 8px rgba(201, 168, 76, 0);
   }
 }
 
@@ -374,4 +375,15 @@
   .sb-guide-zone-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+/* GLCR navy/gold theme — dark-mode secondary reads gold */
+.sb-guide-frame--dark .sb-guide-coach__secondary {
+  border-color: #C9A84C;
+  color: #C9A84C;
+}
+.sb-guide-frame--dark .sb-guide-coach__hint {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-left: 4px solid #C9A84C;
+  color: #E8CE86;
 }
