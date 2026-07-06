@@ -2203,6 +2203,45 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* ── Portrait reflow ─────────────────────────────────────────────────────────
+   The aux-sidebar board is landscape-shaped: ZONES + RESTROOMS on the left, a
+   fixed 165px AUX rail on the right, packed into two fr-rows. In a tall/narrow
+   PORTRAIT viewport that rail eats ~20% of the width and the whole board grows
+   taller than the height-locked, overflow:hidden shell — so RESTROOMS + AUX get
+   clipped off the bottom (unreachable) and zone cards get crushed.
+
+   In portrait we stack the three bands full-width instead: ZONES, then
+   RESTROOMS, then AUX as a horizontal bottom band. Freed of the rail, the zone/
+   RR grids take the full width (the container queries give more, wider columns →
+   fewer rows), and the 3-row fr budget keeps everything inside the viewport
+   (cards scroll their own tasks rather than the board clipping). Live builder
+   only — print preview (no .sb-builder-live) keeps its fixed landscape grid. */
+@media (orientation: portrait) {
+  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.6fr);
+  }
+  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  /* AUX becomes a full-width horizontal band (was a vertical flex strip). */
+  .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar .sb-aux-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: row;
+    flex: 1 1 auto;
+  }
+}
+
 /* Workspace is the flex child that carries height into zones/RR/aux grids. */
 .sb-builder-stage .builder-workspace {
   flex: 1 1 auto;
@@ -2986,6 +3025,46 @@ button,
   height: 2px;
   z-index: 5;
   pointer-events: none;
+}
+
+/* ── Coarse-pointer essentials that must apply at ANY width ──────────────────
+   The (min-width:768px) foundation below silently switches OFF in Split View /
+   Slide Over / Stage Manager (windows routinely < 768 CSS px), dropping the app
+   to desktop chrome on a touch-only device. These rules are width-independent and
+   belong on every coarse pointer: the iOS focus-zoom guard, HIG touch targets, and
+   safe-area insets so nothing hides under the Face-ID bar / home indicator. */
+@media (pointer: coarse) {
+  /* Kill iOS Safari focus auto-zoom: a focused field < 16px zooms the whole board,
+     then the visualViewport shrink re-fits the shell mid-keystroke. Any focusable
+     text field must be >= 16px on touch. !important is required to beat Tailwind
+     text-[Npx] utilities AND inline `fontSize` styles. Auth/PIN inputs are already
+     touch-sized (larger) — leave them; non-text controls don't zoom, so skip them. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="color"]):not(.sb-auth-input):not(.sb-auth-input--compact),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: 16px !important;
+  }
+
+  /* 44pt HIG minimum — applies regardless of width. */
+  .sb-tablet-touch-target {
+    min-width: var(--touch-min, 44px);
+    min-height: var(--touch-min, 44px);
+  }
+
+  /* Merge JS stage insets with safe-area at every width (overrides inline paddingTop). */
+  .sb-stage-host {
+    padding-top: calc(var(--sb-stage-inset-top, 64px) + env(safe-area-inset-top, 0px)) !important;
+    padding-right: calc(var(--sb-stage-inset-right, 12px) + env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: calc(var(--sb-stage-inset-bottom, 20px) + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: calc(var(--sb-stage-inset-left, 12px) + env(safe-area-inset-left, 0px)) !important;
+  }
+
+  /* Deployment-board GROUP filter pills stay tappable in narrow multitasking. */
+  .sb-group-filter-pill {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
 }
 
 /* ── iPad / coarse-pointer tablet foundation (Phase A) ───────────────────── */
