@@ -20,6 +20,7 @@ export default defineConfig({
       "src/lib/shiftbuilder/engine/**/*.test.ts",
       "src/lib/shiftbuilder/*.test.ts",
       "src/lib/tasks/**/*.test.ts",
+      "src/lib/auth/**/*.test.ts",
     ],
     environment: "node",
     globals: true,

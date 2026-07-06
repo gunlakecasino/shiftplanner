@@ -58,9 +58,14 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
-        canAccessTasks: true,
+        // Viewers are walled off from the Projects/ops-work-item system entirely:
+        // no /shiftbuilder/projects access, no Projects nav link, no board task
+        // awareness pill/badges, and no task API access at any level. Their task
+        // work stays on the board itself (night_slot_tasks via the card TasksPad),
+        // which is gated only by night-lock and needs none of these flags.
+        canAccessTasks: false,
         canManageTasks: false,
-        canCompleteOwnTasks: true,
+        canCompleteOwnTasks: false,
       };
 
     case "admin":

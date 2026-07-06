@@ -78,4 +78,25 @@ describe("getEffectivePermissions", () => {
     expect(effective.canAccessReports).toBe(false);
     expect(effective.canEditPublishedOnly).toBe(true);
   });
+
+  it("walls viewer off from the Projects/tasks system, even with overrides that request access", () => {
+    const effective = getEffectivePermissions({
+      id: "u3",
+      email: "",
+      full_name: "Floor",
+      username: "floor2",
+      role: "viewer",
+      permissions: {
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
+      },
+    });
+
+    expect(effective.canAccessTasks).toBe(false);
+    expect(effective.canManageTasks).toBe(false);
+    expect(effective.canCompleteOwnTasks).toBe(false);
+    // Board deployment work is unaffected — viewers still place TMs.
+    expect(effective.canEditAssignments).toBe(true);
+  });
 });
