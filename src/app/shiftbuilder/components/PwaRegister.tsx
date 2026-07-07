@@ -46,7 +46,9 @@ export default function PwaRegister() {
 
     const register = () => {
       navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
+        // updateViaCache:"none" — never serve sw.js (or its imports) from the HTTP
+        // cache during update checks, so a new build's worker is always detected.
+        .register("/sw.js", { scope: "/", updateViaCache: "none" })
         .then((reg) => {
           const checkForUpdate = () => reg.update().catch(() => undefined);
           checkForUpdate();

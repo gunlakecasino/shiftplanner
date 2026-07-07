@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
@@ -75,7 +76,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      {state && (
+      {state && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[10060] flex items-center justify-center p-4 transition-opacity duration-150"
           style={{
@@ -156,7 +157,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </ConfirmContext.Provider>
   );

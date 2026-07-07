@@ -13,7 +13,7 @@
 //   • Everything else             → passthrough.
 //
 // Bump CACHE_VERSION on every release so activate() purges the previous caches.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const SHELL_CACHE = `shiftforge-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `shiftforge-static-${CACHE_VERSION}`;
 const OFFLINE_URL = "/shiftbuilder";
@@ -139,7 +139,11 @@ async function cacheFirst(request, cacheName) {
 
 async function networkFirstNavigation(request) {
   try {
-    const response = await fetch(request);
+    // Bypass the browser HTTP cache for the document itself. Without this, a
+    // "network-first" fetch can still resolve to a stale, HTTP-cached HTML shell
+    // that references dead chunk hashes — the exact "hard-reset to see the new
+    // deploy" symptom. no-store forces a fresh document every navigation.
+    const response = await fetch(request.url, { cache: "no-store", credentials: "same-origin" });
     if (response && response.status === 200) {
       // Keep the canonical shell fresh for offline fallback.
       const clone = response.clone();
