@@ -4,18 +4,15 @@ import React from "react";
 import type { EngineRunPhase, CoverageEngineRunOptions } from "../components/CanvasEngineCluster";
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
+import { useConfirm } from "../components/ConfirmDialog";
 
 /**
  * useEngineRunner
  *
- * Extracted for world-class decomposition (Phase 2).
- * Manages engine run phase, the runner ref, and draft application entry points.
+ * Manages "Run Engine" / Optimize Night (Full: planner+opt+AI) phase and draft entry.
  *
- * The heavy runCoverageEngine implementation remains in the orchestrator for now
- * (due to many dependencies), but this hook centralizes the control surface
- * so components and Client can subscribe narrowly.
- *
- * Future: move full runner here once more state is in store/selectors.
+ * See notes in timefoldLocalSolver.ts and engine/index.ts on how this relates
+ * The single Optimize Night path (full placements + optimization). Week uses the same engine core.
  */
 export interface UseEngineRunnerParams {
   // Pure helpers (passed from orchestrator to avoid duplication)
@@ -43,7 +40,7 @@ export interface UseEngineRunnerReturn {
   ) => void;
   runXaiEngineFromCanvas?: () => void;
   // Unified draft commit surface (step 2)
-  discardDraft: () => void;
+  discardDraft: () => Promise<void>;
   upsertDraftSlot: (slotKey: string, update: { kind: "assign"; tmId: string; tmName: string } | { kind: "clear" }) => void;
   applyDraftMoveOrSwap: (
     fromKey: string,
@@ -65,6 +62,7 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
     isCurrentNightLocked,
   } = params;
 
+  const confirm = useConfirm();
   const [engineRunPhase, setEngineRunPhase] = React.useState<EngineRunPhase>("idle");
   const runCoverageEngineRef = React.useRef<(options?: CoverageEngineRunOptions) => Promise<void>>(
     async () => {}
@@ -148,12 +146,15 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
   // === Draft lifecycle helpers moved here for full unification (step 2) ===
   // These use direct store for narrow updates. applyDraft (the commit with guard + history + DB) stays in Client for now
   // due to heavy coupling (selectedDay, nightId, shiftData, history record, etc.) but upsert/discard/move are here.
-  const discardDraft = () => {
+  const discardDraft = async () => {
     const store = useShiftBuilderStore.getState();
     if (!store.isDraftMode) return;
-    if (typeof window !== "undefined" && !confirm("Discard the current draft? Unsaved placement changes will be lost.")) {
-      return;
-    }
+    const ok = await confirm("Unsaved placement changes will be lost.", {
+      title: "Discard the current draft?",
+      confirmLabel: "Discard",
+      tone: "danger",
+    });
+    if (!ok) return;
     store.setIsDraftMode(false);
     store.clearDraft();
   };

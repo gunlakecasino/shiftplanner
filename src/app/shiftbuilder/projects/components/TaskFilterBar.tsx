@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { LayoutList, Kanban, Repeat, CalendarDays, Layers, LayoutGrid } from "lucide-react";
+import { LayoutList, Kanban, Repeat, CalendarDays, Layers, LayoutGrid, Target } from "lucide-react";
 
-export type SmartFilter = "all" | "open" | "overdue" | "tonight" | "complete";
-export type BoardView = "list" | "board" | "calendar" | "recurring" | "pools" | "defaults";
+export type SmartFilter = "all" | "open" | "overdue" | "tonight" | "complete" | "my-floor" | "from-recap" | "staffing" | "compliance";
+export type BoardView = "list" | "board" | "calendar" | "recurring" | "pools" | "defaults" | "planner";
 
 const SMART_FILTERS: { id: SmartFilter; label: string }[] = [
   { id: "open", label: "Open" },
@@ -12,6 +12,11 @@ const SMART_FILTERS: { id: SmartFilter; label: string }[] = [
   { id: "tonight", label: "Due Tonight" },
   { id: "complete", label: "Complete" },
   { id: "all", label: "All" },
+  // Brian-exclusive personal filters (tailored to grave shift LOG/COMPILE rhythms)
+  { id: "my-floor", label: "My Floor Notes" },
+  { id: "from-recap", label: "From Recaps" },
+  { id: "staffing", label: "Staffing" },
+  { id: "compliance", label: "Compliance/Training" },
 ];
 
 export function TaskFilterBar({
@@ -121,6 +126,17 @@ export function TaskFilterBar({
           }}
         >
           <LayoutGrid size={13} /> Defaults
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("planner")}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors"
+          style={{
+            background: view === "planner" ? "var(--ios-background-primary)" : "transparent",
+            color: view === "planner" ? "var(--ios-label)" : "var(--ios-label-tertiary)",
+          }}
+        >
+          <Target size={13} /> Planner
         </button>
       </div>
     </div>

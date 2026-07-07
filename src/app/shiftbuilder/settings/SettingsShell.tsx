@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { useConfirm } from "../components/ConfirmDialog";
 import { useTheme } from "../hooks/useTheme";
 import { useCurrentNight } from "../hooks/useCurrentNight";
 import {
@@ -30,7 +31,7 @@ import {
   MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
 import { shiftBuilderVersionLabel } from "../version";
-import { GoldHairline } from "../sudo/SudoGlass";
+import { GoldHairline, SudoTabLoading } from "../sudo/SudoGlass";
 import { AuditLogTab } from "../sudo/AuditLogTab";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
@@ -49,13 +50,26 @@ import {
 import "./settingsTheme.css";
 import "./settingsShell.css";
 
+// `dynamic()` with no `loading` renders nothing at all while the chunk is
+// being fetched/compiled — a real, silent multi-second blank gap in dev
+// (Turbopack compiles the route on first visit) that has nothing to do with
+// either tab's own internal data-loading state, since the component hasn't
+// even mounted yet. Give both a fallback so the tab never looks broken.
+function SettingsDynamicTabFallback({ label }: { label: string }) {
+  return (
+    <div className="h-full flex items-center justify-center py-16">
+      <SudoTabLoading>{label}</SudoTabLoading>
+    </div>
+  );
+}
+
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
-  { ssr: false },
+  { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading engine config" /> },
 );
 const BatchPlannerTab = dynamic(
   () => import("../sudo/BatchPlannerTab").then((m) => ({ default: m.BatchPlannerTab })),
-  { ssr: false },
+  { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading batch planner" /> },
 );
 
 function resolveWeekContext() {
@@ -180,6 +194,7 @@ export function SettingsShell() {
   const { isDark, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  const confirmDialog = useConfirm();
 
   const canRunEngine = permissions?.canRunEngine ?? false;
 
@@ -390,8 +405,8 @@ export function SettingsShell() {
             {currentOperator && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Sign out ${currentOperator.full_name}?`)) {
+                onClick={async () => {
+                  if (await confirmDialog(`Sign out ${currentOperator.full_name}?`, { confirmLabel: "Sign out" })) {
                     logoutOperator();
                     router.push("/shiftbuilder");
                   }
@@ -458,7 +473,15 @@ export function SettingsShell() {
             data-tall={TALL_SETTINGS_TABS.has(activeTab) ? "true" : undefined}
             role="tabpanel"
           >
-            <AnimatePresence mode="wait">
+            {/* No `mode="wait"` — it defers mounting the new tab's content until
+                the previous tab's exit animation fully resolves, and if that
+                exit is ever delayed (slow tab content, main-thread contention),
+                the new tab's pill/URL update instantly while its content stays
+                stuck showing the old tab indefinitely. Default (concurrent)
+                mode lets the new tab mount immediately alongside the old one
+                fading out, so content can never lag behind the active-tab
+                state it's supposed to reflect. */}
+            <AnimatePresence>
               <motion.div key={activeTab} className="sb-settings-tab-motion" {...tabMotion}>
                 <SettingsTabPanel
                   activeTab={activeTab}

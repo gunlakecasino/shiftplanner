@@ -1,25 +1,30 @@
 "use client";
 
 /**
- * timefoldLocalSolver — the real "Deep Optimize" engine (in-process).
+ * timefoldLocalSolver — "Optimize Tonight" / deep night rotation optimizer (in-process).
  *
- * Replaces timefoldMock behind the exact same tick/result contract. This is a
- * genuine optimizer, not a simulation: it seeds from tonight's live board,
- * then runs multi-restart hill-climbing over fill/replace/swap moves, scoring
- * every candidate solution against the operator-ratified objective hierarchy:
+ * Genuine local-search optimizer (not simulation). Seeds strictly from *tonight's live board*
+ * (unlike the full "Run Engine" which uses a planner seed from scratch).
+ * Multi-restart hill-climbing (fill/replace/swap) over 3 strategy variants.
  *
- *   1. COVERAGE     — filled required slots (lexicographically dominant)
- *   2. ROTATION     — Σ per-slot health points (prior-3 criticals, week
- *                     repeats, 30-night spread — same primitives as the fit chips)
- *   3. PREFERENCES  — hard avoid = constraint; hard/soft prefer/avoid as signal
- *   4. SKILL        — closeness of tm skill_score to slot_difficulty
+ * Objective (same hierarchy as unified engine):
+ *   1. COVERAGE (hard invariant via enforceBaseCoverage)
+ *   2. ROTATION (health points via scorePlacementFit)
+ *   3. PREFERENCES
+ *   4. SKILL
  *
- * Hard rules are constraints, never costs: eligibility (gender, grave pool,
- * overlap bands), locked slots, one TM per night, scheduled-only pool, and
- * manual-only zones (Z1/Z2 never auto-filled).
+ * Outputs *proposals with diffs* for user triage (vs direct draft from Run Engine).
+ * This gives the nice "Balanced / Minimal disruption / Max spread" review sheet.
  *
- * A true Timefold service can later replace this behind the same interface —
- * see timefoldTypes.ts. Until then, "Est. 12–18s" is a real solve budget.
+ * RELATION TO RUN ENGINE / WEEK:
+ * - Run Engine (for night) = unified engine/index.ts (planner + engine/optimizer + optional AI) → direct draft.
+ * - This = specialized current-board deep opt (legacy timefold impl) → proposals.
+ * - Week engine = rolling runNightEngine (no-ai) + cross-night polish.
+ * Run Engine can feel redundant with this for "optimize the night"; they are
+ * complementary (full plan vs rotation tune from current). See engine/optimizer.ts
+ * (intended successor) and UNIFIED_ENGINE_PLAN.md for consolidation path.
+ *
+ * Hard constraints enforced. ~9s budget.
  */
 
 import {

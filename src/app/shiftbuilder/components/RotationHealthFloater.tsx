@@ -65,13 +65,11 @@ export type RotationHealthFloaterProps = {
   canRunEngine?: boolean;
   canEditAssignments?: boolean;
   isCurrentNightLocked?: boolean;
-  onRunXaiEngine?: () => void;
-  onDeepOptimize?: () => void;
+  /** Single unified Optimize Night (full planner + optimization + optional AI) */
+  /** Unified single Optimize for the day (full placements + optimization) */
+  onOptimizeNight?: () => void;
   onClearBoard?: () => void;
   engineRunning?: boolean;
-  deepOptimizeRunning?: boolean;
-  deepOptimizeTick?: TimefoldProgressTick | null;
-  onCancelDeepOptimize?: () => void;
   onApplyDraft?: () => void;
   onDiscardDraft?: () => void;
   /** When DraftStatusPill is visible, skip redundant draft microcopy in the drawer. */
@@ -110,12 +108,12 @@ function breakdownTitle(
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.critical_repeat} critical · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
     "",
-    "Click the orb to open engine tools — Run Engine, Optimize Tonight, Clear board.",
+    "Click the orb to open engine tools — Optimize Night (full placements + optimization), Optimize Week, Clear board.",
   ];
   return lines.join("\n");
 }
 
-/** Rotation health orb + unified engine drawer (Run Engine, Optimize Tonight, Clear). */
+/** Rotation health orb + unified engine drawer (Optimize Night, Optimize Week, Clear). */
 export function RotationHealthFloater({
   visible,
   auxDefs,
@@ -131,13 +129,9 @@ export function RotationHealthFloater({
   canRunEngine = false,
   canEditAssignments = false,
   isCurrentNightLocked = false,
-  onRunXaiEngine,
-  onDeepOptimize,
+  onOptimizeNight,
   onClearBoard,
   engineRunning = false,
-  deepOptimizeRunning = false,
-  deepOptimizeTick = null,
-  onCancelDeepOptimize,
   onApplyDraft,
   onDiscardDraft,
   showDraftStatusPill = false,
@@ -182,11 +176,11 @@ export function RotationHealthFloater({
     weekHealthLoading ? null : computeWeekAverageHealth(weekDailyHealths),
   );
 
-  const running = engineRunning || deepOptimizeRunning;
+  const running = engineRunning;
 
   React.useEffect(() => {
-    if (running || deepOptimizeRunning) setDrawerOpen(true);
-  }, [running, deepOptimizeRunning]);
+    if (running) setDrawerOpen(true);
+  }, [running]);
 
   React.useEffect(() => {
     if (isDraftMode && draftSlotCount > 0 && !showDraftStatusPill) setDrawerOpen(true);
@@ -196,12 +190,12 @@ export function RotationHealthFloater({
     if (!drawerOpen) return;
     const onPointerDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        if (!deepOptimizeRunning) setDrawerOpen(false);
+        setDrawerOpen(false);
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [drawerOpen, deepOptimizeRunning]);
+  }, [drawerOpen]);
 
   if (!visible) return null;
 
@@ -214,8 +208,7 @@ export function RotationHealthFloater({
   const glassBorder = "var(--sb-glass-border, rgba(0,0,0,0.1))";
 
   const engineDisabled =
-    !canRunEngine || isCurrentNightLocked || engineRunning || deepOptimizeRunning;
-  const optimizeDisabled = engineDisabled || !onDeepOptimize;
+    !canRunEngine || isCurrentNightLocked || engineRunning;
   const clearDisabled =
     !canEditAssignments || isCurrentNightLocked || running;
   const draftActionsDisabled =
@@ -235,10 +228,10 @@ export function RotationHealthFloater({
     whiteSpace: "nowrap",
   };
 
-  let engineLabel = "Run Engine";
-  if (engineRunning) engineLabel = "Scoring…";
+  let engineLabel = "Optimize Night";
+  if (engineRunning) engineLabel = "Optimizing…";
 
-  const drawerWidth = deepOptimizeRunning ? 300 : isDraftMode ? 320 : 280;
+  const drawerWidth = isDraftMode ? 320 : 280;
 
   const anchorStyle: React.CSSProperties =
     placement === "inline"
@@ -274,52 +267,30 @@ export function RotationHealthFloater({
       className="no-print flex flex-col items-end gap-2"
       style={anchorStyle}
     >
-      {deepOptimizeRunning && (
+      {engineRunning && (
         <div
           className="w-full max-w-[300px] rounded-2xl px-3.5 py-3"
           style={velvetGlassPillStyle({ borderRadius: 16 })}
           role="status"
           aria-live="polite"
-          aria-label="Optimize Tonight — running"
+          aria-label="Optimize Night — running"
         >
           <div className="flex items-center gap-2">
             <Loader2
-              size={14}
+              size={18}
               className="shrink-0 animate-spin motion-reduce:animate-none"
-              style={{ color: "var(--sb-gold-ink)" }}
+              style={{ color: "var(--sb-optimize-ink)" }}
             />
-            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground">
-              Optimize Tonight
-            </span>
-            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-              {deepOptimizeTick?.etaSeconds ?? "…"}s
-            </span>
+            <div className="min-w-0 flex-1 truncate text-[13px] font-extrabold tracking-[-0.01em] text-foreground">
+              Optimize Night
+            </div>
+            <div className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+              …
+            </div>
           </div>
-          <p className="mt-1 truncate text-[10px] text-muted-foreground">
-            {deepOptimizeTick?.headline ?? "Reading tonight's board…"}
+          <p className="mt-1 truncate text-[11.5px] text-muted-foreground">
+            Running full placements + optimization…
           </p>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--muted)" }}>
-            <div
-              className="h-full rounded-full transition-[width] duration-300"
-              style={{
-                width: `${deepOptimizeTick?.percent ?? 0}%`,
-                background: "linear-gradient(90deg, var(--sb-gold-ink), var(--sb-gold))",
-              }}
-            />
-          </div>
-          <div className="mt-1.5 flex items-center justify-between text-[9px] tabular-nums text-muted-foreground">
-            <span>Projected health {deepOptimizeTick ? deepOptimizeTick.bestScore.toFixed(1) : "—"}%</span>
-            <span>{deepOptimizeTick?.percent ?? 0}%</span>
-          </div>
-          {onCancelDeepOptimize && (
-            <button
-              type="button"
-              className="mt-2 w-full rounded-full px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-              onClick={onCancelDeepOptimize}
-            >
-              Cancel — keep board
-            </button>
-          )}
         </div>
       )}
 
@@ -418,12 +389,12 @@ export function RotationHealthFloater({
               </button>
             )}
 
-            {onRunXaiEngine && !isDraftMode && (
+            {onOptimizeNight && !isDraftMode && (
               <button
                 type="button"
-                onClick={onRunXaiEngine}
+                onClick={onOptimizeNight}
                 disabled={engineDisabled}
-                title="Run weighted planner + xAI — preview in Draft Mode"
+                title="Optimize Night — full placements (planner) + optimization (local search + optional AI). Enters Draft Mode with the complete result."
                 className={`sb-interactive flex items-center gap-1 rounded px-2 py-1.5 disabled:opacity-40 shrink-0 ${engineRunning ? "sb-engine-running" : ""}`}
                 style={{
                   ...actionBtnBase,
@@ -436,12 +407,12 @@ export function RotationHealthFloater({
               </button>
             )}
 
-            {onRunXaiEngine && isDraftMode && !running && (
+            {onOptimizeNight && isDraftMode && !running && (
               <button
                 type="button"
-                onClick={onRunXaiEngine}
+                onClick={onOptimizeNight}
                 disabled={engineDisabled}
-                title="Re-run engine (replaces current draft)"
+                title="Re-run Optimize Night (replaces current draft)"
                 className="rounded px-2 py-1.5 disabled:opacity-40 shrink-0"
                 style={{
                   ...actionBtnBase,
@@ -449,26 +420,6 @@ export function RotationHealthFloater({
                 }}
               >
                 Re-run
-              </button>
-            )}
-
-            {onDeepOptimize && (
-              <button
-                type="button"
-                onClick={onDeepOptimize}
-                disabled={optimizeDisabled}
-                title="Optimize tonight's board for rotation — lands in Draft Mode"
-                className="sb-interactive flex items-center gap-1 rounded px-2 py-1.5 disabled:opacity-40 shrink-0"
-                style={{
-                  ...actionBtnBase,
-                  background: deepOptimizeRunning
-                    ? "rgba(255,204,0,0.22)"
-                    : actionBtnBase.background,
-                  cursor: optimizeDisabled ? "not-allowed" : "pointer",
-                }}
-              >
-                <Wand2 size={12} aria-hidden />
-                {deepOptimizeRunning ? "Optimizing…" : "Optimize"}
               </button>
             )}
           </div>

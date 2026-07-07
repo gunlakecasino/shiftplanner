@@ -15,6 +15,7 @@ import {
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
+import { RequestBoardModal } from "./RequestBoardModal";
 import {
   ChevronDown,
   LocateFixed,
@@ -39,6 +40,7 @@ import {
   Printer,
   Wand2,
   ClipboardList,
+  ClipboardPlus,
   CalendarRange,
 } from "lucide-react";
 
@@ -95,13 +97,12 @@ export interface FloatingNavProps {
   currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
   onOpenSettings?: (tab?: string) => void;
-  onRunEngine?: () => void;
-  /** Optimize tonight's board — same flow as the rotation-health engine drawer. */
-  onDeepOptimize?: () => void;
+  /** Single unified Optimize Night for the day: full placements + optimization. */
+  onOptimizeNight?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
   /** Preview the unified week engine (rolling solve + cross-night polish + fairness ledger) for the visible grave week. Read-only — opens a results sheet, doesn't write. */
-  onRunWeek?: () => void;
+  onRunWeek?: () => void; // Optimize Week preview (uses unified week engine)
   weekRunBusy?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
@@ -167,12 +168,10 @@ export default function FloatingNav(props: FloatingNavProps) {
     currentUser,
     onLogout,
     onOpenSettings,
-    onRunEngine,
-    onDeepOptimize,
+    onOptimizeNight,
     onRunWeek,
     weekRunBusy = false,
     engineRunning = false,
-    deepOptimizeRunning = false,
     onClearDay,
     onRefreshDay,
     refreshDayBusy = false,
@@ -203,13 +202,14 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canAccessSudo = permissions?.canAccessSudo ?? false;
   const canAccessReports = permissions?.canAccessReports ?? false;
   const canAccessTasks = permissions?.canAccessTasks ?? false;
+  const canRequestTasks = permissions?.canRequestTasks ?? false;
   const canManageTeam = permissions?.canManageTeam ?? false;
   const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
   const showDraftTools = canSeeDraftData && canEditAssignments;
   const showPublishControls = canPublish;
   const showEngineTools = canRunEngine;
-  const engineBusy = engineRunning || deepOptimizeRunning;
+  const engineBusy = engineRunning;
   const showAdminLinks = canAccessSudo;
   const showReportsLink = canAccessReports;
   const showProjectsLink = canAccessTasks;
@@ -217,6 +217,7 @@ export default function FloatingNav(props: FloatingNavProps) {
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<Date>(() => new Date());
 
@@ -761,6 +762,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Projects
                   </Link>
                 )}
+                {canRequestTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setRequestOpen(true);
+                    }}
+                  >
+                    <ClipboardPlus size={14} />
+                    Request Work
+                  </button>
+                )}
                 {showReportsLink && (
                   <Link
                     href="/shiftbuilder/reports"
@@ -802,48 +816,26 @@ export default function FloatingNav(props: FloatingNavProps) {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Engine & Maintenance */}
-                {showEngineTools && (onRunEngine || onDeepOptimize || onRunWeek) && (
+                {showEngineTools && (onOptimizeNight || onRunWeek) && (
                   <div
                     className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                   >
                     Engine
                   </div>
                 )}
-                {showEngineTools && onRunEngine && (
+                {showEngineTools && onOptimizeNight && (
                   <button
                     type="button"
                     className={menuItemClass}
                     disabled={engineBusy}
                     onClick={() => {
-                      onRunEngine();
+                      onOptimizeNight();
                       setMoreOpen(false);
                     }}
                   >
-                    <Sparkles size={14} /> Run Engine
+                    <Sparkles size={14} /> Optimize Night
                     {engineRunning && (
                       <span className="ml-auto text-[10px] opacity-60">Running…</span>
-                    )}
-                  </button>
-                )}
-                {showEngineTools && onDeepOptimize && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    disabled={engineBusy}
-                    onClick={() => {
-                      onDeepOptimize();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Wand2 size={14} className="shrink-0" />
-                    <span className="flex min-w-0 flex-col items-start leading-tight">
-                      <span className="truncate">Optimize Tonight</span>
-                      <span className="truncate text-[10px] font-normal opacity-60">
-                        Rotation-first · ~10s · Safe Draft
-                      </span>
-                    </span>
-                    {deepOptimizeRunning && (
-                      <span className="ml-auto text-[10px] opacity-60">…</span>
                     )}
                   </button>
                 )}
@@ -859,9 +851,9 @@ export default function FloatingNav(props: FloatingNavProps) {
                   >
                     <CalendarRange size={14} className="shrink-0" />
                     <span className="flex min-w-0 flex-col items-start leading-tight">
-                      <span className="truncate">Run Week</span>
+                      <span className="truncate">Optimize Week</span>
                       <span className="truncate text-[10px] font-normal opacity-60">
-                        Fairness ledger · review only
+                        Cross-night fairness · preview + per-night draft
                       </span>
                     </span>
                     {weekRunBusy && (
@@ -896,7 +888,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {((showEngineTools && (onRunEngine || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
+                {((showEngineTools && (onOptimizeNight || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
 
@@ -1118,6 +1110,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           </div>
         </div>
       </nav>
+      <RequestBoardModal open={requestOpen} onClose={() => setRequestOpen(false)} isDark={isDark} />
     </>
   );
 }

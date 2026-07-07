@@ -63,7 +63,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 const PILL_MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
-/** Compact count tile for the "changes at a glance" summary. */
+/** Compact count tile for the "changes at a glance" summary. (Velvet redesign) */
 function GlanceStat({
   icon,
   n,
@@ -79,13 +79,13 @@ function GlanceStat({
   return (
     <div className="flex flex-col items-center gap-0.5 text-center">
       <span
-        className="flex items-center gap-1 text-[18px] font-bold tabular-nums leading-none"
-        style={{ color: on ? accent : "var(--muted-foreground)", fontFamily: PILL_MONO, opacity: on ? 1 : 0.55 }}
+        className="flex items-center gap-1 text-[19px] font-extrabold tabular-nums leading-none"
+        style={{ color: on ? accent : "var(--g400, #9ca3af)", fontFamily: PILL_MONO, opacity: on ? 1 : 0.55 }}
       >
-        <span style={{ opacity: on ? 1 : 0.6 }}>{icon}</span>
+        <span style={{ opacity: on ? 1 : 0.6, fontSize: 15 }}>{icon}</span>
         {n}
       </span>
-      <span className="text-[9px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+      <span className="text-[9px] font-bold uppercase tracking-[0.04em] text-muted-foreground">
         {label}
       </span>
     </div>
@@ -123,7 +123,7 @@ function HeroLiftCard({
   const GREEN = "#1f9d4d";
   const RED = "#c22d24";
   const AMBER = "#b45309";
-  const GOLD = "var(--sb-gold-ink)";
+  const GOLD = "var(--sb-optimize-ink)"; // kept for any legacy lift accent logic; main paths now use optimize blue
   // Accent stripe + number ink: green when a "lower is better" metric hits zero,
   // gold when improved, red when it regressed, amber when still-open, else neutral.
   const accent = clean ? GREEN : improved ? GOLD : !flat ? RED : standingWarn ? AMBER : "var(--sb-glass-border)";
@@ -131,46 +131,46 @@ function HeroLiftCard({
 
   return (
     <div
-      className="relative flex flex-col gap-1 overflow-hidden rounded-2xl px-3 pb-2.5 pt-3"
+      className="relative flex flex-col gap-1 overflow-hidden rounded-[18px] px-3.5 pb-2.5 pt-3.5"
       style={{
-        background: "var(--ios-background-secondary)",
-        border: "1px solid #f0f0f0",
+        background: "#fff",
+        border: "1px solid var(--hair, #f0f0f0)",
         boxShadow: BOARD_CARD_SHADOW,
       }}
     >
-      {/* Top accent stripe — same identity as CardAccentStripe on the board. */}
+      {/* Top accent stripe — same identity as deployment cards (Velvet redesign). */}
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 h-[3px]"
         style={{ background: accent }}
       />
       <div
-        className="text-[9px] font-bold uppercase text-muted-foreground"
-        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)", letterSpacing: "1px" }}
+        className="text-[9px] font-bold uppercase tracking-[0.07em] text-muted-foreground leading-tight"
+        style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)", minHeight: "24px" }}
       >
         {label}
       </div>
-      <div className="flex items-baseline gap-1.5">
+      <div className="flex items-baseline gap-1.5 mt-1">
         <span
-          className="text-[26px] font-bold leading-none tabular-nums tracking-[-0.02em]"
+          className="text-[28px] font-extrabold leading-none tabular-nums tracking-[-0.03em]"
           style={{ color: numberInk, fontFamily: PILL_MONO }}
         >
           {after}
         </span>
         {!flat && (
-          <span className="text-[11px] tabular-nums text-muted-foreground line-through decoration-muted-foreground/40">
+          <span className="text-[12px] tabular-nums text-muted-foreground line-through decoration-muted-foreground/40">
             {before}
           </span>
         )}
       </div>
       <span
-        className="flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold tabular-nums"
+        className="chip flex w-fit items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums"
         style={
           flat
-            ? { background: "var(--sb-glass-lowlight)", color: "var(--muted-foreground)" }
+            ? { background: "var(--g100, #f3f4f6)", color: "var(--g400, #9ca3af)", padding: "3px 9px" }
             : improved
-              ? { background: "rgba(52,199,89,0.16)", color: GREEN, border: "1px solid rgba(52,199,89,0.35)" }
-              : { background: "rgba(255,59,48,0.14)", color: RED, border: "1px solid rgba(255,59,48,0.3)" }
+              ? { background: "rgba(52,199,89,0.14)", color: GREEN }
+              : { background: "rgba(255,149,0,0.15)", color: AMBER }
         }
         aria-label={flat ? "unchanged" : `${improved ? "improves" : "worsens"} by ${Math.abs(delta)}`}
       >
@@ -178,11 +178,11 @@ function HeroLiftCard({
           clean ? "clean" : "—"
         ) : delta > 0 ? (
           <>
-            <TrendingUp size={9} aria-hidden /> +{delta}
+            <TrendingUp size={11} aria-hidden /> +{delta}
           </>
         ) : (
           <>
-            <TrendingDown size={9} aria-hidden /> {delta}
+            <TrendingDown size={11} aria-hidden /> {delta}
           </>
         )}
       </span>
@@ -266,25 +266,21 @@ export function TimefoldResultsSheet({
     showToast?.(`${label} — coming soon once the export pipeline lands`, "info");
   };
 
-  // Tabs in the placement-pad's bottom-action-bar language: white pills,
-  // gray-900 selected with a soft lift — crisp, not glassy.
+  // iOS segmented tabs per Velvet redesign mock: crisp white active pill with shadow.
   const segmentClass =
-    "rounded-xl px-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-400 data-selected:bg-white data-selected:text-gray-900 data-selected:shadow-[0_1px_3px_rgba(0,0,0,0.1)]";
+    "h-7 rounded-[10px] px-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-400 data-selected:bg-white data-selected:text-gray-900 data-selected:shadow-[0_1px_3px_rgba(0,0,0,0.12)] data-selected:font-bold";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="no-print w-full gap-3 rounded-l-3xl border-l-0 bg-transparent sm:max-w-lg"
+        className="no-print w-full gap-3 rounded-l-[28px] border-l-0 bg-transparent sm:max-w-[512px]"
         style={{
-          // Solid white, crisp — the placement-pad / board-card surface, not glass.
+          // Exact match to Velvet redesign: solid white, rounded left, placement-pad shadow.
           background: "#ffffff",
-          borderLeft: "1px solid #f0f0f0",
-          boxShadow: "-8px 0 32px rgba(0,0,0,0.09), -1px 0 3px rgba(0,0,0,0.05)",
-          // Match the ShiftBuilder builder-canvas typeface (Helvetica Neue). The sheet
-          // is portaled to <body>, outside .sb-canvas-builder's font remap, so we mirror
-          // that remap here — every child var(--font-*) resolves to the builder font,
-          // exactly like the board and the placement pad.
+          borderLeft: "1px solid var(--hair, #f0f0f0)",
+          boxShadow: "-10px 0 40px -12px rgba(0,0,0,0.12), -1px 0 3px rgba(0,0,0,0.05)",
+          // Match the ShiftBuilder builder-canvas typeface (Helvetica Neue)...
           ["--font-atkinson" as string]: "var(--font-builder)",
           ["--font-bricolage" as string]: "var(--font-builder)",
           ["--font-inter-tight" as string]: "var(--font-builder)",
@@ -299,9 +295,9 @@ export function TimefoldResultsSheet({
               aria-hidden
               className="flex size-10 shrink-0 items-center justify-center rounded-full"
               style={{
-                // Pad avatar pattern: solid accent circle, white glyph.
-                background: "var(--sb-gold-ink)",
-                boxShadow: "0 2px 8px -2px color-mix(in srgb, var(--sb-gold-ink) 55%, transparent)",
+                // Pad avatar pattern: solid accent circle, white glyph. (blue for Deep Optimize per Velvet redesign)
+                background: "var(--sb-optimize-ink)",
+                boxShadow: "0 2px 8px -2px color-mix(in srgb, var(--sb-optimize-ink) 55%, transparent)",
               }}
             >
               <Wand2 size={18} color="#fff" strokeWidth={2.25} />
@@ -309,11 +305,11 @@ export function TimefoldResultsSheet({
             <div className="min-w-0 flex-1">
               <p
                 className="mb-px text-[9px] font-bold uppercase tracking-[0.14em]"
-                style={{ color: "var(--sb-gold-ink)" }}
+                style={{ color: "var(--sb-optimize-ink)" }}
               >
                 Deep Optimize
               </p>
-              <SheetTitle className="text-[17px] font-bold leading-tight tracking-[-0.01em] text-gray-900">
+              <SheetTitle className="text-[18px] font-extrabold leading-tight tracking-[-0.02em] text-gray-900">
                 Optimize Tonight
               </SheetTitle>
               <SheetDescription className="truncate text-[11px] tabular-nums text-gray-400">
@@ -322,6 +318,14 @@ export function TimefoldResultsSheet({
                   : "No run yet."}
               </SheetDescription>
             </div>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="ml-auto size-7 rounded-full flex items-center justify-center bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]"
+              aria-label="Close"
+            >
+              <span className="text-[15px] leading-none">×</span>
+            </button>
           </div>
         </SheetHeader>
 
@@ -336,7 +340,7 @@ export function TimefoldResultsSheet({
             className="flex flex-1 flex-col overflow-hidden px-4"
           >
             <TabsList
-              className="h-9 w-full rounded-2xl p-1"
+              className="h-8 w-full rounded-2xl p-1 grid grid-cols-4 gap-px"
               style={{ background: "#f4f4f5", border: "1px solid #ececed" }}
             >
               <TabsTrigger value="overview" className={segmentClass}>
@@ -379,7 +383,7 @@ export function TimefoldResultsSheet({
                     <div
                       className="flex flex-col gap-3 rounded-2xl p-3.5"
                       style={{
-                        background: "var(--ios-background-secondary)",
+                        background: "#fff",
                         border: "1px solid #f0f0f0",
                         boxShadow: BOARD_CARD_SHADOW,
                       }}
@@ -389,7 +393,7 @@ export function TimefoldResultsSheet({
                           icon={<PlusCircle size={13} />}
                           n={changeGroups.fills}
                           label="Fills"
-                          accent="var(--sb-gold-ink)"
+                          accent="var(--sb-optimize-ink)"
                         />
                         <GlanceStat
                           icon={<ShieldCheck size={13} />}
@@ -407,11 +411,11 @@ export function TimefoldResultsSheet({
                       <button
                         type="button"
                         onClick={() => setTab("diffs")}
-                        className="flex items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[12px] font-semibold transition-opacity hover:opacity-85"
+                        className="flex items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[12.5px] font-bold transition-opacity hover:opacity-85"
                         style={{
-                          background: "var(--sb-gold-surface)",
-                          color: "var(--sb-gold-ink)",
-                          border: "1px solid var(--sb-gold-border)",
+                          background: "var(--sb-optimize-tint)",
+                          color: "var(--sb-optimize-ink)",
+                          border: "1px solid var(--sb-optimize-border)",
                         }}
                       >
                         Review &amp; pick changes <ArrowRight size={13} />
@@ -511,12 +515,12 @@ export function TimefoldResultsSheet({
           >
             <button
               type="button"
-              className="flex h-12 w-full items-center justify-center gap-1.5 rounded-2xl text-[13px] font-bold tracking-[0.01em] transition-[transform,opacity] active:scale-[0.985] disabled:opacity-45"
+              className="flex h-12 w-full items-center justify-center gap-1.5 rounded-2xl text-[14px] font-extrabold tracking-[0.01em] transition-[transform,opacity] active:scale-[0.985] disabled:opacity-45 text-white"
               style={{
-                background: "linear-gradient(180deg, var(--sb-gold), var(--sb-gold-ink))",
-                color: "#231d00",
+                // Exact Velvet redesign blue gradient (iOS blue for Deep Optimize)
+                background: "linear-gradient(180deg, #339CFF, #007AFF)",
                 boxShadow:
-                  "inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 20px -8px color-mix(in srgb, var(--sb-gold-ink) 55%, transparent)",
+                  "inset 0 1px 0 rgba(255,255,255,0.28), 0 6px 16px -8px rgba(0,122,255,0.5)",
               }}
               disabled={importing || imported || selectedDiffs.length === 0}
               onClick={() => onImport(selected, selectedDiffs)}
@@ -530,7 +534,9 @@ export function TimefoldResultsSheet({
                   <Loader2 size={15} className="animate-spin motion-reduce:animate-none" /> Importing…
                 </>
               ) : selectedDiffs.length === selected.diffs.length ? (
-                `Import all ${selected.diffs.length} changes to Draft`
+                <>
+                  <Download size={16} /> Import all {selected.diffs.length} changes to Draft
+                </>
               ) : (
                 `Import ${selectedDiffs.length} of ${selected.diffs.length} changes to Draft`
               )}

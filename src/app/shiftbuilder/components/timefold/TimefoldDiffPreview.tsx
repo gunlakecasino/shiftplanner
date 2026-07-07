@@ -69,8 +69,9 @@ function CheckCircle({
       style={
         checked
           ? {
-              background: "linear-gradient(180deg, var(--sb-gold), var(--sb-gold-ink))",
-              border: "1px solid var(--sb-gold-border)",
+              // Optimize accent per Velvet redesign
+              background: "linear-gradient(180deg, #339CFF, #007AFF)",
+              border: "1px solid var(--sb-optimize-border)",
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)",
             }
           : {
@@ -80,7 +81,7 @@ function CheckCircle({
             }
       }
     >
-      {checked && <Check size={12} strokeWidth={3.5} style={{ color: "#231d00" }} />}
+      {checked && <Check size={12} strokeWidth={3.5} style={{ color: "#fff" }} />}
     </button>
   );
 }
@@ -188,10 +189,10 @@ export function TimefoldDiffPreview({
               {selectable ? (
                 <button
                   type="button"
-                  className="sb-gold-chip shrink-0 rounded-full px-2 py-0.5 font-mono text-[9px] font-semibold tracking-[0.5px] transition-opacity hover:opacity-85"
+                  className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[9px] font-semibold tracking-[0.5px] transition-opacity hover:opacity-85"
                   style={
                     allSelected
-                      ? { background: "var(--sb-gold-surface)", color: "var(--sb-gold-ink)" }
+                      ? { background: "var(--sb-optimize-tint)", color: "var(--sb-optimize-ink)", border: "1px solid var(--sb-optimize-border)" }
                       : {
                           background: "var(--sb-glass-lowlight)",
                           color: "var(--muted-foreground)",
@@ -251,9 +252,9 @@ export function TimefoldDiffPreview({
                           <span
                             className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold"
                             style={{
-                              background: "var(--sb-gold-surface)",
-                              color: "var(--sb-gold-ink)",
-                              border: "1px solid var(--sb-gold-border)",
+                              background: "var(--sb-optimize-tint)",
+                              color: "var(--sb-optimize-ink)",
+                              border: "1px solid var(--sb-optimize-border)",
                             }}
                           >
                             <ShieldCheck size={9.5} /> Improves rotation

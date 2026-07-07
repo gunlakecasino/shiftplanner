@@ -2,7 +2,11 @@ import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { formatLocalDateISO, currentShiftDate } from "./dateUtils";
 import type { OpsAuditInput } from "./opsAuditLog";
 
-const SETTINGS_NIGHT_ID = "__settings__";
+// today_assignment_changes.night_id is a NOT NULL uuid column — a plain
+// string sentinel here caused every settings-scoped audit write to fail
+// silently with a 500 ("invalid input syntax for type uuid"). The nil UUID
+// is a real, valid uuid that will never collide with a generated night id.
+const SETTINGS_NIGHT_ID = "00000000-0000-0000-0000-000000000000";
 const META_SLOT_KEY = "__meta__";
 
 /** Server-side audit insert — used by protected API routes. */

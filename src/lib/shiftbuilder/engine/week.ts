@@ -1,25 +1,11 @@
 /**
- * engine/week.ts — the week engine (P3).
+ * engine/week.ts — "Optimize Week" engine (P3).
  *
- * Fairness actually lives at the week level: the "max 1 per TM per area per
- * grave week" policy and the 30-night spread can only be *optimized* (not just
- * measured) with cross-night reasoning. Two stages:
+ * Uses runNightEngine (no-ai) in rolling fashion (with in-run history) + cross-night polish.
+ * Powers the "Optimize Week" / "Run Week" preview (read-only sheet + per-night draft open).
  *
- *  1. ROLLING SOLVE (P3-2) — solve Fri→Thu in order; each night's rotation
- *     context is augmented with the nights already solved *in this run*, so
- *     prior-3 and week-repeat gates see the in-flight week (the old batch path
- *     only partially did). This alone drives most week repeats to zero.
- *
- *  2. CROSS-NIGHT POLISH (P3-3) — a bounded, deterministic local search whose
- *     objective is the *week* scorecard. Moves are within-night swaps/replaces
- *     (a TM keeps the nights they work — the schedule is a constraint), but they
- *     are scored against the whole week, so the search reduces cross-night
- *     repeats that no single night could see. Only the mutated night is
- *     re-scored per move (exact, not approximate) and the week policy is
- *     recomputed from the full week — correct by construction, no incremental-
- *     count bookkeeping to drift.
- *
- * Then a fairness ledger (P3-5) explains every TM's week.
+ * Note: Single-night "Run Engine" / full optimize uses the same night pipeline.
+ * The old separate "run engine" for night is now this unified path.
  */
 
 import type {

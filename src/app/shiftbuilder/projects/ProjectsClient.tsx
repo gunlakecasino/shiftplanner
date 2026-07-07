@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Target } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
 import { BuilderLoadingShell } from "../components/builderPrimitives";
@@ -22,6 +22,7 @@ import { RecurringView } from "./components/RecurringView";
 import { PoolsView } from "./components/PoolsView";
 import { DefaultsView } from "./components/DefaultsView";
 import { TaskDetailSheet } from "./components/TaskDetailSheet";
+import { PendingRequestsPanel } from "./components/PendingRequestsPanel";
 import "../settings/settingsShell.css";
 import "../settings/settingsTheme.css";
 import "./projectsShell.css";
@@ -40,6 +41,16 @@ function applySmartFilter(tasks: ReturnType<typeof useTasks>["data"], filter: Sm
       return tasks.filter((t) => t.dueDate === tonight && t.status !== "complete" && t.status !== "cancelled");
     case "complete":
       return tasks.filter((t) => t.status === "complete");
+    case "my-floor":
+      // Brian-exclusive: floor observations, MPulse, walk notes (demo via category/notes)
+      return tasks.filter((t) => t.category === "maintenance" || t.category === "guest_experience" || (t.notes && t.notes.toLowerCase().includes("floor")));
+    case "from-recap":
+      // From recaps / email archivist (demo via notes or future source tag)
+      return tasks.filter((t) => t.notes && (t.notes.toLowerCase().includes("recap") || t.notes.toLowerCase().includes("huddle") || t.notes.toLowerCase().includes("mpulse")));
+    case "staffing":
+      return tasks.filter((t) => t.category === "other" || (t.title && t.title.toLowerCase().includes("staff")));
+    case "compliance":
+      return tasks.filter((t) => t.category === "compliance" || t.category === "training");
     case "all":
     default:
       return tasks;
@@ -168,6 +179,7 @@ function ProjectsShell() {
           </aside>
 
           <main className="min-w-0 space-y-3">
+            <PendingRequestsPanel canManage={canManage} />
             {(view === "list" || view === "board") && (
               <TaskQuickAdd projectId={selectedProjectId} projects={projects} canManage={canManage} />
             )}
@@ -208,6 +220,49 @@ function ProjectsShell() {
             )}
             {view === "pools" && <PoolsView canManage={canManage} />}
             {view === "defaults" && <DefaultsView canManage={canManage} />}
+            {view === "planner" && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border p-4" style={{ background: "var(--ios-background-secondary)" }}>
+                  <h3 className="text-[13px] font-semibold mb-2 flex items-center gap-2" style={{ color: "var(--sb-projects-accent)" }}>
+                    <Target size={14} /> Brian's Personal Grave Planner (exclusive to your flow)
+                  </h3>
+                  <p className="text-[12px] text-muted-foreground mb-3">
+                    Built exclusively for how you function: LOG real-time (voice/notes during graves → structured with your sections), COMPILE to your exact recap template + personal AAR/debrief (voice-calibrated, 3-5 prose), hybrid (hard rules first + judgment). Shift-anchored. Provenance from recaps/email/captures. Calm, power, speed.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => {
+                        const entry = prompt("LOG / Voice capture (e.g. 'Z8 floor walk: MPulse addressed, Alex training note, 2 call-outs')");
+                        if (entry) {
+                          alert(`Captured as shift_log entry (would parse to tasks/notes in glcr_memory + create ops_work_item with your metadata + source).`);
+                        }
+                      }}
+                      className="text-xs px-3 py-1.5 rounded" style={{ background: "var(--sb-projects-accent)", color: "white" }}
+                    >
+                      Voice / LOG Capture
+                    </button>
+                    <button
+                      onClick={() => {
+                        const debrief = `Grave Shift Personal Planner Debrief\nDate: ${formattedDate}\n\nTeam / Staffing:\n${filteredTasks.filter(t => (t.title || '').toLowerCase().includes('staff') || t.category === 'other').map(t => `- ${t.title} (${t.status})`).join('\n') || 'As per log.'}\n\nFloor & Incidents (MPulse, walks):\n${filteredTasks.filter(t => t.category === 'maintenance' || (t.notes || '').toLowerCase().includes('floor') || (t.notes || '').toLowerCase().includes('mpulse')).map(t => `- ${t.title}: ${t.notes || t.description || ''}`).join('\n') || 'None.'}\n\nHuddle / Training / Compliance:\n${filteredTasks.filter(t => t.category === 'compliance' || t.category === 'training' || (t.notes || '').toLowerCase().includes('huddle')).map(t => `- ${t.title}`).join('\n') || 'Logged.'}\n\nOpen Next Actions (your GTD runway):\n${filteredTasks.filter(t => t.status !== 'complete' && t.status !== 'cancelled').slice(0,5).map(t => `- ${t.title} (due ${t.dueDate || 'tonight'})`).join('\n')}\n\nAll things considered, the Team handled it. (Your voice: calm, factual, action-oriented. Use brian-voice for exact. Separate patterns for supervisor.)`;
+                        alert(debrief + "\n\n(Copy-paste ready. Full system: hook to glcr COMPILE + brian-voice + auto task creation from recaps.)");
+                      }}
+                      className="text-xs px-3 py-1.5 rounded border"
+                    >
+                      Synthesize Personal Debrief (your COMPILE + voice)
+                    </button>
+                  </div>
+                  <div className="mt-2 text-[10px] opacity-70">Pre-shift brief (prior + open). During: voice everything. Post: debrief. Weekly: patterns + review. Uses your existing recaps/email archivist for auto-tasks.</div>
+                </div>
+                <TaskListView
+                  tasks={filteredTasks ?? []}
+                  loading={tasksLoading}
+                  roster={roster}
+                  onOpen={setSelectedTaskId}
+                  canComplete={canComplete}
+                  onSetStatus={handleSetStatus}
+                />
+              </div>
+            )}
           </main>
         </div>
       </div>

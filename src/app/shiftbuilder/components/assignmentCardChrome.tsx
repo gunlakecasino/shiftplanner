@@ -737,7 +737,7 @@ export function SlotAssignmentBody({
         showDigitalAssists ? (
           <motion.div
             key="draft"
-            className="flex flex-col min-w-0"
+            className="flex flex-col min-w-0 relative pl-2 border-l-[3px] border-[#339CFF] rounded-l"  /* subtle left accent for optimizer/draft changes (blue = preview) */
             initial={{ opacity: 0, y: 3, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
@@ -753,6 +753,13 @@ export function SlotAssignmentBody({
                 }}
               >
                 {state.proposedName}
+              </span>
+              <span
+                className="ml-1 text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none self-center"
+                style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                title="Draft change from optimizer"
+              >
+                D
               </span>
               {showDigitalAssists ? (
                 <TmPlacementTrail
@@ -786,6 +793,13 @@ export function SlotAssignmentBody({
                 }}
               >
                 {state.proposedName}
+              </span>
+              <span
+                className="ml-1 text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none self-center"
+                style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                title="Draft change from optimizer"
+              >
+                D
               </span>
               {showDigitalAssists ? (
                 <TmPlacementTrail

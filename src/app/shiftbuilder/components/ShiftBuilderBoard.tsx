@@ -261,11 +261,11 @@ export interface ShiftBuilderBoardProps {
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
-  /** Rotation health orb + unified engine drawer (Run Engine, Optimize Tonight, Clear). */
+  /** Rotation health orb + unified engine drawer (Optimize Night, Optimize Week, Clear). */
   canRunEngine?: boolean;
   canEditAssignments?: boolean;
   onRunXaiEngine?: () => void;
-  onDeepOptimize?: () => void;
+  onOptimizeNight?: () => void;
   onClearBoard?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
@@ -390,7 +390,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   canRunEngine,
   canEditAssignments,
   onRunXaiEngine,
-  onDeepOptimize,
+  onOptimizeNight,
   onClearBoard,
   engineRunning,
   deepOptimizeRunning,
@@ -1982,13 +1982,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           canRunEngine={canRunEngine}
           canEditAssignments={canEditAssignments}
           isCurrentNightLocked={isCurrentNightLocked}
-          onRunXaiEngine={onRunXaiEngine}
-          onDeepOptimize={onDeepOptimize}
+          onOptimizeNight={onOptimizeNight}
           onClearBoard={onClearBoard}
           engineRunning={engineRunning}
-          deepOptimizeRunning={deepOptimizeRunning}
-          deepOptimizeTick={deepOptimizeTick}
-          onCancelDeepOptimize={onCancelDeepOptimize}
           onApplyDraft={onApplyDraft}
           onDiscardDraft={onDiscardDraft}
           showDraftStatusPill={showDraftStatusPill}

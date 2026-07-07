@@ -136,6 +136,7 @@ import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
 import { useAuxLayout } from "./hooks/useAuxLayout";
 import { useDayNavigation } from "./hooks/useDayNavigation";
 import { useEngineRunner } from "./hooks/useEngineRunner";
+import { useConfirm } from "./components/ConfirmDialog";
 import { useTimefoldOptimize } from "./hooks/useTimefoldOptimize";
 import { TimefoldResultsSheet } from "./components/timefold/TimefoldResultsSheet";
 import type { TimefoldProposal } from "@/lib/shiftbuilder/timefold/timefoldTypes";
@@ -352,7 +353,7 @@ import {
 // Finalize) so the primary header bar stays short. ESC and outside-click
 // dismiss; the menu is keyboard-navigable via the native button focus order.
 interface HeaderOverflowProps {
-  onRunEngine: () => void;
+  onOptimizeNight?: () => void;
   onPrint: () => void;
   onAddAuxSlot: () => void;
   // null when there's nothing to remove (we're at the default 5); the menu
@@ -362,7 +363,7 @@ interface HeaderOverflowProps {
   lastAuxSlotLabel: string | null;
 }
 
-const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }> = ({ onRunEngine, onPrint, onAddAuxSlot, onRemoveAuxSlot, lastAuxSlotLabel, onLockDay }) => {
+const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }> = ({ onOptimizeNight, onPrint, onAddAuxSlot, onRemoveAuxSlot, lastAuxSlotLabel, onLockDay }) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -399,7 +400,7 @@ const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }>
         >
           <button
             role="menuitem"
-            onClick={() => { setOpen(false); onRunEngine(); }}
+            onClick={() => { setOpen(false); onOptimizeNight?.(); }}
             className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
           >
             <span className="flex items-center gap-2">
@@ -664,6 +665,7 @@ function AuthedShiftBuilder() {
 
   // Ops auth (PIN gate) — hoisted early to avoid TDZ in useAuxLayout / shiftData
   const { hasRole, user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  const confirmDialog = useConfirm();
 
   // Full data orchestration hoisted early
   const shiftData = useShiftData(selectedDay, {
@@ -1298,17 +1300,16 @@ function AuthedShiftBuilder() {
   const upsertDraftSlot = engineUpsertDraftSlot;
   const applyDraftMoveOrSwap = engineApplyDraftMoveOrSwap;
 
-  // === Optimize Tonight (in-process deep optimizer) ===
-  // Backed by timefoldLocalSolver.ts; progress + controls live on RotationHealthFloater.
-  const timefold = useTimefoldOptimize();
+  // === Single unified Optimize Night ===
+  // Full placements (planner) + optimization (local search + optional AI via unified engine).
+  // One thing for the day: runs the canonical engine path and lands in Draft.
+  // (The previous separate deep timefold path has been incorporated here.)
+  const timefold = useTimefoldOptimize(); // kept for now for sheet if needed, but main path is engine
   const [timefoldSheetOpen, setTimefoldSheetOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (timefold.phase === "results") setTimefoldSheetOpen(true);
   }, [timefold.phase]);
-
-  // startDeepOptimize is defined further down (after plannedThisWeekRecentHistory)
-  // so the local solver can receive the full board context — see that definition.
 
   /**
    * Lands an entire Timefold proposal into a fresh Draft, mirroring
@@ -1369,9 +1370,16 @@ function AuthedShiftBuilder() {
 
       timefold.markImported();
       showToast(
-        `Imported ${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"} to Draft — review and Save All Draft when ready`,
+        `Imported ${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"} to Draft. Look for blue "D" badges + left borders on cards + "was:" lines.`,
         "success",
       );
+
+      // Immediate spotlight flash for the just-imported optimizer changes
+      setTimeout(() => {
+        const canvas = document.querySelector('.sb-builder-canvas') || document.body;
+        canvas.classList.add('sb-draft-flash');
+        setTimeout(() => canvas.classList.remove('sb-draft-flash'), 2200);
+      }, 120);
     },
     [isCurrentNightLocked, showToast, timefold, isDraftMode, setIsDraftMode, assignments, auxDefs, draftAssignments],
   );
@@ -1386,10 +1394,27 @@ function AuthedShiftBuilder() {
     }
 
     const changeCount = draftEntries.length;
-    if (!confirm(
-      `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board? ` +
+
+    // Rich context for the optimizer commit gate (visible in screenshot flow)
+    const grokExpl = useShiftBuilderStore.getState().draftGrokExplanation;
+    const summary = grokExpl
+      ? `${changeCount} changes • Optimizer preview`
+      : `${changeCount} placement${changeCount === 1 ? "" : "s"} ready for live`;
+
+    const summaryPoints = grokExpl
+      ? [grokExpl.slice(0, 120) + (grokExpl.length > 120 ? "…" : "")]
+      : ["Changes will be visible to all TMs immediately", "Cannot be auto-undone — use Discard to revert"];
+
+    const okToApply = await confirmDialog(
       `This is the real one — TMs will see it immediately, and it can't be auto-undone.`,
-    )) {
+      {
+        title: `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board?`,
+        confirmLabel: "Apply to Live",
+        summary,
+        summaryPoints,
+      },
+    );
+    if (!okToApply) {
       return;
     }
 
@@ -1489,7 +1514,7 @@ function AuthedShiftBuilder() {
       await batchApplyDraftAssignments(nid, slots);
       setLastSavedAt(new Date());
       const savedCount = draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length;
-      showToast(`Saved ${savedCount} placement${savedCount === 1 ? '' : 's'} (server-validated)`, "success");
+      showToast(`Applied ${savedCount} change${savedCount === 1 ? '' : 's'} to the live board — TMs can see it now.`, "success");
     } catch (e: unknown) {
       console.error("[shiftbuilder] batchApplyDraft failed", e);
       const msg = e instanceof Error ? e.message : String(e);
@@ -1506,7 +1531,7 @@ function AuthedShiftBuilder() {
     [draftAssignments],
   );
 
-  // === Run Week (read-only week-engine preview: fairness ledger + violations) ===
+  // === Optimize Week (read-only preview using unified week engine: rolling night solves + cross-night polish, fairness, violations) ===
   const [weekRunPreview, setWeekRunPreview] = React.useState<
     import("./actions").WeekPreviewResult | null
   >(null);
@@ -1518,11 +1543,11 @@ function AuthedShiftBuilder() {
       showToast("Insufficient privileges — you cannot run the engine", "error");
       return;
     }
-    if (
-      !confirm(
-        "Preview the week engine for this grave week? This only computes and shows results — nothing is written until you open a specific night in Draft and Save.",
-      )
-    ) {
+    const okToPreview = await confirmDialog(
+      "This only computes and shows results — nothing is written until you open a specific night in Draft and Save. Uses the unified week engine (rolling nights + cross-night polish).",
+      { title: "Optimize Week (preview fairness + violations for the grave week)?", confirmLabel: "Preview" },
+    );
+    if (!okToPreview) {
       return;
     }
     setWeekRunBusy(true);
@@ -1549,18 +1574,18 @@ function AuthedShiftBuilder() {
     } finally {
       setWeekRunBusy(false);
     }
-  }, [canRunEngine, showToast, weekStart]);
+  }, [canRunEngine, showToast, weekStart, confirmDialog]);
 
   /** Seeds single-night Draft Mode from a week-preview night's computed Draft.
    * Reuses the existing Draft Mode + Apply/Save flow — no bulk multi-night write. */
   const openNightInDraftFromWeekRun = React.useCallback(
-    (nightIso: string, draft: import("@/lib/shiftbuilder/engine/types").Draft) => {
+    async (nightIso: string, draft: import("@/lib/shiftbuilder/engine/types").Draft) => {
       if (isDraftMode && draftSlotCount > 0) {
-        if (
-          !confirm(
-            "You have an unsaved draft for the currently open night. Discard it and open this night's week-run draft instead?",
-          )
-        ) {
+        const okToDiscard = await confirmDialog(
+          "Discard it and open this night's week-run draft instead?",
+          { title: "You have an unsaved draft for the currently open night.", confirmLabel: "Discard & open" },
+        );
+        if (!okToDiscard) {
           return;
         }
       }
@@ -1610,6 +1635,7 @@ function AuthedShiftBuilder() {
       setDraftGrokReasoning,
       setDraftEngineWarnings,
       showToast,
+      confirmDialog,
     ],
   );
 
@@ -1629,7 +1655,7 @@ function AuthedShiftBuilder() {
     startHeavyTransition(() => {
       if (isDraftMode) {
         if (draftSlotCount > 0) {
-          discardDraft();
+          void discardDraft();
         } else {
           setIsDraftMode(false);
         }
@@ -2339,52 +2365,6 @@ function AuthedShiftBuilder() {
     }
     return result;
   }, [DAY_DEFS, selectedDayIndex, assignments, storeAssignments, liveAssignVersion, currentNight?.queryClient]);
-
-  // Deep Optimize entry point — feeds the in-process local solver the full board
-  // context (profiles, week history, preferences, skill/difficulty, schedule gate)
-  // so it optimizes the real objective hierarchy: coverage > rotation > preferences > skill.
-  // Defined here (not with the timefold hook above) because several context pieces
-  // are declared between there and here.
-  const startDeepOptimize = React.useCallback(() => {
-    if (!canRunEngine) {
-      showToast("Insufficient privileges — you cannot run Optimize Tonight", "error");
-      return;
-    }
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — Optimize Tonight is disabled", "error");
-      return;
-    }
-    timefold.start({
-      nightId: nightId ?? null,
-      dateLabel: `${selectedDay.name} · ${selectedDay.date.toLocaleDateString()}`,
-      assignments,
-      auxDefs,
-      roster: deferredAvailableGraveRoster,
-      members: effectiveRealRoster as Array<Record<string, unknown>>,
-      currentIso: formatLocalDateISO(selectedDay.date),
-      weeklyRecentHistory: plannedThisWeekRecentHistory,
-      scheduledTmIds: effectiveScheduledTmIdsTonight,
-      preferencesByTm: tmPreferencesByTm,
-      skillScores: tmSkillScores,
-      slotDifficulty,
-    });
-  }, [
-    canRunEngine,
-    isCurrentNightLocked,
-    showToast,
-    timefold,
-    nightId,
-    selectedDay,
-    assignments,
-    auxDefs,
-    deferredAvailableGraveRoster,
-    effectiveRealRoster,
-    plannedThisWeekRecentHistory,
-    effectiveScheduledTmIdsTonight,
-    tmPreferencesByTm,
-    tmSkillScores,
-    slotDifficulty,
-  ]);
 
   // Data for the weekly overview on the sheet (built from live assignments across the week days).
   // This feeds the print-preview style weekly table directly on the artboard (replacing the old side panel).
@@ -3307,11 +3287,11 @@ function AuthedShiftBuilder() {
     // Disable confirm popup when publishing (user request: "disable the pop up confirm if i want to publish a night now").
     // Keep a lightweight confirm only for unpublish (more destructive).
     if (!willPublish) {
-      if (
-        !window.confirm(
-          `Unpublish ${dayLabel} (${dateIso})? Unpublished nights return to draft status.`,
-        )
-      ) {
+      const okToUnpublish = await confirmDialog(
+        "Unpublished nights return to draft status.",
+        { title: `Unpublish ${dayLabel} (${dateIso})?`, confirmLabel: "Unpublish", tone: "danger" },
+      );
+      if (!okToUnpublish) {
         return;
       }
     }
@@ -3358,6 +3338,7 @@ function AuthedShiftBuilder() {
     showToast,
     currentNight.queryClient,
     logBuilderChange,
+    confirmDialog,
   ]);
 
   const handleToggleWeekPublished = React.useCallback(
@@ -4278,13 +4259,17 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     return computeWeekAverageHealth(deferredWeekDailyHealths, orderedKeys);
   }, [deferredWeekDailyHealths, DAY_DEFS]);
 
-  const runCoverageEngine = React.useCallback(
+  // Single unified Optimize Night for the day: full placements + optimization.
+  const optimizeNight = React.useCallback(
     async (options?: CoverageEngineRunOptions) => {
-      const confirmMessage =
-        options?.confirmMessage ??
-        "Run Coverage Planner and enter Draft Mode? This will generate a preview without changing current assignments.";
-      if (!options?.skipConfirm && !confirm(confirmMessage)) {
-        return;
+      if (!options?.skipConfirm) {
+        const okToRun = options?.confirmMessage
+          ? await confirmDialog(options.confirmMessage, { confirmLabel: "Run" })
+          : await confirmDialog(
+              "Optimize Night: full placements via planner + optimization (local search + optional AI). Results go to Draft for review.",
+              { title: "Optimize Night — enter Draft Mode?", confirmLabel: "Optimize" },
+            );
+        if (!okToRun) return;
       }
 
       if (!engineConfig) {
@@ -4881,12 +4866,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       effectiveRealRoster,
       weekHistoriesReady,
       weekPlanTmIds,
+      confirmDialog,
     ],
   );
 
   React.useEffect(() => {
-    runCoverageEngineRef.current = runCoverageEngine;
-  }, [runCoverageEngine]);
+    runCoverageEngineRef.current = optimizeNight;
+  }, [optimizeNight]);
 
   // Clear the unified-engine Thought Process panel whenever Draft Mode exits
   // (apply or discard) — the reasoning belongs to a specific draft.
@@ -6232,7 +6218,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         existingCount > 0
           ? `Copy tasks from ${sourceDescription}? This replaces all ${existingCount} task(s) on tonight's board.`
           : `Copy tasks from ${sourceDescription}?`;
-      if (!confirm(confirmMsg)) return;
+      if (!(await confirmDialog(confirmMsg, { confirmLabel: "Copy" }))) return;
 
       try {
         const {
@@ -6264,6 +6250,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       selectedTasks,
       showToast,
       applyCopiedNightTasks,
+      confirmDialog,
     ],
   );
 
@@ -6283,11 +6270,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       return;
     }
 
-    if (
-      !confirm(
-        "Restore card-default break groups for all assigned slots tonight? This overwrites any per-shift break overrides.",
-      )
-    ) {
+    const okToRestore = await confirmDialog(
+      "This overwrites any per-shift break overrides.",
+      { title: "Restore card-default break groups for all assigned slots tonight?", confirmLabel: "Restore" },
+    );
+    if (!okToRestore) {
       return;
     }
 
@@ -6361,6 +6348,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     currentNight.queryClient,
     resolveNightIdForDate,
     startHeavyTransition,
+    confirmDialog,
   ]);
 
   const handleApplyDefaultTasks = React.useCallback(async () => {
@@ -6377,7 +6365,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       existingCount > 0
         ? `Apply card-default task chips to tonight? This replaces existing task chips on every slot that has defaults configured (${existingCount} task${existingCount === 1 ? "" : "s"} on the board now).`
         : "Apply card-default task chips to tonight? This installs defaults from Settings → Card Defaults.";
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirmDialog(confirmMsg, { confirmLabel: "Apply" }))) return;
 
     setApplyDefaultTasksBusy(true);
     try {
@@ -6425,6 +6413,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     currentNight.queryClient,
     resolveNightIdForDate,
     refreshNightTasksFromServer,
+    confirmDialog,
   ]);
 
   const handleApplyOverlapTasks = React.useCallback(async () => {
@@ -6433,11 +6422,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       return;
     }
 
-    if (
-      !confirm(
-        "Apply default task chips to overlap slots (AM/PM) tonight? This replaces existing task chips on overlap slots that have defaults configured.",
-      )
-    ) {
+    const okToApplyOverlap = await confirmDialog(
+      "This replaces existing task chips on overlap slots that have defaults configured.",
+      { title: "Apply default task chips to overlap slots (AM/PM) tonight?", confirmLabel: "Apply" },
+    );
+    if (!okToApplyOverlap) {
       return;
     }
 
@@ -6485,6 +6474,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     currentNight.queryClient,
     resolveNightIdForDate,
     refreshNightTasksFromServer,
+    confirmDialog,
   ]);
 
   const persistRemoveTask = React.useCallback(
@@ -6924,7 +6914,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     setSelectedSlotKey(null);
   }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments, logBuilderChange]);
 
-  const handleClearBoard = React.useCallback(() => {
+  const handleClearBoard = React.useCallback(async () => {
     if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
@@ -6948,7 +6938,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
     if (clearable.length === 0) {
       if (isDraftMode) {
-        if (confirm("Discard the engine draft?")) {
+        if (await confirmDialog("Discard the engine draft?", { confirmLabel: "Discard", tone: "danger" })) {
           setIsDraftMode(false);
           setDraftAssignments({});
           showToast("Draft discarded", "info");
@@ -6968,7 +6958,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       lockedCount > 0
         ? `Clear ${clearable.length} assignment(s) on tonight's board? ${lockedCount} locked slot(s) will be kept.`
         : `Clear all ${clearable.length} assignment(s) on tonight's board?`;
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirmDialog(confirmMsg, { confirmLabel: "Clear", tone: "danger" }))) return;
 
     if (isDraftMode) {
       startHeavyTransition(() => {
@@ -7024,6 +7014,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     unassign,
     showToast,
     logBuilderChange,
+    confirmDialog,
   ]);
 
   const handlePadAddCoverage = React.useCallback(async (sourceKey: string, targetKey: string) => {
@@ -7640,10 +7631,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           canPublish ? () => void handleToggleWeekPublished(false) : undefined
         }
         publishWeekBusy={publishWeekBusy}
-        onRunEngine={canRunEngine ? runXaiEngineFromCanvas : undefined}
-        onDeepOptimize={canRunEngine ? startDeepOptimize : undefined}
+        onOptimizeNight={canRunEngine ? optimizeNight : undefined}
         engineRunning={engineRunPhase !== "idle"}
-        deepOptimizeRunning={timefold.phase === "running"}
         onRunWeek={canRunEngine ? () => void runWeekPreview() : undefined}
         weekRunBusy={weekRunBusy}
         onClearDay={canSeeDraftData ? handleClearBoard : undefined}
@@ -7866,13 +7855,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 selectedDayIndex={selectedDayIndex}
                 canRunEngine={canRunEngine}
                 canEditAssignments={canEditAssignments}
-                onRunXaiEngine={engineRunner.runXaiEngineFromCanvas}
-                onDeepOptimize={canRunEngine ? startDeepOptimize : undefined}
+                onOptimizeNight={canRunEngine ? optimizeNight : undefined}
                 onClearBoard={handleClearBoard}
                 engineRunning={engineRunPhase !== "idle"}
-                deepOptimizeRunning={timefold.phase === "running"}
-                deepOptimizeTick={timefold.tick}
-                onCancelDeepOptimize={timefold.cancel}
                 onApplyDraft={() => { void applyDraft(); }}
                 onDiscardDraft={discardDraft}
                 showDraftStatusPill={
@@ -8599,6 +8584,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           applying={engineRunPhase !== "idle"}
           onApply={() => { void applyDraft(); }}
           onDiscard={discardDraft}
+          onReviewChanges={() => {
+            // Helpful review affordance + flash spotlight on changed cards (D badges + left bars)
+            showToast("Review cards for proposed names + 'was:' strikethroughs. Optimizer changes are highlighted in draft mode.", "info");
+            const canvas = document.querySelector('.sb-builder-canvas') || document.body;
+            canvas.classList.add('sb-draft-flash');
+            setTimeout(() => canvas.classList.remove('sb-draft-flash'), 2400);
+          }}
         />
       )}
 

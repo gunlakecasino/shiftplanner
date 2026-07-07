@@ -32,11 +32,11 @@ export function TimefoldProposalCard({
         "flex w-full flex-col gap-2 rounded-2xl p-4 text-left transition-[transform,box-shadow,background] duration-150 active:scale-[0.99]",
       )}
       style={{
-        // Placement-pad card: crisp white, gray-100 border; selected → gold wash + ring.
-        background: selected ? "var(--sb-gold-tint)" : "#ffffff",
-        border: `1px solid ${selected ? "var(--sb-gold-border)" : "#f0f0f0"}`,
+        // Placement-pad card: crisp white, gray-100 border; selected → optimize blue wash + ring (Velvet redesign).
+        background: selected ? "var(--sb-optimize-tint)" : "#ffffff",
+        border: `1px solid ${selected ? "var(--sb-optimize-border)" : "#f0f0f0"}`,
         boxShadow: selected
-          ? "0 4px 16px -6px color-mix(in srgb, var(--sb-gold-ink) 40%, transparent), 0 0 0 1px var(--sb-gold-border)"
+          ? "0 4px 16px -6px color-mix(in srgb, var(--sb-optimize-ink) 40%, transparent), 0 0 0 1px var(--sb-optimize-border)"
           : "0 1px 3px rgba(0,0,0,0.05), 0 4px 16px -6px rgba(0,0,0,0.08)",
       }}
     >
@@ -46,30 +46,30 @@ export function TimefoldProposalCard({
             aria-label="Recommended proposal"
             className="flex size-5 shrink-0 items-center justify-center rounded-full"
             style={{
-              background: "var(--sb-gold-surface)",
-              border: "1px solid var(--sb-gold-border)",
+              background: "var(--sb-optimize-tint)",
+              border: "1px solid var(--sb-optimize-border)",
             }}
           >
-            <Star size={10} className="fill-current" style={{ color: "var(--sb-gold-ink)" }} />
+            <Star size={10} className="fill-current" style={{ color: "var(--sb-optimize-ink)" }} />
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold tracking-[-0.01em] text-foreground">
           {proposal.title}
         </span>
-        {/* Projected rotation-health ring — conic gauge, tabular readout. */}
+        {/* Projected rotation-health ring — conic gauge, tabular readout. (Velvet redesign) */}
         <span
           className="relative flex size-9 shrink-0 items-center justify-center rounded-full"
           title={`Projected rotation health ${score}%`}
           style={{
-            background: `conic-gradient(${selected || isBest ? "var(--sb-gold-ink)" : "var(--muted-foreground)"} ${score * 3.6}deg, var(--sb-glass-lowlight) 0deg)`,
+            background: `conic-gradient(${selected || isBest ? "var(--sb-optimize-ink)" : "var(--muted-foreground)"} ${score * 3.6}deg, #f3f4f6 0deg)`,
           }}
           aria-label={`Projected rotation health ${score} percent`}
         >
           <span
             className="flex size-7 items-center justify-center rounded-full text-[10px] font-bold tabular-nums text-foreground"
             style={{
-              background: "var(--sb-glass)",
-              boxShadow: "inset 0 1px 0 var(--sb-glass-highlight)",
+              background: "#fff",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
             }}
           >
@@ -77,11 +77,11 @@ export function TimefoldProposalCard({
           </span>
         </span>
       </div>
-      <p className="text-[11.5px] leading-snug text-muted-foreground">{proposal.summary}</p>
+      <p className="text-[12px] leading-snug text-muted-foreground">{proposal.summary}</p>
       {selected && (
         <div
           className="flex items-center gap-1 text-[11px] font-semibold"
-          style={{ color: "var(--sb-gold-ink)" }}
+          style={{ color: "var(--sb-optimize-ink)" }}
         >
           Viewing this proposal <ArrowRight size={11} />
         </div>

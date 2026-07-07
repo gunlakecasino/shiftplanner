@@ -1,21 +1,17 @@
 /**
- * engine/index.ts — the unified run pipeline (P2-3).
+ * engine/index.ts — the unified run pipeline (night + used by week).
  *
- * One entry point (`runNightEngine`) orchestrates the stages:
- *   1. CONTEXT     (built by the caller / context.ts)
- *   2. FEASIBILITY gender-aware reality check
- *   3. PLANNER     deterministic fill-order seed
- *   4. OPTIMIZER   local search from the seed
- *   5. AI          (Phase 4 — not yet wired; passthrough)
- *   6. GUARD       validateDraft; illegal slots fall back to the seed
- *   7. RESULT      draft + provenance + scorecard + per-stage telemetry
+ * `runNightEngine` = the core for "Run Engine" / "Optimize Night (Full)" in the UI:
+ *   planner seed (coverage-first with Top-K) → local optimizer (hill-climb) → optional AI → guard.
  *
- * The stage gate is the whole design: a stage's output is only adopted when its
- * scorecard is lexicographically ≥ the incumbent's (compareScorecards). That
- * single rule makes every component honor coverage > rotation > preferences >
- * skill (N1) without re-implementing the hierarchy.
+ * This powers the main "Run Engine" button (full plan into draft) and is called
+ * internally by the Week optimizer (rolling + polish).
  *
- * Public surface for callers is `runNightEngine`; the week engine composes it.
+ * See timefoldLocalSolver.ts (the "Optimize Tonight" deep rotation path) for the
+ * complementary current-board proposal UI. They share the objective but differ
+ * in seeding and output style. Consolidation target: use this optimizer for both.
+ *
+ * Stage gate enforces lex hierarchy (coverage > rotation > prefs > skill).
  */
 
 import type {

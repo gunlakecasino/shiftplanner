@@ -26,6 +26,7 @@ import type {
   TMSlotSkill,
 } from "@/lib/shiftbuilder/sudoActions";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "../components/ConfirmDialog";
 import {
   GlassSurface,
   GoldHairline,
@@ -416,6 +417,7 @@ function TMEditDrawer({
   onFlash: (kind: "ok" | "err", msg: string) => void;
   isDark?: boolean;
 }) {
+  const confirmDialog = useConfirm();
   const [tab, setTab] = React.useState<DrawerTab>("identity");
   const [form, setForm] = React.useState<TMRecord>(tm);
   const [saving, setSaving] = React.useState(false);
@@ -494,7 +496,11 @@ function TMEditDrawer({
   };
 
   const softDelete = async () => {
-    if (!window.confirm(`Soft-delete ${form.displayName}?\n\nThey'll be marked inactive and removed from the engine roster. History (night_tm_status, appraisals, etc.) is preserved.`)) {
+    const ok = await confirmDialog(
+      "They'll be marked inactive and removed from the engine roster. History (night_tm_status, appraisals, etc.) is preserved.",
+      { title: `Soft-delete ${form.displayName}?`, confirmLabel: "Soft-delete", tone: "danger" },
+    );
+    if (!ok) {
       return;
     }
     setSaving(true);

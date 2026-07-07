@@ -73,6 +73,15 @@
   --sb-gold-surface: rgba(255, 204, 0, 0.24);
   --sb-gold-border: rgba(255, 204, 0, 0.44);
 
+  /* ── Deep Optimize / Optimize Tonight accent (iOS blue per Velvet redesign) ─
+     Distinct from yellow gold so it reads as "engine action" like +Add / insights.
+     Matches the 2026-07 visual spec in Optimize Tonight - Velvet Redesign.html */
+  --sb-optimize:        #339CFF;
+  --sb-optimize-ink:    #007AFF;
+  --sb-optimize-tint:   #EFF6FF;
+  --sb-optimize-surface: #DBEAFE;
+  --sb-optimize-border: #BFDBFE;
+
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
   --sb-z1:  #ffcc00; /* yellow */
   --sb-z2:  #ffcc00;
@@ -629,6 +638,22 @@ body {
 
 .assignment-card:hover {
   box-shadow: 0 2px 6px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.09);
+}
+
+/* Draft / optimizer change indicator on cards (subtle left bar + D badge already in chrome).
+   Helps scannability of the 8 changes in the screenshot flow. */
+.assignment-card[data-has-draft="true"] {
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15);
+}
+
+/* Temporary flash for post-optimizer import review (triggered via Review button or import) */
+.sb-draft-flash .assignment-card[data-has-draft="true"] {
+  animation: sb-draft-flash-kf 2.2s ease-out 1;
+}
+@keyframes sb-draft-flash-kf {
+  0% { box-shadow: 0 0 0 3px rgba(51,156,255,0.45); }
+  70% { box-shadow: 0 0 0 1px rgba(51,156,255,0.15); }
+  100% { box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15); }
 }
 
 /* Spotlight layer — radial gradient using the card's own accent color,

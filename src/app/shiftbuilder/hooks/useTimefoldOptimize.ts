@@ -12,18 +12,14 @@ import type {
 /**
  * useTimefoldOptimize
  *
- * Owns the Optimize Tonight run lifecycle only — starting,
- * ticking progress, landing on results, cancelling. It deliberately does NOT
- * know how to apply a proposal to Draft Mode; that's ShiftBuilderClient's
- * applyTimefoldProposal (same shape as applyGrokSuggestions), kept in the
- * orchestrator since it needs assignments/auxDefs/history-recording context
- * this hook shouldn't be coupled to.
+ * Owns the "Optimize Tonight" (deep night rotation optimizer) run lifecycle.
+ * Specialized in-process local search (hill-climb variants) seeded from the
+ * *current live board*. Focus: rotation relief with coverage invariant.
+ * Produces ranked proposals (Balanced / Minimal / Max-spread) with diffs.
  *
- * Backed by timefoldLocalSolver.ts — a real in-process optimizer over the
- * live board (coverage > rotation > preferences > skill). When a true
- * Timefold service exists, swap the implementation of `start` to call it
- * instead — the phase/tick/result contract matches a real async progress
- * stream (SSE/poll) without changing any consuming component.
+ * Note: Night optimize is now unified under the full engine path (planner + optimization).
+ * This hook remains for the proposal sheet if used by legacy flows, but the primary
+ * "Optimize Night" is the full unified one.
  */
 export interface UseTimefoldOptimizeReturn {
   phase: TimefoldRunPhase;

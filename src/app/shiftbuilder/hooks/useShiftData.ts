@@ -313,8 +313,17 @@ export function useShiftData(
       (Object.keys(effectiveAssignments).length > 0 || currentNight.nightId != null),
     [effectiveAssignments, currentNight.nightId, nightAccessBlocked],
   );
-  const boardColdLoading = currentNight.isCoreLoading && !hasBoardPayload;
+  // Gates the hydration effect below (unrelated to store hydration state, so it can't
+  // form a cycle with `hydratedDayKey`).
+  const queryColdLoading = currentNight.isCoreLoading && !hasBoardPayload;
   const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
+
+  // Query data and the Zustand store hydrate on different ticks (the hydration effect
+  // below only runs after the render where query data first lands). Without this,
+  // `boardColdLoading` would go false the instant query data arrives — one render before
+  // the store actually has it — and every ZoneCard would flash "Unassigned" for a frame.
+  const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(null);
+  const boardColdLoading = queryColdLoading || hydratedDayKey !== selectedDateKey;
 
   // Live version for reactivity of "already placed this night" and week surfaces.
   const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);
@@ -330,12 +339,13 @@ export function useShiftData(
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (hydratedAssignmentsDayRef.current === dayKey) return;
-    if (boardColdLoading || currentNight.isCoreFetching) return;
+    if (queryColdLoading || currentNight.isCoreFetching) return;
 
     if (nightAccessBlocked) {
       useShiftBuilderStore.getState().setAssignments({});
       setBoardAssignmentsDayKey(dayKey);
       hydratedAssignmentsDayRef.current = dayKey;
+      setHydratedDayKey(dayKey);
       return;
     }
 
@@ -369,6 +379,7 @@ export function useShiftData(
     useShiftBuilderStore.getState().setAssignments(next);
     setBoardAssignmentsDayKey(dayKey);
     hydratedAssignmentsDayRef.current = dayKey;
+    setHydratedDayKey(dayKey);
 
     // Mirror for cross-day week consumers (Weekly Overview sheet, plannedThisWeekRecentHistory, etc.)
     try {
@@ -384,7 +395,7 @@ export function useShiftData(
     }
   }, [
     selectedDay.date,
-    boardColdLoading,
+    queryColdLoading,
     currentNight.isCoreFetching,
     currentNight.queryClient,
     currentNight.assignments,

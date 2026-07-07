@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import BreakBadge from "../components/BreakBadge";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
+import { useConfirm } from "../components/ConfirmDialog";
 // Break-default helpers are dynamically imported inside the handlers that use them.
 // This prevents the heavy data.ts module from being part of the top-level static import graph of Sudo tabs (Turbopack HMR fix).
 // NOTE: task-chip defaults were retired by the cutover — they now live in Projects → Defaults.
@@ -200,6 +201,7 @@ const SAVE_GRAVE_BREAK_MAP_CONFIRM =
 
 export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark = false }: DefaultsTabProps) {
   const ios = sudoIosClasses(isDark);
+  const confirmDialog = useConfirm();
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<LocalToast[]>([]);
 
@@ -248,7 +250,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   // ── Break group cycling ───────────────────────────────────────────────────
   const handleSaveGraveBreakMap = useCallback(async () => {
     if (seedingGrave) return;
-    if (!confirm(SAVE_GRAVE_BREAK_MAP_CONFIRM)) return;
+    if (!(await confirmDialog(SAVE_GRAVE_BREAK_MAP_CONFIRM, { confirmLabel: "Save" }))) return;
     setSeedingGrave(true);
     try {
       const { seedGraveBreakGroupDefaults } = await import("@/lib/shiftbuilder/data");
@@ -260,7 +262,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
     } finally {
       setSeedingGrave(false);
     }
-  }, [seedingGrave, load]);
+  }, [seedingGrave, load, confirmDialog]);
 
   const handleCycleBreak = useCallback(
     async (def: SlotDef) => {
@@ -293,7 +295,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   const handlePush = useCallback(
     async (op: "breaks-today" | "breaks-week") => {
       if (pushing) return;
-      if (!confirm(PUSH_CONFIRM_MESSAGES[op])) return;
+      if (!(await confirmDialog(PUSH_CONFIRM_MESSAGES[op], { confirmLabel: "Push" }))) return;
       setPushing(op);
 
       try {
@@ -316,7 +318,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
         setPushing(null);
       }
     },
-    [pushing, currentNightId, weekStart, onDataChanged]
+    [pushing, currentNightId, weekStart, onDataChanged, confirmDialog]
   );
 
   // ─────────────────────────────────────────────────────────────────────────

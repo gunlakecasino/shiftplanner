@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { useConfirm } from "./ConfirmDialog";
 import { BuilderBusyLabel, BuilderLoadingLine, BuilderLoadingShell } from "./builderPrimitives";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifyGravesDefaultScheduleChanged } from "@/lib/shiftbuilder/scheduleCacheSync";
@@ -290,6 +291,7 @@ function ScheduleSection({
 export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const { isAuthenticated, permissions } = useOpsAuth();
+  const confirmDialog = useConfirm();
   const canApplySchedules = permissions?.canApplySchedules ?? false;
   const queryClient = useQueryClient();
   const [grid, setGrid] = useState<GridData | null>(null);
@@ -426,7 +428,11 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
       const sectionKey = sectionKeyForBand(band);
       const row = grid?.[sectionKey].find((r) => r.tmId === tmId);
       const name = row?.tmName || "this TM";
-      if (!window.confirm(`Remove ${name} from the ${band.replace("_", " ")} default schedule?`)) {
+      const ok = await confirmDialog(
+        `Remove ${name} from the ${band.replace("_", " ")} default schedule?`,
+        { confirmLabel: "Remove", tone: "danger" },
+      );
+      if (!ok) {
         return;
       }
       setMutating(true);
@@ -453,7 +459,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
         setMutating(false);
       }
     },
-    [grid, applyGrid, load, queryClient],
+    [grid, applyGrid, load, queryClient, confirmDialog],
   );
 
   if (!isAuthenticated || !canApplySchedules) {

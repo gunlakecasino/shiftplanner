@@ -9,6 +9,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "./ConfirmDialog";
 import "./printCommandCenter.css";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import {
@@ -306,6 +307,7 @@ export function PrintCommandCenter({
   isDark = false,
   currentNightStatus = null,
 }: PrintCommandCenterProps) {
+  const confirmDialog = useConfirm();
 
   const applyConfig = useCallback((config: PrintConfig) => {
     setDays(config.days.map((d) => ({ ...d, inOverview: false })));
@@ -414,20 +416,21 @@ export function PrintCommandCenter({
   const sheetTypeLabel = printVariant === "planning" ? "Planning Worksheet" : "Floor Sheet";
 
   const handlePrintVariantChange = useCallback(
-    (next: PrintVariant) => {
+    async (next: PrintVariant) => {
       if (next === printVariant) return;
       if (
         next === "official" &&
         hasUnpublishedQueuedNights(days, selectedDayIndex, currentNightStatus, nightStatusByDay)
       ) {
-        const ok = window.confirm(
+        const ok = await confirmDialog(
           "One or more selected nights are still unpublished. Print the floor sheet anyway?",
+          { confirmLabel: "Print anyway" },
         );
         if (!ok) return;
       }
       setPrintVariant(next);
     },
-    [printVariant, days, selectedDayIndex, currentNightStatus, nightStatusByDay],
+    [printVariant, days, selectedDayIndex, currentNightStatus, nightStatusByDay, confirmDialog],
   );
 
   const deployCount = useMemo(() => days.filter((d) => d.printDeploy).length, [days]);

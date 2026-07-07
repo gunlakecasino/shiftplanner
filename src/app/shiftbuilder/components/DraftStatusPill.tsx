@@ -11,6 +11,8 @@ export interface DraftStatusPillProps {
   applying?: boolean;
   onApply: () => void;
   onDiscard: () => void;
+  /** Optional: open review for the current draft changes (e.g. spotlight cards or re-open proposal sheet). */
+  onReviewChanges?: () => void;
 }
 
 /**
@@ -31,6 +33,7 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
   applying = false,
   onApply,
   onDiscard,
+  onReviewChanges,
 }) => {
   if (typeof document === "undefined") return null;
 
@@ -61,20 +64,34 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
           : "Draft mode — no changes yet"}
       </span>
       {hasChanges && (
-        <button
-          type="button"
-          onClick={onApply}
-          disabled={applying}
-          aria-label={`Apply ${count} draft change${count === 1 ? "" : "s"} to the live board`}
-          className="flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold transition-opacity disabled:opacity-50"
-          style={{
-            background: "var(--sb-gold-surface)",
-            color: "var(--sb-gold-ink)",
-            border: "1px solid var(--sb-gold-border)",
-          }}
-        >
-          <Check size={12} strokeWidth={2.5} /> Apply to Live
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={applying}
+            aria-label={`Apply ${count} draft change${count === 1 ? "" : "s"} to the live board`}
+            className="flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold transition-opacity disabled:opacity-50"
+            style={{
+              background: "var(--sb-gold-surface)",
+              color: "var(--sb-gold-ink)",
+              border: "1px solid var(--sb-gold-border)",
+            }}
+          >
+            <Check size={12} strokeWidth={2.5} /> Apply to Live
+          </button>
+          {onReviewChanges && (
+            <button
+              type="button"
+              onClick={onReviewChanges}
+              disabled={applying}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium transition-colors border border-transparent hover:border-[var(--sb-optimize-border)] disabled:opacity-50"
+              style={{ color: "var(--sb-optimize-ink)" }}
+              title="Review the proposed optimizer changes on the board (D badges + left bars + 'was:' lines)"
+            >
+              Review
+            </button>
+          )}
+        </>
       )}
       <button
         type="button"

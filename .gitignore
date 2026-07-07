@@ -45,6 +45,9 @@ next-env.d.ts
 # Grok Build environment & skills (personal agent tooling)
 .grok/
 
+# Claude Code local config (settings.local.json, launch.json, task locks) — machine-local
+.claude/
+
 # MCP configuration
 .mcp.json
 

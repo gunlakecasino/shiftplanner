@@ -62,12 +62,12 @@ export function TimefoldProcessingOverlay({
         <div className="flex items-center gap-3">
           <div
             className="flex size-10 shrink-0 items-center justify-center rounded-full"
-            style={{ background: "var(--sb-gold-tint)", border: "1px solid var(--sb-gold-border)" }}
+            style={{ background: "var(--sb-optimize-tint)", border: "1px solid var(--sb-optimize-border)" }}
           >
             <Loader2
               size={18}
               className="animate-spin motion-reduce:animate-none"
-              style={{ color: "var(--sb-gold-ink)" }}
+              style={{ color: "var(--sb-optimize-ink)" }}
             />
           </div>
           <div className="min-w-0 flex-1">
@@ -94,7 +94,7 @@ export function TimefoldProcessingOverlay({
               style={{
                 width: `${percent}%`,
                 background:
-                  "linear-gradient(90deg, var(--sb-gold-ink), var(--sb-gold))",
+                  "linear-gradient(90deg, #007AFF, #339CFF)",
               }}
             />
           </div>

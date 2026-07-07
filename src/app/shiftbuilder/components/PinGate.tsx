@@ -102,6 +102,19 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
     setIsSubmitting(false);
   }, [isComplete, submitting, login, pin, onAuthenticated, pathname, router]);
 
+  // handlePinChange schedules handleSubmit 60ms out, but handleSubmit is
+  // recreated every render (useCallback deps include `pin`/`isComplete`).
+  // The setTimeout closure would otherwise capture *this* render's
+  // handleSubmit — bound to the pin/isComplete from *before* the just-typed
+  // digit takes effect — so its guard (`!isComplete`) always failed and the
+  // auto-submit silently no-opped. Routing through a ref that's kept current
+  // means the timeout always invokes the latest handleSubmit once React has
+  // committed the new pin.
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
+
   const handlePinChange = (value: string) => {
     const cleaned = value.replace(/\D/g, "").slice(0, 6);
     setPin(cleaned);
@@ -109,7 +122,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
 
     if (cleaned.length === 6) {
       setTimeout(() => {
-        void handleSubmit();
+        void handleSubmitRef.current();
       }, 60);
     }
   };

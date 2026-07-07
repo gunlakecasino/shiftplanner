@@ -121,7 +121,36 @@
         },
         {
           "type": "p",
-          "text": "Double-click any card to open its placement pad. The pad has three actions:"
+          "text": "A card has two live regions. <b>Double-click the name band</b> at the top of a card to open its <b>Placement Pad</b>. <b>Double-click the task area</b>, the lines below the name, to open the <b>Tasks Pad</b> (Section 07). The Placement Pad is the per-person control panel; top to bottom it holds:"
+        },
+        {
+          "type": "callouts",
+          "items": [
+            [
+              "1",
+              "<b>Header.</b> The Team Member&rsquo;s name and the area chip in the area&rsquo;s own identity color; an open slot shows Unassigned."
+            ],
+            [
+              "2",
+              "<b>Insight line.</b> When available, a one-sentence rotation verdict for tonight, built from the same facts as the matrix: spread, gaps, and this week&rsquo;s pattern."
+            ],
+            [
+              "3",
+              "<b>Tasks and sweeper.</b> A quick add-task row and the <b>Assign Sweeper</b> button (Section 07)."
+            ],
+            [
+              "4",
+              "<b>The Placement Matrix and LAST 5.</b> The placement memory (Section 06)."
+            ],
+            [
+              "5",
+              "<b>Action bar.</b> Lock, Clear, Coverage, Swap along the bottom."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "The three actions you run the night with:"
         },
         {
           "type": "table",
@@ -140,9 +169,14 @@
             ],
             [
               "Coverage",
-              "Have this person also carry another area. See Section 05."
+              "Have this person also carry another area. See Section 07."
             ]
           ]
+        },
+        {
+          "type": "goldbox",
+          "label": "Locked cards",
+          "text": "A card marked <b>Locked</b> is pinned for the night: Swap and Clear will not change it, and the board will refuse the edit. Leave the Lock button alone; it is not part of running the night. If the whole night refuses changes, the night itself is locked: read and print only."
         }
       ]
     },
@@ -151,6 +185,124 @@
         {
           "type": "h2",
           "n": "05",
+          "text": "Filling a Slot"
+        },
+        {
+          "type": "p",
+          "text": "Tap <b>Swap</b> on an assigned card, or open an <b>Unfilled</b> card, and the Team Member picker opens. It lists only people who can hold that area tonight: scheduled, the right section, and, for restroom sides, the matching gender. Whoever you tap takes the slot immediately: the board is live."
+        },
+        {
+          "type": "p",
+          "text": "Every name in the picker carries a <b>fit dot</b>: a one-glance verdict on how tonight&rsquo;s placement sits with that person&rsquo;s rotation."
+        },
+        {
+          "type": "html",
+          "html": "<div style=\"border:1px solid #D8DBE1;border-radius:10px;background:#F4F5F7;padding:9px 12px;margin:6px 0;display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;\"><span style=\"display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap;\"><span style=\"width:11px;height:11px;border-radius:50%;background:#34C759;display:inline-block;\"></span><b style=\"font-size:9.5px;\">Best</b></span><span style=\"display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap;\"><span style=\"width:11px;height:11px;border-radius:50%;background:#00C0E8;display:inline-block;\"></span><b style=\"font-size:9.5px;\">Okay</b></span><span style=\"display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap;\"><span style=\"width:11px;height:11px;border-radius:50%;background:#FF8D28;display:inline-block;\"></span><b style=\"font-size:9.5px;\">Check</b></span><span style=\"display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap;\"><span style=\"width:11px;height:11px;border-radius:50%;background:#B91C1C;display:inline-block;\"></span><b style=\"font-size:9.5px;\">Critical</b></span><span style=\"display:inline-flex;align-items:center;gap:5px;margin-right:12px;white-space:nowrap;\"><span style=\"width:11px;height:11px;border-radius:50%;background:#FF383C;display:inline-block;\"></span><b style=\"font-size:9.5px;\">Invalid</b></span><span style=\"font-size:8.5px;color:#7C8494;\">&nbsp; tap any dot for the verdict and the facts behind it</span></div>"
+        },
+        {
+          "type": "callouts",
+          "items": [
+            [
+              "1",
+              "<b>Best (green).</b> Rotation supports it: little or no recent exposure, no same-week repeat."
+            ],
+            [
+              "2",
+              "<b>Okay (cyan).</b> Workable. Some recent exposure, nothing alarming."
+            ],
+            [
+              "3",
+              "<b>Check (orange).</b> Look before you tap: repeat exposure building up or a same-week repeat on this slot."
+            ],
+            [
+              "4",
+              "<b>Critical (dark red).</b> A heavy repeat: this placement stacks straight onto recent nights in the same area."
+            ],
+            [
+              "5",
+              "<b>Invalid (red).</b> The placement does not work as the board stands; pick someone else or fix the conflict first."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Tap the dot itself for the verdict popover: the label, a one-line summary, and the fact line behind it. The dot is advice built from placement history; you place the person."
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "06",
+          "text": "The Placement Matrix"
+        },
+        {
+          "type": "p",
+          "text": "Below the pad&rsquo;s actions sits the <b>Placement Matrix</b>: the Team Member&rsquo;s placement memory. Open it the same way, <b>double-click the name band</b> of their card. Check it before you Swap someone in, approve a swap, or add coverage: it tells you where they have been, how often, and how recently."
+        },
+        {
+          "type": "html",
+          "html": "<div class=\"ppad\"><div class=\"ph\"><div class=\"pnm\">Marcus</div><div class=\"pslot\">&#9679; ZONE 7</div></div><div class=\"pmx\">Matrix &middot; last 30 nights (spread) + last 5 placements</div><div class=\"pcounts\"><span class=\"rr\">RR</span> <b>5</b> &nbsp;|&nbsp; Zone <b>10</b> &nbsp;|&nbsp; Z9 <b>12d</b> &nbsp; Z9SR <b>41d</b></div><div class=\"pleg\">Legend:<span class=\"pdot\" style=\"background:#34C759;\"></span>1&times;<span class=\"pdot\" style=\"background:#FF9500;\"></span>2&times;<span class=\"pdot\" style=\"background:#FF3B30;\"></span>3&times;+<span class=\"pdot\" style=\"background:#C7C7CC;\"></span>not in spread</div><div class=\"pgrid\"><div class=\"pp g1\">Z1</div><div class=\"pp g0\">Z2</div><div class=\"pp g2\">Z3</div><div class=\"pp g1\">Z4</div><div class=\"pp g0\">Z5</div><div class=\"pp g0\">Z6</div><div class=\"pp g3\">Z7</div><div class=\"pp g1\">Z8</div><div class=\"pp g0\">Z9</div><div class=\"pp g0\">Z10</div><div class=\"pp g1\">1M</div><div class=\"pp g0\">6M</div><div class=\"pp g2\">7M</div><div class=\"pp g0\">8M</div><div class=\"pp g1\">10M</div><div class=\"pp g0\">ADM</div></div><div class=\"pl5\">LAST 5</div><div class=\"pgrid\"><div class=\"pp\" style=\"background:#007AFF22;border:1px solid #007AFF55;color:#007AFF;width:18.2%;\">Z7</div><div class=\"pp\" style=\"background:#007AFF22;border:1px solid #007AFF55;color:#007AFF;width:18.2%;\">Z7</div><div class=\"pp\" style=\"background:#E5393522;border:1px solid #E5393555;color:#E53935;width:18.2%;\">Z3</div><div class=\"pp\" style=\"background:#C9A84C22;border:1px solid #C9A84C55;color:#C9A84C;width:18.2%;\">1M</div><div class=\"pp\" style=\"background:#007AFF22;border:1px solid #007AFF55;color:#007AFF;width:18.2%;\">Z7</div></div></div><p class=\"figcap\">Marcus&rsquo;s matrix, read in five seconds: Zone 7 three or more times in his last 30 nights worked (red), Zone 3 and Restroom 7 Men&rsquo;s twice (orange), healthy green and gray everywhere else, and 12 days since Zone 9. Tonight is not a Zone 7 night for Marcus.</p>"
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "p",
+          "text": "<b>The spread window.</b> The matrix counts the Team Member&rsquo;s last 30 grave nights actually worked, before the night you are building. Nights off do not shrink the window; it is their nights, not the calendar. <b>The counts row</b> shows how many restroom sides and zones this person can hold (restroom sides match gender), plus days since their last Zone 9 and Zone 9 Smoking Room placement: 12d means twelve days ago, and a dash means never on record."
+        },
+        {
+          "type": "p",
+          "text": "<b>The grid</b> shows one pill per area, colored by how many of those 30 nights the person spent there:"
+        },
+        {
+          "type": "html",
+          "html": "<table style=\"width:100%;border-collapse:collapse;margin:6px 0;\"><tr><th style=\"background:#1A2744;color:#fff;font-size:8px;letter-spacing:1.4px;text-transform:uppercase;text-align:left;padding:5px 8px;\">Pill</th><th style=\"background:#1A2744;color:#fff;font-size:8px;letter-spacing:1.4px;text-transform:uppercase;text-align:left;padding:5px 8px;\">What it means</th><th style=\"background:#1A2744;color:#fff;font-size:8px;letter-spacing:1.4px;text-transform:uppercase;text-align:left;padding:5px 8px;\">How to act</th></tr><tr><td style=\"width:16%;font-weight:700;color:#1A2030;\"><span style=\"display:inline-block;width:10px;height:10px;border-radius:50%;background:#C7C7CC;margin-right:5px;\"></span>Gray</td><td style=\"width:38%;color:#1A2030;font-weight:400;\">Zero nights in that area within their last 30 nights worked. Not in the spread at all.</td><td style=\"color:#1A2030;font-weight:400;\">An open lane for rotation, but gray is not a qualification: confirm they can hold the area before you treat it as an option.</td></tr><tr><td style=\"width:16%;font-weight:700;color:#1A2030;\"><span style=\"display:inline-block;width:10px;height:10px;border-radius:50%;background:#34C759;margin-right:5px;\"></span>Green &middot; 1&times;</td><td style=\"width:38%;color:#1A2030;font-weight:400;\">Worked that area exactly once in the window.</td><td style=\"color:#1A2030;font-weight:400;\">Healthy rotation. Greens are your first-choice lanes when moving people.</td></tr><tr><td style=\"width:16%;font-weight:700;color:#1A2030;\"><span style=\"display:inline-block;width:10px;height:10px;border-radius:50%;background:#FF9500;margin-right:5px;\"></span>Orange &middot; 2&times;</td><td style=\"width:38%;color:#1A2030;font-weight:400;\">Worked it twice in the window.</td><td style=\"color:#1A2030;font-weight:400;\">Caution. Fine when the night demands it, but look for a green or gray first.</td></tr><tr><td style=\"width:16%;font-weight:700;color:#1A2030;\"><span style=\"display:inline-block;width:10px;height:10px;border-radius:50%;background:#FF3B30;margin-right:5px;\"></span>Red &middot; 3&times;+</td><td style=\"width:38%;color:#1A2030;font-weight:400;\">Three or more nights there in the window. Heavy recent exposure.</td><td style=\"color:#1A2030;font-weight:400;\">Do not stack another night on it without a reason. Reds are where rotation complaints and skill fade come from.</td></tr></table>"
+        },
+        {
+          "type": "p",
+          "text": "<b>LAST 5</b> uses a different color language on purpose. Its pills are the five most recent placements, newest first, repeats included, and each pill wears its <b>area&rsquo;s identity color</b>, the same color that area&rsquo;s card wears on the board. So the grid answers <b>how often</b>, in frequency colors; LAST 5 answers <b>where, lately</b>, in area colors. Three blue Z7 pills in a row is a rotation problem you can see from across the room."
+        },
+        {
+          "type": "p",
+          "text": "One caution: the matrix is history, not eligibility. A gray pill means no recent exposure; it does not mean the person is trained for that area, and the picker&rsquo;s eligibility rules still apply either way."
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "07",
+          "text": "Working the Tasks"
+        },
+        {
+          "type": "p",
+          "text": "Task lines are the duties printed on a card under the name. <b>Double-click the task area of a card</b> to open the <b>Tasks Pad</b> and edit them:"
+        },
+        {
+          "type": "steps",
+          "items": [
+            "<b>Add a task.</b> Type the line and add it. It prints on the card exactly as written, so write it the way the floor should read it (for example, &ldquo;Detail slot bases, rows E and F&rdquo;).",
+            "<b>Use the recent chips.</b> The pad shows recently used task lines as one-tap chips: tap one to add it without retyping.",
+            "<b>Remove a task.</b> Tap the &#10005; on the task line.",
+            "<b>Assign the sweeper.</b> Tap <b>Assign Sweeper</b> and pick <b>Sweep 5/8/HL</b> or <b>Sweep 9/10/SR</b>. The button grays out once that card carries a sweep."
+          ]
+        },
+        {
+          "type": "goldbox",
+          "label": "Before you print",
+          "text": "Both sweeps, Sweep 5/8/HL and Sweep 9/10/SR, must be owned by someone every night. If neither appears on any card, assign them before the book prints."
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "type": "h2",
+          "n": "08",
           "text": "Covering a Gap"
         },
         {
@@ -173,7 +325,7 @@
         },
         {
           "type": "h2",
-          "n": "06",
+          "n": "09",
           "text": "The Overlaps Page"
         },
         {
@@ -186,7 +338,7 @@
       "blocks": [
         {
           "type": "h2",
-          "n": "07",
+          "n": "10",
           "text": "Printing"
         },
         {
@@ -195,7 +347,7 @@
         },
         {
           "type": "h2",
-          "n": "08",
+          "n": "11",
           "text": "The Quick Routine"
         },
         {
@@ -205,6 +357,7 @@
             "Open tonight's published night.",
             "Read the board top to bottom: ZONES, RESTROOMS, AUXILIARY.",
             "Swap in replacements and cover any gaps.",
+            "Add or adjust task lines and make sure both sweeps are owned.",
             "Check the Overlap sheet.",
             "Print the book for the floor."
           ]
