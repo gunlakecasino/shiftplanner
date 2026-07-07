@@ -126,7 +126,10 @@ const TasksPad: React.FC<TasksPadProps> = ({
     setMarkerType(nextTask.markerType || "highlight");
     setTextStyleDraft(normalizeTaskTextStyle(nextTask.textStyle ?? null));
     if (editorRef.current) editorRef.current.innerText = nextTask.taskLabel;
-  }, [slotKey, initialTask, initialAddMode, regularTasks.length]);
+    // usePortal: the pad renders inline first, then remounts into a portal once the
+    // placement style is measured (rAF). That remount creates a fresh contentEditable
+    // node, so re-run to re-seed its text — otherwise the editor opens blank.
+  }, [slotKey, initialTask, initialAddMode, regularTasks.length, usePortal]);
 
   const beginAddTask = useCallback(() => {
     setIsAddingNew(true);
@@ -162,7 +165,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
     if (editorRef.current) {
       editorRef.current.innerText = activeTask.taskLabel;
     }
-  }, [isAddingNew, activeTask?.id, activeTask?.taskLabel, activeTask?.color, activeTask?.markerType, activeTask?.textStyle]);
+  }, [isAddingNew, activeTask?.id, activeTask?.taskLabel, activeTask?.color, activeTask?.markerType, activeTask?.textStyle, usePortal]);
 
   const hasChanges = isAddingNew
     ? labelDraft.trim().length > 0

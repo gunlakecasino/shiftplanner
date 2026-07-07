@@ -119,7 +119,7 @@ function RequestRow({ item, isDark }: { item: WorkItem; isDark: boolean }) {
             type="button"
             onClick={save}
             disabled={updateRequest.isPending}
-            className="flex-1 py-2 rounded-lg bg-[#30b0c7] text-white text-sm font-medium disabled:opacity-50"
+            className="flex-1 py-2 rounded-lg bg-[#007AFF] text-white text-sm font-medium disabled:opacity-50"
           >
             {updateRequest.isPending ? "Saving…" : "Save"}
           </button>
@@ -263,7 +263,7 @@ export function RequestBoardModal({
                   className={cn(
                     "flex-1 py-1.5 rounded-lg text-sm font-medium border",
                     workType === t
-                      ? "bg-[#30b0c7] text-white border-transparent"
+                      ? "bg-[#007AFF] text-white border-transparent"
                       : isDark
                         ? "border-white/10 hover:bg-white/5"
                         : "border-black/10 hover:bg-black/5",
@@ -311,7 +311,7 @@ export function RequestBoardModal({
               type="button"
               onClick={submit}
               disabled={createRequest.isPending}
-              className="w-full py-2.5 rounded-xl bg-[#30b0c7] text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-[#007AFF] text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Send size={14} />
               {createRequest.isPending ? "Submitting…" : "Submit request"}

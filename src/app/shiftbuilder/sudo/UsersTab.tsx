@@ -120,7 +120,7 @@ function TemporaryPinModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white text-sm font-medium"
+            className="flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white text-sm font-medium"
           >
             Done
           </button>
@@ -408,7 +408,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[#B89708] text-white hover:bg-[#A07F07]"
+            className="text-xs px-3 py-1.5 rounded-lg bg-[#007AFF] text-white hover:bg-[#0063CC]"
           >
             + Add User
           </button>
@@ -582,7 +582,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                 type="button"
                 onClick={() => void saveUser()}
                 disabled={saving}
-                className="w-full py-2.5 rounded-xl bg-[#B89708] text-white font-medium disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-[#007AFF] text-white font-medium disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save role & privileges"}
               </button>
@@ -697,7 +697,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                 type="button"
                 onClick={() => void handleCreateUser()}
                 disabled={creating}
-                className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white font-medium disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white font-medium disabled:opacity-60"
               >
                 {creating ? "Creating…" : "Create & reveal PIN"}
               </button>

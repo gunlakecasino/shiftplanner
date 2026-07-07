@@ -106,13 +106,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             {state.title ? (
               <>
                 <div className="flex items-start gap-2.5">
-                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#B89708]" />
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#007AFF]" />
                   <div className="min-w-0 flex-1">
                     <h2 id="sb-confirm-title" className="text-[15px] font-semibold text-[#1C1C1E] tracking-[-0.01em]">
                       {state.title}
                     </h2>
                     {state.summary && (
-                      <div className="mt-1 text-[12px] font-medium text-[#B89708] tabular-nums">
+                      <div className="mt-1 text-[12px] font-medium text-[#007AFF] tabular-nums">
                         {state.summary}
                       </div>
                     )}
@@ -150,7 +150,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   "sb-interactive flex-1 rounded-2xl py-2.5 text-[13px] font-extrabold text-white transition-all active:scale-[0.985]",
                   state.tone === "danger"
                     ? "bg-[#FF3B30] hover:bg-[#E0342A]"
-                    : "bg-[#B89708] hover:bg-[#a8890a] shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_4px_14px_-6px_rgba(184,151,8,0.6)]",
+                    : "bg-[#007AFF] hover:bg-[#0063CC] shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_4px_14px_-6px_rgba(0,122,255,0.6)]",
                 )}
               >
                 {state.confirmLabel ?? "Apply to Live"}
