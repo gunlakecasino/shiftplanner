@@ -91,6 +91,13 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
     group: "Editing",
     description: "Mark tasks assigned to you complete without full task management access",
   },
+  {
+    key: "canRequestTasks",
+    label: "Request Tasks & Projects",
+    group: "Editing",
+    description:
+      "Submit task/project requests from the board and manage only your own submissions (they land pending a manager's approval)",
+  },
 ];
 
 export type OpsRoleOption = {

@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
       .select(WORK_ITEM_COLUMNS)
       .eq("work_type", "project")
       .eq("department", SHIFTBUILDER_DEPARTMENT)
+      // Pending project requests are not real projects until approved.
+      .eq("approval_state", "approved")
       .is("archived_at", null)
       .order("created_at", { ascending: false }),
     admin
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
       .select("project_id, status")
       .in("work_type", ["task", "recurring"])
       .eq("department", SHIFTBUILDER_DEPARTMENT)
+      .eq("approval_state", "approved")
       .is("archived_at", null)
       .not("project_id", "is", null),
   ]);

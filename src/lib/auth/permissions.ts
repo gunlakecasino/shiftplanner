@@ -66,6 +66,9 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: false,
         canManageTasks: false,
         canCompleteOwnTasks: false,
+        // Narrow intake door: viewers may submit task/project requests from the
+        // board and manage only their own submissions. Separate from the wall.
+        canRequestTasks: true,
       };
 
     case "admin":
@@ -80,9 +83,14 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
-        canAccessTasks: true,
+        // Projects/tasks access removed for now — admins are walled off from the
+        // ops-work-item system (pages, nav link, board awareness pill/badges, and
+        // the task APIs at every level), same as viewer. Card task management on
+        // the board (night_slot_tasks) is unaffected.
+        canAccessTasks: false,
         canManageTasks: false,
-        canCompleteOwnTasks: true,
+        canCompleteOwnTasks: false,
+        canRequestTasks: false,
       };
 
     case "sudo_admin":
@@ -101,6 +109,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: true,
         canManageTasks: true,
         canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "ops_manager":
@@ -118,6 +127,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: true,
         canManageTasks: true,
         canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "graves_ops_super":
@@ -135,6 +145,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: true,
         canManageTasks: true,
         canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "days_ops_super":
@@ -153,6 +164,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: true,
         canManageTasks: false,
         canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "utility_ops_super":
@@ -172,6 +184,7 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canAccessTasks: true,
         canManageTasks: false,
         canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
   }
 }
@@ -201,6 +214,9 @@ export function mergePermissions(
   if (typeof overrides.canManageTasks === "boolean") sanitized.canManageTasks = overrides.canManageTasks;
   if (typeof overrides.canCompleteOwnTasks === "boolean") {
     sanitized.canCompleteOwnTasks = overrides.canCompleteOwnTasks;
+  }
+  if (typeof overrides.canRequestTasks === "boolean") {
+    sanitized.canRequestTasks = overrides.canRequestTasks;
   }
 
   return { ...base, ...sanitized };

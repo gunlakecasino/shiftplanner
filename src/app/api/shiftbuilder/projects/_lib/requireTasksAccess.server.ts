@@ -7,7 +7,7 @@ import {
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type TasksAccessLevel = "view" | "manage" | "complete";
+export type TasksAccessLevel = "view" | "manage" | "complete" | "request";
 
 export type TasksAccessResult =
   | { ok: true; actor: OpsSessionActor; admin: SupabaseClient }
@@ -17,9 +17,11 @@ export type TasksAccessResult =
  * Session + permission + admin-client gate shared by every /api/shiftbuilder/projects/**
  * route. "view" requires canAccessTasks; "manage" requires canManageTasks; "complete"
  * accepts either canManageTasks or canCompleteOwnTasks (status-only edits — a floor
- * viewer can toggle status without full edit/reassign/delete rights). Mirrors the
- * requireSudoAdmin.server.ts / slot-defaults route.ts pattern — writes always go
- * through the service-role client, RLS is not the write gate.
+ * viewer can toggle status without full edit/reassign/delete rights). "request"
+ * requires canRequestTasks — the narrow board intake door; the route handlers
+ * additionally scope every read/write to created_by_user_id = actor.user.id.
+ * Mirrors the requireSudoAdmin.server.ts / slot-defaults route.ts pattern — writes
+ * always go through the service-role client, RLS is not the write gate.
  *
  * Known simplification: canCompleteOwnTasks is not yet scoped to "tasks assigned to
  * this operator" — there is no identity bridge between an OpsUser (operator login)
@@ -34,7 +36,9 @@ export async function requireTasksAccess(
   const session =
     level === "complete"
       ? await requireOpsAnyPermission(request, ["canManageTasks", "canCompleteOwnTasks"])
-      : await requireOpsPermission(request, level === "manage" ? "canManageTasks" : "canAccessTasks");
+      : level === "request"
+        ? await requireOpsPermission(request, "canRequestTasks")
+        : await requireOpsPermission(request, level === "manage" ? "canManageTasks" : "canAccessTasks");
   if (!session.ok) {
     return {
       ok: false,

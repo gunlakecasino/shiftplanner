@@ -33,6 +33,13 @@ export interface ShiftBuilderPermissions {
   canManageTasks: boolean;
   /** Mark tasks assigned to *you* complete without full canManageTasks. */
   canCompleteOwnTasks: boolean;
+  /**
+   * Submit task/project *requests* from the main board (owner-scoped intake).
+   * A narrow door, independent of canAccessTasks: the requester can create and
+   * manage only the items they themselves created; requests land pending a
+   * manager's approval. Does not grant the full /shiftbuilder/projects surface.
+   */
+  canRequestTasks: boolean;
 }
 
 export interface OpsUser {

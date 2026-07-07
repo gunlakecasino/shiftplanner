@@ -29,6 +29,13 @@ export type WorkItemCategory =
 
 export type WorkItemAssigneeType = "tm" | "staff";
 
+/**
+ * Request approval lifecycle. Everything defaults to 'approved' (existing rows +
+ * manager-created items stay active); only board-submitted requests start 'pending'
+ * and are hidden from active views until a manager approves or rejects them.
+ */
+export type ApprovalState = "pending" | "approved" | "rejected";
+
 export type RecurrenceType = "daily" | "weekly" | "biweekly" | "monthly" | "custom";
 
 export type DistributionMode = "random" | "round_robin" | "manual";
@@ -80,6 +87,12 @@ export interface WorkItem {
   parentTemplateId: string | null;
   createdByName: string | null;
   updatedByName: string | null;
+  /** Stable ops-user id (public.users.id) of the requester who created this item; null for legacy/manager rows. */
+  createdByUserId: string | null;
+  /** Request lifecycle — 'approved' for everything except unapproved board submissions. */
+  approvalState: ApprovalState;
+  /** Manager's note when a request is rejected; surfaced back to the requester. */
+  approvalNote: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

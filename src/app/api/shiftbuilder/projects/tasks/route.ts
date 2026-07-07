@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
   const dueOnOrBefore = sp.get("dueOnOrBefore");
   const includeArchived = sp.get("includeArchived") === "true";
   const workType = sp.get("workType");
+  // Active views show approved items only. Managers can pass approvalState=pending
+  // (or rejected) to review the request queue; anything else clamps to approved so
+  // unapproved requests never leak into operational lists / board awareness.
+  const approvalParam = sp.get("approvalState");
+  const approvalFilter =
+    approvalParam === "pending" || approvalParam === "rejected" ? approvalParam : "approved";
 
   let query = admin
     .from("ops_work_items")
@@ -39,6 +45,7 @@ export async function GET(request: NextRequest) {
     // Slot-default chip templates are managed in the Defaults view + consumed by
     // the night materializer; they are not tracker instances.
     .eq("is_slot_default", false)
+    .eq("approval_state", approvalFilter)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
