@@ -134,8 +134,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   return (
     <div
       ref={setRef}
-      {...(hasTM && !isLocked ? listeners : {})}
-      {...(hasTM && !isLocked ? attributes : {})}
+      {...(!isLocked ? listeners : {})}
+      {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
       className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl touch-none ${
         isOver ? "drop-target-active" : ""

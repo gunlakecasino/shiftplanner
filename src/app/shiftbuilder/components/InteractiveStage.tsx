@@ -178,7 +178,28 @@ export default function InteractiveStage({
               style={{ cursor: "default", width: "max-content", height: "max-content" }}
             >
               {activeDrag ? (
-                (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
+                activeDrag.kind === "coverage-request" ? (
+                  <motion.div
+                    className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
+                    style={{
+                      padding: "5px 10px",
+                      background: isDark ? "rgba(36,35,40,0.96)" : "rgba(255,255,255,0.96)",
+                      color: "#FF3B30",
+                      border: "1px dashed rgba(255,59,48,0.7)",
+                      boxShadow: isDark
+                        ? "0 8px 24px rgba(0,0,0,0.55)"
+                        : "0 8px 24px rgba(0,0,0,0.12)",
+                      backdropFilter: "blur(20px)",
+                      fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+                    }}
+                    initial={{ scale: 0.96, y: 2, opacity: 0.85 }}
+                    animate={{ scale: reducedMotion ? 1 : 1.04, y: reducedMotion ? 0 : -4, opacity: 1 }}
+                    transition={reducedMotion ? premiumSpringReduced : { ...premiumSpring, stiffness: 320 }}
+                  >
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.4px" }}>COVERAGE</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.2px" }}>{activeDrag.label}</span>
+                  </motion.div>
+                ) : (activeDrag.kind === "task" || activeDrag.kind === "assigned" || activeDrag.kind === "tm") ? (
                   <motion.div
                     className="flex items-center gap-1.5 rounded-lg pointer-events-none whitespace-nowrap"
                     style={{

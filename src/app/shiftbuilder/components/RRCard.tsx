@@ -162,8 +162,8 @@ const RRSide: React.FC<{
   return (
     <div
       ref={setRef}
-      {...(hasTM && !isLocked ? listeners : {})}
-      {...(hasTM && !isLocked ? attributes : {})}
+      {...(!isLocked ? listeners : {})}
+      {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
       className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
