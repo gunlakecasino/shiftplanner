@@ -75,12 +75,14 @@ export type PrintDaySnapshot = {
 export type PrintPreviewPageProps = {
   view: PrintPreviewView;
   snapshot: PrintDaySnapshot;
-  pageLabel: string;
-  versionLabel: string;
   weekDayDefs: DayDef[];
   activeBreakGroup?: 1 | 2 | 3 | 4;
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
   /** Planning only — strip notes prefill and covered-by hints for a clean worksheet. */
   planningBlankSlate?: boolean;
+  /** ISO timestamp captured at print/export initiation for the header timestamp box. */
+  printedAt?: string;
+  /** Whether to show the high-quality UPDATED print timestamp stamp in the header (sudo admin toggle). */
+  includeTimestamp?: boolean;
 };

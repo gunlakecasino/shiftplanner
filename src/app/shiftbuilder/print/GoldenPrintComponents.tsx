@@ -30,6 +30,34 @@ import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTex
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 
+function formatPrintTimestamp(iso?: string) {
+  const d = iso ? new Date(iso) : new Date();
+  // e.g. "3:30 AM"
+  const time = d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).replace(/\s/g, "").toUpperCase();
+
+  // e.g. "16 JUN"
+  const date = d.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+  }).toUpperCase().replace(".", "");
+
+  // Full for title/tooltip
+  const full = d.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return { time, date, full };
+}
+
 type CoveredScale = "zone" | "rr" | "aux";
 
 function GoldenCoveredByBlock({
@@ -693,12 +721,16 @@ export function GoldenDeploymentHeader({
   weekDayDefs,
   breakCounts,
   activeBreakGroup = 1,
+  printedAt,
+  includeTimestamp = true,
 }: {
   day: DayDef;
   dayIndex: number;
   weekDayDefs: DayDef[];
   breakCounts: Record<1 | 2 | 3 | 4, number>;
   activeBreakGroup?: 1 | 2 | 3 | 4;
+  printedAt?: string;
+  includeTimestamp?: boolean;
 }) {
   return (
     <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
@@ -768,32 +800,37 @@ export function GoldenDeploymentHeader({
             );
           })}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="text-[8.5px] font-bold tracking-[1px] text-[#1C1C1E]"
-            style={{ fontFamily: "var(--font-atkinson)" }}
+        {includeTimestamp && printedAt && (
+          /* High-quality stamp-style "UPDATED" timestamp box (transparent red) — bigger, no version */
+          <div
+            className="inline-flex flex-col items-end rounded-[2px] px-2.5 py-[4px]"
+            title={`Printed ${formatPrintTimestamp(printedAt).full}`}
+            style={{
+              fontFamily: "var(--font-atkinson)",
+              border: "1.75px solid rgba(185, 28, 28, 0.65)",
+              backgroundColor: "rgba(185, 28, 28, 0.07)",
+            }}
           >
-            GROUP
-          </span>
-          <div className="flex gap-[3px]">
-            {BREAK_GROUP_FILTERS.map((g) => {
-              const isActive = activeBreakGroup === g;
-              return (
-                <div
-                  key={g}
-                  className={`${g === 4 ? "min-w-[18px]" : "min-w-[15px]"} h-[15px] px-1 text-[9px] flex items-center justify-center font-bold rounded-[2px]`}
-                  style={{
-                    background: isActive ? "#1C1C1E" : "#E5E5E7",
-                    color: isActive ? "#fff" : "#6B7280",
-                    fontFamily: "var(--font-atkinson)",
-                  }}
-                >
-                  {breakGroupLabel(g)}
-                </div>
-              );
-            })}
+            <span
+              className="text-[7.5px] font-bold tracking-[2px] uppercase leading-none"
+              style={{ color: "rgba(185, 28, 28, 0.82)" }}
+            >
+              UPDATED
+            </span>
+            <span
+              className="text-[14px] font-extrabold tabular-nums tracking-[-0.5px] leading-[1.0] mt-px"
+              style={{ color: "rgba(185, 28, 28, 0.95)" }}
+            >
+              {formatPrintTimestamp(printedAt).time}
+            </span>
+            <span
+              className="text-[9.5px] font-semibold tabular-nums leading-none mt-px"
+              style={{ color: "rgba(185, 28, 28, 0.72)" }}
+            >
+              {formatPrintTimestamp(printedAt).date}
+            </span>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -805,12 +842,16 @@ export function GoldenBreaksHeader({
   weekDayDefs,
   breakCounts,
   inRotationCount,
+  printedAt,
+  includeTimestamp = true,
 }: {
   day: DayDef;
   dayIndex: number;
   weekDayDefs: DayDef[];
   breakCounts: Record<1 | 2 | 3 | 4, number>;
   inRotationCount: number;
+  printedAt?: string;
+  includeTimestamp?: boolean;
 }) {
   return (
     <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
@@ -870,12 +911,37 @@ export function GoldenBreaksHeader({
         </div>
       </div>
       <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
-        <div
-          className="text-[9.5px] font-bold tracking-[1.2px] uppercase text-[#1C1C1E]"
-          style={{ fontFamily: "var(--font-atkinson)" }}
-        >
-          BY BREAK WAVE
-        </div>
+        {includeTimestamp && printedAt && (
+          /* Timestamp on the right side for breaks header */
+          <div
+            className="inline-flex flex-col items-end rounded-[2px] px-2 py-[3px]"
+            title={`Printed ${formatPrintTimestamp(printedAt).full}`}
+            style={{
+              fontFamily: "var(--font-atkinson)",
+              border: "1.5px solid rgba(185, 28, 28, 0.6)",
+              backgroundColor: "rgba(185, 28, 28, 0.06)",
+            }}
+          >
+            <span
+              className="text-[7px] font-bold tracking-[1.8px] uppercase leading-none"
+              style={{ color: "rgba(185, 28, 28, 0.8)" }}
+            >
+              UPDATED
+            </span>
+            <span
+              className="text-[12.5px] font-extrabold tabular-nums tracking-[-0.3px] leading-[1.0] mt-px"
+              style={{ color: "rgba(185, 28, 28, 0.92)" }}
+            >
+              {formatPrintTimestamp(printedAt).time}
+            </span>
+            <span
+              className="text-[8.5px] font-semibold tabular-nums leading-none mt-px"
+              style={{ color: "rgba(185, 28, 28, 0.7)" }}
+            >
+              {formatPrintTimestamp(printedAt).date}
+            </span>
+          </div>
+        )}
         <div className="flex gap-[2px]">
           {weekDayDefs.map((def, i) => {
             const isActive = i === dayIndex;
@@ -999,10 +1065,12 @@ export function GoldenBreaksPlanningHeader({
   day,
   dayIndex,
   weekDayDefs,
+  includeTimestamp,
 }: {
   day: DayDef;
   dayIndex: number;
   weekDayDefs: DayDef[];
+  includeTimestamp?: boolean;
 }) {
   return (
     <div className="sheet-header flex-shrink-0 pb-1 mb-1 flex items-stretch justify-between w-full">
@@ -1061,50 +1129,6 @@ export function GoldenBreaksPlanningHeader({
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-export function GoldenSheetFooter({
-  versionLabel,
-  pageLabel,
-  printVariant = "official",
-  nightStatus,
-}: {
-  versionLabel: string;
-  pageLabel: string;
-  printVariant?: "official" | "planning";
-  nightStatus?: "published" | "draft";
-}) {
-  if (printVariant === "planning") {
-    const statusLabel = nightStatus === "published" ? "PUBLISHED" : "UNPUBLISHED";
-    return (
-      <div
-        className="sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] pt-1 border-t border-[#E5E5E7] text-[#9CA3AF]"
-        style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-      >
-        <div className="min-w-0 truncate text-[9px] font-bold tracking-[0.8px] uppercase text-[#6B7280]">
-          Planning · {statusLabel} · {versionLabel}
-        </div>
-        <div className="shrink-0 tabular-nums text-right">{pageLabel}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="sheet-footer flex-shrink-0 flex items-center justify-between gap-3 text-[9pt] leading-none tracking-[0.1px] pt-1 border-t border-[#E5E5E7] text-[#9CA3AF]"
-      style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
-    >
-      <div className="min-w-0 truncate">
-        <span className="font-bold tracking-[1px] text-[#1C1C1E]">SBS</span>
-        <span className="mx-1 opacity-60">©</span>
-        <span className="text-[#6B7280]">Weekly Zone Deployment Book</span>
-        <span className="mx-1 opacity-40">—</span>
-        <span className="font-semibold tracking-[1px] text-[#1C1C1E]">GRAVES</span>
-      </div>
-      <div className="shrink-0 tabular-nums">{versionLabel}</div>
-      <div className="shrink-0 tabular-nums text-right">{pageLabel}</div>
     </div>
   );
 }

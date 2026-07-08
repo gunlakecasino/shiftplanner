@@ -8468,6 +8468,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 }
                 includeShiftNotes={printPreviewQueueContext?.includeShiftNotes !== false}
                 planningBlankSlate={printPreviewQueueContext?.planningBlankSlate === true}
+                includeTimestamp={printPreviewQueueContext?.includeTimestamp ?? true}
                 liveNotes={notesRef.current?.innerText ?? currentNight.notes ?? ""}
               />
             ) : (
@@ -8766,6 +8767,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         printProgress={printProgress}
         isDark={isDark}
         currentNightStatus={currentNightStatus}
+        canAccessSudo={permissions?.canAccessSudo ?? false}
       />
 
       <PrintExportProgressOverlay

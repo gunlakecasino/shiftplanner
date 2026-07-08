@@ -4,6 +4,136 @@
 
 ---
 
+## 2026-07-08 — Grok — Admin toggle for print timestamp stamp
+
+**Task**: User: "now add a toggle to the print command center, only visible to the auth role sudo admin that toggles this off or on on the print pdf" (clarified: the timestamp stamp, not footer)
+
+**Changes**:
+- Added `includeTimestamp: boolean` to PrintConfig.
+- In PrintCommandCenter: state + toggle button "Print timestamp stamp (admin)" only rendered if canAccessSudo (from useOpsAuth permissions).
+- Threaded the flag through: defaults, load/save last config, normalize, currentConfig, preview queue context, generate/capture/render pipeline.
+- Updated PrintPreviewPageProps, LivePrintPreviewArtboard, PrintPreviewStage, assemble, headers.
+- In GoldenDeploymentHeader + GoldenBreaksHeader: conditionally render the high-quality red stamp only if includeTimestamp && printedAt.
+- Passed canAccessSudo={permissions?.canAccessSudo ?? false} from ShiftBuilderClient to PCC.
+- Updated types, calls in debug/export, hooks, client.
+- Version bumped to 1.2 (ts + package.json).
+- tsc clean.
+
+**Effect**:
+- Sudo admins see the toggle in advanced section of Print Command Center.
+- When off, the transparent-red "UPDATED" time/date stamp is omitted from print PDF headers (and live preview for consistency).
+- Default on.
+- Footer remains removed as per prior request.
+
+**Status**: Toggle implemented and wired end-to-end for PDF output. Ready to ship.
+
+---
+
+## 2026-07-08 — Grok — Print header redesign + remove footer (archived note; superseded by timestamp toggle)
+
+## 2026-07-08 — Grok — Print header redesign: high-quality printed timestamp box
+
+**Task**: User provided annotated screenshot of print header. Requested: remove the break count boxes (crossed out), replace that area with a refined "Updated" box designed as high-quality detailed "when it was printed" timestamp. Clarification: remove the break count boxes on the *opposite side* (right-side GROUP indicators), keep left-side BREAKS counts. Timestamp goes on the right in header bar.
+
+**Changes**:
+- Restored left BREAKS wave count circles (4 small black pills) in GoldenDeploymentHeader.
+- Removed right-side "GROUP" + 4 break group indicator boxes in GoldenDeploymentHeader.
+- Added premium bordered timestamp box on bottom-right of deployment header:
+  - "UPDATED" small caps label
+  - Large bold time (e.g. 3:30AM)
+  - Date (e.g. 16 JUN)
+  - Micro version badge
+  - Full details in title tooltip
+- Same high-quality timestamp placed on right side of GoldenBreaksHeader (top-right position).
+- Threaded `printedAt` (ISO captured at render time) + `versionLabel` through the entire print pipeline (types, assemble, LivePrintPreviewArtboard, render, components).
+- Added `formatPrintTimestamp` helper for consistent compact 12h time + short date.
+- Updated all call sites (including export-debug).
+- tsc clean.
+
+**Design notes**:
+- Matches Golden aesthetic: Atkinson font, tight tracking, paper-white bg + subtle border, calm grays + black text.
+- Detailed yet compact to fit header real-estate.
+- "Printed at" semantics with "UPDATED" label to match user's annotation language.
+- Works for both live preview and PDF export/raster (timestamp frozen at generation).
+- Week day pills preserved on top-right.
+
+**Files touched**:
+- src/app/shiftbuilder/print/GoldenPrintComponents.tsx (main header redesign + formatter)
+- src/app/shiftbuilder/print/PrintPreviewPage.tsx
+- src/app/shiftbuilder/print/assemblePrintPreviewPages.ts
+- src/app/shiftbuilder/print/printPreviewTypes.ts
+- src/app/shiftbuilder/print/LivePrintPreviewArtboard.tsx
+- src/app/shiftbuilder/dev/export-debug/page.tsx
+
+**Status**: Implemented per clarification. Ready for visual review in Print preview / Export PDF / debug export page. Next: live validation or further tweaks to timestamp styling/content.
+
+---
+
+## 2026-07-08 — Grok — Deep dive: Print PDF output pipeline & Golden fidelity
+
+**Task**: User: "look into the print pdf output"
+
+**Context**: Core production deliverable is the physical GRAVE sheet PDF (landscape letter, exact 1056×816 Golden artboard fidelity). System has two output paths: (1) Browser Print dialog via isolated iframe, (2) PDF Export (html-to-image raster + jsPDF) with multi-day ZIP support. Heavy investment in WYSIWYG: separate Golden* print components + post-processors + defensive raster prep (inline computed styles, font collection, bleed/center fixes, color normalization for modern CSS). Last logged work was on builder canvas (dups + tasks). Print surfaces: PrintCommandCenter, usePrintManager, LivePrintPreviewArtboard, exportGoldenPdf, etc. References: GOLDEN_VISUAL_SPEC.md, ZDS Goldens/, dedicated print CSS, deploymentPrintLayout + breaks post-processors.
+
+**Actions Taken**:
+- Full code archaeology of `src/app/shiftbuilder/print/` (20+ files), related hooks/components, CSS, snapshot builders, raster pipeline.
+- Traced end-to-end: data (buildPrintDaySnapshot + merges for live/draft) → renderPrintPreviewHtml (offscreen React flush) → assemble + queue → mountGoldenPrintSession (iframe for print, DOM for export) → postProcess* + inlineLiveDomForRaster → html-to-image (toPng/toJpeg at 1.5–2×) → bleed/center fixes → jsPDF placement.
+- Analyzed fidelity defenses (Atkinson font injection, @font-face collection, --font-* vars, oklch/color-mix sanitization, strip chrome, raster shell, prepareArtboardForRaster).
+- Compared preview (LivePrintPreviewArtboard + PrintPreviewPage) vs export paths.
+- Reviewed layout solver (deploymentPrintLayout.ts pressure-based flex/density), task/break/coveredBy rendering in GoldenPrintComponents.
+- Verified tests and CSS contracts.
+- Confirmed git state clean; no server running.
+
+**Key Observations** (detailed report in chat):
+- **Architecture strength**: Extremely defensive. Multiple layers to force Golden contract (1056×816, paper look, Atkinson, zone colors, coverage bars, task density scaling).
+- **Two paths diverge**: Browser print (CSS @page + iframe) vs PDF export (pixel raster + image embed). Goal is "Print → Save as PDF" and "Export PDF" should match.
+- **Serialization risks**: React → outerHTML string → remount → raster is powerful but fragile (computed style inlining is the main mitigator).
+- **Fidelity techniques**: Post-processing per kind (deploy/breaks), pixel bleed flattening, content centering, high pixelRatio, font waits.
+- **Potential areas to watch**:
+  - Task list rendering & density scaling under heavy load.
+  - Modern CSS (glass effects on live cards vs print cards) and shadows.
+  - Break wave column filling + overlaps pinning.
+  - CoveredBy / provenance stamps in print.
+  - Font reliability across machines (Atkinson).
+  - Preview vs final PDF pixel match.
+  - Long exports (>8 pages uses JPEG).
+  - Draft vs published differences in output.
+- Golden goldens exist in root for visual regression reference.
+- No obvious broken code paths; system is mature but complex.
+
+**Decisions / Next**:
+- Logged here per Agentic contract.
+- No code changes yet.
+- Ready to: start dev + generate sample PDF, use Playwright/Chrome DevTools to inspect raster quality or compare to goldens, run targeted fixes, improve preview/export parity, add automated golden checks, or audit specific fidelity issues the user has seen.
+- Recommend live validation next if user wants to "see" the output.
+
+**Status**: Investigation complete. Comprehensive understanding of the PDF output system achieved. Awaiting direction (e.g. "fix X in PDF", "make preview match export", "improve breaks sheet", "compare to golden PNGs", "start server and export a test night").
+
+---
+
+## 2026-07-08 — Grok — Session initialization: Project context loaded from path
+
+**Task**: User query provided `/Users/briankillian/oms_shiftbuilder_ultra`. Performed mandatory Agentic Command Post orientation (read THIS_IS_WHAT_WE_ARE_DOING.md, README.md, initPrompt.md, recent AGENT_ACTIVITY_LOG entries, key plans, git status, source verification).
+
+**Context**: ShiftBuilder / ShiftPlanner — world-class GRAVE/ZDS shift scheduling (Next.js 16, React 19, Supabase, strict PLACEMENT_ORDER engine, Draft Mode, Command Palette, Grok hybrid intelligence, Golden 1056×816 print-fidelity canvas). Last logged work (2026-06-13): 
+- Refined duplicate-TM flagging (DuplicateTmBadge amber pill + conflictingTms Set computed in ShiftBuilderBoard; propagated to ZoneCard/RRCard/Aux/Overlap; global "N dups" indicator).
+- Task drag-to-reorder within slots + Option/Alt+drag to duplicate tasks across cards (shipped with commit/push).
+Git: clean working tree on branch `shiftbuilder-ultra-20260627`; recent commits include coverage drag fixes, task-request UI, popups. Code version 1.1. THIS_IS_WHAT_WE_ARE_DOING.md last narrative 2026-06-09 (web focus after native pause). ~25-day gap to today (2026-07-08). Duplicate and task-dupe features verified present in current source.
+
+**Decisions Made**:
+- Strictly followed Agentic rules: Read full Command Post on entry.
+- Verified implementation of last logged features via code search (badges, conflictingTms logic, alt-dupe handlers all active).
+- No code edits or plan changes yet — only orientation + this log append.
+- Will use appropriate skills (browser-dev for live canvas validation, build-verifier for full cycles, coding-engineer workflow) on any substantive task.
+- Prefer relative paths, surgical changes, live browser validation for visual/Golden work.
+- Ready to resume from last handoff (browser validation of dups recommended in prior log) or tackle new items.
+
+**Status**: Full context loaded. Project is production-grade scheduling surface with rich agentic dev tooling. Clean git. Ready for task.
+
+**Artifacts touched**: Agentic/AGENT_ACTIVITY_LOG.md (this entry only)
+
+---
+
 ## 2026-06-13 — Grok 4.3 — Review, debug & implement refined duplicate-TM flagging feature in ShiftBuilder builder view
 
 **Task**: "Let's review, debug, and implement high class and refined detail and feature to the shiftbuilder now. I want to start with the builder view flagging cards that have the same team member scheduled in more than one place on the same day"

@@ -8,7 +8,7 @@ export type DeploymentPrintDensity = "normal" | "compact" | "tight";
 export type OfficialDeploymentLayout = {
   zonesFlexGrow: number;
   rrFlexGrow: number;
-  /** Aux is pinned above footer — always 0 (no flex competition). */
+  /** Aux is pinned at bottom — always 0 (no flex competition with zones). */
   auxFlexGrow: number;
   density: DeploymentPrintDensity;
   taskFontPx: number;

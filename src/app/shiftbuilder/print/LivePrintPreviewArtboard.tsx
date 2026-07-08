@@ -3,7 +3,6 @@
 import React, { useEffect, useRef } from "react";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
-import { shiftBuilderVersionLabel } from "../version";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 import { PrintPreviewPage } from "./PrintPreviewPage";
@@ -16,10 +15,10 @@ export type LivePrintPreviewArtboardProps = {
   snapshot: PrintDaySnapshot;
   breakGroup: ActiveBreakGroupFilter;
   weekDayDefs: DayDef[];
-  pageLabel: string;
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
   planningBlankSlate?: boolean;
+  includeTimestamp?: boolean;
 };
 
 /**
@@ -31,10 +30,10 @@ export function LivePrintPreviewArtboard({
   snapshot,
   breakGroup,
   weekDayDefs,
-  pageLabel,
   printVariant = "official",
   includeShiftNotes = true,
   planningBlankSlate = false,
+  includeTimestamp = true,
 }: LivePrintPreviewArtboardProps) {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -67,13 +66,13 @@ export function LivePrintPreviewArtboard({
       <PrintPreviewPage
         view={view}
         snapshot={snapshot}
-        pageLabel={pageLabel}
-        versionLabel={shiftBuilderVersionLabel()}
         weekDayDefs={weekDayDefs}
         activeBreakGroup={activeBreakGroup}
         printVariant={printVariant}
         includeShiftNotes={includeShiftNotes}
         planningBlankSlate={planningBlankSlate}
+        printedAt={new Date().toISOString()}
+        includeTimestamp={includeTimestamp}
       />
     </div>
   );

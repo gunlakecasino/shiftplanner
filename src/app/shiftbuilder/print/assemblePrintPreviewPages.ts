@@ -1,17 +1,11 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { PrintConfig, PrintDayConfig } from "../components/PrintCommandCenter";
-import {
-  applyCustomQueueOrder,
-  buildPrintQueue,
-} from "./printConfigUtils";
-import { shiftBuilderVersionLabel } from "../version";
 import { buildPrintDaySnapshot } from "./buildPrintDaySnapshot";
 import {
   applyDraftToPrintSnapshot,
   applyLiveBoardToPrintSnapshot,
   type LiveBoardOverlay,
 } from "./mergePrintSnapshot";
-import { pageLabelForQueueId } from "./printPageLabels";
 import { renderPrintPreviewHtml } from "./renderPrintPreviewHtml";
 import { assembleGoldenPrintPages, type GoldenPrintPage } from "./assemblePages";
 import type { DraftAssignmentRow } from "../components/placementFitForSlot";
@@ -42,25 +36,13 @@ export async function capturePrintPreviewPages(args: {
   } = args;
   const dayIndices = [...new Set(activeDays.map((d) => d.dayIndex))].sort((a, b) => a - b);
   const captured: PrintPreviewCaptured = new Map();
-  const versionLabel = shiftBuilderVersionLabel();
 
   const printVariant = config.printVariant ?? "official";
   const includeShiftNotes = config.includeShiftNotes !== false;
   const planningBlankSlate = config.planningBlankSlate === true;
 
-  const queueIds = applyCustomQueueOrder(
-    buildPrintQueue(
-      config.days,
-      config.pageOrder,
-      dayDefs,
-      config.includeOverview,
-      config.overviewPosition,
-      config.includeCoverPage,
-      config.coverPagePosition,
-      printVariant,
-    ),
-    config.customQueueOrder ?? null,
-  ).map((item) => item.id);
+  // Capture a single high-quality print timestamp for all pages in this export/preview session.
+  const printedAt = new Date().toISOString();
 
   for (const dayIdx of dayIndices) {
     const def = dayDefs[dayIdx];
@@ -88,12 +70,12 @@ export async function capturePrintPreviewPages(args: {
       entry.deployHTML = renderPrintPreviewHtml({
         view: "deployment",
         snapshot,
-        pageLabel: pageLabelForQueueId(queueIds, `${dayIdx}-d`),
-        versionLabel,
         weekDayDefs: dayDefs,
         printVariant,
         includeShiftNotes,
         planningBlankSlate,
+        printedAt,
+        includeTimestamp: config.includeTimestamp ?? true,
       });
     }
     if (dayConf.printBreaks) {
@@ -101,12 +83,12 @@ export async function capturePrintPreviewPages(args: {
       entry.breaksHTML = renderPrintPreviewHtml({
         view: "breaks",
         snapshot,
-        pageLabel: pageLabelForQueueId(queueIds, `${dayIdx}-b`),
-        versionLabel,
         weekDayDefs: dayDefs,
         printVariant,
         includeShiftNotes,
         planningBlankSlate,
+        printedAt,
+        includeTimestamp: config.includeTimestamp ?? true,
       });
     }
 

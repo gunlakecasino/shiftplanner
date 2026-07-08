@@ -10,7 +10,6 @@ import {
   GoldenPlanningHeaderBadge,
   GoldenRRPrintGrid,
   GoldenSectionHeader,
-  GoldenSheetFooter,
   GoldenPlanningNotesPanel,
   GoldenZoneCard,
   toTaskLines,
@@ -147,13 +146,13 @@ function OverlapRowsSection({
 export function PrintPreviewPage({
   view,
   snapshot,
-  pageLabel,
-  versionLabel,
   weekDayDefs,
   activeBreakGroup = 1,
   printVariant = "official",
   includeShiftNotes = true,
   planningBlankSlate = false,
+  printedAt,
+  includeTimestamp = true,
 }: PrintPreviewPageProps) {
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
@@ -215,6 +214,7 @@ export function PrintPreviewPage({
             day={day}
             dayIndex={snapshot.dayIndex}
             weekDayDefs={weekDayDefs}
+            includeTimestamp={includeTimestamp}
           />
 
           <div className="sb-breaks-planning-body flex flex-col w-full flex-1 min-h-0 overflow-hidden gap-1">
@@ -237,13 +237,6 @@ export function PrintPreviewPage({
               <GoldenPlanningNotesPanel notes={planningNotes} />
             ) : null}
           </div>
-
-          <GoldenSheetFooter
-            versionLabel={versionLabel}
-            pageLabel={pageLabel}
-            printVariant="planning"
-            nightStatus={snapshot.nightStatus}
-          />
         </div>
       );
     }
@@ -258,6 +251,8 @@ export function PrintPreviewPage({
           weekDayDefs={weekDayDefs}
           breakCounts={breakCounts}
           inRotationCount={inRotationCount}
+          printedAt={printedAt}
+          includeTimestamp={includeTimestamp}
         />
 
         <div className="flex flex-col w-full flex-1 min-h-0 overflow-hidden">
@@ -363,8 +358,6 @@ export function PrintPreviewPage({
 
           <OverlapRowsSection overlapRows={overlapRows} className="mt-auto pt-1.5" />
         </div>
-
-        <GoldenSheetFooter versionLabel={versionLabel} pageLabel={pageLabel} />
       </div>
     );
   }
@@ -404,6 +397,8 @@ export function PrintPreviewPage({
         weekDayDefs={weekDayDefs}
         breakCounts={breakCounts}
         activeBreakGroup={activeBreakGroup}
+        printedAt={printedAt}
+        includeTimestamp={includeTimestamp}
       />
 
       <div
@@ -535,13 +530,6 @@ export function PrintPreviewPage({
           />
         ) : null}
       </div>
-
-      <GoldenSheetFooter
-        versionLabel={versionLabel}
-        pageLabel={pageLabel}
-        printVariant={printVariant}
-        nightStatus={snapshot.nightStatus}
-      />
     </div>
   );
 }

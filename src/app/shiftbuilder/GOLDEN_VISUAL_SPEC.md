@@ -87,11 +87,11 @@ Each zone has a **fixed identity** used consistently across the Golden:
 
 ## 7. Footer
 
-- "GLCR • GRAVE SHIFT DEPLOYMENT"
-- Date + "Zone Deployment Sheet"
-- Version / context on right
+**Removed** (no footer on printed sheets; header timestamp provides printed time context).
 
 ---
+
+
 
 ## 8. Interaction Notes (Digital Layer on Top of Print Look)
 

@@ -73,6 +73,7 @@ export interface UsePrintManagerReturn {
     printVariant?: PrintVariant;
     includeShiftNotes?: boolean;
     planningBlankSlate?: boolean;
+    includeTimestamp?: boolean;
   } | null;
   setPrintPreviewQueueContext: (ctx: any) => void;
 
@@ -93,6 +94,7 @@ export interface UsePrintManagerReturn {
     printVariant: PrintVariant;
     includeShiftNotes: boolean;
     planningBlankSlate: boolean;
+    includeTimestamp?: boolean;
   }) => void;
   handlePrintWeek: () => Promise<void>;
   handleQuickPrintTonight: () => Promise<void>;
@@ -155,6 +157,7 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
     printVariant?: PrintVariant;
     includeShiftNotes?: boolean;
     planningBlankSlate?: boolean;
+    includeTimestamp?: boolean;
   } | null>(null);
 
   // Persist canvasMode (moved from Client)
@@ -388,12 +391,14 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
       printVariant: PrintVariant;
       includeShiftNotes: boolean;
       planningBlankSlate: boolean;
+      includeTimestamp?: boolean;
     }) => {
       const lastConfig = loadLastPrintConfig(args.dayIndex);
       const config = lastConfig ?? tonightPrintConfig(args.dayIndex);
       const printVariant = args.printVariant ?? config.printVariant ?? "official";
       const includeShiftNotes = args.includeShiftNotes ?? config.includeShiftNotes !== false;
       const planningBlankSlate = args.planningBlankSlate ?? config.planningBlankSlate === true;
+      const includeTimestamp = args.includeTimestamp ?? config.includeTimestamp ?? true;
 
       const queueIds = applyCustomQueueOrder(
         buildPrintQueue(
@@ -420,6 +425,7 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
           printVariant,
           includeShiftNotes,
           planningBlankSlate,
+          includeTimestamp,
         });
         setCanvasMode("print-preview");
         changeDay(args.dayIndex);

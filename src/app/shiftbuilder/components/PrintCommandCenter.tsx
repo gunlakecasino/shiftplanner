@@ -46,6 +46,7 @@ export interface PrintConfig {
   printVariant: PrintVariant;
   includeShiftNotes: boolean;
   planningBlankSlate: boolean;
+  includeTimestamp: boolean;
 }
 
 export const MARGIN_VALUES: Record<MarginSize, string> = {
@@ -80,6 +81,7 @@ interface PrintCommandCenterProps {
     printVariant: PrintVariant;
     includeShiftNotes: boolean;
     planningBlankSlate: boolean;
+    includeTimestamp?: boolean;
   }) => void;
   DAY_DEFS: DayDef[];
   selectedDayIndex: number;
@@ -88,6 +90,8 @@ interface PrintCommandCenterProps {
   isDark?: boolean;
   /** Publish status for the currently selected night */
   currentNightStatus?: string | null;
+  /** Only sudo admins see the footer toggle */
+  canAccessSudo?: boolean;
 }
 
 function formatEstTime(secs: number): string {
@@ -306,6 +310,7 @@ export function PrintCommandCenter({
   printProgress,
   isDark = false,
   currentNightStatus = null,
+  canAccessSudo = false,
 }: PrintCommandCenterProps) {
   const confirmDialog = useConfirm();
 
@@ -314,6 +319,7 @@ export function PrintCommandCenter({
     setPrintVariant(config.printVariant ?? "official");
     setIncludeShiftNotes(config.includeShiftNotes !== false);
     setPlanningBlankSlate(config.planningBlankSlate === true);
+    setIncludeTimestamp(config.includeTimestamp ?? true);
   }, []);
 
   // ── Core config state ──────────────────────────────────────────────────────
@@ -321,6 +327,7 @@ export function PrintCommandCenter({
   const [printVariant, setPrintVariant] = useState<PrintVariant>("official");
   const [includeShiftNotes, setIncludeShiftNotes] = useState(true);
   const [planningBlankSlate, setPlanningBlankSlate] = useState(false);
+  const [includeTimestamp, setIncludeTimestamp] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [nightStatusByDay, setNightStatusByDay] = useState<Record<number, string | null>>({});
 
@@ -485,8 +492,9 @@ export function PrintCommandCenter({
       printVariant,
       includeShiftNotes,
       planningBlankSlate,
+      includeTimestamp,
     }),
-    [days, printVariant, includeShiftNotes, planningBlankSlate],
+    [days, printVariant, includeShiftNotes, planningBlankSlate, includeTimestamp],
   );
 
   // ── Day change handler ────────────────────────────────────────────────────
@@ -817,6 +825,35 @@ export function PrintCommandCenter({
                       </span>
                       <span style={{ fontSize: 9.5, color: ts, marginLeft: "auto" }}>
                         No notes prefill · no covered-by hints
+                      </span>
+                    </button>
+                  )}
+
+                  {canAccessSudo && (
+                    <button
+                      type="button"
+                      onClick={() => setIncludeTimestamp((v) => !v)}
+                      aria-pressed={includeTimestamp}
+                      className="sb-interactive"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        marginTop: 6,
+                        padding: "6px 8px",
+                        borderRadius: 8,
+                        border: `1px solid ${includeTimestamp ? "rgba(10,132,255,0.35)" : (isDark ? "rgba(72,72,74,0.38)" : "rgba(209,209,214,0.5)")}`,
+                        background: includeTimestamp ? (isDark ? "rgba(10,132,255,0.1)" : "rgba(10,132,255,0.06)") : "transparent",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                    >
+                      <CheckDot active={includeTimestamp} color="#0A84FF" />
+                      <span style={{ fontSize: 11, fontWeight: 600, color: includeTimestamp ? "#0A84FF" : tx }}>
+                        Print timestamp stamp (admin)
+                      </span>
+                      <span style={{ fontSize: 9.5, color: ts, marginLeft: "auto" }}>
+                        High-quality UPDATED time in header
                       </span>
                     </button>
                   )}

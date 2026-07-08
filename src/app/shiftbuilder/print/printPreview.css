@@ -484,22 +484,6 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-golden-task-
   font-weight: 700 !important;
 }
 
-.print-stage-inner .print-artboard .sheet-footer,
-body.printing-dual-mode .print-dual-container .print-artboard .sheet-footer,
-body.golden-export-raster .print-dual-container .print-artboard .sheet-footer {
-  justify-content: center !important;
-  gap: 1.25rem !important;
-  text-align: center;
-}
-
-.print-stage-inner .print-artboard .sheet-footer > div,
-body.printing-dual-mode .print-dual-container .print-artboard .sheet-footer > div,
-body.golden-export-raster .print-dual-container .print-artboard .sheet-footer > div {
-  flex: 0 0 auto !important;
-  min-width: 0;
-  text-align: center;
-}
-
 /* ── Planning Worksheet variant ─────────────────────────────────────────── */
 .print-stage-inner .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .assignment-card.sb-assignment-card,

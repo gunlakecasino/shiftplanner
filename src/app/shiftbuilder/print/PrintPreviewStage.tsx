@@ -50,6 +50,7 @@ export type PrintPreviewStageProps = {
   printVariant?: PrintVariant;
   includeShiftNotes?: boolean;
   planningBlankSlate?: boolean;
+  includeTimestamp?: boolean;
   liveNotes?: string;
 };
 
@@ -97,6 +98,7 @@ export function PrintPreviewStage({
   printVariant = "official",
   includeShiftNotes = true,
   planningBlankSlate = false,
+  includeTimestamp = true,
   liveNotes,
 }: PrintPreviewStageProps) {
   const views = useMemo(() => viewsForFocus(focus), [focus]);
@@ -175,16 +177,10 @@ export function PrintPreviewStage({
               snapshot={snapshot}
               breakGroup={breakGroup}
               weekDayDefs={weekDayDefs}
-              pageLabel={pageLabelForView(
-                view,
-                focus,
-                selectedDayIndex,
-                queuePageId,
-                queueIds ?? null,
-              )}
               printVariant={printVariant}
               includeShiftNotes={includeShiftNotes}
               planningBlankSlate={planningBlankSlate}
+              includeTimestamp={includeTimestamp}
             />
           </PrintPreviewScaledSheet>
         );
