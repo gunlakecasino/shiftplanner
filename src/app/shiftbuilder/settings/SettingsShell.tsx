@@ -14,9 +14,11 @@ import {
   LogOut,
   Moon,
   Sun,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { useConfirm } from "../components/ConfirmDialog";
 import { useTheme } from "../hooks/useTheme";
 import { useCurrentNight } from "../hooks/useCurrentNight";
 import {
@@ -29,18 +31,15 @@ import {
   MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
 import { shiftBuilderVersionLabel } from "../version";
-import { GoldHairline } from "../sudo/SudoGlass";
-import { TeamTab } from "../sudo/TeamTab";
-import { ReportsTab } from "../sudo/ReportsTab";
+import { GoldHairline, SudoTabLoading } from "../sudo/SudoGlass";
 import { AuditLogTab } from "../sudo/AuditLogTab";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { DefaultsTab } from "../sudo/DefaultsTab";
-import { DashboardTab } from "../sudo/DashboardTab";
 import { UsersTab } from "../sudo/UsersTab";
-import { GravesDefaultSchedulePage } from "../components/GravesDefaultSchedulePage";
 import {
   SETTINGS_SECTIONS,
   SETTINGS_TABS,
+  TEAM_REDIRECT_TABS,
   type SettingsSection,
   type SettingsTab,
   resolveSettingsTab,
@@ -51,13 +50,26 @@ import {
 import "./settingsTheme.css";
 import "./settingsShell.css";
 
+// `dynamic()` with no `loading` renders nothing at all while the chunk is
+// being fetched/compiled — a real, silent multi-second blank gap in dev
+// (Turbopack compiles the route on first visit) that has nothing to do with
+// either tab's own internal data-loading state, since the component hasn't
+// even mounted yet. Give both a fallback so the tab never looks broken.
+function SettingsDynamicTabFallback({ label }: { label: string }) {
+  return (
+    <div className="h-full flex items-center justify-center py-16">
+      <SudoTabLoading>{label}</SudoTabLoading>
+    </div>
+  );
+}
+
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
-  { ssr: false },
+  { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading engine config" /> },
 );
 const BatchPlannerTab = dynamic(
   () => import("../sudo/BatchPlannerTab").then((m) => ({ default: m.BatchPlannerTab })),
-  { ssr: false },
+  { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading batch planner" /> },
 );
 
 function resolveWeekContext() {
@@ -119,60 +131,29 @@ function SettingsTabPanel({
   activeTab,
   isDark,
   canRunEngine,
-  canManageTeam,
   currentOperator,
   currentNightId,
   weekStart,
-  permissions,
   onDataChanged,
-  onNavigate,
 }: {
   activeTab: SettingsTab;
   isDark: boolean;
   canRunEngine: boolean;
-  canManageTeam: boolean;
   currentOperator: ReturnType<typeof useOpsAuth>["user"];
   currentNightId: string | null;
   weekStart: Date;
-  permissions: ReturnType<typeof useOpsAuth>["permissions"];
   onDataChanged: (tab: SettingsTab, details?: Record<string, unknown>) => void;
-  onNavigate: (tab: SettingsTab) => void;
 }) {
   return (
     <div className="sb-settings-panel" data-theme={isDark ? "dark" : "light"}>
-      {activeTab === "dashboard" && (
-        <DashboardTab
-          onDataChanged={() => onDataChanged("dashboard")}
-          isDark={isDark}
-          currentOperator={currentOperator}
+      {activeTab === "defaults" && (
+        <DefaultsTab
+          onDataChanged={() => onDataChanged("defaults", { area: "defaults_push" })}
           currentNightId={currentNightId}
           weekStart={weekStart}
-          onNavigate={onNavigate}
-          permissions={permissions}
-        />
-      )}
-      {activeTab === "team" &&
-        (canManageTeam ? (
-          <TeamTab
-            onDataChanged={() => onDataChanged("team", { area: "team_update" })}
-            isDark={isDark}
-          />
-        ) : (
-          <InsufficientPermNotice feature="Team Management" isDark={isDark} />
-        ))}
-      {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
-        <UsersTab
-          onDataChanged={() => onDataChanged("users", { area: "user_update" })}
           isDark={isDark}
         />
       )}
-      {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
-        <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
-          Only sudo_admins can manage user privileges.
-        </div>
-      )}
-      {activeTab === "reports" && <ReportsTab isDark={isDark} />}
-      {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}
       {activeTab === "engine" &&
         (canRunEngine ? (
           <EngineConfigTab
@@ -191,20 +172,18 @@ function SettingsTabPanel({
         ) : (
           <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
         ))}
-      {activeTab === "defaults" && (
-        <DefaultsTab
-          onDataChanged={() => onDataChanged("defaults", { area: "defaults_push" })}
-          currentNightId={currentNightId}
-          weekStart={weekStart}
+      {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
+        <UsersTab
+          onDataChanged={() => onDataChanged("users", { area: "user_update" })}
           isDark={isDark}
         />
       )}
-      {activeTab === "gravesSchedule" &&
-        (permissions?.canApplySchedules ? (
-          <GravesDefaultSchedulePage embedded />
-        ) : (
-          <InsufficientPermNotice feature="Graves Default Schedule" isDark={isDark} />
-        ))}
+      {activeTab === "users" && currentOperator?.role !== "sudo_admin" && (
+        <div className="py-16 text-center text-[13px] text-[var(--ios-label-tertiary)]">
+          Only sudo_admins can manage user privileges.
+        </div>
+      )}
+      {activeTab === "auditLog" && <AuditLogTab isDark={isDark} />}
     </div>
   );
 }
@@ -215,9 +194,9 @@ export function SettingsShell() {
   const { isDark, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  const confirmDialog = useConfirm();
 
   const canRunEngine = permissions?.canRunEngine ?? false;
-  const canManageTeam = permissions?.canManageTeam ?? false;
 
   const [activeTab, setActiveTab] = React.useState<SettingsTab>(() =>
     resolveSettingsTab(searchParams.get("tab")),
@@ -232,6 +211,14 @@ export function SettingsShell() {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // People + schedule tools moved to /team — bounce any legacy deep link there.
+  React.useEffect(() => {
+    const raw = searchParams.get("tab");
+    if (raw && raw in TEAM_REDIRECT_TABS) {
+      router.replace(`/shiftbuilder/team?tab=${TEAM_REDIRECT_TABS[raw]}`);
+    }
+  }, [searchParams, router]);
 
   // Keep tab state in sync with ?tab= (back/forward, deep links)
   React.useEffect(() => {
@@ -316,10 +303,9 @@ export function SettingsShell() {
   const isTabDisabled = React.useCallback(
     (tab: SettingsTab) => {
       if (tab === "planner" || tab === "engine") return !canRunEngine;
-      if (tab === "team") return !canManageTeam;
       return false;
     },
-    [canRunEngine, canManageTeam],
+    [canRunEngine],
   );
 
   const formattedDate = `${MONTH_LONG[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
@@ -355,18 +341,29 @@ export function SettingsShell() {
             <p className="sb-settings-eyebrow">OMS BACKEND</p>
             <h1 className="sb-settings-hero-title">Settings</h1>
             <p className="sb-settings-hero-sub">
-              Team, tasks, engine, and roster — the quiet machinery behind every grave deployment.
+              Card defaults, engine, and access — the quiet machinery behind every grave deployment.
+              People &amp; schedule live on the Team page.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push("/shiftbuilder")}
-            className="sb-settings-back-btn sb-interactive"
-          >
-            <ArrowLeft size={15} strokeWidth={2.25} />
-            Shift Builder
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/shiftbuilder/team")}
+              className="sb-settings-back-btn sb-interactive"
+            >
+              <Users size={15} strokeWidth={2.25} />
+              Team
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/shiftbuilder")}
+              className="sb-settings-back-btn sb-interactive"
+            >
+              <ArrowLeft size={15} strokeWidth={2.25} />
+              Shift Builder
+            </button>
+          </div>
         </div>
 
         <nav className="sb-settings-glass-pill" aria-label="Settings sections">
@@ -408,8 +405,8 @@ export function SettingsShell() {
             {currentOperator && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Sign out ${currentOperator.full_name}?`)) {
+                onClick={async () => {
+                  if (await confirmDialog(`Sign out ${currentOperator.full_name}?`, { confirmLabel: "Sign out" })) {
                     logoutOperator();
                     router.push("/shiftbuilder");
                   }
@@ -476,19 +473,24 @@ export function SettingsShell() {
             data-tall={TALL_SETTINGS_TABS.has(activeTab) ? "true" : undefined}
             role="tabpanel"
           >
-            <AnimatePresence mode="wait">
+            {/* No `mode="wait"` — it defers mounting the new tab's content until
+                the previous tab's exit animation fully resolves, and if that
+                exit is ever delayed (slow tab content, main-thread contention),
+                the new tab's pill/URL update instantly while its content stays
+                stuck showing the old tab indefinitely. Default (concurrent)
+                mode lets the new tab mount immediately alongside the old one
+                fading out, so content can never lag behind the active-tab
+                state it's supposed to reflect. */}
+            <AnimatePresence>
               <motion.div key={activeTab} className="sb-settings-tab-motion" {...tabMotion}>
                 <SettingsTabPanel
                   activeTab={activeTab}
                   isDark={isDark}
                   canRunEngine={canRunEngine}
-                  canManageTeam={canManageTeam}
                   currentOperator={currentOperator}
                   currentNightId={currentNightId}
                   weekStart={weekStart}
-                  permissions={permissions}
                   onDataChanged={auditedDataChanged}
-                  onNavigate={handleTabSelect}
                 />
               </motion.div>
             </AnimatePresence>

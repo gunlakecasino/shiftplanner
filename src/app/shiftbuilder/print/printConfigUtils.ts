@@ -158,6 +158,7 @@ export function tonightPrintConfig(
     printVariant,
     includeShiftNotes: true,
     planningBlankSlate: false,
+    includeTimestamp: true,
   };
 }
 
@@ -183,6 +184,7 @@ export function fullWeekPrintConfig(): PrintConfig {
     printVariant: "official",
     includeShiftNotes: true,
     planningBlankSlate: false,
+    includeTimestamp: true,
   };
 }
 
@@ -211,6 +213,7 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
       printVariant: parsed.printVariant === "planning" ? "planning" : "official",
       includeShiftNotes: parsed.includeShiftNotes !== false,
       planningBlankSlate: parsed.planningBlankSlate === true,
+      includeTimestamp: parsed.includeTimestamp ?? true,
       customQueueOrder: null,
     };
   } catch {

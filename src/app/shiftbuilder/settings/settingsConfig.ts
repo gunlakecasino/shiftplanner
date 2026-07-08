@@ -1,28 +1,20 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3,
   Bolt,
-  CalendarDays,
   Layers,
-  LayoutDashboard,
   ScrollText,
   SlidersHorizontal,
   UserCog,
-  Users,
 } from "lucide-react";
 
 export type SettingsTab =
-  | "dashboard"
   | "defaults"
-  | "team"
-  | "gravesSchedule"
   | "users"
   | "engine"
   | "planner"
-  | "reports"
   | "auditLog";
 
-export type SettingsSection = "operations" | "people" | "engine" | "insights";
+export type SettingsSection = "operations" | "engine" | "access";
 
 export type SettingsTabDef = {
   id: SettingsTab;
@@ -39,9 +31,8 @@ export const SETTINGS_SECTIONS: Array<{
   accent: string;
 }> = [
   { id: "operations", label: "Operations", accent: "#B89708" },
-  { id: "people", label: "People", accent: "#007AFF" },
   { id: "engine", label: "Engine", accent: "#34C759" },
-  { id: "insights", label: "Insights", accent: "#4D1A8A" },
+  { id: "access", label: "Access", accent: "#007AFF" },
 ];
 
 export const SETTINGS_TABS: SettingsTabDef[] = [
@@ -52,30 +43,6 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     section: "operations",
     icon: Layers,
     description: "Default tasks and markers pushed to nights",
-  },
-  {
-    id: "team",
-    label: "Team",
-    shortLabel: "Team",
-    section: "people",
-    icon: Users,
-    description: "Roster profiles, eligibility, and grave pools",
-  },
-  {
-    id: "gravesSchedule",
-    label: "Graves Schedule",
-    shortLabel: "Schedule",
-    section: "people",
-    icon: CalendarDays,
-    description: "Master Fri–Thu grid — who is scheduled each grave night",
-  },
-  {
-    id: "users",
-    label: "Users",
-    shortLabel: "Users",
-    section: "people",
-    icon: UserCog,
-    description: "Operator PINs and privilege overrides",
   },
   {
     id: "engine",
@@ -94,26 +61,18 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     description: "Run weighted planner across nights",
   },
   {
-    id: "dashboard",
-    label: "Dashboard",
-    shortLabel: "Home",
-    section: "insights",
-    icon: LayoutDashboard,
-    description: "Ops overview and quick actions",
-  },
-  {
-    id: "reports",
-    label: "Reports",
-    shortLabel: "Reports",
-    section: "insights",
-    icon: BarChart3,
-    description: "Rotation fairness, zone frequency, and placement analytics",
+    id: "users",
+    label: "Users",
+    shortLabel: "Users",
+    section: "access",
+    icon: UserCog,
+    description: "Operator PINs and privilege overrides",
   },
   {
     id: "auditLog",
     label: "Audit Log",
     shortLabel: "Audit",
-    section: "insights",
+    section: "access",
     icon: ScrollText,
     description: "Filtered timeline of every operator action",
   },
@@ -122,10 +81,7 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
 /** Tabs that need a tall scroll region inside the paper artboard */
 export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "defaults",
-  "team",
-  "gravesSchedule",
   "users",
-  "reports",
   "auditLog",
   "engine",
   "planner",
@@ -137,25 +93,38 @@ export function isSettingsTab(tab: string): tab is SettingsTab {
   return VALID_SETTINGS_TABS.has(tab);
 }
 
-/** Legacy ?tab= values removed from the settings shell. */
+/**
+ * Legacy ?tab= values that now live on the /team page. SettingsShell detects
+ * these and redirects out to /team with the matching section.
+ */
+export const TEAM_REDIRECT_TABS: Record<string, "roster" | "schedule" | "groups"> = {
+  team: "roster",
+  gravesSchedule: "schedule",
+  tmDefaults: "schedule",
+  weeklyRoster: "schedule",
+};
+
+/** Legacy ?tab= values folded into a surviving settings tab. */
 const DEPRECATED_SETTINGS_TAB_REDIRECTS: Record<string, SettingsTab> = {
   tasks: "defaults",
-  tmDefaults: "gravesSchedule",
-  weeklyRoster: "gravesSchedule",
+  dashboard: "defaults",
+  reports: "auditLog",
 };
+
+export const DEFAULT_SETTINGS_TAB: SettingsTab = "defaults";
 
 export function resolveSettingsTab(param: string | null): SettingsTab {
   if (param && isSettingsTab(param)) return param;
   if (param && param in DEPRECATED_SETTINGS_TAB_REDIRECTS) {
     return DEPRECATED_SETTINGS_TAB_REDIRECTS[param];
   }
-  return "dashboard";
+  return DEFAULT_SETTINGS_TAB;
 }
 
 export function sectionForTab(tab: SettingsTab): SettingsSection {
-  return SETTINGS_TABS.find((t) => t.id === tab)?.section ?? "insights";
+  return SETTINGS_TABS.find((t) => t.id === tab)?.section ?? "operations";
 }
 
 export function tabMeta(tab: SettingsTab): SettingsTabDef {
-  return SETTINGS_TABS.find((t) => t.id === tab) ?? SETTINGS_TABS[SETTINGS_TABS.length - 1];
+  return SETTINGS_TABS.find((t) => t.id === tab) ?? SETTINGS_TABS[0];
 }

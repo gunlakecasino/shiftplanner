@@ -94,7 +94,7 @@ export function AdminPinConfirmModal({
             type="button"
             onClick={submit}
             disabled={busy || pin.length !== 6}
-            className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white text-sm font-medium disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white text-sm font-medium disabled:opacity-50"
           >
             {busy ? "Verifying…" : confirmLabel}
           </button>

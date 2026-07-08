@@ -9,7 +9,6 @@ import {
   findRemovableEmptyAuxSlot,
 } from "@/lib/shiftbuilder/auxLayout";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
-import { validatePlacementOrder } from "@/lib/shiftbuilder/placement";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import {
   patchNightCoreAuxLayoutCache,
@@ -34,7 +33,9 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
  * making the orchestrator thinner and the aux logic testable/reusable.
  *
  * Non-negotiables:
- * - Graves / placement order respected via validatePlacementOrder
+ * - Placement order is enforced structurally by deriveTargetSlotsInOrder
+ *   (dynamic AUX slots always sort after the fixed order, regardless of
+ *   auxDefs array order), not validated here
  * - Persist only after hydration guard
  * - Draft/history snapshots still owned by caller (for undo)
  */
@@ -62,7 +63,7 @@ export interface UseAuxLayoutReturn {
   canRemoveAux: boolean;
   lastAuxSlotLabel: string | null;
   removeLastAuxSlot: () => void;
-  flushAuxLayoutSave: () => Promise<void>;
+  flushAuxLayoutSave: (nightIdOverride?: string | null, layoutOverride?: AuxDef[]) => Promise<void>;
   scheduleAuxLayoutSave: (delayMs?: number) => void;
 }
 
@@ -99,14 +100,17 @@ export function useAuxLayout({
     useShiftBuilderStore.getState().setAuxDefs(auxDefs);
   }, [auxDefs]);
 
-  const flushAuxLayoutSave = useCallback(async () => {
+  const flushAuxLayoutSave = useCallback(async (nightIdOverride?: string | null, layoutOverride?: AuxDef[]) => {
     if (auxSaveTimerRef.current) {
       clearTimeout(auxSaveTimerRef.current);
       auxSaveTimerRef.current = null;
     }
-    const layout = auxDefsLatestRef.current;
+    // layoutOverride/nightIdOverride let a debounced call persist the exact snapshot it was
+    // scheduled with, instead of re-reading "latest" state that a day switch may have already
+    // replaced with the next night's data (see scheduleAuxLayoutSave).
+    const layout = layoutOverride ?? auxDefsLatestRef.current;
     const dateStr = formatLocalDateISO(selectedDay.date);
-    let nid = currentNightId ?? nightId;
+    let nid = nightIdOverride ?? currentNightId ?? nightId;
     try {
       if (!nid) {
         const { getOrCreateNightForDate } = await import("@/lib/shiftbuilder/data");
@@ -131,12 +135,17 @@ export function useAuxLayout({
   const scheduleAuxLayoutSave = useCallback(
     (delayMs = 250) => {
       if (auxSaveTimerRef.current) clearTimeout(auxSaveTimerRef.current);
+      // Capture which night + layout this save is for right now. If the operator switches
+      // days before the timer fires, this snapshot still targets the night being edited,
+      // rather than whatever night/layout is current by the time the timeout callback runs.
+      const capturedNightId = currentNightId ?? nightId;
+      const capturedLayout = auxDefsLatestRef.current;
       auxSaveTimerRef.current = setTimeout(() => {
         auxSaveTimerRef.current = null;
-        void flushAuxLayoutSave();
+        void flushAuxLayoutSave(capturedNightId, capturedLayout);
       }, delayMs);
     },
-    [flushAuxLayoutSave]
+    [flushAuxLayoutSave, currentNightId, nightId]
   );
 
   const persistAuxLayoutNowRef = useRef<(layout: AuxDef[]) => void>(() => {});
@@ -159,10 +168,6 @@ export function useAuxLayout({
       const slot = createBlankAuxSlot(prev);
       if (!slot) return prev;
       const next = [...prev, slot];
-      const warnings = validatePlacementOrder(next);
-      if (warnings.length > 0) {
-        console.warn("[Placement] AUX slot added out of order:", warnings);
-      }
       queueMicrotask(() => persistAuxLayoutNowRef.current(next));
       return next;
     });
@@ -223,6 +228,15 @@ export function useAuxLayout({
   useEffect(() => {
     // The caller (Client) manages per-night aux hydration from query.
     // This hook focuses on mutation + persist.
+    // Clear any pending debounced save on day change — scheduleAuxLayoutSave already
+    // captures a (nightId, layout) snapshot so a stale timer is harmless if it fires,
+    // but there's no reason to let it fire at all once we've moved off that night.
+    return () => {
+      if (auxSaveTimerRef.current) {
+        clearTimeout(auxSaveTimerRef.current);
+        auxSaveTimerRef.current = null;
+      }
+    };
   }, [selectedDay.date]);
 
   return {

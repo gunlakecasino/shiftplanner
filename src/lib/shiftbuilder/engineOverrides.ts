@@ -41,6 +41,7 @@ import type {
   FullyResolvedEngineConfig,
 } from "./engineConfig";
 import { FALLBACK_CONFIG, resolvedWeights, resolvedThresholds } from "./engineConfig";
+import { assignmentTmId } from "./tmIdentity";
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -48,7 +49,10 @@ import { FALLBACK_CONFIG, resolvedWeights, resolvedThresholds } from "./engineCo
 
 /**
  * Returns a FullyResolvedEngineConfig for the given configId (or the current active one).
- * Walks the parent chain, applies overrides in priority order, and attaches rules.
+ * Applies signal overrides to the base weights (in priority order) and attaches
+ * eligibility rules. Only the leaf config's overrides/rules apply — no parent-
+ * chain inheritance today (versionHistory/parent-chain walk was removed
+ * 2026-07-04: it was an extra DB round trip on every call with zero consumers).
  *
  * This is the single source of truth that the scoring + placement layers should use
  * after the 2026-05-28 migration.
@@ -64,10 +68,7 @@ export async function getFullyResolvedEngineConfig(
     base = await getActiveEngineConfigWithVersion();
   }
 
-  // 2. Walk the parent chain (most recent first) for history + inheritance
-  const versionHistory = await fetchVersionHistory(base.id);
-
-  // 3. Load all active overrides + rules for this version (and parents if we decide to inherit)
+  // 2. Load all active overrides + rules for this version (and parents if we decide to inherit)
   //    For v1 we keep it simple: only the leaf config's overrides/rules win.
   //    Future versions can add "inherit from parent" toggles.
   const [signalOverrides, eligibilityRules] = await Promise.all([
@@ -75,17 +76,15 @@ export async function getFullyResolvedEngineConfig(
     fetchEligibilityRules(base.id),
   ]);
 
-  // 4. Apply overrides on top of the base weights (this is where the magic happens)
+  // 3. Apply overrides on top of the base weights (this is where the magic happens)
   const finalWeights = applyOverridesToWeights(base.weights, signalOverrides);
 
   return {
     ...base,
     weights: finalWeights,
-    resolvedVersionName: base.versionName || "Custom",
     signalOverrides,
     eligibilityRules,
     isPreset: base.isPreset,
-    versionHistory,
   };
 }
 
@@ -131,12 +130,13 @@ export function applyOverridesToWeights(
  * Soft rules are handled as score adjustments in scoring.ts.
  */
 export function isEligibleUnderRules(
-  tm: { tmId: string; gravePool?: string; weeksInRole?: number },
+  tm: { id?: string; tmId?: string; tm_id?: string; gravePool?: string; weeksInRole?: number },
   slotKey: string,
   slotType: string,
   rules: EligibilityRule[]
 ): boolean {
   const activeHardRules = rules.filter(r => r.isActive && r.ruleType === "hard_exclude");
+  const resolvedTmId = assignmentTmId(tm);
 
   for (const rule of activeHardRules) {
     const cond = rule.condition || {};
@@ -144,7 +144,7 @@ export function isEligibleUnderRules(
     // Example rule shapes (extensible)
     if (cond.grave_pool && tm.gravePool !== cond.grave_pool) return false;
     if (cond.min_weeks && (tm.weeksInRole ?? 0) < cond.min_weeks) return false;
-    if (Array.isArray(cond.exclude_tm_ids) && cond.exclude_tm_ids.includes(tm.tmId)) return false;
+    if (Array.isArray(cond.exclude_tm_ids) && cond.exclude_tm_ids.includes(resolvedTmId)) return false;
     if (Array.isArray(cond.only_zones) && !cond.only_zones.includes(slotKey)) return false;
     if (Array.isArray(cond.slot_types) && !cond.slot_types.includes(slotType)) return false;
 
@@ -177,32 +177,6 @@ async function getActiveEngineConfigWithVersion(): Promise<EngineConfig> {
   const base = await (await import("./engineConfig")).getActiveEngineConfig(); // avoid circular
   // In real code we would just call the existing one — this is a small shim for the new file.
   return base;
-}
-
-async function fetchVersionHistory(leafId: string) {
-  // Simple chain walk (good enough for first version; can be optimized with recursive CTE later)
-  const history: Array<{ id: string; versionName: string | null; createdAt: string }> = [];
-  let currentId: string | null = leafId;
-  const seen = new Set<string>();
-
-  while (currentId && !seen.has(currentId)) {
-    seen.add(currentId);
-    const { data, error }: { data: any; error: any } = await supabase
-      .from("engine_config")
-      .select("id, version_name, created_at, parent_id")
-      .eq("id", currentId)
-      .single();
-
-    if (error || !data) break;
-
-    history.push({
-      id: data.id,
-      versionName: data.version_name,
-      createdAt: data.created_at,
-    });
-    currentId = data.parent_id ?? null;
-  }
-  return history;
 }
 
 async function fetchSignalOverrides(configId: string): Promise<SignalOverride[]> {
@@ -273,9 +247,6 @@ function mapRowToSignalOverride(row: any): SignalOverride {
     signalName: row.signal_name,
     overrideType: row.override_type,
     value: row.value,
-    appliesToSlotTypes: row.applies_to_slot_types,
-    appliesToSlotKeys: row.applies_to_slot_keys,
-    appliesToZones: row.applies_to_zones,
     priority: row.priority,
     isActive: row.is_active,
     notes: row.notes,
@@ -290,8 +261,6 @@ function mapRowToEligibilityRule(row: any): EligibilityRule {
     ruleType: row.rule_type,
     description: row.description,
     condition: row.condition ?? {},
-    appliesToSlotTypes: row.applies_to_slot_types,
-    appliesToSlotKeys: row.applies_to_slot_keys,
     priority: row.priority,
     isActive: row.is_active,
   };

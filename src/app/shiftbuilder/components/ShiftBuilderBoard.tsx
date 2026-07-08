@@ -261,13 +261,19 @@ export interface ShiftBuilderBoardProps {
   onWeekHealthSelectDay?: (index: number) => void;
   onWeekHealthDismiss?: () => void;
 
-  /** Rotation health side drawer engine controls (clear + run xAI/rotation engine). Passed from orchestrator / cluster. */
+  /** Rotation health orb + unified engine drawer (Optimize Night, Optimize Week, Clear). */
   canRunEngine?: boolean;
+  canEditAssignments?: boolean;
   onRunXaiEngine?: () => void;
+  onOptimizeNight?: () => void;
   onClearBoard?: () => void;
   engineRunning?: boolean;
+  deepOptimizeRunning?: boolean;
+  deepOptimizeTick?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldProgressTick | null;
+  onCancelDeepOptimize?: () => void;
   onApplyDraft?: () => void;
   onDiscardDraft?: () => void;
+  showDraftStatusPill?: boolean;
   draftGrokExplanation?: string;
 
 }
@@ -382,11 +388,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onWeekHealthDismiss,
 
   canRunEngine,
+  canEditAssignments,
   onRunXaiEngine,
+  onOptimizeNight,
   onClearBoard,
   engineRunning,
+  deepOptimizeRunning,
+  deepOptimizeTick,
+  onCancelDeepOptimize,
   onApplyDraft,
   onDiscardDraft,
+  showDraftStatusPill,
   draftGrokExplanation,
   draftBreakdownProp,
   draftGrokReasoningProp,
@@ -1306,6 +1318,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
                         onCardClick={handleCardClickForPad}
+                        showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
                         borderColor={cardBorders[key]}
                         isDraftMode={isDraftMode}
@@ -1407,6 +1420,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         selectedTasks={selectedTasks}
                         setBreakGroupForSlot={setBreakGroupForSlot}
                         onGenderClick={handleGenderClickForPad}
+                        showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
                         borderColor={cardBorders[`RR${def.num}`] || cardBorders[mKey] || cardBorders[wKey]}
                         isDraftMode={isDraftMode}
@@ -1576,6 +1590,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             selectedTasks={selectedTasks}
                             setBreakGroupForSlot={setBreakGroupForSlot}
                             onCardClick={handleCardClickForPad}
+                            showTaskBadge={!isPrintPreview}
                             loading={loadingAssignments}
                             borderColor={cardBorders[key]}
                             isDraftMode={isDraftMode}
@@ -1964,6 +1979,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           selectedDayDateKey={selectedDayDateKeyProp ?? currentIso}
           weekHealthLoading={weekHealthLoading}
           weeklyRecentHistory={weeklyRecentHistory}
+          canRunEngine={canRunEngine}
+          canEditAssignments={canEditAssignments}
+          isCurrentNightLocked={isCurrentNightLocked}
+          onOptimizeNight={onOptimizeNight}
+          onClearBoard={onClearBoard}
+          engineRunning={engineRunning}
+          onApplyDraft={onApplyDraft}
+          onDiscardDraft={onDiscardDraft}
+          showDraftStatusPill={showDraftStatusPill}
         />
       )}
 

@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, LogOut, Moon, Sun, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { useTheme } from "../../hooks/useTheme";
 import { shiftBuilderVersionLabel } from "../../version";
 import { GoldHairline } from "../../sudo/SudoGlass";
@@ -19,6 +20,7 @@ export function ReportsShell() {
   const { isDark, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
+  const confirmDialog = useConfirm();
   const canAccessSudo = permissions?.canAccessSudo ?? false;
   const canAccessReports = permissions?.canAccessReports ?? false;
   const showShiftBuilderLink = canAccessSudo || canAccessReports;
@@ -119,8 +121,8 @@ export function ReportsShell() {
             {currentOperator && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Sign out ${currentOperator.full_name}?`)) {
+                onClick={async () => {
+                  if (await confirmDialog(`Sign out ${currentOperator.full_name}?`, { confirmLabel: "Sign out" })) {
                     logoutOperator();
                     router.push(
                       showShiftBuilderLink ? "/shiftbuilder" : "/shiftbuilder/reports",

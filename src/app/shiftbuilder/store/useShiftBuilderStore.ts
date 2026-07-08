@@ -100,6 +100,9 @@ interface ShiftBuilderState {
   setDraftGrokExplanation: (e: string) => void;
   draftEngineWarnings: string[];
   setDraftEngineWarnings: (w: string[]) => void;
+  /** Structured unified-engine reasoning for the Thought Process panel (null = hidden). */
+  engineThoughtProcess: any | null;
+  setEngineThoughtProcess: (t: any | null) => void;
 
   engineRunPhase: EngineRunPhase;
   setEngineRunPhase: (p: EngineRunPhase) => void;
@@ -366,6 +369,8 @@ export const useShiftBuilderStore = create<ShiftBuilderState>()(
     setDraftGrokExplanation: (e) => set({ draftGrokExplanation: e }),
     draftEngineWarnings: [],
     setDraftEngineWarnings: (w) => set({ draftEngineWarnings: w }),
+    engineThoughtProcess: null,
+    setEngineThoughtProcess: (t) => set({ engineThoughtProcess: t }),
 
     engineRunPhase: "idle" as EngineRunPhase,
     setEngineRunPhase: (p: EngineRunPhase) => set({ engineRunPhase: p }),
@@ -533,6 +538,11 @@ export const useDraftGrokExplanation = () =>
 
 export const useDraftEngineWarnings = () =>
   useShiftBuilderStore(useShallow((state) => state.draftEngineWarnings));
+
+export const useEngineThoughtProcess = () =>
+  useShiftBuilderStore((state) => state.engineThoughtProcess);
+export const useSetEngineThoughtProcess = () =>
+  useShiftBuilderStore((state) => state.setEngineThoughtProcess);
 
 export const useEngineRunPhase = () =>
   useShiftBuilderStore((state) => state.engineRunPhase ?? "idle");

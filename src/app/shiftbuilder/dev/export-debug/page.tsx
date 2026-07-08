@@ -43,10 +43,10 @@ export default function ExportDebugPage() {
       const html = renderPrintPreviewHtml({
         view,
         snapshot,
-        pageLabel: "— debug —",
-        versionLabel: shiftBuilderVersionLabel(),
         weekDayDefs: dayDefs,
         activeBreakGroup: 1,
+        printedAt: new Date().toISOString(),
+        includeTimestamp: true,
       });
 
       const shell = `<!DOCTYPE html><html class="${document.documentElement.className}"><head><link rel="stylesheet" href="/shiftbuilder-print-preview.css" /></head><body class="printing-dual-mode" style="margin:0;background:#fff"><div class="print-dual-container">${html}</div></body></html>`;
@@ -66,6 +66,7 @@ export default function ExportDebugPage() {
         printVariant: "official",
         includeShiftNotes: true,
         planningBlankSlate: false,
+        includeTimestamp: true,
       };
 
       setStatus("Rasterizing from mounted Golden session (live DOM — export path)…");

@@ -45,6 +45,54 @@ export type GrokContext = {
 };
 
 /**
+ * Unified engine AI stage (provider-agnostic). The client runs the deterministic
+ * pipeline locally, then calls this to get the AI's slot-level override proposals.
+ * Runs server-side so the API key never touches the browser. No tools — the brief
+ * already carries the candidate previews, scores, and rotation health the model
+ * needs; the client re-validates every override through the guard, so an illegal
+ * or empty response is only ever a no-op (never a regression).
+ */
+export async function runEngineAiStage(
+  system: string,
+  prompt: string,
+  opts?: {
+    provider?: "xai" | "anthropic";
+    reasoningEffort?: "none" | "low" | "medium" | "high";
+  },
+): Promise<{
+  overrides: Array<{ slotKey: string; tmId: string; rationale: string }>;
+  notes?: string;
+  usage?: { inputTokens: number; outputTokens: number; model: string; reasoningEffort: string };
+  error?: string;
+}> {
+  try {
+    const { createAiProvider } = await import("@/lib/shiftbuilder/engine/ai/factory");
+    const { AiNightOutputSchema } = await import("@/lib/shiftbuilder/engine/ai/schemas");
+    const provider = createAiProvider({ provider: opts?.provider });
+    const effort = opts?.reasoningEffort ?? "high";
+    const { output, usage } = await provider.completeStructured({
+      system,
+      prompt,
+      schema: AiNightOutputSchema,
+      reasoningEffort: effort,
+      maxTokens: 2000,
+    });
+    return {
+      overrides: output.overrides ?? [],
+      notes: output.notes,
+      usage: {
+        inputTokens: usage.promptTokens,
+        outputTokens: usage.completionTokens,
+        model: provider.id === "anthropic" ? "claude-fable-5" : "grok-4.3",
+        reasoningEffort: effort,
+      },
+    };
+  } catch (e: any) {
+    return { overrides: [], error: e?.message || "AI stage failed" };
+  }
+}
+
+/**
  * Legacy text-only flow (still used as fallback / for the simple button).
  */
 export async function askGrokForShiftSuggestions(context: GrokContext): Promise<string> {
@@ -800,4 +848,159 @@ export async function validateProposedAssignments(
     valid: invalid.length === 0,
     invalid,
   };
+}
+
+// =============================================================================
+// Week engine preview (2026-07-04) — read-only. Computes what runWeekEngine
+// (rolling per-night solve + cross-night polish + fairness ledger) would
+// produce for a grave week, WITHOUT writing anything to zone_assignments.
+// Applying a specific night still goes through the existing single-night
+// Draft Mode + Apply flow — this action only powers the results review sheet.
+// =============================================================================
+
+export interface WeekPreviewNightMeta {
+  nightId: string;
+  nightIso: string;
+  dayName: string;
+}
+
+export interface WeekPreviewResult {
+  weekStartIso: string;
+  nightsMeta: WeekPreviewNightMeta[];
+  /** Fri..Thu dates with no `nights` row yet — excluded from the run. */
+  missingNightIsos: string[];
+  result: import("@/lib/shiftbuilder/engine/types").WeekRunResult;
+  /** Each night's assignments as they stood at solve time — lets the client
+   * diff a night's computed Draft against "what's there now" without a
+   * second fetch when seeding Draft Mode. */
+  existingAssignmentsByNight: Record<string, Record<string, { tmId: string; tmName: string }>>;
+}
+
+export async function previewWeekEngine(weekStartIso: string): Promise<WeekPreviewResult> {
+  const { supabase } = await import("@/lib/supabase");
+  const { dbToUi } = await import("@/lib/shiftbuilder/slot-keys");
+  const { getFullyResolvedEngineConfig } = await import("@/lib/shiftbuilder/engineOverrides");
+  const { runWeekEngineFromClient } = await import("@/lib/shiftbuilder/engine/adapters");
+  const {
+    getGraveAvailableTeamMembers,
+    getTMSkillScores,
+    getSlotDifficultyRaw,
+    getTMPreferences,
+    getTMPairAffinities,
+    getTMAccommodations,
+    getTmZoneMatrix,
+    getNightAssignments,
+  } = await import("@/lib/shiftbuilder/data");
+  const { getAllScheduledTmIdsForNight } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
+  const { loadPlacementHistoriesForRoster } = await import("@/lib/shiftbuilder/sudoBatchPlanner");
+
+  // Derive the 7 grave-week dates (Fri..Thu) from weekStartIso.
+  const start = new Date(`${weekStartIso}T12:00:00`);
+  const dateIsos: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dateIsos.push(d.toISOString().slice(0, 10));
+  }
+
+  const { data: nightRows, error: nightErr } = await supabase
+    .from("nights")
+    .select("id, night_date, day_name")
+    .in("night_date", dateIsos)
+    .order("night_date", { ascending: true });
+  if (nightErr) throw new Error(`previewWeekEngine: could not fetch nights — ${nightErr.message}`);
+  if (!nightRows || nightRows.length === 0) {
+    throw new Error("No night records exist yet for this week — visit at least one day on the board first.");
+  }
+
+  const nightsMeta: WeekPreviewNightMeta[] = (nightRows as any[]).map((n) => ({
+    nightId: String(n.id),
+    nightIso: String(n.night_date),
+    dayName: String(n.day_name ?? ""),
+  }));
+  const foundIsos = new Set(nightsMeta.map((n) => n.nightIso));
+  const missingNightIsos = dateIsos.filter((iso) => !foundIsos.has(iso));
+
+  const [engineConfig, skillScores, slotDifficulty, preferenceRows, pairAffinityRows, accommodationRows, grave, zoneMatrix] =
+    await Promise.all([
+      getFullyResolvedEngineConfig(),
+      getTMSkillScores(),
+      getSlotDifficultyRaw(),
+      getTMPreferences(),
+      getTMPairAffinities(),
+      getTMAccommodations(),
+      getGraveAvailableTeamMembers(),
+      getTmZoneMatrix(),
+    ]);
+
+  const prefByTm = new Map<string, any[]>();
+  preferenceRows.forEach((r: any) => {
+    if (!prefByTm.has(r.tmId)) prefByTm.set(r.tmId, []);
+    prefByTm.get(r.tmId)!.push(r);
+  });
+  const pairByTm = new Map<string, any[]>();
+  pairAffinityRows.forEach((r: any) => {
+    if (!pairByTm.has(r.tmId)) pairByTm.set(r.tmId, []);
+    pairByTm.get(r.tmId)!.push(r);
+  });
+  const accByTm = new Map<string, any[]>();
+  accommodationRows.forEach((r: any) => {
+    if (!accByTm.has(r.tmId)) accByTm.set(r.tmId, []);
+    accByTm.get(r.tmId)!.push(r);
+  });
+
+  const tmIds = grave.map((tm) => tm.id).filter(Boolean);
+  const placementHistories = await loadPlacementHistoriesForRoster(tmIds);
+
+  const existingAssignmentsByNight: WeekPreviewResult["existingAssignmentsByNight"] = {};
+  const nights = await Promise.all(
+    nightsMeta.map(async (meta) => {
+      const nightDateObj = new Date(`${meta.nightIso}T12:00:00`);
+      const [scheduledIds, existingAssignments] = await Promise.all([
+        getAllScheduledTmIdsForNight(nightDateObj, meta.nightId),
+        getNightAssignments(meta.nightId),
+      ]);
+
+      const assignmentsMap: Record<string, { tmId: string; tmName: string; isLocked?: boolean }> = {};
+      for (const a of existingAssignments) {
+        if (!a.tmId) continue;
+        try {
+          const uiKey = dbToUi(a.slotKey, a.slotType ?? "zone", a.rrSide ?? null);
+          assignmentsMap[uiKey] = { tmId: a.tmId, tmName: a.tmName ?? a.tmId, isLocked: a.isLocked };
+        } catch {
+          /* unrecognized slot shape — skip */
+        }
+      }
+      existingAssignmentsByNight[meta.nightIso] = assignmentsMap;
+
+      // Mirrors the interactive single-night engine's default: narrow to
+      // tonight's Graves Default Schedule when it's loaded, else use the
+      // full grave pool.
+      const rosterForEngine =
+        scheduledIds.size > 0 ? grave.filter((tm) => scheduledIds.has(tm.id)) : grave;
+
+      return {
+        nightIso: meta.nightIso,
+        config: engineConfig,
+        eligibilityRules: engineConfig.eligibilityRules,
+        auxDefs: [],
+        members: rosterForEngine as unknown as Array<Record<string, unknown>>,
+        scheduledTmIds: scheduledIds,
+        assignments: assignmentsMap,
+        histories: placementHistories,
+        zoneMatrix,
+        skillScores,
+        slotDifficulty,
+        preferencesByTm: prefByTm,
+        pairAffinitiesByTm: pairByTm,
+        accommodationsByTm: accByTm,
+      };
+    }),
+  );
+
+  const result = runWeekEngineFromClient(weekStartIso, nights, {
+    preserve: "all-existing",
+  });
+
+  return { weekStartIso, nightsMeta, missingNightIsos, result, existingAssignmentsByNight };
 }

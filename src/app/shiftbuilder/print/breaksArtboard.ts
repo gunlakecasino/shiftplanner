@@ -1,6 +1,6 @@
 /**
  * Post-process a breaks .print-artboard so wave columns fill available space
- * and Overlaps stays pinned above the footer (Golden contract).
+ * and Overlaps stays pinned at the bottom.
  */
 export function postProcessBreaksArtboard(artboard: Element): void {
   const el = artboard as HTMLElement;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
-import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
+import { requireOpsPermission, requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import { formatLocalDateISO, parseLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 async function resolveNightId(
@@ -25,6 +25,14 @@ async function resolveNightId(
 }
 
 export async function GET(request: NextRequest) {
+  if (!isSameOriginOpsRequest(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const session = await requireOpsSession(request);
+  if (!session.ok) {
+    return NextResponse.json({ error: session.error }, { status: session.status });
+  }
+
   const supabase = createAdminClientSafe();
   if (!supabase) {
     return NextResponse.json({ tmIds: [] });

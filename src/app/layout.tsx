@@ -87,16 +87,15 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('oms-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&s)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />
-        {/* === VELVET PERFORMANCE: Service Worker registration ===
-            - ONLY registers in production (secure contexts).
-            - In development (localhost / .local / common dev ports) we explicitly
-              unregister any existing SW + skip registration.
-            - This is critical for Turbopack HMR. Aggressive caching of /_next/static chunks
-              during dev causes "module factory is not available" errors.
-            - The SW itself (public/sw.js) also has a localhost early-exit as defense-in-depth.
-            - We deliberately avoid process.env here to prevent "Can't find variable: process"
-              crashes on iPad Safari simulator and certain Turbopack dev loads.
-        */}
+        {/* === Service Worker: pre-hydration DEV cleanup only ===
+            Production registration + the update/reload lifecycle live in
+            <PwaRegister/> (src/app/shiftbuilder/components/PwaRegister.tsx) — a single
+            registrar avoids two workers racing on the same page. This early inline script
+            only handles the dev side: it must run before hydration to unregister any stale
+            SW and clear caches, otherwise aggressive caching of /_next/static chunks breaks
+            Turbopack HMR ("module factory is not available").
+            We deliberately avoid process.env here to prevent "Can't find variable: process"
+            crashes on iPad Safari simulator and certain Turbopack dev loads. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -104,50 +103,27 @@ export default function RootLayout({
   if (typeof window === 'undefined') return;
   if (!('serviceWorker' in navigator)) return;
 
-  // === PROPER GUARD: Never register SW during development ===
-  // We use a pure runtime hostname/port check (no process.env) because this runs
-  // inside dangerouslySetInnerHTML. Bare "process" references cause hard crashes
-  // ("Can't find variable: process") on iPad Safari simulator + Turbopack dev.
-  if (
+  var isDev =
     location.hostname === 'localhost' ||
     location.hostname === '127.0.0.1' ||
     location.hostname.endsWith('.local') ||
     location.port === '3000' ||
-    location.port === '3001'
-  ) {
-    // Dev: aggressively clean SWs and caches so Turbopack HMR stays healthy.
-    // This is the most common cause of "module factory is not available" errors.
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-      registrations.forEach(function(registration) { registration.unregister(); });
-    });
-    if ('caches' in window) {
-      caches.keys().then(function(keys) { keys.forEach(function(k){caches.delete(k);}); });
-    }
+    location.port === '3001';
+  if (!isDev) return;
 
-    // If a stale SW (from before our self-destruct logic) sends us a message, force reload.
-    navigator.serviceWorker.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'SW_SELF_DESTRUCTED_IN_DEV') {
-        setTimeout(() => { try { location.reload(); } catch {} }, 30);
-      }
-    });
-
-    return;
+  // Dev: aggressively clean SWs and caches so Turbopack HMR stays healthy.
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    registrations.forEach(function(registration) { registration.unregister(); });
+  });
+  if ('caches' in window) {
+    caches.keys().then(function(keys) { keys.forEach(function(k){caches.delete(k);}); });
   }
 
-  // Production only: register on secure contexts
-  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then(function(reg) {
-        // Optional: expose version for Sudo debugging
-        if (reg.active) {
-          reg.active.postMessage({ type: 'GET_VERSION' });
-        }
-      })
-      .catch(function(err) {
-        console.warn('[Velvet] SW registration failed (non-fatal):', err?.message);
-      });
+  // If a stale SW (from before our self-destruct logic) sends us a message, force reload.
+  navigator.serviceWorker.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'SW_SELF_DESTRUCTED_IN_DEV') {
+      setTimeout(() => { try { location.reload(); } catch {} }, 30);
+    }
   });
 })();
             `.trim(),

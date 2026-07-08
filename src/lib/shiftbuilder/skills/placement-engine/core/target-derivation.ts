@@ -27,26 +27,33 @@ export interface CoverageTier {
  * The authoritative tiered model of the fill order.
  * This is the data structure Grok should primarily reason about.
  */
+// Operator-ratified fill order (2026-07-03):
+//   1. Men's restrooms   1 → 7 → 8 → 10 → 6
+//   2. Women's restrooms 1 → 7 → 8 → 10 → 6
+//   3. Zones             9 → 3 → 4 → 5 → 7 → 8 → 10 → 2 → 1 → 6
+//   4. Auxiliary         Admin → Z9 SR
+// Z1/Z2 are now regular zones near the end of the zone order (not manual-only).
+// Admin fills AFTER all 10 zones — on a short roster a zone fills before Admin.
 export const COVERAGE_TIERS: readonly CoverageTier[] = [
   {
     name: "Critical - Restrooms",
-    slots: ["MRR1","WRR1","MRR6","WRR6","MRR7","WRR7","MRR8","WRR8","MRR10","WRR10"],
-    minUniqueTMs: 10, // 5 male + 5 female, non-reusable
-    description: "All 10 restrooms. Requires strict gender matching. Highest operational and compliance priority.",
+    slots: ["MRR1","MRR7","MRR8","MRR10","MRR6","WRR1","WRR7","WRR8","WRR10","WRR6"],
+    minUniqueTMs: 10, // 5 male + 5 female, non-reusable; men's filled before women's
+    description: "All 10 restrooms. Men's (1,7,8,10,6) then women's (1,7,8,10,6). Strict gender matching. Highest priority.",
     isHardCoverage: true,
   },
   {
-    name: "Core - Admin + Zones",
-    slots: ["ADM", "Z9", "Z4", "Z5", "Z1", "Z2", "Z3", "Z7", "Z8", "Z10", "Z6"],
-    minUniqueTMs: 11, // 1 Admin + 10 full-grave Zones (non-reusable with restrooms)
-    description: "Admin + all 10 main zones. These require dedicated full-grave TMs.",
+    name: "Core - Zones",
+    slots: ["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"],
+    minUniqueTMs: 10, // 10 full-grave Zones (non-reusable with restrooms)
+    description: "All 10 main zones in fill order 9,3,4,5,7,8,10,2,1,6. Dedicated full-grave TMs.",
     isHardCoverage: true,
   },
   {
-    name: "High Value - Smoking Room",
-    slots: ["Z9SR"],
-    minUniqueTMs: 1,
-    description: "Zone 9 Smoking Room. High revenue / visibility area.",
+    name: "Auxiliary - Admin + Smoking Room",
+    slots: ["ADM", "Z9SR"],
+    minUniqueTMs: 2, // Admin first, then Z9 Smoking Room
+    description: "Admin then Z9 Smoking Room — filled after all zones.",
     isHardCoverage: false,
   },
   {
@@ -65,7 +72,7 @@ export const COVERAGE_TIERS: readonly CoverageTier[] = [
   },
 ] as const;
 
-const CORE_ZONE_SLOTS = ["Z9", "Z4", "Z5", "Z1", "Z2", "Z3", "Z7", "Z8", "Z10", "Z6"] as const;
+const CORE_ZONE_SLOTS = ["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"] as const;
 
 /**
  * Build coverage tiers from flex aux layout (roles on AUXn keys).
@@ -77,23 +84,21 @@ export function buildCoverageTiers(auxDefs: AuxDef[] = []): CoverageTier[] {
   const trashSlots = typed.filter((d) => d.role === "trash").map((d) => d.key);
   const supportSlots = typed.filter((d) => d.role === "support").map((d) => d.key);
 
-  const tier2Slots = [...adminSlots, ...CORE_ZONE_SLOTS];
-  const adminCount = adminSlots.length;
-
+  // Zones first (all 10), then Auxiliary = Admin → Z9 SR (operator order 2026-07-03).
   return [
     COVERAGE_TIERS[0],
     {
-      name: "Core - Admin + Zones",
-      slots: tier2Slots,
-      minUniqueTMs: adminCount + 10,
-      description: "Admin + all 10 main zones. These require dedicated full-grave TMs.",
+      name: "Core - Zones",
+      slots: [...CORE_ZONE_SLOTS],
+      minUniqueTMs: 10,
+      description: "All 10 main zones in fill order 9,3,4,5,7,8,10,2,1,6. Full-grave TMs.",
       isHardCoverage: true,
     },
     {
-      name: "High Value - Smoking Room",
-      slots: z9srSlots,
-      minUniqueTMs: z9srSlots.length,
-      description: "Zone 9 Smoking Room. High revenue / visibility area.",
+      name: "Auxiliary - Admin + Smoking Room",
+      slots: [...adminSlots, ...z9srSlots],
+      minUniqueTMs: adminSlots.length + z9srSlots.length,
+      description: "Admin then Z9 Smoking Room — filled after all zones.",
       isHardCoverage: false,
     },
     {
@@ -186,11 +191,38 @@ export interface CoverageFeasibility {
   minimumTMsRequiredForFullTopCoverage: number; // 21
   shortfall: number;
   explanation: string;
+  /** Present when a gender split is supplied. Tier 1 needs ≥5 of each. */
+  maleShortfall?: number;
+  femaleShortfall?: number;
 }
 
-export function calculateCoverageFeasibility(availableUniqueTMs: number): CoverageFeasibility {
+/** Full-grave gender split — Tier 1 (10 restrooms) needs 5 males AND 5 females. */
+export interface GenderSplit {
+  male: number;
+  female: number;
+}
+
+const RR_PER_GENDER = 5;
+
+/**
+ * World-class feasibility calculator.
+ *
+ * F10 (2026-07-02): when a `genderSplit` is supplied, Tier 1 is only clearable
+ * with ≥5 eligible males AND ≥5 eligible females — a roster of 21 full-grave men
+ * can no longer be declared "possible" while the five women's restrooms are
+ * unfillable. The single-arg form is retained (gender-blind) for backward
+ * compatibility with existing callers.
+ */
+export function calculateCoverageFeasibility(
+  availableUniqueTMs: number,
+  genderSplit?: GenderSplit,
+): CoverageFeasibility {
   const minForTier1 = COVERAGE_TIERS[0].minUniqueTMs;                    // 10
   const minForTier2 = minForTier1 + COVERAGE_TIERS[1].minUniqueTMs;     // 21
+
+  const maleShortfall = genderSplit ? Math.max(0, RR_PER_GENDER - genderSplit.male) : 0;
+  const femaleShortfall = genderSplit ? Math.max(0, RR_PER_GENDER - genderSplit.female) : 0;
+  const genderBlocksTier1 = maleShortfall > 0 || femaleShortfall > 0;
 
   const tiersFullyCleared: string[] = [];
   const tiersPartiallyCleared: string[] = [];
@@ -198,10 +230,13 @@ export function calculateCoverageFeasibility(availableUniqueTMs: number): Covera
 
   let maxTierName: string | null = null;
 
-  if (availableUniqueTMs >= minForTier2) {
+  const tier1Clear = availableUniqueTMs >= minForTier1 && !genderBlocksTier1;
+  const tier2Clear = availableUniqueTMs >= minForTier2 && !genderBlocksTier1;
+
+  if (tier2Clear) {
     tiersFullyCleared.push(COVERAGE_TIERS[0].name, COVERAGE_TIERS[1].name);
     maxTierName = COVERAGE_TIERS[1].name;
-  } else if (availableUniqueTMs >= minForTier1) {
+  } else if (tier1Clear) {
     tiersFullyCleared.push(COVERAGE_TIERS[0].name);
     tiersPartiallyCleared.push(COVERAGE_TIERS[1].name);
     maxTierName = COVERAGE_TIERS[0].name;
@@ -209,15 +244,21 @@ export function calculateCoverageFeasibility(availableUniqueTMs: number): Covera
     tiersPartiallyCleared.push(COVERAGE_TIERS[0].name);
   }
 
-  // Higher tiers become impossible if we couldn't clear the core
-  if (availableUniqueTMs < minForTier2) {
+  if (!tier2Clear) {
     impossibleTiers.push(COVERAGE_TIERS[1].name);
   }
 
   const shortfall = Math.max(0, minForTier2 - availableUniqueTMs);
 
-  let explanation = `With ${availableUniqueTMs} unique TMs available:\n`;
-  if (shortfall > 0) {
+  let explanation = `With ${availableUniqueTMs} unique TMs available`;
+  if (genderSplit) explanation += ` (${genderSplit.male}M + ${genderSplit.female}F full-grave)`;
+  explanation += `:\n`;
+  if (genderBlocksTier1) {
+    const parts: string[] = [];
+    if (femaleShortfall > 0) parts.push(`${femaleShortfall} more female TM(s) for WRRs`);
+    if (maleShortfall > 0) parts.push(`${maleShortfall} more male TM(s) for MRRs`);
+    explanation += `→ Tier 1 (Restrooms) cannot be cleared: ${parts.join("; ")}.`;
+  } else if (shortfall > 0) {
     explanation += `→ Short ${shortfall} TMs to clear Tier 1 + Tier 2 (Restrooms + Zones + Admin).\n`;
     explanation += `→ ${COVERAGE_TIERS[1].name} cannot be fully cleared.`;
   } else {
@@ -231,8 +272,10 @@ export function calculateCoverageFeasibility(availableUniqueTMs: number): Covera
     tiersPartiallyCleared,
     impossibleTiers,
     minimumTMsRequiredForFullTopCoverage: minForTier2,
-    shortfall,
+    shortfall: genderBlocksTier1 ? Math.max(shortfall, maleShortfall + femaleShortfall) : shortfall,
     explanation,
+    maleShortfall: genderSplit ? maleShortfall : undefined,
+    femaleShortfall: genderSplit ? femaleShortfall : undefined,
   };
 }
 

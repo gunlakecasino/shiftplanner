@@ -455,7 +455,7 @@ const RosterRail = React.memo(function RosterRail({
         {scheduleEmpty && (
           <div className="sb-roster-empty">
             No TMs on Graves Default Schedule for tonight. Edit the sheet at{" "}
-            <a href="/shiftbuilder/graves-schedule" className="sb-gold-text underline">
+            <a href="/shiftbuilder/team?tab=schedule" className="sb-gold-text underline">
               Graves Schedule
             </a>
             .

@@ -274,9 +274,9 @@ Key signals include:
 - skill_match (closeness of TM skill to slot difficulty)
 - preference_fit (hard preferences/avoidances)
 - pair_affinity (with already-placed neighbors)
-- area_diversity, cross_week_rotation, prior_run_continuity (from historical matrix)
+- area_diversity, cross_week_rotation (graded 8-week exposure, from historical matrix)
 - within_repeat (hard constraint)
-- prior_placement_repeat (hard — same deployment area in last 3 placements)
+- prior_placement_repeat (hard — same deployment area in last 3 placements; rotation-tracked slots only, Admin/overlap exempt)
 - rr_side_family_repeat (soft — different RR same side, e.g. WRR6 after WRR8)
 
 ## 4. Guidance for Intelligent Agents
@@ -354,27 +354,24 @@ export function createEngineRulesTools(rules: EngineRules) {
     checkEligibility: {
       description: "Check whether a specific team member is hard-eligible for a slot according to the full authoritative rules (grave pool, overlap, gender for restrooms, custom eligibility rules, etc.). Returns true/false plus any violations.",
       parameters: CheckEligibilitySchema,
-      execute: async ({ tmId, slotKey }: CheckEligibilityInput) => {
-        // Note: In real use, the caller must provide the TM object.
-        // For now we return a structured response; the actual TM lookup happens in the caller context.
-        return {
-          tmId,
-          slotKey,
-          isEligible: false, // Placeholder - real implementation would need roster access
-          note: "Tool requires full TM object. Use with roster context on caller side.",
-        };
+      // F12 (2026-07-02): this base tool has no roster access, so it cannot
+      // answer honestly. It THROWS rather than returning a hardcoded
+      // `isEligible: false`, which lied to the model. The real execution is
+      // supplied by the caller (actions.ts binds it to the live roster).
+      execute: async (_args: CheckEligibilityInput) => {
+        throw new Error(
+          "checkEligibility base tool is not executable — bind a roster-backed execute (see actions.ts) or use engine/ai/tools.",
+        );
       },
     },
 
     scoreCandidate: {
       description: "Score a team member on a specific slot using the current live weights and all scoring signals (skill match, preferences, pair affinity, area diversity, rotation fairness, etc.). Returns total score and detailed breakdown. This is the 'consult the scoring engine' tool.",
       parameters: ScoreCandidateSchema,
-      execute: async ({ tmId, slotKey, includeBreakdown }: ScoreCandidateInput) => {
-        return {
-          tmId,
-          slotKey,
-          note: "Requires full TM object and current draft state. Call from context that has EngineRules + roster.",
-        };
+      execute: async (_args: ScoreCandidateInput) => {
+        throw new Error(
+          "scoreCandidate base tool is not executable — bind a roster-backed execute (see actions.ts) or use engine/ai/tools.",
+        );
       },
     },
 

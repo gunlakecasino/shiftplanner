@@ -25,6 +25,7 @@ import {
 import { PermissionMatrix } from "../components/PermissionMatrix";
 import { AdminPinConfirmModal } from "../components/AdminPinConfirmModal";
 import { useToast } from "@/app/shiftbuilder/hooks/useToast";
+import { useConfirm } from "../components/ConfirmDialog";
 import { SudoTabLoading } from "./SudoGlass";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -105,7 +106,7 @@ function TemporaryPinModal({
         </div>
 
         <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-3 leading-relaxed">
-          This PIN is shown once. It is not stored in plaintext. If lost, use &quot;Issue temporary PIN&quot; on the user profile.
+          This PIN is shown once. It is not stored in plaintext. If lost, use &quot;Reset PIN&quot; on the user profile.
         </p>
 
         <div className="flex gap-3 mt-5">
@@ -119,7 +120,7 @@ function TemporaryPinModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white text-sm font-medium"
+            className="flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white text-sm font-medium"
           >
             Done
           </button>
@@ -138,6 +139,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
   const [saving, setSaving] = React.useState(false);
   const [issuingPin, setIssuingPin] = React.useState(false);
   const { showToast } = useToast();
+  const confirmDialog = useConfirm();
 
   const [showCreateModal, setShowCreateModal] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
@@ -359,12 +361,19 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
   };
 
   const handleDeactivate = async (user: SudoUser) => {
-    if (!confirm(`Deactivate ${user.full_name}? They will no longer be able to log in.`)) return;
+    const ok = await confirmDialog(
+      "They will no longer be able to log in.",
+      { title: `Deactivate ${user.full_name}?`, confirmLabel: "Deactivate", tone: "danger" },
+    );
+    if (!ok) return;
     try {
       await deactivateUser(user.id);
       await refresh();
       onDataChanged?.();
       audit({ event: "deactivate", targetUserId: user.id });
+      if (selectedUser?.id === user.id) {
+        setSelectedUser((prev) => (prev ? { ...prev, is_active: false } : prev));
+      }
       showToast(`${user.full_name || user.username} deactivated`, "success");
     } catch (e: unknown) {
       showToast(`Failed to deactivate: ${e instanceof Error ? e.message : e}`, "error");
@@ -377,6 +386,9 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
       await refresh();
       onDataChanged?.();
       audit({ event: "reactivate", targetUserId: user.id });
+      if (selectedUser?.id === user.id) {
+        setSelectedUser((prev) => (prev ? { ...prev, is_active: true } : prev));
+      }
       showToast(`${user.full_name || user.username} reactivated`, "success");
     } catch (e: unknown) {
       showToast(`Failed to reactivate: ${e instanceof Error ? e.message : e}`, "error");
@@ -389,14 +401,14 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
         <div>
           <h2 className="font-semibold text-[15px]">Users &amp; Privileges</h2>
           <p className="text-[12px] text-[#6C6C72] dark:text-[#8E8E93]">
-            Add operators, assign roles, set per-feature access, and issue temporary PINs.
+            Add operators, assign roles, set per-feature access, and reset PINs.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[#B89708] text-white hover:bg-[#A07F07]"
+            className="text-xs px-3 py-1.5 rounded-lg bg-[#007AFF] text-white hover:bg-[#0063CC]"
           >
             + Add User
           </button>
@@ -488,10 +500,11 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
           <div
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "w-full max-w-[540px] h-full overflow-auto border-l p-6",
+              "w-full max-w-[540px] h-full flex flex-col border-l",
               isDark ? "bg-[#111113] border-white/10" : "bg-white border-black/10",
             )}
           >
+            <div className="flex-1 overflow-auto p-6">
             <div className="flex justify-between items-start mb-6 gap-3">
               <div>
                 <div className="font-semibold text-lg">{selectedUser.full_name}</div>
@@ -554,51 +567,65 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
               />
             </div>
 
-            <div className="mt-8 flex flex-col gap-3">
+              <p className="text-[10px] text-[#6C6C72] mt-6 text-center">
+                Permission overrides apply within about a minute via live session refresh.
+              </p>
+            </div>
+
+            <div
+              className={cn(
+                "shrink-0 border-t px-4 py-3 flex flex-col gap-2.5",
+                isDark ? "border-white/10 bg-[#111113]" : "border-black/10 bg-white",
+              )}
+            >
               <button
                 type="button"
                 onClick={() => void saveUser()}
                 disabled={saving}
-                className="w-full py-2.5 rounded-xl bg-[#B89708] text-white font-medium disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-[#007AFF] text-white font-medium disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save role & privileges"}
               </button>
 
-              <button
-                type="button"
-                onClick={() => void handleIssueTempPin(selectedUser)}
-                disabled={issuingPin || !selectedUser.is_active}
-                className="w-full py-2.5 rounded-xl border font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
-              >
-                {issuingPin ? "Issuing…" : "Issue temporary PIN"}
-              </button>
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => void handleIssueTempPin(selectedUser)}
+                  disabled={issuingPin || !selectedUser.is_active}
+                  className="flex-1 py-2.5 rounded-xl border font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+                >
+                  {issuingPin ? "Issuing…" : "Reset PIN"}
+                </button>
 
-              {selectedUser.is_active ? (
-                <button
-                  type="button"
-                  onClick={() => void handleDeactivate(selectedUser)}
-                  className="w-full py-2 rounded-xl border border-red-500/30 text-red-600 text-sm hover:bg-red-500/5"
-                >
-                  Deactivate account
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void handleReactivate(selectedUser)}
-                  className="w-full py-2 rounded-xl border border-emerald-500/30 text-emerald-600 text-sm hover:bg-emerald-500/5"
-                >
-                  Reactivate account
-                </button>
+                {selectedUser.is_active ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeactivate(selectedUser)}
+                    className="flex-1 py-2.5 rounded-xl border border-red-500/30 text-red-600 text-sm font-medium hover:bg-red-500/5"
+                  >
+                    Deactivate
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleReactivate(selectedUser)}
+                    className="flex-1 py-2.5 rounded-xl border border-emerald-500/30 text-emerald-600 text-sm font-medium hover:bg-emerald-500/5"
+                  >
+                    Reactivate
+                  </button>
+                )}
+              </div>
+
+              {!selectedUser.is_active && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 text-center">
+                  Reactivate this account to reset its PIN.
+                </p>
               )}
 
               <button type="button" onClick={closeDrawer} className="w-full py-2 rounded-xl border text-sm">
                 Cancel
               </button>
             </div>
-
-            <p className="text-[10px] text-[#6C6C72] mt-4 text-center">
-              Permission overrides apply within about a minute via live session refresh.
-            </p>
           </div>
         </div>
       )}
@@ -670,7 +697,7 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
                 type="button"
                 onClick={() => void handleCreateUser()}
                 disabled={creating}
-                className="flex-1 py-2.5 rounded-xl bg-[#B89708] text-white font-medium disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl bg-[#007AFF] text-white font-medium disabled:opacity-60"
               >
                 {creating ? "Creating…" : "Create & reveal PIN"}
               </button>

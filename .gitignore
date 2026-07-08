@@ -45,6 +45,9 @@ next-env.d.ts
 # Grok Build environment & skills (personal agent tooling)
 .grok/
 
+# Claude Code local config (settings.local.json, launch.json, task locks) — machine-local
+.claude/
+
 # MCP configuration
 .mcp.json
 
@@ -55,6 +58,9 @@ _tmp_*
 
 # Playwright MCP browser snapshots (see Agentic/AGENT_ACTIVITY_LOG — leave untracked)
 .playwright-mcp/
+
+# Live test-account PIN — must never land in git history
+Agentic/Key-Information/test-account-credentials.md
 
 # IDE / editor
 .vscode/

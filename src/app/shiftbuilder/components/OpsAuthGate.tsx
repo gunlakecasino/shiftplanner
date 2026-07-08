@@ -7,7 +7,9 @@ import { PinChangeGate } from "./PinChangeGate";
 import { BuilderLoadingShell } from "./builderPrimitives";
 import { cn } from "@/lib/utils";
 
-const AUTH_EXIT_MS = 200;
+// Long enough for PinGate's success checkmark to register before the board
+// reveals — a deliberate hold, not just an animation-timing accident.
+const AUTH_EXIT_MS = 420;
 
 type Props = {
   children: React.ReactNode;
@@ -86,6 +88,23 @@ export function OpsAuthGate({
     !revealed &&
     (isLoading || needsPin || needsPinChange || pinChangeBlocked || exiting);
 
+  // Remember which modal was up so it keeps rendering (and fading out) through
+  // the `exiting` window, instead of unmounting the instant auth succeeds and
+  // leaving a blank overlay for the rest of the exit transition.
+  const lastModalKindRef = useRef<"pin" | "pinChange" | "blocked" | null>(null);
+  if (needsPin) lastModalKindRef.current = "pin";
+  else if (needsPinChange) lastModalKindRef.current = "pinChange";
+  else if (pinChangeBlocked) lastModalKindRef.current = "blocked";
+  const modalKind = needsPin
+    ? "pin"
+    : needsPinChange
+      ? "pinChange"
+      : pinChangeBlocked
+        ? "blocked"
+        : exiting
+          ? lastModalKindRef.current
+          : null;
+
   useEffect(() => {
     if (!authedReady) {
       exitStartedRef.current = false;
@@ -128,15 +147,22 @@ export function OpsAuthGate({
             sublabel={loadingSublabel ?? (needsPin ? "Awaiting ops PIN" : undefined)}
           />
 
-          {ready && (needsPin || needsPinChange || pinChangeBlocked) ? (
+          {ready && modalKind ? (
             <>
-              <div className="sb-auth-pin-scrim" aria-hidden="true" />
+              <div
+                className="sb-auth-pin-scrim"
+                aria-hidden="true"
+                style={{
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                }}
+              />
               <div className="sb-auth-gate-modal-layer">
-                {needsPin ? <PinGate /> : null}
-                {needsPinChange && user ? (
+                {modalKind === "pin" ? <PinGate /> : null}
+                {modalKind === "pinChange" && user ? (
                   <PinChangeGate operatorName={user.full_name || user.username} />
                 ) : null}
-                {pinChangeBlocked ? (
+                {modalKind === "blocked" ? (
                   <PinSessionError
                     title="PIN setup unavailable"
                     message="Your session couldn't be prepared for a PIN change. Sign out and try again, or contact your supervisor."

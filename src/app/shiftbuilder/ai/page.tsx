@@ -13,6 +13,7 @@ import {
 import { AnalysisCard } from "./AnalysisCard";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
+import SupervisorBrainEditor from "./SupervisorBrainEditor";
 
 /**
  * /shiftbuilder/ai — Engine AI Lab (World-Class Dark ZDS Golden)
@@ -26,7 +27,7 @@ import { updateActiveEngineConfig } from "@/lib/shiftbuilder/sudoActions";
  * - Paper/floor calm but fully dark operational mode
  *
  * This is the dedicated surface for the training loop:
- * Grok proposes → You correct with reasoning → System learns (few-shot injection)
+ * AI proposes → You correct with reasoning → System learns (few-shot injection)
  */
 
 export default function EngineAILab() {
@@ -43,6 +44,7 @@ export default function EngineAILab() {
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [isRunningSim, setIsRunningSim] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [tab, setTab] = useState<"brain" | "lab">("brain");
 
   const gold = "#C5A26F";
 
@@ -173,7 +175,7 @@ export default function EngineAILab() {
 
       useShiftBuilderStore.getState().setLiveEngineConfigForAI(next);
 
-      const msg = `Applied: ${suggestion.type} ${suggestion.key || suggestion.rule || ''}${persisted ? ' (persisted to DB)' : ''}\n\nLive config updated. Future Grok calls and placements will see the change.`;
+      const msg = `Applied: ${suggestion.type} ${suggestion.key || suggestion.rule || ''}${persisted ? ' (persisted to DB)' : ''}\n\nLive config updated. Future AI calls and placements will see the change.`;
       console.info("[AI Lab]", msg);
     } catch (err: any) {
       console.error(err);
@@ -203,7 +205,7 @@ export default function EngineAILab() {
     setSelectedScenario(null);
 
     const toast = document.createElement("div");
-    toast.textContent = "Correction recorded. Will be injected as few-shot on next Grok call.";
+    toast.textContent = "Correction recorded. Will be injected as few-shot on next AI call.";
     toast.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1F1F24;color:#C5A26F;padding:10px 20px;border-radius:9999px;font-size:12px;border:1px solid rgba(197,162,111,0.3);z-index:99999";
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2600);
@@ -232,7 +234,7 @@ export default function EngineAILab() {
           <div style={{ width: 1, height: 12, background: "rgba(255,255,255,0.15)" }} />
           <div style={{ color: "#8E8E93" }}>SHIFTPLANNER</div>
           <div style={{ color: "#8E8E93" }}>/</div>
-          <div style={{ fontWeight: 600 }}>Engine AI Lab</div>
+          <div style={{ fontWeight: 600 }}>Ops AI Console</div>
 
           <div
             className="ml-2 inline-flex items-center rounded-full px-2.5 py-px text-[10px] font-medium tracking-[0.5px]"
@@ -268,42 +270,70 @@ export default function EngineAILab() {
       </div>
 
       <div className="max-w-[1200px] mx-auto px-8 pt-10 pb-16">
-        {/* Hero — Launchpad language */}
-        <div className="mb-10">
+        {/* Header */}
+        <div className="mb-6">
           <div style={{ fontSize: "11px", letterSpacing: "3px", fontWeight: 600, color: "#8E8E93", marginBottom: 8 }}>
-            PLACEMENT ENGINE • GROK 4.3
+            OPS INTELLIGENCE • SUPERVISOR BRAIN
           </div>
-
           <h1
             style={{
-              fontSize: "clamp(42px, 5.2vw, 64px)",
+              fontSize: "clamp(38px, 4.8vw, 58px)",
               fontWeight: 800,
-              letterSpacing: "-3.2px",
-              lineHeight: 0.86,
+              letterSpacing: "-3px",
+              lineHeight: 0.9,
               fontFamily: "var(--font-bricolage, var(--font-atkinson), system-ui)",
               margin: 0,
               color: "#F2F2F4",
             }}
           >
-            Engine AI Lab
+            Ops AI Console
           </h1>
-
-          <div style={{ marginTop: 10, fontSize: "15px", color: "#A1A1AA", maxWidth: 620, lineHeight: 1.35 }}>
-            The surface where Grok learns your operational judgment.<br />
-            Every correction you type becomes few-shot context. Over time the engine stops guessing and starts thinking like you.
+          <div style={{ marginTop: 10, fontSize: "15px", color: "#A1A1AA", maxWidth: 640, lineHeight: 1.4 }}>
+            Teach the engine to place people the way you would. Your knowledge, limits, and corrections
+            become how it thinks — every night.
           </div>
         </div>
 
-        {/* Stats — dense, calm, high information density */}
+        {/* Tabs */}
+        <div
+          className="flex items-center gap-1 mb-8 p-1 rounded-2xl"
+          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", width: "fit-content" }}
+        >
+          {([["brain", "Supervisor Brain"], ["lab", "Engine Lab"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="sb-interactive"
+              style={{
+                fontSize: 13, fontWeight: 600, padding: "8px 18px", borderRadius: 12,
+                border: "none", cursor: "pointer", transition: "all .15s",
+                background: tab === key ? gold : "transparent",
+                color: tab === key ? "#111" : "#A1A1AA",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "brain" && (
+          <div className="mb-10">
+            <SupervisorBrainEditor />
+          </div>
+        )}
+
+        {tab === "lab" && (
+          <>
+        {/* Stats — session activity for the config-tuning lab */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
           {[
-            { label: "CURRENT MODE", value: "grok-hybrid", sub: "Deterministic Top-K + Grok judgment" },
+            { label: "ENGINE", value: "unified", sub: "Planner → optimizer → AI → guard" },
             { label: "ANALYSES THIS SESSION", value: String(analyses.length), sub: "with full traces + suggestions" },
-            { label: "HUMAN CORRECTIONS", value: String(feedbackLog.length), sub: "ready for few-shot injection" },
-            { 
-              label: "TOKENS THIS SESSION", 
-              value: analyses.reduce((sum: number, a: any) => sum + (a.tokens || 0), 0).toLocaleString(), 
-              sub: "Real Grok usage (analysis + sim)" 
+            { label: "CONFIG CORRECTIONS", value: String(feedbackLog.length), sub: "few-shot for config tuning" },
+            {
+              label: "TOKENS THIS SESSION",
+              value: analyses.reduce((sum: number, a: any) => sum + (a.tokens || 0), 0).toLocaleString(),
+              sub: "AI usage (analysis + sim)",
             },
           ].map((s, i) => (
             <div
@@ -331,7 +361,7 @@ export default function EngineAILab() {
             <div style={{ color: gold, fontSize: "11px", letterSpacing: "1.5px", fontWeight: 600, marginBottom: 6 }}>LIVE</div>
             <div className="text-[21px] font-semibold tracking-[-0.3px] mb-2">Analyze Current Night</div>
             <p className="text-[13px] text-[#A1A1AA] flex-1">
-              Pulls the exact roster, current assignments, unfilled slots, and your live EngineConfig from the canvas right now and asks Grok where the config is hurting.
+              Pulls the exact roster, current assignments, unfilled slots, and your live EngineConfig from the canvas right now and asks the AI where the scoring config is hurting.
             </p>
             <button
               onClick={handleAnalyzeCurrentNight}
@@ -344,7 +374,7 @@ export default function EngineAILab() {
               }}
             >
               {isAnalyzing ? (
-                <BuilderBusyLabel>Grok is thinking</BuilderBusyLabel>
+                <BuilderBusyLabel>AI is thinking</BuilderBusyLabel>
               ) : (
                 "Analyze Tonight’s Placement"
               )}
@@ -388,9 +418,9 @@ export default function EngineAILab() {
           <div className="flex items-center gap-3 mb-3">
             <div style={{ color: gold, fontSize: "11px", letterSpacing: "1.5px", fontWeight: 600 }}>HUMAN JUDGMENT → FEW-SHOT LEARNING</div>
           </div>
-          <div className="text-[19px] font-semibold tracking-[-0.2px] mb-1">Tell Grok what you would have done differently</div>
+          <div className="text-[19px] font-semibold tracking-[-0.2px] mb-1">Correct the scoring config</div>
           <p className="text-[13px] text-[#A1A1AA] mb-4 max-w-3xl">
-            This is the most important input in the entire system. Your corrections are stored and automatically injected (as few-shot examples) into every future Grok reasoning call.
+            This is the most important input in the entire system. Your corrections are stored and automatically injected (as few-shot examples) into every future AI reasoning call.
           </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
@@ -425,7 +455,7 @@ export default function EngineAILab() {
               border: `1px solid ${gold}40`,
             }}
           >
-            Record This Correction → Inject into Future Grok Calls
+            Record This Correction → Inject into Future AI Calls
           </button>
         </div>
 
@@ -433,7 +463,7 @@ export default function EngineAILab() {
         <div className="mb-4 flex items-baseline justify-between">
           <div>
             <div className="text-[11px] tracking-[1.5px] font-semibold" style={{ color: "#8E8E93" }}>ENGINE ANALYSES + SUGGESTIONS</div>
-            <div className="text-[19px] font-semibold tracking-[-0.3px]">What Grok thinks should change</div>
+            <div className="text-[19px] font-semibold tracking-[-0.3px]">What the AI thinks should change</div>
           </div>
           <div className="text-[11px] text-[#6B7280]">Click Apply on any suggestion to mutate the live engine config immediately</div>
         </div>
@@ -471,9 +501,11 @@ export default function EngineAILab() {
 
         {/* Vision footer */}
         <div className="mt-10 text-center text-[11px] text-[#4B5563]">
-          Long-term: the entire placement engine lives as a clean, granular, fully inspectable skill (eligibility rules as editable array, scorers, strategies, provenance, pipeline runner).
-          Grok reads the SKILL.md and the pure core functions, proposes exact edits, and improves from your corrections with perfect auditability.
+          The Engine Lab tunes the deterministic scoring config. The Supervisor Brain (other tab) is where
+          the AI learns your judgment — capability, limits, chemistry, and your accept/reject on its picks.
         </div>
+          </>
+        )}
       </div>
     </div>
   );

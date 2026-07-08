@@ -14,9 +14,10 @@
  *   • prior_placement_repeat (hard)   — same deployment area in last 3 placements
  *   • rr_side_family_repeat (soft)    — different RR, same side (WRR6 after WRR8) in last 3
  *
- * Deferred to Phase 2 (need history queries):
- *   fatigue_index, area_diversity, cross_week_rotation, weekly_load_balance,
- *   prior_run_continuity, skill_stretch_reward, sweeper_rotation_penalty
+ * Later signals: area_diversity + cross_week_rotation are live (matrix-derived,
+ * below). weekly_load_balance + fatigue_index are implemented at the week level
+ * in the unified engine (engine/week.ts, decision D3). skill_stretch_reward and
+ * sweeper_rotation_penalty were retired 2026-07-02 (F11) — no data source.
  *
  * Hard gates (eligibility, accommodations) are NOT scored — they live in
  * placement.ts/isEligibleForSlot. This module assumes the caller has already
@@ -36,6 +37,7 @@ import {
   isInPriorPlacementSameAreaWindow,
   isInPriorPlacementSideFamilyOnlyWindow,
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
+  shouldShowPlacementFitChip,
   weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import { assignmentTmId } from "./tmIdentity";
@@ -96,6 +98,8 @@ export interface SignalScore {
   weighted: number;
   /** Optional one-line explanation for the Why? panel */
   note?: string;
+  /** Set by the signal itself when it demands a hard exclude (e.g. avoid/hard pair). */
+  hardExclude?: boolean;
 }
 
 export type SignalBreakdown = Record<string, SignalScore>;
@@ -151,7 +155,13 @@ export function scoreAssignment(
 
   // ---- prior_placement_repeat (hard) --------------------------------
   // Same deployment area in the TM's last 3 placement events (RR number / zone key).
-  if (!excluded && ctx.placementHistories && ctx.tonightIso) {
+  // Rotation-tracked slots only: Admin and other non-fit-chip slots are exempt —
+  // the weekly health policy already excludes them (soft Admin preference is real:
+  // some TMs are intentionally on Admin every night), so the hard gate must not
+  // force-rotate them either. This closes the split-brain where health said
+  // "admin repeats are fine" while the engine hard-blocked them.
+  const rotationTracked = shouldShowPlacementFitChip(slotKey);
+  if (!excluded && rotationTracked && ctx.placementHistories && ctx.tonightIso) {
     const history = ctx.placementHistories[tmKey] ?? null;
     const weekEntries = weekEntriesForTm(
       ctx.weeklyRecentHistory,
@@ -185,7 +195,7 @@ export function scoreAssignment(
     ) {
       breakdown.rr_side_family_repeat = {
         raw: -1,
-        weighted: -48,
+        weighted: -(resolvedWeights(ctx.config).rr_side_family_repeat ?? 48),
         note: `Different RR on same side in last ${PRIOR_PLACEMENT_CRITICAL_WINDOW} placements`,
       };
     }
@@ -224,14 +234,14 @@ export function scoreAssignment(
   const matrixSignals = scoreMatrixFairnessSignals(tm, slotKey, ctx);
   Object.assign(breakdown, matrixSignals);
 
-  // ---- order_priority (NEW: strongly incentivize filling in the declared order)
-  const orderPrio = scoreOrderPriority(slotKey, ctx);
-  breakdown.order_priority = orderPrio;
+  // (order_priority retired 2026-07-01: the planner already walks PLACEMENT_ORDER,
+  // so every candidate for a given slot received the identical bonus — it could never
+  // change a pick, and only made Why?-panel totals misleading across slots.)
 
-  // Hard pair-avoid becomes a hard exclude.
-  if (!excluded && pair.raw <= -1 && pair.note?.includes("hard")) {
+  // Hard pair-avoid becomes a hard exclude (structural flag from the signal itself).
+  if (!excluded && pair.hardExclude) {
     excluded = true;
-    excludeReason = pair.note;
+    excludeReason = pair.note ?? "Hard pair-avoid with a placed neighbor";
   }
 
   // ---- Sum --------------------------------------------------------
@@ -256,7 +266,7 @@ function scoreSkillMatch(
   ctx: ScoringContext
 ): SignalScore {
   const weights = resolvedWeights(ctx.config);
-  const tmSkill = ctx.skillScores.get(tm.id);
+  const tmSkill = ctx.skillScores.get(scoringTmId(tm));
   const slotDifficultyKey = uiKeyToSlotDifficultyKey(slotKey);
   const slotDiff = slotDifficultyKey ? ctx.slotDifficulty.get(slotDifficultyKey) : undefined;
 
@@ -287,6 +297,21 @@ function scoreSkillMatch(
   };
 }
 
+/**
+ * Boundary-aware preference target match. Category targets ("MRR", "WRR", "OL-AM")
+ * prefix-match their whole family, but targets ending in a digit must match the
+ * slot exactly — a naive startsWith made "Z1" also hit Z10 (and "MRR1" hit MRR10),
+ * silently applying hard avoids/prefers to the wrong slots.
+ */
+export function preferenceTargetMatches(target: string, slotKey: string): boolean {
+  if (!target || !slotKey) return false;
+  const t = target.trim().toUpperCase();
+  const s = slotKey.trim().toUpperCase();
+  if (t === s) return true;
+  if (!s.startsWith(t)) return false;
+  return !/\d$/.test(t); // digit-terminated targets are exact-only
+}
+
 function scorePreference(
   tm: any,
   slotKey: string,
@@ -296,16 +321,11 @@ function scorePreference(
   const weights = resolvedWeights(ctx.config);
   const rows = ctx.preferencesByTm.get(scoringTmId(tm)) ?? [];
   // Match by exact slotKey (UI form) — preferences may also target a
-  // category like "RR" or "Z9SR". We match exact and prefix (e.g. a
-  // preference for "MRR" applies to all MRR* slots).
+  // category like "RR" or "MRR" (prefix applies to the whole family).
   const matches = rows.filter((r) => {
     if (r.strength !== strength) return false;
     if (!r.target) return false;
-    return (
-      r.target === slotKey ||
-      slotKey.startsWith(r.target) ||
-      r.target.toLowerCase() === slotKey.toLowerCase()
-    );
+    return preferenceTargetMatches(r.target, slotKey);
   });
 
   if (matches.length === 0) {
@@ -348,6 +368,7 @@ function scorePairAffinity(
   if (neighborTmIds.length === 0) return { raw: 0, weighted: 0 };
 
   let raw = 0;
+  let hardAvoidHit = false;
   const notes: string[] = [];
   rows.forEach((r) => {
     const partnerId = r.withTmId;
@@ -356,6 +377,10 @@ function scorePairAffinity(
     const sign = r.stance === "prefer" ? 1 : r.stance === "avoid" ? -1 : 0;
     const mag = r.strength === "hard" ? 1 : 0.5;
     raw += sign * mag;
+    // Carry the hard-avoid verdict structurally — the old approach re-derived it
+    // from the note text ("includes('hard')"), which both missed real hard avoids
+    // (offset by a soft prefer) and false-positived on prefer/hard rows.
+    if (r.stance === "avoid" && r.strength === "hard") hardAvoidHit = true;
     notes.push(`${r.stance}/${r.strength} with ${partnerId}`);
   });
 
@@ -364,6 +389,7 @@ function scorePairAffinity(
     raw,
     weighted: raw * weights.pair_affinity,
     note: notes.length > 0 ? notes.join(", ") : undefined,
+    hardExclude: hardAvoidHit || undefined,
   };
 }
 
@@ -378,7 +404,7 @@ function scorePairAffinity(
  * separate from both the UI and the zone_assignments DB keys — values
  * pulled directly from the existing seeded rows.
  */
-function uiKeyToSlotDifficultyKey(slotKey: string): string | null {
+export function uiKeyToSlotDifficultyKey(slotKey: string): string | null {
   if (slotKey === "Z9SR") return "Zone9SR";
   if (slotKey === "ADM") return "Admin";
   if (slotKey === "TR1") return "Trash1";
@@ -448,8 +474,10 @@ export function buildDefaultAdjacency(): Map<string, string[]> {
 interface MatrixFairnessSignals {
   area_diversity?: SignalScore;
   cross_week_rotation?: SignalScore;
-  prior_run_continuity?: SignalScore;
   // weekly_load_balance can be added here later when we have full-week aggregates
+  // (prior_run_continuity retired 2026-07-01 — it rewarded *any* historical
+  // placement in the zone regardless of recency, partially cancelling
+  // area_diversity while adding no real discrimination between candidates.)
 }
 
 function scoreMatrixFairnessSignals(
@@ -483,52 +511,20 @@ function scoreMatrixFairnessSignals(
     note: `4w count in this zone: ${matrixRow.count_4w}`,
   };
 
-  // cross_week_rotation
-  const rotationRaw = matrixRow.count_8w > 3 ? 0.3 : 1.0;
+  // cross_week_rotation: graded 8-week exposure (1.0 at 0×, fading to 0 at 6×+).
+  // Was a binary cliff (1.0 below 4×, 0.3 above) — a TM at 3× and one at 0×
+  // scored identically, which is exactly the distinction this signal exists for.
+  const rotationRaw = Math.max(0, 1 - matrixRow.count_8w / 6);
   breakdown.cross_week_rotation = {
     raw: rotationRaw,
     weighted: rotationRaw * (weights.cross_week_rotation ?? 0.5),
     note: `8w count: ${matrixRow.count_8w}`,
   };
 
-  // prior_run_continuity
-  const continuityRaw = matrixRow.last_placed_at ? 0.8 : 0.4;
-  breakdown.prior_run_continuity = {
-    raw: continuityRaw,
-    weighted: continuityRaw * (weights.prior_run_continuity ?? 0.4),
-    note: matrixRow.last_placed_at ? "recent placement in zone" : "no recent history",
-  };
-
   return breakdown;
 }
 
-/**
- * Scores how well this assignment respects the operator's declared fill order.
- * Earlier slots in PLACEMENT_ORDER get a strong positive bonus.
- * This is the main lever to "ensure coverage fills in the stated order".
- */
-function scoreOrderPriority(slotKey: string, ctx: ScoringContext): SignalScore {
-  const weights = resolvedWeights(ctx.config);
-  const weight = weights.order_priority ?? 2.5;
-
-  // Import here to avoid circular deps at module load
-  const { PLACEMENT_ORDER } = require("./placement");
-
-  const idx = PLACEMENT_ORDER.indexOf(slotKey);
-  if (idx === -1) {
-    // Unknown slot (extra AUX) — neutral
-    return { raw: 0, weighted: 0, note: "not in core placement order" };
-  }
-
-  const total = PLACEMENT_ORDER.length;
-  // Position 0 (first restroom) = +1.0, last = 0.0
-  const positionFactor = 1 - (idx / Math.max(1, total - 1));
-  const raw = positionFactor; // 0 to 1
-
-  return {
-    raw,
-    weighted: raw * weight,
-    note: `Priority position ${idx + 1}/${total} in fill order`,
-  };
-}
+// (scoreOrderPriority removed 2026-07-01 — see the retired-signal note in
+// scoreAssignment. Fill-order discipline is enforced structurally by the
+// planner walking PLACEMENT_ORDER, not by a scoring bonus.)
 

@@ -2,6 +2,27 @@
 /**
  * Placement Module — Single Source of Truth for Assignment Order
  *
+ * === DECLARED OBJECTIVE HIERARCHY (operator-ratified 2026-07-01) ============
+ *
+ *   coverage > rotation > preferences > skill
+ *
+ * Every optimizer in this system must honor this precedence:
+ *   - COVERAGE: a filled required slot beats any rotation/preference/skill
+ *     gain. The planner's rescue + backfill passes and the health optimizer's
+ *     fallback exist to enforce this ("coverage over rotation gates").
+ *   - ROTATION: among coverage-equal solutions, rotation health (prior-3
+ *     criticals, week repeats, 30-night spread) outranks preferences — this is
+ *     why buildHealthOptimizedDraft re-picks from the planner's Top-K by
+ *     healthPoints, and why the Deep Optimize local solver weights health
+ *     lexicographically above the preference band.
+ *   - PREFERENCES: hard *avoid* preferences are constraints (never placed);
+ *     prefer/soft signals rank below rotation but above skill.
+ *   - SKILL: skill/difficulty closeness is the final tiebreaker.
+ *
+ * Hard rules (eligibility, locks, one-TM-per-night, Z1/Z2 manual-only) are
+ * constraints at every tier, never tradeable costs.
+ * ============================================================================
+ *
  * This module is the **authoritative definition** of how placements must work
  * in the Coverage Planner (Phase 1).
  *
@@ -15,6 +36,13 @@
 
 import { scoreAssignment, buildDefaultAdjacency, type ScoringContext } from "./scoring";
 import { assignmentTmId } from "./tmIdentity";
+// engineOverrides.ts never imports from this module (no cycle) — safe to pull
+// operator-rule evaluation in here so the legacy fallback planner respects
+// engine_eligibility_rules too, not just the unified engine (F1 follow-up,
+// 2026-07-04). NOTE: engine/eligibility.ts must NOT be imported here — that
+// module imports FROM placement.ts, so doing so would create a cycle.
+import { isEligibleUnderRules } from "./engineOverrides";
+import type { EligibilityRule } from "./engineConfig";
 
 // Single source of truth for placement order now lives in the AI-modifiable skill
 import {
@@ -55,10 +83,11 @@ export interface AuxDef {
 export const PLACEMENT_ORDER: readonly string[] = DEFAULT_PLACEMENT_ORDER;
 
 /**
- * Main-entry zones — engine does not auto-place here; operators staff manually when needed.
- * (Z1 Main Entry North, Z2 Main Entry South)
+ * Optional (never auto-filled) zones. Emptied 2026-07-03: the operator ratified a
+ * fill order that includes Z1 and Z2 as regular zones (…Z10 → Z2 → Z1 → Z6), so
+ * they are now staffed in sequence like any other zone rather than manual-only.
  */
-export const OPTIONAL_AUTO_FILL_ZONE_SLOTS = new Set<string>(["Z1", "Z2"]);
+export const OPTIONAL_AUTO_FILL_ZONE_SLOTS = new Set<string>([]);
 
 export function isOptionalDeploymentSlot(slotKey: string): boolean {
   return OPTIONAL_AUTO_FILL_ZONE_SLOTS.has(slotKey);
@@ -191,6 +220,19 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
    * Unlocked placements are re-scored so the engine can propose a full deployment.
    */
   preserveOnlyLocked?: boolean;
+  /** Operator rules (engine_eligibility_rules). Empty/omitted = none (F1 fix, 2026-07-04). */
+  eligibilityRules?: EligibilityRule[];
+}
+
+/** Coarse slot type used by operator rule filters. Deliberately duplicated from
+ * engine/eligibility.ts's identical helper — that module imports FROM this one,
+ * so this one can't import back from it without creating a cycle. */
+function slotTypeForKey(slotKey: string): string {
+  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return "rr";
+  if (slotKey.startsWith("OL-")) return "overlap";
+  if (slotKey.startsWith("Z")) return "zone";
+  if (isOptionalDeploymentSlot(slotKey)) return "zone";
+  return "aux";
 }
 
 const HARD_COVERAGE_SLOTS = new Set(
@@ -302,7 +344,7 @@ function pickBestCoverageRescueCandidate(
  * judgment to override the deterministic pick on individual slots.
  */
 export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlannerResult {
-  const { orderedSlots, assignments, roster, scoringCtx, topK = 5, preserveOnlyLocked = false } = input;
+  const { orderedSlots, assignments, roster, scoringCtx, topK = 5, preserveOnlyLocked = false, eligibilityRules = [] } = input;
 
   const proposedAssignments: Record<string, string> = {};
   const breakdown: Record<string, SlotRanking> = {};
@@ -311,7 +353,20 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
   // === World-class Coverage Feasibility (using skill tier model) ===
   const availableUnique = roster.length;
   const fullGraveCount = countFullGraveInRoster(roster);
-  const feasibility = calculateCoverageFeasibility(fullGraveCount);
+  // F10 (2026-07-02): feed the gender split so restrooms (5M + 5F) are checked
+  // per gender — 21 full-grave men no longer read as "full coverage possible".
+  let fullGraveMale = 0;
+  let fullGraveFemale = 0;
+  for (const tm of roster) {
+    if (!isFullGraveForPlacement(tm)) continue;
+    const g = normalizeGender(tm.gender);
+    if (g === "M") fullGraveMale += 1;
+    else if (g === "F") fullGraveFemale += 1;
+  }
+  const feasibility = calculateCoverageFeasibility(fullGraveCount, {
+    male: fullGraveMale,
+    female: fullGraveFemale,
+  });
 
   notes.push(`Coverage Feasibility: ${feasibility.explanation}`);
 
@@ -348,8 +403,40 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       const shouldPreserve = preserveOnlyLocked ? isLocked : true;
       if (shouldPreserve) {
         proposedAssignments[slotKey] = existing.tmId;
+
+        // Score the kept TM so the Why? panel isn't silent for preserved slots —
+        // usually the majority of the board when the engine runs around existing
+        // placements. currentDraft already holds this TM at this same slot, so
+        // within_repeat won't self-exclude.
+        let preservedCandidates: SlotRanking["topCandidates"] = [];
+        const existingTm = roster.find(
+          (tm: any) => assignmentTmId(tm) === String(existing.tmId),
+        );
+        if (existingTm) {
+          try {
+            const ctx: ScoringContext = {
+              ...scoringCtx,
+              currentDraft,
+              adjacency,
+            };
+            const result = scoreAssignment(existingTm, slotKey, ctx);
+            preservedCandidates = [
+              {
+                tmId: String(existing.tmId),
+                tmName: existingTm.name || existingTm.fullName || String(existing.tmId),
+                total: result.total,
+                breakdown: result.breakdown,
+                excluded: result.excluded,
+                excludeReason: result.excludeReason,
+              },
+            ];
+          } catch {
+            /* keep empty candidates — preserved flag still explains the slot */
+          }
+        }
+
         breakdown[slotKey] = {
-          topCandidates: [],
+          topCandidates: preservedCandidates,
           pickedTmId: existing.tmId,
           preserved: true,
         };
@@ -371,16 +458,22 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       continue;
     }
 
-    // Build candidate set: eligible + not yet placed this run.
+    // Build candidate set: eligible (core liturgy + operator rules) + not yet placed this run.
+    const slotType = slotTypeForKey(slotKey);
+    const passesOperatorRules = (tm: any) =>
+      eligibilityRules.length === 0 ||
+      isEligibleUnderRules(tm, slotKey, slotType, eligibilityRules);
     const usedIds = new Set(currentDraft.values());
     const candidates = roster.filter((tm: any) => {
       const id = assignmentTmId(tm);
-      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey);
+      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey) && passesOperatorRules(tm);
     });
 
     // DEBUG — log details when candidates are unexpectedly empty
     if (candidates.length === 0) {
-      const eligible = roster.filter((tm: any) => isEligibleForSlot(tm, slotKey));
+      const eligible = roster.filter(
+        (tm: any) => isEligibleForSlot(tm, slotKey) && passesOperatorRules(tm),
+      );
       const notUsed = roster.filter((tm: any) => {
         const id = assignmentTmId(tm);
         return id && !usedIds.has(id);
@@ -477,6 +570,58 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
         notes.push(`No non-excluded candidate for ${slotKey}`);
       }
     }
+  }
+
+  // Backfill pass: if any slots were left unfilled but there are still eligible
+  // unused TMs, assign them anyway (in fill order). This ensures the engine places
+  // as many TMs as possible and does not leave zones empty when available (eligible)
+  // TMs remain. Hard eligibility (full-grave, gender for RR, overlap rules) is still
+  // respected — and candidates are ranked through the same scorer + rescue ladder as
+  // the main loop. The previous version took `cands[0]` raw, which handed every
+  // leftover slot to whoever happened to sort first in the roster, ignoring rotation
+  // and preferences entirely.
+  const unfilledAfterMain = orderedSlots.filter((k) => !proposedAssignments[k]);
+  for (const slotKey of unfilledAfterMain) {
+    if (proposedAssignments[slotKey]) continue;
+    // Respect the same "manual assign only" contract as the main loop above —
+    // otherwise this greedy pass silently auto-fills Z1/Z2 on every engine run.
+    if (isOptionalDeploymentSlot(slotKey)) continue;
+    const stillUsed = new Set(currentDraft.values());
+    const cands = roster.filter((tm: any) => {
+      const id = assignmentTmId(tm);
+      return id && !stillUsed.has(id) && isEligibleForSlot(tm, slotKey);
+    });
+    if (cands.length === 0) continue;
+
+    const ctx: ScoringContext = { ...scoringCtx, currentDraft, adjacency };
+    const scored: ScoredPlannerCandidate[] = cands.map((tm: any) => {
+      const result = scoreAssignment(tm, slotKey, ctx);
+      const tmId = assignmentTmId(tm);
+      return {
+        tmId,
+        tmName: tm.name || tm.fullName || tmId,
+        total: result.total,
+        breakdown: result.breakdown,
+        excluded: result.excluded,
+        excludeReason: result.excludeReason,
+      };
+    });
+    const best =
+      pickBestCoverageRescueCandidate(rankCandidatesByEffectiveScore(scored), cands, slotKey);
+    if (!best) continue;
+
+    proposedAssignments[slotKey] = best.tmId;
+    currentDraft.set(slotKey, best.tmId);
+    if (!breakdown[slotKey] || !breakdown[slotKey].pickedTmId) {
+      breakdown[slotKey] = {
+        topCandidates: rankCandidatesByEffectiveScore(scored).slice(0, topK),
+        pickedTmId: best.tmId,
+        preserved: false,
+      };
+    }
+    notes.push(
+      `Backfill: ${slotKey} ← ${best.tmName} (best-scored remaining eligible TM)`,
+    );
   }
 
   const usedIds = new Set(currentDraft.values());
@@ -593,33 +738,6 @@ export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: an
 }
 
 // ========================================================
-// VALIDATION
-// ========================================================
-
-/**
- * Validates that dynamically added AUX slots appear after the fixed placement order.
- * Returns warnings that can be surfaced in the UI.
- */
-export function validatePlacementOrder(auxDefs: AuxDef[]): string[] {
-  const warnings: string[] = [];
-  const fixedSet = new Set(PLACEMENT_ORDER);
-
-  const dynamicSlots = auxDefs
-    .map((d) => d.key)
-    .filter((key) => !fixedSet.has(key));
-
-  if (dynamicSlots.length === 0) return warnings;
-
-  // Check that all dynamic slots come after the last fixed slot in the order
-  const lastFixedIndex = PLACEMENT_ORDER.length - 1;
-
-  // For now we just warn if someone tries to insert a support slot in the middle
-  // (future: we can enforce strict ordering when AUX is added)
-
-  return warnings;
-}
-
-// ========================================================
 // PROMPT / GROK SUPPORT (Authoritative Rules as Text)
 // ========================================================
 
@@ -647,41 +765,26 @@ export {
 export function getPlacementOrderText(): string {
   return `AUTHORITATIVE PLACEMENT / FILL ORDER (strict, non-negotiable unless impossible due to hard constraints):
 
-1. Restrooms — highest priority
-   MRR1, WRR1, MRR6, WRR6, MRR7, WRR7, MRR8, WRR8, MRR10, WRR10
-   (Strict gender rule: MRR* must be filled by male TMs, WRR* by female TMs)
+1. Men's Restrooms (male TMs only): MRR1 → MRR7 → MRR8 → MRR10 → MRR6
+2. Women's Restrooms (female TMs only): WRR1 → WRR7 → WRR8 → WRR10 → WRR6
+3. Zones: Z9 → Z3 → Z4 → Z5 → Z7 → Z8 → Z10 → Z2 → Z1 → Z6
+4. Auxiliary: Admin (ADM) → Zone 9 Smoking Room (Z9SR)
 
-2. Admin
-   ADM
+Then, if present in the layout: Trash (TR1, TR2), Support (SP1, SP2), and any operator-added AUX after those.
 
-3. Zone 9
-4. Zone 4
-5. Zone 5
-6. Zone 1
-7. Zone 2
-8. Zone 3
-9. Zone 7
-10. Zone 8
-11. Zone 10
-12. Zone 6
+Notes:
+- Men's restrooms fill completely before women's restrooms.
+- Z1 and Z2 are regular zones near the end of the zone order (Z2 before Z1); Z6 is the lowest-priority zone.
+- Admin fills AFTER all 10 zones. On a short roster, a zone fills before Admin.
 
-13. Zone 9 Smoking Room (Z9SR) — FIXED POSITION
-14. Trash 1 (TR1)
-15. Trash 2 (TR2)
-16. Support 1 (SP1)
-17. Support 2 (SP2)
+HARD UNIQUE-TM LIMIT (non-negotiable physical reality):
+- All 10 Restrooms require 5 male + 5 female = **10 distinct TMs**.
+- All 10 Zones require **10 more distinct full-grave TMs**.
+- Admin + Z9SR require more beyond that.
 
-18+. Any additional operator-added AUX / Support / Overflow slots must come AFTER SP2.
+You cannot reuse the same people. If the roster is short, lower-priority slots (Z6, then Admin, then Z9SR) are left open first.
 
-HARD UNIQUE-TM LIMIT (this is non-negotiable physical reality):
-- Filling all 10 Restrooms requires 5 male + 5 female = **10 distinct TMs**.
-- Filling all 10 main Zones requires **10 more distinct full-grave TMs**.
-- Admin requires **1 more**.
-- Total to clear the top of the order (Restrooms + Admin + Zones): minimum **21 unique TMs**.
-
-You cannot reuse the same people. If the available roster is below this threshold, it is mathematically impossible to achieve full coverage in the stated order.
-
-The engine (and any Grok suggestions) MUST attempt to fill slots in exactly this order. Never propose filling a lower-priority slot before all higher-priority slots have been considered or ruled out by hard constraints. Clearly call out impossibility when headcount is insufficient.`;
+The engine and the AI MUST fill slots in exactly this order. Never fill a lower-priority slot while a higher-priority one is fillable. Clearly call out impossibility when headcount is insufficient.`;
 }
 
 /**

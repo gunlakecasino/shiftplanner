@@ -36,11 +36,26 @@ export interface EngineWeights {
   cross_week_rotation?: number;
   weekly_load_balance?: number;
   prior_run_continuity?: number;
-  skill_stretch_reward?: number;
-  sweeper_rotation_penalty?: number;
 
-  /** Strongly incentivizes filling slots early in the declared PLACEMENT_ORDER */
+  // skill_stretch_reward + sweeper_rotation_penalty were removed 2026-07-02 (F11,
+  // decision D3): both were tunable in config but implemented by no signal — dead
+  // dials with no data source (there is no sweeper flag on tm_profiles today). DB
+  // rows carrying these keys are harmless (EngineWeights is non-exact and they are
+  // simply ignored). Reintroduce with a real signal + data source if ever needed.
+
+  /**
+   * @deprecated Retired from scoring (2026-07-01): the planner walks PLACEMENT_ORDER
+   * slot-by-slot, so a per-slot constant can never change a candidate pick — it only
+   * inflated Why?-panel totals. Kept in the type so existing config rows still parse.
+   */
   order_priority?: number;
+
+  /**
+   * Absolute penalty (positive number) applied when a candidate hits the RR
+   * side-family soft repeat (different RR, same side, in the prior-3 window).
+   * Deliberately large — a near-hard deterrent that coverage can still override.
+   */
+  rr_side_family_repeat?: number;
 }
 
 export interface EngineThresholds {
@@ -99,11 +114,12 @@ export const DEFAULT_WEIGHTS: Required<EngineWeights> = {
   cross_week_rotation: 0.5,
   weekly_load_balance: 0.5,
   prior_run_continuity: 0.4,
-  skill_stretch_reward: 0.3,
-  sweeper_rotation_penalty: 0.3,
 
-  // Strong incentive to fill high-priority slots first (per operator-specified order)
+  // Deprecated — no longer read by scoring (see EngineWeights.order_priority).
   order_priority: 2.5,
+
+  // Was hardcoded at 48 inside scoring.ts; now operator-tunable like every other weight.
+  rr_side_family_repeat: 48,
 };
 
 export const DEFAULT_THRESHOLDS: Required<EngineThresholds> = {
@@ -238,9 +254,6 @@ export interface SignalOverride {
   signalName: string;                    // matches keys in EngineWeights
   overrideType: 'multiplier' | 'absolute' | 'disabled';
   value: number | null;
-  appliesToSlotTypes?: string[] | null;
-  appliesToSlotKeys?: string[] | null;
-  appliesToZones?: string[] | null;
   priority: number;
   isActive: boolean;
   notes?: string | null;
@@ -250,16 +263,20 @@ export interface SignalOverride {
  * A custom eligibility rule attached to a config version.
  * Stored in engine_eligibility_rules. The condition JSONB is intentionally
  * flexible so the placement layer can evolve without schema changes.
+ *
+ * ruleType: only "hard_exclude" is implemented today (isEligibleUnderRules
+ * in engineOverrides.ts only branches on that value). Other values are
+ * accepted/stored (the DB column has no enum constraint) but have zero
+ * effect until a soft-scoring or min-experience interpreter is written —
+ * don't assume a rule with ruleType "soft_prefer" etc. does anything yet.
  */
 export interface EligibilityRule {
   id: string;
   configId: string;
   ruleName: string;
-  ruleType: string;                      // 'hard_exclude', 'soft_prefer', 'min_experience', etc.
+  ruleType: string;
   description?: string | null;
   condition: Record<string, any>;
-  appliesToSlotTypes?: string[] | null;
-  appliesToSlotKeys?: string[] | null;
   priority: number;
   isActive: boolean;
 }
@@ -270,14 +287,10 @@ export interface EligibilityRule {
  * This is what scoring.ts and placement.ts should consume going forward.
  */
 export interface FullyResolvedEngineConfig extends EngineConfig {
-  /** The concrete version name the operator actually selected (or inherited) */
-  resolvedVersionName: string;
   /** All active signal overrides for this version (already sorted by priority) */
   signalOverrides: SignalOverride[];
   /** All active eligibility rules for this version */
   eligibilityRules: EligibilityRule[];
   /** Whether this config is a preset (affects UI copy + "reset to preset" behavior) */
   isPreset: boolean;
-  /** The parent chain (most recent first) for "Why this config?" explainability */
-  versionHistory: Array<{ id: string; versionName: string | null; createdAt: string }>;
 }

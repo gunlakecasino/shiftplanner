@@ -14,6 +14,8 @@ import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
+import { CardTaskBadge } from "./CardTaskBadge";
+import { rrDbSlotComposite } from "@/lib/shiftbuilder/slotCatalog";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
@@ -51,6 +53,8 @@ export interface RRCardProps {
   placementTrailW?: string[];
   placementTrailM?: string[];
   showDigitalAssists?: boolean;
+  /** Live board only (never print): render each side's open-task badge. */
+  showTaskBadge?: boolean;
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
@@ -120,7 +124,7 @@ const RRSide: React.FC<{
   placementTrail,
 }) => {
   const a = assignment || {};
-  const { setRef, isOver, isDragging, listeners, attributes, hasTM } = useSlotDnd(
+  const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     slotKey, "rr", { tmId: a.tmId, tmName: a.tmName },
   );
 
@@ -158,10 +162,10 @@ const RRSide: React.FC<{
   return (
     <div
       ref={setRef}
-      {...(hasTM && !isLocked ? listeners : {})}
-      {...(hasTM && !isLocked ? attributes : {})}
+      {...(!isLocked ? listeners : {})}
+      {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
+      className={`flex flex-col flex-1 min-h-0 overflow-hidden touch-none ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${dim ? "sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""}`}
     >
       <div
         className={`sb-card-assign-zone min-w-0 pb-2 shrink-0 ${showDigitalAssists ? "" : "pt-1"}`}
@@ -251,6 +255,7 @@ function RRSideShell({
   slotKey,
   onRemoveTask,
   body,
+  taskBadge,
 }: {
   sideLabel: string;
   color: string;
@@ -265,6 +270,7 @@ function RRSideShell({
   slotKey: string;
   onRemoveTask?: (slotKey: string, taskLabel: string) => void;
   body: React.ReactNode;
+  taskBadge?: React.ReactNode;
 }) {
   return (
     <div
@@ -283,6 +289,7 @@ function RRSideShell({
           {sideLabel}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          {taskBadge}
           {/* Status badge - dynamic (via PlacementFitChip). Omit for covered + unassigned. */}
           {!isCovered && !isEmpty && (
             <PlacementFitChip fit={fitChip} compact />
@@ -334,6 +341,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   placementTrailW,
   placementTrailM,
   showDigitalAssists = false,
+  showTaskBadge = false,
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
@@ -432,6 +440,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={onRemoveTask}
+        taskBadge={
+          showTaskBadge ? (
+            <CardTaskBadge tmId={wA.tmId} slotKey={rrDbSlotComposite(def.num, "womens")} />
+          ) : null
+        }
         body={(
           <RRSide
             slotKey={wKey}
@@ -459,6 +472,11 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={onRemoveTask}
+        taskBadge={
+          showTaskBadge ? (
+            <CardTaskBadge tmId={mA.tmId} slotKey={rrDbSlotComposite(def.num, "mens")} />
+          ) : null
+        }
         body={(
           <RRSide
             slotKey={mKey}

@@ -73,6 +73,15 @@
   --sb-gold-surface: rgba(255, 204, 0, 0.24);
   --sb-gold-border: rgba(255, 204, 0, 0.44);
 
+  /* ── Deep Optimize / Optimize Tonight accent (iOS blue per Velvet redesign) ─
+     Distinct from yellow gold so it reads as "engine action" like +Add / insights.
+     Matches the 2026-07 visual spec in Optimize Tonight - Velvet Redesign.html */
+  --sb-optimize:        #339CFF;
+  --sb-optimize-ink:    #007AFF;
+  --sb-optimize-tint:   #EFF6FF;
+  --sb-optimize-surface: #DBEAFE;
+  --sb-optimize-border: #BFDBFE;
+
   /* ── ShiftBuilder zone accent colors ────────────────────────────────── */
   --sb-z1:  #ffcc00; /* yellow */
   --sb-z2:  #ffcc00;
@@ -133,6 +142,11 @@
   --sb-dur-fast: 0.22s;
   --sb-dur-mid:  0.38s;
   --sb-dur-slow: 0.52s;
+
+  /* Light band that glides across the board on a day switch. Core = the bright
+     glare; edge = faint dark shoulders so it still reads on white in light mode. */
+  --sb-day-sweep-core: rgba(255, 255, 255, 0.95);
+  --sb-day-sweep-edge: rgba(0, 0, 0, 0.05);
 
   /* === OMS Design Tokens — Apple-grade calm operational palette === */
 
@@ -242,6 +256,10 @@
   --sb-glass-border:    rgba(255, 255, 255, 0.10);
   --sb-glass-highlight: rgba(255, 255, 255, 0.14);
   --sb-glass-lowlight:  rgba(255, 255, 255, 0.04);
+
+  /* Day-switch sweep on a dark board — a cooler light, no dark shoulders. */
+  --sb-day-sweep-core: rgba(214, 236, 245, 0.34);
+  --sb-day-sweep-edge: rgba(214, 236, 245, 0);
 
   /* ── Velvet text (dark) ──────────────────────────────────────────────── */
   --sb-text-1:    #F2F2F4;
@@ -620,6 +638,22 @@ body {
 
 .assignment-card:hover {
   box-shadow: 0 2px 6px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.09);
+}
+
+/* Draft / optimizer change indicator on cards (subtle left bar + D badge already in chrome).
+   Helps scannability of the 8 changes in the screenshot flow. */
+.assignment-card[data-has-draft="true"] {
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15);
+}
+
+/* Temporary flash for post-optimizer import review (triggered via Review button or import) */
+.sb-draft-flash .assignment-card[data-has-draft="true"] {
+  animation: sb-draft-flash-kf 2.2s ease-out 1;
+}
+@keyframes sb-draft-flash-kf {
+  0% { box-shadow: 0 0 0 3px rgba(51,156,255,0.45); }
+  70% { box-shadow: 0 0 0 1px rgba(51,156,255,0.15); }
+  100% { box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15); }
 }
 
 /* Spotlight layer — radial gradient using the card's own accent color,
@@ -2194,6 +2228,29 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* ── Portrait scale-to-fit ───────────────────────────────────────────────────
+   This board is landscape-shaped (ZONES + RESTROOMS + a right AUX rail). Rather
+   than reflow/crush it into a tall/narrow portrait viewport, we render the exact
+   landscape layout at a fixed design size and scale the whole thing down to fit
+   the portrait width — a faithful miniature, never clipped or crushed. The design
+   box (--sb-portrait-dw/dh) and fit factor (--sb-portrait-fit) are measured in JS
+   and published on .sb-builder-scale-viewport. transform-origin is top-left so the
+   scaled board aligns to the container's left edge (the fit is derived from the
+   container width, so it fills it exactly). Pads/overlays are body-portaled, so the
+   transform doesn't affect their anchoring. Live builder only. */
+@media (orientation: portrait) {
+  .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport {
+    align-items: flex-start;
+  }
+  .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport > * {
+    flex: none !important;
+    width: var(--sb-portrait-dw, 1180px);
+    height: var(--sb-portrait-dh, 800px);
+    transform: scale(var(--sb-portrait-fit, 1));
+    transform-origin: top left;
+  }
+}
+
 /* Workspace is the flex child that carries height into zones/RR/aux grids. */
 .sb-builder-stage .builder-workspace {
   flex: 1 1 auto;
@@ -2383,6 +2440,248 @@ body {
 .dark .builder-workspace .sb-unassigned-hint {
   color: #71717A;
   opacity: 0.5;
+}
+
+/* === Fit Halos — drag-time placement verdicts (see lib/shiftbuilder/dragFit.ts) ===
+   While a TM is being dragged, every drop target wears its verdict so the operator
+   can survey the whole board before dropping. Ring color + corner glyph badge, so
+   color is never the only channel. No !important on the rings: the drop-target-active
+   gold ring (below) intentionally wins while hovering a specific card — the glyph
+   badge stays visible so the verdict survives hover. Transient (drag-only), so it
+   never fights the print aesthetic at rest. */
+.sb-dragfit-great,
+.sb-dragfit-ok,
+.sb-dragfit-poor,
+.sb-dragfit-blocked {
+  position: relative;
+}
+/* !important beats the card's resting shadow (higher-specificity .dark/.sb-builder-stage
+   rules); drop-target-active still wins on hover — it is both !important and more specific. */
+.sb-dragfit-great {
+  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.5), 0 6px 18px -10px rgba(52, 199, 89, 0.45) !important;
+}
+.sb-dragfit-ok {
+  box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.48), 0 6px 18px -10px rgba(255, 204, 0, 0.4) !important;
+}
+.sb-dragfit-poor {
+  box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.5), 0 6px 18px -10px rgba(255, 149, 0, 0.4) !important;
+}
+.sb-dragfit-blocked {
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.34) !important;
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+/* Corner glyph badge — the non-color channel. ✓ great · ~ ok · ! poor · ✕ blocked */
+.sb-dragfit-great::after,
+.sb-dragfit-ok::after,
+.sb-dragfit-poor::after,
+.sb-dragfit-blocked::after {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.96);
+  pointer-events: none;
+}
+.sb-dragfit-great::after   { content: "✓"; color: #1f9d4d; border: 1.5px solid rgba(52, 199, 89, 0.8); }
+.sb-dragfit-ok::after      { content: "~"; color: #a07f00; border: 1.5px solid rgba(255, 204, 0, 0.85); }
+.sb-dragfit-poor::after    { content: "!"; color: #b25e00; border: 1.5px solid rgba(255, 149, 0, 0.85); }
+.sb-dragfit-blocked::after { content: "✕"; color: #c22d24; border: 1.5px solid rgba(255, 59, 48, 0.7); }
+.dark .sb-dragfit-great::after,
+.dark .sb-dragfit-ok::after,
+.dark .sb-dragfit-poor::after,
+.dark .sb-dragfit-blocked::after {
+  background: rgba(28, 28, 30, 0.94);
+}
+
+/* === Draft Ambiance — ambient gold frame while unapplied draft changes exist ===
+   Pairs with DraftStatusPill (bottom-center). Breathes gently; static under
+   prefers-reduced-motion. pointer-events: none — purely ambient. */
+.sb-draft-frame-active {
+  position: relative;
+}
+.sb-draft-frame-active::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: 60;
+  border-radius: 18px;
+  border: 2px solid var(--sb-gold-border);
+  box-shadow:
+    inset 0 0 28px -18px var(--sb-gold),
+    0 0 0 1px var(--sb-gold-tint);
+  pointer-events: none;
+  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+}
+@keyframes sb-draft-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+.sb-draft-pill-dot {
+  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-draft-frame-active::after,
+  .sb-draft-pill-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+/* ─── Placement-engine "thinking" overlay ─────────────────────────────── */
+/* A calm, premium loading state shown while the engine computes. The hero is
+   an abstract deployment grid that solves itself in a diagonal light-wave —
+   a nod to the board being filled. Monochrome by design (gold belongs to the
+   Draft covenant, teal to Projects); the life comes from motion, not hue. */
+
+.sb-engine-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 10, 12, 0.32);
+  /* Frosted blur is applied inline in EngineRunningOverlay — the build drops
+     class-level backdrop-filter, matching the app's other velvet-glass surfaces. */
+}
+
+.sb-engine-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  min-width: 264px;
+  max-width: 340px;
+  padding: 32px 34px 26px;
+  border-radius: 22px;
+  color: var(--sb-text-1);
+  background: var(--sb-glass);
+  /* backdrop-filter applied inline (see .sb-engine-scrim note). */
+  border: 1px solid var(--sb-glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--sb-glass-highlight),
+    0 24px 70px -24px rgba(0, 0, 0, 0.55),
+    0 8px 24px -14px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.sb-engine-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 4px 0 2px;
+}
+.sb-engine-halo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 76%;
+  height: 76%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--sb-text-1) 12%, transparent),
+    transparent 76%
+  );
+  filter: blur(10px);
+  animation: sb-engine-halo 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.sb-engine-grid {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+.sb-engine-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: 0.12;
+  transform: scale(0.82);
+  animation: sb-engine-cell 1.5s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.sb-engine-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.sb-engine-title {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: var(--sb-text-1);
+}
+.sb-engine-phase-wrap {
+  position: relative;
+  height: 16px;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-engine-phase {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: var(--sb-text-3);
+}
+
+.sb-engine-bar {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sb-text-1) 9%, transparent);
+}
+.sb-engine-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--sb-text-1) 52%, transparent),
+    transparent
+  );
+  animation: sb-engine-sweep 1.35s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes sb-engine-cell {
+  0%, 100% { opacity: 0.12; transform: scale(0.82); }
+  42%      { opacity: 0.92; transform: scale(1); }
+}
+@keyframes sb-engine-halo {
+  0%, 100% { opacity: 0.5; transform: scale(0.94); }
+  50%      { opacity: 0.9; transform: scale(1.05); }
+}
+@keyframes sb-engine-sweep {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-engine-cell   { animation: none; opacity: 0.5; transform: none; }
+  .sb-engine-halo   { animation: none; opacity: 0.7; }
+  .sb-engine-bar > span { animation: none; width: 100%; opacity: 0.4; }
 }
 
 /* Builder drop targets — lively gold ring */
@@ -2735,6 +3034,46 @@ button,
   height: 2px;
   z-index: 5;
   pointer-events: none;
+}
+
+/* ── Coarse-pointer essentials that must apply at ANY width ──────────────────
+   The (min-width:768px) foundation below silently switches OFF in Split View /
+   Slide Over / Stage Manager (windows routinely < 768 CSS px), dropping the app
+   to desktop chrome on a touch-only device. These rules are width-independent and
+   belong on every coarse pointer: the iOS focus-zoom guard, HIG touch targets, and
+   safe-area insets so nothing hides under the Face-ID bar / home indicator. */
+@media (pointer: coarse) {
+  /* Kill iOS Safari focus auto-zoom: a focused field < 16px zooms the whole board,
+     then the visualViewport shrink re-fits the shell mid-keystroke. Any focusable
+     text field must be >= 16px on touch. !important is required to beat Tailwind
+     text-[Npx] utilities AND inline `fontSize` styles. Auth/PIN inputs are already
+     touch-sized (larger) — leave them; non-text controls don't zoom, so skip them. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="color"]):not(.sb-auth-input):not(.sb-auth-input--compact),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: 16px !important;
+  }
+
+  /* 44pt HIG minimum — applies regardless of width. */
+  .sb-tablet-touch-target {
+    min-width: var(--touch-min, 44px);
+    min-height: var(--touch-min, 44px);
+  }
+
+  /* Merge JS stage insets with safe-area at every width (overrides inline paddingTop). */
+  .sb-stage-host {
+    padding-top: calc(var(--sb-stage-inset-top, 64px) + env(safe-area-inset-top, 0px)) !important;
+    padding-right: calc(var(--sb-stage-inset-right, 12px) + env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: calc(var(--sb-stage-inset-bottom, 20px) + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: calc(var(--sb-stage-inset-left, 12px) + env(safe-area-inset-left, 0px)) !important;
+  }
+
+  /* Deployment-board GROUP filter pills stay tappable in narrow multitasking. */
+  .sb-group-filter-pill {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
 }
 
 /* ── iPad / coarse-pointer tablet foundation (Phase A) ───────────────────── */

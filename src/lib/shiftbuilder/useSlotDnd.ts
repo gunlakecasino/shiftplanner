@@ -1,4 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDragFitTier } from "./dragFit";
 
 /**
  * useSlotDnd
@@ -37,10 +38,19 @@ export function useSlotDnd(
     disabled,
   });
   const hasTM = !!tm.tmName;
+  // Filled slots drag as an assignment (reassign/swap). EMPTY slots drag as a
+  // "coverage request" — dropping one onto a staffed slot makes that TM cover this
+  // area (handled by the unassigned-slot branch in ShiftBuilderClient.onDragEnd).
+  // Both are enabled unless the night is locked; disabling the empty draggable here
+  // (disabled || !hasTM) is what silently killed the coverage gesture.
+  const dragData = hasTM
+    ? { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName }
+    : { type: "unassigned-slot", fromSlot: slotKey, slotType };
+  const dragId = hasTM ? `assigned:${slotKey}` : `unassigned-slot:${slotKey}`;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-    id: `assigned:${slotKey}`,
-    data: { type: "assigned", fromSlot: slotKey, tmId: tm.tmId, tmName: tm.tmName },
-    disabled: disabled || !hasTM,
+    id: dragId,
+    data: dragData,
+    disabled,
   });
   const setRef = (el: HTMLElement | null) => {
     setDropRef(el);
@@ -51,5 +61,9 @@ export function useSlotDnd(
   const incomingFromOther =
     isOver && active && active.data.current?.type !== undefined &&
     !(active.data.current?.type === "assigned" && active.data.current?.fromSlot === slotKey);
-  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM };
+  // Fit halo verdict for the in-flight TM drag (null outside a drag — see dragFit.ts).
+  const dragFitTier = useDragFitTier(slotKey);
+  const dragFitClass =
+    dragFitTier && !isDragging && !disabled ? `sb-dragfit-${dragFitTier}` : "";
+  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM, dragFitClass };
 }

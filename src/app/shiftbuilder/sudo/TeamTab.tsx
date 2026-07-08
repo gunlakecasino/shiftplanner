@@ -26,6 +26,7 @@ import type {
   TMSlotSkill,
 } from "@/lib/shiftbuilder/sudoActions";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "../components/ConfirmDialog";
 import {
   GlassSurface,
   GoldHairline,
@@ -399,7 +400,7 @@ function StatusPill({ active, status, isDark = false }: { active: boolean; statu
 // Edit Drawer
 // =====================================================================
 
-type DrawerTab = "identity" | "grave" | "prefs" | "skills" | "special";
+type DrawerTab = "identity" | "grave" | "prefs" | "skills";
 
 function TMEditDrawer({
   tm,
@@ -416,6 +417,7 @@ function TMEditDrawer({
   onFlash: (kind: "ok" | "err", msg: string) => void;
   isDark?: boolean;
 }) {
+  const confirmDialog = useConfirm();
   const [tab, setTab] = React.useState<DrawerTab>("identity");
   const [form, setForm] = React.useState<TMRecord>(tm);
   const [saving, setSaving] = React.useState(false);
@@ -494,7 +496,11 @@ function TMEditDrawer({
   };
 
   const softDelete = async () => {
-    if (!window.confirm(`Soft-delete ${form.displayName}?\n\nThey'll be marked inactive and removed from the engine roster. History (night_tm_status, appraisals, etc.) is preserved.`)) {
+    const ok = await confirmDialog(
+      "They'll be marked inactive and removed from the engine roster. History (night_tm_status, appraisals, etc.) is preserved.",
+      { title: `Soft-delete ${form.displayName}?`, confirmLabel: "Soft-delete", tone: "danger" },
+    );
+    if (!ok) {
       return;
     }
     setSaving(true);
@@ -601,7 +607,7 @@ function TMEditDrawer({
 
       {/* Horizontal tab strip (gold accent for active) */}
       <div className="flex items-center gap-1 border-b border-black/10 dark:border-white/10 pb-2 mb-4">
-        {(["identity", "grave", "prefs", "skills", "special"] as DrawerTab[]).map((t) => (
+        {(["identity", "grave", "prefs", "skills"] as DrawerTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -654,15 +660,6 @@ function TMEditDrawer({
           />
         )}
 
-        {tab === "special" && (
-          <SpecialGroupsForm
-            tmId={form.id}   // use the uuid for the new group tables
-            tmName={form.displayName || form.fullName || form.tmId}
-            isDark={isDark}
-            onChanged={onSaved}
-            onFlash={onFlash}
-          />
-        )}
       </div>
     </CenteredGlassModal>
   );
@@ -1273,122 +1270,5 @@ function Field({ label, children, isDark = false }: { label: string; children: R
       </span>
       <div className="mt-1">{children}</div>
     </label>
-  );
-}
-
-// =====================================================================
-// Special Groups (On Call, AM Overlaps, PM Overlaps) — for the new static schedule system
-// =====================================================================
-
-const SPECIAL_GROUP_NAMES = ["On Call", "AM Overlaps", "PM Overlaps"] as const;
-
-function SpecialGroupsForm({
-  tmId,
-  tmName,
-  isDark = false,
-  onChanged,
-  onFlash,
-}: {
-  tmId: string;
-  tmName: string;
-  isDark?: boolean;
-  onChanged: () => void | Promise<void>;
-  onFlash: (kind: "ok" | "err", msg: string) => void;
-}) {
-  const [groups, setGroups] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  const refresh = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/tm-groups");
-      const json = await res.json();
-      setGroups(json.data || []);
-    } catch (e) {
-      onFlash("err", "Failed to load special groups");
-    } finally {
-      setLoading(false);
-    }
-  }, [onFlash]);
-
-  React.useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const toggleMembership = async (groupName: string, isMember: boolean) => {
-    // Always fetch fresh to avoid stale closure bugs when groups were just auto-created
-    let freshGroups: any[] = [];
-    try {
-      const res = await fetch("/api/admin/tm-groups");
-      const json = await res.json();
-      freshGroups = json.data || [];
-    } catch {}
-
-    let group = freshGroups.find((g: any) => g.name === groupName);
-
-    if (!group) {
-      await fetch("/api/admin/tm-groups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create_group", name: groupName, description: `${groupName} weekly special assignments` }),
-      });
-      // Re-fetch after create
-      const res2 = await fetch("/api/admin/tm-groups");
-      const json2 = await res2.json();
-      freshGroups = json2.data || [];
-      group = freshGroups.find((g: any) => g.name === groupName);
-    }
-
-    if (!group) return onFlash("err", "Could not find or create the group");
-
-    const action = isMember ? "remove_member" : "add_member";
-    try {
-      await fetch("/api/admin/tm-groups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, group_id: group.id, tm_id: tmId }),
-      });
-      onFlash("ok", `${isMember ? "Removed from" : "Added to"} ${groupName}`);
-      await refresh(); // sync the form's local list
-      await onChanged();
-    } catch (e) {
-      onFlash("err", `Failed to update ${groupName}`);
-    }
-  };
-
-  if (loading) return <SudoTabLoading className="!py-2 text-xs">Loading special groups</SudoTabLoading>;
-
-  return (
-    <div className="space-y-4">
-      <div className="text-[11px] uppercase tracking-wider opacity-60">Weekly Special Assignment Groups</div>
-      <div className="text-xs opacity-70 mb-2">
-        These groups control which TMs are eligible for On-Call, AM Overlap, and PM Overlap assignments in the weekly roster.
-      </div>
-
-      {SPECIAL_GROUP_NAMES.map((name) => {
-        const g = groups.find((gg: any) => gg.name === name);
-        const isMember = g?.members?.includes(tmId) ?? false;
-
-        return (
-          <div key={name} className="flex items-center justify-between rounded-2xl border border-white/10 px-4 py-3">
-            <div>
-              <div className="font-medium">{name}</div>
-              <div className="text-[10px] opacity-50">{g ? `${g.members?.length || 0} members` : "Group will be created automatically"}</div>
-            </div>
-            <button
-              onClick={() => toggleMembership(name, isMember)}
-              className={cn(
-                "px-4 py-1 rounded-xl text-sm font-medium transition",
-                isMember
-                  ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                  : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-              )}
-            >
-              {isMember ? "Remove" : "Add"}
-            </button>
-          </div>
-        );
-      })}
-    </div>
   );
 }

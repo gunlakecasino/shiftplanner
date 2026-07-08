@@ -8,20 +8,11 @@ function adminClient() {
   return client;
 }
 
-function mapSlotDefaultTaskRow(r: Record<string, unknown>): SlotDefaultTask {
-  return {
-    id: String(r.id),
-    slotKey: String(r.slot_key),
-    slotType: r.slot_type as SlotDefaultTask["slotType"],
-    rrSide: (r.rr_side as string) ?? "",
-    taskLabel: String(r.task_label),
-    taskColor: (r.task_color as string | null) ?? null,
-    isCoverage: Boolean(r.is_coverage),
-    sortOrder: Number(r.sort_order ?? 0),
-  };
-}
+const SLOT_DEFAULT_TASKS_RETIRED =
+  "slot_default_tasks was dropped by the defaults cutover — default task chips are now Ops Tasks (ops_work_items), managed in Projects → Defaults.";
 
-export async function addSlotDefaultTaskServer(params: {
+/** @deprecated Retired by the cutover — slot_default_tasks no longer exists. */
+export async function addSlotDefaultTaskServer(_params: {
   slotKey: string;
   slotType: "zone" | "rr" | "aux" | "overlap";
   rrSide?: string;
@@ -30,49 +21,12 @@ export async function addSlotDefaultTaskServer(params: {
   isCoverage?: boolean;
   sortOrder?: number;
 }): Promise<SlotDefaultTask> {
-  const {
-    slotKey,
-    slotType,
-    rrSide: rawRrSide = "",
-    taskLabel,
-    taskColor = null,
-    isCoverage = false,
-    sortOrder = 0,
-  } = params;
-  const rrSide = rawRrSide ?? "";
-
-  const { data, error } = await adminClient()
-    .from("slot_default_tasks")
-    .upsert(
-      {
-        slot_key: slotKey,
-        slot_type: slotType,
-        rr_side: rrSide,
-        task_label: taskLabel,
-        task_color: taskColor,
-        is_coverage: isCoverage,
-        sort_order: sortOrder,
-      },
-      { onConflict: "slot_key,rr_side,task_label" },
-    )
-    .select("id, slot_key, slot_type, rr_side, task_label, task_color, is_coverage, sort_order")
-    .single();
-
-  if (error) {
-    console.error("[shiftbuilder/slotDefaults] addSlotDefaultTaskServer error:", error);
-    throw new Error(`Failed to add default task: ${(error as { message?: string }).message ?? "unknown"}`);
-  }
-
-  return mapSlotDefaultTaskRow(data as Record<string, unknown>);
+  throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }
 
-export async function removeSlotDefaultTaskServer(id: string): Promise<void> {
-  const { error } = await adminClient().from("slot_default_tasks").delete().eq("id", id);
-
-  if (error) {
-    console.error("[shiftbuilder/slotDefaults] removeSlotDefaultTaskServer error:", error);
-    throw new Error(`Failed to remove default task: ${(error as { message?: string }).message ?? "unknown"}`);
-  }
+/** @deprecated Retired by the cutover — slot_default_tasks no longer exists. */
+export async function removeSlotDefaultTaskServer(_id: string): Promise<void> {
+  throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }
 
 export async function upsertSlotDefaultServer(params: {

@@ -3,6 +3,16 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import {
+  ChevronLeft,
+  ChevronRight,
+  Eraser,
+  Check,
+  X,
+  Sparkles,
+  Wand2,
+  Loader2,
+} from "lucide-react";
+import {
   computeShiftRotationHealth,
   computeWeekAverageHealth,
   GRAVE_WEEK_LABEL,
@@ -14,8 +24,15 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import type { DraftAssignmentRow, SlotAssignmentRow } from "./placementFitForSlot";
-import { ROTATION_HEALTH_BOTTOM_PX, ROTATION_HEALTH_Z } from "./canvasPillGlass";
+import {
+  CANVAS_PILL_MONO,
+  ROTATION_HEALTH_BOTTOM_PX,
+  ROTATION_HEALTH_Z,
+  velvetGlassPillStyle,
+} from "./canvasPillGlass";
+import { SB_DRAWER_TRANSITION } from "./builderPrimitives";
 import { RotationHealthOrb } from "./RotationHealthOrb";
+import type { TimefoldProgressTick } from "@/lib/shiftbuilder/timefold/timefoldTypes";
 
 export type RotationHealthPlacement =
   | "above-ops-pill"
@@ -44,6 +61,19 @@ export type RotationHealthFloaterProps = {
   selectedDayDateKey?: string;
   weekHealthLoading?: boolean;
   weeklyRecentHistory?: Map<string, Array<{ nightDate: string; slotKey: string }>>;
+  /** Unified engine drawer — same home as rotation health orb. */
+  canRunEngine?: boolean;
+  canEditAssignments?: boolean;
+  isCurrentNightLocked?: boolean;
+  /** Single unified Optimize Night (full planner + optimization + optional AI) */
+  /** Unified single Optimize for the day (full placements + optimization) */
+  onOptimizeNight?: () => void;
+  onClearBoard?: () => void;
+  engineRunning?: boolean;
+  onApplyDraft?: () => void;
+  onDiscardDraft?: () => void;
+  /** When DraftStatusPill is visible, skip redundant draft microcopy in the drawer. */
+  showDraftStatusPill?: boolean;
 };
 
 function breakdownTitle(
@@ -77,11 +107,13 @@ function breakdownTitle(
     `${scoredCount} placed scored · ${openGaps} open gap${openGaps === 1 ? "" : "s"} (info only)`,
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.critical_repeat} critical · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
+    "",
+    "Click the orb to open engine tools — Optimize Night (full placements + optimization), Optimize Week, Clear board.",
   ];
   return lines.join("\n");
 }
 
-/** Screen-only rotation health orb — no pill, no labels; hover for breakdown. */
+/** Rotation health orb + unified engine drawer (Optimize Night, Optimize Week, Clear). */
 export function RotationHealthFloater({
   visible,
   auxDefs,
@@ -94,7 +126,27 @@ export function RotationHealthFloater({
   selectedDayDateKey,
   weekHealthLoading,
   weeklyRecentHistory,
+  canRunEngine = false,
+  canEditAssignments = false,
+  isCurrentNightLocked = false,
+  onOptimizeNight,
+  onClearBoard,
+  engineRunning = false,
+  onApplyDraft,
+  onDiscardDraft,
+  showDraftStatusPill = false,
 }: RotationHealthFloaterProps) {
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+
+  const draftSlotCount = React.useMemo(
+    () =>
+      Object.values(draftAssignments ?? {}).filter(
+        (d) => d?.proposedTmName?.trim() && !d.proposedClear,
+      ).length,
+    [draftAssignments],
+  );
+
   const health = React.useMemo(
     () =>
       computeShiftRotationHealth(auxDefs, assignments, fitBySlot, {
@@ -124,10 +176,62 @@ export function RotationHealthFloater({
     weekHealthLoading ? null : computeWeekAverageHealth(weekDailyHealths),
   );
 
+  const running = engineRunning;
+
+  React.useEffect(() => {
+    if (running) setDrawerOpen(true);
+  }, [running]);
+
+  React.useEffect(() => {
+    if (isDraftMode && draftSlotCount > 0 && !showDraftStatusPill) setDrawerOpen(true);
+  }, [isDraftMode, draftSlotCount, showDraftStatusPill]);
+
+  React.useEffect(() => {
+    if (!drawerOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setDrawerOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [drawerOpen]);
+
   if (!visible) return null;
 
   const display = formatRotationHealthPercent(dailyPercent);
   const tooltip = breakdownTitle(health, dailyPercent, weekAveragePercent);
+  // The shell is velvet glass (matching all app chrome); the health *tier* color
+  // is carried entirely by the orb's own gradient shader, not the box — the old
+  // tier-colored slab (e.g. burnt-orange at amber) fought the whole aesthetic.
+  const glassText = "var(--sb-text-1, #1c1c1e)";
+  const glassBorder = "var(--sb-glass-border, rgba(0,0,0,0.1))";
+
+  const engineDisabled =
+    !canRunEngine || isCurrentNightLocked || engineRunning;
+  const clearDisabled =
+    !canEditAssignments || isCurrentNightLocked || running;
+  const draftActionsDisabled =
+    !canEditAssignments || isCurrentNightLocked || running;
+  const saveDisabled = draftActionsDisabled || draftSlotCount === 0;
+  const discardDisabled = draftActionsDisabled || !isDraftMode;
+
+  const actionBtnBase: React.CSSProperties = {
+    fontFamily: CANVAS_PILL_MONO,
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+    border: `1px solid ${glassBorder}`,
+    color: glassText,
+    background: "rgba(0,0,0,0.045)",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
+  let engineLabel = "Optimize Night";
+  if (engineRunning) engineLabel = "Optimizing…";
+
+  const drawerWidth = isDraftMode ? 320 : 280;
 
   const anchorStyle: React.CSSProperties =
     placement === "inline"
@@ -158,12 +262,198 @@ export function RotationHealthFloater({
             };
 
   const shell = (
-    <div style={anchorStyle} className="no-print">
-      <RotationHealthOrb
-        percent={dailyPercent}
-        title={tooltip}
-        aria-label={`Rotation health ${display}. Hover for details.`}
-      />
+    <div
+      ref={rootRef}
+      className="no-print flex flex-col items-end gap-2"
+      style={anchorStyle}
+    >
+      {engineRunning && (
+        <div
+          className="w-full max-w-[300px] rounded-2xl px-3.5 py-3"
+          style={velvetGlassPillStyle({ borderRadius: 16 })}
+          role="status"
+          aria-live="polite"
+          aria-label="Optimize Night — running"
+        >
+          <div className="flex items-center gap-2">
+            <Loader2
+              size={18}
+              className="shrink-0 animate-spin motion-reduce:animate-none"
+              style={{ color: "var(--sb-optimize-ink)" }}
+            />
+            <div className="min-w-0 flex-1 truncate text-[13px] font-extrabold tracking-[-0.01em] text-foreground">
+              Optimize Night
+            </div>
+            <div className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+              …
+            </div>
+          </div>
+          <p className="mt-1 truncate text-[11.5px] text-muted-foreground">
+            Running full placements + optimization…
+          </p>
+        </div>
+      )}
+
+      <div
+        className="flex flex-row items-stretch overflow-hidden rounded-2xl"
+        style={{
+          background: "var(--sb-glass)",
+          border: `1px solid ${glassBorder}`,
+          boxShadow:
+            "inset 0 1px 0 var(--sb-glass-highlight), 0 8px 28px -10px rgba(0,0,0,0.4)",
+          backdropFilter: "var(--sb-glass-blur)",
+          WebkitBackdropFilter: "var(--sb-glass-blur)",
+        }}
+      >
+        <div
+          aria-hidden={!drawerOpen}
+          className="sb-drawer-shell flex flex-col justify-center gap-1.5"
+          style={{
+            maxWidth: drawerOpen ? drawerWidth : 0,
+            opacity: drawerOpen ? 1 : 0,
+            paddingLeft: drawerOpen ? 8 : 0,
+            paddingRight: drawerOpen ? 6 : 0,
+            paddingTop: drawerOpen ? 6 : 0,
+            paddingBottom: drawerOpen ? 6 : 0,
+            borderRight: drawerOpen ? `1px solid ${glassBorder}` : "none",
+            transition: SB_DRAWER_TRANSITION,
+            overflow: "hidden",
+          }}
+        >
+          {isDraftMode && !showDraftStatusPill && (
+            <p
+              className="max-w-[260px] px-0.5 text-[9px] leading-snug opacity-85"
+              style={{ fontFamily: CANVAS_PILL_MONO }}
+            >
+              Draft preview on cards
+              {draftSlotCount > 0
+                ? ` · ${draftSlotCount} placement${draftSlotCount === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isDraftMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onDiscardDraft?.()}
+                  disabled={discardDisabled}
+                  title="Discard draft"
+                  aria-label="Discard draft"
+                  className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
+                  style={{
+                    ...actionBtnBase,
+                    padding: 6,
+                    cursor: discardDisabled ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <X size={14} strokeWidth={2.25} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onApplyDraft?.()}
+                  disabled={saveDisabled}
+                  title="Apply draft to live board"
+                  aria-label="Apply draft to live board"
+                  className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
+                  style={{
+                    ...actionBtnBase,
+                    padding: 6,
+                    background: saveDisabled
+                      ? actionBtnBase.background
+                      : "rgba(34,197,94,0.35)",
+                    cursor: saveDisabled ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Check size={14} strokeWidth={2.5} aria-hidden />
+                </button>
+              </>
+            )}
+
+            {onClearBoard && (
+              <button
+                type="button"
+                onClick={onClearBoard}
+                disabled={clearDisabled}
+                title="Clear all assignments (locked slots kept)"
+                aria-label="Clear board"
+                className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
+                style={{
+                  ...actionBtnBase,
+                  padding: 6,
+                  cursor: clearDisabled ? "not-allowed" : "pointer",
+                }}
+              >
+                <Eraser size={14} strokeWidth={2.25} aria-hidden />
+              </button>
+            )}
+
+            {onOptimizeNight && !isDraftMode && (
+              <button
+                type="button"
+                onClick={onOptimizeNight}
+                disabled={engineDisabled}
+                title="Optimize Night — full placements (planner) + optimization (local search + optional AI). Enters Draft Mode with the complete result."
+                className={`sb-interactive flex items-center gap-1 rounded px-2 py-1.5 disabled:opacity-40 shrink-0 ${engineRunning ? "sb-engine-running" : ""}`}
+                style={{
+                  ...actionBtnBase,
+                  textTransform: "uppercase",
+                  cursor: engineDisabled ? "not-allowed" : "pointer",
+                }}
+              >
+                <Sparkles size={12} aria-hidden />
+                {engineLabel}
+              </button>
+            )}
+
+            {onOptimizeNight && isDraftMode && !running && (
+              <button
+                type="button"
+                onClick={onOptimizeNight}
+                disabled={engineDisabled}
+                title="Re-run Optimize Night (replaces current draft)"
+                className="rounded px-2 py-1.5 disabled:opacity-40 shrink-0"
+                style={{
+                  ...actionBtnBase,
+                  cursor: engineDisabled ? "not-allowed" : "pointer",
+                }}
+              >
+                Re-run
+              </button>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setDrawerOpen((o) => !o)}
+          aria-expanded={drawerOpen}
+          aria-label={
+            drawerOpen ? "Close engine tools" : "Open engine tools"
+          }
+          title={tooltip}
+          className="flex items-center gap-1.5 p-1 transition-opacity hover:opacity-95"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          <span className="flex shrink-0 items-center justify-center opacity-60 px-0.5" aria-hidden>
+            {drawerOpen ? (
+              <ChevronRight size={14} strokeWidth={2.75} style={{ color: glassText }} />
+            ) : (
+              <ChevronLeft size={14} strokeWidth={2.75} style={{ color: glassText }} />
+            )}
+          </span>
+          <RotationHealthOrb
+            percent={dailyPercent}
+            title={tooltip}
+            aria-label={`Tonight's rotation fit ${display}. Click for engine tools.`}
+          />
+        </button>
+      </div>
     </div>
   );
 

@@ -2,6 +2,7 @@
 
 import { OpsAuthProvider } from "@/lib/auth/opsAuth";
 import { OpsAuthGate } from "./components/OpsAuthGate";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import "./authGate.css";
 
 export default function ShiftBuilderLayout({
@@ -12,7 +13,7 @@ export default function ShiftBuilderLayout({
   return (
     <OpsAuthProvider>
       <OpsAuthGate loadingSublabel="Preparing computer context">
-        {children}
+        <ConfirmProvider>{children}</ConfirmProvider>
       </OpsAuthGate>
     </OpsAuthProvider>
   );

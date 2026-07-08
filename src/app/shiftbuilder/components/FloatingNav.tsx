@@ -15,6 +15,7 @@ import {
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
+import { RequestBoardModal } from "./RequestBoardModal";
 import {
   ChevronDown,
   LocateFixed,
@@ -37,6 +38,10 @@ import {
   BookOpen,
   Copy,
   Printer,
+  Wand2,
+  ClipboardList,
+  ClipboardPlus,
+  CalendarRange,
 } from "lucide-react";
 
 export interface DayItem {
@@ -92,7 +97,13 @@ export interface FloatingNavProps {
   currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
   onOpenSettings?: (tab?: string) => void;
-  onRunEngine?: () => void;
+  /** Single unified Optimize Night for the day: full placements + optimization. */
+  onOptimizeNight?: () => void;
+  engineRunning?: boolean;
+  deepOptimizeRunning?: boolean;
+  /** Preview the unified week engine (rolling solve + cross-night polish + fairness ledger) for the visible grave week. Read-only — opens a results sheet, doesn't write. */
+  onRunWeek?: () => void; // Optimize Week preview (uses unified week engine)
+  weekRunBusy?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
   onRefreshDay?: () => void;
@@ -157,7 +168,10 @@ export default function FloatingNav(props: FloatingNavProps) {
     currentUser,
     onLogout,
     onOpenSettings,
-    onRunEngine,
+    onOptimizeNight,
+    onRunWeek,
+    weekRunBusy = false,
+    engineRunning = false,
     onClearDay,
     onRefreshDay,
     refreshDayBusy = false,
@@ -187,15 +201,23 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
   const canAccessReports = permissions?.canAccessReports ?? false;
+  const canAccessTasks = permissions?.canAccessTasks ?? false;
+  const canRequestTasks = permissions?.canRequestTasks ?? false;
+  const canManageTeam = permissions?.canManageTeam ?? false;
+  const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
   const showDraftTools = canSeeDraftData && canEditAssignments;
   const showPublishControls = canPublish;
   const showEngineTools = canRunEngine;
+  const engineBusy = engineRunning;
   const showAdminLinks = canAccessSudo;
   const showReportsLink = canAccessReports;
+  const showProjectsLink = canAccessTasks;
+  const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<Date>(() => new Date());
 
@@ -244,11 +266,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const pickCalendarDate = (date: Date) => {
     onNavigateToDate?.(date);
     setCalendarOpen(false);
-  };
-
-  const handleDefaultTasks = () => {
-    onApplyDefaultTasks?.();
-    setMoreOpen(false);
   };
 
   const menuPanelClass = isDark
@@ -725,6 +742,39 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Settings
                   </button>
                 )}
+                {showTeamLink && (
+                  <Link
+                    href="/shiftbuilder/team"
+                    className={menuItemClass}
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <Users size={14} />
+                    Team
+                  </Link>
+                )}
+                {showProjectsLink && (
+                  <Link
+                    href="/shiftbuilder/projects"
+                    className={menuItemClass}
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <ClipboardList size={14} />
+                    Projects
+                  </Link>
+                )}
+                {canRequestTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setRequestOpen(true);
+                    }}
+                  >
+                    <ClipboardPlus size={14} />
+                    Request Work
+                  </button>
+                )}
                 {showReportsLink && (
                   <Link
                     href="/shiftbuilder/reports"
@@ -761,21 +811,54 @@ export default function FloatingNav(props: FloatingNavProps) {
 
             {moreOpen && (
               <div
-                className={`absolute right-0 top-full mt-2 w-56 z-[70] ${menuPanelClass}`}
+                className={`absolute right-0 top-full mt-2 w-64 z-[70] ${menuPanelClass}`}
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Engine & Maintenance */}
-                {showEngineTools && onRunEngine && (
+                {showEngineTools && (onOptimizeNight || onRunWeek) && (
+                  <div
+                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
+                  >
+                    Engine
+                  </div>
+                )}
+                {showEngineTools && onOptimizeNight && (
                   <button
                     type="button"
                     className={menuItemClass}
+                    disabled={engineBusy}
                     onClick={() => {
-                      onRunEngine();
+                      onOptimizeNight();
                       setMoreOpen(false);
                     }}
                   >
-                    <Sparkles size={14} /> Run Engine
+                    <Sparkles size={14} /> Optimize Night
+                    {engineRunning && (
+                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
+                    )}
+                  </button>
+                )}
+                {showEngineTools && onRunWeek && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    disabled={weekRunBusy}
+                    onClick={() => {
+                      onRunWeek();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <CalendarRange size={14} className="shrink-0" />
+                    <span className="flex min-w-0 flex-col items-start leading-tight">
+                      <span className="truncate">Optimize Week</span>
+                      <span className="truncate text-[10px] font-normal opacity-60">
+                        Cross-night fairness · preview + per-night draft
+                      </span>
+                    </span>
+                    {weekRunBusy && (
+                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
+                    )}
                   </button>
                 )}
                 {showDraftTools && onClearDay && (
@@ -805,7 +888,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {((showEngineTools && onRunEngine) || (showDraftTools && onClearDay) || onRefreshDay) && (
+                {((showEngineTools && (onOptimizeNight || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
 
@@ -871,31 +954,9 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Coffee size={14} /> Restore Default Breaks
                   </button>
                 )}
-                {onApplyOverlapTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onApplyOverlapTasks();
-                      setMoreOpen(false);
-                    }}
-                    disabled={applyOverlapTasksBusy}
-                  >
-                    <Layers size={14} />
-                    {applyOverlapTasksBusy ? "Applying…" : "Apply Overlap Tasks"}
-                  </button>
-                )}
-                {onApplyDefaultTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={handleDefaultTasks}
-                    disabled={applyDefaultTasksBusy}
-                  >
-                    <LayoutGrid size={14} />
-                    {applyDefaultTasksBusy ? "Applying…" : "Apply Default Tasks"}
-                  </button>
-                )}
+                {/* Apply Default / Overlap Tasks retired by the defaults cutover —
+                    nightly defaults now materialize from slot-default Ops Tasks
+                    (managed in /shiftbuilder/projects → Defaults) on night creation. */}
 
                 {/* Copies (task population) */}
                 {showDraftTools && onCopyPriorWeekTasks && (
@@ -928,14 +989,14 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
 
                 {/* Admin & Schedule */}
-                {showAdminLinks && (
+                {showTeamLink && (
                   <Link
-                    href="/shiftbuilder/graves-schedule"
+                    href="/shiftbuilder/team?tab=schedule"
                     className={menuItemClass}
                     onClick={() => setMoreOpen(false)}
                   >
                     <CalendarDays size={14} />
-                    Graves Default Schedule
+                    Graves Schedule
                   </Link>
                 )}
 
@@ -1049,6 +1110,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           </div>
         </div>
       </nav>
+      <RequestBoardModal open={requestOpen} onClose={() => setRequestOpen(false)} isDark={isDark} />
     </>
   );
 }

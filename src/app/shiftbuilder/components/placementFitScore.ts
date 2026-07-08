@@ -14,6 +14,12 @@ export type PrerenderedPlacementFit = {
   fitFactLine: string;
   /** Continuous 0–100 slot contribution for rotation health (varies inside verdict bands). */
   healthPoints?: number;
+  /**
+   * True while the TM's history is still loading — the verdict is a placeholder.
+   * Health rollups skip pending slots instead of scoring them optimistically
+   * (which made the orb tick visibly downward as histories arrived).
+   */
+  healthPending?: boolean;
 };
 
 export type PlacementFitScoreInput = {
@@ -193,10 +199,6 @@ export function findBetterSuited(
     return { better: true, primaryGap: gaps[0] };
   }
 
-  if (times >= 1 && inLast5) {
-    return { better: true, primaryGap: gaps[0] };
-  }
-
   return { better: false };
 }
 
@@ -233,12 +235,15 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
   const weekRepeat = input.weekRepeatThisSlot ?? 0;
 
   if (input.padHistoryLoading) {
-    return finishFit(
-      input,
-      "acceptable",
-      `Checking ${name}'s rotation for ${slotLabel}…`,
-      buildFactLine(["History loading"]),
-    );
+    return {
+      ...finishFit(
+        input,
+        "acceptable",
+        `Checking ${name}'s rotation for ${slotLabel}…`,
+        buildFactLine(["History loading"]),
+      ),
+      healthPending: true,
+    };
   }
 
   if (input.tmEligibleForSlot === false) {
@@ -283,9 +288,12 @@ export function scorePlacementFit(input: PlacementFitScoreInput): PrerenderedPla
     ) ?? [];
 
   if (weekRepeat >= 3) {
+    // Same severity bucket as the prior-3-placement critical_repeat check above — a 3x+
+    // same-week repeat is at least as bad, and previously used "questionable" here, which
+    // showed a milder chip/health score than critical_repeat despite the "rotate out" text.
     return finishFit(
       input,
-      "questionable",
+      "critical_repeat",
       `${name} on ${slotLabel} — real bad this-week repeat (${weekRepeat}× in same place). Rotate out.`,
       buildFactLine([`week repeat ${weekRepeat}× (real bad)`, eightFact]),
     );

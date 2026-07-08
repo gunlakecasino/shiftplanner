@@ -20,7 +20,11 @@ export type OpsAuditInput = {
   payload?: Record<string, unknown>;
 };
 
-const SETTINGS_NIGHT_ID = "__settings__";
+// Kept in sync with the same fix in opsAuditLog.server.ts — this table's
+// night_id column is a NOT NULL uuid, so the sentinel must be a real uuid
+// (the nil UUID), not an arbitrary string, or every settings-scoped write
+// fails silently with a 500 from /api/shiftbuilder/log-change.
+const SETTINGS_NIGHT_ID = "00000000-0000-0000-0000-000000000000";
 
 /** Resolve audit night context — settings mutations use a synthetic night row. */
 export function resolveAuditNightContext(

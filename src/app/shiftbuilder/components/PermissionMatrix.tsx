@@ -70,7 +70,7 @@ export function PermissionMatrix({
         <button
           type="button"
           onClick={resetToRoleDefaults}
-          className="text-xs text-[#B89708] hover:underline shrink-0"
+          className="text-xs text-[#007AFF] hover:underline shrink-0"
         >
           Reset to role defaults
         </button>

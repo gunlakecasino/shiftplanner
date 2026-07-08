@@ -150,6 +150,21 @@ export function assignmentsFromPlannerDraft(
   return out;
 }
 
+/**
+ * Conservative stand-in when computeSlotPlacementFit throws for an assigned draft slot.
+ * Without this, the slot was silently dropped from both the score list and the gap count
+ * (see computeDailyHealthPercent's `if (!fit) continue`), shrinking the denominator and
+ * inflating the projected health % instead of reflecting that the slot couldn't be scored.
+ */
+function unscorableDraftSlotFit(): PrerenderedPlacementFit {
+  return {
+    fitVerdict: "poor_fit",
+    fitSummary: "Could not score this placement — treated as unfit for projection purposes.",
+    fitFactLine: "Fit computation failed",
+    healthPoints: 0,
+  };
+}
+
 function computeDraftFitPercent(
   draft: Record<string, string>,
   args: {
@@ -190,7 +205,7 @@ function computeDraftFitPercent(
         weeklyRecentHistory: scopedWeek,
       });
     } catch {
-      /* skip */
+      draftFitBySlot[slotKey] = unscorableDraftSlotFit();
     }
   }
 
@@ -231,7 +246,7 @@ export function scoreDraftRotationHealth(
       });
       draftFitBySlot[slotKey] = fit;
     } catch {
-      /* skip */
+      draftFitBySlot[slotKey] = unscorableDraftSlotFit();
     }
   }
 
@@ -302,6 +317,12 @@ export type HealthOptimizedDraftResult = {
 /**
  * Greedy health-first draft: walk fill order, pick max healthPoints per slot
  * from planner Top-K (on-schedule, one-TM-per-night, fill-order safe).
+ *
+ * This is the "rotation > preferences > skill" tier of the declared hierarchy
+ * (see placement.ts header): the planner's weighted score (preferences, skill,
+ * affinity) decides *who makes the Top-K*; rotation health decides the pick
+ * within it. The fallback path ("health gates relaxed") is the coverage tier
+ * asserting itself — coverage beats rotation when they conflict.
  */
 export function buildHealthOptimizedDraft(
   args: BuildHealthOptimizedDraftArgs,
@@ -447,6 +468,48 @@ export function buildHealthOptimizedDraft(
           healthPoints: 0,
           fitVerdict: "acceptable",
           fitSummary: "Planner fallback — best-scored candidate (health gates relaxed)",
+        };
+      }
+    }
+
+    // F2 (2026-07-02): final coverage rescue. If every remaining candidate is a
+    // prior-3 repeat (so both passes above found nobody), coverage is tier 1 and
+    // must still win — fill the slot with the best-scored candidate anyway rather
+    // than leaving a required zone open. Previously the slot was silently skipped,
+    // and because open slots don't reduce the health %, the coverage-dropping
+    // draft scored *higher* than one that filled the slot with a critical repeat.
+    // We compute the true (low) health so the projection reflects reality, not 0.
+    if (!best) {
+      const rescuePool = candidates.filter(
+        (c) => (!scheduleGate || scheduledTmIds!.has(c.tmId)) && !usedTmIds.has(c.tmId),
+      );
+      const rescue = [...rescuePool].sort((a, b) => b.total - a.total)[0];
+      if (rescue) {
+        let hp = 0;
+        let verdict: PlacementFitVerdict = "critical_repeat";
+        try {
+          const fit = computeSlotPlacementFit({
+            slotKey,
+            assignments: { ...draftRows, [slotKey]: { tmId: rescue.tmId, tmName: rescue.tmName } },
+            members,
+            auxDefs,
+            currentIso: tonightIso,
+            histories,
+            historiesLoading: false,
+            otherTmProfiles: { ...otherProfiles, [rescue.tmId]: memberToPlacementProfile(members, rescue.tmId) },
+            weeklyRecentHistory: scopedWeek,
+          });
+          hp = slotHealthPoints(fit);
+          verdict = fit.fitVerdict;
+        } catch {
+          /* keep conservative defaults */
+        }
+        best = {
+          tmId: rescue.tmId,
+          tmName: rescue.tmName,
+          healthPoints: hp,
+          fitVerdict: verdict,
+          fitSummary: "Coverage rescue — prior-3 relaxed (only eligible option for a required slot)",
         };
       }
     }
@@ -722,10 +785,10 @@ export function computeCandidatePickerHealthPoints(
 
   score -= timesInSpread * 7.5;
 
-  const criticalIdx = last5.findIndex((ui) => placementRepeatKeysMatch(slotKey, ui));
-  if (criticalIdx >= 0 && criticalIdx < PRIOR_PLACEMENT_CRITICAL_WINDOW) {
-    score -= 8 + (PRIOR_PLACEMENT_CRITICAL_WINDOW - 1 - criticalIdx) * 2.5;
-  }
+  // F8 (2026-07-02): the old prior-3 penalty block here was dead code — any
+  // same-area hit inside PRIOR_PLACEMENT_CRITICAL_WINDOW already triggered the
+  // early `return 50` above, so `criticalIdx < WINDOW` was never reachable. Only
+  // the beyond-window same-area case (in last-5 but older than prior-3) survives.
   const sameAreaIdx = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
   if (sameAreaIdx >= PRIOR_PLACEMENT_CRITICAL_WINDOW) {
     score -= 4;
@@ -880,40 +943,53 @@ export function applyGranularHealthToFitMap(
     const tmId = row?.tmId;
     if (!tmId) continue;
 
-    const preview = previewCandidateRotationFit({
-      tmId,
-      tmName: row?.tmName ?? tmId,
-      slotKey,
-      tonightIso: currentIso,
-      assignments,
-      auxDefs,
-      histories,
-      weeklyRecentHistory,
-      members,
-    });
-
     const existing = out[slotKey];
     if (!existing) continue;
 
-    out[slotKey] = {
-      ...existing,
-      healthPoints: preview.healthPoints,
-      fitVerdict: preview.fitVerdict as PlacementFitVerdict,
-      fitFactLine: preview.fitFactLine,
-    };
+    try {
+      const preview = previewCandidateRotationFit({
+        tmId,
+        tmName: row?.tmName ?? tmId,
+        slotKey,
+        tonightIso: currentIso,
+        assignments,
+        auxDefs,
+        histories,
+        weeklyRecentHistory,
+        members,
+      });
+
+      out[slotKey] = {
+        ...existing,
+        healthPoints: preview.healthPoints,
+        fitVerdict: preview.fitVerdict as PlacementFitVerdict,
+        fitFactLine: preview.fitFactLine,
+      };
+    } catch {
+      // Keep whatever fit was already in `out` (a real computed fit, or the conservative
+      // unscorable-slot fallback) rather than letting a fresh failure here propagate.
+    }
   }
 
   return out;
 }
 
-/** Map granular picker points to a verdict band for row badge color. */
+/**
+ * Map granular picker points to a verdict band for row badge color.
+ *
+ * F8 (2026-07-02): criticality is now an explicit flag, never inferred from
+ * `points === 50`. A genuine critical repeat (prior-3 or week-repeat 3×) can be
+ * capped *below* 50 and previously fell through to the milder "needs_swap"; now
+ * it always reads `critical_repeat`. Mirrors engine/health/verdict.ts.
+ */
 export function pickerVerdictFromHealthPoints(
   points: number,
+  isCritical = false,
 ): PlacementFitVerdict {
+  if (isCritical) return "critical_repeat";
   if (points >= 90) return "strong_fit";
   if (points >= 76) return "acceptable";
-  if (points > 50) return "questionable";
-  if (points === 50) return "critical_repeat";
+  if (points >= 50) return "questionable";
   if (points >= 20) return "needs_swap";
   return "poor_fit";
 }
@@ -1024,11 +1100,16 @@ export function previewCandidateRotationFit(
     weekNightsWorked,
   });
 
+  // Prior-3 same-area repeat or a 3×+ same-week repeat is a critical repeat —
+  // derived from conditions, not the score, so the verdict is never misread (F8).
+  const isCritical =
+    (last5Index >= 0 && last5Index < PRIOR_PLACEMENT_CRITICAL_WINDOW) || weekRepeat >= 3;
+
   return {
     tmId,
     tmName,
     slotKey,
-    fitVerdict: pickerVerdictFromHealthPoints(healthPoints),
+    fitVerdict: pickerVerdictFromHealthPoints(healthPoints, isCritical),
     healthPoints,
     timesInSpread,
     inLast5,

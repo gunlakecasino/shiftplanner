@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ZONE_DEFS } from "./constants";
 import type { ReportWindow } from "./data";
 import { dbToUi } from "./slot-keys";
+import { formatLocalDateISO } from "./dateUtils";
 import type {
   AreaCoverageSummary,
   NightZoneFill,
@@ -33,13 +34,13 @@ function graveWeekRange(which: "this-week" | "last-4-weeks"): { from: string; to
   if (which === "this-week") {
     const thu = new Date(thisFri);
     thu.setDate(thisFri.getDate() + 6);
-    return { from: thisFri.toISOString().slice(0, 10), to: thu.toISOString().slice(0, 10) };
+    return { from: formatLocalDateISO(thisFri), to: formatLocalDateISO(thu) };
   }
   const to = new Date(thisFri);
   to.setDate(thisFri.getDate() - 1);
   const from = new Date(to);
   from.setDate(to.getDate() - 27);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  return { from: formatLocalDateISO(from), to: formatLocalDateISO(to) };
 }
 
 function resolveWindow(reportWindow: ReportWindow): { from: string; to: string } {
@@ -48,8 +49,8 @@ function resolveWindow(reportWindow: ReportWindow): { from: string; to: string }
     const cutoff = new Date(today);
     cutoff.setDate(cutoff.getDate() - reportWindow);
     return {
-      from: cutoff.toISOString().slice(0, 10),
-      to: today.toISOString().slice(0, 10),
+      from: formatLocalDateISO(cutoff),
+      to: formatLocalDateISO(today),
     };
   }
   return graveWeekRange(reportWindow);

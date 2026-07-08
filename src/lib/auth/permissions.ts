@@ -58,6 +58,17 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
+        // Viewers are walled off from the Projects/ops-work-item system entirely:
+        // no /shiftbuilder/projects access, no Projects nav link, no board task
+        // awareness pill/badges, and no task API access at any level. Their task
+        // work stays on the board itself (night_slot_tasks via the card TasksPad),
+        // which is gated only by night-lock and needs none of these flags.
+        canAccessTasks: false,
+        canManageTasks: false,
+        canCompleteOwnTasks: false,
+        // Narrow intake door: viewers may submit task/project requests from the
+        // board and manage only their own submissions. Separate from the wall.
+        canRequestTasks: true,
       };
 
     case "admin":
@@ -72,6 +83,14 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: true,
+        // Projects/tasks access removed for now — admins are walled off from the
+        // ops-work-item system (pages, nav link, board awareness pill/badges, and
+        // the task APIs at every level), same as viewer. Card task management on
+        // the board (night_slot_tasks) is unaffected.
+        canAccessTasks: false,
+        canManageTasks: false,
+        canCompleteOwnTasks: false,
+        canRequestTasks: false,
       };
 
     case "sudo_admin":
@@ -87,6 +106,10 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "ops_manager":
@@ -101,6 +124,10 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: true,
         canManageTeam: true,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "graves_ops_super":
@@ -115,6 +142,10 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: true,
+        canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "days_ops_super":
@@ -130,6 +161,10 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
 
     case "utility_ops_super":
@@ -146,6 +181,10 @@ export function getPermissionsForRole(role: OpsRole): ShiftBuilderPermissions {
         canRunEngine: false,
         canManageTeam: false,
         canEditPublishedOnly: false,
+        canAccessTasks: true,
+        canManageTasks: false,
+        canCompleteOwnTasks: true,
+        canRequestTasks: false,
       };
   }
 }
@@ -170,6 +209,14 @@ export function mergePermissions(
   if (typeof overrides.canManageTeam === "boolean") sanitized.canManageTeam = overrides.canManageTeam;
   if (typeof overrides.canEditPublishedOnly === "boolean") {
     sanitized.canEditPublishedOnly = overrides.canEditPublishedOnly;
+  }
+  if (typeof overrides.canAccessTasks === "boolean") sanitized.canAccessTasks = overrides.canAccessTasks;
+  if (typeof overrides.canManageTasks === "boolean") sanitized.canManageTasks = overrides.canManageTasks;
+  if (typeof overrides.canCompleteOwnTasks === "boolean") {
+    sanitized.canCompleteOwnTasks = overrides.canCompleteOwnTasks;
+  }
+  if (typeof overrides.canRequestTasks === "boolean") {
+    sanitized.canRequestTasks = overrides.canRequestTasks;
   }
 
   return { ...base, ...sanitized };
