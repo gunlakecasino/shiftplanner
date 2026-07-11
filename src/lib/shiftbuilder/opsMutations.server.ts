@@ -718,3 +718,54 @@ export async function unmarkTmCallOffServer(params: {
   }
   return { ok: true };
 }
+
+export type GravePoolValue = "Full" | "AM" | "PM" | null;
+
+/** Set TM grave_pool (null = ineligible). Admin client; session-gated at mutations route. */
+export async function setTMGravePoolServer(
+  tmId: string,
+  value: GravePoolValue,
+): Promise<{ ok: true }> {
+  if (!tmId) throw new Error("setTMGravePool: tmId is required");
+  if (value !== null && value !== "Full" && value !== "AM" && value !== "PM") {
+    throw new Error(`setTMGravePool: invalid grave_pool value "${String(value)}"`);
+  }
+
+  const client = adminClient();
+  const { error } = await client
+    .from("tm_profiles")
+    .update({ grave_pool: value, updated_at: new Date().toISOString() })
+    .eq("tm_id", tmId);
+
+  if (error) {
+    throw new Error(
+      `setTMGravePool failed for ${tmId} → ${value ?? "NULL"}: ${error.message}`,
+    );
+  }
+  return { ok: true };
+}
+
+/** Update TM display_name. Admin client; session-gated at mutations route. */
+export async function setTMDisplayNameServer(
+  tmId: string,
+  newDisplayName: string,
+): Promise<{ ok: true }> {
+  if (!tmId) throw new Error("setTMDisplayName: tmId is required");
+  const trimmed = newDisplayName.trim();
+  if (!trimmed) {
+    throw new Error("setTMDisplayName: new display name cannot be empty");
+  }
+
+  const client = adminClient();
+  const { error } = await client
+    .from("tm_profiles")
+    .update({ display_name: trimmed, updated_at: new Date().toISOString() })
+    .eq("tm_id", tmId);
+
+  if (error) {
+    throw new Error(
+      `setTMDisplayName failed for ${tmId} → "${trimmed}": ${error.message}`,
+    );
+  }
+  return { ok: true };
+}

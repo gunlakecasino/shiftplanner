@@ -1,14 +1,10 @@
 /**
- * Server-side mutations for the Command Palette's `make` and `remove` commands.
+ * Mutations for the Command Palette's `make` and `remove` commands.
  *
- * Each helper is a single Supabase mutation (or small group of them) that the
- * palette invokes after the parser resolves a complete command. None of these
- * are wrapped as Next.js Server Actions — the existing pattern across this
- * codebase calls supabase from the browser via the service-role key during
- * the auth-less dev phase, so we follow that convention here.
- *
- * If/when auth lands, every function below should move behind a server action
- * with the appropriate row-level checks.
+ * Privileged writes (grave pool, display name, call-off) go through
+ * postOpsMutation → /api/shiftbuilder/mutations with session + permission.
+ * Server handlers use the admin client (see opsMutations.server.ts).
+ * Reads may still use the browser supabase client where RLS allows SELECT.
  */
 
 import { supabase } from "../supabase";
@@ -38,27 +34,27 @@ export interface DisplayNameConflict {
  * Why this matters: isEligibleForSlot() in placement.ts treats `gravePool`
  * as the canonical signal for who can hold a zone slot. Flipping this here
  * immediately updates the engine's behavior on the next run.
+ *
+ * Permission: canAccessSudo OR canManageTeam (KD-16).
  */
 export async function setTMGravePool(
   tmId: string,
   value: GravePoolValue
 ): Promise<void> {
-  const { error } = await supabase
-    .from("tm_profiles")
-    .update({ grave_pool: value, updated_at: new Date().toISOString() })
-    .eq("tm_id", tmId);
-
-  if (error) {
-    throw new Error(
-      `setTMGravePool failed for ${tmId} → ${value ?? "NULL"}: ${error.message}`
-    );
+  if (typeof window !== "undefined") {
+    const { postOpsMutation } = await import("./opsMutationClient");
+    await postOpsMutation("set_tm_grave_pool", { tmId, value });
+    return;
   }
+
+  const { setTMGravePoolServer } = await import("./opsMutations.server");
+  await setTMGravePoolServer(tmId, value);
 
   try {
     const { revalidateRosterCache } = await import("./revalidateOpsCache");
     await revalidateRosterCache();
   } catch {
-    /* server revalidate optional from browser */
+    /* server revalidate optional */
   }
 }
 
@@ -102,6 +98,8 @@ export async function checkDisplayNameConflict(
  * via checkDisplayNameConflict() first — this function does NOT enforce
  * uniqueness because the schema doesn't (and we want the UI to handle the
  * conflict gracefully rather than throwing).
+ *
+ * Permission: canAccessSudo OR canManageTeam (KD-16).
  */
 export async function setTMDisplayName(
   tmId: string,
@@ -112,15 +110,20 @@ export async function setTMDisplayName(
     throw new Error("setTMDisplayName: new display name cannot be empty");
   }
 
-  const { error } = await supabase
-    .from("tm_profiles")
-    .update({ display_name: trimmed, updated_at: new Date().toISOString() })
-    .eq("tm_id", tmId);
+  if (typeof window !== "undefined") {
+    const { postOpsMutation } = await import("./opsMutationClient");
+    await postOpsMutation("set_tm_display_name", { tmId, displayName: trimmed });
+    return;
+  }
 
-  if (error) {
-    throw new Error(
-      `setTMDisplayName failed for ${tmId} → "${trimmed}": ${error.message}`
-    );
+  const { setTMDisplayNameServer } = await import("./opsMutations.server");
+  await setTMDisplayNameServer(tmId, trimmed);
+
+  try {
+    const { revalidateRosterCache } = await import("./revalidateOpsCache");
+    await revalidateRosterCache();
+  } catch {
+    /* server revalidate optional */
   }
 }
 

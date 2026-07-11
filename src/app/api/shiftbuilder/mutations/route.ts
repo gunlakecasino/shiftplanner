@@ -6,7 +6,10 @@ import {
   assertActorCanEditNight,
   nightRefFromMutationBody,
 } from "@/lib/auth/assertNightEditable.server";
-import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
+import {
+  requireOpsAnyPermission,
+  requireOpsPermission,
+} from "@/lib/auth/requireOpsSession.server";
 import {
   addNightSlotTaskServer,
   batchApplyDraftAssignmentsServer,
@@ -22,6 +25,9 @@ import {
   setNightCardBorderServer,
   setNightLockedServer,
   setNightPublishedServer,
+  setTMDisplayNameServer,
+  setTMGravePoolServer,
+  type GravePoolValue,
   toggleAssignmentLockServer,
   updateNightSlotTaskColorServer,
   updateNightSlotTaskCoverageSideServer,
@@ -30,7 +36,11 @@ import {
   upsertBreakAssignmentServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
-import { revalidateNightBoardCaches, revalidateSlotDefaultsCache } from "@/lib/shiftbuilder/revalidateOpsCache";
+import {
+  revalidateNightBoardCaches,
+  revalidateRosterCache,
+  revalidateSlotDefaultsCache,
+} from "@/lib/shiftbuilder/revalidateOpsCache";
 import {
   addSlotDefaultTaskServer,
   bulkUpsertSlotDefaultsServer,
@@ -39,7 +49,8 @@ import {
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 
-const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
+/** Single key = require that bit; array = require any one of the bits. */
+const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
   upsert_zone_assignment: "canEditAssignments",
   delete_zone_assignment: "canEditAssignments",
   batch_apply_draft: "canEditAssignments",
@@ -61,6 +72,9 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   replace_all_night_slot_tasks: "canEditAssignments",
   mark_tm_call_off: "canEditAssignments",
   unmark_tm_call_off: "canEditAssignments",
+  // KD-16: privileged identity / eligibility — sudo or manage-team only
+  set_tm_grave_pool: ["canAccessSudo", "canManageTeam"],
+  set_tm_display_name: ["canAccessSudo", "canManageTeam"],
   add_slot_default_task: "canAccessSudo",
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
@@ -93,12 +107,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Unknown mutation: ${action}` }, { status: 400 });
   }
 
-  const session = await requireOpsPermission(request, permission);
+  const session = Array.isArray(permission)
+    ? await requireOpsAnyPermission(request, permission)
+    : await requireOpsPermission(request, permission);
   if (!session.ok) {
     return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
-  if (permission === "canEditAssignments" || permission === "canLockUnlock") {
+  const singlePermission = Array.isArray(permission) ? null : permission;
+  if (singlePermission === "canEditAssignments" || singlePermission === "canLockUnlock") {
     const editCheck = await assertActorCanEditNight(
       session.actor.permissions,
       nightRefFromMutationBody(body),
@@ -265,6 +282,30 @@ export async function POST(request: NextRequest) {
           date: String(body.date),
         });
         await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "set_tm_grave_pool": {
+        const raw = body.value;
+        const value: GravePoolValue =
+          raw === null || raw === undefined || raw === ""
+            ? null
+            : (String(raw) as Exclude<GravePoolValue, null>);
+        const result = await setTMGravePoolServer(String(body.tmId), value);
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "set_tm_display_name": {
+        const displayName = String(body.displayName ?? body.newDisplayName ?? "");
+        const result = await setTMDisplayNameServer(String(body.tmId), displayName);
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
         return NextResponse.json(result);
       }
       case "add_slot_default_task": {
