@@ -556,6 +556,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const analystRequestRef = useRef(0);
   const [padGoodExamples, setPadGoodExamples] = useState<Array<{ slotKey: string; insightText: string }>>([]);
   const [rotationBasics, setRotationBasics] = useState<PlacementRotationBasics | null>(null);
+  /** Peer board histories for swap-aware local fit (same data as rotation basics). */
+  const [peerHistories, setPeerHistories] = useState<Record<string, ZoneDetailEntry | null>>({});
+  const [peerProfiles, setPeerProfiles] = useState<
+    Record<string, PlacementTmProfile | null>
+  >({});
   const rotationSigRef = useRef<string | null>(null);
 
   const [coverageMode, setCoverageMode] = useState(false);
@@ -573,6 +578,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setAssignConfirmed(false);
     setRotationDisplay(null);
     setRotationBasics(null);
+    setPeerHistories({});
+    setPeerProfiles({});
     rotationSigRef.current = null;
     setDeepInsight(null);
     setInsightStructured(null);
@@ -718,6 +725,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     if (!a.tmId || !a.tmName) {
       setRotationBasics(null);
       setRotationDisplay(null);
+      setPeerHistories({});
+      setPeerProfiles({});
       rotationSigRef.current = null;
       return;
     }
@@ -753,7 +762,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           const res = await fetch("/api/shiftbuilder/placement-histories", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tmIds: otherIds.slice(0, 48), days: PLACEMENT_SPREAD_NIGHTS }),
+            body: JSON.stringify({
+              tmIds: otherIds.slice(0, 48),
+              days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+            }),
           });
           if (res.ok) {
             const data = await res.json();
@@ -788,6 +800,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
         otherTmProfiles,
       );
       rotationSigRef.current = sig;
+      setPeerHistories(histories);
+      setPeerProfiles(otherTmProfiles);
       setRotationBasics(basics);
       setRotationDisplay(
         formatPlacementRotationDisplay(a.tmName!, slotKey, basics, PLACEMENT_SPREAD_NIGHTS),
@@ -814,34 +828,42 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   ]);
 
   // Prefer board chip when present (same granular pipeline); fall back to pad-local score.
-  const localPrerenderedFit = React.useMemo(
-    () =>
-      computeSlotPlacementFit({
-        slotKey,
-        assignments,
-        isDraftMode,
-        draftAssignments,
-        members: members as any,
-        auxDefs,
-        currentIso,
-        histories: safePadHistory && a.tmId ? { [a.tmId]: safePadHistory } : {},
-        historiesLoading: padHistoryLoading,
-        weeklyRecentHistory,
-      }),
-    [
+  // Local score includes peer histories + profiles when rotation effect has loaded them (swap-aware).
+  const localPrerenderedFit = React.useMemo(() => {
+    const histories: Record<string, ZoneDetailEntry | null> = {
+      ...peerHistories,
+    };
+    if (safePadHistory && a.tmId) {
+      histories[a.tmId] = safePadHistory;
+    }
+    return computeSlotPlacementFit({
       slotKey,
       assignments,
       isDraftMode,
       draftAssignments,
-      members,
+      members: members as any,
       auxDefs,
       currentIso,
-      safePadHistory,
-      a.tmId,
-      padHistoryLoading,
+      histories,
+      historiesLoading: padHistoryLoading,
+      otherTmProfiles: peerProfiles,
       weeklyRecentHistory,
-    ],
-  );
+    });
+  }, [
+    slotKey,
+    assignments,
+    isDraftMode,
+    draftAssignments,
+    members,
+    auxDefs,
+    currentIso,
+    safePadHistory,
+    a.tmId,
+    padHistoryLoading,
+    weeklyRecentHistory,
+    peerHistories,
+    peerProfiles,
+  ]);
 
   // Board chips use full-board histories (swap-aware). Prefer that when not history-pending.
   const prerenderedFit: PrerenderedPlacementFit =

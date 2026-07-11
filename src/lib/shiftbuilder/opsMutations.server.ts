@@ -524,7 +524,10 @@ export async function clearPlacementHistoryForSlotServer(params: {
     .eq("night_id", nightId)
     .eq("slot_key", uiSlot);
   if (delErr) {
-    console.warn("[ops] clearPlacementHistoryForSlotServer delete failed", delErr);
+    // Fail closed: callers must not insert after a failed clear (would double-count matrix).
+    throw new Error(
+      `clearPlacementHistoryForSlotServer delete failed: ${delErr.message}`,
+    );
   }
 
   return { clearedTmIds };
@@ -560,6 +563,7 @@ export async function recordPlacementAndRefreshMatrixServer(params: {
   );
 
   // Singular ownership: any prior TM on this night×slot is replaced.
+  // clear throws on failure — do not insert (avoids ghost double-counts in matrix).
   const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
     nightId,
     slotKey: uiSlot,

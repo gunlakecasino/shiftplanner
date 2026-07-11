@@ -31,6 +31,8 @@ export type UsePickerRotationSortArgs = {
   currentIso: string;
   members?: Array<Record<string, unknown>>;
   weeklyRecentHistory?: Map<string, WeekNightRecord[]>;
+  /** Bump to force history refetch (day rollover, post-apply). */
+  historyRefreshEpoch?: number;
 };
 
 export function usePickerRotationSort({
@@ -42,6 +44,7 @@ export function usePickerRotationSort({
   currentIso,
   members = [],
   weeklyRecentHistory,
+  historyRefreshEpoch = 0,
 }: UsePickerRotationSortArgs): {
   sortedCandidates: TmEntry[];
   fitByTmId: Record<string, PickerTmRotationFit>;
@@ -57,6 +60,11 @@ export function usePickerRotationSort({
 
   const lastFetchedKeyRef = useRef<string | null>(null);
   const lastHistoriesSigRef = useRef<string>("");
+
+  useEffect(() => {
+    lastFetchedKeyRef.current = null;
+    lastHistoriesSigRef.current = "";
+  }, [historyRefreshEpoch]);
 
   useEffect(() => {
     if (!enabled || !slotKey || !tmIdsKey) {
@@ -105,7 +113,7 @@ export function usePickerRotationSort({
     return () => {
       cancelled = true;
     };
-  }, [enabled, slotKey, tmIdsKey]);
+  }, [enabled, slotKey, tmIdsKey, historyRefreshEpoch]);
 
   const { sortedCandidates, fitByTmId } = useMemo(() => {
     if (!enabled || !slotKey || candidates.length === 0) {

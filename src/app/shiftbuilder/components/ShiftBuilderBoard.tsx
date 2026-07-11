@@ -88,16 +88,17 @@ function builderDayCardMotionProps(
 
 function slotShowsFilled(
   slotKey: string,
-  assignments: Record<string, { tmName?: string }>,
+  assignments: Record<string, { tmName?: string; tmId?: string }>,
   isDraftMode: boolean,
   draftAssignments: Record<string, DraftAssignmentRow>,
 ): boolean {
   if (isDraftMode) {
     const d = draftAssignments[slotKey];
     if (d?.proposedClear) return false;
-    if (d?.proposedTmName?.trim()) return true;
+    if (d?.proposedTmId || d?.proposedTmName?.trim()) return true;
   }
-  return !!assignments[slotKey]?.tmName;
+  const live = assignments[slotKey];
+  return !!(live?.tmName || live?.tmId);
 }
 
 export interface ShiftBuilderBoardProps {

@@ -60,9 +60,10 @@ function toTaskLines(tasks: NightSlotTask[] | undefined): PrintTaskLine[] {
 
 export function slotShowsFilled(
   slotKey: string,
-  assignments: Record<string, { tmName?: string }>,
+  assignments: Record<string, { tmName?: string; tmId?: string }>,
 ): boolean {
-  return !!assignments[slotKey]?.tmName?.trim();
+  const row = assignments[slotKey];
+  return !!(row?.tmName?.trim() || row?.tmId);
 }
 
 import { computeBreakCounts } from "@/lib/shiftbuilder/processNightData";

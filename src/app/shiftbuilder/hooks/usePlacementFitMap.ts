@@ -123,8 +123,17 @@ export function usePlacementFitMap({
     lastFetchedKeyRef.current = tmIdsKey;
 
     const tmIds = tmIdsKey.split(",").filter(Boolean);
+    const tmIdSet = new Set(tmIds);
     let cancelled = false;
     setHistoriesLoading(true);
+    // Drop TMs no longer on the board so we never score with stale peer histories.
+    setHistories((prev) => {
+      const pruned: Record<string, ZoneDetailEntry | null> = {};
+      for (const id of tmIds) {
+        if (id in prev) pruned[id] = prev[id];
+      }
+      return pruned;
+    });
 
     (async () => {
       try {
@@ -140,15 +149,26 @@ export function usePlacementFitMap({
         const data = await res.json();
         if (cancelled) return;
         const nextH = (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
-        const nextSig = JSON.stringify(nextH);
+        // Only keep requested TMs (full replace for this board set).
+        const scoped: Record<string, ZoneDetailEntry | null> = {};
+        for (const id of tmIds) {
+          scoped[id] = nextH[id] ?? null;
+        }
+        const nextSig = JSON.stringify(scoped);
         if (lastHistoriesSigRef.current !== nextSig) {
-          setHistories(nextH);
+          setHistories(scoped);
           lastHistoriesSigRef.current = nextSig;
         }
       } catch {
-        // Keep prior good histories on failure — do not treat error as "never placed".
+        // Keep pruned prior good histories for still-present TMs — not empty-as-truth.
         if (!cancelled) {
-          /* leave histories as-is; still clear loading */
+          setHistories((prev) => {
+            const kept: Record<string, ZoneDetailEntry | null> = {};
+            for (const [id, h] of Object.entries(prev)) {
+              if (tmIdSet.has(id)) kept[id] = h;
+            }
+            return kept;
+          });
         }
       } finally {
         if (!cancelled) setHistoriesLoading(false);

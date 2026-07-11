@@ -4943,6 +4943,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     currentIso: pickerCurrentIso,
     members: effectiveRealRoster as Array<Record<string, unknown>>,
     weeklyRecentHistory: plannedThisWeekRecentHistory,
+    historyRefreshEpoch: fitHistoryRefreshEpoch,
   });
 
   const activePickerScheduledUnassigned = selectedSlotKey
