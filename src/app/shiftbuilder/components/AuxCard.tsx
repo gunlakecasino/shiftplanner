@@ -157,6 +157,28 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const pickerRef = React.useRef<HTMLDivElement>(null);
   const [pickerPosition, setPickerPosition] = React.useState<{ top: number; left: number } | null>(null);
 
+  /** Place the portal menu in-viewport: flip above the card when bottom would overflow. */
+  const placePickerInViewport = React.useCallback((anchor: DOMRect, menuW: number, menuH: number) => {
+    const pad = 8;
+    const gap = 4;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const spaceBelow = vh - anchor.bottom - pad;
+    const spaceAbove = anchor.top - pad;
+    // Prefer below; flip up when not enough room below and more room above.
+    const openUp = spaceBelow < menuH && spaceAbove > spaceBelow;
+
+    let top = openUp ? anchor.top - menuH - gap : anchor.bottom + gap;
+    let left = anchor.left;
+
+    // Clamp so the full menu stays on screen.
+    top = Math.max(pad, Math.min(top, vh - menuH - pad));
+    left = Math.max(pad, Math.min(left, vw - menuW - pad));
+
+    return { top, left };
+  }, []);
+
   React.useEffect(() => {
     if (!showRolePicker) return;
     const onDocPointerDown = (e: PointerEvent) => {
@@ -170,6 +192,30 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     return () => document.removeEventListener("pointerdown", onDocPointerDown, true);
   }, [showRolePicker]);
 
+  // After open, measure the real menu size and re-anchor (fixes bottom-row overflow).
+  React.useLayoutEffect(() => {
+    if (!showRolePicker) return;
+    const anchor = cardContainerRef.current?.getBoundingClientRect();
+    const menuEl = pickerRef.current;
+    if (!anchor || !menuEl) return;
+
+    const apply = () => {
+      const menu = menuEl.getBoundingClientRect();
+      const w = Math.max(menu.width, 240);
+      const h = Math.max(menu.height, 280);
+      setPickerPosition(placePickerInViewport(anchor, w, h));
+    };
+    apply();
+    // Re-run once after fonts/layout settle.
+    const t = window.setTimeout(apply, 0);
+    const onResize = () => apply();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [showRolePicker, placePickerInViewport]);
+
   React.useEffect(() => {
     setLabelDraft(def.label);
   }, [def.label]);
@@ -182,7 +228,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     if (isLocked) return;
     const rect = cardContainerRef.current?.getBoundingClientRect();
     if (rect) {
-      setPickerPosition({ top: rect.bottom + 4, left: rect.left });
+      // Estimate first (menu ~420px tall max) so we don't flash off-screen.
+      const estH = Math.min(420, window.innerHeight * 0.7);
+      setPickerPosition(placePickerInViewport(rect, 240, estH));
     }
     setShowRolePicker(true);
   };
