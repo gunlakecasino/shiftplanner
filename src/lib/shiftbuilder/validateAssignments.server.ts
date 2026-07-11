@@ -73,8 +73,15 @@ function toUiSlotKey(
   }
 }
 
+/** Normalize DB night_date (YYYY-MM-DD or ISO timestamp) → YYYY-MM-DD. */
+function normalizeNightDateIso(raw: string): string {
+  const s = String(raw).trim();
+  return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
+}
+
 /**
- * Resolve night_date for a night id via admin. Returns YYYY-MM-DD or null.
+ * Resolve authoritative night_date for a night id via admin.
+ * Schedule day-key MUST come from this — never from a client-supplied date alone.
  */
 async function resolveNightDate(
   nightId: string,
@@ -95,19 +102,22 @@ async function resolveNightDate(
   if (!data?.night_date) {
     return { error: "Night not found" };
   }
-  // night_date may be ISO timestamp or YYYY-MM-DD
-  const raw = String(data.night_date);
-  const date = raw.includes("T") ? raw.slice(0, 10) : raw.slice(0, 10);
-  return { date };
+  return { date: normalizeNightDateIso(String(data.night_date)) };
 }
 
 /**
  * Authoritative canPlace validation for a night's draft proposals.
  * Performs zero writes. Caller must not write when `valid === false`.
+ *
+ * Schedule date is always `nights.night_date` for `nightId` (KD-5). Client
+ * `date` is advisory only — if present and disagrees, validation fails closed.
  */
 export async function validateProposalsForNight(params: {
   nightId: string;
-  /** YYYY-MM-DD — optional; resolved from nightId when omitted. */
+  /**
+   * Optional client YYYY-MM-DD (cache-bust / UX). Never used as the schedule
+   * day-key by itself. When provided, must match `nights.night_date` for nightId.
+   */
   date?: string | null;
   proposals: Proposal[];
 }): Promise<ValidationResult> {
@@ -120,29 +130,24 @@ export async function validateProposalsForNight(params: {
     return { valid: true, invalid: [] };
   }
 
-  let dateIso = params.date?.trim() || "";
-  if (!dateIso) {
-    const resolved = await resolveNightDate(params.nightId);
-    if ("error" in resolved) {
-      return invalidStar(resolved.error);
-    }
-    dateIso = resolved.date;
-  } else {
-    // Confirm night exists when both provided (cheap integrity check).
-    const { data: nightRow, error: nightErr } = await client
-      .from("nights")
-      .select("id")
-      .eq("id", params.nightId)
-      .maybeSingle();
-    if (nightErr) {
-      return invalidStar(`Night lookup failed: ${nightErr.message}`);
-    }
-    if (!nightRow) {
-      return invalidStar("Night not found");
+  // Always bind schedule gate to the night row — client date cannot spoof day-key.
+  const resolved = await resolveNightDate(params.nightId);
+  if ("error" in resolved) {
+    return invalidStar(resolved.error);
+  }
+  const dateIso = resolved.date;
+
+  const clientDate = params.date?.trim() || "";
+  if (clientDate) {
+    const clientNorm = normalizeNightDateIso(clientDate);
+    if (clientNorm !== dateIso) {
+      return invalidStar(
+        `Date does not match night (${clientNorm} ≠ ${dateIso})`,
+      );
     }
   }
 
-  // ── Schedule (admin, already via createAdminClientSafe in graves helpers) ──
+  // ── Schedule (admin; day-key from nights.night_date only) ──
   let scheduledIds;
   try {
     const nightDate = parseLocalDateISO(dateIso);

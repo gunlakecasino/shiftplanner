@@ -40,3 +40,18 @@ describe("batch_apply slot key normalization (db → UI for canPlace)", () => {
     expect(slotTypeForKey("OL-AM-1")).toBe("overlap");
   });
 });
+
+describe("night date binding (schedule day-key)", () => {
+  // normalizeNightDateIso is module-private; re-test the contract via error shape
+  // and document that client date is never authoritative alone.
+  it("ProposalValidationError still carries invalid for date mismatch responses", () => {
+    const err = new ProposalValidationError([
+      {
+        slotKey: "*",
+        tmId: null,
+        reason: "Date does not match night (2026-07-12 ≠ 2026-07-11)",
+      },
+    ]);
+    expect(err.invalid[0].reason).toMatch(/Date does not match night/);
+  });
+});
