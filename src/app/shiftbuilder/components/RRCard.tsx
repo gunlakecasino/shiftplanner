@@ -36,7 +36,11 @@ export interface RRCardProps {
   isDraftMode?: boolean;
   draftInfoW?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   draftInfoM?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
@@ -77,7 +81,11 @@ const RRSide: React.FC<{
   tasks: NightSlotTask[] | undefined;
   onClick: (k: string, el: HTMLElement, e?: React.MouseEvent) => void;
   loading?: boolean;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
@@ -268,7 +276,11 @@ function RRSideShell({
   onCycle?: () => void;
   coverageTasks: NightSlotTask[];
   slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   body: React.ReactNode;
   taskBadge?: React.ReactNode;
 }) {

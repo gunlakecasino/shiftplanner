@@ -21,7 +21,11 @@ const CoverageBar = React.memo(function CoverageBar({
 }: {
   task: NightSlotTask;
   slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   /** Softer saturation in live builder — print/preview stays full strength. */
   builderCalm?: boolean;
 }) {
@@ -68,7 +72,7 @@ const CoverageBar = React.memo(function CoverageBar({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onRemoveTask(slotKey, task.taskLabel);
+            onRemoveTask(slotKey, task.taskLabel, task.id);
           }}
           className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all sb-tablet-touch-target"
           style={{

@@ -711,7 +711,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     });
   }, [isPrintPreview, selectedTasks, onSlotClose, auxDefs]);
 
-  // Close flyout pads on outside click (placement + tasks)
+  // Close flyout pads on outside click (placement + tasks).
+  // Dirty Tasks Pad asks before discard (matches in-pad Cancel / Escape).
   React.useEffect(() => {
     if (!selectedSlotKey && !activeTaskEditPad) return;
     const onDocClick = (e: MouseEvent) => {
@@ -722,6 +723,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         !target.closest(".placement-dock") &&
         !target.closest("[data-tasks-pad]")
       ) {
+        if (activeTaskEditPad) {
+          const dirty = document.querySelector(
+            '[data-tasks-pad][data-tasks-pad-dirty="true"]',
+          );
+          if (dirty) {
+            const ok = window.confirm("Discard unsaved task changes?");
+            if (!ok) return;
+          }
+        }
         onSlotClose?.();
         closeTaskTextEditPad();
       }

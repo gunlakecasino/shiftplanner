@@ -45,7 +45,11 @@ export interface AuxCardProps {
   borderColor?: string;
   isDraftMode?: boolean;
   draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;

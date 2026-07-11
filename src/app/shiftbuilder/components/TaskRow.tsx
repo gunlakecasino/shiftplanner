@@ -38,7 +38,11 @@ export const TASK_COLOR_SPHERES = [
 export interface TaskRowProps {
   task: NightSlotTask;
   slotKey: string;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
@@ -262,7 +266,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
-            onRemoveTask(slotKey, task.taskLabel);
+            onRemoveTask(slotKey, task.taskLabel, task.id);
           }}
           className="hidden group-hover/task:flex shrink-0 items-center justify-center text-[#9CA3AF] hover:text-red-500 text-[13px] leading-none font-bold px-0.5 -mr-0.5"
           aria-label={`Remove ${task.taskLabel}`}

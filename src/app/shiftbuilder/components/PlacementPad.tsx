@@ -426,7 +426,11 @@ export interface PlacementPadProps {
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
   /** Opens Tasks Pad — primary surface for adding and formatting tasks. */
   onOpenTasksPad?: (slotKey: string, task?: NightSlotTask, options?: { addMode?: boolean }) => void;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   onClearSlotTasks?: (slotKey: string) => void | Promise<void>;
   onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
@@ -1196,7 +1200,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                     {onRemoveTask && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
+                        onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel, t.id); }}
                         className="text-gray-300 hover:text-red-400"
                         aria-label={`Remove ${t.taskLabel}`}
                       >

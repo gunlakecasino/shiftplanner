@@ -58,7 +58,11 @@ export interface MarkerPadProps {
   allEligibleTms?: TmEntry[];          // Full roster (minus placed) — used for search
   setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onAddTask: (slotKey: string, label: string) => void | Promise<void>;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
   /** New: Quick sweeper assignment with forced orange color + duplication guard */
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
   onToggleLock?: (slotKey: string) => void;
@@ -1644,7 +1648,7 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
                   {onRemoveTask && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel); }}
+                      onClick={(e) => { e.stopPropagation(); onRemoveTask(slotKey, t.taskLabel, t.id); }}
                       onPointerDown={(e) => e.stopPropagation()}
                       style={{
                         fontSize: 14, lineHeight: 1, color: "var(--sb-text-muted, #6C6C72)",

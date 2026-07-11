@@ -405,6 +405,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
       transition={premiumSpring}
       className="sb-tasks-pad rounded-xl border border-[var(--ios-gray-4)]/20 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] dark:bg-[var(--ios-background-secondary)] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)] overflow-hidden flex flex-col"
       data-tasks-pad
+      data-tasks-pad-dirty={hasChanges ? "true" : undefined}
       style={{
         ...(usePortal && portalStyle
           ? { ...portalStyle, zIndex: 210 }
