@@ -45,6 +45,7 @@ import {
   computePlacementRotationBasics,
   formatPlacementRotationDisplay,
   formatRotationBriefForAnalyst,
+  spreadCountForRepeatKey,
   type PlacementRotationBasics,
   type PlacementRotationDisplay,
   type PlacementTmProfile,
@@ -562,6 +563,28 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const [sweeperOpen, setSweeperOpen] = useState(false);
   const [taskInput, setTaskInput] = useState("");
   const taskInputRef = useRef<HTMLInputElement>(null);
+  const lightRunRef = useRef(0);
+
+  // Reset pad UI/insight state when identity (slot/TM/night/insights) changes.
+  useEffect(() => {
+    setCoverageMode(false);
+    setAssignMode(false);
+    setAssignConfirmed(false);
+    setRotationDisplay(null);
+    setRotationBasics(null);
+    rotationSigRef.current = null;
+    setDeepInsight(null);
+    setInsightStructured(null);
+    setInsightCached(false);
+    setAnalystDetailsOpen(false);
+    setDeepInsightLoading(false);
+    lightRunRef.current += 1;
+    analystRequestRef.current += 1;
+    setMatrixExpanded(false);
+    setEvidenceOpen(false);
+    setTaskInput("");
+    setSweeperOpen(false);
+  }, [slotKey, a.tmId, selectedDay.date, insightsEnabled]);
 
   const closeSide = anchor === "left" ? "left" : "right";
   const showDockAssignedSummary = isDock && dockTab === "assign" && !!a.tmId && !assignMode;
@@ -587,6 +610,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tmIds: [a.tmId], days: 90 }),
         });
+        if (!res.ok) throw new Error(`history ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
         setPadHistory((data.histories as Record<string, ZoneDetailEntry | null>)?.[a.tmId!] ?? null);
@@ -605,7 +629,12 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     const spreadCounts = getSpreadPlacementCounts(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
     const spreadKeys = getSpreadPlacementKeys(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
     const last5Sequence = getLastPlacementSequence(padHistory, LAST5_COUNT, currentIso);
-    return { spreadCounts, spreadKeys, last5Sequence, slotSpread: spreadCounts.get(slotKey) ?? 0 };
+    return {
+      spreadCounts,
+      spreadKeys,
+      last5Sequence,
+      slotSpread: spreadCountForRepeatKey(spreadCounts, slotKey),
+    };
   }, [padHistory, currentIso, slotKey]);
 
   const spreadCountFor = (ui: string) => padMatrixFacts.spreadCounts.get(ui) ?? 0;
@@ -659,7 +688,18 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       rotationSigRef.current = null;
       return;
     }
-    if (padHistoryLoading || !padHistory) return;
+    if (padHistoryLoading) return;
+    // null history = brand-new TM: still compute gaps (all matrix slots "not recent")
+    const historyForBasics = padHistory ?? {
+      tmId: a.tmId!,
+      tmName: a.tmName ?? a.tmId!,
+      zoneDates: {},
+      zoneCounts: {},
+      totalAssignments: 0,
+      totalNights: 0,
+      lastDate: "",
+      zoneDow: {},
+    };
 
     const sig = `${slotKey}|${a.tmId}|${currentIso}|${boardSig}|${padHistorySig}`;
     if (rotationSigRef.current === sig) return;
@@ -680,7 +720,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           const res = await fetch("/api/shiftbuilder/placement-histories", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tmIds: otherIds.slice(0, 24), days: PLACEMENT_SPREAD_NIGHTS }),
+            body: JSON.stringify({ tmIds: otherIds.slice(0, 48), days: PLACEMENT_SPREAD_NIGHTS }),
           });
           if (res.ok) {
             const data = await res.json();
@@ -703,7 +743,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       }
 
       const basics = computePlacementRotationBasics(
-        padHistory,
+        historyForBasics,
         slotKey,
         a.tmId!,
         matrixSlotKeys,
@@ -770,9 +810,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     ],
   );
 
-  // Board chips use full-board histories (swap-aware). Prefer that when parent provided it.
+  // Board chips use full-board histories (swap-aware). Prefer that when not history-pending.
   const prerenderedFit: PrerenderedPlacementFit =
-    boardPrerenderedFit ?? localPrerenderedFit;
+    boardPrerenderedFit && !boardPrerenderedFit.healthPending
+      ? boardPrerenderedFit
+      : localPrerenderedFit;
 
   const weekRepeatTotal = a.tmId
     ? getTmWeekRepeatForSlotThroughNight(
@@ -876,7 +918,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     void runPlacementAnalyst(a.tmName ? "deep" : "assignee");
   }, [a.tmName, runPlacementAnalyst]);
 
-  const lightRunRef = useRef(0);
   const runLightDetermination = React.useCallback(async () => {
     if (!insightsEnabled || !a.tmName) return;
     const reqId = ++lightRunRef.current;
@@ -884,7 +925,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       const data = await postEngineInsight(buildInsightContext("headline"));
       if (lightRunRef.current !== reqId) return;
       if (data.structured?.headline) {
-        setInsightStructured((prev) => (prev?.headline ? prev : data.structured ?? null));
+        setInsightStructured(data.structured ?? null);
         setInsightCached(!!data.cached);
       }
       if (data && !data.cached && data.usage) {

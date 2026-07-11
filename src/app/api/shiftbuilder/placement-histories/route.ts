@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const days = typeof body?.days === "number" ? body.days : 30;
     const unique = [...new Set(tmIds.filter((id) => typeof id === "string" && id.length > 0))].slice(
       0,
-      24,
+      48,
     );
 
     const entries = await Promise.all(
