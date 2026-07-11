@@ -6502,41 +6502,97 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     [nightId, selectedDay.date, selectedDay.name, persistAddTask, persistRemoveTask]
   );
 
-  // Direct "X" delete from task list on cards (hover affordance).
-  // Optimistic UI update + reuse the existing persistRemoveTask helper.
-  const handleRemoveTask = React.useCallback(
-    (uiKey: string, taskLabel: string) => {
-      const targetNightId = nightId;
-      const captureDate = selectedDay.date;
-      const captureDayName = selectedDay.name;
+  // Snapshot helpers for optimistic task-row mutations (rollback on error).
+  const snapshotSlotTasks = React.useCallback(
+    (uiKey: string): NightSlotTask[] => {
+      return [...(selectedTasks[uiKey] || [])];
+    },
+    [selectedTasks],
+  );
 
-      // Optimistic removal from local state for instant feedback
+  const restoreSlotTasks = React.useCallback((uiKey: string, snap: NightSlotTask[]) => {
+    setSelectedTasks((prev) => ({ ...prev, [uiKey]: snap }));
+  }, []);
+
+  // Direct "X" delete from task list on cards / pad.
+  // Optimistic UI + stable id when provided; restore + toast on failure.
+  const handleRemoveTask = React.useCallback(
+    async (uiKey: string, taskLabel: string, taskId?: string | null) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
+      const captureDate = selectedDay.date;
+      const captureDateKey = formatLocalDateISO(captureDate);
+      const snap = snapshotSlotTasks(uiKey);
+
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
-        const next = existing.filter((t) => t.taskLabel !== taskLabel);
+        const next = existing.filter((t) =>
+          taskId ? t.id !== taskId : t.taskLabel !== taskLabel,
+        );
         return { ...prev, [uiKey]: next };
       });
 
-      persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, taskLabel);
+      try {
+        const { removeNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+        await removeNightSlotTask({
+          nightId,
+          slotKey: slot_key,
+          slotType: slot_type,
+          rrSide: rr_side,
+          taskLabel,
+          taskId,
+        });
+        const fresh = await getNightSlotTasks(nightId);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+        }
+        logBuilderChange({
+          action: "task_remove",
+          slotKey: uiKey,
+          targetNightId: nightId,
+          payload: { taskLabel, taskId },
+        });
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to remove task:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to remove task — changes reverted", "error");
+        throw err;
+      }
     },
-    [nightId, selectedDay.date, selectedDay.name, persistRemoveTask]
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      showToast,
+      currentNight.queryClient,
+      logBuilderChange,
+    ],
   );
 
-  // Per-task color sphere — optimistic + persist
+  // Per-task color sphere — optimistic + persist + rollback
   const handleSetTaskColor = React.useCallback(
-    (uiKey: string, taskLabel: string, color: string | null) => {
-      const targetNightId = nightId;
-      const captureDate = selectedDay.date;
-      const captureDayName = selectedDay.name;
-      const captureDateKey: string = formatLocalDateISO(captureDate);
-
+    async (
+      uiKey: string,
+      taskLabel: string,
+      color: string | null,
+      taskId?: string | null,
+    ) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
       const { slot_key, rr_side } = uiToDb(uiKey);
+      const snap = snapshotSlotTasks(uiKey);
 
-      // Optimistic update
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) =>
-          t.taskLabel === taskLabel ? { ...t, color } : t
+          (taskId ? t.id === taskId : t.taskLabel === taskLabel) ? { ...t, color } : t,
         );
         return { ...prev, [uiKey]: next };
       });
@@ -6544,38 +6600,63 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       logBuilderChange({
         action: "task_color",
         slotKey: uiKey,
-        targetNightId,
-        payload: { taskLabel, color },
+        targetNightId: nightId,
+        payload: { taskLabel, color, taskId },
       });
 
-      // Persist + patch TanStack so reloads see marker/color without extra refreshes
-      (async () => {
-        try {
-          const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-          await (updateNightSlotTaskColor as any)(targetNightId!, slot_key, taskLabel, color, rr_side, undefined);
-          const fresh = await getNightSlotTasks(targetNightId!);
-          if (currentNight.queryClient) {
-            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
-          }
-        } catch (err) {
-          console.error('[ShiftBuilder] Failed to set task color:', err);
+      try {
+        const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        await updateNightSlotTaskColor(
+          nightId,
+          slot_key,
+          taskLabel,
+          color,
+          rr_side,
+          undefined,
+          taskId,
+        );
+        const fresh = await getNightSlotTasks(nightId);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
         }
-      })();
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to set task color:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to update task color — changes reverted", "error");
+        throw err;
+      }
     },
-    [nightId, selectedDay.date, selectedDay.name, logBuilderChange, currentNight.queryClient]
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      logBuilderChange,
+      currentNight.queryClient,
+      showToast,
+    ],
   );
 
-  // Per-task marker style (underline / circle / highlight / none)
+  // Per-task text style (font weight / size / spans)
   const handleSetTaskTextStyle = React.useCallback(
-    (uiKey: string, taskLabel: string, textStyle: TaskTextStyle | null) => {
-      const targetNightId = nightId;
-      const captureDateKey: string = formatLocalDateISO(selectedDay.date);
+    async (
+      uiKey: string,
+      taskLabel: string,
+      textStyle: TaskTextStyle | null,
+      taskId?: string | null,
+    ) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
       const { slot_key, rr_side } = uiToDb(uiKey);
+      const snap = snapshotSlotTasks(uiKey);
 
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) =>
-          t.taskLabel === taskLabel ? { ...t, textStyle } : t,
+          (taskId ? t.id === taskId : t.taskLabel === taskLabel) ? { ...t, textStyle } : t,
         );
         return { ...prev, [uiKey]: next };
       });
@@ -6583,65 +6664,105 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       logBuilderChange({
         action: "task_style",
         slotKey: uiKey,
-        targetNightId,
-        payload: { taskLabel, textStyle },
+        targetNightId: nightId,
+        payload: { taskLabel, textStyle, taskId },
       });
 
-      (async () => {
-        try {
-          const { updateNightSlotTaskStyle, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-          await updateNightSlotTaskStyle(targetNightId!, slot_key, taskLabel, textStyle, rr_side);
-          const fresh = await getNightSlotTasks(targetNightId!);
-          if (currentNight.queryClient) {
-            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
-          }
-        } catch (err) {
-          console.error("[ShiftBuilder] Failed to set task text style:", err);
+      try {
+        const { updateNightSlotTaskStyle, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        await updateNightSlotTaskStyle(
+          nightId,
+          slot_key,
+          taskLabel,
+          textStyle,
+          rr_side,
+          taskId,
+        );
+        const fresh = await getNightSlotTasks(nightId);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
         }
-      })();
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to set task text style:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to update task style — changes reverted", "error");
+        throw err;
+      }
     },
-    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient],
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      logBuilderChange,
+      currentNight.queryClient,
+      showToast,
+    ],
   );
 
   const handleSetTaskMarker = React.useCallback(
-    (uiKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
-      const targetNightId = nightId;
-      const captureDate = selectedDay.date;
-      const captureDateKey: string = formatLocalDateISO(captureDate);
-
+    async (
+      uiKey: string,
+      taskLabel: string,
+      markerType: "highlight" | "underline" | "circle" | "none" | null,
+      taskId?: string | null,
+    ) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
       const { slot_key, rr_side } = uiToDb(uiKey);
+      const snap = snapshotSlotTasks(uiKey);
 
-      // Optimistic update
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) =>
-          t.taskLabel === taskLabel ? { ...t, markerType } : t
+          (taskId ? t.id === taskId : t.taskLabel === taskLabel)
+            ? { ...t, markerType }
+            : t,
         );
         return { ...prev, [uiKey]: next };
       });
 
       logBuilderChange({
-        action: "task_color", // reuse for now (or could be task_marker)
+        action: "task_color",
         slotKey: uiKey,
-        targetNightId,
-        payload: { taskLabel, markerType },
+        targetNightId: nightId,
+        payload: { taskLabel, markerType, taskId },
       });
 
-      // Persist + patch TanStack cache so reloads see the marker without multiple refreshes
-      (async () => {
-        try {
-          const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-          await updateNightSlotTaskColor(targetNightId!, slot_key, taskLabel, undefined, rr_side, markerType);
-          const fresh = await getNightSlotTasks(targetNightId!);
-          if (currentNight.queryClient) {
-            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
-          }
-        } catch (err) {
-          console.error('[ShiftBuilder] Failed to set task marker:', err);
+      try {
+        const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        await updateNightSlotTaskColor(
+          nightId,
+          slot_key,
+          taskLabel,
+          undefined,
+          rr_side,
+          markerType,
+          taskId,
+        );
+        const fresh = await getNightSlotTasks(nightId);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
         }
-      })();
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to set task marker:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to update task marker — changes reverted", "error");
+        throw err;
+      }
     },
-    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient]
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      logBuilderChange,
+      currentNight.queryClient,
+      showToast,
+    ],
   );
 
   const handleSetTaskAppearance = React.useCallback(
@@ -6652,15 +6773,20 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         color: string | null;
         markerType: "highlight" | "underline" | "circle" | "none";
       },
+      taskId?: string | null,
     ) => {
-      const targetNightId = nightId;
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
       const captureDateKey = formatLocalDateISO(selectedDay.date);
       const { slot_key, rr_side } = uiToDb(uiKey);
+      const snap = snapshotSlotTasks(uiKey);
 
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) =>
-          t.taskLabel === taskLabel
+          (taskId ? t.id === taskId : t.taskLabel === taskLabel)
             ? { ...t, color: appearance.color, markerType: appearance.markerType }
             : t,
         );
@@ -6670,80 +6796,118 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       logBuilderChange({
         action: "task_color",
         slotKey: uiKey,
-        targetNightId,
+        targetNightId: nightId,
         payload: {
           taskLabel,
           color: appearance.color,
           markerType: appearance.markerType,
+          taskId,
         },
       });
 
       try {
         const { updateNightSlotTaskColor, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
         await updateNightSlotTaskColor(
-          targetNightId!,
+          nightId,
           slot_key,
           taskLabel,
           appearance.color,
           rr_side,
           appearance.markerType,
+          taskId,
         );
-        const fresh = await getNightSlotTasks(targetNightId!);
+        const fresh = await getNightSlotTasks(nightId);
         if (currentNight.queryClient) {
           patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
         }
       } catch (err) {
         console.error("[ShiftBuilder] Failed to set task appearance:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to update task appearance — changes reverted", "error");
         throw err;
       }
     },
-    [nightId, selectedDay.date, logBuilderChange, currentNight.queryClient],
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      logBuilderChange,
+      currentNight.queryClient,
+      showToast,
+    ],
   );
 
-  // Edit / rename an existing task label (inline edit)
+  // Edit / rename an existing task label (inline edit / pad)
   const handleEditTask = React.useCallback(
-    (uiKey: string, oldLabel: string, newLabel: string) => {
-      const targetNightId = nightId;
-      const captureDateKey = formatLocalDateISO(selectedDay.date);
-
+    async (
+      uiKey: string,
+      oldLabel: string,
+      newLabel: string,
+      taskId?: string | null,
+    ) => {
+      if (!nightId) {
+        showToast("No active night selected", "error");
+        throw new Error("no night");
+      }
       const trimmed = newLabel.trim();
       if (!trimmed || trimmed === oldLabel) return;
 
+      const captureDateKey = formatLocalDateISO(selectedDay.date);
+      const snap = snapshotSlotTasks(uiKey);
       let remappedStyle: TaskTextStyle | null = null;
 
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
         const next = existing.map((t) => {
-          if (t.taskLabel !== oldLabel) return t;
+          if (taskId ? t.id !== taskId : t.taskLabel !== oldLabel) return t;
           remappedStyle = remapTaskTextStyleForLabelChange(t.textStyle, oldLabel, trimmed);
-          return {
-            ...t,
-            taskLabel: trimmed,
-            textStyle: remappedStyle,
-          };
+          return { ...t, taskLabel: trimmed, textStyle: remappedStyle };
         });
         return { ...prev, [uiKey]: next };
       });
 
       const { slot_key, rr_side } = uiToDb(uiKey);
-      (async () => {
-        try {
-          const { updateNightSlotTaskLabel, updateNightSlotTaskStyle, getNightSlotTasks } =
-            await import("@/lib/shiftbuilder/data");
-          await updateNightSlotTaskLabel(targetNightId!, slot_key, oldLabel, trimmed, rr_side);
-          if (remappedStyle) {
-            await updateNightSlotTaskStyle(targetNightId!, slot_key, trimmed, remappedStyle, rr_side);
-          }
-          const fresh = await getNightSlotTasks(targetNightId!);
-          if (currentNight.queryClient) {
-            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
-          }
-        } catch (err) {
-          console.error("[ShiftBuilder] Failed to edit task label:", err);
+      try {
+        const { updateNightSlotTaskLabel, updateNightSlotTaskStyle, getNightSlotTasks } =
+          await import("@/lib/shiftbuilder/data");
+        await updateNightSlotTaskLabel(
+          nightId,
+          slot_key,
+          oldLabel,
+          trimmed,
+          rr_side,
+          taskId,
+        );
+        if (remappedStyle) {
+          await updateNightSlotTaskStyle(
+            nightId,
+            slot_key,
+            trimmed,
+            remappedStyle,
+            rr_side,
+            taskId,
+          );
         }
-      })();
+        const fresh = await getNightSlotTasks(nightId);
+        if (currentNight.queryClient) {
+          patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKey, fresh);
+        }
+      } catch (err) {
+        console.error("[ShiftBuilder] Failed to edit task label:", err);
+        restoreSlotTasks(uiKey, snap);
+        showToast("Failed to rename task — changes reverted", "error");
+        throw err;
+      }
     },
-    [nightId, selectedDay.date, currentNight.queryClient],
+    [
+      nightId,
+      selectedDay.date,
+      snapshotSlotTasks,
+      restoreSlotTasks,
+      currentNight.queryClient,
+      showToast,
+    ],
   );
 
   // Operator-authored custom task: insert into the catalog AND select it for
@@ -6959,9 +7123,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     await handleCmdkAddCoverage(sourceKey, targetKey);
   }, [handleCmdkAddCoverage]);
 
-  const handleBoardRemoveTask = React.useCallback((slotKey: string, taskLabel: string) => {
-    handleRemoveTask(slotKey, taskLabel);
-  }, [handleRemoveTask]);
+  const handleBoardRemoveTask = React.useCallback(
+    (slotKey: string, taskLabel: string, taskId?: string | null) =>
+      handleRemoveTask(slotKey, taskLabel, taskId),
+    [handleRemoveTask],
+  );
 
   const handleClearSlotTasks = React.useCallback(
     async (uiKey: string) => {
@@ -7057,13 +7223,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     [isCurrentNightLocked, nightId, selectedTasks, showToast, logBuilderChange, mapNightTasksToUiKeys, auxDefs],
   );
 
-  const handleBoardSetTaskColor = React.useCallback((slotKey: string, taskId: string, color: string) => {
-    handleSetTaskColor(slotKey, taskId, color);
-  }, [handleSetTaskColor]);
+  const handleBoardSetTaskColor = React.useCallback(
+    (slotKey: string, taskLabel: string, color: string | null, taskId?: string | null) =>
+      handleSetTaskColor(slotKey, taskLabel, color, taskId),
+    [handleSetTaskColor],
+  );
 
-  const handleBoardSetTaskMarker = React.useCallback((slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => {
-    handleSetTaskMarker(slotKey, taskLabel, markerType);
-  }, [handleSetTaskMarker]);
+  const handleBoardSetTaskMarker = React.useCallback(
+    (
+      slotKey: string,
+      taskLabel: string,
+      markerType: "highlight" | "underline" | "circle" | "none" | null,
+      taskId?: string | null,
+    ) => handleSetTaskMarker(slotKey, taskLabel, markerType, taskId),
+    [handleSetTaskMarker],
+  );
 
   const handleBoardSetTaskAppearance = React.useCallback(
     (
@@ -7073,22 +7247,26 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         color: string | null;
         markerType: "highlight" | "underline" | "circle" | "none";
       },
-    ) => {
-      handleSetTaskAppearance(slotKey, taskLabel, appearance);
-    },
+      taskId?: string | null,
+    ) => handleSetTaskAppearance(slotKey, taskLabel, appearance, taskId),
     [handleSetTaskAppearance],
   );
 
   const handleBoardSetTaskTextStyle = React.useCallback(
-    (slotKey: string, taskLabel: string, textStyle: import("@/lib/shiftbuilder/taskTextStyle").TaskTextStyle | null) => {
-      handleSetTaskTextStyle(slotKey, taskLabel, textStyle);
-    },
+    (
+      slotKey: string,
+      taskLabel: string,
+      textStyle: import("@/lib/shiftbuilder/taskTextStyle").TaskTextStyle | null,
+      taskId?: string | null,
+    ) => handleSetTaskTextStyle(slotKey, taskLabel, textStyle, taskId),
     [handleSetTaskTextStyle],
   );
 
-  const handleBoardEditTask = React.useCallback((slotKey: string, taskId: string, newLabel: string) => {
-    handleEditTask(slotKey, taskId, newLabel);
-  }, [handleEditTask]);
+  const handleBoardEditTask = React.useCallback(
+    (slotKey: string, oldLabel: string, newLabel: string, taskId?: string | null) =>
+      handleEditTask(slotKey, oldLabel, newLabel, taskId),
+    [handleEditTask],
+  );
 
   const handleBoardLiveAssign = React.useCallback((uiKey: string, tmId: string, tmName: string) => {
     if (!requireEdit()) return;
