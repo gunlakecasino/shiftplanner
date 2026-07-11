@@ -55,7 +55,7 @@ import {
 // (e.g. useCommandActions transitive) into the static module graph of this giant file.
 // This follows the established pattern to prevent Turbopack "module factory is not available" HMR errors.
 // See comments around LazyCommandPalette and other await import() sites.
-// runWeightedPlanner + logEngineRunSummary dynamically imported inside the engine handler (placement is a heavy module)
+// Legacy runWeightedPlanner is dynamically imported only behind sb_legacy_engine=1 (dev); production uses unified engine/adapters.
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 // EngineRulesContext extracted; import removed to clean unused.
 // buildDefaultAdjacency dynamically imported inside the engine handler (any static edge into scoring still triggers Turbopack "module factory" errors on this giant file, per the pattern for placement/grok/data/etc.)
@@ -1277,10 +1277,9 @@ function AuthedShiftBuilder() {
   // opt-in fix for the "JT shouldn't show up on Wednesday" problem.
   // === Draft Mode Controls ===
   //
-  // Respects engineConfig.placementMethod:
-  //   - "weighted"     → Pure deterministic weighted planner (fast, predictable)
-  //   - "grok-hybrid"  → Weighted planner + Grok 4.3 judgment layer on top
-  //   - "greedy"       → Falls back to weighted (legacy)
+  // Production: unified engine only (engine/adapters). Failure → toast + abort.
+  // Dev-only legacy weighted planner: localStorage sb_legacy_engine=1 (non-production).
+  // placementMethod still selects AI refinement (grok-hybrid) inside the unified path.
   //
   // Engine runner extracted (Phase 2) - now after function deps are defined to avoid TDZ
   const engineRunner = useEngineRunner({
@@ -4221,20 +4220,16 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             })
           : rosterForEngine;
 
-        // ── Unified Placement Intelligence System (opt-in, behind a local flag) ──
-        // Default OFF: the live board runs the legacy path below untouched. When
-        // enabled (localStorage sb_unified_engine="1"), the whole run — coverage
-        // planner, rotation-health optimizer, guard — flows through the unified
-        // engine and feeds Draft Mode via the same applyPlannerResultAsDraft seam,
-        // so the board, Why? panel, and per-card provenance render with no UI work.
-        // ── Unified Placement Intelligence System — now the DEFAULT engine path.
-        // Opt out with localStorage sb_unified_engine="0". Wrapped in try/catch:
-        // any runtime error falls through to the legacy planner below, so the
-        // board is never left broken.
-        const unifiedEngineOff =
+        // ── Unified Placement Intelligence System — sole production engine path.
+        // On failure: toast + abort. No silent runWeightedPlanner fallthrough.
+        // Dev-only escape hatch: localStorage sb_legacy_engine="1" (non-production
+        // builds only) runs the legacy weighted planner path below instead.
+        const allowLegacyEngine =
+          process.env.NODE_ENV !== "production" &&
           typeof window !== "undefined" &&
-          window.localStorage?.getItem("sb_unified_engine") === "0";
-        if (!unifiedEngineOff) {
+          window.localStorage?.getItem("sb_legacy_engine") === "1";
+
+        if (!allowLegacyEngine) {
           try {
             console.info("[engine] unified pipeline running", { forceXai: !!options?.forceXai });
             const {
@@ -4396,14 +4391,23 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             );
             return;
           } catch (unifiedErr) {
-            console.error(
-              "[engine] unified pipeline failed — falling back to legacy planner:",
-              unifiedErr,
+            console.error("[engine] unified pipeline failed — aborting (no legacy fallthrough):", unifiedErr);
+            const detail =
+              unifiedErr instanceof Error
+                ? unifiedErr.message
+                : typeof unifiedErr === "string"
+                  ? unifiedErr
+                  : "unknown error";
+            showToast(
+              `Engine failed — ${detail || "unified pipeline error"}. No legacy fallback.`,
+              "error",
             );
-            // fall through to the legacy path below
+            return;
           }
         }
 
+        // Dev-only: localStorage sb_legacy_engine=1 (stripped from production builds).
+        console.info("[engine] sb_legacy_engine=1 — running legacy weighted planner");
         const { runWeightedPlanner } = await import("@/lib/shiftbuilder/placement");
         const { buildDefaultAdjacency } = await import("@/lib/shiftbuilder/scoring");
         const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");

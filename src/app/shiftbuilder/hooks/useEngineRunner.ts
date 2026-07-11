@@ -11,8 +11,13 @@ import { useConfirm } from "../components/ConfirmDialog";
  *
  * Manages "Run Engine" / Optimize Night (Full: planner+opt+AI) phase and draft entry.
  *
- * See notes in timefoldLocalSolver.ts and engine/index.ts on how this relates
- * The single Optimize Night path (full placements + optimization). Week uses the same engine core.
+ * The actual Optimize Night body lives on `runCoverageEngineRef` (wired from
+ * ShiftBuilderClient.optimizeNight). Production uses the unified engine only —
+ * on failure the client toasts and aborts; there is no silent
+ * `runWeightedPlanner` fallthrough. Dev-only legacy is opt-in via
+ * localStorage `sb_legacy_engine=1` (non-production builds).
+ *
+ * See notes in timefoldLocalSolver.ts and engine/index.ts. Week uses the same engine core.
  */
 export interface UseEngineRunnerParams {
   // Pure helpers (passed from orchestrator to avoid duplication)
