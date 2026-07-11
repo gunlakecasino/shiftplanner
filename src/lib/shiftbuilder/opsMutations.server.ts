@@ -3,6 +3,7 @@ import { dbToUi, uiToDb } from "@/lib/shiftbuilder/slot-keys";
 import { matrixTmsAfterHistoryChange } from "@/lib/shiftbuilder/rotation/historyOwnership";
 import type { BreakGroupValue } from "@/lib/shiftbuilder/breakGroupResolve";
 import type { MoveTaskParams } from "./data";
+import { preferTaskIdFilter } from "./taskMutationIdentity";
 
 export type UpsertAssignmentParams = {
   nightId: string;
@@ -40,6 +41,8 @@ export type RemoveTaskParams = {
   slotType: "zone" | "rr" | "aux" | "overlap";
   rrSide?: "mens" | "womens" | null;
   taskLabel: string;
+  /** When set, delete by stable row id (label kept for logging / legacy callers). */
+  taskId?: string | null;
 };
 
 function adminClient() {
@@ -838,18 +841,28 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
 
 export async function removeNightSlotTaskServer(params: RemoveTaskParams): Promise<void> {
   const client = adminClient();
-  const { nightId, slotKey, slotType, rrSide = null, taskLabel } = params;
+  const { nightId, slotKey, slotType, rrSide = null, taskLabel, taskId } = params;
 
-  let q = client
-    .from("night_slot_tasks")
-    .delete()
-    .eq("night_id", nightId)
-    .eq("slot_key", slotKey)
-    .eq("slot_type", slotType)
-    .eq("task_label", taskLabel);
+  const pref = preferTaskIdFilter({
+    nightId,
+    slotKey,
+    taskLabel,
+    taskId,
+    rrSide,
+  });
 
-  if (rrSide) q = q.eq("rr_side", rrSide);
-  else q = q.is("rr_side", null);
+  let q = client.from("night_slot_tasks").delete();
+  if (pref.mode === "id") {
+    q = q.eq("id", pref.taskId!);
+  } else {
+    q = q
+      .eq("night_id", nightId)
+      .eq("slot_key", slotKey)
+      .eq("slot_type", slotType)
+      .eq("task_label", pref.taskLabel!);
+    if (rrSide) q = q.eq("rr_side", rrSide);
+    else q = q.is("rr_side", null);
+  }
 
   const { error } = await q;
   if (error) throw new Error(`Failed to remove task: ${error.message}`);
@@ -937,17 +950,24 @@ export async function updateNightSlotTaskStyleServer(
   taskLabel: string,
   textStyle: Record<string, unknown> | null,
   rrSide: "mens" | "womens" | null = null,
+  taskId?: string | null,
 ): Promise<void> {
   const client = adminClient();
+  const pref = preferTaskIdFilter({ nightId, slotKey, taskLabel, taskId, rrSide });
+
   let q = client
     .from("night_slot_tasks")
-    .update({ text_style: textStyle })
-    .eq("night_id", nightId)
-    .eq("slot_key", slotKey)
-    .eq("task_label", taskLabel);
-
-  if (rrSide) q = q.eq("rr_side", rrSide);
-  else q = q.is("rr_side", null);
+    .update({ text_style: textStyle });
+  if (pref.mode === "id") {
+    q = q.eq("id", pref.taskId!);
+  } else {
+    q = q
+      .eq("night_id", nightId)
+      .eq("slot_key", slotKey)
+      .eq("task_label", pref.taskLabel!);
+    if (rrSide) q = q.eq("rr_side", rrSide);
+    else q = q.is("rr_side", null);
+  }
 
   const { error } = await q;
   if (error) throw new Error(`Failed to set task text style: ${error.message}`);
@@ -960,21 +980,25 @@ export async function updateNightSlotTaskColorServer(
   color?: string | null,
   rrSide: "mens" | "womens" | null = null,
   markerType?: "highlight" | "underline" | "circle" | "none" | null,
+  taskId?: string | null,
 ): Promise<void> {
   const client = adminClient();
   const update: Record<string, unknown> = {};
   if (color !== undefined) update.color = color;
   if (markerType !== undefined) update.marker_type = markerType;
 
-  let q = client
-    .from("night_slot_tasks")
-    .update(update)
-    .eq("night_id", nightId)
-    .eq("slot_key", slotKey)
-    .eq("task_label", taskLabel);
-
-  if (rrSide) q = q.eq("rr_side", rrSide);
-  else q = q.is("rr_side", null);
+  const pref = preferTaskIdFilter({ nightId, slotKey, taskLabel, taskId, rrSide });
+  let q = client.from("night_slot_tasks").update(update);
+  if (pref.mode === "id") {
+    q = q.eq("id", pref.taskId!);
+  } else {
+    q = q
+      .eq("night_id", nightId)
+      .eq("slot_key", slotKey)
+      .eq("task_label", pref.taskLabel!);
+    if (rrSide) q = q.eq("rr_side", rrSide);
+    else q = q.is("rr_side", null);
+  }
 
   const { error } = await q;
   if (error) throw new Error(`Failed to set task color: ${error.message}`);
@@ -986,21 +1010,30 @@ export async function updateNightSlotTaskLabelServer(
   oldLabel: string,
   newLabel: string,
   rrSide: "mens" | "womens" | null = null,
+  taskId?: string | null,
 ): Promise<void> {
   const trimmed = newLabel.trim();
   if (!trimmed) throw new Error("Task label cannot be empty");
 
   const client = adminClient();
-  let q = client
-    .from("night_slot_tasks")
-    .update({ task_label: trimmed })
-    .eq("night_id", nightId)
-    .eq("slot_key", slotKey)
-    .eq("task_label", oldLabel);
-
-  if (rrSide) q = q.eq("rr_side", rrSide);
-  else q = q.is("rr_side", null);
-
+  const pref = preferTaskIdFilter({
+    nightId,
+    slotKey,
+    taskLabel: oldLabel,
+    taskId,
+    rrSide,
+  });
+  let q = client.from("night_slot_tasks").update({ task_label: trimmed });
+  if (pref.mode === "id") {
+    q = q.eq("id", pref.taskId!);
+  } else {
+    q = q
+      .eq("night_id", nightId)
+      .eq("slot_key", slotKey)
+      .eq("task_label", oldLabel);
+    if (rrSide) q = q.eq("rr_side", rrSide);
+    else q = q.is("rr_side", null);
+  }
   const { error } = await q;
   if (error) throw new Error(`Failed to update task label: ${error.message}`);
 }

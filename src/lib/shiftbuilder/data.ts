@@ -1354,12 +1354,15 @@ export interface RemoveTaskParams {
   slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide?: 'mens' | 'womens' | null;
   taskLabel: string;
+  /** When set, delete by stable row id (label kept for logging / legacy callers). */
+  taskId?: string | null;
 }
 
 export async function removeNightSlotTask(params: RemoveTaskParams): Promise<void> {
-  const { nightId, slotKey, slotType, rrSide = null, taskLabel } = params;
-  if (!nightId || !slotKey || !taskLabel) {
-    throw new Error('removeNightSlotTask requires nightId, slotKey, taskLabel');
+  const { nightId, slotKey, taskLabel, taskId } = params;
+  const hasId = typeof taskId === "string" && taskId.trim().length > 0;
+  if (!nightId || !slotKey || (!taskLabel && !hasId)) {
+    throw new Error('removeNightSlotTask requires nightId, slotKey, and taskId or taskLabel');
   }
 
   await runBoardMutation(
@@ -1383,13 +1386,15 @@ export async function updateNightSlotTaskColor(
   taskLabel: string,
   color?: string | null,
   rrSide: 'mens' | 'womens' | null = null,
-  markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null
+  markerType?: 'highlight' | 'underline' | 'circle' | 'none' | null,
+  taskId?: string | null,
 ): Promise<void> {
-  if (!nightId || !slotKey || !taskLabel) {
-    throw new Error('setNightSlotTaskColor requires nightId, slotKey, taskLabel');
+  const hasId = typeof taskId === "string" && taskId.trim().length > 0;
+  if (!nightId || !slotKey || (!taskLabel && !hasId)) {
+    throw new Error('setNightSlotTaskColor requires nightId, slotKey, and taskId or taskLabel');
   }
 
-  const payload = { nightId, slotKey, taskLabel, color, rrSide, markerType };
+  const payload = { nightId, slotKey, taskLabel, color, rrSide, markerType, taskId };
   await runBoardMutation(
     'update_night_slot_task_color',
     payload,
@@ -1402,6 +1407,7 @@ export async function updateNightSlotTaskColor(
         color,
         rrSide,
         markerType,
+        taskId,
       );
       return { ok: true };
     },
@@ -1418,18 +1424,27 @@ export async function updateNightSlotTaskStyle(
   taskLabel: string,
   textStyle: TaskTextStyle | null,
   rrSide: 'mens' | 'womens' | null = null,
+  taskId?: string | null,
 ): Promise<void> {
-  if (!nightId || !slotKey || !taskLabel) {
-    throw new Error('updateNightSlotTaskStyle requires nightId, slotKey, taskLabel');
+  const hasId = typeof taskId === "string" && taskId.trim().length > 0;
+  if (!nightId || !slotKey || (!taskLabel && !hasId)) {
+    throw new Error('updateNightSlotTaskStyle requires nightId, slotKey, and taskId or taskLabel');
   }
 
-  const payload = { nightId, slotKey, taskLabel, textStyle, rrSide };
+  const payload = { nightId, slotKey, taskLabel, textStyle, rrSide, taskId };
   await runBoardMutation(
     'update_night_slot_task_style',
     payload,
     async () => {
       const { updateNightSlotTaskStyleServer } = await import('./opsMutations.server');
-      await updateNightSlotTaskStyleServer(nightId, slotKey, taskLabel, textStyle, rrSide);
+      await updateNightSlotTaskStyleServer(
+        nightId,
+        slotKey,
+        taskLabel,
+        textStyle,
+        rrSide,
+        taskId,
+      );
       return { ok: true };
     },
   );
@@ -1471,10 +1486,14 @@ export async function updateNightSlotTaskLabel(
   slotKey: string,
   oldLabel: string,
   newLabel: string,
-  rrSide: 'mens' | 'womens' | null = null
+  rrSide: 'mens' | 'womens' | null = null,
+  taskId?: string | null,
 ): Promise<void> {
-  if (!nightId || !slotKey || !oldLabel || !newLabel) {
-    throw new Error('updateNightSlotTaskLabel requires nightId, slotKey, oldLabel, newLabel');
+  const hasId = typeof taskId === "string" && taskId.trim().length > 0;
+  if (!nightId || !slotKey || !newLabel || (!oldLabel && !hasId)) {
+    throw new Error(
+      'updateNightSlotTaskLabel requires nightId, slotKey, newLabel, and oldLabel or taskId',
+    );
   }
 
   const trimmed = newLabel.trim();
@@ -1482,13 +1501,20 @@ export async function updateNightSlotTaskLabel(
     throw new Error('Task label cannot be empty');
   }
 
-  const payload = { nightId, slotKey, oldLabel, newLabel: trimmed, rrSide };
+  const payload = { nightId, slotKey, oldLabel, newLabel: trimmed, rrSide, taskId };
   await runBoardMutation(
     'update_night_slot_task_label',
     payload,
     async () => {
       const { updateNightSlotTaskLabelServer } = await import('./opsMutations.server');
-      await updateNightSlotTaskLabelServer(nightId, slotKey, oldLabel, trimmed, rrSide);
+      await updateNightSlotTaskLabelServer(
+        nightId,
+        slotKey,
+        oldLabel,
+        trimmed,
+        rrSide,
+        taskId,
+      );
       return { ok: true };
     },
   );

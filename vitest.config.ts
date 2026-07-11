@@ -19,6 +19,7 @@ export default defineConfig({
     include: [
       "src/lib/shiftbuilder/engine/**/*.test.ts",
       "src/lib/shiftbuilder/rotation/**/*.test.ts",
+      "src/lib/shiftbuilder/__tests__/**/*.test.ts",
       "src/lib/shiftbuilder/*.test.ts",
       "src/lib/tasks/**/*.test.ts",
       "src/lib/auth/**/*.test.ts",

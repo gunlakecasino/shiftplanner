@@ -270,10 +270,11 @@ export async function POST(request: NextRequest) {
         await updateNightSlotTaskColorServer(
           String(body.nightId),
           String(body.slotKey),
-          String(body.taskLabel),
+          String(body.taskLabel ?? ""),
           (body.color as string | null) ?? null,
           (body.rrSide as "mens" | "womens" | null) ?? null,
           body.markerType as "highlight" | "underline" | "circle" | "none" | null | undefined,
+          (body.taskId as string | null | undefined) ?? null,
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
@@ -282,9 +283,10 @@ export async function POST(request: NextRequest) {
         await updateNightSlotTaskStyleServer(
           String(body.nightId),
           String(body.slotKey),
-          String(body.taskLabel),
+          String(body.taskLabel ?? ""),
           (body.textStyle as Record<string, unknown> | null) ?? null,
           (body.rrSide as "mens" | "womens" | null) ?? null,
+          (body.taskId as string | null | undefined) ?? null,
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
@@ -304,9 +306,10 @@ export async function POST(request: NextRequest) {
         await updateNightSlotTaskLabelServer(
           String(body.nightId),
           String(body.slotKey),
-          String(body.oldLabel),
+          String(body.oldLabel ?? ""),
           String(body.newLabel),
           (body.rrSide as "mens" | "womens" | null) ?? null,
+          (body.taskId as string | null | undefined) ?? null,
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
