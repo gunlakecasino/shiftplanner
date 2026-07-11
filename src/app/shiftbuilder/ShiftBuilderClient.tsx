@@ -50,6 +50,7 @@ import {
   defaultAuxDefsForNewNight,
   ensureAdminFirst,
 } from "@/lib/shiftbuilder/auxLayout";
+import { canonicalizeAuxSlotKeyForTrail } from "@/lib/shiftbuilder/constants";
 
 // tmCommands functions are dynamically imported below to avoid pulling heavy deps
 // (e.g. useCommandActions transitive) into the static module graph of this giant file.
@@ -2386,16 +2387,37 @@ function AuthedShiftBuilder() {
       // Collect from the (store or cached) for this day. Do *not* layer the live main here;
       // the health merge will ensure the current viewed day's live is counted toward this week.
       // This keeps the base "week committed" consistent across view days.
+      // Canonicalize AUXn → STEP/SUP1/… using **this night's** aux layout so
+      // next-day trails don't remint Step Up as SP1 via today's shell indices.
+      const cachedCore = qc?.getQueryData(["nightCore", dateKey]) as
+        | { auxDefs?: Array<{ key: string; role?: string; label?: string }> }
+        | undefined;
+      const dayAuxDefs: Array<{ key: string; role?: string; label?: string }> =
+        cachedCore?.auxDefs ??
+        (i === selectedDayIndex ? auxDefs : undefined) ??
+        [];
       for (const [slotKey, ass] of Object.entries(nightAss)) {
         const tmId = (ass as any)?.tmId;
         if (tmId) {
           if (!result.has(tmId)) result.set(tmId, []);
-          result.get(tmId)!.push({ nightDate: formatLocalDateISO(dayDef.date), slotKey });
+          const stableKey = canonicalizeAuxSlotKeyForTrail(slotKey, dayAuxDefs);
+          result.get(tmId)!.push({
+            nightDate: formatLocalDateISO(dayDef.date),
+            slotKey: stableKey,
+          });
         }
       }
     }
     return result;
-  }, [DAY_DEFS, selectedDayIndex, assignments, storeAssignments, liveAssignVersion, currentNight?.queryClient]);
+  }, [
+    DAY_DEFS,
+    selectedDayIndex,
+    assignments,
+    storeAssignments,
+    liveAssignVersion,
+    currentNight?.queryClient,
+    auxDefs,
+  ]);
 
   // Data for the weekly overview on the sheet (built from live assignments across the week days).
   // This feeds the print-preview style weekly table directly on the artboard (replacing the old side panel).

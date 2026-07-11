@@ -84,6 +84,34 @@ export function auxRoleTrailCode(role: AuxRole, nthAmongRole = 0): string {
   return code;
 }
 
+/**
+ * Map flex AUXn → stable trail identity using **that night's** aux layout.
+ * AUX3 can be Step Up one night and Support the next — never reuse another
+ * night's auxDefs or Step Up rewrites as SP1/SUP1 on the next day's trail.
+ * Stable keys (STEP, Z4, SP1, …) pass through unchanged.
+ */
+export function canonicalizeAuxSlotKeyForTrail(
+  ui: string,
+  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
+): string {
+  if (!ui) return ui;
+  if (!/^AUX\d+$/i.test(ui) || !auxDefs?.length) return ui;
+
+  const def = auxDefs.find((d) => d.key === ui);
+  if (!def?.role || def.role === "blank") {
+    if (def?.label?.trim()) {
+      return def.label.replace(/\s+/g, "").toUpperCase().slice(0, 10);
+    }
+    return ui;
+  }
+
+  const role = def.role as AuxRole;
+  const nth = NUMBERED_AUX_ROLES.has(role)
+    ? auxDefs.filter((d) => d.role === role).findIndex((d) => d.key === ui)
+    : 0;
+  return auxRoleTrailCode(role, nth >= 0 ? nth : 0);
+}
+
 export const BLANK_AUX_DEFS: AuxDef[] = Array.from({ length: 6 }, (_, i) => ({
   key: `AUX${i + 1}`,
   role: "blank" as const,

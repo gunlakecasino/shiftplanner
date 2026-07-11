@@ -2,11 +2,12 @@ import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import {
   ZONE_DEFS,
   RR_DEFS,
-  auxRoleTrailCode,
-  NUMBERED_AUX_ROLES,
+  canonicalizeAuxSlotKeyForTrail,
 } from "@/lib/shiftbuilder/constants";
-import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
+import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { isEligibleForSlot, normalizeGender, areSwapLanePeers } from "@/lib/shiftbuilder/placement";
+
+export { canonicalizeAuxSlotKeyForTrail } from "@/lib/shiftbuilder/constants";
 
 /** Minimal TM fields for swap / eligibility checks. */
 export type PlacementTmProfile = {
@@ -227,10 +228,14 @@ export function spreadCountForRepeatKey(
 export const CARD_PLACEMENT_TRAIL_COUNT = 3;
 
 /**
- * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR, ADMIN, TSH1, OAS2).
+ * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR, ADMIN, TSH1, OAS2, STEP).
  * Restroom sides keep M/W so prior placements are not collapsed into an ambiguous "RR8".
- * Aux shells resolve through role when auxDefs are provided so AUX1≠"Admin" confusion ends.
+ *
  * Short codes: TSH / SUP / OAS (numbered), JC / STEP (single).
+ *
+ * IMPORTANT: `auxDefs` must be the layout from the **night of the placement**
+ * (or omit it when `ui` is already a stable key like STEP / SUP1). Never pass
+ * tonight's auxDefs when formatting historical AUXn keys from other nights.
  */
 export function formatCardPlacementTrailLabel(
   ui: string,
@@ -239,43 +244,39 @@ export function formatCardPlacementTrailLabel(
 ): string {
   if (!ui) return (fallback ?? "").replace(/\s+/g, "") || "—";
 
-  // Canonical aux identity (DB → UI history keys + legacy).
-  if (ui === "Z9SR" || ui === "z9_sr") return "Z9SR";
-  if (ui === "ADM" || ui === "ADMIN" || ui === "admin") return "ADMIN";
-  if (ui === "JC" || ui === "job_coach") return "JC";
-  if (ui === "STEP" || ui === "step_up") return "STEP";
+  // Flex AUXn → stable code first (only when caller provided that night's layout).
+  const resolved = canonicalizeAuxSlotKeyForTrail(ui, auxDefs);
 
-  if (auxDefs?.length) {
-    const def = auxDefs.find((d) => d.key === ui);
-    if (def?.role && def.role !== "blank") {
-      const role = def.role as AuxRole;
-      const nth = NUMBERED_AUX_ROLES.has(role)
-        ? auxDefs.filter((d) => d.role === role).findIndex((d) => d.key === ui)
-        : 0;
-      return auxRoleTrailCode(role, nth >= 0 ? nth : 0);
-    }
-    if (def?.label?.trim()) {
-      return def.label.replace(/\s+/g, "").toUpperCase().slice(0, 10);
-    }
+  // Canonical aux identity (DB → UI history keys + legacy + short codes).
+  if (resolved === "Z9SR" || resolved === "z9_sr") return "Z9SR";
+  if (resolved === "ADM" || resolved === "ADMIN" || resolved === "admin") return "ADMIN";
+  if (resolved === "JC" || resolved === "job_coach") return "JC";
+  if (resolved === "STEP" || resolved === "step_up") return "STEP";
+
+  // Already-canonical short trail codes from canonicalize / history.
+  if (/^(TSH|SUP|OAS)\d+$/i.test(resolved)) return resolved.toUpperCase();
+  if (resolved === "JC" || resolved === "STEP" || resolved === "ADMIN" || resolved === "Z9SR") {
+    return resolved;
   }
 
-  if (/^Z\d+$/.test(ui)) return ui;
+  if (/^Z\d+$/.test(resolved)) return resolved;
   // Prefer side-explicit RR labels (matches pad matrix style: RR8M / RR8W).
-  if (/^MRR\d+$/i.test(ui)) return `RR${ui.replace(/^MRR/i, "")}M`;
-  if (/^WRR\d+$/i.test(ui)) return `RR${ui.replace(/^WRR/i, "")}W`;
+  if (/^MRR\d+$/i.test(resolved)) return `RR${resolved.replace(/^MRR/i, "")}M`;
+  if (/^WRR\d+$/i.test(resolved)) return `RR${resolved.replace(/^WRR/i, "")}W`;
   // Bare RR8 (legacy / side-agnostic) — keep as RR8.
-  const bareRr = ui.match(/^RR(\d+)$/i);
+  const bareRr = resolved.match(/^RR(\d+)$/i);
   if (bareRr) return `RR${bareRr[1]}`;
   // Legacy TR/SP UI keys + short codes as trail chips.
-  const trash = ui.match(/^(?:TR|TSH)(\d+)$/i);
+  // NOTE: do not use startsWith("SP") — that false-positives "STEP" as support.
+  const trash = resolved.match(/^(?:TR|TSH)(\d+)$/i);
   if (trash) return `TSH${trash[1]}`;
-  const support = ui.match(/^(?:SP|SUP)(\d+)$/i);
+  const support = resolved.match(/^(?:SP|SUP)(\d+)$/i);
   if (support) return `SUP${support[1]}`;
-  const oasis = ui.match(/^OAS(\d+)$/i);
+  const oasis = resolved.match(/^OAS(\d+)$/i);
   if (oasis) return `OAS${oasis[1]}`;
-  // Unresolved AUXn without role context — still better than silent blank.
-  if (/^AUX\d+$/i.test(ui)) return ui.toUpperCase();
-  const raw = fallback ?? ui;
+  // Unresolved AUXn without that night's layout — keep shell id, never invent SP1.
+  if (/^AUX\d+$/i.test(resolved)) return resolved.toUpperCase();
+  const raw = fallback ?? resolved;
   return raw.replace(/\s+/g, "");
 }
 
@@ -360,16 +361,32 @@ export function collectPlacementTrailEvents(
   return events;
 }
 
+/**
+ * @param auxDefsByNight  optional map nightDate → that night's auxDefs.
+ *   Used only to resolve historical AUXn keys. Do not pass a single "tonight"
+ *   layout for all nights — that rewrites Step Up as SP1 when shell indices differ.
+ * @param tonightAuxDefs  only used when a week/history key is AUXn and no
+ *   per-night layout is available for that event's date (last resort).
+ */
 export function buildPlacementTrailLabels(
   history: ZoneDetailEntry | null | undefined,
   beforeIso?: string,
   count = CARD_PLACEMENT_TRAIL_COUNT,
   weekEntries?: Array<{ nightDate: string; slotKey: string }>,
-  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
+  tonightAuxDefs?: Array<{ key: string; role?: string; label?: string }>,
+  auxDefsByNight?: Record<string, Array<{ key: string; role?: string; label?: string }>>,
 ): string[] {
   return collectPlacementTrailEvents(history, beforeIso, weekEntries)
     .slice(0, count)
-    .map((e) => formatCardPlacementTrailLabel(e.ui, undefined, auxDefs));
+    .map((e) => {
+      // Prefer the placement night's own layout. Never fall back to tonight for
+      // a different day — AUX shell indices are not stable across nights.
+      const nightLayout =
+        auxDefsByNight?.[e.d] ??
+        (beforeIso && e.d === beforeIso ? tonightAuxDefs : undefined);
+      // Only use tonight's layout when the event is for tonight itself.
+      return formatCardPlacementTrailLabel(e.ui, undefined, nightLayout);
+    });
 }
 
 /** Week plan entries for one TM, optionally scoped before a night (exclusive). */

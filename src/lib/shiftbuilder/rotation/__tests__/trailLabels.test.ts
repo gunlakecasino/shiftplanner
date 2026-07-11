@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatCardPlacementTrailLabel,
   trailLabelMatchesSlotKey,
+  buildPlacementTrailLabels,
+  canonicalizeAuxSlotKeyForTrail,
 } from "../placementPadHelpers";
 
 describe("formatCardPlacementTrailLabel", () => {
@@ -20,7 +22,14 @@ describe("formatCardPlacementTrailLabel", () => {
     expect(formatCardPlacementTrailLabel("OAS1")).toBe("OAS1");
   });
 
-  it("maps ADM and role-bearing AUX shells to ADMIN / Z9SR", () => {
+  it("maps STEP / JC without treating STEP as support (no startsWith SP)", () => {
+    expect(formatCardPlacementTrailLabel("STEP")).toBe("STEP");
+    expect(formatCardPlacementTrailLabel("step_up")).toBe("STEP");
+    expect(formatCardPlacementTrailLabel("JC")).toBe("JC");
+    expect(formatCardPlacementTrailLabel("job_coach")).toBe("JC");
+  });
+
+  it("maps ADM and role-bearing AUX shells via that night's layout only", () => {
     expect(formatCardPlacementTrailLabel("ADM")).toBe("ADMIN");
     expect(formatCardPlacementTrailLabel("admin")).toBe("ADMIN");
     const auxDefs = [
@@ -31,7 +40,7 @@ describe("formatCardPlacementTrailLabel", () => {
     expect(formatCardPlacementTrailLabel("AUX2", undefined, auxDefs)).toBe("Z9SR");
   });
 
-  it("maps numbered aux roles to short codes (TSH / SUP / OAS)", () => {
+  it("maps numbered aux roles to short codes (TSH / SUP / OAS / STEP)", () => {
     const auxDefs = [
       { key: "AUX1", role: "admin", label: "ADMIN" },
       { key: "AUX2", role: "z9sr", label: "Z9 SR" },
@@ -48,6 +57,91 @@ describe("formatCardPlacementTrailLabel", () => {
     expect(formatCardPlacementTrailLabel("AUX6", undefined, auxDefs)).toBe("OAS1");
     expect(formatCardPlacementTrailLabel("AUX7", undefined, auxDefs)).toBe("JC");
     expect(formatCardPlacementTrailLabel("AUX8", undefined, auxDefs)).toBe("STEP");
+  });
+
+  it("does not invent SP1 for bare AUXn without that night's layout", () => {
+    expect(formatCardPlacementTrailLabel("AUX3")).toBe("AUX3");
+    expect(formatCardPlacementTrailLabel("AUX8")).toBe("AUX8");
+  });
+});
+
+describe("canonicalizeAuxSlotKeyForTrail", () => {
+  it("maps Step Up shell to STEP using that night's layout", () => {
+    const nightA = [
+      { key: "AUX1", role: "admin" },
+      { key: "AUX2", role: "z9sr" },
+      { key: "AUX3", role: "step_up", label: "STEP UP" },
+    ];
+    expect(canonicalizeAuxSlotKeyForTrail("AUX3", nightA)).toBe("STEP");
+  });
+
+  it("does not rewrite yesterday Step Up via today's Support shell", () => {
+    // Yesterday AUX3 = Step Up; today AUX3 = Support 1.
+    const today = [
+      { key: "AUX1", role: "admin" },
+      { key: "AUX2", role: "z9sr" },
+      { key: "AUX3", role: "support", label: "SUPPORT 1" },
+    ];
+    // If we wrongly used today's layout for yesterday's AUX3 we'd get SUP1.
+    expect(canonicalizeAuxSlotKeyForTrail("AUX3", today)).toBe("SUP1");
+    // Correct: already-stable STEP from the placement night is left alone.
+    expect(canonicalizeAuxSlotKeyForTrail("STEP", today)).toBe("STEP");
+  });
+});
+
+describe("buildPlacementTrailLabels", () => {
+  it("does not map historical AUXn through tonight's auxDefs (Step Up ≠ SP1)", () => {
+    const tonightAux = [
+      { key: "AUX1", role: "admin" },
+      { key: "AUX2", role: "z9sr" },
+      // Tonight AUX3 is Support — must not rewrite yesterday's AUX3 Step Up.
+      { key: "AUX3", role: "support", label: "SUPPORT 1" },
+    ];
+    const history = {
+      tmId: "t1",
+      tmName: "Test",
+      zoneDates: { AUX3: ["2026-07-10"] },
+      zoneCounts: { AUX3: 1 },
+      totalAssignments: 1,
+      totalNights: 1,
+      lastDate: "2026-07-10",
+    };
+    // Without per-night layout, leave AUX3 (never SUP1/SP1 from tonight).
+    const labels = buildPlacementTrailLabels(
+      history as any,
+      "2026-07-11",
+      3,
+      undefined,
+      tonightAux,
+    );
+    expect(labels).toEqual(["AUX3"]);
+    expect(labels[0]).not.toMatch(/^(SP|SUP)/);
+
+    // With correct per-night layout → STEP.
+    const labelsFixed = buildPlacementTrailLabels(
+      history as any,
+      "2026-07-11",
+      3,
+      undefined,
+      tonightAux,
+      {
+        "2026-07-10": [
+          { key: "AUX3", role: "step_up", label: "STEP UP" },
+        ],
+      },
+    );
+    expect(labelsFixed).toEqual(["STEP"]);
+  });
+
+  it("formats pre-canonical week entries (STEP) without remapping", () => {
+    const labels = buildPlacementTrailLabels(
+      null,
+      "2026-07-11",
+      3,
+      [{ nightDate: "2026-07-10", slotKey: "STEP" }],
+      [{ key: "AUX3", role: "support" }],
+    );
+    expect(labels).toEqual(["STEP"]);
   });
 });
 
@@ -72,5 +166,7 @@ describe("trailLabelMatchesSlotKey", () => {
     expect(trailLabelMatchesSlotKey("TSH1", "TR1")).toBe(true);
     expect(trailLabelMatchesSlotKey("SUP2", "SP2")).toBe(true);
     expect(trailLabelMatchesSlotKey("OAS1", "OAS1")).toBe(true);
+    expect(trailLabelMatchesSlotKey("STEP", "STEP")).toBe(true);
+    expect(trailLabelMatchesSlotKey("STEP", "step_up")).toBe(true);
   });
 });

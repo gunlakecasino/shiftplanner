@@ -52,7 +52,9 @@ function adminClient() {
 }
 
 function isDbSlotKey(slotKey: string): boolean {
-  return /^(zone_|rr_|aux_|support_|trash_|overlap_|admin$|z9_sr$)/.test(slotKey);
+  return /^(zone_|rr_|aux_|support_|trash_|oasis_|overlap_|admin$|z9_sr$|job_coach$|step_up$)/.test(
+    slotKey,
+  );
 }
 
 function normalizeSlotKeys(

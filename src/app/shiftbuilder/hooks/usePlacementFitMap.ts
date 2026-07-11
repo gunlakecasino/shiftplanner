@@ -321,11 +321,15 @@ export function usePlacementFitMap({
       const history = histories[tmId] ?? null;
       // Exclusive of tonight — same rule as pad prior-N windows.
       const weekEntries = weekEntriesForTm(scopedWeekForTrails, tmId, currentIso);
+      // Do NOT pass tonight's auxDefs for historical AUXn keys — shell indices
+      // are per-night (Step Up on AUX3 yesterday ≠ Support on AUX3 today → SP1).
+      // Week entries are already canonicalized (STEP/SUP1/…) at source.
       const labels = buildPlacementTrailLabels(
         history,
         currentIso,
         undefined,
         weekEntries,
+        // Only for events on tonight itself (rare for prior-N trail).
         auxDefs,
       );
       if (labels.length > 0) out[tmId] = labels;
