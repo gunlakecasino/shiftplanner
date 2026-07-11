@@ -6,29 +6,49 @@ import {
   assertActorCanEditNight,
   nightRefFromMutationBody,
 } from "@/lib/auth/assertNightEditable.server";
-import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
+import {
+  requireOpsAnyPermission,
+  requireOpsPermission,
+} from "@/lib/auth/requireOpsSession.server";
 import {
   addNightSlotTaskServer,
+  addTMAccommodationServer,
+  addTMPreferenceServer,
   batchApplyDraftAssignmentsServer,
   deleteBreakAssignmentServer,
+  deleteTMAccommodationServer,
+  deleteTMPreferenceServer,
   deleteZoneAssignmentServer,
+  getOrCreateNightForDateServer,
   markTmCallOffServer,
   unmarkTmCallOffServer,
+  recordPlacementHistoryServer,
   removeNightCardBorderServer,
   removeNightSlotTaskServer,
   moveNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
   replaceNightSlotTasksForSlotServer,
+  restoreTMServer,
+  saveNightNotesServer,
+  seedDefaultBreaksForNightServer,
   setNightCardBorderServer,
   setNightLockedServer,
   setNightPublishedServer,
+  setTMDisplayNameServer,
+  setTMGravePoolServer,
+  softDeleteTMServer,
   toggleAssignmentLockServer,
+  updateActiveEngineConfigServer,
   updateNightSlotTaskColorServer,
   updateNightSlotTaskCoverageSideServer,
   updateNightSlotTaskLabelServer,
   updateNightSlotTaskStyleServer,
+  updateNightTmStatusServer,
   upsertBreakAssignmentServer,
+  upsertSlotSkillServer,
+  upsertTMServer,
   upsertZoneAssignmentServer,
+  type GravePoolValue,
 } from "@/lib/shiftbuilder/opsMutations.server";
 import { ProposalValidationError } from "@/lib/shiftbuilder/validateAssignments.server";
 import { revalidateNightBoardCaches, revalidateSlotDefaultsCache } from "@/lib/shiftbuilder/revalidateOpsCache";
@@ -39,8 +59,17 @@ import {
   upsertSlotDefaultServer,
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
+import {
+  loadOpsKnowledgeServer,
+  loadRecentAiFeedbackServer,
+  saveAiFeedbackServer,
+  saveOpsKnowledgeServer,
+} from "@/lib/shiftbuilder/opsKnowledge/opsKnowledge.server";
 
-const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
+/** Single permission or any-of list (sudo/manage-team identity surfaces). */
+type ActionPerm = PermissionKey | "authenticated" | PermissionKey[];
+
+const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   upsert_zone_assignment: "canEditAssignments",
   delete_zone_assignment: "canEditAssignments",
   batch_apply_draft: "canEditAssignments",
@@ -66,7 +95,47 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
   bulk_upsert_slot_defaults: "canAccessSudo",
+  // Team / sudo identity
+  set_tm_grave_pool: ["canAccessSudo", "canManageTeam"],
+  set_tm_display_name: ["canAccessSudo", "canManageTeam"],
+  upsert_tm_profile: ["canAccessSudo", "canManageTeam"],
+  soft_delete_tm: ["canAccessSudo", "canManageTeam"],
+  restore_tm: ["canAccessSudo", "canManageTeam"],
+  upsert_slot_skill: ["canAccessSudo", "canManageTeam"],
+  add_tm_preference: ["canAccessSudo", "canManageTeam"],
+  delete_tm_preference: ["canAccessSudo", "canManageTeam"],
+  add_tm_accommodation: ["canAccessSudo", "canManageTeam"],
+  delete_tm_accommodation: ["canAccessSudo", "canManageTeam"],
+  update_night_tm_status: "canEditAssignments",
+  update_engine_config: "canAccessSudo",
+  // Board residual
+  save_night_notes: "canEditAssignments",
+  get_or_create_night: "canEditAssignments",
+  seed_default_breaks: "canEditAssignments",
+  record_placement_history: "canEditAssignments",
+  // Knowledge / AI feedback
+  load_ops_knowledge: "authenticated",
+  save_ops_knowledge: "canAccessSudo",
+  load_ai_feedback: "authenticated",
+  save_ai_feedback: "canEditAssignments",
+  // Batch planner
+  batch_run_engine_week: "canRunEngine",
+  batch_run_engine_night: "canRunEngine",
+  list_batch_weeks: "canRunEngine",
+  list_batch_nights: "canRunEngine",
 };
+
+function needsNightEditGate(perm: ActionPerm): boolean {
+  const keys = Array.isArray(perm) ? perm : [perm];
+  return keys.some((k) => k === "canEditAssignments" || k === "canLockUnlock");
+}
+
+async function resolveSession(request: NextRequest, perm: ActionPerm) {
+  if (Array.isArray(perm)) {
+    return requireOpsAnyPermission(request, perm);
+  }
+  return requireOpsPermission(request, perm);
+}
 
 async function bustCache(date?: string) {
   try {
@@ -94,12 +163,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Unknown mutation: ${action}` }, { status: 400 });
   }
 
-  const session = await requireOpsPermission(request, permission);
+  const session = await resolveSession(request, permission);
   if (!session.ok) {
     return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
-  if (permission === "canEditAssignments" || permission === "canLockUnlock") {
+  if (needsNightEditGate(permission)) {
     const editCheck = await assertActorCanEditNight(
       session.actor.permissions,
       nightRefFromMutationBody(body),
@@ -131,13 +200,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result);
       }
       case "batch_apply_draft": {
-        await batchApplyDraftAssignmentsServer(
+        const result = await batchApplyDraftAssignmentsServer(
           String(body.nightId),
           (body.slots as never[]) ?? [],
           body.date != null ? String(body.date) : null,
+          body.expectedUpdatedAt != null ? String(body.expectedUpdatedAt) : null,
         );
         await bustCache(body.date as string | undefined);
-        return NextResponse.json({ ok: true });
+        return NextResponse.json(result);
       }
       case "toggle_assignment_lock": {
         const result = await toggleAssignmentLockServer(body as never);
@@ -318,13 +388,160 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ ok: true });
       }
+
+      // ── Team / sudo ──────────────────────────────────────────────
+      case "set_tm_grave_pool": {
+        await setTMGravePoolServer(
+          String(body.tmId),
+          (body.value ?? null) as GravePoolValue,
+        );
+        return NextResponse.json({ ok: true });
+      }
+      case "set_tm_display_name": {
+        await setTMDisplayNameServer(
+          String(body.tmId),
+          String(body.displayName ?? body.newDisplayName ?? ""),
+        );
+        return NextResponse.json({ ok: true });
+      }
+      case "upsert_tm_profile": {
+        const result = await upsertTMServer(body as never);
+        return NextResponse.json(result);
+      }
+      case "soft_delete_tm": {
+        await softDeleteTMServer(String(body.tmId), (body.reason as never) ?? "separated");
+        return NextResponse.json({ ok: true });
+      }
+      case "restore_tm": {
+        await restoreTMServer(String(body.tmId));
+        return NextResponse.json({ ok: true });
+      }
+      case "upsert_slot_skill": {
+        await upsertSlotSkillServer({
+          tmId: String(body.tmId),
+          slotId: String(body.slotId),
+          score: Number(body.score),
+        });
+        return NextResponse.json({ ok: true });
+      }
+      case "add_tm_preference": {
+        await addTMPreferenceServer(body as never);
+        return NextResponse.json({ ok: true });
+      }
+      case "delete_tm_preference": {
+        await deleteTMPreferenceServer(String(body.id));
+        return NextResponse.json({ ok: true });
+      }
+      case "add_tm_accommodation": {
+        await addTMAccommodationServer(body as never);
+        return NextResponse.json({ ok: true });
+      }
+      case "delete_tm_accommodation": {
+        await deleteTMAccommodationServer(String(body.id));
+        return NextResponse.json({ ok: true });
+      }
+      case "update_night_tm_status": {
+        await updateNightTmStatusServer(body as never);
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json({ ok: true });
+      }
+      case "update_engine_config": {
+        await updateActiveEngineConfigServer(body as never);
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Board residual (P1) ──────────────────────────────────────
+      case "save_night_notes": {
+        const result = await saveNightNotesServer(
+          String(body.nightId),
+          String(body.notes ?? ""),
+        );
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "get_or_create_night": {
+        const result = await getOrCreateNightForDateServer({
+          date: String(body.date),
+          dayName: String(body.dayName ?? ""),
+        });
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "seed_default_breaks": {
+        const result = await seedDefaultBreaksForNightServer(String(body.nightId));
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "record_placement_history": {
+        try {
+          await recordPlacementHistoryServer(body as never);
+        } catch (e) {
+          // Soft-fail history so apply path is never blocked by matrix side-effects.
+          console.warn("[mutations] record_placement_history", e);
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Knowledge ────────────────────────────────────────────────
+      case "load_ops_knowledge": {
+        const knowledge = await loadOpsKnowledgeServer();
+        return NextResponse.json({ knowledge });
+      }
+      case "save_ops_knowledge": {
+        await saveOpsKnowledgeServer(body.knowledge as never);
+        return NextResponse.json({ ok: true });
+      }
+      case "load_ai_feedback": {
+        const examples = await loadRecentAiFeedbackServer(
+          body.limit != null ? Number(body.limit) : 40,
+        );
+        return NextResponse.json({ examples });
+      }
+      case "save_ai_feedback": {
+        await saveAiFeedbackServer(body as never);
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Batch planner (P0) ───────────────────────────────────────
+      case "batch_run_engine_week": {
+        const { batchRunEngineForWeekServer } = await import(
+          "@/lib/shiftbuilder/sudoBatchPlanner.server"
+        );
+        const result = await batchRunEngineForWeekServer(
+          String(body.weekId),
+          (body.options as never) ?? {},
+        );
+        return NextResponse.json(result);
+      }
+      case "batch_run_engine_night": {
+        const { batchRunEngineForNightServer } = await import(
+          "@/lib/shiftbuilder/sudoBatchPlanner.server"
+        );
+        const result = await batchRunEngineForNightServer(
+          String(body.nightId),
+          (body.options as never) ?? {},
+        );
+        return NextResponse.json(result);
+      }
+      case "list_batch_weeks": {
+        const { listWeeksWithNightsServer } = await import(
+          "@/lib/shiftbuilder/sudoBatchPlanner.server"
+        );
+        const weeks = await listWeeksWithNightsServer();
+        return NextResponse.json({ weeks });
+      }
+      case "list_batch_nights": {
+        const { listNightsForWeekServer } = await import(
+          "@/lib/shiftbuilder/sudoBatchPlanner.server"
+        );
+        const nights = await listNightsForWeekServer(String(body.weekId));
+        return NextResponse.json({ nights });
+      }
+
       default:
         return NextResponse.json({ error: "Unhandled mutation" }, { status: 500 });
     }
   } catch (err: unknown) {
-    // KD-5: structured invalid[] from canPlace re-validate (zero writes occurred).
-    // Check name as well as instanceof — dynamic import of the same module is fine,
-    // but name is resilient if bundling ever duplicates the class identity.
     const isProposalValidation =
       err instanceof ProposalValidationError ||
       (err instanceof Error &&
@@ -332,7 +549,7 @@ export async function POST(request: NextRequest) {
         Array.isArray((err as ProposalValidationError).invalid));
     if (isProposalValidation) {
       const pe = err as ProposalValidationError;
-      console.warn("[shiftbuilder/mutations] batch_apply_draft rejected", pe.invalid);
+      console.warn("[shiftbuilder/mutations] assignment rejected", pe.invalid);
       return NextResponse.json(
         { error: pe.message, invalid: pe.invalid, valid: false },
         { status: 400 },
@@ -340,6 +557,10 @@ export async function POST(request: NextRequest) {
     }
     const msg = err instanceof Error ? err.message : "Mutation failed";
     console.error("[shiftbuilder/mutations]", action, err);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    const status =
+      msg.includes("another operator") || msg.includes("reload")
+        ? 409
+        : 400;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

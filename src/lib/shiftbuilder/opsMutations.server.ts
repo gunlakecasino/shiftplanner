@@ -101,7 +101,49 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
     });
   }
 
+  // P0: same canPlace constitution as batch_apply (drag/palette cannot bypass).
+  const {
+    validateProposalsForNight,
+    ProposalValidationError,
+  } = await import("@/lib/shiftbuilder/validateAssignments.server");
+  const validation = await validateProposalsForNight({
+    nightId,
+    proposals: [
+      {
+        slotKey: finalSlotKey,
+        slotType: finalSlotType,
+        rrSide: finalRrSide,
+        tmId,
+      },
+    ],
+  });
+  if (!validation.valid) {
+    throw new ProposalValidationError(validation.invalid);
+  }
+
   const client = adminClient();
+
+  // Preserve existing lock unless caller explicitly sets isLocked.
+  let lockValue = Boolean(isLocked);
+  if (params.isLocked === undefined) {
+    let lockQ = client
+      .from("zone_assignments")
+      .select("is_locked")
+      .eq("night_id", nightId)
+      .eq("slot_key", finalSlotKey)
+      .eq("slot_type", finalSlotType);
+    lockQ =
+      finalRrSide != null
+        ? lockQ.eq("rr_side", finalRrSide)
+        : lockQ.is("rr_side", null);
+    const { data: existing } = await lockQ.maybeSingle();
+    if (existing && typeof (existing as { is_locked?: boolean }).is_locked === "boolean") {
+      lockValue = Boolean((existing as { is_locked: boolean }).is_locked);
+    } else {
+      lockValue = false;
+    }
+  }
+
   const { error } = await client.from("zone_assignments").upsert(
     {
       night_id: nightId,
@@ -110,7 +152,7 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
       tm_id: tmId,
       rr_side: finalRrSide,
       is_filled: true,
-      is_locked: isLocked,
+      is_locked: lockValue,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "night_id,slot_type,slot_key,rr_side" },
@@ -192,7 +234,9 @@ export async function batchApplyDraftAssignmentsServer(
     tmId: string | null;
   }>,
   date?: string | null,
-): Promise<void> {
+  /** P1 concurrency: if set, reject when nights.updated_at differs (multi-operator). */
+  expectedUpdatedAt?: string | null,
+): Promise<{ ok: true; nightUpdatedAt: string | null }> {
   if (!nightId) {
     throw new Error("nightId is required");
   }
@@ -219,23 +263,68 @@ export async function batchApplyDraftAssignmentsServer(
   }
 
   const client = adminClient();
+
+  // P1: optimistic concurrency — refuse apply if night changed under us.
+  const { data: nightRow, error: nightErr } = await client
+    .from("nights")
+    .select("updated_at")
+    .eq("id", nightId)
+    .maybeSingle();
+  if (nightErr) {
+    throw new Error(`batch_apply: night lookup failed: ${nightErr.message}`);
+  }
+  const serverUpdatedAt =
+    nightRow && (nightRow as { updated_at?: string }).updated_at
+      ? String((nightRow as { updated_at: string }).updated_at)
+      : null;
+  if (expectedUpdatedAt != null && expectedUpdatedAt !== "") {
+    const exp = String(expectedUpdatedAt).trim();
+    if (serverUpdatedAt && exp !== serverUpdatedAt) {
+      throw new Error(
+        "Night was updated by another operator — reload and try again",
+      );
+    }
+  }
+
   const now = new Date().toISOString();
   const toUpsert = slots.filter((s) => s.tmId !== null);
   const toDelete = slots.filter((s) => s.tmId === null);
   const errors: string[] = [];
 
+  // P1: preserve is_locked on existing rows (never force false).
+  const lockByKey = new Map<string, boolean>();
+  if (toUpsert.length > 0) {
+    const { data: existingRows } = await client
+      .from("zone_assignments")
+      .select("slot_key, slot_type, rr_side, is_locked")
+      .eq("night_id", nightId);
+    for (const row of existingRows ?? []) {
+      const r = row as {
+        slot_key: string;
+        slot_type: string;
+        rr_side: string | null;
+        is_locked?: boolean;
+      };
+      const k = `${r.slot_type}|${r.slot_key}|${r.rr_side ?? ""}`;
+      lockByKey.set(k, Boolean(r.is_locked));
+    }
+  }
+
   // Writes only after full validation passes.
   if (toUpsert.length > 0) {
-    const rows = toUpsert.map((s) => ({
-      night_id: nightId,
-      slot_key: s.slotKey,
-      slot_type: s.slotType,
-      rr_side: s.rrSide,
-      tm_id: s.tmId,
-      is_filled: true,
-      is_locked: false,
-      updated_at: now,
-    }));
+    const rows = toUpsert.map((s) => {
+      const k = `${s.slotType}|${s.slotKey}|${s.rrSide ?? ""}`;
+      return {
+        night_id: nightId,
+        slot_key: s.slotKey,
+        slot_type: s.slotType,
+        rr_side: s.rrSide,
+        tm_id: s.tmId,
+        is_filled: true,
+        is_locked: lockByKey.get(k) ?? false,
+        updated_at: now,
+      };
+    });
     const { error } = await client
       .from("zone_assignments")
       .upsert(rows, { onConflict: "night_id,slot_type,slot_key,rr_side" });
@@ -252,6 +341,7 @@ export async function batchApplyDraftAssignmentsServer(
           .eq("slot_key", s.slotKey)
           .eq("slot_type", s.slotType);
         if (s.rrSide) q = q.eq("rr_side", s.rrSide);
+        else q = q.is("rr_side", null);
         const { error } = await q;
         if (error) throw new Error(`delete ${s.slotKey}: ${error.message}`);
       }),
@@ -262,6 +352,22 @@ export async function batchApplyDraftAssignmentsServer(
   }
 
   if (errors.length > 0) throw new Error(errors.join("; "));
+
+  // Bump night.updated_at for concurrency tracking.
+  const { data: bumped } = await client
+    .from("nights")
+    .update({ updated_at: now })
+    .eq("id", nightId)
+    .select("updated_at")
+    .maybeSingle();
+
+  return {
+    ok: true,
+    nightUpdatedAt:
+      bumped && (bumped as { updated_at?: string }).updated_at
+        ? String((bumped as { updated_at: string }).updated_at)
+        : now,
+  };
 }
 
 export async function toggleAssignmentLockServer(params: {
@@ -1163,6 +1269,196 @@ export async function updateActiveEngineConfigServer(
       created_at: new Date().toISOString(),
     });
     if (insErr) throw new Error(`Failed to create engine_config row: ${insErr.message}`);
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// P1 residual writes — notes / night create / breaks seed / placement history
+// ---------------------------------------------------------------------------
+
+export async function saveNightNotesServer(
+  nightId: string,
+  notes: string,
+): Promise<{ ok: true; updatedAt: string }> {
+  const id = typeof nightId === "string" ? nightId.trim() : "";
+  if (!id) throw new Error("saveNightNotes: nightId is required");
+  const client = adminClient();
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("nights")
+    .update({ notes: notes ?? "", updated_at: now })
+    .eq("id", id);
+  if (error) throw new Error(`Failed to save notes: ${error.message}`);
+  return { ok: true, updatedAt: now };
+}
+
+export async function getOrCreateNightForDateServer(params: {
+  date: string;
+  dayName: string;
+}): Promise<{ nightId: string }> {
+  const date = typeof params.date === "string" ? params.date.trim().slice(0, 10) : "";
+  const dayName = typeof params.dayName === "string" ? params.dayName.trim() : "";
+  if (!date) throw new Error("getOrCreateNightForDate: date is required");
+
+  const client = adminClient();
+  const { data: existing } = await client
+    .from("nights")
+    .select("id")
+    .eq("night_date", date)
+    .maybeSingle();
+  if (existing?.id) return { nightId: String(existing.id) };
+
+  // Week ending = date's Fri–Thu week Thursday.
+  const d = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(d.getTime())) throw new Error("getOrCreateNightForDate: invalid date");
+  // Local Friday start: JS getDay Sun=0 … Fri=5
+  const day = d.getDay();
+  const daysFromFri = (day - 5 + 7) % 7;
+  const fri = new Date(d);
+  fri.setDate(d.getDate() - daysFromFri);
+  const thu = new Date(fri);
+  thu.setDate(fri.getDate() + 6);
+  const weekEndingIso = thu.toISOString().slice(0, 10);
+
+  let weekId: string | null = null;
+  {
+    const { data: weekRow } = await client
+      .from("weeks")
+      .select("id")
+      .eq("week_ending", weekEndingIso)
+      .maybeSingle();
+    weekId = weekRow?.id ? String(weekRow.id) : null;
+  }
+  if (!weekId) {
+    const { data: newWeek, error: wErr } = await client
+      .from("weeks")
+      .insert({ week_ending: weekEndingIso })
+      .select("id")
+      .single();
+    if (wErr || !newWeek?.id) {
+      throw new Error(`Failed to create week: ${wErr?.message ?? "unknown"}`);
+    }
+    weekId = String(newWeek.id);
+  }
+
+  const dayNum = ((d.getDay() - 5 + 7) % 7) + 1;
+  const { data: newNight, error: nErr } = await client
+    .from("nights")
+    .insert({
+      week_id: weekId,
+      night_date: date,
+      day_name: dayName || date,
+      day_num: dayNum,
+      page_num: dayNum,
+      status: "draft",
+      is_locked: false,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (nErr || !newNight?.id) {
+    // Race: another writer created the night.
+    const { data: raced } = await client
+      .from("nights")
+      .select("id")
+      .eq("night_date", date)
+      .maybeSingle();
+    if (raced?.id) return { nightId: String(raced.id) };
+    throw new Error(`Failed to create night: ${nErr?.message ?? "unknown"}`);
+  }
+
+  const nightId = String(newNight.id);
+  // Best-effort seeds (non-fatal).
+  try {
+    await seedDefaultBreaksForNightServer(nightId);
+  } catch (e) {
+    console.warn("[opsMutations] seed breaks after night create failed", e);
+  }
+  return { nightId };
+}
+
+export async function seedDefaultBreaksForNightServer(
+  nightId: string,
+): Promise<{ count: number }> {
+  const id = typeof nightId === "string" ? nightId.trim() : "";
+  if (!id) throw new Error("seedDefaultBreaksForNight: nightId is required");
+  const client = adminClient();
+
+  // Prefer break_template (legacy schema); fall back to break_assignment_templates.
+  let template: Array<Record<string, unknown>> | null = null;
+  {
+    const first = await client
+      .from("break_template")
+      .select("tm_id, group_num, break_wave, slot_ref, sort_order")
+      .order("group_num", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (!first.error && first.data?.length) {
+      template = first.data as Array<Record<string, unknown>>;
+    } else {
+      const second = await client
+        .from("break_assignment_templates")
+        .select("tm_id, group_num, break_wave, slot_ref, sort_order")
+        .limit(500);
+      if (second.error) {
+        console.warn("[seedDefaultBreaks] template fetch:", second.error.message);
+        return { count: 0 };
+      }
+      template = (second.data as Array<Record<string, unknown>>) ?? [];
+    }
+  }
+  if (!template?.length) return { count: 0 };
+
+  const { data: existing } = await client
+    .from("break_assignments")
+    .select("tm_id")
+    .eq("night_id", id);
+  const existingTmIds = new Set((existing ?? []).map((r: { tm_id: string }) => r.tm_id));
+
+  const toInsert = template
+    .filter((r) => {
+      const tm = String(r.tm_id ?? "");
+      return tm && !existingTmIds.has(tm);
+    })
+    .map((r) => ({
+      night_id: id,
+      tm_id: r.tm_id,
+      group_num: r.group_num,
+      break_wave: r.break_wave,
+      slot_ref: r.slot_ref,
+      sort_order: r.sort_order,
+    }));
+  if (toInsert.length === 0) return { count: 0 };
+
+  const { error: iErr } = await client.from("break_assignments").insert(toInsert);
+  if (iErr) throw new Error(`Failed to seed break assignments: ${iErr.message}`);
+  return { count: toInsert.length };
+}
+
+export async function recordPlacementHistoryServer(params: {
+  tmId: string;
+  nightId: string;
+  slotKey: string;
+  slotType: string;
+  rrSide?: string | null;
+  weekStart?: string | null;
+}): Promise<{ ok: true }> {
+  const tmId = typeof params.tmId === "string" ? params.tmId.trim() : "";
+  const nightId = typeof params.nightId === "string" ? params.nightId.trim() : "";
+  if (!tmId || !nightId) throw new Error("recordPlacementHistory: tmId and nightId required");
+  const client = adminClient();
+  const { error } = await client.from("tm_placement_history").insert({
+    tm_id: tmId,
+    night_id: nightId,
+    slot_key: params.slotKey,
+    slot_type: params.slotType,
+    rr_side: params.rrSide ?? null,
+    week_start: params.weekStart ?? null,
+    is_committed: true,
+  });
+  if (error) {
+    // Non-fatal for callers that fire-and-forget; still throw so mutations surface.
+    throw new Error(`recordPlacementHistory failed: ${error.message}`);
   }
   return { ok: true };
 }

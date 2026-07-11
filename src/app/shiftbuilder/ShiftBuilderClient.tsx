@@ -1417,9 +1417,7 @@ function AuthedShiftBuilder() {
       return;
     }
 
-    // === SLICE 4: Server-side eligibility + graves guard (before any optimistic state or history) ===
-    // This is the hard re-check so Grok / engine / manual drafts cannot commit invalid placements.
-    // We build a minimal proposal list and call the server action.
+    // === P0: DB-first apply — never paint the live board until the write succeeds ===
     const proposalsForGuard = draftEntries.map(([slotKey, info]) => ({
       slotKey,
       tmId: info.proposedClear ? null : (info.proposedTmId ?? null),
@@ -1427,8 +1425,6 @@ function AuthedShiftBuilder() {
 
     try {
       const { validateProposedAssignments } = await import("./actions");
-      // Server loads graves schedule authoritatively — never send clientScheduledTmIds
-      // (ignored / rejected for hard gate; empty server schedule fails closed).
       const validation = await validateProposedAssignments({
         date: formatLocalDateISO(selectedDay.date),
         nightId: nightId || queryNightId,
@@ -1440,65 +1436,25 @@ function AuthedShiftBuilder() {
           .map((e) => `${e.slotKey}: ${e.reason}`)
           .join(" | ");
         showToast(`Cannot apply — server guard rejected: ${reasons}`, "error");
-        // Do not proceed to optimistic update or history record.
         return;
       }
     } catch (guardErr) {
       console.error("[applyDraft] server guard failed (fail closed):", guardErr);
       showToast("Cannot apply — eligibility check unavailable. Try again.", "error");
-      return; // never proceed optimistic when guard transport fails
+      return;
     }
-
-    const storeBefore = useShiftBuilderStore.getState().assignments ?? {};
-    const before: Snapshot = { assignments: { ...storeBefore }, auxDefs: [...auxDefs] };
-
-    const newAssignments = (buildFinalAssignmentsFromDraft?.(draftEntries as any, storeBefore) ?? storeBefore) as Record<string, any>;
-
-    const dateKey = formatLocalDateISO(selectedDay.date);
-    const liveForNight: Record<string, { tmId: string; tmName: string | null }> = {};
-    for (const [slotKey, row] of Object.entries(newAssignments)) {
-      if (row?.tmId) {
-        liveForNight[slotKey] = {
-          tmId: row.tmId,
-          tmName: row.tmName ?? row.tmId,
-        };
-      }
-    }
-
-    // Board + cards read Zustand and live cache; React Query was overwriting local-only updates.
-    useShiftBuilderStore.getState().setAssignments(newAssignments);
-    liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
-
-    // Use the centralized data hook helpers (Slice 1) for mirror + cache patch.
-    // This keeps the live cross-day store (Weekly Overview, repeats, fit, health, xAI) and
-    // TanStack cache in sync after an optimistic apply.
-    shiftData.mirrorCurrentDay?.();
-    shiftData.patchCurrentNightCache?.(newAssignments);
-
-    // Legacy bump kept for any remaining local memos during the transition.
-    setLiveAssignVersion((v) => v + 1);
-
-    setAssignments(newAssignments);
-    const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
-
-    // === ATOMICITY CONTRACT (Slice 3 + 4 hardening) ===
-    // - Server guard (validateProposedAssignments) already ran and passed (fail closed on transport errors).
-    // - Exactly one history entry for the entire batch (via recordAtomicChange).
-    // - One optimistic store + live mirror + query patch.
-    // - One batched DB write via batchApplyDraftAssignments.
-    // - On DB failure: board is updated locally; operator can undo via history.
-    recordChangeRef.current("Apply Engine Draft", before, after);
-
-    setIsDraftMode(false);
-    setDraftAssignments({});
-    useShiftBuilderStore.getState().clearDraft();
 
     let nid = nightId || queryNightId;
     if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
     if (!nid) {
-      showToast("Draft applied on board but couldn't save — no night context. Reload and try again.", "error");
+      showToast("Cannot apply — no night context. Open the day and try again.", "error");
       return;
     }
+
+    const storeBefore = useShiftBuilderStore.getState().assignments ?? {};
+    const before: Snapshot = { assignments: { ...storeBefore }, auxDefs: [...auxDefs] };
+    const newAssignments = (buildFinalAssignmentsFromDraft?.(draftEntries as any, storeBefore) ?? storeBefore) as Record<string, any>;
+    const dateKey = formatLocalDateISO(selectedDay.date);
 
     try {
       const slots = draftEntries.map(([slotKey, info]) => {
@@ -1511,19 +1467,60 @@ function AuthedShiftBuilder() {
         };
       });
 
+      // P1 concurrency: pass nights.updated_at if we have it from night core payload.
+      const expectedUpdatedAt =
+        (useShiftBuilderStore.getState() as { nightUpdatedAt?: string | null }).nightUpdatedAt ??
+        (shiftData as { nightUpdatedAt?: string | null }).nightUpdatedAt ??
+        null;
+
       const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
       await batchApplyDraftAssignments(
         nid,
         slots,
         formatLocalDateISO(selectedDay.date),
+        expectedUpdatedAt,
       );
+
+      // Only after DB success: paint board, clear draft, history.
+      const liveForNight: Record<string, { tmId: string; tmName: string | null }> = {};
+      for (const [slotKey, row] of Object.entries(newAssignments)) {
+        if (row?.tmId) {
+          liveForNight[slotKey] = {
+            tmId: row.tmId,
+            tmName: row.tmName ?? row.tmId,
+          };
+        }
+      }
+      useShiftBuilderStore.getState().setAssignments(newAssignments);
+      liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, liveForNight);
+      shiftData.mirrorCurrentDay?.();
+      shiftData.patchCurrentNightCache?.(newAssignments);
+      setLiveAssignVersion((v) => v + 1);
+      setAssignments(newAssignments);
+
+      const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
+      recordChangeRef.current("Apply Engine Draft", before, after);
+
+      setIsDraftMode(false);
+      setDraftAssignments({});
+      useShiftBuilderStore.getState().clearDraft();
+
       setLastSavedAt(new Date());
       const savedCount = draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length;
-      showToast(`Applied ${savedCount} change${savedCount === 1 ? '' : 's'} to the live board — TMs can see it now.`, "success");
+      showToast(
+        `Applied ${savedCount} change${savedCount === 1 ? "" : "s"} to the live board — TMs can see it now.`,
+        "success",
+      );
     } catch (e: unknown) {
       console.error("[shiftbuilder] batchApplyDraft failed", e);
       const msg = e instanceof Error ? e.message : String(e);
-      showToast(`Board updated but database save failed: ${msg}`, "error");
+      // Board deliberately unchanged (DB-first).
+      showToast(
+        msg.includes("another operator") || msg.includes("reload")
+          ? msg
+          : `Could not apply — database rejected the change: ${msg}`,
+        "error",
+      );
     }
   };
 

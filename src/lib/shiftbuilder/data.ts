@@ -529,86 +529,27 @@ export async function getOrCreateNightForDate(
   date: Date,
   dayName: string
 ): Promise<string> {
-  // 1. Existing night?
+  // 1. Existing night? (read may use session API / cache)
   const existing = await getNightIdForDate(date);
   if (existing) return existing;
 
-  // 2. Find or create the parent week.
-  const weekStart = startOfShiftWeekLocal(date);
-  const weekStartIso = localDateIso(weekStart);
-  const weekEndingIso = (() => {
-    const end = new Date(weekStart);
-    end.setDate(end.getDate() + 6);
-    return localDateIso(end);
-  })();
+  const iso = localDateIso(date);
+  const result = await runBoardMutation<{ nightId: string }>(
+    "get_or_create_night",
+    { date: iso, dayName },
+    async () => {
+      const { getOrCreateNightForDateServer } = await import("./opsMutations.server");
+      return getOrCreateNightForDateServer({ date: iso, dayName });
+    },
+  );
+  writeNightIdCache(iso, result.nightId);
 
-  let weekId: string | null = null;
-  {
-    const { data } = await supabase
-      .from("weeks")
-      .select("id")
-      .eq("week_ending", weekEndingIso)
-      .maybeSingle();
-    weekId = data?.id ?? null;
-  }
+  // Best-effort card defaults (session-gated when browser; may no-op under RLS until fully migrated).
+  applySlotDefaultsToNight(result.nightId).catch((e) =>
+    console.warn("[shiftbuilder/data] getOrCreateNightForDate: card-default task seed failed", e),
+  );
 
-  if (!weekId) {
-    const { data: newWeek, error: wErr } = await supabase
-      .from("weeks")
-      .insert({
-        week_ending: weekEndingIso,
-        // Leave other columns (label, status, schedule_path, etc.) to defaults or triggers.
-        // The table 'weeks' is keyed by week_ending (per the rest of the app and schema).
-      })
-      .select("id")
-      .single();
-
-    if (wErr || !newWeek) {
-      throw new Error(`Failed to create week for ${weekEndingIso}: ${wErr?.message ?? "unknown"}`);
-    }
-    weekId = newWeek.id;
-  }
-
-  // 3. Create the night under that week.
-  // Supply all NOT NULL columns that have no defaults (per schema + sudoActions ensure path).
-  // day_num/page_num are 1-based within the Fri-Thu week.
-  const dayNum = shiftDayNumLocal(date);
-  const { data: newNight, error: nErr } = await supabase
-    .from("nights")
-    .insert({
-      week_id: weekId,
-      night_date: localDateIso(date),
-      day_name: dayName,
-      day_num: dayNum,
-      page_num: dayNum,
-      status: "draft",
-      is_locked: false,
-    })
-    .select("id")
-    .single();
-
-  if (nErr || !newNight) {
-    throw new Error(`Failed to create night for ${localDateIso(date)}: ${nErr?.message ?? "unknown"}`);
-  }
-
-  const newNightId = newNight.id;
-  writeNightIdCache(localDateIso(date), newNightId);
-
-  // Auto-seed default tasks and break template in parallel — fire-and-forget
-  // so a seeding failure never blocks night creation. Errors are logged but
-  // do not propagate; the operator can always add tasks/breaks manually.
-  Promise.all([
-    // Cutover: night defaults now come from slot-default Ops Tasks (ops_work_items),
-    // not the legacy slot_default_tasks table. See applySlotDefaultsToNight.
-    applySlotDefaultsToNight(newNightId).catch((e) =>
-      console.warn('[shiftbuilder/data] getOrCreateNightForDate: card-default task seed failed', e)
-    ),
-    seedDefaultBreaksForNight(newNightId).catch((e) =>
-      console.warn('[shiftbuilder/data] getOrCreateNightForDate: break seed failed', e)
-    ),
-  ]);
-
-  return newNightId;
+  return result.nightId;
 }
 
 // ============================================================================
@@ -987,14 +928,20 @@ export async function batchApplyDraftAssignments(
   }>,
   /** Optional YYYY-MM-DD for server re-validate schedule gate (resolved from nightId if omitted). */
   date?: string | null,
-): Promise<void> {
-  await runBoardMutation(
+  /** P1 concurrency token from nights.updated_at when the board was loaded. */
+  expectedUpdatedAt?: string | null,
+): Promise<{ ok: true; nightUpdatedAt?: string | null }> {
+  return runBoardMutation(
     'batch_apply_draft',
-    { nightId, slots, ...(date ? { date } : {}) },
+    {
+      nightId,
+      slots,
+      ...(date ? { date } : {}),
+      ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+    },
     async () => {
       const { batchApplyDraftAssignmentsServer } = await import('./opsMutations.server');
-      await batchApplyDraftAssignmentsServer(nightId, slots, date);
-      return { ok: true };
+      return batchApplyDraftAssignmentsServer(nightId, slots, date, expectedUpdatedAt);
     },
   );
 }
@@ -1117,15 +1064,14 @@ export async function getNightNotes(nightId: string): Promise<string> {
 }
 
 export async function saveNightNotes(nightId: string, notes: string): Promise<void> {
-  const { error } = await supabase
-    .from("nights")
-    .update({ notes, updated_at: new Date().toISOString() })
-    .eq("id", nightId);
-  if (error) {
-    throw new Error(`Failed to save notes: ${error.message}`);
-  }
-
-  await bustNightBoardServerCache();
+  await runBoardMutation(
+    "save_night_notes",
+    { nightId, notes },
+    async () => {
+      const { saveNightNotesServer } = await import("./opsMutations.server");
+      return saveNightNotesServer(nightId, notes);
+    },
+  );
 }
 
 export async function getNightAuxLayout(nightId: string): Promise<unknown | null> {
@@ -1767,49 +1713,15 @@ export async function seedDefaultTasksForNight(nightId: string): Promise<number>
  * Idempotent: skips rows where (night_id, tm_id) already exists.
  */
 export async function seedDefaultBreaksForNight(nightId: string): Promise<number> {
-  if (!nightId) return 0;
-
-  const { data: template, error: tErr } = await supabase
-    .from('break_template')
-    .select('tm_id, group_num, break_wave, slot_ref, sort_order')
-    .order('group_num', { ascending: true })
-    .order('sort_order', { ascending: true });
-
-  if (tErr) {
-    console.error('[shiftbuilder/data] seedDefaultBreaksForNight fetch failed:', tErr);
-    throw new Error(`Failed to load break template: ${tErr.message}`);
-  }
-
-  if (!template || template.length === 0) return 0;
-
-  // Get existing TM IDs for this night so we don't double-insert
-  const { data: existing } = await supabase
-    .from('break_assignments')
-    .select('tm_id')
-    .eq('night_id', nightId);
-
-  const existingTmIds = new Set((existing || []).map((r: any) => r.tm_id));
-
-  const toInsert = template
-    .filter((r: any) => !existingTmIds.has(r.tm_id))
-    .map((r: any) => ({
-      night_id: nightId,
-      tm_id: r.tm_id,
-      group_num: r.group_num,
-      break_wave: r.break_wave,
-      slot_ref: r.slot_ref,
-      sort_order: r.sort_order,
-    }));
-
-  if (toInsert.length === 0) return 0;
-
-  const { error: iErr } = await supabase.from('break_assignments').insert(toInsert);
-  if (iErr) {
-    console.error('[shiftbuilder/data] seedDefaultBreaksForNight insert failed:', iErr);
-    throw new Error(`Failed to seed break assignments: ${iErr.message}`);
-  }
-
-  return toInsert.length;
+  const res = await runBoardMutation<{ count: number }>(
+    "seed_default_breaks",
+    { nightId },
+    async () => {
+      const { seedDefaultBreaksForNightServer } = await import("./opsMutations.server");
+      return seedDefaultBreaksForNightServer(nightId);
+    },
+  );
+  return res.count ?? 0;
 }
 
 // ============================================================================
@@ -3937,17 +3849,23 @@ export async function recordPlacementHistory(
   rrSide: string | null = null,
   weekStart: string | null = null
 ): Promise<void> {
-  const { error } = await supabase.from("tm_placement_history").insert({
-    tm_id: tmId,
-    night_id: nightId,
-    slot_key: slotKey,
-    slot_type: slotType,
-    rr_side: rrSide,
-    week_start: weekStart,
-    is_committed: true,
-  });
-
-  if (error) {
+  try {
+    await runBoardMutation(
+      "record_placement_history",
+      { tmId, nightId, slotKey, slotType, rrSide, weekStart },
+      async () => {
+        const { recordPlacementHistoryServer } = await import("./opsMutations.server");
+        return recordPlacementHistoryServer({
+          tmId,
+          nightId,
+          slotKey,
+          slotType,
+          rrSide,
+          weekStart,
+        });
+      },
+    );
+  } catch (error) {
     console.warn("[data] recordPlacementHistory failed", error);
   }
 }

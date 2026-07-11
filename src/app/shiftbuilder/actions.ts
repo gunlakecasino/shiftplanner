@@ -907,7 +907,9 @@ export async function previewWeekEngine(weekStartIso: string): Promise<WeekPrevi
     getNightAssignments,
   } = await import("@/lib/shiftbuilder/data");
   const { getAllScheduledTmIdsForNight } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
-  const { loadPlacementHistoriesForRoster } = await import("@/lib/shiftbuilder/sudoBatchPlanner");
+  const { loadPlacementHistoriesForRoster } = await import(
+    "@/lib/shiftbuilder/sudoBatchPlanner.server"
+  );
 
   // Derive the 7 grave-week dates (Fri..Thu) from weekStartIso.
   const start = new Date(`${weekStartIso}T12:00:00`);
