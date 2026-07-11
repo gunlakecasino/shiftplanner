@@ -49,7 +49,12 @@ import {
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 
-/** Single key = require that bit; array = require any one of the bits. */
+/**
+ * Single key = require that bit; array = require any one of the bits.
+ * Array form is for multi-permission OR only (e.g. sudo ∥ manage-team).
+ * Night published/draft gate below runs if any required key is
+ * canEditAssignments or canLockUnlock — keep that true for board mutations.
+ */
 const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
   upsert_zone_assignment: "canEditAssignments",
   delete_zone_assignment: "canEditAssignments",
@@ -80,6 +85,16 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
   upsert_slot_default: "canAccessSudo",
   bulk_upsert_slot_defaults: "canAccessSudo",
 };
+
+function requireBodyTmId(body: Record<string, unknown>): string {
+  const raw = body.tmId;
+  if (raw == null) throw new Error("tmId is required");
+  const tmId = String(raw).trim();
+  if (!tmId || tmId === "undefined" || tmId === "null") {
+    throw new Error("tmId is required");
+  }
+  return tmId;
+}
 
 async function bustCache(date?: string) {
   try {
@@ -114,8 +129,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
-  const singlePermission = Array.isArray(permission) ? null : permission;
-  if (singlePermission === "canEditAssignments" || singlePermission === "canLockUnlock") {
+  // Night published/draft policy: run when any required key is a board-edit bit
+  // (works for string keys and future OR-arrays that include those keys).
+  const permissionKeys = Array.isArray(permission) ? permission : [permission];
+  if (
+    permissionKeys.some((p) => p === "canEditAssignments" || p === "canLockUnlock")
+  ) {
     const editCheck = await assertActorCanEditNight(
       session.actor.permissions,
       nightRefFromMutationBody(body),
@@ -285,12 +304,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result);
       }
       case "set_tm_grave_pool": {
+        const tmId = requireBodyTmId(body);
         const raw = body.value;
         const value: GravePoolValue =
           raw === null || raw === undefined || raw === ""
             ? null
             : (String(raw) as Exclude<GravePoolValue, null>);
-        const result = await setTMGravePoolServer(String(body.tmId), value);
+        const result = await setTMGravePoolServer(tmId, value);
         try {
           await revalidateRosterCache();
         } catch {
@@ -299,8 +319,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result);
       }
       case "set_tm_display_name": {
+        const tmId = requireBodyTmId(body);
         const displayName = String(body.displayName ?? body.newDisplayName ?? "");
-        const result = await setTMDisplayNameServer(String(body.tmId), displayName);
+        const result = await setTMDisplayNameServer(tmId, displayName);
         try {
           await revalidateRosterCache();
         } catch {

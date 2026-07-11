@@ -721,51 +721,73 @@ export async function unmarkTmCallOffServer(params: {
 
 export type GravePoolValue = "Full" | "AM" | "PM" | null;
 
-/** Set TM grave_pool (null = ineligible). Admin client; session-gated at mutations route. */
+/**
+ * Set TM grave_pool (null = ineligible).
+ * Admin client only — callers MUST already have enforced canAccessSudo ∥ canManageTeam
+ * (mutations route via requireOpsAnyPermission). Do not call from unauthenticated code.
+ */
 export async function setTMGravePoolServer(
   tmId: string,
   value: GravePoolValue,
 ): Promise<{ ok: true }> {
-  if (!tmId) throw new Error("setTMGravePool: tmId is required");
+  const id = typeof tmId === "string" ? tmId.trim() : "";
+  if (!id || id === "undefined" || id === "null") {
+    throw new Error("setTMGravePool: tmId is required");
+  }
   if (value !== null && value !== "Full" && value !== "AM" && value !== "PM") {
     throw new Error(`setTMGravePool: invalid grave_pool value "${String(value)}"`);
   }
 
   const client = adminClient();
-  const { error } = await client
+  const { data, error } = await client
     .from("tm_profiles")
     .update({ grave_pool: value, updated_at: new Date().toISOString() })
-    .eq("tm_id", tmId);
+    .eq("tm_id", id)
+    .select("tm_id");
 
   if (error) {
     throw new Error(
-      `setTMGravePool failed for ${tmId} → ${value ?? "NULL"}: ${error.message}`,
+      `setTMGravePool failed for ${id} → ${value ?? "NULL"}: ${error.message}`,
     );
+  }
+  if (!data || data.length === 0) {
+    throw new Error(`setTMGravePool: no tm_profiles row for tm_id=${id}`);
   }
   return { ok: true };
 }
 
-/** Update TM display_name. Admin client; session-gated at mutations route. */
+/**
+ * Update TM display_name.
+ * Admin client only — callers MUST already have enforced canAccessSudo ∥ canManageTeam
+ * (mutations route via requireOpsAnyPermission). Do not call from unauthenticated code.
+ */
 export async function setTMDisplayNameServer(
   tmId: string,
   newDisplayName: string,
 ): Promise<{ ok: true }> {
-  if (!tmId) throw new Error("setTMDisplayName: tmId is required");
+  const id = typeof tmId === "string" ? tmId.trim() : "";
+  if (!id || id === "undefined" || id === "null") {
+    throw new Error("setTMDisplayName: tmId is required");
+  }
   const trimmed = newDisplayName.trim();
   if (!trimmed) {
     throw new Error("setTMDisplayName: new display name cannot be empty");
   }
 
   const client = adminClient();
-  const { error } = await client
+  const { data, error } = await client
     .from("tm_profiles")
     .update({ display_name: trimmed, updated_at: new Date().toISOString() })
-    .eq("tm_id", tmId);
+    .eq("tm_id", id)
+    .select("tm_id");
 
   if (error) {
     throw new Error(
-      `setTMDisplayName failed for ${tmId} → "${trimmed}": ${error.message}`,
+      `setTMDisplayName failed for ${id} → "${trimmed}": ${error.message}`,
     );
+  }
+  if (!data || data.length === 0) {
+    throw new Error(`setTMDisplayName: no tm_profiles row for tm_id=${id}`);
   }
   return { ok: true };
 }

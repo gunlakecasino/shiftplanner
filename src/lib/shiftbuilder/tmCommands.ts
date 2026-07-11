@@ -5,17 +5,22 @@
  * postOpsMutation → /api/shiftbuilder/mutations with session + permission.
  * Server handlers use the admin client (see opsMutations.server.ts).
  * Reads may still use the browser supabase client where RLS allows SELECT.
+ *
+ * setTMGravePool / setTMDisplayName are browser-only entry points. Server
+ * code must call setTM*Server only after requireOpsAnyPermission
+ * (canAccessSudo | canManageTeam) — never import those admin writers here.
  */
 
 import { supabase } from "../supabase";
 
 import { uiToDb } from "./slot-keys";
+import type { GravePoolValue } from "./opsMutations.server";
 
 // ---------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------
 
-export type GravePoolValue = "Full" | "AM" | "PM" | null;
+export type { GravePoolValue };
 
 export interface DisplayNameConflict {
   conflictTmId: string;
@@ -35,27 +40,20 @@ export interface DisplayNameConflict {
  * as the canonical signal for who can hold a zone slot. Flipping this here
  * immediately updates the engine's behavior on the next run.
  *
- * Permission: canAccessSudo OR canManageTeam (KD-16).
+ * Permission: canAccessSudo OR canManageTeam (KD-16), enforced by mutations API.
+ * Browser-only — does not call admin writers from non-window contexts.
  */
 export async function setTMGravePool(
   tmId: string,
   value: GravePoolValue
 ): Promise<void> {
-  if (typeof window !== "undefined") {
-    const { postOpsMutation } = await import("./opsMutationClient");
-    await postOpsMutation("set_tm_grave_pool", { tmId, value });
-    return;
+  if (typeof window === "undefined") {
+    throw new Error(
+      "setTMGravePool is browser-only; use setTMGravePoolServer after requireOpsAnyPermission(canAccessSudo|canManageTeam)",
+    );
   }
-
-  const { setTMGravePoolServer } = await import("./opsMutations.server");
-  await setTMGravePoolServer(tmId, value);
-
-  try {
-    const { revalidateRosterCache } = await import("./revalidateOpsCache");
-    await revalidateRosterCache();
-  } catch {
-    /* server revalidate optional */
-  }
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("set_tm_grave_pool", { tmId, value });
 }
 
 // ---------------------------------------------------------------
@@ -99,7 +97,8 @@ export async function checkDisplayNameConflict(
  * uniqueness because the schema doesn't (and we want the UI to handle the
  * conflict gracefully rather than throwing).
  *
- * Permission: canAccessSudo OR canManageTeam (KD-16).
+ * Permission: canAccessSudo OR canManageTeam (KD-16), enforced by mutations API.
+ * Browser-only — does not call admin writers from non-window contexts.
  */
 export async function setTMDisplayName(
   tmId: string,
@@ -110,21 +109,13 @@ export async function setTMDisplayName(
     throw new Error("setTMDisplayName: new display name cannot be empty");
   }
 
-  if (typeof window !== "undefined") {
-    const { postOpsMutation } = await import("./opsMutationClient");
-    await postOpsMutation("set_tm_display_name", { tmId, displayName: trimmed });
-    return;
+  if (typeof window === "undefined") {
+    throw new Error(
+      "setTMDisplayName is browser-only; use setTMDisplayNameServer after requireOpsAnyPermission(canAccessSudo|canManageTeam)",
+    );
   }
-
-  const { setTMDisplayNameServer } = await import("./opsMutations.server");
-  await setTMDisplayNameServer(tmId, trimmed);
-
-  try {
-    const { revalidateRosterCache } = await import("./revalidateOpsCache");
-    await revalidateRosterCache();
-  } catch {
-    /* server revalidate optional */
-  }
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("set_tm_display_name", { tmId, displayName: trimmed });
 }
 
 // ---------------------------------------------------------------
