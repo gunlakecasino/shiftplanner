@@ -9,7 +9,7 @@ import { isEligibleForSlot } from "@/lib/shiftbuilder/placement";
 import {
   buildPlacementTrailLabels,
   collectDeploymentSlotKeys,
-  PLACEMENT_SPREAD_NIGHTS,
+  PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
   shouldShowPlacementFitChip,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import {
@@ -131,8 +131,12 @@ export function usePlacementFitMap({
         const res = await fetch("/api/shiftbuilder/placement-histories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tmIds, days: PLACEMENT_SPREAD_NIGHTS }),
+          body: JSON.stringify({
+            tmIds,
+            days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+          }),
         });
+        if (!res.ok) throw new Error(`placement-histories ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
         const nextH = (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
@@ -142,9 +146,9 @@ export function usePlacementFitMap({
           lastHistoriesSigRef.current = nextSig;
         }
       } catch {
-        if (!cancelled && lastHistoriesSigRef.current !== "{}") {
-          setHistories({});
-          lastHistoriesSigRef.current = "{}";
+        // Keep prior good histories on failure — do not treat error as "never placed".
+        if (!cancelled) {
+          /* leave histories as-is; still clear loading */
         }
       } finally {
         if (!cancelled) setHistoriesLoading(false);

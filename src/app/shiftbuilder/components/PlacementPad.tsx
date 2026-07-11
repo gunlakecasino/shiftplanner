@@ -31,6 +31,7 @@ import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
 import {
   PLACEMENT_SPREAD_NIGHTS,
+  PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
   getSpreadPlacementKeys,
   getSpreadPlacementCounts,
   MATRIX_SPREAD_ONCE,
@@ -578,6 +579,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setInsightCached(false);
     setAnalystDetailsOpen(false);
     setDeepInsightLoading(false);
+    // Drop prior TM's history immediately so matrix/fit never paint under the wrong id.
+    setPadHistory(null);
+    setPadHistoryLoading(!!a.tmId);
     lightRunRef.current += 1;
     analystRequestRef.current += 1;
     setMatrixExpanded(false);
@@ -594,13 +598,14 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
   const usePortal = !isDock && !!hostId && !!portalStyle;
 
-  // Fetch current TM placement history via session-gated batch API (same source as fit chips).
+  // Fetch current TM placement history via session-gated batch API (aligned calendar lookback with chips).
   useEffect(() => {
     if (!a.tmId) {
       setPadHistory(null);
       setPadHistoryLoading(false);
       return;
     }
+    const fetchTmId = a.tmId;
     let cancelled = false;
     setPadHistoryLoading(true);
     (async () => {
@@ -608,12 +613,22 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
         const res = await fetch("/api/shiftbuilder/placement-histories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tmIds: [a.tmId], days: 90 }),
+          body: JSON.stringify({
+            tmIds: [fetchTmId],
+            days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+          }),
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
-        setPadHistory((data.histories as Record<string, ZoneDetailEntry | null>)?.[a.tmId!] ?? null);
+        const next =
+          (data.histories as Record<string, ZoneDetailEntry | null>)?.[fetchTmId] ?? null;
+        // Identity guard: never attach another TM's payload to this pad.
+        if (next && next.tmId && next.tmId !== fetchTmId) {
+          setPadHistory(null);
+        } else {
+          setPadHistory(next);
+        }
       } catch {
         if (!cancelled) setPadHistory(null);
       } finally {
@@ -625,17 +640,35 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     };
   }, [slotKey, a.tmId]);
 
+  // Only use history that matches the currently assigned TM (guards race during switches).
+  const safePadHistory =
+    padHistory && a.tmId && (!padHistory.tmId || padHistory.tmId === a.tmId)
+      ? padHistory
+      : null;
+
   const padMatrixFacts = React.useMemo(() => {
-    const spreadCounts = getSpreadPlacementCounts(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
-    const spreadKeys = getSpreadPlacementKeys(padHistory, PLACEMENT_SPREAD_NIGHTS, currentIso);
-    const last5Sequence = getLastPlacementSequence(padHistory, LAST5_COUNT, currentIso);
+    const spreadCounts = getSpreadPlacementCounts(
+      safePadHistory,
+      PLACEMENT_SPREAD_NIGHTS,
+      currentIso,
+    );
+    const spreadKeys = getSpreadPlacementKeys(
+      safePadHistory,
+      PLACEMENT_SPREAD_NIGHTS,
+      currentIso,
+    );
+    const last5Sequence = getLastPlacementSequence(
+      safePadHistory,
+      LAST5_COUNT,
+      currentIso,
+    );
     return {
       spreadCounts,
       spreadKeys,
       last5Sequence,
       slotSpread: spreadCountForRepeatKey(spreadCounts, slotKey),
     };
-  }, [padHistory, currentIso, slotKey]);
+  }, [safePadHistory, currentIso, slotKey]);
 
   const spreadCountFor = (ui: string) => padMatrixFacts.spreadCounts.get(ui) ?? 0;
   const last5Sequence = padMatrixFacts.last5Sequence;
@@ -669,10 +702,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const padHistorySig = React.useMemo(
     () =>
-      padHistory
-        ? `${padHistory.tmId}:${padHistory.lastDate}:${padHistory.totalAssignments}`
+      safePadHistory
+        ? `${safePadHistory.tmId}:${safePadHistory.lastDate}:${safePadHistory.totalAssignments}`
         : "",
-    [padHistory?.tmId, padHistory?.lastDate, padHistory?.totalAssignments],
+    [safePadHistory?.tmId, safePadHistory?.lastDate, safePadHistory?.totalAssignments],
   );
 
   const currentPlacementTm = React.useMemo(
@@ -690,7 +723,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     }
     if (padHistoryLoading) return;
     // null history = brand-new TM: still compute gaps (all matrix slots "not recent")
-    const historyForBasics = padHistory ?? {
+    const historyForBasics = safePadHistory ?? {
       tmId: a.tmId!,
       tmName: a.tmName ?? a.tmId!,
       zoneDates: {},
@@ -776,7 +809,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     matrixSlotKeys,
     assignments,
     members,
-    padHistory,
+    safePadHistory,
     currentPlacementTm,
   ]);
 
@@ -791,7 +824,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
         members: members as any,
         auxDefs,
         currentIso,
-        histories: padHistory && a.tmId ? { [a.tmId]: padHistory } : {},
+        histories: safePadHistory && a.tmId ? { [a.tmId]: safePadHistory } : {},
         historiesLoading: padHistoryLoading,
         weeklyRecentHistory,
       }),
@@ -803,7 +836,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       members,
       auxDefs,
       currentIso,
-      padHistory,
+      safePadHistory,
       a.tmId,
       padHistoryLoading,
       weeklyRecentHistory,
@@ -964,8 +997,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const rrWorkedCount = spreadKeys.filter((k) => k.startsWith("MRR") || k.startsWith("WRR")).length;
   const zoneWorkedCount = spreadKeys.filter((k) => /^Z\d+$/.test(k)).length;
-  const z9Days = getDaysSinceForKey(padHistory, "Z9", currentIso);
-  const z9srDays = getDaysSinceForKey(padHistory, "Z9SR", currentIso);
+  const z9Days = getDaysSinceForKey(safePadHistory, "Z9", currentIso);
+  const z9srDays = getDaysSinceForKey(safePadHistory, "Z9SR", currentIso);
 
   const last5Pills: Array<string | null> = [...last5Sequence];
   while (last5Pills.length < LAST5_COUNT) last5Pills.push(null);

@@ -152,7 +152,7 @@ export function buildPadAssignmentsFromStore(
             ? (merged[slotKey] as Record<string, unknown>)
             : {}),
           tmId: draft.proposedTmId,
-          tmName: draft.proposedTmName,
+          tmName: draft.proposedTmName ?? draft.proposedTmId,
           slotKey,
         };
       }

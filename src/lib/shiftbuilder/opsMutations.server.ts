@@ -625,33 +625,13 @@ export async function refreshTmZoneMatrixServer(
   }
 
   const now = new Date();
-  const fourWeeksAgo = new Date(now.getTime() - 28 * 86400 * 1000);
-  const eightWeeksAgo = new Date(now.getTime() - 56 * 86400 * 1000);
-
-  const zoneCounts = new Map<
-    string,
-    { last: string | null; c4: number; c8: number; life: number }
-  >();
-
-  for (const h of history as Array<{ slot_key: string; placed_at: string }>) {
-    let z = h.slot_key;
-    // Tolerate DB-format keys that slipped into history (zone_N → ZN).
-    if (!/^Z\d+$/.test(z) && z !== "Z9SR") {
-      if (/^zone_(\d+)$/.test(z)) z = `Z${z.replace("zone_", "")}`;
-      else if (z === "z9_sr") z = "Z9SR";
-      else continue; // RR/aux not used by zone-matrix fairness signals
-    }
-
-    const placed = new Date(h.placed_at);
-    if (!zoneCounts.has(z)) {
-      zoneCounts.set(z, { last: null, c4: 0, c8: 0, life: 0 });
-    }
-    const rec = zoneCounts.get(z)!;
-    rec.life += 1;
-    if (placed >= fourWeeksAgo) rec.c4 += 1;
-    if (placed >= eightWeeksAgo) rec.c8 += 1;
-    if (!rec.last || placed > new Date(rec.last)) rec.last = h.placed_at;
-  }
+  const { aggregateZoneMatrixFromHistory } = await import(
+    "@/lib/shiftbuilder/rotation/matrixRebuild"
+  );
+  const zoneCounts = aggregateZoneMatrixFromHistory(
+    history as Array<{ slot_key: string; placed_at: string }>,
+    now,
+  );
 
   // Empty history within lookback → zero the matrix for this TM (no stale zones).
   if (zoneCounts.size === 0) {

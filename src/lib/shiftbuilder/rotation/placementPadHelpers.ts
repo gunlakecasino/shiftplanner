@@ -39,8 +39,15 @@ export function canSuggestSwapBetween(
   );
 }
 
-/** Nights of history used for the placement spread grid. */
+/** Nights of history used for the placement spread grid (work nights, not calendar days). */
 export const PLACEMENT_SPREAD_NIGHTS = 30;
+
+/**
+ * Calendar-day lookback when fetching zone_assignments history so that
+ * PLACEMENT_SPREAD_NIGHTS work nights are usually available (~5 graves/week → 90d ≈ 60+ nights).
+ * Pad, chips, picker, and week cache must share this.
+ */
+export const PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS = 90;
 
 /** Unique slot keys the TM worked at least once in the last N grave nights (before viewed night). */
 export function getSpreadPlacementKeys(

@@ -6,7 +6,7 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { TmEntry } from "@/app/shiftbuilder/components/MarkerPad";
 import {
-  PLACEMENT_SPREAD_NIGHTS,
+  PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import type { SlotAssignmentRow } from "@/app/shiftbuilder/components/placementFitForSlot";
 import {
@@ -81,8 +81,12 @@ export function usePickerRotationSort({
         const res = await fetch("/api/shiftbuilder/placement-histories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tmIds, days: PLACEMENT_SPREAD_NIGHTS }),
+          body: JSON.stringify({
+            tmIds,
+            days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+          }),
         });
+        if (!res.ok) throw new Error(`placement-histories ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
         const nextH = (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
@@ -92,10 +96,7 @@ export function usePickerRotationSort({
           lastHistoriesSigRef.current = nextSig;
         }
       } catch {
-        if (!cancelled && lastHistoriesSigRef.current !== "{}") {
-          setHistories({});
-          lastHistoriesSigRef.current = "{}";
-        }
+        // Keep prior good histories — empty-on-error looked like "never placed".
       } finally {
         if (!cancelled) setHistoriesLoading(false);
       }

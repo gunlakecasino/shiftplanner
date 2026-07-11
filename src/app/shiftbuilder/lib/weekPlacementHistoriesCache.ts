@@ -1,7 +1,7 @@
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { PLACEMENT_SPREAD_NIGHTS } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS } from "@/app/shiftbuilder/components/placementPadHelpers";
 
-const SESSION_KEY = "oms_week_placement_histories_v1";
+const SESSION_KEY = "oms_week_placement_histories_v2";
 
 /** In-memory TM → 30-night spread (survives re-renders; hydrated from sessionStorage on load). */
 const byTmId = new Map<string, ZoneDetailEntry | null>();
@@ -61,6 +61,26 @@ export function allWeekPlacementHistoriesCached(tmIds: string[]): boolean {
   return tmIds.length > 0 && tmIds.every((id) => byTmId.has(id));
 }
 
+/** Drop in-memory + session history after live assign/clear/apply so week health reloads. */
+export function invalidateWeekPlacementHistories(tmIds?: string[]): void {
+  hydrateFromSession();
+  if (!tmIds || tmIds.length === 0) {
+    byTmId.clear();
+  } else {
+    for (const id of tmIds) byTmId.delete(id);
+  }
+  inflight = null;
+  inflightKey = "";
+  persistToSession();
+  if (tmIds === undefined || tmIds.length === 0) {
+    try {
+      if (typeof window !== "undefined") sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 /**
  * Returns histories for all requested TMs, fetching only IDs not yet cached.
  * Incremental — adding a TM to the week plan does not invalidate prior entries.
@@ -81,8 +101,12 @@ export async function ensureWeekPlacementHistories(
           const res = await fetch("/api/shiftbuilder/placement-histories", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tmIds: missing, days: PLACEMENT_SPREAD_NIGHTS }),
+            body: JSON.stringify({
+              tmIds: missing,
+              days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+            }),
           });
+          if (!res.ok) throw new Error(`placement-histories ${res.status}`);
           const data = await res.json();
           const histories =
             (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
@@ -90,6 +114,8 @@ export async function ensureWeekPlacementHistories(
             byTmId.set(id, histories[id] ?? null);
           }
           persistToSession();
+        } catch {
+          // Do not cache empty as truth on network/auth failure.
         } finally {
           inflight = null;
           inflightKey = "";

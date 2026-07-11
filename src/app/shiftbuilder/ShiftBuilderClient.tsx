@@ -1509,6 +1509,16 @@ function AuthedShiftBuilder() {
       useShiftBuilderStore.getState().clearDraft();
 
       setLastSavedAt(new Date());
+      // Force placement-history caches to reload after commits (matrix + trails + chips).
+      try {
+        const { invalidateWeekPlacementHistories } = await import(
+          "./lib/weekPlacementHistoriesCache"
+        );
+        invalidateWeekPlacementHistories();
+      } catch {
+        /* non-fatal */
+      }
+      setFitHistoryRefreshEpoch((e) => e + 1);
       const savedCount = draftEntries.length;
       showToast(
         `Applied ${savedCount} change${savedCount === 1 ? "" : "s"} to the live board — TMs can see it now.`,

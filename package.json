@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "icons:pwa": "node scripts/generate-pwa-icons.mjs",
-    "icons:from-master": "node scripts/generate-icons-from-master.mjs"
+    "icons:from-master": "node scripts/generate-icons-from-master.mjs",
+    "backfill:zone-matrix": "tsx scripts/backfill-tm-zone-matrix.ts"
   },
   "dependencies": {
     "@ai-sdk/xai": "^1.2.0",
