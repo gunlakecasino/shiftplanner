@@ -9,7 +9,9 @@ import {
   AUX_ROLE_PRESETS,
   MAX_AUX_SLOTS,
   NUMBERED_AUX_ROLES,
+  auxRoleTrailCode,
   defaultLabelForAuxRole,
+  normalizeHistoryUiKey,
 } from "./constants";
 
 export { MAX_AUX_SLOTS };
@@ -165,11 +167,16 @@ export function resolveAuxLayout(
   rawDbAssignments: Array<{ slotKey?: string; slot_key?: string; tmId?: string | null; tm_id?: string | null }> | undefined | null,
 ): AuxDef[] {
   const parsed = parseAuxLayoutJson(storedLayout);
-  if (parsed?.length) return ensureCoreAuxRoles(parsed);
+  if (parsed?.length) {
+    // Coerce mislabeled "STEP UP" support shells → real step_up (not permanent seed).
+    return ensureCoreAuxRoles(coerceMislabeledAuxRoles(parsed));
+  }
   if (!nightHasAuxAssignmentData(rawDbAssignments)) {
     return defaultAuxDefsForNewNight();
   }
-  return ensureCoreAuxRoles(migrateAuxLayoutFromDbRows(rawDbAssignments));
+  return ensureCoreAuxRoles(
+    coerceMislabeledAuxRoles(migrateAuxLayoutFromDbRows(rawDbAssignments)),
+  );
 }
 
 export function remapAssignmentsToAuxKeys(
@@ -186,6 +193,21 @@ export function remapAssignmentsToAuxKeys(
     if (target && !out[target.key]?.tmId) {
       out[target.key] = data;
       delete out[legacyKey];
+    }
+  }
+
+  // After coerceMislabeledAuxRoles turns support+"STEP UP" into step_up, SP1/support_1
+  // occupancy must land on the Step Up shell (otherwise Cookie vanishes from the board
+  // and trails keep saying SP1).
+  const stepShell = auxDefs.find((d) => d.role === "step_up");
+  const supportShells = auxDefs.filter((d) => d.role === "support");
+  if (stepShell && supportShells.length === 0) {
+    for (const orphanKey of ["SP1", "support_1", "SUP1"]) {
+      const data = out[orphanKey];
+      if (!data?.tmId && !data?.tmName) continue;
+      if (out[stepShell.key]?.tmId) continue;
+      out[stepShell.key] = data;
+      delete out[orphanKey];
     }
   }
 
@@ -244,14 +266,139 @@ export function applyAuxRole(
   );
 }
 
+/**
+ * Infer a typed aux role from free-text / custom labels.
+ * "STEP UP" / "STEPUP" → step_up so we never keep role=support with a Step Up name
+ * (that wrote support_1 to the DB and showed as SP1 in trails).
+ */
+export function inferAuxRoleFromLabel(label: string): AuxRole | null {
+  const compact = (label || "").replace(/\s+/g, "").toUpperCase();
+  if (!compact) return null;
+  if (compact === "STEPUP" || compact === "STEP" || compact === "STEP_UP") {
+    return "step_up";
+  }
+  if (compact === "JOBCOACH" || compact === "JC" || compact === "JOB_COACH") {
+    return "job_coach";
+  }
+  if (compact === "ADMIN" || compact === "ADM") return "admin";
+  if (compact === "Z9SR" || compact === "Z9SMOKINGROOM") return "z9sr";
+  if (/^OASIS\d*$/.test(compact) || /^OAS\d*$/.test(compact)) return "oasis";
+  if (/^TRASH\d*$/.test(compact) || /^TSH\d*$/.test(compact)) return "trash";
+  if (/^SUPPORT\d*$/.test(compact) || /^SUP\d*$/.test(compact)) return "support";
+  return null;
+}
+
 export function applyAuxLabel(
   auxDefs: AuxDef[],
   slotKey: string,
   label: string,
 ): AuxDef[] {
+  const trimmed = label.trim();
+  // Typing a known role name promotes the shell to that role (DB key + trail id).
+  const inferred = inferAuxRoleFromLabel(trimmed);
+  if (inferred) {
+    return applyAuxRole(auxDefs, slotKey, inferred);
+  }
   return auxDefs.map((d) =>
-    d.key === slotKey ? { ...d, label: label.trim() } : d,
+    d.key === slotKey ? { ...d, label: trimmed } : d,
   );
+}
+
+/**
+ * Repair shells that were labeled Step Up / Job Coach but still typed as support
+ * or blank (operator custom-label path before role promotion).
+ * Step Up is NOT a permanent core card — this only fixes mis-typed shells that
+ * already exist; it never invents a Step Up card on a clean night.
+ */
+export function coerceMislabeledAuxRoles(defs: AuxDef[]): AuxDef[] {
+  if (!defs?.length) return defs;
+  let next = defs;
+  for (const d of defs) {
+    const inferred = inferAuxRoleFromLabel(d.label || "");
+    if (!inferred) continue;
+    // Only lift support/blank shells that were clearly renamed to a single-instance role.
+    if (
+      (inferred === "step_up" || inferred === "job_coach") &&
+      (d.role === "support" || d.role === "blank") &&
+      d.role !== inferred
+    ) {
+      next = applyAuxRole(next, d.key, inferred);
+    }
+  }
+  return next;
+}
+
+/**
+ * Given a DB zone_assignments slot_key and that night's aux_layout, return the
+ * stable trail id (STEP, SUP1, …). Fixes Cookie-style nights where support_1
+ * was the storage key for a shell labeled "STEP UP".
+ */
+export function trailKeyFromDbSlotAndLayout(
+  slotKey: string,
+  slotType: string,
+  rrSide: string | null | undefined,
+  layout: AuxDef[] | null | undefined,
+): string {
+  const rawDefs = layout?.length ? layout : null;
+  const defs = rawDefs ? coerceMislabeledAuxRoles(rawDefs) : null;
+
+  // Cookie Jul-9 path: DB has support_1, layout shell is role=support label="STEP UP".
+  // Inspect the raw layout before coerce (coerce removes the support shell).
+  if (rawDefs?.length) {
+    const supportN = slotKey.match(/^support_(\d+)$/);
+    if (supportN) {
+      const n = parseInt(supportN[1], 10);
+      const supportShells = rawDefs.filter((d) => d.role === "support");
+      const shell = supportShells[n - 1];
+      if (shell && inferAuxRoleFromLabel(shell.label || "") === "step_up") {
+        return "STEP";
+      }
+    }
+  }
+
+  if (defs?.length) {
+    // Reverse auxUiKeyToDb: find the shell that owns this DB key.
+    for (const d of defs) {
+      if (d.role === "blank") continue;
+      const mapped = auxUiKeyToDb(d.key, defs);
+      if (mapped?.slot_key === slotKey) {
+        if (d.role === "step_up" || inferAuxRoleFromLabel(d.label) === "step_up") {
+          return "STEP";
+        }
+        if (d.role === "job_coach" || inferAuxRoleFromLabel(d.label) === "job_coach") {
+          return "JC";
+        }
+        const nth = NUMBERED_AUX_ROLES.has(d.role)
+          ? defs.filter((x) => x.role === d.role).findIndex((x) => x.key === d.key)
+          : 0;
+        return auxRoleTrailCode(d.role, nth >= 0 ? nth : 0);
+      }
+    }
+
+    // After coerce, support_N rows with a step_up shell → STEP.
+    if (/^support_\d+$/.test(slotKey) && defs.some((d) => d.role === "step_up")) {
+      return "STEP";
+    }
+  }
+
+  // Fallback without importing slot-keys (avoids circular auxLayout ↔ slot-keys).
+  void slotType;
+  void rrSide;
+  if (slotKey === "step_up") return "STEP";
+  if (slotKey === "job_coach") return "JC";
+  if (slotKey === "admin") return "ADMIN";
+  if (slotKey === "z9_sr") return "Z9SR";
+  const zone = slotKey.match(/^zone_(\d+)$/);
+  if (zone) return `Z${zone[1]}`;
+  if (slotKey === "rr_1_2") {
+    return rrSide === "womens" ? "RR1W" : "RR1M";
+  }
+  const rr = slotKey.match(/^rr_(\d+)$/);
+  if (rr) {
+    const side = rrSide === "womens" ? "W" : "M";
+    return `RR${rr[1]}${side}`;
+  }
+  return normalizeHistoryUiKey(slotKey);
 }
 
 export function isAuxSlotKey(uiKey: string, auxDefs?: AuxDef[]): boolean {

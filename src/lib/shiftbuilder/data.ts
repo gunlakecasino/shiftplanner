@@ -9,6 +9,8 @@ import {
 } from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
 import { normalizeHistoryUiKey } from './constants';
+import { parseAuxLayoutJson, trailKeyFromDbSlotAndLayout } from './auxLayout';
+import type { AuxDef } from './placement';
 import type { BreakGroupValue } from './breakGroupResolve';
 import { addDays, startOfRosterWeek, daysBetween, formatLocalDateISO } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
@@ -2966,14 +2968,18 @@ export async function getTmPlacementHistory(
 
   const { data: nightRows } = await client
     .from("nights")
-    .select("id, night_date")
+    .select("id, night_date, aux_layout")
     .gte("night_date", from)
     .lte("night_date", to);
 
   if (!nightRows?.length) return null;
 
   const nightIdToDate = new Map<string, string>();
-  (nightRows as any[]).forEach((n) => nightIdToDate.set(n.id, n.night_date));
+  const nightIdToLayout = new Map<string, AuxDef[] | null>();
+  (nightRows as any[]).forEach((n) => {
+    nightIdToDate.set(n.id, n.night_date);
+    nightIdToLayout.set(n.id, parseAuxLayoutJson(n.aux_layout));
+  });
 
   // Batch night_id filters — very long .in() lists can fail/truncate under PostgREST.
   const nightIds = Array.from(nightIdToDate.keys());
@@ -3003,10 +3009,14 @@ export async function getTmPlacementHistory(
   for (const row of rows as any[]) {
     const d = nightIdToDate.get(row.night_id) ?? "";
     if (!d) continue;
-    const rawUi = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
-    if (rawUi.startsWith("UNK:")) continue;
-    // Stable trail vocabulary: step_up→STEP, SP1→SUP1 (never leave SP1/STEPUP in pad).
-    const z = normalizeHistoryUiKey(rawUi);
+    // Use that night's aux_layout so support_1 + label "STEP UP" → STEP (not SP1).
+    const z = trailKeyFromDbSlotAndLayout(
+      row.slot_key,
+      row.slot_type ?? "zone",
+      row.rr_side ?? null,
+      nightIdToLayout.get(row.night_id) ?? null,
+    );
+    if (!z || z.startsWith("UNK:")) continue;
     if (!zoneDates[z]) zoneDates[z] = [];
     zoneDates[z].push(d);
     nightDates.add(d);

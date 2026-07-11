@@ -4,8 +4,12 @@ import {
   ensureCoreAuxRoles,
   ensureAdminFirst,
   applyAuxRole,
+  applyAuxLabel,
   auxUiKeyToDb,
   parseAuxLayoutJson,
+  coerceMislabeledAuxRoles,
+  inferAuxRoleFromLabel,
+  trailKeyFromDbSlotAndLayout,
 } from "../auxLayout";
 import { uiToDb, dbToUi } from "../slot-keys";
 
@@ -117,5 +121,82 @@ describe("applyAuxRole + auxUiKeyToDb (Oasis / Trash / Support / JC / STEP)", ()
       "job_coach",
       "step_up",
     ]);
+  });
+});
+
+describe("Step Up is opt-in (not permanent) + mislabel repair", () => {
+  it("does not seed step_up on a new night", () => {
+    const defs = defaultAuxDefsForNewNight();
+    expect(defs.some((d) => d.role === "step_up")).toBe(false);
+    expect(defs.map((d) => d.role)).toEqual([
+      "admin",
+      "z9sr",
+      "blank",
+      "blank",
+      "blank",
+      "blank",
+    ]);
+  });
+
+  it("infers step_up from STEP UP label and promotes support shells", () => {
+    expect(inferAuxRoleFromLabel("STEP UP")).toBe("step_up");
+    expect(inferAuxRoleFromLabel("STEPUP")).toBe("step_up");
+
+    let defs = defaultAuxDefsForNewNight();
+    defs = applyAuxRole(defs, "AUX3", "support");
+    defs = applyAuxLabel(defs, "AUX3", "STEP UP");
+    expect(defs.find((d) => d.key === "AUX3")).toMatchObject({
+      role: "step_up",
+      label: "STEP UP",
+    });
+    expect(auxUiKeyToDb("AUX3", defs)?.slot_key).toBe("step_up");
+  });
+
+  it("coerces legacy support+STEP UP layout to real step_up role", () => {
+    const legacy = [
+      { key: "AUX1", role: "admin" as const, label: "ADMIN", locations: ["Floor Admin"] },
+      { key: "AUX2", role: "z9sr" as const, label: "Z9 SR", locations: ["Z9 Smoking Room"] },
+      {
+        key: "AUX3",
+        role: "support" as const,
+        label: "STEP UP",
+        locations: ["Float Support"],
+      },
+    ];
+    const fixed = coerceMislabeledAuxRoles(legacy);
+    expect(fixed.find((d) => d.key === "AUX3")?.role).toBe("step_up");
+  });
+
+  it("maps support_1 history to STEP when that night's layout was labeled STEP UP", () => {
+    const layout = [
+      { key: "AUX1", role: "admin" as const, label: "ADMIN", locations: [] },
+      { key: "AUX2", role: "z9sr" as const, label: "Z9 SR", locations: [] },
+      {
+        key: "AUX3",
+        role: "support" as const,
+        label: "STEP UP",
+        locations: ["Float Support"],
+      },
+    ];
+    // Cookie Jul 9: stored as support_1 while shell showed STEP UP
+    expect(trailKeyFromDbSlotAndLayout("support_1", "aux", null, layout)).toBe(
+      "STEP",
+    );
+    expect(trailKeyFromDbSlotAndLayout("step_up", "aux", null, layout)).toBe(
+      "STEP",
+    );
+    // Real support without step-up label stays SUP1
+    const realSupport = [
+      ...layout.slice(0, 2),
+      {
+        key: "AUX3",
+        role: "support" as const,
+        label: "SUPPORT 1",
+        locations: ["Float Support"],
+      },
+    ];
+    expect(
+      trailKeyFromDbSlotAndLayout("support_1", "aux", null, realSupport),
+    ).toBe("SUP1");
   });
 });
