@@ -245,6 +245,38 @@ railway up   # or GitHub auto-deploy
 
 Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
 
+**Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway (or any client-exposed env). Service role stays server-only as `SUPABASE_SERVICE_ROLE_KEY`.
+
+---
+
+## Security — retire unauthenticated `create-user` Edge Function (P0)
+
+**Canonical path (do not change):** session-gated **`POST /api/admin/users`** via Settings → Users tab (`UsersTab` + `adminUsersClient` → `requireSudoAdmin` + admin PIN confirm + `createOpsUserWithPin`). Prefer session mutations; fail closed.
+
+**Do not** call or redeploy `supabase/functions/create-user` for real user creation. Repo path is a **410 Gone stub** only (no service-role create). Prefer full dashboard undeploy so the public functions URL **404s**.
+
+### Inventory before undeploy (mandatory — KD-18)
+
+- [ ] Supabase Dashboard → **Edge Functions** → note whether **`create-user`** is currently **deployed**
+- [ ] Optional CLI (project-linked): `supabase functions list` — record deploy status
+- [ ] If deployed: review Edge Function **logs** for unexpected traffic (external dependents unknown)
+- [ ] Grep monorepo + CI/Railway/runbooks for `create-user` / `functions/create-user` (no active callers)
+
+### Undeploy / disable
+
+- [ ] If deployed → **undeploy/delete** `create-user` in Supabase Dashboard **immediately** (do not leave live during code PR lag)
+- [ ] Confirm public URL is **404** (or **410** if only the retirement stub is live):  
+      `curl -sS -o /dev/null -w "%{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-user" -H "Content-Type: application/json" -d '{}'`  
+      Expect **404** or **410** — never **200** with `success: true`
+- [ ] Do **not** treat platform `verify_jwt` as mitigation (anon JWT often satisfies gateway shape checks; app auth was never present)
+- [ ] Do **not** re-deploy create-user except intentionally as the 410 stub (prefer leave undeployed)
+
+### Canonical admin create still works
+
+- [ ] Sign in as **sudo_admin**
+- [ ] Settings → **Users** → create operator (PIN confirm) succeeds via **`/api/admin/users`**
+- [ ] Unauthenticated / non-sudo POST to `/api/admin/users` is rejected (401/403)
+
 ---
 
 ## Post-deploy sign-off
@@ -252,6 +284,7 @@ Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
 - [ ] Production URL loads `/shiftbuilder`
 - [ ] Floor supervisor iPad test
 - [ ] sudo_admin audit trail verified on live data
+- [ ] `create-user` Edge Function not live (404/410); Users tab create still works via `/api/admin/users`
 - [x] Tag: `v1.0.0`
 
 ---
