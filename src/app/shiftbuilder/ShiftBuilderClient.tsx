@@ -1445,8 +1445,9 @@ function AuthedShiftBuilder() {
         return;
       }
     } catch (guardErr) {
-      console.error("[applyDraft] server guard failed (proceeding with caution):", guardErr);
-      // Fail open for now (network hiccup etc.) but log loudly. In production you may want to fail closed.
+      console.error("[applyDraft] server guard failed (fail closed):", guardErr);
+      showToast("Cannot apply — eligibility check unavailable. Try again.", "error");
+      return; // never proceed optimistic when guard transport fails
     }
 
     const storeBefore = useShiftBuilderStore.getState().assignments ?? {};
@@ -1482,7 +1483,7 @@ function AuthedShiftBuilder() {
     const after: Snapshot = { assignments: newAssignments, auxDefs: [...auxDefs] };
 
     // === ATOMICITY CONTRACT (Slice 3 + 4 hardening) ===
-    // - Server guard (validateProposedAssignments) already ran and passed (or failed open).
+    // - Server guard (validateProposedAssignments) already ran and passed (fail closed on transport errors).
     // - Exactly one history entry for the entire batch (via recordAtomicChange).
     // - One optimistic store + live mirror + query patch.
     // - One batched DB write via batchApplyDraftAssignments.
