@@ -40,9 +40,27 @@ import { assignmentTmId } from "./tmIdentity";
 // operator-rule evaluation in here so the legacy fallback planner respects
 // engine_eligibility_rules too, not just the unified engine (F1 follow-up,
 // 2026-07-04). NOTE: engine/eligibility.ts must NOT be imported here — that
-// module imports FROM placement.ts, so doing so would create a cycle.
+// would create a placement↔eligibility cycle (KD-7). Liturgy lives in the
+// leaf module eligibilityCore.ts; public hard gate is canPlace.
 import { isEligibleUnderRules } from "./engineOverrides";
 import type { EligibilityRule } from "./engineConfig";
+import {
+  OPTIONAL_AUTO_FILL_ZONE_SLOTS,
+  isOptionalDeploymentSlot,
+  isEligibleForSlot,
+  normalizeGender,
+  slotTypeForKey,
+} from "./eligibilityCore";
+
+// Re-export leaf liturgy for backward-compatible call sites (UI, guards, solvers).
+// New hard gates should use `canPlace` from engine/eligibility instead.
+export {
+  OPTIONAL_AUTO_FILL_ZONE_SLOTS,
+  isOptionalDeploymentSlot,
+  isEligibleForSlot,
+  normalizeGender,
+  slotTypeForKey,
+};
 
 // Single source of truth for placement order now lives in the AI-modifiable skill
 import {
@@ -81,17 +99,6 @@ export interface AuxDef {
  * This now comes directly from the AI-modifiable skill layer.
  */
 export const PLACEMENT_ORDER: readonly string[] = DEFAULT_PLACEMENT_ORDER;
-
-/**
- * Optional (never auto-filled) zones. Emptied 2026-07-03: the operator ratified a
- * fill order that includes Z1 and Z2 as regular zones (…Z10 → Z2 → Z1 → Z6), so
- * they are now staffed in sequence like any other zone rather than manual-only.
- */
-export const OPTIONAL_AUTO_FILL_ZONE_SLOTS = new Set<string>([]);
-
-export function isOptionalDeploymentSlot(slotKey: string): boolean {
-  return OPTIONAL_AUTO_FILL_ZONE_SLOTS.has(slotKey);
-}
 
 /**
  * Returns all slot keys in the exact order the Coverage Planner must process them.
@@ -222,17 +229,6 @@ export interface WeightedPlannerInput extends CoveragePlannerInput {
   preserveOnlyLocked?: boolean;
   /** Operator rules (engine_eligibility_rules). Empty/omitted = none (F1 fix, 2026-07-04). */
   eligibilityRules?: EligibilityRule[];
-}
-
-/** Coarse slot type used by operator rule filters. Deliberately duplicated from
- * engine/eligibility.ts's identical helper — that module imports FROM this one,
- * so this one can't import back from it without creating a cycle. */
-function slotTypeForKey(slotKey: string): string {
-  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return "rr";
-  if (slotKey.startsWith("OL-")) return "overlap";
-  if (slotKey.startsWith("Z")) return "zone";
-  if (isOptionalDeploymentSlot(slotKey)) return "zone";
-  return "aux";
 }
 
 const HARD_COVERAGE_SLOTS = new Set(
@@ -587,9 +583,20 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     // otherwise this greedy pass silently auto-fills Z1/Z2 on every engine run.
     if (isOptionalDeploymentSlot(slotKey)) continue;
     const stillUsed = new Set(currentDraft.values());
+    // Backfill must honor the same hard gate as the main loop: liturgy +
+    // operator rules (was bare isEligibleForSlot — operator rules skipped).
+    const backfillSlotType = slotTypeForKey(slotKey);
+    const passesBackfillRules = (tm: any) =>
+      eligibilityRules.length === 0 ||
+      isEligibleUnderRules(tm, slotKey, backfillSlotType, eligibilityRules);
     const cands = roster.filter((tm: any) => {
       const id = assignmentTmId(tm);
-      return id && !stillUsed.has(id) && isEligibleForSlot(tm, slotKey);
+      return (
+        id &&
+        !stillUsed.has(id) &&
+        isEligibleForSlot(tm, slotKey) &&
+        passesBackfillRules(tm)
+      );
     });
     if (cands.length === 0) continue;
 
@@ -633,109 +640,10 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
   return { proposedAssignments, unassignedPeople, notes, breakdown };
 }
 
-/**
- * Determines if a team member is eligible for a given slot type,
- * following the GLCR rules:
- *
- * - Main Zone Deployment slots (Z1–Z10 and Z9SR): only **full-grave** TMs,
- *   i.e. gravePool && !isAMOverlap && !isPMOverlap. Overlap TMs cover
- *   partial shifts (10pm–3am or 3am–7am) and cannot hold a zone for the
- *   full 11pm–7am window.
- * - AM Overlap slots (OL-AM-*, *AM-Overlap*): only grave TMs flagged as AM overlap.
- * - PM Overlap slots (OL-PM-*, *PM-Overlap*): only grave TMs flagged as PM overlap.
- * - Restrooms (MRR-x / WRR-x), Admin, Trash, Support, AUX: full-night positions.
- *   AM/PM overlap TMs are excluded because they work partial shifts and cannot
- *   cover a full-night restroom or admin assignment. Full-grave TMs are eligible.
- *   NOTE: Men's (MRR-x) vs Women's (WRR-x) assignment requires a gender/section
- *   field on tm_profiles — currently not present; operator must swap M/W manually.
- * - Breaks are ignored for placement decisions.
- */
-export function normalizeGender(val: any): 'M' | 'F' | '' {
-  const s = String(val || '').toUpperCase().trim();
-  if (!s) return '';
-  if (s === 'F' || s === 'FEMALE' || s === 'WOMAN' || s === 'WOMEN' || s.startsWith('F')) return 'F';
-  if (s === 'M' || s === 'MALE' || s === 'MAN' || s === 'MEN' || s.startsWith('M')) return 'M';
-  return '';
-}
-
-export function isEligibleForSlot(tm: any, slotKey: string, eligibilityRules: any[] = []): boolean {
-  // 2026-05-28: First check custom rules from the resolved engine config (engine_eligibility_rules table).
-  // This is the injection point for operator-defined hard excludes / restrictions.
-  // The helper lives in engineOverrides.ts so it can evolve independently of the core liturgy.
-  if (eligibilityRules.length > 0) {
-    const { isEligibleUnderRules } = require("./engineOverrides"); // dynamic to avoid circular during rollout
-    if (!isEligibleUnderRules(tm, slotKey, "zone", eligibilityRules)) {
-      return false;
-    }
-  }
-
-  const isAMOverlapAssigned = !!(tm.isAMOverlap || tm.isAMOverlapTonight);
-  const isPMOverlapAssigned = !!(tm.isPMOverlap || tm.isPMOverlapTonight);
-  const isFullGraveBySchedule = !!(tm.isFullGrave || tm.isFullGraveTonight);
-
-  // `gravePool` on tm_profiles is a string enum, NOT a boolean. Common
-  // values include "AM", "PM", "Full" (and truthy fallbacks). A TM whose
-  // gravePool is "AM" or "PM" is an overlap-type grave employee — they
-  // cover a partial shift and cannot hold a full-zone slot, regardless of
-  // whether they happen to be assigned to an OL-AM/PM slot tonight.
-  const gravePoolKind = String(tm.gravePool ?? "").toUpperCase();
-  const isOverlapByPool = gravePoolKind === "AM" || gravePoolKind === "PM";
-  const isGrave =
-    !!tm.gravePool || isFullGraveBySchedule || isAMOverlapAssigned || isPMOverlapAssigned;
-  const isFullGrave =
-    isFullGraveBySchedule ||
-    (isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned);
-
-  // Main Zone Deployment + Z9 Smoking Room — strict full-grave only
-  if (slotKey.startsWith("Z")) {
-    return isFullGrave;
-  }
-
-  // Overlap Tab AM — accept TMs flagged as AM by either signal
-  if (slotKey.startsWith("OL-AM") || slotKey.includes("AM-Overlap")) {
-    return isGrave && (isAMOverlapAssigned || gravePoolKind === "AM");
-  }
-
-  // Overlap Tab PM — accept TMs flagged as PM by either signal
-  if (slotKey.startsWith("OL-PM") || slotKey.includes("PM-Overlap")) {
-    return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
-  }
-
-  // Men's Restrooms — full-night grave shift, male TMs only
-  if (slotKey.startsWith("MRR")) {
-    if (!isGrave) return false;
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const g = normalizeGender(tm.gender);
-    if (g === 'F') return false;
-    return true;
-  }
-
-  // Women's Restrooms — full-night grave shift, female TMs only
-  if (slotKey.startsWith("WRR")) {
-    if (!isGrave) return false;
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const g = normalizeGender(tm.gender);
-    if (g === 'M') return false;
-    return true;
-  }
-
-  // Admin, Trash, Support, AUX — full-night positions, no gender restriction.
-  // AM/PM overlap TMs work partial shifts (10pm–3am or 3am–7am) and cannot
-  // hold a full-night restroom or admin slot. Only full-grave TMs (or non-grave
-  // active TMs on the roster) are eligible here.
-  if (
-    slotKey === "ADM" ||
-    slotKey.startsWith("TR") ||
-    slotKey.startsWith("AUX") ||
-    slotKey.startsWith("SP")
-  ) {
-    // Exclude AM/PM overlap TMs — they cannot cover a full-night position
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    return true;
-  }
-
-  return true;
-}
+// Liturgy (normalizeGender / isEligibleForSlot / slotTypeForKey) lives in
+// eligibilityCore.ts and is re-exported at the top of this file. Operator
+// rules + schedule + knowledge compose only in canPlace (engine/eligibility)
+// — never re-introduce rules into the leaf (KD-7).
 
 // ========================================================
 // PROMPT / GROK SUPPORT (Authoritative Rules as Text)

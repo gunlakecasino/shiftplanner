@@ -1,31 +1,31 @@
 /**
- * engine/eligibility.ts — the ONE hard eligibility gate (P1-2, principle N2/N3).
+ * engine/eligibility.ts — the ONE hard eligibility gate (P1-2, principle N2/N3, KD-7).
  *
  * Every engine stage (planner, optimizer, health preview, guard, AI tools) asks
  * `canPlace()` and nothing else. It composes, in order:
- *   1. core liturgy   — gender / grave-pool / overlap-band rules (isEligibleForSlot)
- *   2. operator rules  — engine_eligibility_rules (isEligibleUnderRules), when loaded
- *   3. schedule gate   — graves_default_schedule membership, when enabled
+ *   1. core liturgy   — gender / grave-pool / overlap-band (eligibilityCore.isEligibleForSlot)
+ *   2. knowledge      — hard accommodations (Supervisor Brain)
+ *   3. operator rules — engine_eligibility_rules (isEligibleUnderRules), when loaded
+ *   4. schedule gate  — graves_default_schedule membership, when enabled
  *
- * The pass/fail verdict itself comes from the existing, battle-tested
- * `isEligibleForSlot` so there is exactly one implementation of the rules
- * (N3). This module adds the *first failing reason* on top for explainability
- * (N6) — reason derivation mirrors the gate's own branch order.
- *
- * Import direction is one-way (engine → placement); placement.ts must never
- * import this file, or the two form a cycle.
+ * Liturgy lives in the **leaf** `eligibilityCore.ts` (no reverse imports).
+ * Import direction: engine/eligibility → eligibilityCore + engineOverrides.
+ * placement.ts re-exports liturgy for BC but must NEVER import this file
+ * (placement↔eligibility cycle is forbidden).
  */
 
 import {
   isEligibleForSlot,
   normalizeGender,
-  isOptionalDeploymentSlot,
-} from "../placement";
+  slotTypeForKey,
+} from "../eligibilityCore";
 import { isEligibleUnderRules } from "../engineOverrides";
 import type { EligibilityRule } from "../engineConfig";
 import type { TmModel, NightContext, SlotModel } from "./types";
 import type { OpsKnowledge } from "../opsKnowledge/types";
 import { accommodationBlocks } from "../opsKnowledge/apply";
+
+export { slotTypeForKey } from "../eligibilityCore";
 
 export interface EligibilityVerdict {
   ok: boolean;
@@ -52,7 +52,11 @@ export interface CanPlaceOptions {
   eligibilityRules?: EligibilityRule[];
   /** When non-empty, TM must be a member to be placeable. */
   scheduledTmIds?: Set<string>;
-  /** Slot type hint for operator rules ("zone" | "rr" | "aux" | "overlap"). */
+  /**
+   * Slot type for operator rules ("zone" | "rr" | "aux" | "overlap").
+   * When omitted, derived via `slotTypeForKey(slotKey)` — never defaults to
+   * a hard-coded `"zone"` (that was the pre-constitution footgun).
+   */
   slotType?: string;
   /** Supervisor Brain — hard accommodations become blocks. */
   knowledge?: OpsKnowledge;
@@ -113,11 +117,12 @@ export function canPlace(
   slotKey: string,
   opts: CanPlaceOptions = {},
 ): EligibilityVerdict {
-  const { eligibilityRules = [], scheduledTmIds, slotType = "zone", knowledge } = opts;
+  const { eligibilityRules = [], scheduledTmIds, knowledge } = opts;
+  // Always resolve slot type from the key when caller omits it — never "zone".
+  const slotType = opts.slotType ?? slotTypeForKey(slotKey);
   const gate = normalizeForGate(tm);
 
-  // 1. Core liturgy (single source of pass/fail — no rules threaded here so the
-  //    reason branch below can distinguish liturgy failures from operator ones).
+  // 1. Core liturgy (leaf — no operator rules threaded here).
   if (!isEligibleForSlot(gate, slotKey)) {
     return { ok: false, reason: deriveLiturgyReason(gate, slotKey) };
   }
@@ -129,8 +134,7 @@ export function canPlace(
     if (acc.blocked) return { ok: false, reason: acc.reason };
   }
 
-  // 2. Operator rules (engine_eligibility_rules) — the F1 fix. These were
-  //    silently ignored on every live path before the unified gate existed.
+  // 2. Operator rules (engine_eligibility_rules) — F1 fix; correct slotType.
   if (eligibilityRules.length > 0) {
     if (!isEligibleUnderRules(gate as any, slotKey, slotType, eligibilityRules)) {
       return { ok: false, reason: "Blocked by an operator eligibility rule" };
@@ -161,13 +165,4 @@ export function canPlaceInContext(
     slotType: slotTypeForKey(slot.key),
     knowledge: ctx.knowledge,
   });
-}
-
-/** Coarse slot type used by operator rule filters. */
-export function slotTypeForKey(slotKey: string): string {
-  if (slotKey.startsWith("MRR") || slotKey.startsWith("WRR")) return "rr";
-  if (slotKey.startsWith("OL-")) return "overlap";
-  if (slotKey.startsWith("Z")) return "zone";
-  if (isOptionalDeploymentSlot(slotKey)) return "zone";
-  return "aux";
 }

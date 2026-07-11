@@ -26,7 +26,8 @@
  * - supabase/migrations/20260528_engine_granular_overrides_and_matrix.sql
  * - engineConfig.ts (the new interfaces live here too for now)
  * - scoring.ts (new areaDiversity / rotationFairness signals)
- * - placement.ts (isEligibleForSlot now receives rules)
+ * - engine/eligibility.ts canPlace (operator rules + correct slotTypeForKey)
+ * - placement.ts runWeightedPlanner (main + backfill pass)
  * - data.ts (getTmZoneMatrix, refreshTmZoneMatrix, etc.)
  */
 

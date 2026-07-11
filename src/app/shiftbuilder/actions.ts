@@ -752,7 +752,7 @@ export type ValidationResult = {
 /**
  * Server-side re-validation of draft proposals before commit.
  * This is the hard guard (W3-4) so that even Grok / engine suggestions
- * cannot bypass graves_default_schedule + isEligibleForSlot.
+ * cannot bypass graves_default_schedule + canPlace (eligibility constitution).
  *
  * Called from the Client before optimistic update + DB write in applyDraft.
  *
@@ -796,7 +796,9 @@ export async function validateProposedAssignments(
     expandScheduledIdsForNight,
     isTmIdOnScheduleSet,
   } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
-  const { isEligibleForSlot } = await import("@/lib/shiftbuilder/placement");
+  const { canPlace, slotTypeForKey } = await import(
+    "@/lib/shiftbuilder/engine/eligibility"
+  );
   const { parseLocalDateISO } = await import("@/lib/shiftbuilder/dateUtils");
   const { createAdminClientSafe } = await import(
     "@/app/api/admin/_lib/createAdminClient"
@@ -921,11 +923,18 @@ export async function validateProposedAssignments(
     };
 
     try {
-      if (!isEligibleForSlot(tmForEligibility, slotKey)) {
+      // Constitution hard gate (liturgy). Operator rules + knowledge are composed
+      // here when available; full admin-loaded re-validate on batch_apply is PR 10.
+      const verdict = canPlace(tmForEligibility, slotKey, {
+        slotType: slotTypeForKey(slotKey),
+      });
+      if (!verdict.ok) {
         invalid.push({
           slotKey,
           tmId,
-          reason: `Not eligible for ${slotKey} per placement rules (grave pool / gender / overlap)`,
+          reason:
+            verdict.reason ??
+            `Not eligible for ${slotKey} per placement rules (grave pool / gender / overlap)`,
         });
       }
     } catch (e) {

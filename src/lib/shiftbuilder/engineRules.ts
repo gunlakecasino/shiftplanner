@@ -24,12 +24,12 @@
 import {
   PLACEMENT_ORDER,
   getSlotsInPlacementOrder,
-  isEligibleForSlot,
   getPlacementOrderText,
   getEligibilityRulesText,
   type AuxDef,
   type CoveragePlannerResult,
 } from "./placement";
+import { canPlace, slotTypeForKey } from "./engine/eligibility";
 import { getXaiFillOrderHardRules, getXaiSwapHardRules } from "./xaiFillOrderContract";
 
 // Wire in the new granular AI-native skill as the preferred source for eligibility
@@ -125,12 +125,12 @@ export class EngineRules {
 
   /**
    * Checks hard eligibility for a TM on a slot.
-   * This is the primary "does this violate the rules?" gate.
-   * Now prefers the new granular skill's evaluateEligibility when available.
+   * Public constitution gate is `canPlace` (liturgy + operator rules + schedule).
+   * Skill evaluateEligibility remains a soft pre-check when available.
    */
   isEligible(tm: any, slotKey: string): boolean {
     try {
-      // Prefer the new AI-modifiable skill
+      // Prefer the new AI-modifiable skill as an additional soft pre-check
       const context = {
         config: this.ctx.config,
         currentAssignments: undefined,
@@ -143,7 +143,11 @@ export class EngineRules {
     }
 
     const eligibilityRules = (this.ctx.config as any).eligibilityRules ?? [];
-    return isEligibleForSlot(tm, slotKey, eligibilityRules);
+    return canPlace(tm, slotKey, {
+      eligibilityRules,
+      scheduledTmIds: this.ctx.scheduledTmIds,
+      slotType: slotTypeForKey(slotKey),
+    }).ok;
   }
 
   /**

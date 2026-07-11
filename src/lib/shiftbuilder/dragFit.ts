@@ -24,7 +24,9 @@
  */
 
 import { createContext, useContext } from "react";
-import { isEligibleForSlot } from "./placement";
+// Liturgy only for cheap drag halos (no schedule/rules load on pointer-move).
+// Full hard gate for Apply / mutations is `canPlace` (engine/eligibility).
+import { isEligibleForSlot } from "./eligibilityCore";
 import { placementRepeatKey } from "@/app/shiftbuilder/components/placementPadHelpers";
 
 export type DragFitTier = "great" | "ok" | "poor" | "blocked";

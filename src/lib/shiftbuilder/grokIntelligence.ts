@@ -5,7 +5,7 @@
  * - The rich, authoritative context snapshot sent to xAI (B in the A+B plan)
  * - The structured action schema Grok must emit (A in the A+B plan)
  * - Safe parsing + server-side guard validation against the single source of truth
- *   (PLACEMENT_ORDER + isEligibleForSlot from placement.ts)
+ *   (PLACEMENT_ORDER + canPlace / eligibilityCore liturgy)
  *
  * All Grok suggestions for ShiftBuilder MUST flow through types and helpers
  * defined in this file.
@@ -15,9 +15,9 @@ import {
   PLACEMENT_ORDER,
   getPlacementOrderText,
   getEligibilityRulesText,
-  isEligibleForSlot,
   type AuxDef,
 } from "./placement";
+import { canPlace, slotTypeForKey } from "./engine/eligibility";
 import {
   getXaiFillOrderHardRules,
   getXaiSwapHardRules,
@@ -505,7 +505,7 @@ export function guardGrokActions(
         continue;
       }
 
-      if (!isEligibleForSlot(tm, action.slotKey)) {
+      if (!canPlace(tm, action.slotKey, { slotType: slotTypeForKey(action.slotKey) }).ok) {
         warnings.push(
           `Grok suggestion rejected by guard: ${tm.name || action.tmId} is not eligible for ${action.slotKey} per placement rules.`
         );
