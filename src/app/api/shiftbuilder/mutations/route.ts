@@ -12,8 +12,12 @@ import {
 } from "@/lib/auth/requireOpsSession.server";
 import {
   addNightSlotTaskServer,
+  addTMAccommodationServer,
+  addTMPreferenceServer,
   batchApplyDraftAssignmentsServer,
   deleteBreakAssignmentServer,
+  deleteTMAccommodationServer,
+  deleteTMPreferenceServer,
   deleteZoneAssignmentServer,
   markTmCallOffServer,
   unmarkTmCallOffServer,
@@ -22,18 +26,25 @@ import {
   moveNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
   replaceNightSlotTasksForSlotServer,
+  restoreTMServer,
   setNightCardBorderServer,
   setNightLockedServer,
   setNightPublishedServer,
   setTMDisplayNameServer,
   setTMGravePoolServer,
+  softDeleteTMServer,
   type GravePoolValue,
+  type SoftDeleteReason,
   toggleAssignmentLockServer,
+  updateActiveEngineConfigServer,
   updateNightSlotTaskColorServer,
   updateNightSlotTaskCoverageSideServer,
   updateNightSlotTaskLabelServer,
   updateNightSlotTaskStyleServer,
+  updateNightTmStatusServer,
   upsertBreakAssignmentServer,
+  upsertSlotSkillServer,
+  upsertTMServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
 import {
@@ -80,6 +91,18 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
   // KD-16: privileged identity / eligibility — sudo or manage-team only
   set_tm_grave_pool: ["canAccessSudo", "canManageTeam"],
   set_tm_display_name: ["canAccessSudo", "canManageTeam"],
+  upsert_tm_profile: ["canAccessSudo", "canManageTeam"],
+  soft_delete_tm: ["canAccessSudo", "canManageTeam"],
+  restore_tm: ["canAccessSudo", "canManageTeam"],
+  upsert_slot_skill: ["canAccessSudo", "canManageTeam"],
+  add_tm_preference: ["canAccessSudo", "canManageTeam"],
+  delete_tm_preference: ["canAccessSudo", "canManageTeam"],
+  add_tm_accommodation: ["canAccessSudo", "canManageTeam"],
+  delete_tm_accommodation: ["canAccessSudo", "canManageTeam"],
+  // Night schedule status (board-adjacent) — assignment editors
+  update_night_tm_status: "canEditAssignments",
+  // Engine config is sudo-only
+  update_engine_config: "canAccessSudo",
   add_slot_default_task: "canAccessSudo",
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
@@ -327,6 +350,133 @@ export async function POST(request: NextRequest) {
         } catch {
           /* non-fatal */
         }
+        return NextResponse.json(result);
+      }
+
+      case "update_night_tm_status": {
+        const result = await updateNightTmStatusServer({
+          nightId: String(body.nightId ?? ""),
+          tmId: requireBodyTmId(body),
+          status: String(body.status ?? ""),
+          note: body.note != null ? String(body.note) : null,
+          tmName: body.tmName != null ? String(body.tmName) : null,
+        });
+        await bustCache(body.date as string | undefined);
+        return NextResponse.json(result);
+      }
+      case "upsert_tm_profile": {
+        const result = await upsertTMServer({
+          tmId: body.tmId != null && String(body.tmId).trim() ? String(body.tmId) : undefined,
+          displayName: String(body.displayName ?? ""),
+          fullName: (body.fullName as string | null | undefined) ?? null,
+          employeeName: (body.employeeName as string | null | undefined) ?? null,
+          active: body.active as boolean | undefined,
+          gravePool: (body.gravePool as string | null | undefined) ?? null,
+          primarySection: (body.primarySection as string | null | undefined) ?? null,
+          gender: (body.gender as "M" | "F" | null | undefined) ?? null,
+          tieBreakRank: body.tieBreakRank as number | null | undefined,
+          skillScore: body.skillScore as number | null | undefined,
+          status: body.status as string | undefined,
+          slotPreference: (body.slotPreference as string | null | undefined) ?? null,
+          notes: (body.notes as string | null | undefined) ?? null,
+        });
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "soft_delete_tm": {
+        const tmId = requireBodyTmId(body);
+        const reason = (body.reason as SoftDeleteReason | undefined) ?? "separated";
+        const result = await softDeleteTMServer(tmId, reason);
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "restore_tm": {
+        const result = await restoreTMServer(requireBodyTmId(body));
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "upsert_slot_skill": {
+        const result = await upsertSlotSkillServer({
+          tmId: requireBodyTmId(body),
+          slotId: String(body.slotId ?? ""),
+          score: Number(body.score),
+        });
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "add_tm_preference": {
+        const result = await addTMPreferenceServer({
+          tmId: requireBodyTmId(body),
+          stance: String(body.stance ?? ""),
+          strength: String(body.strength ?? ""),
+          target: String(body.target ?? ""),
+          note: body.note != null ? String(body.note) : null,
+        });
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "delete_tm_preference": {
+        const result = await deleteTMPreferenceServer(String(body.id ?? ""));
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "add_tm_accommodation": {
+        const result = await addTMAccommodationServer({
+          tmId: requireBodyTmId(body),
+          type: String(body.type ?? ""),
+          severity: String(body.severity ?? ""),
+          target: body.target != null ? String(body.target) : null,
+          note: String(body.note ?? ""),
+          status: body.status != null ? String(body.status) : undefined,
+        });
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "delete_tm_accommodation": {
+        const result = await deleteTMAccommodationServer(String(body.id ?? ""));
+        try {
+          await revalidateRosterCache();
+        } catch {
+          /* non-fatal */
+        }
+        return NextResponse.json(result);
+      }
+      case "update_engine_config": {
+        const result = await updateActiveEngineConfigServer({
+          placementMethod: body.placementMethod as string | undefined,
+          grokReasoningEffort: body.grokReasoningEffort as string | undefined,
+          notes: body.notes as string | null | undefined,
+          weights: body.weights as Record<string, number> | undefined,
+          eligibilityRules: body.eligibilityRules as unknown[] | undefined,
+        });
         return NextResponse.json(result);
       }
       case "add_slot_default_task": {

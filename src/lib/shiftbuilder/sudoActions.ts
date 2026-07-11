@@ -1,15 +1,32 @@
-"use server";
-
 /**
- * Privileged write actions surfaced from the SUDO / Settings window.
+ * Privileged SUDO / Team surfaces.
+ *
+ * Writes go through postOpsMutation → /api/shiftbuilder/mutations with session +
+ * permission (fail closed). Server handlers use the admin client
+ * (opsMutations.server.ts). Reads may still use the browser supabase client
+ * where RLS allows SELECT.
+ *
+ * Browser-only for write exports — do not call from non-window contexts.
+ * Team identity / prefs / skills require canAccessSudo ∥ canManageTeam.
+ * Engine config requires canAccessSudo. Night TM status requires canEditAssignments.
  */
 
 import { supabase } from "../supabase";
 import type { PlacementMethod, GrokReasoningEffort } from "./engineConfig";
 
+function assertBrowser(fn: string): void {
+  if (typeof window === "undefined") {
+    throw new Error(
+      `${fn} is browser-only; call the *Server writer after requireOpsPermission / requireOpsAnyPermission`,
+    );
+  }
+}
+
 /**
  * Update (or insert) the schedule status for a single TM on a single night.
  * Changes are picked up live via realtime subscriptions on night_tm_status.
+ *
+ * Permission: canEditAssignments (mutations API).
  */
 export async function updateNightTmStatus(params: {
   nightId: string;
@@ -17,26 +34,16 @@ export async function updateNightTmStatus(params: {
   status: string;           // e.g. "scheduled", "present", "off", "LOA", "PTO", "Other", "called_off"
   note?: string | null;
   tmName?: string | null;   // optional – will be filled if missing
-}) {
-  const { nightId, tmId, status, note, tmName } = params;
-
-  const payload: any = {
-    night_id: nightId,
-    tm_id: tmId,
-    status,
-    note: note ?? null,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (tmName) payload.tm_name = tmName;
-
-  const { error } = await supabase
-    .from("night_tm_status")
-    .upsert(payload, { onConflict: "night_id,tm_id" });
-
-  if (error) {
-    throw new Error(`updateNightTmStatus failed: ${error.message}`);
-  }
+}): Promise<void> {
+  assertBrowser("updateNightTmStatus");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("update_night_tm_status", {
+    nightId: params.nightId,
+    tmId: params.tmId,
+    status: params.status,
+    note: params.note ?? null,
+    tmName: params.tmName ?? null,
+  });
 }
 
 export interface TMRecord {
@@ -93,6 +100,7 @@ export interface TMSlotSkill {
 
 /**
  * List every TM (active + inactive). Caller decides whether to filter.
+ * Read via browser client (RLS SELECT).
  */
 export async function listAllTMs(): Promise<TMRecord[]> {
   const { data, error } = await supabase
@@ -129,7 +137,9 @@ function rowToTMRecord(r: any): TMRecord {
 
 /**
  * Insert or update a TM. Supply tmId for an update; omit it to insert (a new
- * tm_id will be derived from the display name).
+ * tm_id will be derived from the display name server-side).
+ *
+ * Permission: canAccessSudo OR canManageTeam (mutations API).
  */
 export async function upsertTM(input: {
   tmId?: string;
@@ -147,86 +157,50 @@ export async function upsertTM(input: {
   slotPreference?: string | null;
   notes?: string | null;
 }): Promise<string /* tmId */> {
-  const isInsert = !input.tmId;
-  const tmId = input.tmId ?? deriveTmId(input.displayName);
-
-  const payload: any = {
-    tm_id: tmId,
-    display_name: input.displayName,
-    full_name: input.fullName ?? null,
-    employee_name: input.employeeName ?? null,
-    active: input.active ?? true,
-    grave_pool: input.gravePool ?? null,
-    primary_section: input.primarySection ?? null,
+  assertBrowser("upsertTM");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  const result = await postOpsMutation<{ tmId: string }>("upsert_tm_profile", {
+    tmId: input.tmId,
+    displayName: input.displayName,
+    fullName: input.fullName ?? null,
+    employeeName: input.employeeName ?? null,
+    active: input.active,
+    gravePool: input.gravePool ?? null,
+    primarySection: input.primarySection ?? null,
     gender: input.gender ?? null,
-    tie_break_rank: input.tieBreakRank ?? null,
-    skill_score: input.skillScore ?? null,
-    status: input.status ?? "active",
-    slot_preference: input.slotPreference ?? null,
+    tieBreakRank: input.tieBreakRank ?? null,
+    skillScore: input.skillScore ?? null,
+    status: input.status,
+    slotPreference: input.slotPreference ?? null,
     notes: input.notes ?? null,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (isInsert) {
-    const { error } = await supabase.from("tm_profiles").insert(payload);
-    if (error) throw new Error(`upsertTM insert failed: ${error.message}`);
-  } else {
-    const { error } = await supabase
-      .from("tm_profiles")
-      .update(payload)
-      .eq("tm_id", tmId);
-    if (error) throw new Error(`upsertTM update failed: ${error.message}`);
-  }
-  return tmId;
+  });
+  return result.tmId;
 }
 
-/** Derive a tm_id from a display name. Mirrors the existing convention
- *  (lowercase, underscored). If the slug already exists, append a hash. */
-function deriveTmId(displayName: string): string {
-  const slug = displayName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  // Random suffix — the engine treats tm_id as opaque so collisions matter
-  // more than readability for new inserts. 6-char hex is plenty.
-  const suffix = Math.random().toString(16).slice(2, 8);
-  return `tm_${slug || "tm"}_${suffix}`;
+/** Soft-delete a TM (active=false). History rows are preserved.
+ *  Permission: canAccessSudo OR canManageTeam. */
+export async function softDeleteTM(
+  tmId: string,
+  reason: "separated" | "LOA" | "transferred" | "other" = "separated",
+): Promise<void> {
+  assertBrowser("softDeleteTM");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("soft_delete_tm", { tmId, reason });
 }
 
-/** Soft-delete a TM (active=false). History rows are preserved. */
-export async function softDeleteTM(tmId: string, reason: "separated" | "LOA" | "transferred" | "other" = "separated"): Promise<void> {
-  const { error } = await supabase
-    .from("tm_profiles")
-    .update({
-      active: false,
-      status: reason, // must be one of: 'active' | 'LOA' | 'transferred' | 'separated' | 'other'
-      status_date: new Date().toISOString().slice(0, 10),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("tm_id", tmId);
-  if (error) throw new Error(`softDeleteTM failed: ${error.message}`);
-}
-
-/** Restore a soft-deleted TM. */
+/** Restore a soft-deleted TM.
+ *  Permission: canAccessSudo OR canManageTeam. */
 export async function restoreTM(tmId: string): Promise<void> {
-  const { error } = await supabase
-    .from("tm_profiles")
-    .update({
-      active: true,
-      status: "active",
-      status_date: null,
-      status_note: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("tm_id", tmId);
-  if (error) throw new Error(`restoreTM failed: ${error.message}`);
+  assertBrowser("restoreTM");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("restore_tm", { tmId });
 }
 
 
 /**
  * Bulk-fetch this TM's preferences, accommodations, and per-slot skill
  * scores in one round-trip. Used by the edit drawer.
+ * Read via browser client (RLS SELECT).
  */
 export async function getTMDetail(tmId: string): Promise<{
   preferences: TMPreference[];
@@ -272,28 +246,23 @@ export async function getTMDetail(tmId: string): Promise<{
   };
 }
 
-/** Upsert a per-slot skill score (0-10). */
+/** Upsert a per-slot skill score (0-10).
+ *  Permission: canAccessSudo OR canManageTeam. */
 export async function upsertSlotSkill(args: {
   tmId: string;
   slotId: string;
   score: number;
 }): Promise<void> {
-  const score = Math.max(0, Math.min(10, Math.round(args.score)));
-  const { error } = await supabase
-    .from("tm_slot_skills")
-    .upsert(
-      {
-        tm_id: args.tmId,
-        slot_id: args.slotId,
-        score,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "tm_id,slot_id" }
-    );
-  if (error) throw new Error(`upsertSlotSkill failed: ${error.message}`);
+  assertBrowser("upsertSlotSkill");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("upsert_slot_skill", {
+    tmId: args.tmId,
+    slotId: args.slotId,
+    score: args.score,
+  });
 }
 
-/** Add a preference row. */
+/** Add a preference row. Permission: canAccessSudo OR canManageTeam. */
 export async function addTMPreference(input: {
   tmId: string;
   stance: string;
@@ -301,22 +270,25 @@ export async function addTMPreference(input: {
   target: string;
   note?: string | null;
 }): Promise<void> {
-  const { error } = await supabase.from("tm_preferences").insert({
-    tm_id: input.tmId,
+  assertBrowser("addTMPreference");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("add_tm_preference", {
+    tmId: input.tmId,
     stance: input.stance,
     strength: input.strength,
     target: input.target,
     note: input.note ?? null,
-    added_date: new Date().toISOString().slice(0, 10),
   });
-  if (error) throw new Error(`addTMPreference failed: ${error.message}`);
 }
 
+/** Permission: canAccessSudo OR canManageTeam. */
 export async function deleteTMPreference(id: string): Promise<void> {
-  const { error } = await supabase.from("tm_preferences").delete().eq("id", id);
-  if (error) throw new Error(`deleteTMPreference failed: ${error.message}`);
+  assertBrowser("deleteTMPreference");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("delete_tm_preference", { id });
 }
 
+/** Permission: canAccessSudo OR canManageTeam. */
 export async function addTMAccommodation(input: {
   tmId: string;
   type: string;
@@ -325,21 +297,23 @@ export async function addTMAccommodation(input: {
   note: string;
   status?: string;
 }): Promise<void> {
-  const { error } = await supabase.from("tm_accommodations").insert({
-    tm_id: input.tmId,
+  assertBrowser("addTMAccommodation");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("add_tm_accommodation", {
+    tmId: input.tmId,
     type: input.type,
     severity: input.severity,
     target: input.target ?? null,
     note: input.note,
-    status: input.status ?? "active",
-    added_date: new Date().toISOString().slice(0, 10),
+    status: input.status,
   });
-  if (error) throw new Error(`addTMAccommodation failed: ${error.message}`);
 }
 
+/** Permission: canAccessSudo OR canManageTeam. */
 export async function deleteTMAccommodation(id: string): Promise<void> {
-  const { error } = await supabase.from("tm_accommodations").delete().eq("id", id);
-  if (error) throw new Error(`deleteTMAccommodation failed: ${error.message}`);
+  assertBrowser("deleteTMAccommodation");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("delete_tm_accommodation", { id });
 }
 
 
@@ -347,6 +321,8 @@ export async function deleteTMAccommodation(id: string): Promise<void> {
  * Updates (or creates) the currently active engine_config row.
  * Used by the Sudo > Engine Config tab to let operators switch between
  * deterministic vs grok-hybrid and tune Grok 4.3 reasoning depth.
+ *
+ * Permission: canAccessSudo (mutations API).
  */
 export async function updateActiveEngineConfig(updates: {
   placementMethod?: PlacementMethod;
@@ -355,47 +331,13 @@ export async function updateActiveEngineConfig(updates: {
   weights?: Record<string, number>;
   eligibilityRules?: any[]; // custom rules for the skill / engine_eligibility_rules
 }): Promise<void> {
-  // Find the current active row (most recent is_active = true)
-  const { data: activeRows, error: findErr } = await supabase
-    .from("engine_config")
-    .select("id")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (findErr) {
-    throw new Error(`Could not find active engine_config: ${findErr.message}`);
-  }
-
-  const payload: Record<string, any> = {
-    updated_at: new Date().toISOString(),
-  };
-
-  if (updates.placementMethod) payload.placement_method = updates.placementMethod;
-  if (updates.grokReasoningEffort) payload.grok_reasoning_effort = updates.grokReasoningEffort;
-  if (updates.notes !== undefined) payload.notes = updates.notes;
-  if (updates.weights) payload.weights = updates.weights;
-  if (updates.eligibilityRules) payload.eligibility_rules = updates.eligibilityRules; // store as JSON column or related table
-
-  if (activeRows && activeRows.length > 0) {
-    // Update existing active row in place (simple & safe for dev)
-    const { error: updErr } = await supabase
-      .from("engine_config")
-      .update(payload)
-      .eq("id", activeRows[0].id);
-
-    if (updErr) throw new Error(`Failed to update engine_config: ${updErr.message}`);
-  } else {
-    // No active row — create one (seed with defaults + our changes)
-    const { error: insErr } = await supabase.from("engine_config").insert({
-      ...payload,
-      is_active: true,
-      weights: updates.weights || {},
-      thresholds: {},
-      slot_priority: {},
-      created_at: new Date().toISOString(),
-    });
-
-    if (insErr) throw new Error(`Failed to create engine_config row: ${insErr.message}`);
-  }
+  assertBrowser("updateActiveEngineConfig");
+  const { postOpsMutation } = await import("./opsMutationClient");
+  await postOpsMutation("update_engine_config", {
+    placementMethod: updates.placementMethod,
+    grokReasoningEffort: updates.grokReasoningEffort,
+    notes: updates.notes,
+    weights: updates.weights,
+    eligibilityRules: updates.eligibilityRules,
+  });
 }

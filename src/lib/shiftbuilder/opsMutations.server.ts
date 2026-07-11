@@ -791,3 +791,341 @@ export async function setTMDisplayNameServer(
   }
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// SUDO / Team privileged writes (session-gated via mutations route)
+// Admin client only — callers MUST enforce permission first.
+// ---------------------------------------------------------------------------
+
+export type SoftDeleteReason = "separated" | "LOA" | "transferred" | "other";
+
+export type UpsertTMInput = {
+  tmId?: string;
+  displayName: string;
+  fullName?: string | null;
+  employeeName?: string | null;
+  active?: boolean;
+  gravePool?: string | null;
+  primarySection?: string | null;
+  gender?: "M" | "F" | null;
+  tieBreakRank?: number | null;
+  skillScore?: number | null;
+  status?: string;
+  slotPreference?: string | null;
+  notes?: string | null;
+};
+
+function deriveTmId(displayName: string): string {
+  const slug = displayName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const suffix = Math.random().toString(16).slice(2, 8);
+  return `tm_${slug || "tm"}_${suffix}`;
+}
+
+function requireTmId(tmId: unknown, label = "tmId"): string {
+  const id = typeof tmId === "string" ? tmId.trim() : "";
+  if (!id || id === "undefined" || id === "null") {
+    throw new Error(`${label} is required`);
+  }
+  return id;
+}
+
+/** Upsert night_tm_status for one TM on one night. */
+export async function updateNightTmStatusServer(params: {
+  nightId: string;
+  tmId: string;
+  status: string;
+  note?: string | null;
+  tmName?: string | null;
+}): Promise<{ ok: true }> {
+  const nightId = typeof params.nightId === "string" ? params.nightId.trim() : "";
+  if (!nightId) throw new Error("updateNightTmStatus: nightId is required");
+  const tmId = requireTmId(params.tmId, "updateNightTmStatus: tmId");
+  const status = typeof params.status === "string" ? params.status.trim() : "";
+  if (!status) throw new Error("updateNightTmStatus: status is required");
+
+  const payload: Record<string, unknown> = {
+    night_id: nightId,
+    tm_id: tmId,
+    status,
+    note: params.note ?? null,
+    updated_at: new Date().toISOString(),
+  };
+  if (params.tmName) payload.tm_name = params.tmName;
+
+  const client = adminClient();
+  const { error } = await client
+    .from("night_tm_status")
+    .upsert(payload, { onConflict: "night_id,tm_id" });
+  if (error) throw new Error(`updateNightTmStatus failed: ${error.message}`);
+  return { ok: true };
+}
+
+/** Insert or update a TM profile. Returns tm_id. */
+export async function upsertTMServer(input: UpsertTMInput): Promise<{ tmId: string }> {
+  const displayName =
+    typeof input.displayName === "string" ? input.displayName.trim() : "";
+  if (!displayName) throw new Error("upsertTM: displayName is required");
+
+  const isInsert = !input.tmId;
+  const tmId = input.tmId ? requireTmId(input.tmId, "upsertTM: tmId") : deriveTmId(displayName);
+
+  const payload: Record<string, unknown> = {
+    tm_id: tmId,
+    display_name: displayName,
+    full_name: input.fullName ?? null,
+    employee_name: input.employeeName ?? null,
+    active: input.active ?? true,
+    grave_pool: input.gravePool ?? null,
+    primary_section: input.primarySection ?? null,
+    gender: input.gender ?? null,
+    tie_break_rank: input.tieBreakRank ?? null,
+    skill_score: input.skillScore ?? null,
+    status: input.status ?? "active",
+    slot_preference: input.slotPreference ?? null,
+    notes: input.notes ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const client = adminClient();
+  if (isInsert) {
+    const { error } = await client.from("tm_profiles").insert(payload);
+    if (error) throw new Error(`upsertTM insert failed: ${error.message}`);
+  } else {
+    const { data, error } = await client
+      .from("tm_profiles")
+      .update(payload)
+      .eq("tm_id", tmId)
+      .select("tm_id");
+    if (error) throw new Error(`upsertTM update failed: ${error.message}`);
+    if (!data || data.length === 0) {
+      throw new Error(`upsertTM: no tm_profiles row for tm_id=${tmId}`);
+    }
+  }
+  return { tmId };
+}
+
+/** Soft-delete a TM (active=false). */
+export async function softDeleteTMServer(
+  tmId: string,
+  reason: SoftDeleteReason = "separated",
+): Promise<{ ok: true }> {
+  const id = requireTmId(tmId, "softDeleteTM: tmId");
+  const allowed: SoftDeleteReason[] = ["separated", "LOA", "transferred", "other"];
+  if (!allowed.includes(reason)) {
+    throw new Error(`softDeleteTM: invalid reason "${reason}"`);
+  }
+
+  const client = adminClient();
+  const { data, error } = await client
+    .from("tm_profiles")
+    .update({
+      active: false,
+      status: reason,
+      status_date: new Date().toISOString().slice(0, 10),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tm_id", id)
+    .select("tm_id");
+  if (error) throw new Error(`softDeleteTM failed: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(`softDeleteTM: no tm_profiles row for tm_id=${id}`);
+  }
+  return { ok: true };
+}
+
+/** Restore a soft-deleted TM. */
+export async function restoreTMServer(tmId: string): Promise<{ ok: true }> {
+  const id = requireTmId(tmId, "restoreTM: tmId");
+  const client = adminClient();
+  const { data, error } = await client
+    .from("tm_profiles")
+    .update({
+      active: true,
+      status: "active",
+      status_date: null,
+      status_note: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tm_id", id)
+    .select("tm_id");
+  if (error) throw new Error(`restoreTM failed: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error(`restoreTM: no tm_profiles row for tm_id=${id}`);
+  }
+  return { ok: true };
+}
+
+/** Upsert a per-slot skill score (0-10). */
+export async function upsertSlotSkillServer(args: {
+  tmId: string;
+  slotId: string;
+  score: number;
+}): Promise<{ ok: true }> {
+  const tmId = requireTmId(args.tmId, "upsertSlotSkill: tmId");
+  const slotId = typeof args.slotId === "string" ? args.slotId.trim() : "";
+  if (!slotId) throw new Error("upsertSlotSkill: slotId is required");
+  const score = Math.max(0, Math.min(10, Math.round(Number(args.score))));
+
+  const client = adminClient();
+  const { error } = await client.from("tm_slot_skills").upsert(
+    {
+      tm_id: tmId,
+      slot_id: slotId,
+      score,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "tm_id,slot_id" },
+  );
+  if (error) throw new Error(`upsertSlotSkill failed: ${error.message}`);
+  return { ok: true };
+}
+
+export async function addTMPreferenceServer(input: {
+  tmId: string;
+  stance: string;
+  strength: string;
+  target: string;
+  note?: string | null;
+}): Promise<{ ok: true }> {
+  const tmId = requireTmId(input.tmId, "addTMPreference: tmId");
+  const stance = typeof input.stance === "string" ? input.stance.trim() : "";
+  const strength = typeof input.strength === "string" ? input.strength.trim() : "";
+  const target = typeof input.target === "string" ? input.target.trim() : "";
+  if (!stance || !strength || !target) {
+    throw new Error("addTMPreference: stance, strength, and target are required");
+  }
+
+  const client = adminClient();
+  const { error } = await client.from("tm_preferences").insert({
+    tm_id: tmId,
+    stance,
+    strength,
+    target,
+    note: input.note ?? null,
+    added_date: new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw new Error(`addTMPreference failed: ${error.message}`);
+  return { ok: true };
+}
+
+export async function deleteTMPreferenceServer(id: string): Promise<{ ok: true }> {
+  const prefId = typeof id === "string" ? id.trim() : "";
+  if (!prefId) throw new Error("deleteTMPreference: id is required");
+
+  const client = adminClient();
+  const { error } = await client.from("tm_preferences").delete().eq("id", prefId);
+  if (error) throw new Error(`deleteTMPreference failed: ${error.message}`);
+  return { ok: true };
+}
+
+export async function addTMAccommodationServer(input: {
+  tmId: string;
+  type: string;
+  severity: string;
+  target?: string | null;
+  note: string;
+  status?: string;
+}): Promise<{ ok: true }> {
+  const tmId = requireTmId(input.tmId, "addTMAccommodation: tmId");
+  const type = typeof input.type === "string" ? input.type.trim() : "";
+  const severity = typeof input.severity === "string" ? input.severity.trim() : "";
+  const note = typeof input.note === "string" ? input.note.trim() : "";
+  if (!type || !severity || !note) {
+    throw new Error("addTMAccommodation: type, severity, and note are required");
+  }
+
+  const client = adminClient();
+  const { error } = await client.from("tm_accommodations").insert({
+    tm_id: tmId,
+    type,
+    severity,
+    target: input.target ?? null,
+    note,
+    status: input.status ?? "active",
+    added_date: new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw new Error(`addTMAccommodation failed: ${error.message}`);
+  return { ok: true };
+}
+
+export async function deleteTMAccommodationServer(id: string): Promise<{ ok: true }> {
+  const accId = typeof id === "string" ? id.trim() : "";
+  if (!accId) throw new Error("deleteTMAccommodation: id is required");
+
+  const client = adminClient();
+  const { error } = await client.from("tm_accommodations").delete().eq("id", accId);
+  if (error) throw new Error(`deleteTMAccommodation failed: ${error.message}`);
+  return { ok: true };
+}
+
+export type UpdateEngineConfigInput = {
+  placementMethod?: string;
+  grokReasoningEffort?: string;
+  notes?: string | null;
+  weights?: Record<string, number>;
+  eligibilityRules?: unknown[];
+};
+
+/** Update or create the active engine_config row. */
+export async function updateActiveEngineConfigServer(
+  updates: UpdateEngineConfigInput,
+): Promise<{ ok: true }> {
+  const client = adminClient();
+
+  const { data: activeRows, error: findErr } = await client
+    .from("engine_config")
+    .select("id")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (findErr) {
+    throw new Error(`Could not find active engine_config: ${findErr.message}`);
+  }
+
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.placementMethod) {
+    const allowed = ["greedy", "weighted", "grok-hybrid"];
+    if (!allowed.includes(updates.placementMethod)) {
+      throw new Error(`updateActiveEngineConfig: invalid placementMethod`);
+    }
+    payload.placement_method = updates.placementMethod;
+  }
+  if (updates.grokReasoningEffort) {
+    const allowed = ["none", "low", "medium", "high"];
+    if (!allowed.includes(updates.grokReasoningEffort)) {
+      throw new Error(`updateActiveEngineConfig: invalid grokReasoningEffort`);
+    }
+    payload.grok_reasoning_effort = updates.grokReasoningEffort;
+  }
+  if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.weights) payload.weights = updates.weights;
+  if (updates.eligibilityRules) payload.eligibility_rules = updates.eligibilityRules;
+
+  if (activeRows && activeRows.length > 0) {
+    const { error: updErr } = await client
+      .from("engine_config")
+      .update(payload)
+      .eq("id", activeRows[0].id);
+    if (updErr) throw new Error(`Failed to update engine_config: ${updErr.message}`);
+  } else {
+    const { error: insErr } = await client.from("engine_config").insert({
+      ...payload,
+      is_active: true,
+      weights: updates.weights || {},
+      thresholds: {},
+      slot_priority: {},
+      created_at: new Date().toISOString(),
+    });
+    if (insErr) throw new Error(`Failed to create engine_config row: ${insErr.message}`);
+  }
+  return { ok: true };
+}
+

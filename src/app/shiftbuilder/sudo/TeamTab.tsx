@@ -11,8 +11,8 @@
  *        - Prefs (tm_preferences + tm_accommodations CRUD)
  *        - Skills (overall skill_score + per-slot 0-10 grid backed by tm_slot_skills)
  *
- * No-auth caveat: every write goes through the service-role key. The drawer
- * always confirms destructive actions (soft-delete, restore) before firing.
+ * Writes are session-gated via postOpsMutation (canAccessSudo ∥ canManageTeam).
+ * The drawer always confirms destructive actions (soft-delete, restore) before firing.
  */
 
 import React from "react";
