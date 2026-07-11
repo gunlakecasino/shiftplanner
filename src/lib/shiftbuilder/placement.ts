@@ -71,7 +71,21 @@ import {
 } from "./skills/placement-engine";
 
 // Minimal interface to avoid circular imports
-export type AuxRole = "blank" | "z9sr" | "admin" | "trash" | "support";
+/**
+ * Aux card roles.
+ * - admin / z9sr: always-present core shells
+ * - trash / support / oasis: numbered 1–2 (TSH / SUP / OAS)
+ * - job_coach / step_up: single-instance (JC / STEP)
+ */
+export type AuxRole =
+  | "blank"
+  | "z9sr"
+  | "admin"
+  | "trash"
+  | "support"
+  | "oasis"
+  | "job_coach"
+  | "step_up";
 
 export interface AuxDef {
   key: string;

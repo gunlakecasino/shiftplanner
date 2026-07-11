@@ -48,7 +48,7 @@ const RR_DB_TO_NUM: Record<string, number> = {
 };
 
 // Default AUX UI key ↔ DB key. Operator-added slots use the AUX{N} ↔ aux_{N}
-// fallback pattern below.
+// fallback pattern below. Short-code UI keys (OAS1, JC, STEP) map to DB families.
 const AUX_UI_TO_DB: Record<string, string> = {
   Z9SR: "z9_sr",
   ADM: "admin",
@@ -56,6 +56,10 @@ const AUX_UI_TO_DB: Record<string, string> = {
   TR2: "trash_2",
   SP1: "support_1",
   SP2: "support_2",
+  OAS1: "oasis_1",
+  OAS2: "oasis_2",
+  JC: "job_coach",
+  STEP: "step_up",
 };
 const AUX_DB_TO_UI: Record<string, string> = {
   z9_sr: "Z9SR",
@@ -64,6 +68,10 @@ const AUX_DB_TO_UI: Record<string, string> = {
   trash_2: "TR2",
   support_1: "SP1",
   support_2: "SP2",
+  oasis_1: "OAS1",
+  oasis_2: "OAS2",
+  job_coach: "JC",
+  step_up: "STEP",
 };
 
 /**
@@ -104,7 +112,14 @@ export function uiToDb(uiKey: string, auxDefs?: AuxDef[]): DbSlot {
 
   if (/^zone_\d+$/.test(uiKey)) return { slot_key: uiKey, slot_type: "zone", rr_side: null };
   if (/^rr_\d+(_\d+)?$/.test(uiKey)) return { slot_key: uiKey, slot_type: "rr", rr_side: null };
-  if (/^(aux_|support_|trash_|overlap_|z9_sr|admin)\d*$/.test(uiKey)) {
+  // Already-canonical DB aux keys (incl. new oasis / job_coach / step_up families).
+  if (
+    /^(aux_|support_|trash_|oasis_|overlap_)\d+$/.test(uiKey) ||
+    uiKey === "z9_sr" ||
+    uiKey === "admin" ||
+    uiKey === "job_coach" ||
+    uiKey === "step_up"
+  ) {
     return { slot_key: uiKey, slot_type: "aux", rr_side: null };
   }
 
@@ -136,14 +151,24 @@ export function uiToDb(uiKey: string, auxDefs?: AuxDef[]): DbSlot {
     return { slot_key: uiKey, slot_type: "aux", rr_side: null };
   }
 
-  // Numbered family AUX — support / trash / generic. Mirror the same naming
-  // the DB already uses for support_1 / support_2 / trash_1 / trash_2 so a
-  // SUPPORT 3 added by the operator round-trips to support_3.
+  // Numbered family AUX — support / trash / oasis / generic. Mirror the same
+  // naming the DB already uses (support_1, trash_1, oasis_1, …) so operator
+  // instances round-trip.
   let m = uiKey.match(/^SP(\d+)$/);
   if (m) return { slot_key: `support_${m[1]}`, slot_type: "aux", rr_side: null };
 
   m = uiKey.match(/^TR(\d+)$/);
   if (m) return { slot_key: `trash_${m[1]}`, slot_type: "aux", rr_side: null };
+
+  // Short trail codes as UI keys: OAS1 / TSH2 / SUP1 (also accept bare SUP/TSH via SP/TR).
+  m = uiKey.match(/^OAS(\d+)$/i);
+  if (m) return { slot_key: `oasis_${m[1]}`, slot_type: "aux", rr_side: null };
+
+  m = uiKey.match(/^TSH(\d+)$/i);
+  if (m) return { slot_key: `trash_${m[1]}`, slot_type: "aux", rr_side: null };
+
+  m = uiKey.match(/^SUP(\d+)$/i);
+  if (m) return { slot_key: `support_${m[1]}`, slot_type: "aux", rr_side: null };
 
   // Generic operator-added AUX (AUX6, AUX7, …)
   m = uiKey.match(/^AUX(\d+)$/);
@@ -189,8 +214,8 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
   // corrupts the planner's currentDraft.
   if (/^Z\d+$/.test(slot_key)) return slot_key;                       // Z1..Z10
   if (/^[MW]RR\d+$/.test(slot_key)) return slot_key;                  // MRR1, WRR7 …
-  if (/^(Z9SR|ADM)$/.test(slot_key)) return slot_key;                 // named aux
-  if (/^(TR|SP|AUX)\d+$/.test(slot_key)) return slot_key;            // TR1, SP2, AUX6 …
+  if (/^(Z9SR|ADM|JC|STEP)$/.test(slot_key)) return slot_key;        // named aux
+  if (/^(TR|SP|AUX|OAS|TSH|SUP)\d+$/i.test(slot_key)) return slot_key.toUpperCase();
   if (/^OL-(PM|AM)-\d+$/.test(slot_key)) return slot_key;            // overlap slots
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -209,12 +234,15 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
   if (slot_type === "aux") {
     if (AUX_DB_TO_UI[slot_key]) return AUX_DB_TO_UI[slot_key];
 
-    // Numbered families — support_N → SP{N}, trash_N → TR{N}.
+    // Numbered families — support_N → SP{N}, trash_N → TR{N}, oasis_N → OAS{N}.
     let m = slot_key.match(/^support_(\d+)$/);
     if (m) return `SP${m[1]}`;
 
     m = slot_key.match(/^trash_(\d+)$/);
     if (m) return `TR${m[1]}`;
+
+    m = slot_key.match(/^oasis_(\d+)$/);
+    if (m) return `OAS${m[1]}`;
 
     // Generic operator-added aux_N → AUX{N}.
     m = slot_key.match(/^aux_(\d+)$/);
@@ -260,14 +288,19 @@ export function slotKeyToLabel(uiKey: string): string {
 
   // Named AUX
   if (uiKey === "Z9SR") return "Z9 SR";
-  if (uiKey === "ADM")  return "Admin";
+  if (uiKey === "ADM") return "Admin";
+  if (uiKey === "JC") return "Job Coach";
+  if (uiKey === "STEP") return "Step Up";
 
-  // TR/SP numbered families
-  const trMatch = uiKey.match(/^TR(\d+)$/);
+  // TR/SP/OAS/TSH/SUP numbered families
+  const trMatch = uiKey.match(/^(?:TR|TSH)(\d+)$/i);
   if (trMatch) return `Trash ${trMatch[1]}`;
 
-  const spMatch = uiKey.match(/^SP(\d+)$/);
+  const spMatch = uiKey.match(/^(?:SP|SUP)(\d+)$/i);
   if (spMatch) return `Support ${spMatch[1]}`;
+
+  const oasMatch = uiKey.match(/^OAS(\d+)$/i);
+  if (oasMatch) return `Oasis ${oasMatch[1]}`;
 
   // Operator-added AUX slots
   const auxMatch = uiKey.match(/^AUX(\d+)$/);
@@ -305,6 +338,19 @@ export function auxDbKeyToDef(slot_key: string): { uiKey: string; label: string 
   m = slot_key.match(/^trash_(\d+)$/);
   if (m) {
     return { uiKey: `TR${m[1]}`, label: `TRASH ${m[1]}` };
+  }
+
+  // oasis_N → OAS{N} / "OASIS N"
+  m = slot_key.match(/^oasis_(\d+)$/);
+  if (m) {
+    return { uiKey: `OAS${m[1]}`, label: `OASIS ${m[1]}` };
+  }
+
+  if (slot_key === "job_coach") {
+    return { uiKey: "JC", label: "JOB COACH" };
+  }
+  if (slot_key === "step_up") {
+    return { uiKey: "STEP", label: "STEP UP" };
   }
 
   // Generic aux_N → AUX{N} / "AUX N"

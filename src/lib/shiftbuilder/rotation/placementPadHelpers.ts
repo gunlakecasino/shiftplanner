@@ -1,6 +1,11 @@
 import type { ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { ZONE_DEFS, RR_DEFS } from "@/lib/shiftbuilder/constants";
-import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import {
+  ZONE_DEFS,
+  RR_DEFS,
+  auxRoleTrailCode,
+  NUMBERED_AUX_ROLES,
+} from "@/lib/shiftbuilder/constants";
+import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import { isEligibleForSlot, normalizeGender, areSwapLanePeers } from "@/lib/shiftbuilder/placement";
 
 /** Minimal TM fields for swap / eligibility checks. */
@@ -222,9 +227,10 @@ export function spreadCountForRepeatKey(
 export const CARD_PLACEMENT_TRAIL_COUNT = 3;
 
 /**
- * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR, ADMIN).
+ * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR, ADMIN, TSH1, OAS2).
  * Restroom sides keep M/W so prior placements are not collapsed into an ambiguous "RR8".
  * Aux shells resolve through role when auxDefs are provided so AUX1≠"Admin" confusion ends.
+ * Short codes: TSH / SUP / OAS (numbered), JC / STEP (single).
  */
 export function formatCardPlacementTrailLabel(
   ui: string,
@@ -236,22 +242,19 @@ export function formatCardPlacementTrailLabel(
   // Canonical aux identity (DB → UI history keys + legacy).
   if (ui === "Z9SR" || ui === "z9_sr") return "Z9SR";
   if (ui === "ADM" || ui === "ADMIN" || ui === "admin") return "ADMIN";
+  if (ui === "JC" || ui === "job_coach") return "JC";
+  if (ui === "STEP" || ui === "step_up") return "STEP";
 
   if (auxDefs?.length) {
     const def = auxDefs.find((d) => d.key === ui);
-    if (def?.role === "admin") return "ADMIN";
-    if (def?.role === "z9sr") return "Z9SR";
-    if (def?.role === "trash") {
-      const n =
-        auxDefs.filter((d) => d.role === "trash").findIndex((d) => d.key === ui) + 1;
-      return `TR${n || ""}`;
+    if (def?.role && def.role !== "blank") {
+      const role = def.role as AuxRole;
+      const nth = NUMBERED_AUX_ROLES.has(role)
+        ? auxDefs.filter((d) => d.role === role).findIndex((d) => d.key === ui)
+        : 0;
+      return auxRoleTrailCode(role, nth >= 0 ? nth : 0);
     }
-    if (def?.role === "support") {
-      const n =
-        auxDefs.filter((d) => d.role === "support").findIndex((d) => d.key === ui) + 1;
-      return `SP${n || ""}`;
-    }
-    if (def?.label?.trim() && def.role && def.role !== "blank") {
+    if (def?.label?.trim()) {
       return def.label.replace(/\s+/g, "").toUpperCase().slice(0, 10);
     }
   }
@@ -263,8 +266,13 @@ export function formatCardPlacementTrailLabel(
   // Bare RR8 (legacy / side-agnostic) — keep as RR8.
   const bareRr = ui.match(/^RR(\d+)$/i);
   if (bareRr) return `RR${bareRr[1]}`;
-  if (ui.startsWith("TR")) return `TR${ui.replace(/\D/g, "")}`;
-  if (ui.startsWith("SP")) return ui.toUpperCase();
+  // Legacy TR/SP UI keys + short codes as trail chips.
+  const trash = ui.match(/^(?:TR|TSH)(\d+)$/i);
+  if (trash) return `TSH${trash[1]}`;
+  const support = ui.match(/^(?:SP|SUP)(\d+)$/i);
+  if (support) return `SUP${support[1]}`;
+  const oasis = ui.match(/^OAS(\d+)$/i);
+  if (oasis) return `OAS${oasis[1]}`;
   // Unresolved AUXn without role context — still better than silent blank.
   if (/^AUX\d+$/i.test(ui)) return ui.toUpperCase();
   const raw = fallback ?? ui;
@@ -293,9 +301,27 @@ export function trailLabelMatchesSlotKey(trailLabel: string, slotKey: string): b
     if (placementRepeatKeysMatch(`WRR${bareRr[1]}`, slotKey)) return true;
   }
 
-  // TR1 / T1 style
-  const trash = trailLabel.match(/^T(?:R)?(\d+)$/i);
-  if (trash && placementRepeatKeysMatch(`TR${trash[1]}`, slotKey)) return true;
+  // TR1 / T1 / TSH1 style (legacy + short-code trails)
+  const trash = trailLabel.match(/^(?:T(?:R)?|TSH)(\d+)$/i);
+  if (trash) {
+    if (placementRepeatKeysMatch(`TR${trash[1]}`, slotKey)) return true;
+    if (placementRepeatKeysMatch(`TSH${trash[1]}`, slotKey)) return true;
+  }
+
+  // SP1 / SUP1 support short codes
+  const support = trailLabel.match(/^(?:SP|SUP)(\d+)$/i);
+  if (support) {
+    if (placementRepeatKeysMatch(`SP${support[1]}`, slotKey)) return true;
+    if (placementRepeatKeysMatch(`SUP${support[1]}`, slotKey)) return true;
+  }
+
+  // OAS1 oasis short codes
+  const oasis = trailLabel.match(/^OAS(\d+)$/i);
+  if (oasis && placementRepeatKeysMatch(`OAS${oasis[1]}`, slotKey)) return true;
+
+  // Single-instance aux
+  if (/^JC$/i.test(trailLabel) && /^(JC|job_coach)$/i.test(slotKey)) return true;
+  if (/^STEP$/i.test(trailLabel) && /^(STEP|step_up)$/i.test(slotKey)) return true;
 
   return false;
 }

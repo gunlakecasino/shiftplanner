@@ -8,6 +8,7 @@ import {
   BLANK_AUX_DEFS,
   AUX_ROLE_PRESETS,
   MAX_AUX_SLOTS,
+  NUMBERED_AUX_ROLES,
   defaultLabelForAuxRole,
 } from "./constants";
 
@@ -32,7 +33,7 @@ const LEGACY_REMAP_ORDER: Array<{ legacyKey: string; role: AuxRole; nth: number 
 ];
 
 const DB_AUX_SLOT_RE =
-  /^(admin|z9_sr|trash_\d+|support_\d+|aux_\d+)$/;
+  /^(admin|z9_sr|trash_\d+|support_\d+|oasis_\d+|job_coach|step_up|aux_\d+)$/;
 
 function nextAuxKey(existing: AuxDef[]): string {
   let n = existing.length + 1;
@@ -51,8 +52,11 @@ function blankSlot(key: string): AuxDef {
 function roleFromDbSlotKey(slotKey: string): AuxRole | null {
   if (slotKey === "admin") return "admin";
   if (slotKey === "z9_sr") return "z9sr";
+  if (slotKey === "job_coach") return "job_coach";
+  if (slotKey === "step_up") return "step_up";
   if (/^trash_\d+$/.test(slotKey)) return "trash";
   if (/^support_\d+$/.test(slotKey)) return "support";
+  if (/^oasis_\d+$/.test(slotKey)) return "oasis";
   if (/^aux_\d+$/.test(slotKey)) return "blank";
   return null;
 }
@@ -63,7 +67,7 @@ function labelForRole(role: AuxRole, nthAmongRole: number): string {
   if (role === "blank") return "";
   const preset = AUX_ROLE_PRESETS[role as TypedAuxRole];
   if (!preset) return "";
-  if (role === "trash" || role === "support") {
+  if (NUMBERED_AUX_ROLES.has(role)) {
     return `${preset.labelBase} ${nthAmongRole + 1}`;
   }
   return preset.label ?? "";
@@ -75,7 +79,16 @@ function ensureAuxDefShape(raw: unknown): AuxDef | null {
   const key = typeof o.key === "string" ? o.key : "";
   if (!/^AUX\d+$/.test(key)) return null;
   const role = (o.role as AuxRole) || "blank";
-  const validRoles: AuxRole[] = ["blank", "z9sr", "admin", "trash", "support"];
+  const validRoles: AuxRole[] = [
+    "blank",
+    "z9sr",
+    "admin",
+    "trash",
+    "support",
+    "oasis",
+    "job_coach",
+    "step_up",
+  ];
   const safeRole = validRoles.includes(role) ? role : "blank";
   return {
     key,
@@ -212,13 +225,12 @@ export function applyAuxRole(
   slotKey: string,
   role: AuxRole,
 ): AuxDef[] {
-  const trashCount = auxDefs.filter((d) => d.role === "trash" && d.key !== slotKey).length;
-  const supportCount = auxDefs.filter((d) => d.role === "support" && d.key !== slotKey).length;
+  const nthAmongRole = NUMBERED_AUX_ROLES.has(role)
+    ? auxDefs.filter((d) => d.role === role && d.key !== slotKey).length
+    : 0;
   const preset = role === "blank" ? null : AUX_ROLE_PRESETS[role as TypedAuxRole];
-  const nth =
-    role === "trash" ? trashCount : role === "support" ? supportCount : 0;
   const autoLabel =
-    role === "blank" ? "" : defaultLabelForAuxRole(role, nth);
+    role === "blank" ? "" : defaultLabelForAuxRole(role, nthAmongRole);
 
   return auxDefs.map((d) =>
     d.key === slotKey
@@ -258,15 +270,18 @@ export function auxUiKeyToDb(uiKey: string, auxDefs: AuxDef[]): DbSlot | null {
       return { slot_key: "admin", slot_type: "aux", rr_side: null };
     case "z9sr":
       return { slot_key: "z9_sr", slot_type: "aux", rr_side: null };
-    case "trash": {
+    case "job_coach":
+      return { slot_key: "job_coach", slot_type: "aux", rr_side: null };
+    case "step_up":
+      return { slot_key: "step_up", slot_type: "aux", rr_side: null };
+    case "trash":
+    case "support":
+    case "oasis": {
       const n =
-        auxDefs.filter((d) => d.role === "trash").findIndex((d) => d.key === uiKey) + 1;
-      return { slot_key: `trash_${n}`, slot_type: "aux", rr_side: null };
-    }
-    case "support": {
-      const n =
-        auxDefs.filter((d) => d.role === "support").findIndex((d) => d.key === uiKey) + 1;
-      return { slot_key: `support_${n}`, slot_type: "aux", rr_side: null };
+        auxDefs.filter((d) => d.role === def.role).findIndex((d) => d.key === uiKey) + 1;
+      const prefix =
+        def.role === "trash" ? "trash" : def.role === "support" ? "support" : "oasis";
+      return { slot_key: `${prefix}_${n}`, slot_type: "aux", rr_side: null };
     }
     default:
       return null;

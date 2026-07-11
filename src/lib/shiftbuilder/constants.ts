@@ -37,6 +37,23 @@ export const RR_DEFS = [
 // Flex aux row — per-night typed shells (see auxLayout.ts)
 export const MAX_AUX_SLOTS = 10;
 
+/** Numbered aux roles (1 or 2 instances). */
+export const NUMBERED_AUX_ROLES = new Set<AuxRole>(["trash", "support", "oasis"]);
+
+/**
+ * Short trail / matrix codes for aux roles.
+ * Operator-facing card headers still use full labels (TRASH 1, OASIS 2, …).
+ */
+export const AUX_ROLE_SHORT_CODE: Record<Exclude<AuxRole, "blank">, string> = {
+  z9sr: "Z9SR",
+  admin: "ADMIN",
+  trash: "TSH",
+  support: "SUP",
+  oasis: "OAS",
+  job_coach: "JC",
+  step_up: "STEP",
+};
+
 export const AUX_ROLE_PRESETS: Record<
   Exclude<AuxRole, "blank">,
   { label?: string; labelBase?: string; locations: string[] }
@@ -45,15 +62,26 @@ export const AUX_ROLE_PRESETS: Record<
   admin: { label: "ADMIN", locations: ["Floor Admin"] },
   trash: { labelBase: "TRASH", locations: ["West Trash Run"] },
   support: { labelBase: "SUPPORT", locations: ["Float Support"] },
+  oasis: { labelBase: "OASIS", locations: ["Oasis"] },
+  job_coach: { label: "JOB COACH", locations: ["Job Coach"] },
+  step_up: { label: "STEP UP", locations: ["Step Up"] },
 };
 
 export function defaultLabelForAuxRole(role: AuxRole, nthAmongRole = 0): string {
   if (role === "blank") return "";
   const preset = AUX_ROLE_PRESETS[role as Exclude<AuxRole, "blank">];
-  if (role === "trash" || role === "support") {
-    return `${preset.labelBase ?? role} ${nthAmongRole + 1}`;
+  if (NUMBERED_AUX_ROLES.has(role)) {
+    return `${preset.labelBase ?? role.toUpperCase()} ${nthAmongRole + 1}`;
   }
   return preset.label ?? role.toUpperCase();
+}
+
+/** Compact trail chip for an aux role (+ optional 1-based index for numbered roles). */
+export function auxRoleTrailCode(role: AuxRole, nthAmongRole = 0): string {
+  if (role === "blank") return "AUX";
+  const code = AUX_ROLE_SHORT_CODE[role as Exclude<AuxRole, "blank">] ?? role.toUpperCase();
+  if (NUMBERED_AUX_ROLES.has(role)) return `${code}${nthAmongRole + 1}`;
+  return code;
 }
 
 export const BLANK_AUX_DEFS: AuxDef[] = Array.from({ length: 6 }, (_, i) => ({
@@ -107,6 +135,9 @@ export const AUX_ROLE_ICONS: Record<Exclude<AuxRole, "blank">, string> = {
   admin: "❖",
   trash: "✖",
   support: "✦",
+  oasis: "◆",
+  job_coach: "★",
+  step_up: "▲",
 };
 
 export const AUX_ICONS: Record<string, string> = {
@@ -192,10 +223,13 @@ export const getRRAccent = (num: number) => RR_COLORS[num] || '#6B7280';
 
 // AUX accent palette — using iOS 26 colors for roles
 export const AUX_ROLE_COLORS: Record<Exclude<AuxRole, "blank">, string> = {
-  z9sr: "#ff3b30",   // red
-  admin: "#ff2d55",  // pink
-  trash: "#a2845e",  // brown
-  support: "#007aff",// blue
+  z9sr: "#ff3b30", // red
+  admin: "#ff2d55", // pink
+  trash: "#a2845e", // brown
+  support: "#007aff", // blue
+  oasis: "#30b0c7", // teal
+  job_coach: "#5856d6", // indigo
+  step_up: "#ff9500", // orange
 };
 
 export const AUX_COLORS: Record<string, string> = {

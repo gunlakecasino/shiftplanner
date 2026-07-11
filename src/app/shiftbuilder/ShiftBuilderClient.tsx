@@ -3357,18 +3357,36 @@ function AuthedShiftBuilder() {
         return;
       }
       if (currentAuxDefs.length > 0) {
-        if (uiKey === "ADM" || uiKey === "Z9SR" || /^TR\d+$/.test(uiKey) || /^SP\d+$/.test(uiKey)) {
+        // Legacy TR/SP + short-code OAS/TSH/SUP/JC/STEP → flex AUXn shell.
+        if (
+          uiKey === "ADM" ||
+          uiKey === "Z9SR" ||
+          uiKey === "JC" ||
+          uiKey === "STEP" ||
+          /^(TR|TSH|SP|SUP|OAS)\d+$/i.test(uiKey)
+        ) {
           let match: AuxDef | undefined;
           if (uiKey === "ADM") {
-            match = currentAuxDefs.find(d => d.role === "admin");
+            match = currentAuxDefs.find((d) => d.role === "admin");
           } else if (uiKey === "Z9SR") {
-            match = currentAuxDefs.find(d => d.role === "z9sr");
-          } else if (/^TR(\d+)$/.test(uiKey)) {
-            const n = parseInt(RegExp.$1, 10);
-            match = currentAuxDefs.filter(d => d.role === "trash")[n - 1];
-          } else if (/^SP(\d+)$/.test(uiKey)) {
-            const n = parseInt(RegExp.$1, 10);
-            match = currentAuxDefs.filter(d => d.role === "support")[n - 1];
+            match = currentAuxDefs.find((d) => d.role === "z9sr");
+          } else if (uiKey === "JC") {
+            match = currentAuxDefs.find((d) => d.role === "job_coach");
+          } else if (uiKey === "STEP") {
+            match = currentAuxDefs.find((d) => d.role === "step_up");
+          } else {
+            const numbered = uiKey.match(/^(TR|TSH|SP|SUP|OAS)(\d+)$/i);
+            if (numbered) {
+              const family = numbered[1].toUpperCase();
+              const n = parseInt(numbered[2], 10);
+              const role =
+                family === "TR" || family === "TSH"
+                  ? "trash"
+                  : family === "SP" || family === "SUP"
+                    ? "support"
+                    : "oasis";
+              match = currentAuxDefs.filter((d) => d.role === role)[n - 1];
+            }
           }
           if (match?.key) uiKey = match.key;
         }

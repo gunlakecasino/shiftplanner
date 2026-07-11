@@ -3,11 +3,14 @@
 import React, { useRef, useEffect } from "react";
 import type { AuxRole } from "@/lib/shiftbuilder/placement";
 
-const ROLE_OPTIONS: Array<{ role: Exclude<AuxRole, "blank">; label: string }> = [
-  { role: "z9sr", label: "Z9 SR" },
-  { role: "admin", label: "Admin" },
-  { role: "trash", label: "Trash" },
-  { role: "support", label: "Support" },
+const ROLE_OPTIONS: Array<{ role: Exclude<AuxRole, "blank">; label: string; code: string }> = [
+  { role: "admin", label: "Admin", code: "ADMIN" },
+  { role: "z9sr", label: "Z9 SR", code: "Z9SR" },
+  { role: "oasis", label: "Oasis 1–2", code: "OAS" },
+  { role: "trash", label: "Trash 1–2", code: "TSH" },
+  { role: "support", label: "Support 1–2", code: "SUP" },
+  { role: "job_coach", label: "Job Coach", code: "JC" },
+  { role: "step_up", label: "Step Up", code: "STEP" },
 ];
 
 export interface AuxRolePickerProps {
@@ -125,10 +128,11 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
       onKeyDownCapture={stopKeyBubble}
     >
       <div className="flex flex-row flex-wrap gap-1 max-w-[200px]">
-        {ROLE_OPTIONS.map(({ role, label }) => (
+        {ROLE_OPTIONS.map(({ role, label, code }) => (
           <button
             key={role}
             type="button"
+            title={`${label} (${code})`}
             className="text-left px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#F3F4F6] dark:hover:bg-[#2C2C2E] text-[#374151] dark:text-[#E5E7EB] whitespace-nowrap"
             onClick={() => {
               onSelect(role);
@@ -136,6 +140,9 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
             }}
           >
             {label}
+            <span className="ml-1 font-semibold opacity-50 normal-case tracking-normal">
+              {code}
+            </span>
           </button>
         ))}
         {onCustomLabel ? (

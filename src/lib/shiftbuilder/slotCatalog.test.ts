@@ -64,9 +64,20 @@ describe("board card key alignment", () => {
     expect(auxDbSlotKey("admin", "ADM")).toBe("admin");
     expect(auxDbSlotKey("z9sr", "Z9SR")).toBe("z9_sr");
     expect(auxDbSlotKey("trash", "TR1")).toBe("trash_1");
+    expect(auxDbSlotKey("oasis", "OAS1")).toBe("oasis_1");
+    expect(auxDbSlotKey("job_coach", "JC")).toBe("job_coach");
+    expect(auxDbSlotKey("step_up", "STEP")).toBe("step_up");
     // custom/unknown role → fallback
     expect(auxDbSlotKey("blank", "AUX7")).toBe("AUX7");
   });
+
+  it("catalog includes oasis / job coach / step up aux entries", () => {
+    const keys = new Set(SLOT_CATALOG.map((e) => e.slotKey));
+    expect(keys.has("oasis_1")).toBe(true);
+    expect(keys.has("job_coach")).toBe(true);
+    expect(keys.has("step_up")).toBe(true);
+  });
+
 
   it("RR composite matches a stored RR task's composite", () => {
     // Task stored as slot_key='rr_6', rr_side='mens' → composite 'rr_6|mens'

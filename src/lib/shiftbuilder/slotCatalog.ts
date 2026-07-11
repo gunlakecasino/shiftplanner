@@ -28,6 +28,9 @@ const AUX_ROLE_DB_KEYS: Record<string, string> = {
   admin: "admin",
   trash: "trash_1",
   support: "support_1",
+  oasis: "oasis_1",
+  job_coach: "job_coach",
+  step_up: "step_up",
 };
 
 function rrDbKey(num: number): string {

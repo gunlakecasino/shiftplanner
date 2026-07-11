@@ -111,6 +111,9 @@ function buildSlotDefs(): SlotDef[] {
     admin: "admin",
     trash: "trash_1",
     support: "support_1",
+    oasis: "oasis_1",
+    job_coach: "job_coach",
+    step_up: "step_up",
   };
   for (const [role, preset] of Object.entries(AUX_ROLE_PRESETS)) {
     const dbKey = ROLE_DB_KEYS[role] ?? role;

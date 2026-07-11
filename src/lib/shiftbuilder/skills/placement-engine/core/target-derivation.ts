@@ -82,7 +82,16 @@ export function buildCoverageTiers(auxDefs: AuxDef[] = []): CoverageTier[] {
   const adminSlots = typed.filter((d) => d.role === "admin").map((d) => d.key);
   const z9srSlots = typed.filter((d) => d.role === "z9sr").map((d) => d.key);
   const trashSlots = typed.filter((d) => d.role === "trash").map((d) => d.key);
-  const supportSlots = typed.filter((d) => d.role === "support").map((d) => d.key);
+  // Support + Oasis + Job Coach + Step Up share the lowest-priority float tier.
+  const floatSlots = typed
+    .filter(
+      (d) =>
+        d.role === "support" ||
+        d.role === "oasis" ||
+        d.role === "job_coach" ||
+        d.role === "step_up",
+    )
+    .map((d) => d.key);
 
   // Zones first (all 10), then Auxiliary = Admin → Z9 SR (operator order 2026-07-03).
   return [
@@ -110,9 +119,10 @@ export function buildCoverageTiers(auxDefs: AuxDef[] = []): CoverageTier[] {
     },
     {
       name: "Float / Overflow",
-      slots: supportSlots,
+      slots: floatSlots,
       minUniqueTMs: 0,
-      description: "Support / float positions. Lowest priority in the strict order.",
+      description:
+        "Support / Oasis / Job Coach / Step Up — lowest priority in the strict order.",
       isHardCoverage: false,
     },
   ];
