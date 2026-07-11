@@ -981,14 +981,16 @@ export async function batchApplyDraftAssignments(
     slotType: string;   // e.g. "zone" | "rr" | "aux"
     rrSide: string | null;
     tmId: string | null; // null → clear the slot
-  }>
+  }>,
+  /** Optional YYYY-MM-DD for server re-validate schedule gate (resolved from nightId if omitted). */
+  date?: string | null,
 ): Promise<void> {
   await runBoardMutation(
     'batch_apply_draft',
-    { nightId, slots },
+    { nightId, slots, ...(date ? { date } : {}) },
     async () => {
       const { batchApplyDraftAssignmentsServer } = await import('./opsMutations.server');
-      await batchApplyDraftAssignmentsServer(nightId, slots);
+      await batchApplyDraftAssignmentsServer(nightId, slots, date);
       return { ok: true };
     },
   );

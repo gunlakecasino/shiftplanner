@@ -1513,7 +1513,11 @@ function AuthedShiftBuilder() {
       });
 
       const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
-      await batchApplyDraftAssignments(nid, slots);
+      await batchApplyDraftAssignments(
+        nid,
+        slots,
+        formatLocalDateISO(selectedDay.date),
+      );
       setLastSavedAt(new Date());
       const savedCount = draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length;
       showToast(`Applied ${savedCount} change${savedCount === 1 ? '' : 's'} to the live board — TMs can see it now.`, "success");

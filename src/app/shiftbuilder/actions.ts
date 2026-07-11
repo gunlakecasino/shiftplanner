@@ -751,10 +751,11 @@ export type ValidationResult = {
 
 /**
  * Server-side re-validation of draft proposals before commit.
- * This is the hard guard (W3-4) so that even Grok / engine suggestions
+ * This is the hard guard (W3-4 / KD-5) so that even Grok / engine suggestions
  * cannot bypass graves_default_schedule + canPlace (eligibility constitution).
  *
  * Called from the Client before optimistic update + DB write in applyDraft.
+ * Same admin loaders + canPlace constitution as batch_apply_draft (defense-in-depth).
  *
  * Security: requires canEditAssignments. Server schedule is authoritative —
  * client-supplied schedule id lists are ignored (fail closed when empty).
@@ -790,165 +791,61 @@ export async function validateProposedAssignments(
     return { valid: true, invalid: [] };
   }
 
-  // Dynamic imports to keep this actions module's static graph clean for Turbopack.
-  const {
-    getScheduledIdsForNight,
-    expandScheduledIdsForNight,
-    isTmIdOnScheduleSet,
-  } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
-  const { canPlace, slotTypeForKey } = await import(
-    "@/lib/shiftbuilder/engine/eligibility"
+  // Shared KD-5 validator (admin config/knowledge/schedule — fail closed).
+  const { validateProposalsForNight } = await import(
+    "@/lib/shiftbuilder/validateAssignments.server"
   );
-  const { parseLocalDateISO } = await import("@/lib/shiftbuilder/dateUtils");
   const { createAdminClientSafe } = await import(
     "@/app/api/admin/_lib/createAdminClient"
   );
 
-  const nightDate = parseLocalDateISO(params.date);
-  let scheduledIds = await getScheduledIdsForNight(nightDate, params.nightId ?? null);
-  scheduledIds = await expandScheduledIdsForNight(scheduledIds);
-
-  const serverScheduleEmpty =
-    scheduledIds.grave.size === 0 &&
-    scheduledIds.amOverlap.size === 0 &&
-    scheduledIds.pmOverlap.size === 0 &&
-    scheduledIds.onCall.size === 0;
-
-  // Fail closed: empty server schedule denies all placements. Never fill from client.
-  if (serverScheduleEmpty) {
-    const invalid: ValidationError[] = params.proposals
-      .filter((p) => !!p.tmId)
-      .map((p) => ({
-        slotKey: p.slotKey,
-        tmId: p.tmId,
-        reason:
-          "No graves schedule loaded for this night — cannot verify on-schedule (server authoritative)",
-      }));
-    return {
-      valid: invalid.length === 0,
-      invalid,
-    };
-  }
-
-  const onScheduleTonight = new Set<string>([
-    ...scheduledIds.grave,
-    ...scheduledIds.amOverlap,
-    ...scheduledIds.pmOverlap,
-    ...scheduledIds.onCall,
-  ]);
-
-  const supabase = createAdminClientSafe();
-  const invalid: ValidationError[] = [];
-
-  const neededTmIds = new Set<string>();
-  for (const p of params.proposals) {
-    if (p.tmId) neededTmIds.add(p.tmId);
-  }
-
-  const profileByIdOrTmId = new Map<string, any>();
-  const profileIndex = new Map<
-    string,
-    { id: string; tmId: string | null; name: string; gravePool: string | null; gender: string | null }
-  >();
-
-  if (supabase && neededTmIds.size > 0) {
-    const ids = Array.from(neededTmIds);
-    const [{ data: byId }, { data: byTmId }] = await Promise.all([
-      supabase
-        .from("tm_profiles")
-        .select("id, tm_id, grave_pool, gender, display_name, full_name")
-        .in("id", ids),
-      supabase
-        .from("tm_profiles")
-        .select("id, tm_id, grave_pool, gender, display_name, full_name")
-        .in("tm_id", ids),
-    ]);
-    const seen = new Set<string>();
-    const profiles = [...(byId || []), ...(byTmId || [])].filter((p) => {
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-
-    for (const p of profiles) {
-      profileByIdOrTmId.set(p.id, p);
-      if (p.tm_id) profileByIdOrTmId.set(p.tm_id, p);
-      const row = {
-        id: p.id,
-        tmId: p.tm_id,
-        name: p.display_name || p.full_name || p.tm_id || p.id,
-        gravePool: p.grave_pool,
-        gender: p.gender,
+  let nightId = params.nightId?.trim() || "";
+  if (!nightId) {
+    // Resolve night by date so the pre-check works before client has nightId.
+    const client = createAdminClientSafe();
+    if (!client) {
+      return {
+        valid: false,
+        invalid: [
+          {
+            slotKey: "*",
+            tmId: null,
+            reason: "Eligibility service unavailable",
+          },
+        ],
       };
-      profileIndex.set(p.id, row);
-      if (p.tm_id) profileIndex.set(p.tm_id, row);
     }
+    const { data, error } = await client
+      .from("nights")
+      .select("id")
+      .eq("night_date", params.date)
+      .maybeSingle();
+    if (error || !data?.id) {
+      return {
+        valid: false,
+        invalid: [
+          {
+            slotKey: "*",
+            tmId: null,
+            reason: error?.message
+              ? `Night lookup failed: ${error.message}`
+              : "Night not found",
+          },
+        ],
+      };
+    }
+    nightId = data.id as string;
   }
 
-  for (const proposal of params.proposals) {
-    const { slotKey, tmId } = proposal;
-
-    if (!tmId) {
-      continue;
-    }
-
-    const onSchedule = isTmIdOnScheduleSet(tmId, onScheduleTonight, profileIndex);
-
-    if (!onSchedule) {
-      invalid.push({
-        slotKey,
-        tmId,
-        reason: "Not scheduled on Graves Default Schedule for tonight",
-      });
-      continue;
-    }
-
-    const profile = profileByIdOrTmId.get(tmId);
-    if (!profile) {
-      invalid.push({
-        slotKey,
-        tmId,
-        reason: "TM profile not found",
-      });
-      continue;
-    }
-
-    const tmForEligibility = {
-      id: profile.id,
-      tmId: profile.tm_id || tmId,
-      gravePool: profile.grave_pool,
-      gender: profile.gender,
-      isAMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.amOverlap, profileIndex),
-      isPMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.pmOverlap, profileIndex),
-    };
-
-    try {
-      // Constitution hard gate (liturgy). Operator rules + knowledge are composed
-      // here when available; full admin-loaded re-validate on batch_apply is PR 10.
-      const verdict = canPlace(tmForEligibility, slotKey, {
-        slotType: slotTypeForKey(slotKey),
-      });
-      if (!verdict.ok) {
-        invalid.push({
-          slotKey,
-          tmId,
-          reason:
-            verdict.reason ??
-            `Not eligible for ${slotKey} per placement rules (grave pool / gender / overlap)`,
-        });
-      }
-    } catch (e) {
-      invalid.push({
-        slotKey,
-        tmId,
-        reason: "Eligibility check failed",
-      });
-    }
-  }
+  const result = await validateProposalsForNight({
+    nightId,
+    date: params.date,
+    proposals: params.proposals,
+  });
 
   return {
-    valid: invalid.length === 0,
-    invalid,
+    valid: result.valid,
+    invalid: result.invalid,
   };
 }
 

@@ -172,6 +172,17 @@ export async function deleteZoneAssignmentServer(params: {
   return { success: true, rowsDeleted: totalDeleted };
 }
 
+/**
+ * Apply a draft batch to zone_assignments.
+ *
+ * KD-5: re-validates every non-null placement with shared canPlace (admin loaders)
+ * before ANY write. On failure throws ProposalValidationError — zero writes.
+ * All-or-nothing: validate fully → upsert batch → deletes. (PostgREST has no
+ * multi-statement transaction here; a mid-write failure after validate is still
+ * possible and surfaces as a thrown Error.)
+ *
+ * @param date Optional YYYY-MM-DD; resolved from nightId when omitted.
+ */
 export async function batchApplyDraftAssignmentsServer(
   nightId: string,
   slots: Array<{
@@ -180,13 +191,40 @@ export async function batchApplyDraftAssignmentsServer(
     rrSide: string | null;
     tmId: string | null;
   }>,
+  date?: string | null,
 ): Promise<void> {
+  if (!nightId) {
+    throw new Error("nightId is required");
+  }
+
+  // ── All-or-nothing hard gate: validate ALL placements before ANY write ──
+  const {
+    validateProposalsForNight,
+    ProposalValidationError,
+  } = await import("@/lib/shiftbuilder/validateAssignments.server");
+
+  const validation = await validateProposalsForNight({
+    nightId,
+    date: date ?? null,
+    proposals: slots.map((s) => ({
+      slotKey: s.slotKey,
+      slotType: s.slotType,
+      rrSide: s.rrSide,
+      tmId: s.tmId,
+    })),
+  });
+
+  if (!validation.valid) {
+    throw new ProposalValidationError(validation.invalid);
+  }
+
   const client = adminClient();
   const now = new Date().toISOString();
   const toUpsert = slots.filter((s) => s.tmId !== null);
   const toDelete = slots.filter((s) => s.tmId === null);
   const errors: string[] = [];
 
+  // Writes only after full validation passes.
   if (toUpsert.length > 0) {
     const rows = toUpsert.map((s) => ({
       night_id: nightId,

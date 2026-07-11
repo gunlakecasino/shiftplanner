@@ -30,14 +30,7 @@ import {
   upsertBreakAssignmentServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
-import {
-  loadOpsKnowledgeServer,
-  loadRecentAiFeedbackServer,
-  saveAiFeedbackServer,
-  saveOpsKnowledgeServer,
-} from "@/lib/shiftbuilder/opsKnowledge/opsKnowledge.server";
-import type { AiFeedbackExample } from "@/lib/shiftbuilder/opsKnowledge/feedback";
-import type { OpsKnowledge } from "@/lib/shiftbuilder/opsKnowledge/types";
+import { ProposalValidationError } from "@/lib/shiftbuilder/validateAssignments.server";
 import { revalidateNightBoardCaches, revalidateSlotDefaultsCache } from "@/lib/shiftbuilder/revalidateOpsCache";
 import {
   addSlotDefaultTaskServer,
@@ -47,7 +40,7 @@ import {
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 
-const ACTION_PERMISSIONS: Record<string, PermissionKey | "authenticated"> = {
+const ACTION_PERMISSIONS: Record<string, PermissionKey> = {
   upsert_zone_assignment: "canEditAssignments",
   delete_zone_assignment: "canEditAssignments",
   batch_apply_draft: "canEditAssignments",
@@ -73,11 +66,6 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey | "authenticated"> = {
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
   bulk_upsert_slot_defaults: "canAccessSudo",
-  // opsKnowledge — service_role tables; session-gated RPC only
-  load_ops_knowledge: "authenticated",
-  load_ai_feedback: "authenticated",
-  save_ai_feedback: "canEditAssignments",
-  save_ops_knowledge: "canAccessSudo",
 };
 
 async function bustCache(date?: string) {
@@ -146,6 +134,7 @@ export async function POST(request: NextRequest) {
         await batchApplyDraftAssignmentsServer(
           String(body.nightId),
           (body.slots as never[]) ?? [],
+          body.date != null ? String(body.date) : null,
         );
         await bustCache(body.date as string | undefined);
         return NextResponse.json({ ok: true });
@@ -329,38 +318,26 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ ok: true });
       }
-      case "load_ops_knowledge": {
-        const knowledge = await loadOpsKnowledgeServer();
-        return NextResponse.json({ ok: true, knowledge });
-      }
-      case "load_ai_feedback": {
-        const limit = body.limit != null ? Number(body.limit) : 40;
-        const examples = await loadRecentAiFeedbackServer(limit);
-        return NextResponse.json({ ok: true, examples });
-      }
-      case "save_ai_feedback": {
-        const example: AiFeedbackExample = {
-          nightIso: String(body.nightIso ?? ""),
-          slotKey: String(body.slotKey ?? ""),
-          tmId: String(body.tmId ?? ""),
-          tmName: String(body.tmName ?? ""),
-          aiRationale: String(body.aiRationale ?? ""),
-          verdict: body.verdict as AiFeedbackExample["verdict"],
-          reason: body.reason != null ? String(body.reason) : undefined,
-          facts: body.facts != null ? String(body.facts) : undefined,
-        };
-        const result = await saveAiFeedbackServer(example);
-        return NextResponse.json(result);
-      }
-      case "save_ops_knowledge": {
-        const knowledge = (body.knowledge ?? {}) as OpsKnowledge;
-        const result = await saveOpsKnowledgeServer(knowledge);
-        return NextResponse.json(result);
-      }
       default:
         return NextResponse.json({ error: "Unhandled mutation" }, { status: 500 });
     }
   } catch (err: unknown) {
+    // KD-5: structured invalid[] from canPlace re-validate (zero writes occurred).
+    // Check name as well as instanceof — dynamic import of the same module is fine,
+    // but name is resilient if bundling ever duplicates the class identity.
+    const isProposalValidation =
+      err instanceof ProposalValidationError ||
+      (err instanceof Error &&
+        err.name === "ProposalValidationError" &&
+        Array.isArray((err as ProposalValidationError).invalid));
+    if (isProposalValidation) {
+      const pe = err as ProposalValidationError;
+      console.warn("[shiftbuilder/mutations] batch_apply_draft rejected", pe.invalid);
+      return NextResponse.json(
+        { error: pe.message, invalid: pe.invalid, valid: false },
+        { status: 400 },
+      );
+    }
     const msg = err instanceof Error ? err.message : "Mutation failed";
     console.error("[shiftbuilder/mutations]", action, err);
     return NextResponse.json({ error: msg }, { status: 400 });
