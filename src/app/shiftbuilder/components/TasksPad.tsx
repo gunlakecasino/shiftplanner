@@ -11,16 +11,13 @@ import { TASK_COLOR_SPHERES } from "./TaskRow";
 import { TaskMarkerLabel } from "./TaskMarkerLabel";
 import { resolveTaskAppearanceColor } from "@/lib/shiftbuilder/taskMarkerStyle";
 import {
-  applySpanFormat,
   applyTaskLevelFormat,
   formatTaskLabelTitleCase,
   formatTaskLabelTitleCaseOnWordBoundary,
-  getSelectionOffsets,
   isTaskTextStyleEqual,
   normalizeTaskTextStyle,
   TASK_FONT_SIZES,
   TASK_LABEL_SIZE_PX,
-  type TaskFormatScope,
   type TaskTextStyle,
 } from "@/lib/shiftbuilder/taskTextStyle";
 
@@ -34,14 +31,25 @@ export interface TasksPadProps {
   /** When true, start in add-new-task mode (even if the slot already has tasks). */
   addMode?: boolean;
   onClose: () => void;
-  onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
+  onEditTask?: (
+    slotKey: string,
+    oldLabel: string,
+    newLabel: string,
+    taskId?: string | null,
+  ) => void | Promise<void>;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
-  onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
+  onSetTaskColor?: (
+    slotKey: string,
+    taskLabel: string,
+    color: string | null,
+    taskId?: string | null,
+  ) => void | Promise<void>;
   onSetTaskMarker?: (
     slotKey: string,
     taskLabel: string,
     markerType: "highlight" | "underline" | "circle" | "none" | null,
-  ) => void;
+    taskId?: string | null,
+  ) => void | Promise<void>;
   /** Persists color + marker together (preferred for Tasks Pad save). */
   onSetTaskAppearance?: (
     slotKey: string,
@@ -50,9 +58,19 @@ export interface TasksPadProps {
       color: string | null;
       markerType: "highlight" | "underline" | "circle" | "none";
     },
+    taskId?: string | null,
   ) => void | Promise<void>;
-  onSetTaskTextStyle?: (slotKey: string, taskLabel: string, textStyle: TaskTextStyle | null) => void;
-  onRemoveTask?: (slotKey: string, taskLabel: string) => void;
+  onSetTaskTextStyle?: (
+    slotKey: string,
+    taskLabel: string,
+    textStyle: TaskTextStyle | null,
+    taskId?: string | null,
+  ) => void | Promise<void>;
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void | Promise<void>;
   isDark?: boolean;
 }
 
@@ -97,13 +115,23 @@ const TasksPad: React.FC<TasksPadProps> = ({
   const [textStyleDraft, setTextStyleDraft] = useState<TaskTextStyle | null>(
     isAddingNew ? null : originalTextStyle,
   );
-  const [formatScope, setFormatScope] = useState<TaskFormatScope>("task");
+  // Selection-scope formatting deferred until contentEditable renders spans.
+  // Always whole-task so Enter-to-save and applyFormat stay honest.
   const [saving, setSaving] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
   const portalStyle = usePortalPlacementStyle(hostId, anchor);
   const usePortal = !!hostId && !!portalStyle;
+
+  /** Content signature so pad resyncs when task rows change, not only list length. */
+  const slotTasksSig = React.useMemo(
+    () =>
+      regularTasks
+        .map((t) => `${t.id}:${t.taskLabel}:${t.color ?? ""}:${t.markerType ?? ""}`)
+        .join("|"),
+    [regularTasks],
+  );
 
   React.useEffect(() => {
     const adding = initialAddMode || (!initialTask && regularTasks.length === 0);
@@ -129,7 +157,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
     // usePortal: the pad renders inline first, then remounts into a portal once the
     // placement style is measured (rAF). That remount creates a fresh contentEditable
     // node, so re-run to re-seed its text — otherwise the editor opens blank.
-  }, [slotKey, initialTask, initialAddMode, regularTasks.length, usePortal]);
+  }, [slotKey, initialTask?.id, initialAddMode, slotTasksSig, usePortal]);
 
   const beginAddTask = useCallback(() => {
     setIsAddingNew(true);
@@ -138,7 +166,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
     setColorDraft(null);
     setMarkerType("highlight");
     setTextStyleDraft(null);
-    setFormatScope("task");
     if (editorRef.current) editorRef.current.innerText = "";
     requestAnimationFrame(() => editorRef.current?.focus());
   }, []);
@@ -185,32 +212,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
       fontStyle?: "normal" | "italic";
       textDecoration?: "none" | "underline" | "line-through";
     }) => {
-      if (formatScope === "selection" && editorRef.current) {
-        const sel = getSelectionOffsets(editorRef.current);
-        if (!sel) return;
-        if (patch.bold !== undefined) {
-          setTextStyleDraft((prev) =>
-            applySpanFormat(prev, labelDraft.length, sel.start, sel.end, { bold: true }),
-          );
-        }
-        if (patch.italic !== undefined) {
-          setTextStyleDraft((prev) =>
-            applySpanFormat(prev, labelDraft.length, sel.start, sel.end, { italic: true }),
-          );
-        }
-        if (patch.underline !== undefined) {
-          setTextStyleDraft((prev) =>
-            applySpanFormat(prev, labelDraft.length, sel.start, sel.end, { underline: true }),
-          );
-        }
-        if (patch.strike !== undefined) {
-          setTextStyleDraft((prev) =>
-            applySpanFormat(prev, labelDraft.length, sel.start, sel.end, { strike: true }),
-          );
-        }
-        return;
-      }
-
+      // Whole-task only (selection scope deferred until rich editor).
       if (patch.fontSizePx !== undefined) {
         setTextStyleDraft((prev) => applyTaskLevelFormat(prev, { fontSizePx: patch.fontSizePx }));
       }
@@ -241,20 +243,20 @@ const TasksPad: React.FC<TasksPadProps> = ({
         });
       }
     },
-    [formatScope, labelDraft.length],
+    [],
   );
 
-  const persistAppearance = async (label: string) => {
+  const persistAppearance = async (label: string, taskId?: string | null) => {
     const appearance = {
       color: resolveTaskAppearanceColor(colorDraft, markerType),
       markerType,
     };
     if (onSetTaskAppearance) {
-      await onSetTaskAppearance(slotKey, label, appearance);
+      await onSetTaskAppearance(slotKey, label, appearance, taskId);
       return;
     }
-    if (onSetTaskColor) onSetTaskColor(slotKey, label, appearance.color);
-    if (onSetTaskMarker) onSetTaskMarker(slotKey, label, markerType);
+    if (onSetTaskColor) await onSetTaskColor(slotKey, label, appearance.color, taskId);
+    if (onSetTaskMarker) await onSetTaskMarker(slotKey, label, markerType, taskId);
   };
 
   const syncEditorText = useCallback((text: string, focusEnd = false) => {
@@ -291,6 +293,14 @@ const TasksPad: React.FC<TasksPadProps> = ({
     }
   }, [labelDraft, syncEditorText]);
 
+  const requestClose = useCallback(() => {
+    if (hasChanges && !saving) {
+      const ok = window.confirm("Discard unsaved task changes?");
+      if (!ok) return;
+    }
+    onClose();
+  }, [hasChanges, saving, onClose]);
+
   const handleSave = async () => {
     const newLabel = formatTaskLabelTitleCase(labelDraft);
     if (!newLabel) {
@@ -298,52 +308,63 @@ const TasksPad: React.FC<TasksPadProps> = ({
       return;
     }
 
-    if (isAddingNew) {
-      if (!onAddTask) {
+    setSaving(true);
+    try {
+      if (isAddingNew) {
+        if (!onAddTask) {
+          onClose();
+          return;
+        }
+        await onAddTask(slotKey, newLabel);
+        // Appearance after add still keyed by label (row just created); ok.
+        await persistAppearance(newLabel);
+        if (textStyleDraft && onSetTaskTextStyle) {
+          await onSetTaskTextStyle(slotKey, newLabel, textStyleDraft);
+        }
         onClose();
         return;
       }
-      setSaving(true);
-      try {
-        await onAddTask(slotKey, newLabel);
-        await persistAppearance(newLabel);
-        if (textStyleDraft && onSetTaskTextStyle) onSetTaskTextStyle(slotKey, newLabel, textStyleDraft);
-      } finally {
-        setSaving(false);
+
+      if (!activeTask) {
+        onClose();
+        return;
       }
-      onClose();
-      return;
-    }
 
-    if (!activeTask) {
-      onClose();
-      return;
-    }
+      const taskId = activeTask.id;
+      const labelForMeta = newLabel !== originalLabel ? newLabel : originalLabel;
 
-    if (newLabel !== originalLabel && onEditTask) {
-      onEditTask(slotKey, originalLabel, newLabel);
-    }
+      if (newLabel !== originalLabel && onEditTask) {
+        await onEditTask(slotKey, originalLabel, newLabel, taskId);
+      }
 
-    const labelForMeta = newLabel !== originalLabel ? newLabel : originalLabel;
+      await persistAppearance(labelForMeta, taskId);
 
-    setSaving(true);
-    try {
-      await persistAppearance(labelForMeta);
       if (!isTaskTextStyleEqual(textStyleDraft, originalTextStyle) && onSetTaskTextStyle) {
-        onSetTaskTextStyle(slotKey, labelForMeta, textStyleDraft);
+        await onSetTaskTextStyle(slotKey, labelForMeta, textStyleDraft, taskId);
       }
+
+      onClose();
+    } catch {
+      // Handlers already toasted; keep pad open so operator can retry.
     } finally {
       setSaving(false);
     }
-
-    onClose();
   };
 
-  const handleRemove = () => {
-    if (activeTask && onRemoveTask) {
-      onRemoveTask(slotKey, activeTask.taskLabel);
+  const handleRemove = async () => {
+    if (!activeTask || !onRemoveTask) {
+      onClose();
+      return;
     }
-    onClose();
+    setSaving(true);
+    try {
+      await onRemoveTask(slotKey, activeTask.taskLabel, activeTask.id);
+      onClose();
+    } catch {
+      /* toast from handler */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -359,12 +380,12 @@ const TasksPad: React.FC<TasksPadProps> = ({
       e.preventDefault();
       applyFormat({ underline: true });
     }
-    if (e.key === "Enter" && !e.shiftKey && formatScope === "task") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSave();
+      void handleSave();
     }
     if (e.key === "Escape") {
-      onClose();
+      requestClose();
     }
   };
 
@@ -406,7 +427,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="text-neutral-400 hover:text-neutral-600 text-sm leading-none px-1"
           aria-label="Close"
         >
@@ -450,22 +471,10 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
       {isAddingNew || activeTask ? (
         <>
+          {/* Selection scope deferred — contentEditable does not render spans. */}
           <div className="px-3 pt-2 flex items-center gap-1">
             <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mr-1">Apply to</span>
-            {(["task", "selection"] as const).map((scope) => (
-              <button
-                key={scope}
-                type="button"
-                onClick={() => setFormatScope(scope)}
-                className={`text-[10px] px-2 py-0.5 rounded border ${
-                  formatScope === scope
-                    ? "bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)]"
-                    : "border-black/15 text-neutral-600"
-                }`}
-              >
-                {scope === "task" ? "Whole task" : "Selection"}
-              </button>
-            ))}
+            <span className="text-[10px] text-neutral-400 px-2 py-0.5">Whole task</span>
           </div>
 
           {isAddingNew ? (
@@ -590,12 +599,21 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
           <div className="mt-auto border-t border-[var(--ios-gray-4)]/15 px-3 py-2 flex items-center gap-2">
             {onRemoveTask ? (
-              <button type="button" onClick={handleRemove} className="text-[11px] px-2 py-1 rounded text-red-500/90 hover:text-red-500 hover:bg-red-500/5">
+              <button
+                type="button"
+                onClick={() => void handleRemove()}
+                disabled={saving}
+                className="text-[11px] px-2 py-1 rounded text-red-500/90 hover:text-red-500 hover:bg-red-500/5 disabled:opacity-50"
+              >
                 Remove task
               </button>
             ) : null}
             <div className="flex-1" />
-            <button type="button" onClick={onClose} className="text-[11px] px-3 py-1 rounded border border-[var(--ios-gray-4)]/20">
+            <button
+              type="button"
+              onClick={requestClose}
+              className="text-[11px] px-3 py-1 rounded border border-[var(--ios-gray-4)]/20"
+            >
               Cancel
             </button>
             <motion.button
@@ -623,9 +641,9 @@ const TasksPad: React.FC<TasksPadProps> = ({
         <div
           key="overlay"
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20"
-          onClick={onClose}
+          onClick={requestClose}
           onPointerDown={(e) => {
-            if (e.target === e.currentTarget) onClose();
+            if (e.target === e.currentTarget) requestClose();
           }}
         >
           {content}
@@ -639,9 +657,9 @@ const TasksPad: React.FC<TasksPadProps> = ({
       {/* Backdrop sits below the pad (z 205) so taps on the pad hit the pad, not onClose. */}
       <div
         key="overlay"
-        onClick={onClose}
+        onClick={requestClose}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget) onClose();
+          if (e.target === e.currentTarget) requestClose();
         }}
         className="fixed inset-0 z-[205] bg-black/10"
         aria-hidden
