@@ -165,9 +165,19 @@ See `src/app/api/shiftbuilder/_lib/routeMap.ts` for the full map.
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Build + runtime |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Build + runtime |
-| `SUPABASE_SERVICE_ROLE_KEY` | Runtime only (server) |
-| `OPS_SESSION_SECRET` | Runtime only (session cookie signing) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Runtime only (server admin client — **not** for session signing) |
+| `OPS_SESSION_SECRET` | Runtime only — **required in production** (session cookie HMAC) |
+| `OPS_SESSION_SECRET_PREV` | Runtime only — optional one-release dual-verify during secret rotation |
 | `XAI_API_KEY` | Runtime only (optional, AI engine) |
+
+**KD-2 / production session secret (Railway — set before deploy):**
+
+- [ ] Set dedicated `OPS_SESSION_SECRET` on Railway (e.g. `openssl rand -base64 48`) **before** shipping the fail-closed build
+- [ ] Do **not** rely on `SUPABASE_SERVICE_ROLE_KEY` (or any `NEXT_PUBLIC_*`) for session signing in production — that fallback is **removed**
+- [ ] **Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway
+- [ ] Missing `OPS_SESSION_SECRET` in production: `POST /api/auth/verify-pin` → **503** (no cookie); gated routes without valid session → **401**
+- [ ] Optional rotate without mass logout: set `OPS_SESSION_SECRET` = new, `OPS_SESSION_SECRET_PREV` = old material (server-only); sign uses primary only; verify accepts either. Remove `OPS_SESSION_SECRET_PREV` after soak
+- [ ] After deploy: PIN login succeeds **and** `GET /api/shiftbuilder/night-core?date=…` with session cookie returns **200**
 
 ---
 
@@ -239,11 +249,15 @@ pnpm start   # http://localhost:3000/shiftbuilder
 
 ## Deploy (Railway)
 
+**Before deploy:** confirm `OPS_SESSION_SECRET` is set on the Railway service (required; dedicated HMAC secret — **not** service-role fallback). If rotating secrets mid-shift, set `OPS_SESSION_SECRET_PREV` to the previous secret first, deploy, soak, then remove PREV.
+
 ```bash
 railway up   # or GitHub auto-deploy
 ```
 
-Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
+- [ ] `OPS_SESSION_SECRET` present in Railway runtime env (fail-closed without it)
+- [ ] `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` **not** set on Railway
+- [ ] PIN login + authenticated night-core read smoke pass post-deploy
 
 **Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway (or any client-exposed env). Service role stays server-only as `SUPABASE_SERVICE_ROLE_KEY`.
 

@@ -21,34 +21,47 @@ type TokenPayload = {
 
 const usedPinChangeTokens = new Map<string, number>();
 
+/**
+ * Session HMAC secret.
+ * Production (KD-2): OPS_SESSION_SECRET only — fail closed (null) if missing.
+ * Never fall back to service-role keys in production (avoids coupling session
+ * forgery to the DB superkey). Dev may fall back to SUPABASE_SERVICE_ROLE_KEY
+ * for local convenience only (never NEXT_PUBLIC_*).
+ */
 function sessionSecret(): string | null {
   const dedicated = process.env.OPS_SESSION_SECRET?.trim();
   if (dedicated) return dedicated;
 
-  const fallback =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
-
   if (process.env.NODE_ENV === "production") {
-    if (fallback) {
-      console.warn(
-        "[opsSession] OPS_SESSION_SECRET missing — using SUPABASE_SERVICE_ROLE_KEY fallback. Set a dedicated OPS_SESSION_SECRET on Railway.",
-      );
-      return fallback;
-    }
     console.error(
-      "[opsSession] No session signing secret — set OPS_SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY on Railway",
+      "[opsSession] OPS_SESSION_SECRET required — refusing service-role fallback",
     );
     return null;
   }
 
+  // Dev only: server-side service role as convenience (never NEXT_PUBLIC_)
+  const fallback = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null;
   if (!fallback) {
     console.error(
       "[opsSession] No session signing secret in development — add OPS_SESSION_SECRET to .env.local (recommended) or SUPABASE_SERVICE_ROLE_KEY, then restart `pnpm dev`.",
     );
   }
+  return fallback;
+}
 
-  return fallback || null;
+/** Optional previous secret for one-release dual-verify rotation (sign still uses primary only). */
+function previousSessionSecret(): string | null {
+  return process.env.OPS_SESSION_SECRET_PREV?.trim() || null;
+}
+
+/** Secrets used to verify tokens: primary first, then PREV if set and distinct. */
+function verifySecrets(): string[] {
+  const primary = sessionSecret();
+  if (!primary) return [];
+  const secrets = [primary];
+  const prev = previousSessionSecret();
+  if (prev && prev !== primary) secrets.push(prev);
+  return secrets;
 }
 
 function b64url(input: string): string {
@@ -73,21 +86,30 @@ function signPayload(body: TokenPayload): string | null {
 }
 
 function verifySignedToken(token: string): TokenPayload | null {
-  const secret = sessionSecret();
-  if (!secret) return null;
+  const secrets = verifySecrets();
+  if (secrets.length === 0) return null;
 
   const parts = token.split(".");
   if (parts.length !== 2) return null;
   const [encoded, sig] = parts;
 
-  const expected = createHmac("sha256", secret).update(encoded).digest("base64url");
-  try {
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  } catch {
-    return null;
+  // Dual-verify: primary OPS_SESSION_SECRET, then optional OPS_SESSION_SECRET_PREV
+  // (one-release rotation off service-role-as-secret or secret rollover). Sign uses primary only.
+  let sigOk = false;
+  for (const secret of secrets) {
+    const expected = createHmac("sha256", secret).update(encoded).digest("base64url");
+    try {
+      const a = Buffer.from(sig);
+      const b = Buffer.from(expected);
+      if (a.length === b.length && timingSafeEqual(a, b)) {
+        sigOk = true;
+        break;
+      }
+    } catch {
+      // try next secret
+    }
   }
+  if (!sigOk) return null;
 
   try {
     const payload = JSON.parse(b64urlDecode(encoded)) as TokenPayload;
