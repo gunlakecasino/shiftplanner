@@ -88,3 +88,41 @@ export async function requireOpsAnyPermission(
 
   return session;
 }
+
+/**
+ * Build a synthetic NextRequest from the server-action cookie jar so
+ * `"use server"` functions can reuse the Request-based session helpers.
+ * `cookies()` is not a valid argument to requireOpsSession directly.
+ */
+export async function nextRequestFromCookies(
+  path = "/ops-server-action",
+): Promise<NextRequest> {
+  const { cookies } = await import("next/headers");
+  const jar = await cookies();
+  const cookieHeader = jar
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+  return new NextRequest(`http://local${path}`, {
+    headers: cookieHeader ? { cookie: cookieHeader } : {},
+  });
+}
+
+/** Session gate for Next.js server actions (no Request in the action signature). */
+export async function requireOpsSessionFromCookies(): Promise<OpsSessionResult> {
+  return requireOpsSession(await nextRequestFromCookies());
+}
+
+/** Permission gate for Next.js server actions. */
+export async function requireOpsPermissionFromCookies(
+  permission: PermissionKey | "authenticated",
+): Promise<OpsSessionResult> {
+  return requireOpsPermission(await nextRequestFromCookies(), permission);
+}
+
+/** Any-of permission gate for Next.js server actions. */
+export async function requireOpsAnyPermissionFromCookies(
+  keys: PermissionKey[],
+): Promise<OpsSessionResult> {
+  return requireOpsAnyPermission(await nextRequestFromCookies(), keys);
+}

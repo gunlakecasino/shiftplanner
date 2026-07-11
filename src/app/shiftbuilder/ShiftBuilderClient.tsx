@@ -1428,11 +1428,12 @@ function AuthedShiftBuilder() {
 
     try {
       const { validateProposedAssignments } = await import("./actions");
+      // Server loads graves schedule authoritatively — never send clientScheduledTmIds
+      // (ignored / rejected for hard gate; empty server schedule fails closed).
       const validation = await validateProposedAssignments({
         date: formatLocalDateISO(selectedDay.date),
         nightId: nightId || queryNightId,
         proposals: proposalsForGuard,
-        clientScheduledTmIds: Array.from(effectiveScheduledTmIdsTonight),
       });
 
       if (!validation.valid) {

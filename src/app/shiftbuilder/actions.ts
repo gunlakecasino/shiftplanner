@@ -35,6 +35,48 @@ import {
 import { createEngineRulesTools, EngineRules } from "@/lib/shiftbuilder/engineRules";
 import { scoreAssignment, buildDefaultAdjacency } from "@/lib/shiftbuilder/scoring";
 import { z } from "zod";
+import { checkOpsApiRateLimit } from "@/app/api/_lib/rateLimit";
+import {
+  requireOpsAnyPermissionFromCookies,
+  requireOpsPermissionFromCookies,
+  type OpsSessionResult,
+} from "@/lib/auth/requireOpsSession.server";
+import type { PermissionKey } from "@/lib/auth/auditActionPermission";
+
+/** Tight ceiling for xAI / provider-backed server actions (per user / rolling minute). */
+const AI_ACTION_MAX_PER_MIN = 20;
+/** Moderate ceiling for heavy week-engine preview compute. */
+const WEEK_PREVIEW_MAX_PER_MIN = 10;
+
+async function requireActionPermission(
+  permission: PermissionKey | "authenticated",
+): Promise<OpsSessionResult> {
+  return requireOpsPermissionFromCookies(permission);
+}
+
+/**
+ * Fail closed on auth, then rate-limit AI cost paths.
+ * Returns a session result; caller must not burn provider keys when !ok.
+ */
+async function requireAiActionSession(
+  permission: PermissionKey | "authenticated" = "canEditAssignments",
+): Promise<OpsSessionResult & { rateLimited?: boolean; retryAfterSec?: number }> {
+  const session = await requireActionPermission(permission);
+  if (!session.ok) return session;
+
+  const rateKey = `ai-action:${session.actor.user.id}`;
+  const rate = checkOpsApiRateLimit(rateKey, AI_ACTION_MAX_PER_MIN);
+  if (!rate.ok) {
+    return {
+      ok: false,
+      status: 429,
+      error: `AI rate limit — retry in ${rate.retryAfterSec}s`,
+      rateLimited: true,
+      retryAfterSec: rate.retryAfterSec,
+    };
+  }
+  return session;
+}
 
 export type GrokContext = {
   type: "slot" | "person";
@@ -65,6 +107,11 @@ export async function runEngineAiStage(
   usage?: { inputTokens: number; outputTokens: number; model: string; reasoningEffort: string };
   error?: string;
 }> {
+  const session = await requireAiActionSession("canEditAssignments");
+  if (!session.ok) {
+    return { overrides: [], error: session.error };
+  }
+
   try {
     const { createAiProvider } = await import("@/lib/shiftbuilder/engine/ai/factory");
     const { AiNightOutputSchema } = await import("@/lib/shiftbuilder/engine/ai/schemas");
@@ -96,6 +143,11 @@ export async function runEngineAiStage(
  * Legacy text-only flow (still used as fallback / for the simple button).
  */
 export async function askGrokForShiftSuggestions(context: GrokContext): Promise<string> {
+  const session = await requireAiActionSession("canEditAssignments");
+  if (!session.ok) {
+    return `Sorry — ${session.error}`;
+  }
+
   const { buildShiftBuilderSystemPrompt, callGrok } = await import("@/lib/xai");
   const systemPrompt = buildShiftBuilderSystemPrompt();
 
@@ -178,6 +230,15 @@ export async function askGrokForStructuredSuggestions(
     reasoningEffort?: string;
   };
 }> {
+  const session = await requireAiActionSession("canEditAssignments");
+  if (!session.ok) {
+    return {
+      text: `Sorry — ${session.error}`,
+      warnings: [session.error],
+      usedStructured: false,
+    };
+  }
+
   const { snapshot, userQuestion, rosterForGuard } = request;
 
   const {
@@ -341,6 +402,17 @@ export async function askGrokEngineDraft(
     useTools?: boolean;
   }
 ): Promise<GrokEngineRunResult> {
+  const session = await requireAiActionSession("canEditAssignments");
+  if (!session.ok) {
+    return {
+      picks: [],
+      explanation: "",
+      warnings: [session.error],
+      usedGrok: false,
+      rawText: "",
+    };
+  }
+
   const toolContext = options?.toolContext;
   const useTools = options?.useTools !== false && !!toolContext?.roster;
   const systemPrompt = buildGrokEngineSystemPrompt(snapshot);
@@ -646,6 +718,11 @@ Explore with tools (previewRotationFit + scoreDraftRotationHealth + scoreCandida
 export async function getEngineInsightForPlacement(
   ctx: import("@/lib/shiftbuilder/engineInsightForPlacement").EngineInsightContext,
 ): Promise<import("@/lib/shiftbuilder/engineInsightForPlacement").EngineInsightResult> {
+  const session = await requireAiActionSession("canEditAssignments");
+  if (!session.ok) {
+    return { text: session.error };
+  }
+
   const { runEngineInsightForPlacement } = await import(
     "@/lib/shiftbuilder/engineInsightForPlacement"
   );
@@ -678,16 +755,37 @@ export type ValidationResult = {
  * cannot bypass graves_default_schedule + isEligibleForSlot.
  *
  * Called from the Client before optimistic update + DB write in applyDraft.
+ *
+ * Security: requires canEditAssignments. Server schedule is authoritative —
+ * client-supplied schedule id lists are ignored (fail closed when empty).
  */
 export async function validateProposedAssignments(
   params: {
     date: string; // YYYY-MM-DD local
     nightId?: string | null;
     proposals: ProposedAssignment[];
-    /** Client-loaded board ids for tonight — fallback when server schedule is empty. */
+    /**
+     * @deprecated Ignored. Never trusted for the hard schedule gate (P1-14).
+     * Kept optional so older clients still typecheck; do not send for security.
+     */
     clientScheduledTmIds?: string[];
   }
 ): Promise<ValidationResult> {
+  // Return invalid (not throw) so applyDraft cannot fail-open on auth errors.
+  const session = await requireActionPermission("canEditAssignments");
+  if (!session.ok) {
+    return {
+      valid: false,
+      invalid: [
+        {
+          slotKey: "_auth",
+          tmId: null,
+          reason: session.error,
+        },
+      ],
+    };
+  }
+
   if (!params.proposals?.length) {
     return { valid: true, invalid: [] };
   }
@@ -714,11 +812,20 @@ export async function validateProposedAssignments(
     scheduledIds.pmOverlap.size === 0 &&
     scheduledIds.onCall.size === 0;
 
-  if (serverScheduleEmpty && params.clientScheduledTmIds?.length) {
-    for (const id of params.clientScheduledTmIds) {
-      if (id) scheduledIds.grave.add(id);
-    }
-    scheduledIds = await expandScheduledIdsForNight(scheduledIds);
+  // Fail closed: empty server schedule denies all placements. Never fill from client.
+  if (serverScheduleEmpty) {
+    const invalid: ValidationError[] = params.proposals
+      .filter((p) => !!p.tmId)
+      .map((p) => ({
+        slotKey: p.slotKey,
+        tmId: p.tmId,
+        reason:
+          "No graves schedule loaded for this night — cannot verify on-schedule (server authoritative)",
+      }));
+    return {
+      valid: invalid.length === 0,
+      invalid,
+    };
   }
 
   const onScheduleTonight = new Set<string>([
@@ -734,9 +841,6 @@ export async function validateProposedAssignments(
   const neededTmIds = new Set<string>();
   for (const p of params.proposals) {
     if (p.tmId) neededTmIds.add(p.tmId);
-  }
-  for (const id of params.clientScheduledTmIds ?? []) {
-    if (id) neededTmIds.add(id);
   }
 
   const profileByIdOrTmId = new Map<string, any>();
@@ -776,17 +880,6 @@ export async function validateProposedAssignments(
       };
       profileIndex.set(p.id, row);
       if (p.tm_id) profileIndex.set(p.tm_id, row);
-    }
-  }
-
-  // Merge client schedule (already used by engine + picker) with all alias forms.
-  for (const id of params.clientScheduledTmIds ?? []) {
-    if (!id) continue;
-    onScheduleTonight.add(id);
-    const tm = profileIndex.get(id);
-    if (tm) {
-      onScheduleTonight.add(tm.id);
-      if (tm.tmId) onScheduleTonight.add(tm.tmId);
     }
   }
 
@@ -877,6 +970,22 @@ export interface WeekPreviewResult {
 }
 
 export async function previewWeekEngine(weekStartIso: string): Promise<WeekPreviewResult> {
+  // Privileged heavy compute — canRunEngine or canEditAssignments (OR).
+  const session = await requireOpsAnyPermissionFromCookies([
+    "canRunEngine",
+    "canEditAssignments",
+  ]);
+  if (!session.ok) {
+    throw new Error(session.error);
+  }
+  const rate = checkOpsApiRateLimit(
+    `week-preview:${session.actor.user.id}`,
+    WEEK_PREVIEW_MAX_PER_MIN,
+  );
+  if (!rate.ok) {
+    throw new Error(`Week preview rate limit — retry in ${rate.retryAfterSec}s`);
+  }
+
   const { supabase } = await import("@/lib/supabase");
   const { dbToUi } = await import("@/lib/shiftbuilder/slot-keys");
   const { getFullyResolvedEngineConfig } = await import("@/lib/shiftbuilder/engineOverrides");
