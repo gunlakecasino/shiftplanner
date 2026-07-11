@@ -6,18 +6,11 @@ import {
   assertActorCanEditNight,
   nightRefFromMutationBody,
 } from "@/lib/auth/assertNightEditable.server";
-import {
-  requireOpsAnyPermission,
-  requireOpsPermission,
-} from "@/lib/auth/requireOpsSession.server";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import {
   addNightSlotTaskServer,
-  addTMAccommodationServer,
-  addTMPreferenceServer,
   batchApplyDraftAssignmentsServer,
   deleteBreakAssignmentServer,
-  deleteTMAccommodationServer,
-  deleteTMPreferenceServer,
   deleteZoneAssignmentServer,
   markTmCallOffServer,
   unmarkTmCallOffServer,
@@ -26,32 +19,26 @@ import {
   moveNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
   replaceNightSlotTasksForSlotServer,
-  restoreTMServer,
   setNightCardBorderServer,
   setNightLockedServer,
   setNightPublishedServer,
-  setTMDisplayNameServer,
-  setTMGravePoolServer,
-  softDeleteTMServer,
-  type GravePoolValue,
-  type SoftDeleteReason,
   toggleAssignmentLockServer,
-  updateActiveEngineConfigServer,
   updateNightSlotTaskColorServer,
   updateNightSlotTaskCoverageSideServer,
   updateNightSlotTaskLabelServer,
   updateNightSlotTaskStyleServer,
-  updateNightTmStatusServer,
   upsertBreakAssignmentServer,
-  upsertSlotSkillServer,
-  upsertTMServer,
   upsertZoneAssignmentServer,
 } from "@/lib/shiftbuilder/opsMutations.server";
 import {
-  revalidateNightBoardCaches,
-  revalidateRosterCache,
-  revalidateSlotDefaultsCache,
-} from "@/lib/shiftbuilder/revalidateOpsCache";
+  loadOpsKnowledgeServer,
+  loadRecentAiFeedbackServer,
+  saveAiFeedbackServer,
+  saveOpsKnowledgeServer,
+} from "@/lib/shiftbuilder/opsKnowledge/opsKnowledge.server";
+import type { AiFeedbackExample } from "@/lib/shiftbuilder/opsKnowledge/feedback";
+import type { OpsKnowledge } from "@/lib/shiftbuilder/opsKnowledge/types";
+import { revalidateNightBoardCaches, revalidateSlotDefaultsCache } from "@/lib/shiftbuilder/revalidateOpsCache";
 import {
   addSlotDefaultTaskServer,
   bulkUpsertSlotDefaultsServer,
@@ -60,13 +47,7 @@ import {
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 
-/**
- * Single key = require that bit; array = require any one of the bits.
- * Array form is for multi-permission OR only (e.g. sudo ∥ manage-team).
- * Night published/draft gate below runs if any required key is
- * canEditAssignments or canLockUnlock — keep that true for board mutations.
- */
-const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
+const ACTION_PERMISSIONS: Record<string, PermissionKey | "authenticated"> = {
   upsert_zone_assignment: "canEditAssignments",
   delete_zone_assignment: "canEditAssignments",
   batch_apply_draft: "canEditAssignments",
@@ -88,36 +69,16 @@ const ACTION_PERMISSIONS: Record<string, PermissionKey | PermissionKey[]> = {
   replace_all_night_slot_tasks: "canEditAssignments",
   mark_tm_call_off: "canEditAssignments",
   unmark_tm_call_off: "canEditAssignments",
-  // KD-16: privileged identity / eligibility — sudo or manage-team only
-  set_tm_grave_pool: ["canAccessSudo", "canManageTeam"],
-  set_tm_display_name: ["canAccessSudo", "canManageTeam"],
-  upsert_tm_profile: ["canAccessSudo", "canManageTeam"],
-  soft_delete_tm: ["canAccessSudo", "canManageTeam"],
-  restore_tm: ["canAccessSudo", "canManageTeam"],
-  upsert_slot_skill: ["canAccessSudo", "canManageTeam"],
-  add_tm_preference: ["canAccessSudo", "canManageTeam"],
-  delete_tm_preference: ["canAccessSudo", "canManageTeam"],
-  add_tm_accommodation: ["canAccessSudo", "canManageTeam"],
-  delete_tm_accommodation: ["canAccessSudo", "canManageTeam"],
-  // Night schedule status (board-adjacent) — assignment editors
-  update_night_tm_status: "canEditAssignments",
-  // Engine config is sudo-only
-  update_engine_config: "canAccessSudo",
   add_slot_default_task: "canAccessSudo",
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
   bulk_upsert_slot_defaults: "canAccessSudo",
+  // opsKnowledge — service_role tables; session-gated RPC only
+  load_ops_knowledge: "authenticated",
+  load_ai_feedback: "authenticated",
+  save_ai_feedback: "canEditAssignments",
+  save_ops_knowledge: "canAccessSudo",
 };
-
-function requireBodyTmId(body: Record<string, unknown>): string {
-  const raw = body.tmId;
-  if (raw == null) throw new Error("tmId is required");
-  const tmId = String(raw).trim();
-  if (!tmId || tmId === "undefined" || tmId === "null") {
-    throw new Error("tmId is required");
-  }
-  return tmId;
-}
 
 async function bustCache(date?: string) {
   try {
@@ -145,19 +106,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Unknown mutation: ${action}` }, { status: 400 });
   }
 
-  const session = Array.isArray(permission)
-    ? await requireOpsAnyPermission(request, permission)
-    : await requireOpsPermission(request, permission);
+  const session = await requireOpsPermission(request, permission);
   if (!session.ok) {
     return NextResponse.json({ error: session.error }, { status: session.status });
   }
 
-  // Night published/draft policy: run when any required key is a board-edit bit
-  // (works for string keys and future OR-arrays that include those keys).
-  const permissionKeys = Array.isArray(permission) ? permission : [permission];
-  if (
-    permissionKeys.some((p) => p === "canEditAssignments" || p === "canLockUnlock")
-  ) {
+  if (permission === "canEditAssignments" || permission === "canLockUnlock") {
     const editCheck = await assertActorCanEditNight(
       session.actor.permissions,
       nightRefFromMutationBody(body),
@@ -326,159 +280,6 @@ export async function POST(request: NextRequest) {
         await bustCache(body.date as string | undefined);
         return NextResponse.json(result);
       }
-      case "set_tm_grave_pool": {
-        const tmId = requireBodyTmId(body);
-        const raw = body.value;
-        const value: GravePoolValue =
-          raw === null || raw === undefined || raw === ""
-            ? null
-            : (String(raw) as Exclude<GravePoolValue, null>);
-        const result = await setTMGravePoolServer(tmId, value);
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "set_tm_display_name": {
-        const tmId = requireBodyTmId(body);
-        const displayName = String(body.displayName ?? body.newDisplayName ?? "");
-        const result = await setTMDisplayNameServer(tmId, displayName);
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-
-      case "update_night_tm_status": {
-        const result = await updateNightTmStatusServer({
-          nightId: String(body.nightId ?? ""),
-          tmId: requireBodyTmId(body),
-          status: String(body.status ?? ""),
-          note: body.note != null ? String(body.note) : null,
-          tmName: body.tmName != null ? String(body.tmName) : null,
-        });
-        await bustCache(body.date as string | undefined);
-        return NextResponse.json(result);
-      }
-      case "upsert_tm_profile": {
-        const result = await upsertTMServer({
-          tmId: body.tmId != null && String(body.tmId).trim() ? String(body.tmId) : undefined,
-          displayName: String(body.displayName ?? ""),
-          fullName: (body.fullName as string | null | undefined) ?? null,
-          employeeName: (body.employeeName as string | null | undefined) ?? null,
-          active: body.active as boolean | undefined,
-          gravePool: (body.gravePool as string | null | undefined) ?? null,
-          primarySection: (body.primarySection as string | null | undefined) ?? null,
-          gender: (body.gender as "M" | "F" | null | undefined) ?? null,
-          tieBreakRank: body.tieBreakRank as number | null | undefined,
-          skillScore: body.skillScore as number | null | undefined,
-          status: body.status as string | undefined,
-          slotPreference: (body.slotPreference as string | null | undefined) ?? null,
-          notes: (body.notes as string | null | undefined) ?? null,
-        });
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "soft_delete_tm": {
-        const tmId = requireBodyTmId(body);
-        const reason = (body.reason as SoftDeleteReason | undefined) ?? "separated";
-        const result = await softDeleteTMServer(tmId, reason);
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "restore_tm": {
-        const result = await restoreTMServer(requireBodyTmId(body));
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "upsert_slot_skill": {
-        const result = await upsertSlotSkillServer({
-          tmId: requireBodyTmId(body),
-          slotId: String(body.slotId ?? ""),
-          score: Number(body.score),
-        });
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "add_tm_preference": {
-        const result = await addTMPreferenceServer({
-          tmId: requireBodyTmId(body),
-          stance: String(body.stance ?? ""),
-          strength: String(body.strength ?? ""),
-          target: String(body.target ?? ""),
-          note: body.note != null ? String(body.note) : null,
-        });
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "delete_tm_preference": {
-        const result = await deleteTMPreferenceServer(String(body.id ?? ""));
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "add_tm_accommodation": {
-        const result = await addTMAccommodationServer({
-          tmId: requireBodyTmId(body),
-          type: String(body.type ?? ""),
-          severity: String(body.severity ?? ""),
-          target: body.target != null ? String(body.target) : null,
-          note: String(body.note ?? ""),
-          status: body.status != null ? String(body.status) : undefined,
-        });
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "delete_tm_accommodation": {
-        const result = await deleteTMAccommodationServer(String(body.id ?? ""));
-        try {
-          await revalidateRosterCache();
-        } catch {
-          /* non-fatal */
-        }
-        return NextResponse.json(result);
-      }
-      case "update_engine_config": {
-        const result = await updateActiveEngineConfigServer({
-          placementMethod: body.placementMethod as string | undefined,
-          grokReasoningEffort: body.grokReasoningEffort as string | undefined,
-          notes: body.notes as string | null | undefined,
-          weights: body.weights as Record<string, number> | undefined,
-          eligibilityRules: body.eligibilityRules as unknown[] | undefined,
-        });
-        return NextResponse.json(result);
-      }
       case "add_slot_default_task": {
         const task = await addSlotDefaultTaskServer({
           slotKey: String(body.slotKey),
@@ -527,6 +328,34 @@ export async function POST(request: NextRequest) {
           /* non-fatal */
         }
         return NextResponse.json({ ok: true });
+      }
+      case "load_ops_knowledge": {
+        const knowledge = await loadOpsKnowledgeServer();
+        return NextResponse.json({ ok: true, knowledge });
+      }
+      case "load_ai_feedback": {
+        const limit = body.limit != null ? Number(body.limit) : 40;
+        const examples = await loadRecentAiFeedbackServer(limit);
+        return NextResponse.json({ ok: true, examples });
+      }
+      case "save_ai_feedback": {
+        const example: AiFeedbackExample = {
+          nightIso: String(body.nightIso ?? ""),
+          slotKey: String(body.slotKey ?? ""),
+          tmId: String(body.tmId ?? ""),
+          tmName: String(body.tmName ?? ""),
+          aiRationale: String(body.aiRationale ?? ""),
+          verdict: body.verdict as AiFeedbackExample["verdict"],
+          reason: body.reason != null ? String(body.reason) : undefined,
+          facts: body.facts != null ? String(body.facts) : undefined,
+        };
+        const result = await saveAiFeedbackServer(example);
+        return NextResponse.json(result);
+      }
+      case "save_ops_knowledge": {
+        const knowledge = (body.knowledge ?? {}) as OpsKnowledge;
+        const result = await saveOpsKnowledgeServer(knowledge);
+        return NextResponse.json(result);
       }
       default:
         return NextResponse.json({ error: "Unhandled mutation" }, { status: 500 });

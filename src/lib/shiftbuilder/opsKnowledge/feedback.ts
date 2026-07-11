@@ -5,9 +5,13 @@
  * example of their judgment: {situation, AI proposal + rationale, verdict, reason}.
  * Recent examples are injected into the brief as few-shot context, so the AI
  * converges on how the supervisor actually thinks. See docs/AI_SUPERVISOR_BRAIN.md.
+ *
+ * Writes (and reads after service_role-only RLS) go through session-gated
+ * postOpsMutation → /api/shiftbuilder/mutations (admin client). Browser must not
+ * hit ops_ai_feedback with the anon Supabase key.
  */
 
-import { supabase } from "../../supabase";
+import { postOpsMutation } from "../opsMutationClient";
 
 export type FeedbackVerdict = "endorsed" | "rejected";
 
@@ -26,49 +30,51 @@ export interface AiFeedbackExample {
   createdAt?: string;
 }
 
-const TABLE = "ops_ai_feedback";
-
+/**
+ * Persist one labeled feedback example.
+ * Browser-only — uses session cookie via mutations API.
+ */
 export async function saveFeedback(
   example: AiFeedbackExample,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (typeof window === "undefined") {
+    return {
+      ok: false,
+      error:
+        "saveFeedback is browser-only; use saveAiFeedbackServer after requireOpsPermission",
+    };
+  }
   try {
-    const { error } = await supabase.from(TABLE).insert({
-      night_iso: example.nightIso,
-      slot_key: example.slotKey,
-      tm_id: example.tmId,
-      tm_name: example.tmName,
-      ai_rationale: example.aiRationale,
+    await postOpsMutation("save_ai_feedback", {
+      nightIso: example.nightIso,
+      // night gate uses date when present (ISO night key)
+      date: example.nightIso || undefined,
+      slotKey: example.slotKey,
+      tmId: example.tmId,
+      tmName: example.tmName,
+      aiRationale: example.aiRationale,
       verdict: example.verdict,
       reason: example.reason ?? null,
       facts: example.facts ?? null,
     });
-    return error ? { ok: false, error: error.message } : { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "save failed" };
+    return { ok: true };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "save failed";
+    return { ok: false, error: msg };
   }
 }
 
 /** Most recent examples (newest first), for the few-shot brief block + learning view. */
 export async function loadRecentFeedback(limit = 40): Promise<AiFeedbackExample[]> {
+  if (typeof window === "undefined") {
+    return [];
+  }
   try {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select("id, night_iso, slot_key, tm_id, tm_name, ai_rationale, verdict, reason, facts, created_at")
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (error || !data) return [];
-    return data.map((r: any) => ({
-      id: r.id,
-      nightIso: r.night_iso,
-      slotKey: r.slot_key,
-      tmId: r.tm_id,
-      tmName: r.tm_name,
-      aiRationale: r.ai_rationale,
-      verdict: r.verdict,
-      reason: r.reason ?? undefined,
-      facts: r.facts ?? undefined,
-      createdAt: r.created_at,
-    }));
+    const res = await postOpsMutation<{ examples?: AiFeedbackExample[] }>(
+      "load_ai_feedback",
+      { limit },
+    );
+    return Array.isArray(res.examples) ? res.examples : [];
   } catch {
     return [];
   }
