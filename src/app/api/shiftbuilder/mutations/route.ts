@@ -22,7 +22,9 @@ import {
   getOrCreateNightForDateServer,
   markTmCallOffServer,
   unmarkTmCallOffServer,
+  clearPlacementHistoryForSlotServer,
   recordPlacementHistoryServer,
+  refreshTmZoneMatrixServer,
   removeNightCardBorderServer,
   removeNightSlotTaskServer,
   moveNightSlotTaskServer,
@@ -113,6 +115,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   get_or_create_night: "canEditAssignments",
   seed_default_breaks: "canEditAssignments",
   record_placement_history: "canEditAssignments",
+  refresh_tm_zone_matrix: "canEditAssignments",
   // Knowledge / AI feedback
   load_ops_knowledge: "authenticated",
   save_ops_knowledge: "canAccessSudo",
@@ -474,10 +477,35 @@ export async function POST(request: NextRequest) {
       }
       case "record_placement_history": {
         try {
+          // Singular night×slot ownership: clear any prior TM, then insert.
+          const nightId = String((body as { nightId?: string }).nightId ?? "");
+          const slotKey = String((body as { slotKey?: string }).slotKey ?? "");
+          const slotType = String((body as { slotType?: string }).slotType ?? "zone");
+          const rrSide =
+            (body as { rrSide?: string | null }).rrSide ?? null;
+          if (nightId && slotKey) {
+            await clearPlacementHistoryForSlotServer({
+              nightId,
+              slotKey,
+              slotType,
+              rrSide,
+            });
+          }
           await recordPlacementHistoryServer(body as never);
         } catch (e) {
           // Soft-fail history so apply path is never blocked by matrix side-effects.
           console.warn("[mutations] record_placement_history", e);
+        }
+        return NextResponse.json({ ok: true });
+      }
+      case "refresh_tm_zone_matrix": {
+        try {
+          const tmId = String(body.tmId ?? "");
+          const lookbackWeeks =
+            body.lookbackWeeks != null ? Number(body.lookbackWeeks) : 12;
+          await refreshTmZoneMatrixServer(tmId, lookbackWeeks);
+        } catch (e) {
+          console.warn("[mutations] refresh_tm_zone_matrix", e);
         }
         return NextResponse.json({ ok: true });
       }

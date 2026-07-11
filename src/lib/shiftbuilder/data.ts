@@ -3780,60 +3780,19 @@ export async function getTmZoneMatrix(tmId?: string): Promise<Map<string, Map<st
  * This is the bridge between committed assignments and the fast fairness signals.
  */
 export async function refreshTmZoneMatrix(tmId: string, lookbackWeeks = 12): Promise<void> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - (lookbackWeeks * 7));
-
-  const { data: history, error } = await supabase
-    .from("tm_placement_history")
-    .select("slot_key, placed_at, week_start")
-    .eq("tm_id", tmId)
-    .gte("placed_at", cutoff.toISOString())
-    .order("placed_at", { ascending: false });
-
-  if (error || !history) {
-    console.warn("[data] refreshTmZoneMatrix history fetch failed", error);
-    return;
-  }
-
-  const now = new Date();
-  const fourWeeksAgo = new Date(now.getTime() - 28 * 86400 * 1000);
-  const eightWeeksAgo = new Date(now.getTime() - 56 * 86400 * 1000);
-
-  const zoneCounts = new Map<string, { last: string | null; c4: number; c8: number; life: number }>();
-
-  history.forEach((h: any) => {
-    // Only real zones count for area/rotation fairness
-    if (!/^Z\d+$/.test(h.slot_key) && h.slot_key !== "Z9SR") return;
-
-    const z = h.slot_key;
-    const placed = new Date(h.placed_at);
-    if (!zoneCounts.has(z)) {
-      zoneCounts.set(z, { last: null, c4: 0, c8: 0, life: 0 });
-    }
-    const rec = zoneCounts.get(z)!;
-    rec.life += 1;
-    if (placed >= fourWeeksAgo) rec.c4 += 1;
-    if (placed >= eightWeeksAgo) rec.c8 += 1;
-    if (!rec.last || placed > new Date(rec.last)) rec.last = h.placed_at;
-  });
-
-  // Upsert into tm_zone_matrix
-  const upserts = Array.from(zoneCounts.entries()).map(([zoneKey, rec]) => ({
-    tm_id: tmId,
-    zone_key: zoneKey,
-    last_placed_at: rec.last,
-    count_4w: rec.c4,
-    count_8w: rec.c8,
-    count_lifetime: rec.life,
-    updated_at: now.toISOString(),
-  }));
-
-  if (upserts.length > 0) {
-    const { error: upErr } = await supabase
-      .from("tm_zone_matrix")
-      .upsert(upserts, { onConflict: "tm_id,zone_key" });
-
-    if (upErr) console.warn("[data] tm_zone_matrix upsert failed", upErr);
+  // Server path only — browser client cannot write tm_zone_matrix under RLS.
+  try {
+    await runBoardMutation(
+      "refresh_tm_zone_matrix",
+      { tmId, lookbackWeeks },
+      async () => {
+        const { refreshTmZoneMatrixServer } = await import("./opsMutations.server");
+        await refreshTmZoneMatrixServer(tmId, lookbackWeeks);
+        return { ok: true as const };
+      },
+    );
+  } catch (error) {
+    console.warn("[data] refreshTmZoneMatrix failed", error);
   }
 }
 
@@ -3854,7 +3813,17 @@ export async function recordPlacementHistory(
       "record_placement_history",
       { tmId, nightId, slotKey, slotType, rrSide, weekStart },
       async () => {
-        const { recordPlacementHistoryServer } = await import("./opsMutations.server");
+        const {
+          clearPlacementHistoryForSlotServer,
+          recordPlacementHistoryServer,
+        } = await import("./opsMutations.server");
+        // Singular night×slot ownership before insert.
+        await clearPlacementHistoryForSlotServer({
+          nightId,
+          slotKey,
+          slotType,
+          rrSide,
+        });
         return recordPlacementHistoryServer({
           tmId,
           nightId,

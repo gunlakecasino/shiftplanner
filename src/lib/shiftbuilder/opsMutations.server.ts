@@ -1,5 +1,6 @@
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
-import { uiToDb } from "@/lib/shiftbuilder/slot-keys";
+import { dbToUi, uiToDb } from "@/lib/shiftbuilder/slot-keys";
+import { matrixTmsAfterHistoryChange } from "@/lib/shiftbuilder/rotation/historyOwnership";
 import type { BreakGroupValue } from "@/lib/shiftbuilder/breakGroupResolve";
 import type { MoveTaskParams } from "./data";
 
@@ -124,22 +125,31 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
   const client = adminClient();
 
   // Preserve existing lock unless caller explicitly sets isLocked.
+  // Also capture previous occupant for matrix refresh if history was missing.
   let lockValue = Boolean(isLocked);
-  if (params.isLocked === undefined) {
-    let lockQ = client
+  let previousTmId: string | null = null;
+  {
+    let existingQ = client
       .from("zone_assignments")
-      .select("is_locked")
+      .select("is_locked, tm_id")
       .eq("night_id", nightId)
       .eq("slot_key", finalSlotKey)
       .eq("slot_type", finalSlotType);
-    lockQ =
+    existingQ =
       finalRrSide != null
-        ? lockQ.eq("rr_side", finalRrSide)
-        : lockQ.is("rr_side", null);
-    const { data: existing } = await lockQ.maybeSingle();
-    if (existing && typeof (existing as { is_locked?: boolean }).is_locked === "boolean") {
-      lockValue = Boolean((existing as { is_locked: boolean }).is_locked);
-    } else {
+        ? existingQ.eq("rr_side", finalRrSide)
+        : existingQ.is("rr_side", null);
+    const { data: existing } = await existingQ.maybeSingle();
+    if (existing) {
+      const row = existing as { is_locked?: boolean; tm_id?: string | null };
+      if (params.isLocked === undefined) {
+        lockValue =
+          typeof row.is_locked === "boolean" ? Boolean(row.is_locked) : false;
+      }
+      if (typeof row.tm_id === "string" && row.tm_id.trim()) {
+        previousTmId = row.tm_id.trim();
+      }
+    } else if (params.isLocked === undefined) {
       lockValue = false;
     }
   }
@@ -159,6 +169,22 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
   );
 
   if (error) throw new Error(`Failed to save assignment: ${error.message}`);
+
+  // Singular night×slot history ownership + matrix for old + new TMs (never fail assign).
+  try {
+    await recordPlacementAndRefreshMatrixServer({
+      tmId,
+      nightId,
+      slotKey: finalSlotKey,
+      slotType: finalSlotType,
+      rrSide: finalRrSide,
+      extraMatrixTmIds:
+        previousTmId && previousTmId !== tmId ? [previousTmId] : undefined,
+    });
+  } catch (histErr) {
+    console.warn("[ops] post-assign history/matrix refresh failed", histErr);
+  }
+
   return { success: true, action: "upserted" as const };
 }
 
@@ -209,6 +235,25 @@ export async function deleteZoneAssignmentServer(params: {
 
     const { error, count } = await q;
     if (!error && count) totalDeleted += count;
+  }
+
+  // Clear singular history for this night×slot and rebuild matrix for vacated TMs.
+  try {
+    const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
+      nightId,
+      slotKey: uiKey,
+      slotType: canonical.slot_type,
+      rrSide: canonical.rr_side,
+    });
+    await Promise.all(
+      clearedTmIds.map((id) =>
+        refreshTmZoneMatrixServer(id).catch((e) =>
+          console.warn("[ops] matrix refresh after clear failed", id, e),
+        ),
+      ),
+    );
+  } catch (histErr) {
+    console.warn("[ops] post-delete history/matrix clear failed", histErr);
   }
 
   return { success: true, rowsDeleted: totalDeleted };
@@ -361,6 +406,56 @@ export async function batchApplyDraftAssignmentsServer(
     .select("updated_at")
     .maybeSingle();
 
+  // Rotation fairness plane: singular night×slot history + full matrix rebuild.
+  // Non-fatal — assignment write already succeeded.
+  try {
+    const matrixTms = new Set<string>();
+
+    // Clears first — drop all history for vacated slots.
+    for (const s of toDelete) {
+      try {
+        const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
+          nightId,
+          slotKey: s.slotKey,
+          slotType: s.slotType,
+          rrSide: s.rrSide,
+        });
+        clearedTmIds.forEach((id) => matrixTms.add(id));
+      } catch (e) {
+        console.warn("[ops] clear history on batch delete failed", e);
+      }
+    }
+
+    // Assigns — clear previous occupant(s), insert new TM, collect matrix TMs.
+    for (const s of toUpsert) {
+      if (!s.tmId) continue;
+      try {
+        const { clearedTmIds } = await recordPlacementAndRefreshMatrixServer({
+          tmId: s.tmId,
+          nightId,
+          slotKey: s.slotKey,
+          slotType: s.slotType,
+          rrSide: s.rrSide,
+          skipMatrixRefresh: true,
+        });
+        clearedTmIds.forEach((id) => matrixTms.add(id));
+        matrixTms.add(s.tmId);
+      } catch (e) {
+        console.warn("[ops] record history on batch upsert failed", e);
+      }
+    }
+
+    await Promise.all(
+      [...matrixTms].map((tmId) =>
+        refreshTmZoneMatrixServer(tmId).catch((e) =>
+          console.warn("[ops] matrix refresh after batch apply failed", tmId, e),
+        ),
+      ),
+    );
+  } catch (histErr) {
+    console.warn("[ops] batch apply history/matrix side-effects failed", histErr);
+  }
+
   return {
     ok: true,
     nightUpdatedAt:
@@ -368,6 +463,246 @@ export async function batchApplyDraftAssignmentsServer(
         ? String((bumped as { updated_at: string }).updated_at)
         : now,
   };
+}
+
+/**
+ * Resolve a slot key (DB or UI) to the UI key used in tm_placement_history.
+ */
+function resolveHistoryUiSlotKey(
+  slotKey: string,
+  slotType: string,
+  rrSide?: string | null,
+): string {
+  try {
+    const ui = dbToUi(slotKey, slotType, rrSide ?? null);
+    if (ui.startsWith("UNK:")) return slotKey;
+    return ui;
+  } catch {
+    return slotKey;
+  }
+}
+
+/**
+ * Delete ALL history rows for a night×slot (any TM). Slot ownership is singular.
+ * Returns prior occupants so callers can refresh their zone matrices.
+ */
+export async function clearPlacementHistoryForSlotServer(params: {
+  nightId: string;
+  slotKey: string; // UI key preferred; DB keys are converted via dbToUi
+  slotType: string;
+  rrSide?: string | null;
+}): Promise<{ clearedTmIds: string[] }> {
+  const nightId = typeof params.nightId === "string" ? params.nightId.trim() : "";
+  if (!nightId || !params.slotKey) return { clearedTmIds: [] };
+
+  const client = adminClient();
+  const uiSlot = resolveHistoryUiSlotKey(
+    params.slotKey,
+    params.slotType,
+    params.rrSide ?? null,
+  );
+
+  const { data: existing } = await client
+    .from("tm_placement_history")
+    .select("tm_id")
+    .eq("night_id", nightId)
+    .eq("slot_key", uiSlot);
+
+  const clearedTmIds = [
+    ...new Set(
+      (existing ?? [])
+        .map((r: { tm_id?: string | null }) =>
+          typeof r.tm_id === "string" ? r.tm_id.trim() : "",
+        )
+        .filter(Boolean),
+    ),
+  ];
+
+  const { error: delErr } = await client
+    .from("tm_placement_history")
+    .delete()
+    .eq("night_id", nightId)
+    .eq("slot_key", uiSlot);
+  if (delErr) {
+    console.warn("[ops] clearPlacementHistoryForSlotServer delete failed", delErr);
+  }
+
+  return { clearedTmIds };
+}
+
+/**
+ * Record a committed placement into tm_placement_history using the *UI* slot key
+ * (Z1 / MRR8 / …) so matrix refresh + fairness signals stay aligned with the pad.
+ *
+ * Ownership: clear ALL history for night×slot first, then insert the new TM.
+ * Optionally refresh tm_zone_matrix for cleared TMs + new TM.
+ */
+export async function recordPlacementAndRefreshMatrixServer(params: {
+  tmId: string;
+  nightId: string;
+  slotKey: string;
+  slotType: string;
+  rrSide?: string | null;
+  weekStart?: string | null;
+  /** When true, only write history — caller batch-refreshes matrix once per TM. */
+  skipMatrixRefresh?: boolean;
+  /** Extra TMs to matrix-refresh (e.g. previous zone_assignments occupant). */
+  extraMatrixTmIds?: string[];
+}): Promise<{ clearedTmIds: string[] }> {
+  const tmId = typeof params.tmId === "string" ? params.tmId.trim() : "";
+  const nightId = typeof params.nightId === "string" ? params.nightId.trim() : "";
+  if (!tmId || !nightId) return { clearedTmIds: [] };
+
+  const uiSlot = resolveHistoryUiSlotKey(
+    params.slotKey,
+    params.slotType,
+    params.rrSide ?? null,
+  );
+
+  // Singular ownership: any prior TM on this night×slot is replaced.
+  const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
+    nightId,
+    slotKey: uiSlot,
+    slotType: params.slotType,
+    rrSide: params.rrSide ?? null,
+  });
+
+  await recordPlacementHistoryServer({
+    tmId,
+    nightId,
+    slotKey: uiSlot,
+    slotType: params.slotType,
+    rrSide: params.rrSide ?? null,
+    weekStart: params.weekStart ?? null,
+  });
+
+  if (!params.skipMatrixRefresh) {
+    const matrixTms = matrixTmsAfterHistoryChange(
+      [...clearedTmIds, ...(params.extraMatrixTmIds ?? [])],
+      tmId,
+    );
+    await Promise.all(
+      matrixTms.map((id) =>
+        refreshTmZoneMatrixServer(id).catch((e) =>
+          console.warn("[ops] matrix refresh after placement failed", id, e),
+        ),
+      ),
+    );
+  }
+
+  return { clearedTmIds };
+}
+
+/**
+ * Rebuild tm_zone_matrix rows for a TM from tm_placement_history (admin client).
+ * Counts Z* zones (incl. Z9SR) for area_diversity / cross_week_rotation.
+ *
+ * Full rebuild: upsert current zone counts, then delete orphan zone_keys not in
+ * the new set. If history yields no zone counts, delete all matrix rows for the TM.
+ *
+ * Note: count_lifetime is lifetime *within lookback* (column name kept for compat).
+ * Windows use placed_at (night noon UTC when history was written with night date).
+ */
+export async function refreshTmZoneMatrixServer(
+  tmId: string,
+  lookbackWeeks = 12,
+): Promise<void> {
+  if (!tmId) return;
+  const client = adminClient();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - lookbackWeeks * 7);
+
+  const { data: history, error } = await client
+    .from("tm_placement_history")
+    .select("slot_key, placed_at, week_start")
+    .eq("tm_id", tmId)
+    .gte("placed_at", cutoff.toISOString())
+    .order("placed_at", { ascending: false });
+
+  if (error || !history) {
+    console.warn("[ops] refreshTmZoneMatrixServer history fetch failed", error);
+    return;
+  }
+
+  const now = new Date();
+  const fourWeeksAgo = new Date(now.getTime() - 28 * 86400 * 1000);
+  const eightWeeksAgo = new Date(now.getTime() - 56 * 86400 * 1000);
+
+  const zoneCounts = new Map<
+    string,
+    { last: string | null; c4: number; c8: number; life: number }
+  >();
+
+  for (const h of history as Array<{ slot_key: string; placed_at: string }>) {
+    let z = h.slot_key;
+    // Tolerate DB-format keys that slipped into history (zone_N → ZN).
+    if (!/^Z\d+$/.test(z) && z !== "Z9SR") {
+      if (/^zone_(\d+)$/.test(z)) z = `Z${z.replace("zone_", "")}`;
+      else if (z === "z9_sr") z = "Z9SR";
+      else continue; // RR/aux not used by zone-matrix fairness signals
+    }
+
+    const placed = new Date(h.placed_at);
+    if (!zoneCounts.has(z)) {
+      zoneCounts.set(z, { last: null, c4: 0, c8: 0, life: 0 });
+    }
+    const rec = zoneCounts.get(z)!;
+    rec.life += 1;
+    if (placed >= fourWeeksAgo) rec.c4 += 1;
+    if (placed >= eightWeeksAgo) rec.c8 += 1;
+    if (!rec.last || placed > new Date(rec.last)) rec.last = h.placed_at;
+  }
+
+  // Empty history within lookback → zero the matrix for this TM (no stale zones).
+  if (zoneCounts.size === 0) {
+    const { error: delAllErr } = await client
+      .from("tm_zone_matrix")
+      .delete()
+      .eq("tm_id", tmId);
+    if (delAllErr) {
+      console.warn("[ops] tm_zone_matrix delete-all failed", delAllErr);
+    }
+    return;
+  }
+
+  const upserts = Array.from(zoneCounts.entries()).map(([zoneKey, rec]) => ({
+    tm_id: tmId,
+    zone_key: zoneKey,
+    last_placed_at: rec.last,
+    count_4w: rec.c4,
+    count_8w: rec.c8,
+    count_lifetime: rec.life,
+    updated_at: now.toISOString(),
+  }));
+
+  const { error: upErr } = await client
+    .from("tm_zone_matrix")
+    .upsert(upserts, { onConflict: "tm_id,zone_key" });
+  if (upErr) {
+    console.warn("[ops] tm_zone_matrix upsert failed", upErr);
+  }
+
+  // Delete orphan matrix rows for zone_keys no longer present in history.
+  const { data: existingRows } = await client
+    .from("tm_zone_matrix")
+    .select("zone_key")
+    .eq("tm_id", tmId);
+
+  const keep = new Set(zoneCounts.keys());
+  const orphans = (existingRows ?? [])
+    .map((r: { zone_key?: string }) => r.zone_key)
+    .filter((k): k is string => typeof k === "string" && k.length > 0 && !keep.has(k));
+
+  if (orphans.length > 0) {
+    const { error: orphanErr } = await client
+      .from("tm_zone_matrix")
+      .delete()
+      .eq("tm_id", tmId)
+      .in("zone_key", orphans);
+    if (orphanErr) {
+      console.warn("[ops] tm_zone_matrix orphan delete failed", orphanErr);
+    }
+  }
 }
 
 export async function toggleAssignmentLockServer(params: {
@@ -1435,6 +1770,13 @@ export async function seedDefaultBreaksForNightServer(
   return { count: toInsert.length };
 }
 
+/**
+ * Insert-only history write. Callers MUST clear night×slot ownership first via
+ * clearPlacementHistoryForSlotServer (or recordPlacementAndRefreshMatrixServer).
+ *
+ * placed_at uses nights.night_date at noon UTC when available so 4w/8w windows
+ * track the night, not wall-clock apply time.
+ */
 export async function recordPlacementHistoryServer(params: {
   tmId: string;
   nightId: string;
@@ -1447,6 +1789,24 @@ export async function recordPlacementHistoryServer(params: {
   const nightId = typeof params.nightId === "string" ? params.nightId.trim() : "";
   if (!tmId || !nightId) throw new Error("recordPlacementHistory: tmId and nightId required");
   const client = adminClient();
+
+  // Night-dated placed_at (noon UTC) so matrix windows stay correct after late applies.
+  let placedAt = new Date().toISOString();
+  try {
+    const { data: night } = await client
+      .from("nights")
+      .select("night_date")
+      .eq("id", nightId)
+      .maybeSingle();
+    const nightDate = (night as { night_date?: string } | null)?.night_date;
+    if (typeof nightDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(nightDate)) {
+      const isoDate = nightDate.slice(0, 10);
+      placedAt = new Date(`${isoDate}T12:00:00.000Z`).toISOString();
+    }
+  } catch {
+    /* keep now() */
+  }
+
   const { error } = await client.from("tm_placement_history").insert({
     tm_id: tmId,
     night_id: nightId,
@@ -1454,6 +1814,7 @@ export async function recordPlacementHistoryServer(params: {
     slot_type: params.slotType,
     rr_side: params.rrSide ?? null,
     week_start: params.weekStart ?? null,
+    placed_at: placedAt,
     is_committed: true,
   });
   if (error) {
