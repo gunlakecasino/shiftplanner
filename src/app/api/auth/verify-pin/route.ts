@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
-import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
+import {
+  checkOpsApiRateLimit,
+  clientIpFromRequest,
+  verifyPinRateLimitPerMin,
+} from "@/app/api/_lib/rateLimit";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import {
   attachSessionCookie,
@@ -92,8 +96,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Default 8/min/IP; override with OPS_RATE_VERIFY_PIN_PER_MIN (in-memory, single-replica).
   const ip = clientIpFromRequest(request);
-  const rateCheck = checkOpsApiRateLimit(`verify-pin:${ip}`, 12);
+  const rateCheck = checkOpsApiRateLimit(
+    `verify-pin:${ip}`,
+    verifyPinRateLimitPerMin(),
+  );
   if (!rateCheck.ok) {
     return NextResponse.json(
       { error: "Too many PIN attempts — try again shortly" },

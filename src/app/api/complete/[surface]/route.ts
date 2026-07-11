@@ -31,6 +31,11 @@
 import { NextRequest } from "next/server";
 import { streamText } from "ai";
 import { createXai } from "@ai-sdk/xai";
+import {
+  checkOpsApiRateLimit,
+  clientIpFromRequest,
+  completeRateLimitPerMin,
+} from "@/app/api/_lib/rateLimit";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 
@@ -157,6 +162,23 @@ export async function POST(
       status: session.status,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Cap xAI spend from autocomplete spam: default 30/min per IP+user
+  // (OPS_RATE_COMPLETE_PER_MIN). In-memory only — single-replica assumption.
+  const completeKey = `complete:${clientIpFromRequest(req)}:${session.actor.user.id}`;
+  const rateCheck = checkOpsApiRateLimit(completeKey, completeRateLimitPerMin());
+  if (!rateCheck.ok) {
+    return new Response(
+      JSON.stringify({ error: "Too many completion requests — try again shortly" }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rateCheck.retryAfterSec),
+        },
+      },
+    );
   }
 
   // Validate API key early — fail fast with a clear message.
