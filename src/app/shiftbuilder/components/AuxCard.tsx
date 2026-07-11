@@ -434,6 +434,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
               isConfigured && def.role !== "admin" && def.role !== "z9sr"
             }
             initialCustomLabel={def.label}
+            currentRole={def.role}
             onClose={() => {
               setShowRolePicker(false);
               setPickerPosition(null);

@@ -2,15 +2,46 @@
 
 import React, { useRef, useEffect } from "react";
 import type { AuxRole } from "@/lib/shiftbuilder/placement";
+import {
+  AUX_ROLE_ICONS,
+  AUX_ROLE_COLORS,
+  AUX_ROLE_SHORT_CODE,
+} from "@/lib/shiftbuilder/constants";
 
-const ROLE_OPTIONS: Array<{ role: Exclude<AuxRole, "blank">; label: string; code: string }> = [
-  { role: "admin", label: "Admin", code: "ADMIN" },
-  { role: "z9sr", label: "Z9 SR", code: "Z9SR" },
-  { role: "oasis", label: "Oasis 1–2", code: "OAS" },
-  { role: "trash", label: "Trash 1–2", code: "TSH" },
-  { role: "support", label: "Support 1–2", code: "SUP" },
-  { role: "job_coach", label: "Job Coach", code: "JC" },
-  { role: "step_up", label: "Step Up", code: "STEP" },
+type RoleOption = {
+  role: Exclude<AuxRole, "blank">;
+  label: string;
+  hint: string;
+  code: string;
+};
+
+/** Grouped menu — permanent core first, then floor runs, then people roles. */
+const ROLE_GROUPS: Array<{ id: string; title: string; options: RoleOption[] }> = [
+  {
+    id: "core",
+    title: "Always on board",
+    options: [
+      { role: "admin", label: "Admin", hint: "Floor admin", code: "ADMIN" },
+      { role: "z9sr", label: "Z9 Smoking Room", hint: "Zone 9 SR", code: "Z9SR" },
+    ],
+  },
+  {
+    id: "floor",
+    title: "Floor runs (1 or 2)",
+    options: [
+      { role: "oasis", label: "Oasis", hint: "Oasis 1 or 2", code: "OAS" },
+      { role: "trash", label: "Trash", hint: "Trash 1 or 2", code: "TSH" },
+      { role: "support", label: "Support", hint: "Support 1 or 2", code: "SUP" },
+    ],
+  },
+  {
+    id: "people",
+    title: "People & coverage",
+    options: [
+      { role: "job_coach", label: "Job Coach", hint: "One per night", code: "JC" },
+      { role: "step_up", label: "Step Up", hint: "One per night", code: "STEP" },
+    ],
+  },
 ];
 
 export interface AuxRolePickerProps {
@@ -23,6 +54,8 @@ export interface AuxRolePickerProps {
   onClose?: () => void;
   className?: string;
   initialCustomLabel?: string;
+  /** Highlight the card's current role in the menu. */
+  currentRole?: AuxRole;
 }
 
 const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
@@ -33,6 +66,7 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
   onClose,
   className = "",
   initialCustomLabel = "",
+  currentRole,
 }) => {
   const [mode, setMode] = React.useState<"roles" | "custom">("roles");
   const [customDraft, setCustomDraft] = React.useState(initialCustomLabel);
@@ -53,22 +87,41 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
     e.stopPropagation();
   };
 
+  const fontUi = {
+    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+  } as const;
+
   if (mode === "custom") {
     return (
       <div
         data-aux-role-picker
-        className={`sb-aux-role-picker flex flex-col gap-1.5 rounded-[4px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] p-2 shadow-lg min-w-[148px] ${className}`}
+        className={`sb-aux-role-picker w-[220px] rounded-xl border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] p-3 shadow-2xl shadow-black/15 ${className}`}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={stopKeyBubble}
         onKeyDownCapture={stopKeyBubble}
       >
-        <span
-          className="text-[8px] font-bold uppercase tracking-[1px] text-[#6B7280] dark:text-[#9CA3AF]"
-          style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-        >
-          Custom label
-        </span>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-[#9CA3AF]"
+            style={fontUi}
+          >
+            Custom label
+          </span>
+          <button
+            type="button"
+            className="text-[10px] font-semibold text-[#007AFF] dark:text-[#0A84FF]"
+            onClick={() => {
+              setMode("roles");
+              setCustomDraft(initialCustomLabel);
+            }}
+          >
+            ← Roles
+          </button>
+        </div>
+        <p className="mb-2 text-[10px] leading-snug text-[#9CA3AF]" style={fontUi}>
+          Free-form header (e.g. COFFEE RUN). Prefer a named role when it matches.
+        </p>
         <input
           ref={inputRef}
           type="text"
@@ -91,29 +144,17 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           placeholder="e.g. COFFEE RUN"
-          className="w-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.3px] rounded-[3px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-[#FAFAFA] dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-[#F2F2F4] outline-none focus:border-[#007AFF]"
-          style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+          className="mb-2 w-full rounded-lg border border-[#E5E7EB] dark:border-[#3A3A3C] bg-[#FAFAFA] dark:bg-[#2C2C2E] px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.3px] text-[#1C1C1E] dark:text-[#F2F2F4] outline-none focus:border-[#007AFF]"
+          style={fontUi}
         />
-        <div className="flex gap-1">
-          <button
-            type="button"
-            disabled={!customDraft.trim()}
-            className="flex-1 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] bg-[#1C1C1E] text-white disabled:opacity-40"
-            onClick={applyCustom}
-          >
-            Apply
-          </button>
-          <button
-            type="button"
-            className="px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#F3F4F6] dark:hover:bg-[#2C2C2E] text-[#6B7280] dark:text-[#9CA3AF]"
-            onClick={() => {
-              setMode("roles");
-              setCustomDraft(initialCustomLabel);
-            }}
-          >
-            Back
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={!customDraft.trim()}
+          className="w-full rounded-lg bg-[#1C1C1E] dark:bg-[#F2F2F4] px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.4px] text-white dark:text-[#1C1C1E] disabled:opacity-40"
+          onClick={applyCustom}
+        >
+          Apply custom label
+        </button>
       </div>
     );
   }
@@ -121,55 +162,137 @@ const AuxRolePicker: React.FC<AuxRolePickerProps> = ({
   return (
     <div
       data-aux-role-picker
-      className={`sb-aux-role-picker flex flex-col gap-1 rounded-[4px] border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] p-1 shadow-lg ${className}`}
+      role="menu"
+      aria-label="Choose aux role"
+      className={`sb-aux-role-picker w-[240px] max-h-[min(70vh,420px)] overflow-y-auto rounded-xl border border-[#E5E7EB] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] shadow-2xl shadow-black/15 ${className}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={stopKeyBubble}
       onKeyDownCapture={stopKeyBubble}
     >
-      <div className="flex flex-row flex-wrap gap-1 max-w-[200px]">
-        {ROLE_OPTIONS.map(({ role, label, code }) => (
-          <button
-            key={role}
-            type="button"
-            title={`${label} (${code})`}
-            className="text-left px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#F3F4F6] dark:hover:bg-[#2C2C2E] text-[#374151] dark:text-[#E5E7EB] whitespace-nowrap"
-            onClick={() => {
-              onSelect(role);
-              onClose?.();
-            }}
-          >
-            {label}
-            <span className="ml-1 font-semibold opacity-50 normal-case tracking-normal">
-              {code}
-            </span>
-          </button>
+      <div className="sticky top-0 z-[1] border-b border-[#F3F4F6] dark:border-[#2C2C2E] bg-white/95 dark:bg-[#1C1C1E]/95 px-3 py-2 backdrop-blur-sm">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6B7280] dark:text-[#9CA3AF]"
+          style={fontUi}
+        >
+          Set aux role
+        </p>
+        <p className="text-[10px] text-[#9CA3AF] leading-snug mt-0.5" style={fontUi}>
+          Pick a role for this card. Step Up & Job Coach are here under People.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 p-2">
+        {ROLE_GROUPS.map((group) => (
+          <div key={group.id}>
+            <div
+              className="px-1.5 pb-1 pt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#9CA3AF]"
+              style={fontUi}
+            >
+              {group.title}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {group.options.map((opt) => {
+                const selected = currentRole === opt.role;
+                const icon = AUX_ROLE_ICONS[opt.role] ?? "✦";
+                const accent = AUX_ROLE_COLORS[opt.role] ?? "#6B7280";
+                const code = AUX_ROLE_SHORT_CODE[opt.role] ?? opt.code;
+                return (
+                  <button
+                    key={opt.role}
+                    type="button"
+                    role="menuitem"
+                    aria-current={selected ? "true" : undefined}
+                    title={`${opt.label} (${code}) — ${opt.hint}`}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                      selected
+                        ? "bg-[#007AFF14] ring-1 ring-[#007AFF44]"
+                        : "hover:bg-[#F3F4F6] dark:hover:bg-[#2C2C2E]"
+                    }`}
+                    onClick={() => {
+                      onSelect(opt.role);
+                      onClose?.();
+                    }}
+                  >
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[13px] font-bold"
+                      style={{
+                        backgroundColor: `${accent}22`,
+                        color: accent,
+                      }}
+                      aria-hidden
+                    >
+                      {icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className="block text-[12px] font-bold text-[#1C1C1E] dark:text-[#F2F2F4] leading-tight"
+                        style={fontUi}
+                      >
+                        {opt.label}
+                      </span>
+                      <span
+                        className="block text-[10px] text-[#9CA3AF] leading-tight"
+                        style={fontUi}
+                      >
+                        {opt.hint}
+                      </span>
+                    </span>
+                    <span
+                      className="shrink-0 rounded-md bg-[#F3F4F6] dark:bg-[#2C2C2E] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[#6B7280] dark:text-[#9CA3AF]"
+                      style={fontUi}
+                    >
+                      {code}
+                    </span>
+                    {selected ? (
+                      <span className="text-[11px] text-[#007AFF]" aria-hidden>
+                        ✓
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
+      </div>
+
+      <div className="border-t border-[#F3F4F6] dark:border-[#2C2C2E] p-2 flex flex-col gap-0.5">
         {onCustomLabel ? (
           <button
             type="button"
-            className="text-left px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#F3F4F6] dark:hover:bg-[#2C2C2E] text-[#007AFF] dark:text-[#0A84FF] whitespace-nowrap border border-dashed border-[#007AFF44]"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-lg border border-dashed border-[#007AFF55] px-2 py-1.5 text-left text-[11px] font-bold text-[#007AFF] dark:text-[#0A84FF] hover:bg-[#007AFF0A]"
+            style={fontUi}
             onClick={() => {
               setCustomDraft(initialCustomLabel);
               setMode("custom");
             }}
           >
-            Custom
+            <span className="text-[14px] leading-none">✎</span>
+            <span>
+              Custom label…
+              <span className="block text-[9px] font-medium opacity-70 normal-case tracking-normal">
+                Only if no role above fits
+              </span>
+            </span>
+          </button>
+        ) : null}
+        {showClearRole && onClearRole ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="mt-0.5 w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-bold text-[#DC2626] dark:text-[#F87171] hover:bg-[#FEE2E2] dark:hover:bg-[#3A2020]"
+            style={fontUi}
+            onClick={() => {
+              onClearRole();
+              onClose?.();
+            }}
+          >
+            Clear role
           </button>
         ) : null}
       </div>
-      {showClearRole && onClearRole ? (
-        <button
-          type="button"
-          className="mt-0.5 w-full text-left px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] rounded-[2px] hover:bg-[#FEE2E2] dark:hover:bg-[#3A2020] text-[#DC2626] dark:text-[#F87171] border-t border-[#E5E7EB] dark:border-[#3A3A3C] pt-1.5"
-          onClick={() => {
-            onClearRole();
-            onClose?.();
-          }}
-        >
-          Clear role
-        </button>
-      ) : null}
     </div>
   );
 };
