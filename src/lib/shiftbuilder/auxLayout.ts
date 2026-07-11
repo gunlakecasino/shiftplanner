@@ -383,8 +383,7 @@ export function coerceMislabeledAuxRoles(defs: AuxDef[]): AuxDef[] {
     // Only lift support/blank shells that were clearly renamed to a single-instance role.
     if (
       (inferred === "step_up" || inferred === "job_coach") &&
-      (d.role === "support" || d.role === "blank") &&
-      d.role !== inferred
+      (d.role === "support" || d.role === "blank")
     ) {
       next = applyAuxRole(next, d.key, inferred);
     }
