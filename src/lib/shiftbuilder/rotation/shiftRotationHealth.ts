@@ -489,10 +489,11 @@ export function computeShiftRotationHealth(
   };
 }
 
-/** Pure helper: given the recent 7-night history map and a TM + target slot, return how many
- * times the TM appears in that slot's *repeat area* in the window (this-week / recent repeats).
- * Area-merged via placementRepeatKey (MRR8/WRR8 = RR8) to match the engine's hard gate.
- * Does not include "tonight" — caller adds +1 when the current assignment is for this TM+slot.
+/**
+ * @deprecated Prefer getTmWeekRepeatForSlotThroughNight.
+ * Returns ALL matching week-map rows (may include "tonight" if the map was built
+ * with the full grave week including the selected day). Callers must NOT add +1
+ * for tonight without checking nightDate === throughIso.
  */
 export function getTmThisWeekRepeatForSlot(
   weeklyRecentHistory: Map<string, Array<{ nightDate: string; slotKey: string }>> | undefined,

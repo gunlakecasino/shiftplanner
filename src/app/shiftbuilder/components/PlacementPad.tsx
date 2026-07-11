@@ -2,16 +2,19 @@
 
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
-import { X, Plus, Sparkles, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { X, Plus, Sparkles } from "lucide-react";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
-import { premiumSpring, premiumPresenceReduced } from "@/lib/premiumSpring";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import { normalizeGender, isEligibleForSlot } from "@/lib/shiftbuilder/placement";
+import { normalizeGender } from "@/lib/shiftbuilder/placement";
 import type { PlacementPadInsight } from "@/lib/shiftbuilder/placementPadInsightSchema";
+import {
+  fitVerdictLabel,
+  fitVerdictStyles,
+} from "@/lib/shiftbuilder/placementPadInsightSchema";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { computeSlotPlacementFit } from "./placementFitForSlot";
-import { getTmThisWeekRepeatForSlot } from "./shiftRotationHealth";
+import { getTmWeekRepeatForSlotThroughNight } from "./shiftRotationHealth";
 import type { PlacementInsightMode } from "@/lib/shiftbuilder/engineInsightForPlacement";
 import {
   ZONE_DEFS,
@@ -22,7 +25,6 @@ import {
   type BreakGroup,
 } from "@/lib/shiftbuilder/constants";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import { getTmPlacementHistory } from "@/lib/shiftbuilder/data";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
@@ -39,6 +41,7 @@ import {
   getDaysSinceForKey,
   formatPlacementUiLabel,
   nightIsoFromDate,
+  buildMatrixSlotKeysForTm,
   computePlacementRotationBasics,
   formatPlacementRotationDisplay,
   formatRotationBriefForAnalyst,
@@ -46,6 +49,7 @@ import {
   type PlacementRotationDisplay,
   type PlacementTmProfile,
 } from "./placementPadHelpers";
+import { memberToPlacementProfile } from "./placementFitForSlot";
 import { postEngineInsight } from "../lib/engineInsightClient";
 import { BuilderLoadingLine } from "./builderPrimitives";
 
@@ -200,30 +204,197 @@ function InlineCoverage({ sourceKey, auxDefs, onPick, onCancel }: { sourceKey: s
   );
 }
 
-function InsightsRow({ insight, detailsOpen, onToggle }: { insight: { body: string; provenance?: string }; detailsOpen?: boolean; onToggle?: () => void }) {
+/** Engine baseline + optional xAI light/deep insight for the pad. */
+function FitIntelBlock({
+  prerendered,
+  loading,
+  detailsOpen,
+  structured,
+  text,
+  assigned,
+  onMoreDetails,
+  onCollapseDetails,
+  rotationGapsLine,
+  swapLines,
+  weekRepeatLine,
+}: {
+  prerendered: PrerenderedPlacementFit;
+  loading: boolean;
+  detailsOpen: boolean;
+  structured: PlacementPadInsight | null;
+  text: string | null;
+  assigned: boolean;
+  onMoreDetails: () => void;
+  onCollapseDetails: () => void;
+  rotationGapsLine?: string | null;
+  swapLines?: string[];
+  weekRepeatLine?: string | null;
+}) {
+  const styles = fitVerdictStyles(prerendered.fitVerdict);
+  const xaiOverrides =
+    !!structured?.fitVerdict &&
+    !!structured?.fitSummary &&
+    (structured.fitVerdict !== prerendered.fitVerdict ||
+      structured.fitSummary.trim() !== prerendered.fitSummary.trim());
+  const xaiStyles = structured?.fitVerdict
+    ? fitVerdictStyles(structured.fitVerdict)
+    : styles;
+
   return (
-    <div className="border-t border-b border-gray-100 -mx-5 px-5">
-      <button onClick={onToggle} className="flex items-center gap-2 w-full py-2.5 text-left group">
-        <Sparkles className="w-3 h-3 text-gray-300 flex-shrink-0 group-hover:text-[#007AFF] transition-colors" />
-        <span className="text-[9px] font-bold tracking-[0.12em] uppercase text-gray-400 flex-shrink-0">Insights</span>
-        <span className="flex-1 text-[11px] text-gray-500 truncate leading-none">{insight.body}</span>
-        <motion.div animate={{ rotate: detailsOpen ? 90 : 0 }} className="flex-shrink-0">
-          <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400" />
-        </motion.div>
-      </button>
-      <AnimatePresence>
-        {detailsOpen && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="pb-3 space-y-1.5">
-              <p className="text-[13px] font-semibold text-gray-800 leading-snug">{insight.body}</p>
-              {insight.provenance && <p className="text-[11px] text-gray-400">◇ {insight.provenance}</p>}
+    <div className="rounded-2xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
+      <div
+        className="px-3 py-2.5 border-b border-black/[0.04]"
+        style={{ background: styles.bg }}
+      >
+        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${styles.badge}`}
+          >
+            {fitVerdictLabel(prerendered.fitVerdict)}
+          </span>
+          <span className="text-[8px] font-medium uppercase tracking-wide text-white/70">
+            rotation fit
+          </span>
+          {typeof prerendered.healthPoints === "number" && (
+            <span className="ml-auto text-[10px] font-semibold tabular-nums text-white/90">
+              {prerendered.healthPoints.toFixed(0)}pt
+            </span>
+          )}
+        </div>
+        <p className="text-[12px] font-semibold leading-snug" style={{ color: styles.text }}>
+          {prerendered.fitSummary}
+        </p>
+        {prerendered.fitFactLine ? (
+          <p className="mt-0.5 text-[10px] leading-snug text-white/75 tabular-nums">
+            {prerendered.fitFactLine}
+          </p>
+        ) : null}
+      </div>
+
+      {(weekRepeatLine || rotationGapsLine || (swapLines && swapLines.length > 0)) && (
+        <div className="px-3 py-2 space-y-1 text-[11px] leading-snug text-neutral-700 border-b border-black/[0.04]">
+          {weekRepeatLine && (
+            <p className="font-semibold text-amber-800">{weekRepeatLine}</p>
+          )}
+          {rotationGapsLine && <p>{rotationGapsLine}</p>}
+          {swapLines && swapLines.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-neutral-400 mb-0.5">
+                Swap lanes
+              </p>
+              {swapLines.map((line) => (
+                <p key={line} className="text-[10.5px] text-neutral-600">
+                  {line}
+                </p>
+              ))}
             </div>
-          </motion.div>
+          )}
+        </div>
+      )}
+
+      {structured?.headline && (
+        <div className="px-3 py-2 border-b border-black/[0.04] bg-white/80">
+          <div className="flex items-center gap-1 mb-0.5">
+            <Sparkles className="w-3 h-3 text-[#2F5C7C]" />
+            <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#2F5C7C]/90">
+              xAI
+            </span>
+          </div>
+          <p className="text-[12px] font-semibold text-neutral-900 leading-snug">
+            {structured.headline}
+          </p>
+          {xaiOverrides && structured.fitSummary && (
+            <div
+              className="mt-1.5 rounded-lg px-2 py-1"
+              style={{ background: xaiStyles.bg }}
+            >
+              <span className={`text-[8px] font-bold uppercase ${xaiStyles.badge} rounded-full px-1.5 py-0.5`}>
+                {fitVerdictLabel(structured.fitVerdict)}
+              </span>
+              <p className="mt-0.5 text-[11px] font-semibold" style={{ color: xaiStyles.text }}>
+                {structured.fitSummary}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="px-3 py-2 flex items-center gap-2">
+        {!detailsOpen ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoreDetails();
+            }}
+            disabled={loading || !assigned}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#2F5C7C]/25 text-[#2F5C7C] bg-white hover:bg-[#F8FAFC] disabled:opacity-50"
+          >
+            {loading ? "Analyzing…" : structured?.headline ? "Full reasoning" : "xAI insight"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCollapseDetails();
+            }}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-neutral-200 text-neutral-600 bg-white"
+          >
+            Collapse
+          </button>
         )}
-      </AnimatePresence>
+        {loading && detailsOpen && (
+          <BuilderLoadingLine className="text-[10px]">Building analyst notes</BuilderLoadingLine>
+        )}
+      </div>
+
+      {detailsOpen && structured && (
+        <div className="px-3 pb-3 space-y-2 text-[11px] leading-snug text-neutral-700">
+          {structured.whyTonight && (
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Tonight</p>
+              <p className="mt-0.5">{structured.whyTonight}</p>
+            </div>
+          )}
+          {structured.rotationNote && (
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Rotation</p>
+              <p className="mt-0.5">{structured.rotationNote}</p>
+            </div>
+          )}
+          {(structured.swapRecommendations?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Swap lanes</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {(structured.swapRecommendations ?? []).map((s, i) => (
+                  <li key={i}>
+                    {s.priority === "high" ? "★ " : "· "}
+                    {s.summary}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(structured.watchouts?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-wide text-amber-700/80">Watchouts</p>
+              <ul className="mt-0.5 list-disc pl-3">
+                {(structured.watchouts ?? []).map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {text && !structured.whyTonight && (
+            <p className="whitespace-pre-wrap text-neutral-600">{text}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
 
 /* ── Original supporting types / constants (kept for compatibility) ───────── */
 export type PlacementPadAnchor = "left" | "right" | "bottom";
@@ -400,23 +571,34 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
   const usePortal = !isDock && !!hostId && !!portalStyle;
 
-  const handleMoreDetails = React.useCallback(() => {
-    setAnalystDetailsOpen(true);
-    // In real usage the original runPlacementAnalyst would be called here
-  }, []);
-
-  // Reuse original history + rotation + xAI effects (abbreviated for space but kept in real file)
+  // Fetch current TM placement history via session-gated batch API (same source as fit chips).
   useEffect(() => {
-    setCoverageMode(false); setAssignMode(false); setAssignConfirmed(false);
-    setRotationDisplay(null); setDeepInsight(null); setInsightStructured(null);
-    setAnalystDetailsOpen(false); setPadGoodExamples([]); setRotationBasics(null);
-    rotationSigRef.current = null; setTaskInput(""); setSweeperOpen(false); setMatrixExpanded(false); setEvidenceOpen(false);
-  }, [slotKey, selectedDay.date, insightsEnabled]);
-
-  useEffect(() => {
-    if (!a.tmId) { setPadHistory(null); setPadHistoryLoading(false); return; }
+    if (!a.tmId) {
+      setPadHistory(null);
+      setPadHistoryLoading(false);
+      return;
+    }
+    let cancelled = false;
     setPadHistoryLoading(true);
-    getTmPlacementHistory(a.tmId, 90).then(h => { setPadHistory(h); setPadHistoryLoading(false); }).catch(() => { setPadHistory(null); setPadHistoryLoading(false); });
+    (async () => {
+      try {
+        const res = await fetch("/api/shiftbuilder/placement-histories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tmIds: [a.tmId], days: 90 }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        setPadHistory((data.histories as Record<string, ZoneDetailEntry | null>)?.[a.tmId!] ?? null);
+      } catch {
+        if (!cancelled) setPadHistory(null);
+      } finally {
+        if (!cancelled) setPadHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [slotKey, a.tmId]);
 
   const padMatrixFacts = React.useMemo(() => {
@@ -428,42 +610,338 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const spreadCountFor = (ui: string) => padMatrixFacts.spreadCounts.get(ui) ?? 0;
   const last5Sequence = padMatrixFacts.last5Sequence;
+  const spreadKeys = padMatrixFacts.spreadKeys;
 
   const rrLocs = RR_DEFS.flatMap((d) => {
     const g = normalizeGender(members.find((m: any) => m.id === a.tmId || m.tmId === a.tmId)?.gender);
-    const sides: any[] = [];
+    const sides: { ui: string; label: string }[] = [];
     if (!g || g === "M") sides.push({ ui: `MRR${d.num}`, label: `${d.num}M` });
     if (!g || g === "F") sides.push({ ui: `WRR${d.num}`, label: `${d.num}W` });
     return sides;
   });
-  const auxLocs = auxDefs.filter(d => !d.key.startsWith("SP")).map(d => ({ ui: d.key, label: formatPlacementUiLabel(d.key, d.label || d.key) }));
+  const auxLocs = auxDefs
+    .filter((d) => !d.key.startsWith("SP") && d.role !== "blank" && d.role !== "support")
+    .map((d) => ({ ui: d.key, label: formatPlacementUiLabel(d.key, d.label || d.key) }));
 
-  const prerenderedFit = React.useMemo(() => computeSlotPlacementFit({
-    slotKey, assignments, isDraftMode, draftAssignments, members: members as any, auxDefs, currentIso,
-    histories: padHistory && a.tmId ? { [a.tmId]: padHistory } : {}, historiesLoading: padHistoryLoading,
-    weeklyRecentHistory,
-  }), [slotKey, assignments, isDraftMode, draftAssignments, members, auxDefs, currentIso, padHistory, a.tmId, padHistoryLoading, weeklyRecentHistory]);
+  const matrixSlotKeys = React.useMemo(
+    () => buildMatrixSlotKeysForTm(a.tmId, members as any[], auxDefs),
+    [a.tmId, members, auxDefs],
+  );
+
+  const boardSig = React.useMemo(
+    () =>
+      Object.entries(assignments)
+        .filter(([, row]) => row?.tmId)
+        .map(([k, row]) => `${k}:${row!.tmId}`)
+        .sort()
+        .join("|"),
+    [assignments],
+  );
+
+  const padHistorySig = React.useMemo(
+    () =>
+      padHistory
+        ? `${padHistory.tmId}:${padHistory.lastDate}:${padHistory.totalAssignments}`
+        : "",
+    [padHistory?.tmId, padHistory?.lastDate, padHistory?.totalAssignments],
+  );
+
+  const currentPlacementTm = React.useMemo(
+    () => memberToPlacementProfile(members as Array<Record<string, unknown>>, a.tmId),
+    [members, a.tmId],
+  );
+
+  // Rotation basics + swap lanes (needs other board TM histories).
+  useEffect(() => {
+    if (!a.tmId || !a.tmName) {
+      setRotationBasics(null);
+      setRotationDisplay(null);
+      rotationSigRef.current = null;
+      return;
+    }
+    if (padHistoryLoading || !padHistory) return;
+
+    const sig = `${slotKey}|${a.tmId}|${currentIso}|${boardSig}|${padHistorySig}`;
+    if (rotationSigRef.current === sig) return;
+
+    let cancelled = false;
+    const run = async () => {
+      const otherIds = [
+        ...new Set(
+          Object.values(assignments)
+            .map((row: { tmId?: string }) => row?.tmId)
+            .filter((id): id is string => !!id && id !== a.tmId),
+        ),
+      ];
+
+      let histories: Record<string, ZoneDetailEntry | null> = {};
+      try {
+        if (otherIds.length > 0) {
+          const res = await fetch("/api/shiftbuilder/placement-histories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tmIds: otherIds.slice(0, 24), days: PLACEMENT_SPREAD_NIGHTS }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            histories = data.histories ?? {};
+          }
+        }
+      } catch {
+        /* rotation still works without cross-board histories */
+      }
+      if (cancelled) return;
+
+      const otherTmProfiles: Record<string, PlacementTmProfile | null> = {};
+      for (const row of Object.values(assignments)) {
+        const id = (row as { tmId?: string })?.tmId;
+        if (!id || id === a.tmId) continue;
+        otherTmProfiles[id] = memberToPlacementProfile(
+          members as Array<Record<string, unknown>>,
+          id,
+        );
+      }
+
+      const basics = computePlacementRotationBasics(
+        padHistory,
+        slotKey,
+        a.tmId!,
+        matrixSlotKeys,
+        assignments,
+        histories,
+        currentIso,
+        PLACEMENT_SPREAD_NIGHTS,
+        currentPlacementTm,
+        otherTmProfiles,
+      );
+      rotationSigRef.current = sig;
+      setRotationBasics(basics);
+      setRotationDisplay(
+        formatPlacementRotationDisplay(a.tmName!, slotKey, basics, PLACEMENT_SPREAD_NIGHTS),
+      );
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    a.tmId,
+    a.tmName,
+    padHistoryLoading,
+    padHistorySig,
+    slotKey,
+    currentIso,
+    boardSig,
+    matrixSlotKeys,
+    assignments,
+    members,
+    padHistory,
+    currentPlacementTm,
+  ]);
+
+  // Prefer board chip when present (same granular pipeline); fall back to pad-local score.
+  const localPrerenderedFit = React.useMemo(
+    () =>
+      computeSlotPlacementFit({
+        slotKey,
+        assignments,
+        isDraftMode,
+        draftAssignments,
+        members: members as any,
+        auxDefs,
+        currentIso,
+        histories: padHistory && a.tmId ? { [a.tmId]: padHistory } : {},
+        historiesLoading: padHistoryLoading,
+        weeklyRecentHistory,
+      }),
+    [
+      slotKey,
+      assignments,
+      isDraftMode,
+      draftAssignments,
+      members,
+      auxDefs,
+      currentIso,
+      padHistory,
+      a.tmId,
+      padHistoryLoading,
+      weeklyRecentHistory,
+    ],
+  );
+
+  // Board chips use full-board histories (swap-aware). Prefer that when parent provided it.
+  const prerenderedFit: PrerenderedPlacementFit =
+    boardPrerenderedFit ?? localPrerenderedFit;
+
+  const weekRepeatTotal = a.tmId
+    ? getTmWeekRepeatForSlotThroughNight(
+        weeklyRecentHistory,
+        a.tmId,
+        slotKey,
+        currentIso,
+        true, // count tonight if assigned and not already in map
+      )
+    : 0;
+  const weekRepeatLine =
+    weekRepeatTotal > 1
+      ? weekRepeatTotal >= 3
+        ? `This week: ${weekRepeatTotal}× on ${label} (real bad — rotate out)`
+        : `This week: ${weekRepeatTotal}× on ${label} (policy max 1)`
+      : null;
+
+  const buildInsightContext = React.useCallback(
+    (mode: PlacementInsightMode) => {
+      const prov = (assignments[slotKey] as { provenance?: { rationale?: string; fairnessSignals?: Record<string, number | string> } })?.provenance || {};
+      return {
+        slotKey,
+        tmName: a.tmName || "Unassigned",
+        mode,
+        prerenderVerdict: prerenderedFit.fitVerdict,
+        prerenderSummary: prerenderedFit.fitSummary,
+        prerenderFactLine: prerenderedFit.fitFactLine,
+        isRR: slotKey.startsWith("MRR") || slotKey.startsWith("WRR"),
+        rrSide: slotKey.startsWith("MRR")
+          ? "mens"
+          : slotKey.startsWith("WRR")
+            ? "womens"
+            : null,
+        rationale: prov.rationale,
+        fairnessSignals: prov.fairnessSignals,
+        recentPlacements: last5Sequence.filter(Boolean).join(" → ") || undefined,
+        slotSpecificHistory:
+          padMatrixFacts.slotSpread > 0
+            ? `${padMatrixFacts.slotSpread}× in last ${PLACEMENT_SPREAD_NIGHTS} nights`
+            : `Not in last ${PLACEMENT_SPREAD_NIGHTS}-night spread`,
+        rotationBrief: formatRotationBriefForAnalyst(rotationDisplay),
+        rotationGapsLine: rotationDisplay?.gapsLine,
+        rotationSwapLines: rotationDisplay?.swapLines,
+        spreadPlaced: spreadKeys.slice(0, 24).join(", ") || undefined,
+        spreadGaps: matrixSlotKeys.filter((k) => !spreadKeys.includes(k)).slice(0, 24).join(", ") || undefined,
+        tmThisWeekRepeat:
+          weekRepeatTotal > 1
+            ? `${a.tmName || "TM"} repeat this week: ${weekRepeatTotal}× in ${label}`
+            : undefined,
+        contextSig: `${slotKey}|${a.tmId}|${padHistorySig}|${boardSig}|${prerenderedFit.fitVerdict}`,
+      };
+    },
+    [
+      slotKey,
+      a.tmName,
+      a.tmId,
+      prerenderedFit,
+      last5Sequence,
+      padMatrixFacts.slotSpread,
+      rotationDisplay,
+      spreadKeys,
+      matrixSlotKeys,
+      weekRepeatTotal,
+      label,
+      padHistorySig,
+      boardSig,
+      assignments,
+    ],
+  );
+
+  const runPlacementAnalyst = React.useCallback(
+    async (mode: PlacementInsightMode) => {
+      const reqId = ++analystRequestRef.current;
+      setDeepInsightLoading(true);
+      try {
+        const data = await postEngineInsight(buildInsightContext(mode));
+        if (analystRequestRef.current !== reqId) return;
+        setDeepInsight(data.text || null);
+        setInsightStructured(data.structured ?? null);
+        setInsightCached(!!data.cached);
+        if (data && !data.cached && data.usage) {
+          try {
+            useShiftBuilderStore.getState().addAiUsage(data.usage);
+          } catch {
+            /* optional usage tracker */
+          }
+        }
+      } catch (err) {
+        if (analystRequestRef.current !== reqId) return;
+        setDeepInsight(err instanceof Error ? err.message : "Analyst unavailable.");
+        setInsightStructured(null);
+      } finally {
+        if (analystRequestRef.current === reqId) setDeepInsightLoading(false);
+      }
+    },
+    [buildInsightContext],
+  );
+
+  const handleMoreDetails = React.useCallback(() => {
+    setAnalystDetailsOpen(true);
+    void runPlacementAnalyst(a.tmName ? "deep" : "assignee");
+  }, [a.tmName, runPlacementAnalyst]);
+
+  const lightRunRef = useRef(0);
+  const runLightDetermination = React.useCallback(async () => {
+    if (!insightsEnabled || !a.tmName) return;
+    const reqId = ++lightRunRef.current;
+    try {
+      const data = await postEngineInsight(buildInsightContext("headline"));
+      if (lightRunRef.current !== reqId) return;
+      if (data.structured?.headline) {
+        setInsightStructured((prev) => (prev?.headline ? prev : data.structured ?? null));
+        setInsightCached(!!data.cached);
+      }
+      if (data && !data.cached && data.usage) {
+        try {
+          useShiftBuilderStore.getState().addAiUsage(data.usage);
+        } catch {
+          /* optional */
+        }
+      }
+    } catch {
+      /* prerender + rotation remain authoritative */
+    }
+  }, [a.tmName, buildInsightContext, insightsEnabled]);
+
+  useEffect(() => {
+    if (!insightsEnabled) return;
+    if (!a.tmName || analystDetailsOpen || insightStructured?.headline || padHistoryLoading) return;
+    const t = setTimeout(() => {
+      void runLightDetermination();
+    }, 80);
+    return () => clearTimeout(t);
+  }, [
+    a.tmName,
+    analystDetailsOpen,
+    insightStructured?.headline,
+    padHistoryLoading,
+    runLightDetermination,
+    insightsEnabled,
+    padHistorySig,
+  ]);
 
   const sweeperOptions = [
-    { label: 'Sweep 5/8/HL', full: 'Sweep 5/8/HL' },
-    { label: 'Sweep 9/10/SR', full: 'Sweep 9/10/SR' },
+    { label: "Sweep 5/8/HL", full: "Sweep 5/8/HL" },
+    { label: "Sweep 9/10/SR", full: "Sweep 9/10/SR" },
   ];
 
-  const rrCount = rrLocs.length;
-  const zoneCount = ZONE_DEFS.length;
+  const rrWorkedCount = spreadKeys.filter((k) => k.startsWith("MRR") || k.startsWith("WRR")).length;
+  const zoneWorkedCount = spreadKeys.filter((k) => /^Z\d+$/.test(k)).length;
   const z9Days = getDaysSinceForKey(padHistory, "Z9", currentIso);
   const z9srDays = getDaysSinceForKey(padHistory, "Z9SR", currentIso);
 
   const last5Pills: Array<string | null> = [...last5Sequence];
   while (last5Pills.length < LAST5_COUNT) last5Pills.push(null);
 
-  const handlePickTm = useCallback((tm: TmEntry) => {
-    if (!onAssign) return;
-    onAssign(slotKey, tm.tmId, tm.tmName);
-    tabletHaptic(16);
-    setAssignConfirmed(true);
-    setTimeout(() => { setAssignMode(false); setAssignConfirmed(false); }, 700);
-  }, [slotKey, onAssign]);
+  const handlePickTm = useCallback(
+    (tm: TmEntry) => {
+      if (!onAssign) return;
+      onAssign(slotKey, tm.tmId, tm.tmName);
+      tabletHaptic(16);
+      setAssignConfirmed(true);
+      setTimeout(() => {
+        setAssignMode(false);
+        setAssignConfirmed(false);
+      }, 700);
+    },
+    [slotKey, onAssign],
+  );
 
   const handleInlineAddTask = () => {
     const lbl = taskInput.trim();
@@ -472,9 +950,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     void onAddTask(slotKey, lbl);
     setTimeout(() => taskInputRef.current?.focus(), 0);
   };
-
-  // Light xAI + rotation effects are kept from original (abbreviated here for the port — full logic lives in the production file)
-  const runLightDetermination = React.useCallback(async () => { /* full original impl kept in practice */ }, []);
 
   // Build refined data
   const refinedName = a.tmName || "Unassigned";
@@ -511,13 +986,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     })),
   ];
 
-  const refinedLastFive = last5Sequence.map((ui) => {
-    const label = formatPlacementUiLabel(ui);
-    const color = getSlotAccent(ui);
-    return { label, color };
+  const refinedLastFive = last5Pills.map((ui) => {
+    if (!ui) return { label: "—", color: "#C7C7CC" };
+    return { label: formatPlacementUiLabel(ui), color: getSlotAccent(ui) };
   });
-
-  const refinedAi = insightStructured?.headline ? { body: insightStructured.headline, provenance: rotationDisplay?.gapsLine || "spread • gaps • week" } : undefined;
 
   const portalStyleLocal = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
   const usePortalLocal = !isDock && !!hostId && !!portalStyleLocal;
@@ -712,21 +1184,46 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </div>
             )}
 
-            {insightsEnabled && insightStructured?.headline && (
-              <InsightsRow insight={{ body: insightStructured.headline, provenance: "spread • gaps • training" }} detailsOpen={analystDetailsOpen} onToggle={handleMoreDetails} />
+            {(showIntelPane || !isDock) && (
+              <>
+                {padHistoryLoading && a.tmId ? (
+                  <BuilderLoadingLine className="text-[11px]">Loading rotation history</BuilderLoadingLine>
+                ) : (
+                  <FitIntelBlock
+                    prerendered={prerenderedFit}
+                    loading={deepInsightLoading}
+                    detailsOpen={analystDetailsOpen}
+                    structured={insightStructured}
+                    text={deepInsight}
+                    assigned={!!a.tmName}
+                    onMoreDetails={handleMoreDetails}
+                    onCollapseDetails={() => {
+                      setAnalystDetailsOpen(false);
+                      setDeepInsight(null);
+                    }}
+                    rotationGapsLine={rotationDisplay?.gapsLine}
+                    swapLines={rotationDisplay?.swapLines}
+                    weekRepeatLine={weekRepeatLine}
+                  />
+                )}
+              </>
             )}
 
-            {/* Matrix - compact */}
+            {/* Matrix — full gender-eligible surface (no truncation) */}
             <div>
               <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
 
               <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
-                <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span><span className="font-bold text-gray-800">{rrLocs.length}</span>
+                <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span>
+                <span className="font-bold text-gray-800">{rrWorkedCount}</span>
                 <span className="text-gray-300 mx-0.5">|</span>
-                <span className="text-gray-500">Zone</span><span className="font-bold text-gray-800">{ZONE_DEFS.length}</span>
+                <span className="text-gray-500">Zone</span>
+                <span className="font-bold text-gray-800">{zoneWorkedCount}</span>
                 <span className="text-gray-300 mx-0.5">|</span>
-                <span className="text-gray-500">Z9</span><span className="font-semibold text-gray-500">{z9Days}</span>
-                <span className="text-gray-500">Z9SR</span><span className="font-semibold text-gray-500">{z9srDays}</span>
+                <span className="text-gray-500">Z9</span>
+                <span className="font-semibold text-gray-500">{z9Days}</span>
+                <span className="text-gray-500">Z9SR</span>
+                <span className="font-semibold text-gray-500">{z9srDays}</span>
               </div>
 
               <div className="flex items-center gap-2 mb-2 flex-wrap text-[9px] text-gray-500">
@@ -737,7 +1234,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </div>
 
               <div className="grid grid-cols-5 gap-1">
-                {refinedZones.slice(0, 20).map((item) => (
+                {refinedZones.map((item) => (
                     <div
                       key={item.id}
                       className="rounded-xl py-[5px] text-[10px] font-semibold text-center transition-colors"

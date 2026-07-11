@@ -5,7 +5,8 @@ import { useWeekLensFilters, useWeekLensSearch, useWeekLensSidebarOpen } from ".
 import { buildOverviewSlotRows, layoutForWeekly } from "../print/printOverviewTables";
 import type { OverviewNight, OverviewSlotRow } from "../print/printOverviewTables";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
-import { getTmThisWeekRepeatForSlot } from "./shiftRotationHealth";
+import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+import { getTmWeekRepeatForSlotThroughNight } from "./shiftRotationHealth";
 
 /**
  * LiveWeeklyOverviewArtboard
@@ -665,7 +666,7 @@ export default function LiveWeeklyOverviewArtboard({
                 </div>
 
                 <div style={isSidebarCompact ? { display: 'flex', flex: 1, maxWidth: '87%' } : { display: 'flex', flex: 1 }}>
-                {nightDefs.map(({ night }, colIdx) => {
+                {nightDefs.map(({ night, def }, colIdx) => {
                   const asgn = night.assignments[slot.key];
                   const tmId = asgn?.tmId;
                   const name = asgn?.tmName ?? "—";
@@ -675,13 +676,23 @@ export default function LiveWeeklyOverviewArtboard({
                   const repeatCount = tmId ? (repeatCounts.get(`${tmId}:${slot.key}`) || 0) : 0;
                   const isRepeated = repeatCount > 1;
 
-                  // Deeper health integration: prior recent history on this exact slot (for "effective this week" repeats).
-                  // repeatCount = multiples within the current planned week.
-                  // priorCount = matches in weeklyRecentHistory (prior days/weeks).
-                  // totalThisWeek drives titles and consequence surfacing; plan repeat still drives the primary oval.
-                  const priorInfo = tmId ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, tmId, slot.key) : { count: 0, dates: [] as string[] };
-                  const priorCount = priorInfo.count;
-                  const totalThisWeek = repeatCount + priorCount;
+                  // Through-night week repeat for THIS cell's night. Map already includes built days —
+                  // do not +1 (avoids double-count when tonight is already present).
+                  const cellNightIso =
+                    def?.date instanceof Date && !Number.isNaN(def.date.getTime())
+                      ? formatLocalDateISO(def.date)
+                      : "";
+                  const totalThisWeek =
+                    tmId && cellNightIso
+                      ? getTmWeekRepeatForSlotThroughNight(
+                          weeklyRecentHistory,
+                          tmId,
+                          slot.key,
+                          cellNightIso,
+                          false,
+                        )
+                      : 0;
+                  const priorCount = Math.max(0, totalThisWeek - (tmId ? 1 : 0));
 
                   let cellBg = "transparent";
                   if (isFocused) {
@@ -964,7 +975,7 @@ export default function LiveWeeklyOverviewArtboard({
                 </div>
 
                 <div style={isSidebarCompact ? { display: 'flex', flex: 1, maxWidth: '87%' } : { display: 'flex', flex: 1 }}>
-                {nightDefs.map(({ night }, colIdx) => {
+                {nightDefs.map(({ night, def }, colIdx) => {
                   const asgn = night.assignments[slot.key];
                   const tmId = asgn?.tmId;
                   const name = asgn?.tmName ?? "—";
@@ -974,13 +985,23 @@ export default function LiveWeeklyOverviewArtboard({
                   const repeatCount = tmId ? (repeatCounts.get(`${tmId}:${slot.key}`) || 0) : 0;
                   const isRepeated = repeatCount > 1;
 
-                  // Deeper health integration: prior recent history on this exact slot (for "effective this week" repeats).
-                  // repeatCount = multiples within the current planned week.
-                  // priorCount = matches in weeklyRecentHistory (prior days/weeks).
-                  // totalThisWeek drives titles and consequence surfacing; plan repeat still drives the primary oval.
-                  const priorInfo = tmId ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, tmId, slot.key) : { count: 0, dates: [] as string[] };
-                  const priorCount = priorInfo.count;
-                  const totalThisWeek = repeatCount + priorCount;
+                  // Through-night week repeat for THIS cell's night. Map already includes built days —
+                  // do not +1 (avoids double-count when tonight is already present).
+                  const cellNightIso =
+                    def?.date instanceof Date && !Number.isNaN(def.date.getTime())
+                      ? formatLocalDateISO(def.date)
+                      : "";
+                  const totalThisWeek =
+                    tmId && cellNightIso
+                      ? getTmWeekRepeatForSlotThroughNight(
+                          weeklyRecentHistory,
+                          tmId,
+                          slot.key,
+                          cellNightIso,
+                          false,
+                        )
+                      : 0;
+                  const priorCount = Math.max(0, totalThisWeek - (tmId ? 1 : 0));
 
                   let cellBg = "transparent";
                   if (isFocused) {
@@ -1263,7 +1284,7 @@ export default function LiveWeeklyOverviewArtboard({
                 </div>
 
                 <div style={isSidebarCompact ? { display: 'flex', flex: 1, maxWidth: '87%' } : { display: 'flex', flex: 1 }}>
-                {nightDefs.map(({ night }, colIdx) => {
+                {nightDefs.map(({ night, def }, colIdx) => {
                   const asgn = night.assignments[slot.key];
                   const tmId = asgn?.tmId;
                   const name = asgn?.tmName ?? "—";
@@ -1273,13 +1294,23 @@ export default function LiveWeeklyOverviewArtboard({
                   const repeatCount = tmId ? (repeatCounts.get(`${tmId}:${slot.key}`) || 0) : 0;
                   const isRepeated = repeatCount > 1;
 
-                  // Deeper health integration: prior recent history on this exact slot (for "effective this week" repeats).
-                  // repeatCount = multiples within the current planned week.
-                  // priorCount = matches in weeklyRecentHistory (prior days/weeks).
-                  // totalThisWeek drives titles and consequence surfacing; plan repeat still drives the primary oval.
-                  const priorInfo = tmId ? getTmThisWeekRepeatForSlot(weeklyRecentHistory, tmId, slot.key) : { count: 0, dates: [] as string[] };
-                  const priorCount = priorInfo.count;
-                  const totalThisWeek = repeatCount + priorCount;
+                  // Through-night week repeat for THIS cell's night. Map already includes built days —
+                  // do not +1 (avoids double-count when tonight is already present).
+                  const cellNightIso =
+                    def?.date instanceof Date && !Number.isNaN(def.date.getTime())
+                      ? formatLocalDateISO(def.date)
+                      : "";
+                  const totalThisWeek =
+                    tmId && cellNightIso
+                      ? getTmWeekRepeatForSlotThroughNight(
+                          weeklyRecentHistory,
+                          tmId,
+                          slot.key,
+                          cellNightIso,
+                          false,
+                        )
+                      : 0;
+                  const priorCount = Math.max(0, totalThisWeek - (tmId ? 1 : 0));
 
                   let cellBg = "transparent";
                   if (isFocused) {
