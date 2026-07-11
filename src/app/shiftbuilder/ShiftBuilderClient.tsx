@@ -3382,11 +3382,11 @@ function AuthedShiftBuilder() {
     async (uiKeys: string | string[], taskLabel: string) => {
       if (isCurrentNightLocked) {
         showToast("This day is locked — cannot add tasks", "error");
-        return;
+        throw new Error("night locked");
       }
       if (!nightId) {
         showToast("No active night selected", "error");
-        return;
+        throw new Error("no night");
       }
       const keys = Array.isArray(uiKeys) ? uiKeys : [uiKeys];
       if (keys.length === 0 || !taskLabel?.trim()) return;
@@ -3421,7 +3421,9 @@ function AuthedShiftBuilder() {
         }
       } catch (e) {
         console.error("Failed to add task from palette (multi)", e);
-        showToast("Failed to save task to one or more cards", "error");
+        const msg = e instanceof Error ? e.message : "Failed to save task to one or more cards";
+        showToast(msg, "error");
+        throw e;
       }
     },
     [nightId, showToast, logBuilderChange, isCurrentNightLocked, mapNightTasksToUiKeys, auxDefs]

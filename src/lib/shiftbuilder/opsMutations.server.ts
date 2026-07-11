@@ -834,7 +834,10 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
     coverage_side: coverageSide,
   });
 
-  if (error && (error as { code?: string }).code !== "23505") {
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new Error("A task with this label already exists on this slot");
+    }
     throw new Error(`Failed to add task: ${error.message}`);
   }
 }
