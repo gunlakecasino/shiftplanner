@@ -25,9 +25,30 @@ function hostsMatch(request: NextRequest): boolean {
   return false;
 }
 
+function authOriginLogPayload(
+  event: "auth_origin_reject" | "auth_origin_relaxed_hit",
+  request: NextRequest,
+  secFetchSite: string | null,
+) {
+  return {
+    event,
+    method: request.method,
+    host: request.headers.get("host"),
+    secFetchSite,
+    hasOrigin: Boolean(request.headers.get("origin")),
+    hasReferer: Boolean(request.headers.get("referer")),
+  };
+}
+
 /**
- * Auth routes (/api/auth/*): PIN gate fetch on some mobile browsers omits
- * Origin/Referer but is still a same-tab JSON POST to our host.
+ * Auth routes (/api/auth/*): require Origin/Referer host match or
+ * Sec-Fetch-Site same-origin/same-site in production.
+ *
+ * Bare application/json + Host bypass removed (KD-8). When Origin/Referer
+ * and Sec-Fetch-Site are all missing (some WebViews), reject unless
+ * AUTH_RELAXED_ORIGIN=1 (emergency one-release escape).
+ *
+ * Dev remains permissive.
  */
 export function isAuthApiRequest(request: NextRequest): boolean {
   if (process.env.NODE_ENV !== "production") return true;
@@ -38,13 +59,21 @@ export function isAuthApiRequest(request: NextRequest): boolean {
     return true;
   }
 
-  if (request.method === "POST") {
-    const contentType = request.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json") && request.headers.get("host")) {
-      return true;
-    }
+  // Emergency break-glass only — restore Host-only accept for stuck WebViews.
+  if (process.env.AUTH_RELAXED_ORIGIN === "1" && request.headers.get("host")) {
+    console.warn(
+      JSON.stringify(
+        authOriginLogPayload("auth_origin_relaxed_hit", request, secFetchSite),
+      ),
+    );
+    return true;
   }
 
+  console.warn(
+    JSON.stringify(
+      authOriginLogPayload("auth_origin_reject", request, secFetchSite),
+    ),
+  );
   return false;
 }
 
