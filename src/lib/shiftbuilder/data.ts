@@ -16,19 +16,22 @@ import { normalizeTaskTextStyle, type TaskTextStyle } from './taskTextStyle';
 
 /**
  * Shift Builder Data Layer — Real Supabase backed.
- * 
+ *
  * Responsibilities:
  * - Load real team members from tm_profiles
  * - Load real zone/rr/aux assignments from zone_assignments for a night
- * - Reliable immediate write-back (upsert / delete) for manual edits
+ * - Reliable immediate write-back (upsert / delete) for manual edits (session mutations)
  * - Support on-schedule roster (TMs scheduled/used in the week)
- * - Helpers for live realtime subscriptions (channel factory)
- * 
+ *
+ * Night board reads go through session-gated APIs (fetchNightCoreData /
+ * fetchNightSecondaryData). Multi-operator sync is poll + invalidation (KD-13);
+ * ops Realtime channel helpers were removed in PR 11a.
+ *
  * Slot key conventions in DB:
  *   - Zones: "zone_1" ... "zone_10"   (slot_type: "zone")
  *   - RR: "rr_1_2", "rr_6" ... with rr_side: "mens" | "womens"
  *   - Aux: "admin", "z9_sr", "trash_1", "support_1" etc (slot_type: "aux")
- * 
+ *
  * The UI layer maps these to pretty labels (Z1, MRR1/WRR1, AUX...).
  */
 
@@ -1971,160 +1974,6 @@ export async function deleteBreakAssignment(nightId: string, tmId: string): Prom
       return { ok: true };
     },
   );
-}
-
-// ============================================================================
-// Realtime / Live Sync helpers
-// ============================================================================
-
-/**
- * Create a Supabase Realtime channel for live updates on zone_assignments for a specific night.
- * 
- * Usage in component:
- *   const channel = createNightAssignmentChannel(nightId, (payload) => { refetchAssignments(); });
- *   // later channel.unsubscribe()
- */
-export function createNightAssignmentChannel(
-  nightId: string,
-  onChange: (payload: any) => void
-) {
-  const client = getSupabaseClient();
-
-  // Always-fresh channel (unique topic) — prevents "callbacks after subscribe" on reuse.
-  const channel = freshChannel(`shiftbuilder-zone-assignments-${nightId}`);
-
-  return channel
-    .on(
-      'postgres_changes',
-      {
-        event: '*', // INSERT | UPDATE | DELETE
-        schema: 'public',
-        table: 'zone_assignments',
-        filter: `night_id=eq.${nightId}`,
-      },
-      (payload) => {
-        // eslint-disable-next-line no-console
-        console.log('[shiftbuilder] realtime change received', payload.eventType, (payload.new as any)?.slot_key);
-        onChange(payload);
-      }
-    )
-    .subscribe((status) => {
-      // eslint-disable-next-line no-console
-      console.log('[shiftbuilder] realtime subscription status:', status);
-    });
-}
-
-/**
- * Convenience: unsubscribe helper.
- */
-export async function unsubscribeChannel(channel: any) {
-  if (channel) {
-    await supabase.removeChannel(channel);
-  }
-}
-
-/**
- * Always returns a brand-new, never-before-subscribed Supabase Realtime channel.
- * 
- * Using a unique topic suffix on every call completely eliminates the
- * "cannot add `postgres_changes` callbacks ... after `subscribe()`" error
- * that occurs when React effects, HMR, StrictMode, or rapid date changes
- * cause overlapping channel creation for the same logical topic.
- * 
- * Callers are responsible for calling removeChannel on the exact instance returned.
- * We never reuse a channel instance or rely on topic-name deduping.
- */
-function freshChannel(prefix: string) {
-  const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  return supabase.channel(`${prefix}-${nonce}`);
-}
-
-/**
- * Create a Supabase Realtime channel for live updates on night_tm_status for a specific night.
- * This lets schedule changes (ADP re-imports, manual status edits, LOA/PTO marks) flow live into the planner.
- */
-export function createNightScheduleStatusChannel(
-  nightId: string,
-  onChange: (payload: any) => void
-) {
-  const channel = freshChannel(`shiftbuilder-night-tm-status-${nightId}`);
-
-  return channel
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'night_tm_status',
-        filter: `night_id=eq.${nightId}`,
-      },
-      (payload) => {
-        console.log('[shiftbuilder] night_tm_status realtime change', payload.eventType, payload.new);
-        onChange(payload);
-      }
-    )
-    .subscribe((status) => {
-      console.log('[shiftbuilder] night_tm_status subscription status:', status);
-      // Expose to OpsStatusBar (permanent prod telemetry)
-      (window as any).__realtimeState =
-        status === 'SUBSCRIBED' ? 'LIVE' :
-        status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'OFFLINE' : 'SYNCING';
-    });
-}
-
-/**
- * Create a Supabase Realtime channel for live updates on call_offs for a specific date.
- */
-export function createCallOffsChannel(
-  nightDateIso: string, // yyyy-mm-dd
-  onChange: (payload: any) => void
-) {
-  const client = getSupabaseClient();
-
-  // Always-fresh channel (unique topic) — the direct fix for the runtime error:
-  // "cannot add `postgres_changes` callbacks for realtime:shiftbuilder-call-offs-... after `subscribe()`"
-  const channel = freshChannel(`shiftbuilder-call-offs-${nightDateIso}`);
-
-  return channel
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'call_offs',
-        filter: `night_date=eq.${nightDateIso}`,
-      },
-      (payload) => {
-        console.log('[shiftbuilder] call_offs realtime change', payload.eventType);
-        onChange(payload);
-      }
-    )
-    .subscribe((status) => {
-      console.log('[shiftbuilder] call_offs subscription status:', status);
-    });
-}
-
-/**
- * Realtime channels for graves_default_schedule + night_on_call edits.
- * When either fires, re-fetch /api/shiftbuilder/scheduled-roster for the active night.
- */
-export function createGravesScheduleChannels(onChange: (payload: any) => void) {
-  const tables = ['graves_default_schedule', 'night_on_call'] as const;
-  const channels = tables.map((table) =>
-    freshChannel(`shiftbuilder-${table}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
-        (payload) => {
-          console.log(`[shiftbuilder] ${table} realtime change`, payload.eventType);
-          onChange(payload);
-        },
-      )
-      .subscribe((status) => {
-        console.log(`[shiftbuilder] ${table} subscription status:`, status);
-      }),
-  );
-  return channels;
 }
 
 // ============================================================================

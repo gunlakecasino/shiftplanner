@@ -8,6 +8,9 @@ import { OPS_PILL_Z } from "./canvasPillGlass";
 /**
  * OpsStatusBar — static LIVE dot + label in the bottom-right corner.
  * Telemetry details are exposed via the native title tooltip on hover/long-press.
+ *
+ * KD-13: pill reflects session poll health (`window.__realtimeState`), not
+ * Supabase Realtime (retired for ops multi-operator sync).
  */
 
 type RealtimeState = "LIVE" | "SYNCING" | "OFFLINE";
@@ -172,7 +175,7 @@ export function updateOpsStatusBarContent(): void {
     dotEl.style.boxShadow = `0 0 4px ${t.rtColor}`;
   }
 
-  pill.title = `Realtime: ${t.rt} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;
+  pill.title = `Poll sync: ${t.rt} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;
 }
 
 /** Toggle visibility without tearing down the telemetry poll (e.g. iPad placement dock). */

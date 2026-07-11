@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { resumeShiftBuilderConnectivity } from "@/lib/shiftbuilder/shiftBuilderResume";
 import { warmSupabaseConnection } from "@/lib/supabase";
-import { liveAssignmentsStore } from "@/lib/shiftbuilder/liveCache";
 
 export type UseShiftBuilderIdleResumeOptions = {
   enabled?: boolean;
@@ -13,13 +12,15 @@ export type UseShiftBuilderIdleResumeOptions = {
   dateKey: string;
   /** Resume after this much wall-clock idle (ms). Default 45s. */
   idleThresholdMs?: number;
-  /** While tab is visible, keep REST + realtime warm on this interval (ms). Default 90s. */
+  /** While tab is visible, keep REST warm on this interval (ms). Default 90s. */
   keepaliveIntervalMs?: number;
   onResume?: () => void;
 };
 
 /**
- * Detects idle / background / offline gaps and restores Supabase + realtime without a full refresh.
+ * Detects idle / background / offline gaps and restores session API connectivity
+ * without a full refresh. KD-13: no Realtime socket health — poll resumes via
+ * night query invalidation.
  */
 export function useShiftBuilderIdleResume({
   enabled = true,
@@ -44,12 +45,6 @@ export function useShiftBuilderIdleResume({
 
       const idleMs = Date.now() - lastActiveRef.current;
       if (!force && idleMs < idleThresholdMs) return;
-
-      const conn = liveAssignmentsStore.getState().connectionStatus[dateKey];
-      const realtimeUnhealthy =
-        conn === "error" || conn === "disconnected" || (window as any).__realtimeState === "OFFLINE";
-
-      if (!force && idleMs < idleThresholdMs * 2 && !realtimeUnhealthy) return;
 
       console.log(`[shiftBuilderResume] Resuming after ${Math.round(idleMs / 1000)}s idle (${reason})`);
 
@@ -102,11 +97,8 @@ export function useShiftBuilderIdleResume({
 
     const keepalive = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      // TLS warm only — multi-operator sync is night query poll (NIGHT_BOARD_POLL_MS).
       void warmSupabaseConnection();
-      const conn = liveAssignmentsStore.getState().connectionStatus[dateKey];
-      if (conn === "error" || conn === "disconnected") {
-        void maybeResume("keepalive-realtime", true);
-      }
     }, keepaliveIntervalMs);
 
     return () => {

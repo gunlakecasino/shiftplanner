@@ -1,22 +1,8 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
-import {
-  buildSlotDefaultBreakMap,
-  enrichAssignmentsWithBreakGroups,
-  slotDefaultBreakMapToRecord,
-} from "@/lib/shiftbuilder/breakGroupResolve";
-import {
-  getCachedActiveTeamMembers,
-  getCachedGraveAvailableTeamMembers,
-  getCachedSlotDefaults,
-} from "@/lib/shiftbuilder/data.server";
-import { buildGravesScheduleRosterRows } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import {
-  resolveAuxLayout,
-  remapAssignmentsToAuxKeys,
-  defaultAuxDefsForNewNight,
-} from "@/lib/shiftbuilder/auxLayout";
+import { defaultAuxDefsForNewNight } from "@/lib/shiftbuilder/auxLayout";
+
 type NightCoreApiPayload = {
   nightId: string | null;
   assignments: Record<string, any>;
@@ -86,7 +72,10 @@ export type FetchNightCoreOptions = {
   publishedOnlyPolicy?: boolean;
 };
 
-/** Primary path: one browser → Next server hop with parallel Supabase on the server. */
+/**
+ * Session-gated night-core load only.
+ * PR 11a / KD-13: no silent anon Supabase fallback when the API fails.
+ */
 async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOptions) {
   const policyQs = options?.todayPolicy ? "&policy=today" : "";
   // Add unique bust param to ensure browser / any intermediate layers don't serve a stale response
@@ -99,121 +88,11 @@ async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOpt
   if (res.status === 403) {
     return emptyNightCoreResult(true);
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    throw new Error(`Night core API failed (${res.status}) for ${dateStr}`);
+  }
   const raw = (await res.json()) as NightCoreApiPayload;
   return hydrateNightCoreFromBundle(raw);
-}
-
-/** Fallback when API unavailable — parallel client/server mix. */
-async function fetchNightCoreClientFallback(selectedDay: DayDef) {
-  const {
-    getNightIdForDate,
-    getNightAssignments,
-    getOnScheduleTmIdsForNight,
-  } = await import("@/lib/shiftbuilder/data");
-
-  const dateStr = formatLocalDateISO(selectedDay.date);
-
-  const [id, graveMembers, slotDefaults, allMembers, rosterResponse] = await Promise.all([
-    getNightIdForDate(selectedDay.date),
-    getCachedGraveAvailableTeamMembers(),
-    getCachedSlotDefaults(),
-    getCachedActiveTeamMembers(),
-    fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}&_=${Date.now()}`, {
-      credentials: "same-origin",
-    }).catch(() => null),
-  ]);
-
-  const [dbAssignments, weekOnScheduleSet] = await Promise.all([
-    id ? getNightAssignments(id) : Promise.resolve([]),
-    id ? getOnScheduleTmIdsForNight(id, dateStr) : Promise.resolve(new Set<string>()),
-  ]);
-
-  const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults as any);
-  const legacyAssignments = enrichAssignmentsWithBreakGroups(dbAssignments as any[], defaultBreakMap);
-
-  let storedAuxLayout: unknown = null;
-  if (id) {
-    const { getNightAuxLayout } = await import("@/lib/shiftbuilder/data");
-    storedAuxLayout = await getNightAuxLayout(id);
-  }
-  const auxDefs = id
-    ? resolveAuxLayout(storedAuxLayout, dbAssignments as any[])
-    : defaultAuxDefsForNewNight();
-  const assignments = remapAssignmentsToAuxKeys(legacyAssignments, auxDefs);
-
-  const members = allMembers.map((tm) => ({
-    ...tm,
-    isOnSchedule: weekOnScheduleSet.has(tm.id),
-  }));
-
-  const graveRoster = graveMembers.map((m: any) => ({
-    ...m,
-    isOnWeek: weekOnScheduleSet.has(m.id),
-    isPMOverlap: m.gravePool === "PM",
-    isAMOverlap: m.gravePool === "AM",
-  }));
-
-  let canonicalScheduled = {
-    allScheduled: [] as any[],
-    fullGraveScheduled: [] as any[],
-    pmOverlapScheduled: [] as any[],
-    amOverlapScheduled: [] as any[],
-    scheduledWithRoles: [] as any[],
-  };
-
-  try {
-    if (rosterResponse?.ok) {
-      const data = await rosterResponse.json();
-      canonicalScheduled = {
-        allScheduled: data.allScheduled || [],
-        fullGraveScheduled: data.fullGraveScheduled || [],
-        pmOverlapScheduled: data.pmOverlapScheduled || [],
-        amOverlapScheduled: data.amOverlapScheduled || [],
-        scheduledWithRoles: data.scheduledWithRoles || [],
-      };
-    }
-  } catch (e) {
-    console.error("[fetchNightCoreData] scheduled-roster failed", e);
-  }
-
-  const scheduledId = (t: any) => t.tmId || t.tm_id || t.id;
-  const fullGraveScheduledTonight = new Set(
-    canonicalScheduled.fullGraveScheduled.map(scheduledId),
-  );
-  const pmOverlapScheduledTonight = new Set(
-    canonicalScheduled.pmOverlapScheduled.map(scheduledId),
-  );
-  const amOverlapScheduledTonight = new Set(
-    canonicalScheduled.amOverlapScheduled.map(scheduledId),
-  );
-
-  const enrich = (list: any[]) =>
-    list.map((m: any) => ({
-      ...m,
-      isPMOverlapTonight: pmOverlapScheduledTonight.has(m.id),
-      isAMOverlapTonight: amOverlapScheduledTonight.has(m.id),
-      isFullGraveTonight: fullGraveScheduledTonight.has(m.id),
-    }));
-
-  const gravesScheduleRoster = buildGravesScheduleRosterRows(canonicalScheduled, members);
-
-  return {
-    nightId: id,
-    assignments,
-    auxDefs,
-    members,
-    scheduledTmIdsTonight: new Set(canonicalScheduled.allScheduled.map(scheduledId)),
-    realRoster: enrich(members),
-    graveRoster: enrich(graveRoster),
-    gravesScheduleRoster,
-    fullGraveScheduledTonight,
-    pmOverlapScheduledTonight,
-    amOverlapScheduledTonight,
-    rawDbAssignments: dbAssignments,
-    rawBreakRows: [] as any[],
-    slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
-  };
 }
 
 /** Shared nightCore queryFn — used by useCurrentNight, print hydration, and week prefetch. */
@@ -224,15 +103,14 @@ export async function fetchNightCoreData(
   const dateStr = formatLocalDateISO(selectedDay.date);
 
   try {
-    const viaApi = await fetchNightCoreViaApi(dateStr, options);
-    if (viaApi) return viaApi;
+    return await fetchNightCoreViaApi(dateStr, options);
   } catch (e) {
-    console.warn("[fetchNightCoreData] API path failed, using fallback", e);
+    // Viewer/today policy: fail closed to blocked/empty rather than throwing into print paths.
+    if (options?.todayPolicy || options?.publishedOnlyPolicy) {
+      console.warn("[fetchNightCoreData] session API failed under policy — fail closed", e);
+      return emptyNightCoreResult(options?.publishedOnlyPolicy ?? false);
+    }
+    console.error("[fetchNightCoreData] session API failed (no client fallback)", e);
+    throw e instanceof Error ? e : new Error("Night core session API failed");
   }
-
-  if (options?.todayPolicy || options?.publishedOnlyPolicy) {
-    return emptyNightCoreResult(options?.publishedOnlyPolicy ?? false);
-  }
-
-  return fetchNightCoreClientFallback(selectedDay);
 }

@@ -146,8 +146,11 @@ export const supabase = new Proxy({} as SupabaseClient, {
 export type SupabaseClientType = SupabaseClient;
 
 /**
- * Fire a lightweight read so TLS + HTTP/2 to Supabase are warm before the board asks.
+ * Fire a lightweight TLS/HTTP warm so REST is ready before the board asks.
  * Idempotent — safe to call from loading shells, providers, and route entry.
+ *
+ * PR 11a / KD-13: do **not** SELECT ops tables (e.g. nights) — that residual
+ * anon path blocks RLS revoke. Warm the REST origin only.
  */
 export type WarmSupabaseOptions = {
   /** Drop the in-flight warm guard and ping again (after idle / tab resume). */
@@ -166,9 +169,11 @@ export function warmSupabaseConnection(options?: WarmSupabaseOptions): Promise<v
       if (!hasSupabaseConfig()) {
         return;
       }
-      const client = getSupabaseClient();
+      const origin = getSupabaseRestOrigin();
+      if (!origin) return;
       const t0 = performance.now();
-      await client.from('nights').select('id').limit(1).maybeSingle();
+      // no-cors HEAD warms TCP/TLS without requiring anon SELECT on ops tables.
+      await fetch(origin, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }).catch(() => {});
       const ms = Math.round(performance.now() - t0);
       if (ms > 0) {
         (window as any).__supabaseWarmMs = ms;

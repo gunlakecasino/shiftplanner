@@ -31,13 +31,11 @@
  * - Will be consumed by updated ZoneCard / RRCard / AuxCard / OverlapSlot
  * - Will replace direct `setAssignments` + `persistAssign` calls in onDragEnd
  * - Used alongside useCurrentNight (which provides the base query data + queryClient)
- * - Realtime updates from liveCache.ts automatically keep the same caches fresh
- *   when OTHER clients change data.
+ * - Multi-operator refresh comes from night query poll + mutation invalidation (KD-13).
  *
- * @see liveCache.ts (the realtime bridge that keeps these caches hot)
- * @see ShiftBuilderClient.tsx:3376 (original persistAssign – we wrap, do not replace yet)
+ * @see liveCache.ts (optimistic mirrors + poll registration)
+ * @see ShiftBuilderClient.tsx (original persistAssign – we wrap, do not replace yet)
  * @see useCurrentNight.ts (the query whose data we optimistically mutate)
- * @see SCHEDULING_MASTERLIST.md (new "Live Cache Layer" subsection added in this task)
  */
 
 "use client";
@@ -90,9 +88,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
   const queryClient = useQueryClient();
   const dateKey = formatLocalDateISO(selectedDay.date);
 
-  // Ensure realtime is listening for this night (idempotent).
+  // Register night for poll-sync status (idempotent). KD-13 — no Realtime socket.
   // The caller (ShiftBuilderClient) should call initLiveCacheForNight once we have a real nightId.
-  // This is a safety net.
   const ensureRealtime = useCallback((nightId: string | null) => {
     if (nightId) {
       initLiveCacheForNight(nightId, dateKey, queryClient);

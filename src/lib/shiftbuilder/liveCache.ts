@@ -4,31 +4,25 @@
  * Centralized live-state caching layer for the Shift Builder.
  *
  * Responsibilities:
- * - Supabase Realtime bridge: subscribes to postgres_changes on zone_assignments,
- *   break_assignments, night_slot_tasks, etc. for the active night(s).
- * - On every remote change (from other operators / other browser tabs), instantly
- *   updates BOTH:
- *     1. TanStack Query cache via queryClient.setQueryData(["night", dateKey])
- *     2. A lightweight Zustand store (useLiveAssignmentsStore) for any non-Query
- *        consumers or cross-surface sync (future opsApp parity).
- * - Provides helpers to init/teardown subscriptions per night.
+ * - Lightweight Zustand store (useLiveAssignmentsStore) for optimistic / cross-surface
+ *   assignment mirrors (MarkerPad, week overview, fit maps).
+ * - Helpers to register the active night for multi-operator poll sync (KD-13).
  * - Works hand-in-hand with useLiveAssignments.ts for the optimistic write path.
+ *
+ * KD-13 (PR 11a): multi-operator sync is **poll (15–30s) + mutation invalidation**,
+ * not Supabase Realtime on anon. Realtime would require residual anon SELECT and
+ * blocks RLS revoke (PR 11c). Night board queries poll via useCurrentNight;
+ * this module only tracks connection status for the Ops pill / resume hooks.
  *
  * Architecture notes (links to prior work):
  * - Builds directly on the TanStack Query foundation added in the 2026-05-27
  *   FloatingNav + day-switch migration (see providers.tsx and useCurrentNight.ts).
- * - Preserves the existing "capture nightId at action time + resolveNightIdForDate"
- *   race-free pattern from ShiftBuilderClient.tsx:3376 (persistAssign).
- * - Draft Mode (useShiftHistory + draftAssignments in ShiftBuilderClient) remains
- *   the **only** source of truth for final apply. Live cache reflects committed
- *   server state; Draft is the proposal overlay the operator reviews before persist.
- * - Follows Motion Auditor / Velvet principles for any future UI derived from this
- *   cache: only transform/opacity changes for live updates.
+ * - Draft Mode remains the **only** source of truth for final apply. Live cache
+ *   reflects committed server state; Draft is the proposal overlay.
  *
  * Rollback & Conflict policy (enforced in useLiveAssignments.ts consumers):
  * - Every optimistic mutation takes a snapshot in onMutate.
- * - On server error or realtime conflict detection → rollback + sonner toast with
- *   clear "another operator changed X, your change was reverted" message.
+ * - On server error → rollback + sonner toast.
  * - Never silently lose data.
  *
  * Usage (typical):
@@ -37,9 +31,8 @@
  *   initLiveCacheForNight(nightId, dateKey, queryClient);
  *
  * @see useLiveAssignments.ts (the consumer hook with useMutation optimistic wrappers)
- * @see useCurrentNight.ts (the query that this layer keeps fresh)
- * @see ShiftBuilderClient.tsx (the place that will call init + pass live hooks down)
- * @see SCHEDULING_MASTERLIST.md § "Current State of the Art" (will document this layer)
+ * @see useCurrentNight.ts (poll + invalidation that keeps this layer fresh)
+ * @see ShiftBuilderClient.tsx
  */
 
 "use client";
@@ -47,11 +40,14 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { QueryClient } from "@tanstack/react-query";
-import { getSupabaseClient } from "../supabase"; // re-exported singleton from the data layer root
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { dbToUi } from "@/lib/shiftbuilder/slot-keys"; // correct DB→UI reverse (z9_sr + aux → Z9SR, zone_9 + zone → Z9, etc.)
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore"; // main board store (what ShiftBuilderBoard subscribes to)
+
+/**
+ * KD-13 multi-operator poll interval (ms) while the tab is visible.
+ * Range guidance: 15–30s. Mutation invalidation still provides same-tab instant refresh.
+ */
+export const NIGHT_BOARD_POLL_MS = 20_000;
 
 /** Local YYYY-MM-DD — use everywhere live cache keys assignments (never UTC slice). */
 export function nightDateKey(date: Date): string {
@@ -183,10 +179,10 @@ interface LiveAssignmentsState {
   breakAssignmentsByNight: Record<string, any[]>; // simplified for Phase 1
   lastUpdated: Record<string, number>; // epoch ms for debugging / staleness UI
 
-  // Realtime connection health per night (for future status pill)
+  // Poll / connectivity health per night (Ops pill + idle resume)
   connectionStatus: Record<string, "connected" | "connecting" | "error" | "disconnected">;
 
-  // Actions (internal – called by the realtime bridge and optimistic hooks)
+  // Actions (internal – called by optimistic hooks + poll registration)
   setAssignmentsForNight: (dateKey: string, assignments: Record<string, LiveAssignment>) => void;
   patchAssignment: (dateKey: string, uiKey: string, patch: Partial<LiveAssignment>) => void;
   removeAssignment: (dateKey: string, uiKey: string) => void;
@@ -248,14 +244,14 @@ export function resetLiveCrossDayCache(): void {
 }
 
 // ============================================================================
-// REALTIME BRIDGE
+// POLL REGISTRATION (KD-13 — replaces ops Realtime)
 // ============================================================================
 
-const activeChannels: Record<string, RealtimeChannel> = {};
-const channelQueryClients: Record<string, QueryClient> = {};
-const reconnectTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+/** Active nights registered for poll status (no Realtime channels). */
+const activeNights: Record<string, { nightId: string; dateKey: string; queryClient: QueryClient }> =
+  {};
 
-function parseChannelKey(channelKey: string): { nightId: string; dateKey: string } | null {
+function parseNightKey(channelKey: string): { nightId: string; dateKey: string } | null {
   const sep = channelKey.indexOf(":");
   if (sep <= 0) return null;
   return {
@@ -264,47 +260,59 @@ function parseChannelKey(channelKey: string): { nightId: string; dateKey: string
   };
 }
 
-function scheduleLiveCacheReconnect(
-  nightId: string,
+/**
+ * Register a night for multi-operator poll sync status.
+ * Idempotent — safe to call multiple times for the same night.
+ *
+ * Does **not** open Supabase Realtime (retired KD-13). Night queries poll via
+ * useCurrentNight; mutations invalidate nightCore / nightSecondary.
+ */
+export function initLiveCacheForNight(
+  nightId: string | null,
   dateKey: string,
   queryClient: QueryClient,
-  reason: string,
-): void {
-  const channelKey = `${nightId}:${dateKey}`;
-  if (reconnectTimers[channelKey]) return;
+): () => void {
+  if (!nightId) return () => {};
 
-  reconnectTimers[channelKey] = setTimeout(() => {
-    delete reconnectTimers[channelKey];
-    console.warn(`[liveCache] Reconnecting realtime (${reason}) for ${nightId} (${dateKey})`);
-    teardownLiveCacheForNight(nightId, dateKey);
-    initLiveCacheForNight(nightId, dateKey, queryClient);
-  }, 1200);
-}
-
-/** Tear down and re-open all active assignment realtime channels. */
-export function reconnectAllActiveLiveCache(queryClient?: QueryClient): void {
-  const keys = Object.keys(activeChannels);
-  for (const channelKey of keys) {
-    const parsed = parseChannelKey(channelKey);
-    if (!parsed) continue;
-    const qc = queryClient ?? channelQueryClients[channelKey];
-    if (!qc) continue;
-    scheduleLiveCacheReconnect(parsed.nightId, parsed.dateKey, qc, "manual-resume");
+  const nightKey = `${nightId}:${dateKey}`;
+  activeNights[nightKey] = { nightId, dateKey, queryClient };
+  liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connected");
+  if (typeof window !== "undefined") {
+    (window as any).__realtimeState = "LIVE";
   }
 
-  // If channels were torn down but we still know the night, ensure at least one resubscribe attempt.
-  for (const [channelKey, qc] of Object.entries(channelQueryClients)) {
-    if (activeChannels[channelKey]) continue;
-    const parsed = parseChannelKey(channelKey);
-    if (!parsed) continue;
-    initLiveCacheForNight(parsed.nightId, parsed.dateKey, qc);
+  return () => teardownLiveCacheForNight(nightId, dateKey);
+}
+
+function teardownLiveCacheForNight(nightId: string, dateKey: string) {
+  const nightKey = `${nightId}:${dateKey}`;
+  delete activeNights[nightKey];
+  liveAssignmentsStore.getState().setConnectionStatus(dateKey, "disconnected");
+  if (typeof window !== "undefined" && Object.keys(activeNights).length === 0) {
+    (window as any).__realtimeState = "OFFLINE";
+  }
+}
+
+/**
+ * Re-mark active nights as connected after idle / resume and force a night refetch.
+ * Kept for call-site compatibility (formerly re-subscribed Realtime channels).
+ */
+export function reconnectAllActiveLiveCache(queryClient?: QueryClient): void {
+  for (const entry of Object.values(activeNights)) {
+    const qc = queryClient ?? entry.queryClient;
+    liveAssignmentsStore.getState().setConnectionStatus(entry.dateKey, "connected");
+    if (typeof window !== "undefined") {
+      (window as any).__realtimeState = "LIVE";
+    }
+    void qc.invalidateQueries({ queryKey: ["nightCore", entry.dateKey] });
+    void qc.invalidateQueries({ queryKey: ["nightSecondary", entry.dateKey] });
   }
 }
 
 /** Routes that mount live cache (/today + ShiftBuilder). Global teardown only when last unmounts. */
 let liveCacheMountCount = 0;
 
-/** Call once per surface mount; returned release only tears down all channels when count hits 0. */
+/** Call once per surface mount; returned release only tears down all nights when count hits 0. */
 export function retainLiveCacheMount(): () => void {
   liveCacheMountCount += 1;
   return () => {
@@ -315,293 +323,17 @@ export function retainLiveCacheMount(): () => void {
   };
 }
 
-/**
- * Initialize (or re-use) a Supabase Realtime subscription for a specific night.
- * Idempotent – safe to call multiple times for the same night.
- *
- * On any change to zone_assignments (and later break_assignments / tasks),
- * we:
- *   1. Update the Zustand live store (instant for any subscriber).
- *   2. Use queryClient.setQueryData to keep the TanStack ["night", dateKey] cache
- *      in sync without a full refetch (background refetch still happens on staleTime).
- *
- * This gives us "live from other operators" for free while keeping all the
- * intelligent caching / prefetch / invalidation behavior of useCurrentNight.
- */
-export function initLiveCacheForNight(
-  nightId: string | null,
-  dateKey: string,
-  queryClient: QueryClient
-): () => void {
-  if (!nightId) return () => {}; // nothing to subscribe to yet
-
-  const channelKey = `${nightId}:${dateKey}`;
-
-  // Already listening for this exact night+date combo
-  if (activeChannels[channelKey]) {
-    return () => teardownLiveCacheForNight(nightId, dateKey);
+// Convenience: full teardown (used on unmount / day change in the client)
+export function teardownAllLiveCache() {
+  for (const nightKey of Object.keys(activeNights)) {
+    const parsed = parseNightKey(nightKey);
+    if (parsed) {
+      liveAssignmentsStore.getState().setConnectionStatus(parsed.dateKey, "disconnected");
+    }
+    delete activeNights[nightKey];
   }
-
-  const supabase = getSupabaseClient();
-  liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connecting");
-
-  // Unique suffix prevents any "after subscribe" races if the guard key
-  // is ever bypassed (HMR, StrictMode, or overlapping nightId reuse).
-  // The activeChannels guard still ensures we only keep one subscription per (nightId, dateKey).
-  const nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const channel = supabase
-    .channel(`live-night-${nightId}-${nonce}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "zone_assignments",
-        filter: `night_id=eq.${nightId}`,
-      },
-      (payload: any) => {
-        handleAssignmentChange(payload, dateKey, queryClient);
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "night_slot_tasks",
-        filter: `night_id=eq.${nightId}`,
-      },
-      () => {
-        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "break_assignments",
-        filter: `night_id=eq.${nightId}`,
-      },
-      () => {
-        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-        void queryClient.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "night_card_borders",
-        filter: `night_id=eq.${nightId}`,
-      },
-      () => {
-        void queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "nights",
-        filter: `id=eq.${nightId}`,
-      },
-      (payload: { old?: { status?: string }; new?: { status?: string } }) => {
-        const prev = payload.old?.status;
-        const next = payload.new?.status;
-        if (prev === next) return;
-        void queryClient.invalidateQueries({ queryKey: ["todayPublishedDates"] });
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("today-publish-meta-changed", {
-              detail: { nightId, dateKey, status: next },
-            }),
-          );
-        }
-      },
-    )
-    .subscribe((status: any) => {
-      if (status === "SUBSCRIBED") {
-        liveAssignmentsStore.getState().setConnectionStatus(dateKey, "connected");
-        if (typeof window !== "undefined") {
-          (window as any).__realtimeState = "LIVE";
-        }
-        console.log(`[liveCache] Realtime connected for night ${nightId} (${dateKey})`);
-      } else if (
-        status === "CHANNEL_ERROR" ||
-        status === "TIMED_OUT" ||
-        status === "CLOSED"
-      ) {
-        liveAssignmentsStore.getState().setConnectionStatus(dateKey, "error");
-        if (typeof window !== "undefined") {
-          (window as any).__realtimeState = "OFFLINE";
-        }
-        console.warn(`[liveCache] Realtime ${status} for night ${nightId}`);
-        scheduleLiveCacheReconnect(nightId, dateKey, queryClient, status);
-      } else if (status === "SUBSCRIBING") {
-        if (typeof window !== "undefined") {
-          (window as any).__realtimeState = "SYNCING";
-        }
-      }
-    });
-
-  channelQueryClients[channelKey] = queryClient;
-  activeChannels[channelKey] = channel;
-
-  return () => teardownLiveCacheForNight(nightId, dateKey);
-}
-
-function teardownLiveCacheForNight(nightId: string, dateKey: string) {
-  const channelKey = `${nightId}:${dateKey}`;
-  if (reconnectTimers[channelKey]) {
-    clearTimeout(reconnectTimers[channelKey]);
-    delete reconnectTimers[channelKey];
-  }
-  const ch = activeChannels[channelKey];
-  if (ch) {
-    ch.unsubscribe();
-    delete activeChannels[channelKey];
-  }
-  liveAssignmentsStore.getState().setConnectionStatus(dateKey, "disconnected");
   if (typeof window !== "undefined") {
     (window as any).__realtimeState = "OFFLINE";
   }
-}
-
-/**
- * Handle a single realtime payload from zone_assignments.
- * Converts DB row → uiKey shape used by the rest of the app, then updates both stores.
- */
-function handleAssignmentChange(
-  payload: any,
-  dateKey: string,
-  queryClient: QueryClient
-) {
-  const { eventType, new: newRow, old: oldRow } = payload;
-
-  // Convert DB shape to the uiKey shape the UI has always used (Z9, Z9SR, MRR1, etc.)
-  // Use the canonical dbToUi so aux slots (z9_sr + "aux") and zones (zone_9 + "zone") round-trip correctly.
-  const rowForKey = newRow || oldRow;
-  const uiKey = rowForKey
-    ? dbToUi(rowForKey.slot_key, rowForKey.slot_type, rowForKey.rr_side ?? null)
-    : null;
-  if (!uiKey) return;
-
-  const store = liveAssignmentsStore.getState();
-
-  if (eventType === "DELETE" || (eventType === "UPDATE" && !newRow?.tm_id)) {
-    // Removal / unassign
-    store.removeAssignment(dateKey, uiKey);
-
-    // Patch both the legacy + correct core TanStack keys
-    const removeFromCache = (old: any) => {
-      if (!old) return old;
-      const next = { ...(old.assignments || {}) };
-      delete next[uiKey];
-      return { ...old, assignments: next };
-    };
-    queryClient.setQueryData(["night", dateKey], removeFromCache);
-    queryClient.setQueryData(["nightCore", dateKey], removeFromCache);
-
-    // Drive the main board store (the one ShiftBuilderBoard + cards actually read)
-    try {
-      useShiftBuilderStore.getState().setAssignments((prev: any) => {
-        const copy = { ...prev };
-        delete copy[uiKey];
-        return copy;
-      });
-    } catch {}
-
-    return;
-  }
-
-  if (eventType === "UPDATE" && newRow && !newRow.tm_id) {
-    // Break-group-only or lock-only updates without a TM assignment row.
-    if (newRow.break_group !== undefined && newRow.break_group !== null) {
-      const breakGroup = Number(newRow.break_group);
-      try {
-        useShiftBuilderStore.getState().setAssignments((prev: any) => ({
-          ...prev,
-          [uiKey]: {
-            ...prev[uiKey],
-            slotKey: uiKey,
-            breakGroup,
-          },
-        }));
-      } catch {}
-    }
-    return;
-  }
-
-  if ((eventType === "INSERT" || eventType === "UPDATE") && newRow?.tm_id) {
-    const breakGroup =
-      newRow.break_group !== undefined && newRow.break_group !== null
-        ? Number(newRow.break_group)
-        : undefined;
-    const liveAssignment: LiveAssignment = {
-      tmId: newRow.tm_id,
-      tmName: newRow.tm_name || newRow.tm_id,
-      isLocked: newRow.is_locked ?? false,
-      updatedAt: newRow.updated_at,
-    };
-
-    store.patchAssignment(dateKey, uiKey, liveAssignment);
-
-    // Patch both legacy and the real core key used by the board
-    const patchCache = (old: any) => {
-      if (!old) return old;
-      const existing = (old.assignments || {})[uiKey] ?? {};
-      return {
-        ...old,
-        assignments: {
-          ...(old.assignments || {}),
-          [uiKey]: {
-            tmId: liveAssignment.tmId,
-            tmName: liveAssignment.tmName,
-            isLocked: liveAssignment.isLocked,
-            ...(breakGroup !== undefined ? { breakGroup } : {}),
-            ...(existing.breakGroup !== undefined && breakGroup === undefined
-              ? { breakGroup: existing.breakGroup }
-              : {}),
-          },
-        },
-      };
-    };
-    queryClient.setQueryData(["night", dateKey], patchCache);
-    queryClient.setQueryData(["nightCore", dateKey], patchCache);
-
-    // Drive the main board store so cards re-render instantly (fixes the "must refresh" bug)
-    try {
-      useShiftBuilderStore.getState().setAssignments((prev: any) => ({
-        ...prev,
-        [uiKey]: {
-          ...prev[uiKey],
-          tmId: liveAssignment.tmId,
-          tmName: liveAssignment.tmName,
-          isLocked: liveAssignment.isLocked,
-          slotKey: uiKey,
-          breakGroup:
-            breakGroup !== undefined ? breakGroup : prev[uiKey]?.breakGroup,
-        },
-      }));
-    } catch {}
-  }
-}
-
-// Convenience: full teardown (used on unmount / day change in the client)
-export function teardownAllLiveCache() {
-  Object.keys(reconnectTimers).forEach((key) => {
-    clearTimeout(reconnectTimers[key]);
-    delete reconnectTimers[key];
-  });
-  Object.keys(activeChannels).forEach((key) => {
-    activeChannels[key]?.unsubscribe();
-    delete activeChannels[key];
-  });
-  Object.keys(channelQueryClients).forEach((key) => {
-    delete channelQueryClients[key];
-  });
-  console.log("[liveCache] All realtime channels torn down");
+  console.log("[liveCache] Poll registration torn down (KD-13 — no Realtime channels)");
 }

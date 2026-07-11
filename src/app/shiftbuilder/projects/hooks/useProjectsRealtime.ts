@@ -14,7 +14,7 @@ import { getSupabaseClient } from "@/lib/supabase";
  * a fresh read. A slow poll remains as a fallback (see useProjectsData) in case
  * the socket drops. Uses a nonce'd channel per the codebase convention that
  * prevents "cannot add postgres_changes callbacks after subscribe" under HMR /
- * StrictMode (see createNightAssignmentChannel in lib/shiftbuilder/data.ts).
+ * StrictMode (unique channel topic per mount).
  *
  * Note: the dev server's browser client uses the service-role key, so realtime
  * works there regardless of RLS; the production anon path relies on the

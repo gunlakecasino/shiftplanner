@@ -1,8 +1,11 @@
 "use client";
 
+import React from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+import { NIGHT_BOARD_POLL_MS } from "@/lib/shiftbuilder/liveCache";
 import { fetchNightCoreData } from "./fetchNightCoreData";
 import { fetchNightSecondaryData } from "./fetchNightSecondaryData";
 
@@ -12,6 +15,9 @@ import { fetchNightSecondaryData } from "./fetchNightSecondaryData";
  * Full TanStack Query commitment for the currently selected GRAVE night.
  * Replaces the manual useEffect + many setState calls with proper caching,
  * optimistic updates, and background refetching.
+ *
+ * KD-13 multi-operator sync: poll night bundles on an interval while the tab is
+ * visible, plus mutation invalidation. Ops Realtime is retired (PR 11a).
  */
 export type UseCurrentNightOptions = {
   /** When false, skips night-core + secondary fetches (e.g. unpublished history on /today). */
@@ -35,13 +41,15 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
         publishedOnlyPolicy: options?.publishedOnlyPolicy,
       }),
     enabled: coreEnabled,
-    // Long stale window keeps UI stable during live session; we rely on patches + server busts.
+    // Long stale window keeps UI stable during live session; poll + patches keep data fresh.
     // refetchOnMount: 'always' ensures hard refresh / remount sees latest server data
     // immediately (paired with { expire: 0 } revalidates after edits).
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: NIGHT_BOARD_POLL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: options?.publishedOnlyPolicy ? undefined : keepPreviousData,
   });
 
@@ -53,10 +61,37 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
       }),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: NIGHT_BOARD_POLL_MS,
+    refetchIntervalInBackground: false,
     enabled: coreEnabled,
   });
+
+  // Fail closed UX: surface session API failures (no silent empty board via anon fallback).
+  React.useEffect(() => {
+    if (!coreEnabled) return;
+    if (coreQuery.isError) {
+      toast.error("Failed to load night data — session API unavailable", {
+        id: `night-core-error-${dateKey}`,
+        description: "Check your connection and try again. Board will not use offline fallbacks.",
+      });
+      if (typeof window !== "undefined") {
+        (window as any).__realtimeState = "OFFLINE";
+      }
+    } else if (coreQuery.isSuccess && typeof window !== "undefined") {
+      (window as any).__realtimeState = "LIVE";
+    }
+  }, [coreEnabled, coreQuery.isError, coreQuery.isSuccess, dateKey]);
+
+  React.useEffect(() => {
+    if (!coreEnabled) return;
+    if (secondaryQuery.isError) {
+      toast.error("Failed to load night tasks/breaks — session API unavailable", {
+        id: `night-secondary-error-${dateKey}`,
+      });
+    }
+  }, [coreEnabled, secondaryQuery.isError, dateKey]);
 
   const combinedData = {
     ...coreQuery.data,

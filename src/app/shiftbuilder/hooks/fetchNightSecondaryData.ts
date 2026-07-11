@@ -25,7 +25,7 @@ function mapNightSlotTaskRow(row: Record<string, unknown>): NightSlotTask {
     catalogTaskId: (row.catalogTaskId ?? row.catalog_task_id ?? null) as string | null,
     sortOrder: Number(row.sortOrder ?? row.sort_order ?? 0),
     color: (row.color ?? null) as string | null,
-    markerType: (row.markerType ?? row.marker_type ?? null) as NightSlotTask['markerType'],
+    markerType: (row.markerType ?? row.marker_type ?? null) as NightSlotTask["markerType"],
     textStyle: normalizeTaskTextStyle(row.textStyle ?? row.text_style ?? null),
     isCoverage: Boolean(row.isCoverage ?? row.is_coverage ?? false),
   };
@@ -74,7 +74,10 @@ function emptyNightSecondaryResult(accessBlocked = false) {
   };
 }
 
-/** Shared nightSecondary queryFn — fully API-backed on the happy path (no client Supabase). */
+/**
+ * Shared nightSecondary queryFn — session API only.
+ * PR 11a / KD-13: no silent anon Supabase fallback when the API fails.
+ */
 export async function fetchNightSecondaryData(
   selectedDay: DayDef,
   options?: FetchNightSecondaryOptions,
@@ -92,46 +95,17 @@ export async function fetchNightSecondaryData(
     if (res.status === 403) {
       return emptyNightSecondaryResult(true);
     }
-    if (res.ok) {
-      const data = (await res.json()) as NightSecondaryApiPayload;
-      return hydrateSecondaryPayload(data);
+    if (!res.ok) {
+      throw new Error(`Night secondary API failed (${res.status}) for ${dateStr}`);
     }
+    const data = (await res.json()) as NightSecondaryApiPayload;
+    return hydrateSecondaryPayload(data);
   } catch (e) {
-    console.warn("[fetchNightSecondaryData] API path failed, using fallback", e);
+    if (options?.publishedOnlyPolicy) {
+      console.warn("[fetchNightSecondaryData] session API failed under policy — fail closed", e);
+      return emptyNightSecondaryResult(true);
+    }
+    console.error("[fetchNightSecondaryData] session API failed (no client fallback)", e);
+    throw e instanceof Error ? e : new Error("Night secondary session API failed");
   }
-
-  if (options?.publishedOnlyPolicy) {
-    return emptyNightSecondaryResult(true);
-  }
-
-  const {
-    getNightIdForDate,
-    getNightNotes,
-    getNightSlotTasks,
-    getNightBreakAssignments,
-    getNightCardBorders,
-    getRecentZoneHistory,
-  } = await import("@/lib/shiftbuilder/data");
-
-  const [id, recentHistory] = await Promise.all([
-    getNightIdForDate(selectedDay.date),
-    getRecentZoneHistory(selectedDay.date, 7),
-  ]);
-
-  const [notesText, nightTaskRows, breakRows, nightBorderMap] = await Promise.all([
-    id ? getNightNotes(id) : Promise.resolve(""),
-    id ? getNightSlotTasks(id) : Promise.resolve([]),
-    id ? getNightBreakAssignments(id) : Promise.resolve([]),
-    id ? getNightCardBorders(id) : Promise.resolve({} as Record<string, string>),
-  ]);
-
-  return {
-    notes: notesText,
-    tasks: nightTaskRows,
-    breakAssignments: breakRows,
-    cardBorders: nightBorderMap,
-    recentZoneHistory: recentHistory,
-    calledOffIds: new Set<string>(),
-    rawBreakRows: breakRows,
-  };
 }

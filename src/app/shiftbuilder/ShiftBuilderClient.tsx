@@ -2707,7 +2707,7 @@ function AuthedShiftBuilder() {
 
   // Phase 1 Live Cache + Optimistic Layer
   // Provides assign/unassign with instant UI (Query + Zustand), perfect rollback,
-  // conflict toasts, and realtime sync from other clients.
+  // conflict toasts. Multi-operator sync is poll + mutation invalidation (KD-13).
   const live = useLiveAssignments(selectedDay);
 
   // Graves Default Schedule page uses its own QueryClient — broadcast invalidates ours.
@@ -2724,7 +2724,7 @@ function AuthedShiftBuilder() {
         const url = nid
           ? `/api/shiftbuilder/scheduled-roster?date=${dateStr}&night_id=${nid}`
           : `/api/shiftbuilder/scheduled-roster?date=${dateStr}`;
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url, { cache: "no-store", credentials: "same-origin" });
         if (res.ok) {
           const data = await res.json();
           setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
@@ -2744,11 +2744,14 @@ function AuthedShiftBuilder() {
     };
   }, [currentNight.queryClient, selectedDay, queryNightId, nightId]);
 
-  // Subscribe to realtime for this night when we have an ID (idempotent).
-  // Teardown on unmount / major day change is handled via effect below.
+  // Register night for poll-sync status (KD-13 — no Supabase Realtime).
   React.useEffect(() => {
     if (queryNightId) {
-      const cleanup = initLiveCacheForNight(queryNightId, nightDateKey(selectedDay.date), /* queryClient from useCurrentNight */ currentNight.queryClient);
+      const cleanup = initLiveCacheForNight(
+        queryNightId,
+        nightDateKey(selectedDay.date),
+        currentNight.queryClient,
+      );
       return () => {
         cleanup?.();
       };
@@ -2790,102 +2793,8 @@ function AuthedShiftBuilder() {
     [builderOperatorName, currentOperator?.id, nightId, queryNightId, selectedDay.date],
   );
 
-  // Release live cache when ShiftBuilder unmounts
+  // Release live cache registration when ShiftBuilder unmounts
   React.useEffect(() => retainLiveCacheMount(), []);
-
-  // === Realtime for night_tm_status + call_offs (TM schedule changes) ===
-  // When operator (or another user) marks LOA, PTO, changes a shift, or adds call-off,
-  // we want the planner + engine to see it immediately.
-  //
-  // IMPORTANT: Channel creation is async (dynamic import) so we use a cancellation
-  // guard + captured instance arrays. This prevents overlapping subscriptions when
-  // the date changes rapidly or during HMR/StrictMode double-invocation.
-  React.useEffect(() => {
-    if (!nightId) return;
-
-    let cancelled = false;
-    const createdChannels: any[] = [];
-    const teardownFns: Array<() => void> = [];
-
-    (async () => {
-      // Dynamically import the realtime channel helpers (eliminates last static data.ts edge)
-      const {
-        createNightScheduleStatusChannel,
-        createCallOffsChannel,
-        createGravesScheduleChannels,
-        unsubscribeChannel,
-      } = await import("@/lib/shiftbuilder/data");
-
-      if (cancelled) return;
-
-      const nightDateIso = selectedDay.date.toISOString().slice(0, 10);
-
-      const statusChannel = createNightScheduleStatusChannel(nightId, async () => {
-        try {
-          const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
-            credentials: "same-origin",
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
-          }
-        } catch {}
-      });
-      createdChannels.push(statusChannel);
-
-      const callOffChannel = createCallOffsChannel(nightDateIso, async () => {
-        const { getCallOffsForDate } = await import("@/lib/shiftbuilder/tmCommands");
-        const freshCalledOff = await getCallOffsForDate(selectedDay.date);
-        setCalledOffIds(freshCalledOff);
-      });
-      createdChannels.push(callOffChannel);
-
-      const refreshScheduledRoster = async () => {
-        try {
-          const dateStr = selectedDay.date.toISOString().slice(0, 10);
-          const res = await fetch(`/api/shiftbuilder/scheduled-roster?date=${dateStr}`, {
-            credentials: "same-origin",
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setScheduledTmIdsTonight(boardTmIdsFromScheduled(data.allScheduled || []));
-          }
-        } catch {}
-      };
-
-      const gravesScheduleChannels = createGravesScheduleChannels(async () => {
-        await refreshScheduledRoster();
-      });
-      createdChannels.push(...gravesScheduleChannels);
-
-      // Build teardown after we know we weren't cancelled
-      if (!cancelled) {
-        teardownFns.push(
-          () => unsubscribeChannel(statusChannel),
-          () => unsubscribeChannel(callOffChannel),
-          ...gravesScheduleChannels.map((ch) => () => unsubscribeChannel(ch)),
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      // Run every teardown we registered for *this* effect invocation
-      teardownFns.forEach((fn) => {
-        try { fn(); } catch {}
-      });
-      // Extra safety: remove any channel objects we captured even if unsubscribe failed
-      createdChannels.forEach((ch) => {
-        if (ch) {
-          // fire-and-forget is acceptable here; we are unmounting / switching
-          import("@/lib/shiftbuilder/data").then(({ unsubscribeChannel }) => {
-            unsubscribeChannel(ch).catch(() => {});
-          }).catch(() => {});
-        }
-      });
-    };
-  }, [nightId, selectedDay.date, realtimeResumeEpoch]);
 
   // Day/week nav provided by useDayNavigation hook (Phase 2 extraction)
   // Prefetch logic moved or kept minimal in caller if needed.
@@ -5904,17 +5813,17 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     }
   }, [effectiveRecentZoneHistory]);
 
+  // Call-offs from session night-secondary poll (KD-13) — no anon SELECT fallback.
   React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { getCallOffsForDate } = await import("@/lib/shiftbuilder/tmCommands");
-      const callOffSet = await getCallOffsForDate(selectedDay.date);
-      if (!cancelled) setCalledOffIds(callOffSet);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDay.date, tmCommandEpoch]);
+    const fromSecondary = (currentNight as { calledOffIds?: Set<string> }).calledOffIds;
+    if (fromSecondary instanceof Set) {
+      setCalledOffIds(new Set(fromSecondary));
+      return;
+    }
+    if (Array.isArray(fromSecondary)) {
+      setCalledOffIds(new Set(fromSecondary as string[]));
+    }
+  }, [currentNight.calledOffIds, selectedDay.date, tmCommandEpoch]);
 
   React.useEffect(() => {
     setLoadingAssignments(boardColdLoading);

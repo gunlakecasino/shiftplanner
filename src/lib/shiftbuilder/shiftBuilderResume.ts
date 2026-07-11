@@ -13,10 +13,12 @@ export type ShiftBuilderResumeOptions = {
 let resumeInFlight: Promise<void> | null = null;
 
 /**
- * Re-establish ShiftBuilder connectivity after idle / background / socket drop.
- * - Re-warms Supabase REST
- * - Re-subscribes assignment realtime
- * - Refetches the active night's query bundles
+ * Re-establish ShiftBuilder connectivity after idle / background / network drop.
+ * - Re-warms TLS to Supabase REST (non-ops ping)
+ * - Re-registers poll status for the active night
+ * - Refetches the active night's session API bundles
+ *
+ * KD-13: no Realtime re-subscribe — multi-operator sync is poll + invalidation.
  */
 export async function resumeShiftBuilderConnectivity(
   opts: ShiftBuilderResumeOptions,
@@ -53,7 +55,7 @@ let deepRefreshInFlight: Promise<void> | null = null;
 
 /**
  * Deep refresh for the active grave night: bust server bundles, invalidate TanStack,
- * force refetch nightCore + nightSecondary, re-warm Supabase + realtime.
+ * force refetch nightCore + nightSecondary, re-warm REST.
  */
 export async function deepRefreshShiftBuilderDay(
   opts: ShiftBuilderResumeOptions,
