@@ -61,6 +61,7 @@ pnpm start   # http://localhost:3000/shiftbuilder
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only |
 | `OPS_SESSION_SECRET` | Session cookie signing (required in prod) |
 | `XAI_API_KEY` | Optional — AI placement engine |
+| `AUTH_RELAXED_ORIGIN` | Emergency only (`1`) — temporary Host-only auth origin break-glass for headerless WebViews; remove after soak |
 
 ---
 

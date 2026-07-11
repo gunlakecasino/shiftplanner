@@ -169,6 +169,7 @@ See `src/app/api/shiftbuilder/_lib/routeMap.ts` for the full map.
 | `OPS_SESSION_SECRET` | Runtime only — **required in production** (session cookie HMAC) |
 | `OPS_SESSION_SECRET_PREV` | Runtime only — optional one-release dual-verify during secret rotation |
 | `XAI_API_KEY` | Runtime only (optional, AI engine) |
+| `AUTH_RELAXED_ORIGIN` | **Emergency only** — set to `1` for one-release WebView/iPad soak if PIN login 403s after same-origin tighten; **unset after soak** (never leave on in production) |
 
 **KD-2 / production session secret (Railway — set before deploy):**
 
