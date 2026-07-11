@@ -1210,7 +1210,21 @@ function AuthedShiftBuilder() {
     }, [assignments]),
   });
 
-  const { auxDefs, setAuxDefs, addAuxSlot, setAuxRole, setAuxLabel, canAddAux, canRemoveAux, lastAuxSlotLabel, removeLastAuxSlot, scheduleAuxLayoutSave, flushAuxLayoutSave } = auxLayout;
+  const {
+    auxDefs,
+    setAuxDefs,
+    hydrateAuxLayout,
+    isAuxLayoutHydrated,
+    addAuxSlot,
+    setAuxRole,
+    setAuxLabel,
+    canAddAux,
+    canRemoveAux,
+    lastAuxSlotLabel,
+    removeLastAuxSlot,
+    scheduleAuxLayoutSave,
+    flushAuxLayoutSave,
+  } = auxLayout;
 
   // === Print manager — extracted (high impact decomposition) ===
   const printManager = usePrintManager({
@@ -1872,8 +1886,9 @@ function AuthedShiftBuilder() {
   }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Enforce core aux cards: ADMIN first, Z9 SR second (always present).
-  // Reorders / promotes blanks via ensureCoreAuxRoles (exported as ensureAdminFirst).
+  // Only after night-core hydration — never promote/save against the pre-load default shell.
   React.useEffect(() => {
+    if (!isAuxLayoutHydrated) return;
     if (!auxDefs || auxDefs.length === 0) return;
     const ensured = ensureAdminFirst(auxDefs);
     const same =
@@ -1886,8 +1901,9 @@ function AuthedShiftBuilder() {
       );
     if (same) return;
     setAuxDefs(ensured);
+    // Core-role backfill is a real layout change for this night — persist once hydrated.
     queueMicrotask(() => scheduleAuxLayoutSave(0));
-  }, [auxDefs, setAuxDefs, scheduleAuxLayoutSave]);
+  }, [auxDefs, setAuxDefs, scheduleAuxLayoutSave, isAuxLayoutHydrated]);
 
   // Keyboard shortcuts for undo/redo (one tab session)
   useEffect(() => {
@@ -2517,44 +2533,39 @@ function AuthedShiftBuilder() {
   // Note: auxDefs sync to store is handled earlier via seed + effect (Phase 1 unification)
   // for narrow useAuxDefs() consumers. Duplicate removed for consistency.
 
-  // Hydrate auxDefs per night from night-core query
+  // Hydrate auxDefs per night from night-core query.
+  // hydrateAuxLayout enables persist; until then saves are blocked so the
+  // default Admin+Z9SR shell cannot overwrite a saved oasis/trash/etc layout.
   const hydratedAuxDayRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     hydratedAuxDayRef.current = null;
-    // aux hydration reset now handled inside useAuxLayout + shiftData effects (Phase 2)
   }, [selectedDay.date]);
 
   React.useEffect(() => {
     const dayKey = nightDateKey(selectedDay.date);
     if (hydratedAuxDayRef.current === dayKey) return;
-    if (boardColdLoading || currentNight.isCoreFetching) return;
+    // Wait for the real night-core payload (not keepPreviousData / in-flight).
+    if (boardColdLoading || currentNight.isCoreFetching || currentNight.isCorePlaceholder) {
+      return;
+    }
 
     const fromQuery = currentNight.auxDefs;
     if (fromQuery == null) return;
 
     hydratedAuxDayRef.current = dayKey;
-    const normalized = fromQuery.map((d: any) => ({
-      ...d,
-      role: d.role ?? "blank",
-    }));
-    const ensured = ensureAdminFirst(normalized);
-    setAuxDefs(ensured); // via hook
-    const nid = currentNight.nightId;
-    // fingerprint handled inside hook
+    hydrateAuxLayout(fromQuery, currentNight.nightId ?? null);
   }, [
     selectedDay.date,
     boardColdLoading,
     currentNight.isCoreFetching,
+    currentNight.isCorePlaceholder,
     currentNight.auxDefs,
     currentNight.nightId,
+    hydrateAuxLayout,
   ]);
 
-  // Persist via hook
-  React.useEffect(() => {
-    // The hook internally guards and schedules on changes after hydration
-    scheduleAuxLayoutSave(250);
-  }, [auxDefs, scheduleAuxLayoutSave]);
-
+  // Flush pending layout only when leaving a hydrated night (unmount / flush identity change).
+  // No blanket "save on every auxDefs tick" — that raced pre-hydrate defaults onto the server.
   React.useEffect(() => {
     return () => {
       void flushAuxLayoutSave();
@@ -3192,7 +3203,10 @@ function AuthedShiftBuilder() {
 
   const applySnapshot = (snapshot: Snapshot) => {
     setAssignments(snapshot.assignments);
-    setAuxDefs(snapshot.auxDefs);
+    // Re-hydrate so undo/redo of aux roles persists under the same gate (and
+    // stamps fingerprint), instead of a silent setAuxDefs that never saves.
+    hydrateAuxLayout(snapshot.auxDefs, currentNight.nightId ?? nightId ?? null);
+    queueMicrotask(() => scheduleAuxLayoutSave(0));
   };
 
   const recordWithSnapshot = (description: string, before: Snapshot, mutator: () => void) => {
