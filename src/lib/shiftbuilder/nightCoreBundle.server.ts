@@ -25,6 +25,7 @@ import type { AuxDef } from "./placement";
 import {
   resolveAuxLayout,
   remapAssignmentsToAuxKeys,
+  ensureAuxShellsForAssignmentKeys,
   defaultAuxDefsForNewNight,
 } from "./auxLayout";
 
@@ -203,11 +204,14 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
   const legacyAssignments = enrichAssignmentsWithBreakGroups(dbAssignments, defaultBreakMap);
 
   const storedAuxLayout = nightId ? await fetchAuxLayoutForNight(nightId) : null;
-  const auxDefs = storedAuxLayout
+  let auxDefs = storedAuxLayout
     ? resolveAuxLayout(storedAuxLayout, dbAssignments)
     : nightId
       ? resolveAuxLayout(null, dbAssignments)
       : defaultAuxDefsForNewNight();
+  // Ensure shells exist for every DB aux assignment (step_up, admin, …) so TMs
+  // never land on a key the board does not render (e.g. STEP vs AUX3).
+  auxDefs = ensureAuxShellsForAssignmentKeys(auxDefs, Object.keys(legacyAssignments));
   const assignments = remapAssignmentsToAuxKeys(legacyAssignments, auxDefs);
 
   const members = allMembers.map((tm) => ({

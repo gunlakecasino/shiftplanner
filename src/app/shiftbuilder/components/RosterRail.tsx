@@ -46,6 +46,8 @@ export interface RosterRailProps {
   canEditAssignments: boolean;
   /** Remove TM from Called Off — returns them to the assignable pool (slots stay cleared). */
   onUnmarkCalledOff?: (tmId: string, tmName: string) => void | Promise<void>;
+  /** Unplace a placed TM from their board card (Already Placed section). */
+  onUnplaceTm?: (tmId: string, tmName: string) => void;
   amOverlapDayName?: string;
   amOverlapDateNum?: number;
   selectedDay: { name: string; dateNum: number };
@@ -162,6 +164,7 @@ const RosterRail = React.memo(function RosterRail({
   isCurrentNightLocked,
   canEditAssignments,
   onUnmarkCalledOff,
+  onUnplaceTm,
   amOverlapDayName,
   amOverlapDateNum,
   selectedDay,
@@ -362,8 +365,12 @@ const RosterRail = React.memo(function RosterRail({
       emphasis,
       isLocked: isCurrentNightLocked,
       canEdit: canEditAssignments,
+      onUnplace:
+        isPlaced(tm) && canEditAssignments && !isCurrentNightLocked && onUnplaceTm
+          ? onUnplaceTm
+          : undefined,
     }),
-    [isPlaced, isCurrentNightLocked, canEditAssignments],
+    [isPlaced, isCurrentNightLocked, canEditAssignments, onUnplaceTm],
   );
 
   const scheduleEmpty = !isRosterLoading && scheduleRoster.length === 0;

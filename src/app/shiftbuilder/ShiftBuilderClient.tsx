@@ -8007,6 +8007,15 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
                 onUnmarkCalledOff={handleUnmarkCalledOff}
+                onUnplaceTm={(tmId, tmName) => {
+                  const slotKey = getSlotForTmId(tmId);
+                  if (!slotKey) {
+                    showToast(`Could not find board slot for ${tmName}`, "error");
+                    return;
+                  }
+                  handleBoardLiveUnassign(slotKey);
+                  showToast(`Unplaced ${tmName}`, "success");
+                }}
                 amOverlapDayName={amOverlapDayName}
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}

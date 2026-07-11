@@ -15,6 +15,8 @@ export interface RosterItemProps {
   emphasis: "on" | "off" | "scheduled";
   isLocked?: boolean;
   canEdit?: boolean;
+  /** Unplace this TM from their board slot (Already Placed section). */
+  onUnplace?: (tmId: string, tmName: string) => void;
 }
 
 const RosterItem = React.memo(function RosterItem({
@@ -23,6 +25,7 @@ const RosterItem = React.memo(function RosterItem({
   emphasis,
   isLocked = false,
   canEdit = true,
+  onUnplace,
 }: RosterItemProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tm:${tm.id}`,
@@ -80,13 +83,35 @@ const RosterItem = React.memo(function RosterItem({
       </div>
 
       {isAssigned && (
-        <div className="sb-roster-placed-badge" title="Already placed on the board">
-          <span
-            className="ms"
-            style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 500, "opsz" 20' }}
-          >
-            check_circle
-          </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {canEdit && !isLocked && onUnplace ? (
+            <button
+              type="button"
+              className="sb-roster-unplace-btn opacity-70 group-hover:opacity-100 hover:opacity-100 px-1.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] hover:bg-[#FF3B3014] active:scale-95 transition-all"
+              title={`Unplace ${tm.name} from the board`}
+              aria-label={`Unplace ${tm.name}`}
+              onPointerDown={(e) => {
+                // Don't start a drag from the unplace control
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onUnplace(tm.id, tm.name);
+              }}
+            >
+              Unplace
+            </button>
+          ) : (
+            <div className="sb-roster-placed-badge" title="Already placed on the board">
+              <span
+                className="ms"
+                style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 500, "opsz" 20' }}
+              >
+                check_circle
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

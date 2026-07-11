@@ -10,6 +10,9 @@ import {
   coerceMislabeledAuxRoles,
   inferAuxRoleFromLabel,
   trailKeyFromDbSlotAndLayout,
+  remapAssignmentsToAuxKeys,
+  ensureAuxShellsForAssignmentKeys,
+  roleNthFromAssignmentKey,
 } from "../auxLayout";
 import { uiToDb, dbToUi } from "../slot-keys";
 
@@ -218,5 +221,39 @@ describe("Step Up is opt-in (not permanent) + mislabel repair", () => {
     expect(trailKeyFromDbSlotAndLayout("AUX3", "aux", null, layout)).toBe(
       "STEP",
     );
+  });
+
+  it("remaps STEP/admin assignment keys onto AUXn shells so cards show TMs", () => {
+    expect(roleNthFromAssignmentKey("STEP")).toEqual({ role: "step_up", nth: 0 });
+    expect(roleNthFromAssignmentKey("ADM")).toEqual({ role: "admin", nth: 0 });
+    expect(roleNthFromAssignmentKey("SUP1")).toEqual({ role: "support", nth: 0 });
+
+    let defs = defaultAuxDefsForNewNight();
+    defs = applyAuxRole(defs, "AUX3", "step_up");
+    const remapped = remapAssignmentsToAuxKeys(
+      {
+        STEP: { tmId: "tm_cookie", tmName: "Cookie", breakGroup: 1 },
+        ADM: { tmId: "tm_admin", tmName: "Admin", breakGroup: 2 },
+      },
+      defs,
+    );
+    expect(remapped.AUX3?.tmId).toBe("tm_cookie");
+    expect(remapped.AUX1?.tmId).toBe("tm_admin");
+    expect(remapped.STEP).toBeUndefined();
+    expect(remapped.ADM).toBeUndefined();
+  });
+
+  it("recreates missing step_up shell when assignment exists but layout lost the role", () => {
+    // Layout only has admin + blanks — step_up assignment would vanish without this.
+    const defs = defaultAuxDefsForNewNight();
+    const ensured = ensureAuxShellsForAssignmentKeys(defs, ["STEP", "ADM"]);
+    expect(ensured.some((d) => d.role === "step_up")).toBe(true);
+    expect(ensured.some((d) => d.role === "admin")).toBe(true);
+    const remapped = remapAssignmentsToAuxKeys(
+      { STEP: { tmId: "tm_x", tmName: "X" } },
+      ensured,
+    );
+    const stepKey = ensured.find((d) => d.role === "step_up")!.key;
+    expect(remapped[stepKey]?.tmId).toBe("tm_x");
   });
 });

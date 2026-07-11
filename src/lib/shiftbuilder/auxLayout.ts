@@ -179,12 +179,91 @@ export function resolveAuxLayout(
   );
 }
 
+/**
+ * Map a UI/DB assignment key to { role, nth } for flex AUXn shells.
+ * Critical: dbToUi("step_up") → "STEP", but cards render as AUX3 with role step_up.
+ * Without this remap, assigned TMs disappear on refresh.
+ */
+export function roleNthFromAssignmentKey(
+  key: string,
+): { role: AuxRole; nth: number } | null {
+  if (!key) return null;
+  const k = key.trim();
+  if (k === "ADM" || k === "ADMIN" || k === "admin") return { role: "admin", nth: 0 };
+  if (k === "Z9SR" || k === "z9_sr") return { role: "z9sr", nth: 0 };
+  if (k === "STEP" || k === "step_up" || k === "STEPUP") return { role: "step_up", nth: 0 };
+  if (k === "JC" || k === "job_coach") return { role: "job_coach", nth: 0 };
+
+  let m = k.match(/^(?:SP|SUP|support_)(\d+)$/i);
+  if (m) return { role: "support", nth: Math.max(0, parseInt(m[1], 10) - 1) };
+  m = k.match(/^(?:TR|TSH|trash_)(\d+)$/i);
+  if (m) return { role: "trash", nth: Math.max(0, parseInt(m[1], 10) - 1) };
+  m = k.match(/^(?:OAS|oasis_)(\d+)$/i);
+  if (m) return { role: "oasis", nth: Math.max(0, parseInt(m[1], 10) - 1) };
+
+  // Already a flex shell key — leave as-is (caller skips)
+  if (/^AUX\d+$/i.test(k)) return null;
+  return null;
+}
+
+/**
+ * Ensure layout has a shell for every role that has a live assignment.
+ * Prevents ghost TMs when DB has step_up/admin/… but aux_layout lost the role.
+ */
+export function ensureAuxShellsForAssignmentKeys(
+  auxDefs: AuxDef[],
+  assignmentKeys: string[],
+): AuxDef[] {
+  let next = ensureCoreAuxRoles(auxDefs?.length ? [...auxDefs] : defaultAuxDefsForNewNight());
+
+  for (const key of assignmentKeys) {
+    const parsed = roleNthFromAssignmentKey(key);
+    if (!parsed) continue;
+    const { role, nth } = parsed;
+    const shells = next.filter((d) => d.role === role);
+    if (shells[nth]) continue;
+
+    // Need more shells of this role — promote blanks or append.
+    while (next.filter((d) => d.role === role).length <= nth) {
+      const blank = next.find((d) => d.role === "blank" && !d.label?.trim());
+      if (blank) {
+        next = applyAuxRole(next, blank.key, role);
+        continue;
+      }
+      if (next.length >= MAX_AUX_SLOTS) break;
+      const slot = createBlankAuxSlot(next);
+      if (!slot) break;
+      next = applyAuxRole([...next, slot], slot.key, role);
+    }
+  }
+
+  return ensureCoreAuxRoles(next);
+}
+
 export function remapAssignmentsToAuxKeys(
   assignments: Record<string, any>,
   auxDefs: AuxDef[],
 ): Record<string, any> {
   const out = { ...assignments };
 
+  // Legacy fixed keys + role-stable trail keys → flex AUXn
+  const candidates = Object.keys(out);
+  for (const key of candidates) {
+    const data = out[key];
+    if (!data?.tmId && !data?.tmName) continue;
+    if (/^AUX\d+$/i.test(key)) continue; // already on a shell
+
+    const parsed = roleNthFromAssignmentKey(key);
+    if (!parsed) continue;
+    const shells = auxDefs.filter((d) => d.role === parsed.role);
+    const target = shells[parsed.nth] ?? shells[0];
+    if (!target) continue;
+    if (out[target.key]?.tmId && out[target.key].tmId !== data.tmId) continue;
+    out[target.key] = { ...data };
+    if (target.key !== key) delete out[key];
+  }
+
+  // Also run legacy order for any remaining TR1/SP1 etc.
   for (const { legacyKey, role, nth } of LEGACY_REMAP_ORDER) {
     const data = out[legacyKey];
     if (!data?.tmId && !data?.tmName) continue;
@@ -193,21 +272,6 @@ export function remapAssignmentsToAuxKeys(
     if (target && !out[target.key]?.tmId) {
       out[target.key] = data;
       delete out[legacyKey];
-    }
-  }
-
-  // After coerceMislabeledAuxRoles turns support+"STEP UP" into step_up, SP1/support_1
-  // occupancy must land on the Step Up shell (otherwise Cookie vanishes from the board
-  // and trails keep saying SP1).
-  const stepShell = auxDefs.find((d) => d.role === "step_up");
-  const supportShells = auxDefs.filter((d) => d.role === "support");
-  if (stepShell && supportShells.length === 0) {
-    for (const orphanKey of ["SP1", "support_1", "SUP1"]) {
-      const data = out[orphanKey];
-      if (!data?.tmId && !data?.tmName) continue;
-      if (out[stepShell.key]?.tmId) continue;
-      out[stepShell.key] = data;
-      delete out[orphanKey];
     }
   }
 
