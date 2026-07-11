@@ -37,6 +37,7 @@ import {
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
   placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
+  spreadCountForRepeatKey,
   weekEntriesForTm,
 } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 import type { PrerenderedPlacementFit } from "@/lib/shiftbuilder/rotation/placementFitScore";
@@ -959,11 +960,14 @@ export function applyGranularHealthToFitMap(
         members,
       });
 
+      // Keep summary in sync with the granular verdict (avoids "Best" label with
+      // "strong fit" text after a re-score that dropped to acceptable/etc.).
       out[slotKey] = {
         ...existing,
         healthPoints: preview.healthPoints,
         fitVerdict: preview.fitVerdict as PlacementFitVerdict,
-        fitFactLine: preview.fitFactLine,
+        fitSummary: preview.fitSummary || existing.fitSummary,
+        fitFactLine: preview.fitFactLine || existing.fitFactLine,
       };
     } catch {
       // Keep whatever fit was already in `out` (a real computed fit, or the conservative
@@ -1062,7 +1066,8 @@ export function previewCandidateRotationFit(
   );
   const tmWeekEntries = weekEntriesForTm(scopedWeek, tmId, tonightIso);
   const last5 = getMergedPlacementSequence(history, LAST5_SOFT_TRAIL_COUNT, tonightIso, tmWeekEntries);
-  const timesInSpread = spreadCounts.get(slotKey) ?? 0;
+  // Area-merge RR sides (MRR8/WRR8) — must match computeSlotPlacementFit / critical-repeat.
+  const timesInSpread = spreadCountForRepeatKey(spreadCounts, slotKey);
   const inLast5 = isSlotInPlacementSequence(last5, slotKey);
   const last5Index = last5.findIndex((ui) => placementRepeatKeysMatch(ui, slotKey));
 

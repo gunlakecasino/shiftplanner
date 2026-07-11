@@ -3827,7 +3827,7 @@ function AuthedShiftBuilder() {
 const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   const deploymentRotationFitEnabled =
-    currentView === "deployment" &&
+    (currentView === "deployment" || !!selectedSlotKey) &&
     engineRunPhase === "idle" &&
     !restoreDefaultBreaksBusy &&
     !applyDefaultTasksBusy &&
@@ -8300,6 +8300,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                     onMarkUnavailable: handlePadMarkUnavailable,
                     isDraftMode,
                     draftAssignments,
+                    weeklyRecentHistory: plannedThisWeekRecentHistory,
+                    boardPrerenderedFit: selectedSlotKey
+                      ? deploymentFitBySlot[selectedSlotKey]
+                      : undefined,
                   };
                   return (
                     <PlacementPad
