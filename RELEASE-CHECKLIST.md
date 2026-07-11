@@ -281,25 +281,11 @@ After **PR 11** (kill client API fallbacks + ops Realtime → poll) is **deploye
 - [ ] No open critical residual client REST fallbacks for board read path
 - [ ] Floor smoke still green after soak (auth, day switch, assign/Apply, print as applicable)
 
-### Blocked until gate — PR 13 SQL + curl proof
+### Blocked until gate — PR 13 SQL
 
-**Do not run** anon SELECT revoke / drop `*_anon_authenticated_read` (or equivalent) on ops tables until the checklist above is signed.
+**Do not run** anon SELECT revoke / drop `*_anon_authenticated_read` (or equivalent) on ops tables until the soak checklist above is signed.
 
-When the gate passes, **PR 13** owns the migration (reverse SQL in migration comments) and **staging REST proof** with the public anon key. Reference curl DoD (run on **staging after PR 13 SQL**, not during soak):
-
-```bash
-# Expect permission denied / empty under RLS — not 200 with data rows
-curl -sS "$SUPABASE_URL/rest/v1/zone_assignments?select=id&limit=1" \
-  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
-curl -sS "$SUPABASE_URL/rest/v1/nights?select=id&limit=1" \
-  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
-curl -sS "$SUPABASE_URL/rest/v1/tm_profiles?select=tm_id&limit=1" \
-  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
-curl -sS "$SUPABASE_URL/rest/v1/ops_ai_feedback?select=id&limit=1" \
-  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
-```
-
-After PR 13: logged-in board still works via session APIs; rollback = reverse SQL for SELECT policies (PR 11 code can stay).
+When the gate passes, continue with **Security — PR 13 revoke anon SELECT** (migration + staging curl DoD below).
 
 ### Soak sign-off
 
@@ -310,12 +296,70 @@ After PR 13: logged-in board still works via session APIs; rollback = reverse SQ
 
 ---
 
+## Security — PR 13 revoke anon SELECT (after soak gate)
+
+**Migration file only in repo until deliberately applied.**  
+Path: `supabase/migrations/20260711_revoke_anon_select_ops_tables.sql`
+
+- Drops `*_anon_authenticated_read` (and residual `*_anon_authenticated_all`) on:  
+  `nights`, `zone_assignments`, `break_assignments`, `overlap_assignments`,  
+  `night_slot_tasks`, `night_card_borders`, `night_tm_status`, `call_offs`, `tm_profiles`
+- Reasserts **service_role** `FOR ALL` on those tables
+- Closes residual open policies on `ops_ai_feedback` / `ops_supervisor_knowledge` (service_role only; idempotent with PR 6)
+- **Reverse SQL** is documented in migration comments (emergency only)
+- Access model after apply: **service_role + session-gated APIs only** (no browser anon REST reads)
+
+**Hard rules**
+
+- [ ] Soak gate above is **signed** before any apply
+- [ ] Apply on **staging first** — do **not** auto-apply to production as part of this PR merge alone
+- [ ] Prefer low-traffic window for production apply
+- [ ] Do **not** set or ship `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`
+
+### Staging curl proof (required DoD — design PR 11c)
+
+Run **after** the migration is applied on staging. Expect **permission denied / empty under RLS** — **not** HTTP 200 with data rows.
+
+```bash
+# Staging anon SELECT proof (required for PR 11c / exec PR 13)
+# Expect permission denied / empty under RLS — not 200 with rows
+export SUPABASE_URL="https://YOUR_STAGING_PROJECT.supabase.co"
+export ANON_KEY="YOUR_STAGING_ANON_KEY"
+
+curl -sS "$SUPABASE_URL/rest/v1/zone_assignments?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/nights?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/tm_profiles?select=tm_id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/ops_ai_feedback?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+```
+
+### Post-migration verification
+
+- [ ] Staging curl block above: anon cannot read ops rows (empty / RLS denial for each table)
+- [ ] PIN-authenticated board still loads via session APIs (`/api/shiftbuilder/night-core`, night secondary, roster)
+- [ ] Floor smoke: day switch, assign/Apply, print as applicable
+- [ ] Multi-tab poll still works (no Realtime dependency on anon SELECT)
+- [ ] Production apply (only after staging green + soak signed): migration applied deliberately; re-run curl on prod with **prod** anon key
+
+### PR 13 sign-off
+
+- [ ] Staging apply + curl DoD: _______________
+- [ ] Logged-in board verified on staging: _______________
+- [ ] Production apply (if authorized): _______________
+- [ ] Prod curl re-check: _______________
+
+---
+
 ## Post-deploy sign-off
 
 - [ ] Production URL loads `/shiftbuilder`
 - [ ] Floor supervisor iPad test
 - [ ] sudo_admin audit trail verified on live data
-- [ ] **Read-cutover soak hold** complete (24–48h after PR 11); **no** anon SELECT revoke until gate; PR 13 staging curl proof ready when SQL ships
+- [ ] **Read-cutover soak hold** complete (24–48h after PR 11); gate signed before PR 13 SQL
+- [ ] **PR 13:** staging curl proof green; anon cannot SELECT ops tables; session board still works
 - [x] Tag: `v1.0.0`
 
 ---
@@ -324,7 +368,7 @@ After PR 13: logged-in board still works via session APIs; rollback = reverse SQ
 
 1. Railway instant rollback to prior deployment
 2. Or redeploy prior git tag/commit
-3. **Read cutover:** Revert PR 11 deploy if board is unusable; do **not** rush PR 13 SQL as a “fix.” After PR 13, use reverse SQL for SELECT policies; keep PR 11 fail-closed reads.
+3. **Read cutover:** Revert PR 11 deploy if board is unusable; do **not** rush PR 13 SQL as a “fix.” After PR 13, use reverse SQL for SELECT policies in `20260711_revoke_anon_select_ops_tables.sql` comments; keep PR 11 fail-closed reads.
 
 ---
 
