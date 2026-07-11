@@ -488,6 +488,11 @@ function scoreMatrixFairnessSignals(
   const weights = resolvedWeights(ctx.config);
   const breakdown: MatrixFairnessSignals = {};
 
+  // Matrix is Z*/Z9SR only — RR/aux would always read as 0 exposure (false "fresh").
+  if (!/^Z\d+$/.test(slotKey) && slotKey !== "Z9SR") {
+    return breakdown;
+  }
+
   // 2026-05-30 fix: Use preloaded matrix (batched once by the engine caller in
   // ShiftBuilderClient + sudoActions). This eliminates the previous per-TM
   // Supabase N+1 inside the hot scoring loop (and fixes a latent bug where
