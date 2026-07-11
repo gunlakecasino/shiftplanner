@@ -28,9 +28,18 @@ const usedPinChangeTokens = new Map<string, number>();
  * forgery to the DB superkey). Dev may fall back to SUPABASE_SERVICE_ROLE_KEY
  * for local convenience only (never NEXT_PUBLIC_*).
  */
+const MIN_SESSION_SECRET_LEN = 32;
+
 function sessionSecret(): string | null {
   const dedicated = process.env.OPS_SESSION_SECRET?.trim();
-  if (dedicated) return dedicated;
+  if (dedicated) {
+    if (dedicated.length < MIN_SESSION_SECRET_LEN) {
+      console.warn(
+        `[opsSession] OPS_SESSION_SECRET is shorter than ${MIN_SESSION_SECRET_LEN} chars — use a longer random secret (e.g. openssl rand -base64 48)`,
+      );
+    }
+    return dedicated;
+  }
 
   if (process.env.NODE_ENV === "production") {
     console.error(

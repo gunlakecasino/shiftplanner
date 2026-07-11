@@ -169,14 +169,15 @@ export async function POST(request: NextRequest) {
   });
 
   if (!requiresPinChange && !attachSessionCookie(response, freshUser.id)) {
+    // KD-2: production signs only with OPS_SESSION_SECRET (no service-role fallback).
     console.error(
-      "[verify-pin] Session cookie not attached — set OPS_SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY on the server",
+      "[verify-pin] Session cookie not attached — set OPS_SESSION_SECRET on the server (required in production; service-role is not used for session signing)",
     );
     return NextResponse.json(
       {
         error:
           process.env.NODE_ENV === "production"
-            ? "Server session signing unavailable — set OPS_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY) on Railway"
+            ? "Server session signing unavailable — set OPS_SESSION_SECRET on Railway (required; not SUPABASE_SERVICE_ROLE_KEY)"
             : "Server session signing unavailable — add OPS_SESSION_SECRET to .env.local and restart pnpm dev",
       },
       { status: 503 },

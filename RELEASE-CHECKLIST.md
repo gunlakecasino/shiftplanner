@@ -172,12 +172,21 @@ See `src/app/api/shiftbuilder/_lib/routeMap.ts` for the full map.
 
 **KD-2 / production session secret (Railway — set before deploy):**
 
-- [ ] Set dedicated `OPS_SESSION_SECRET` on Railway (e.g. `openssl rand -base64 48`) **before** shipping the fail-closed build
+- [ ] Set `OPS_SESSION_SECRET` on Railway **before** shipping the fail-closed build
 - [ ] Do **not** rely on `SUPABASE_SERVICE_ROLE_KEY` (or any `NEXT_PUBLIC_*`) for session signing in production — that fallback is **removed**
 - [ ] **Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway
 - [ ] Missing `OPS_SESSION_SECRET` in production: `POST /api/auth/verify-pin` → **503** (no cookie); gated routes without valid session → **401**
-- [ ] Optional rotate without mass logout: set `OPS_SESSION_SECRET` = new, `OPS_SESSION_SECRET_PREV` = old material (server-only); sign uses primary only; verify accepts either. Remove `OPS_SESSION_SECRET_PREV` after soak
 - [ ] After deploy: PIN login succeeds **and** `GET /api/shiftbuilder/night-core?date=…` with session cookie returns **200**
+
+**First cutover (live service-role-as-signer → dedicated secret):**  
+If production is still signing sessions with service-role material (old warn-and-continue path), a fresh random `OPS_SESSION_SECRET` **without** PREV will invalidate all mid-shift cookies on deploy (login still works; floor ops re-PIN). Prefer continuity:
+
+- [ ] **(a)** Set `OPS_SESSION_SECRET` = **current live signer material** (often the service-role key value that was used as the HMAC secret), deploy fail-closed build, then later rotate to a dedicated random with PREV (below); **or**
+- [ ] **(b)** In the **same** Railway env change before deploy: `OPS_SESSION_SECRET` = new random (`openssl rand -base64 48`) **and** `OPS_SESSION_SECRET_PREV` = old service-role-as-session material (server-only). Sign uses primary only; verify accepts either.
+
+**Later rotate / soak:**
+
+- [ ] Optional rotate without mass logout: set `OPS_SESSION_SECRET` = new, `OPS_SESSION_SECRET_PREV` = old material; remove `OPS_SESSION_SECRET_PREV` after soak
 
 ---
 
