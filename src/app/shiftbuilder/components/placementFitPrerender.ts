@@ -1,8 +1,5 @@
-export type {
-  PrerenderedPlacementFit,
-  PlacementFitScoreInput,
-} from "./placementFitScore";
-export {
-  scorePlacementFit,
-  scorePlacementFit as computePrerenderedPlacementFit,
-} from "./placementFitScore";
+/**
+ * BC re-export shim — pure helpers live in `@/lib/shiftbuilder/rotation`.
+ * Prefer importing from `@/lib/shiftbuilder/rotation/placementFitPrerender` in new code.
+ */
+export * from "@/lib/shiftbuilder/rotation/placementFitPrerender";

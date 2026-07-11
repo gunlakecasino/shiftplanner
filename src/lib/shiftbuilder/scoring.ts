@@ -39,7 +39,7 @@ import {
   PRIOR_PLACEMENT_CRITICAL_WINDOW,
   shouldShowPlacementFitChip,
   weekEntriesForTm,
-} from "@/app/shiftbuilder/components/placementPadHelpers";
+} from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 import { assignmentTmId } from "./tmIdentity";
 
 /** Canonical TM id for scoring lookups (matches assignment rows + planner draft). */

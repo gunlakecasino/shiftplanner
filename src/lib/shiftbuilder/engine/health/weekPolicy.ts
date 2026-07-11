@@ -22,7 +22,7 @@ import {
   WEEK_POLICY_VIOLATION_PENALTY_CAP,
   WEEK_POLICY_FLOOR,
   type WeekRepeatViolation,
-} from "@/app/shiftbuilder/components/shiftRotationHealth";
+} from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
 import type { WeekNightRecord } from "../types";
 
 export interface WeekPolicyResult {

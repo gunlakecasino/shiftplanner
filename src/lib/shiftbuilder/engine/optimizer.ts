@@ -19,7 +19,7 @@ import type { Draft, NightContext, Relaxation, SlotModel, SlotPlacement } from "
 import { canPlace } from "./eligibility";
 import { rotationHealthPointsStatic } from "./health/model";
 import { prefScoreFor, skillScoreFor, hasHardAvoid, tierMultipliers, type TierMultipliers } from "./objective";
-import { isInPriorPlacementSameAreaWindow, weekEntriesForTm } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { isInPriorPlacementSameAreaWindow, weekEntriesForTm } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 
 export interface OptimizerOptions {
   seed?: number;

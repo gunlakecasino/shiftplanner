@@ -22,8 +22,8 @@ import type { ZoneDetailEntry } from "../../data";
 import {
   previewCandidateRotationFit,
 } from "../../rotationHealthEngineContext";
-import { PRIOR_PLACEMENT_CRITICAL_WINDOW } from "@/app/shiftbuilder/components/placementPadHelpers";
-import type { SlotAssignmentRow as FitSlotAssignmentRow } from "@/app/shiftbuilder/components/placementFitForSlot";
+import { PRIOR_PLACEMENT_CRITICAL_WINDOW } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
+import type { SlotAssignmentRow as FitSlotAssignmentRow } from "@/lib/shiftbuilder/rotation/placementFitForSlot";
 import type { AuxDef } from "../../placement";
 import { verdictFromPoints } from "./verdict";
 import type { PlacementFitVerdict, WeekNightRecord } from "../types";

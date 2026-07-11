@@ -36,10 +36,10 @@ import {
   PLACEMENT_SPREAD_NIGHTS,
   spreadCountForRepeatKey,
   weekEntriesForTm,
-} from "@/app/shiftbuilder/components/placementPadHelpers";
-import { scorePlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
-import { memberToPlacementProfile } from "@/app/shiftbuilder/components/placementFitForSlot";
-import { getTmWeekRepeatForSlotThroughNight } from "@/app/shiftbuilder/components/shiftRotationHealth";
+} from "@/lib/shiftbuilder/rotation/placementPadHelpers";
+import { scorePlacementFit } from "@/lib/shiftbuilder/rotation/placementFitScore";
+import { memberToPlacementProfile } from "@/lib/shiftbuilder/rotation/placementFitForSlot";
+import { getTmWeekRepeatForSlotThroughNight } from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
 import {
   isEligibleForSlot,
   isOptionalDeploymentSlot,

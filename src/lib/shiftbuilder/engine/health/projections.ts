@@ -16,7 +16,7 @@
 
 import { rotationHealthPoints } from "./model";
 import type { Draft, NightContext } from "../types";
-import { roundRotationHealthValue } from "@/app/shiftbuilder/components/shiftRotationHealth";
+import { roundRotationHealthValue } from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
 
 export interface DraftHealthProjection {
   /** Mean granular health across filled rotation-tracked slots, or null if none. */

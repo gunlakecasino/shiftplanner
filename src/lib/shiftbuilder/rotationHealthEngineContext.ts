@@ -13,7 +13,7 @@ import {
   resolveSlotAssignmentRow,
   type DraftAssignmentRow,
   type SlotAssignmentRow,
-} from "@/app/shiftbuilder/components/placementFitForSlot";
+} from "@/lib/shiftbuilder/rotation/placementFitForSlot";
 import {
   buildWeekRepeatData,
   computeDailyHealthPercent,
@@ -24,7 +24,7 @@ import {
   slotHealthPoints,
   type WeekNightRecord,
   type WeekRepeatViolation,
-} from "@/app/shiftbuilder/components/shiftRotationHealth";
+} from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
 import {
   collectDeploymentSlotKeys,
   getMergedPlacementSequence,
@@ -38,8 +38,8 @@ import {
   placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
   weekEntriesForTm,
-} from "@/app/shiftbuilder/components/placementPadHelpers";
-import type { PrerenderedPlacementFit } from "@/app/shiftbuilder/components/placementFitScore";
+} from "@/lib/shiftbuilder/rotation/placementPadHelpers";
+import type { PrerenderedPlacementFit } from "@/lib/shiftbuilder/rotation/placementFitScore";
 import type { PlacementFitVerdict } from "@/lib/shiftbuilder/placementPadInsightSchema";
 
 export type CandidateRotationPreview = {

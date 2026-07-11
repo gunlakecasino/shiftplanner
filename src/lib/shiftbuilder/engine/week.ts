@@ -29,8 +29,8 @@ import { weekPolicyScore } from "./health/weekPolicy";
 import { prefScoreFor, skillScoreFor } from "./objective";
 import { canPlace } from "./eligibility";
 import { resolvedWeights } from "../engineConfig";
-import { buildWeekRepeatData } from "@/app/shiftbuilder/components/shiftRotationHealth";
-import { placementRepeatKey } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { buildWeekRepeatData } from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
+import { placementRepeatKey } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 
 export interface WeekEngineInput {
   weekStartIso: string;

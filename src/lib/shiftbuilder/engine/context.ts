@@ -32,7 +32,7 @@ import {
   type AuxDef,
 } from "../placement";
 import { COVERAGE_TIERS, getTierForSlot } from "../skills/placement-engine";
-import { shouldShowPlacementFitChip } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { shouldShowPlacementFitChip } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 import { buildDefaultAdjacency } from "../scoring";
 import { assignmentTmId, boardTmId } from "../tmIdentity";
 import type {
