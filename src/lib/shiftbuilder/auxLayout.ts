@@ -354,6 +354,34 @@ export function trailKeyFromDbSlotAndLayout(
         return "STEP";
       }
     }
+
+    // Generic aux_N / AUXn storage (uiToDb without auxDefs, or live board keys)
+    // → resolve via that night's shell role so trails never show AUX3 for Step Up.
+    const auxN = slotKey.match(/^(?:aux_|AUX)(\d+)$/i);
+    if (auxN) {
+      const uiKey = `AUX${auxN[1]}`;
+      const shell = rawDefs.find((d) => d.key === uiKey);
+      if (shell) {
+        if (shell.role === "step_up" || inferAuxRoleFromLabel(shell.label || "") === "step_up") {
+          return "STEP";
+        }
+        if (shell.role === "job_coach" || inferAuxRoleFromLabel(shell.label || "") === "job_coach") {
+          return "JC";
+        }
+        if (shell.role && shell.role !== "blank") {
+          const nth = NUMBERED_AUX_ROLES.has(shell.role)
+            ? rawDefs
+                .filter((x) => x.role === shell.role)
+                .findIndex((x) => x.key === shell.key)
+            : 0;
+          return auxRoleTrailCode(shell.role, nth >= 0 ? nth : 0);
+        }
+        if (shell.label?.trim()) {
+          const inferred = inferAuxRoleFromLabel(shell.label);
+          if (inferred) return auxRoleTrailCode(inferred, 0);
+        }
+      }
+    }
   }
 
   if (defs?.length) {

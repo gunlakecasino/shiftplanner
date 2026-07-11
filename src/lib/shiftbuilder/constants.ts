@@ -95,19 +95,42 @@ export function canonicalizeAuxSlotKeyForTrail(
   auxDefs?: Array<{ key: string; role?: string; label?: string }>,
 ): string {
   if (!ui) return ui;
-  if (!/^AUX\d+$/i.test(ui) || !auxDefs?.length) return ui;
 
-  const def = auxDefs.find((d) => d.key === ui);
+  // Already-stable trail / DB ids
+  const upper = ui.toUpperCase();
+  if (/^(STEP|JC|ADMIN|Z9SR|SUP\d+|TSH\d+|OAS\d+)$/i.test(ui)) {
+    return upper;
+  }
+  if (/^SP(\d+)$/i.test(ui)) return upper.replace(/^SP/, "SUP");
+  if (/^TR(\d+)$/i.test(ui)) return upper.replace(/^TR/, "TSH");
+  if (ui === "step_up" || upper === "STEPUP") return "STEP";
+  if (ui === "job_coach") return "JC";
+  if (ui === "admin" || upper === "ADM") return "ADMIN";
+  if (ui === "z9_sr") return "Z9SR";
+
+  // Generic aux_3 DB key → AUX3 for shell lookup
+  const auxDb = ui.match(/^aux_(\d+)$/i);
+  const shellKey = auxDb ? `AUX${auxDb[1]}` : ui;
+
+  if (!/^AUX\d+$/i.test(shellKey) || !auxDefs?.length) {
+    // No layout: still never show bare AUX3 if label-like / known
+    return normalizeHistoryUiKey(ui);
+  }
+
+  const def = auxDefs.find((d) => d.key === shellKey);
   if (!def?.role || def.role === "blank") {
     if (def?.label?.trim()) {
-      return def.label.replace(/\s+/g, "").toUpperCase().slice(0, 10);
+      const inferred = def.label.replace(/\s+/g, "").toUpperCase();
+      if (inferred === "STEPUP" || inferred === "STEP") return "STEP";
+      if (inferred === "JOBCOACH" || inferred === "JC") return "JC";
+      return inferred.slice(0, 10);
     }
-    return ui;
+    return shellKey.toUpperCase();
   }
 
   const role = def.role as AuxRole;
   const nth = NUMBERED_AUX_ROLES.has(role)
-    ? auxDefs.filter((d) => d.role === role).findIndex((d) => d.key === ui)
+    ? auxDefs.filter((d) => d.role === role).findIndex((d) => d.key === shellKey)
     : 0;
   return auxRoleTrailCode(role, nth >= 0 ? nth : 0);
 }

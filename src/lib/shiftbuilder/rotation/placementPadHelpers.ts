@@ -348,26 +348,76 @@ export function collectPlacementTrailEvents(
     for (const [ui, ds] of Object.entries(history.zoneDates)) {
       for (const d of ds || []) {
         if (beforeIso && d >= beforeIso) continue;
-        events.push({ ui, d });
+        // Collapse AUX3 / step_up / STEP aliases so one night isn't two trail chips.
+        events.push({ ui: normalizePlacementIdentity(ui), d });
       }
     }
   }
 
-  const seen = new Set(events.map((e) => `${e.d}|${e.ui}`));
+  // Prefer stable codes (STEP) over shell ids (AUX3) when both appear for same night.
+  const preferStable = (a: string, b: string) => {
+    const aAux = /^AUX\d+$/i.test(a);
+    const bAux = /^AUX\d+$/i.test(b);
+    if (aAux && !bAux) return b;
+    if (bAux && !aAux) return a;
+    return a;
+  };
+
+  const byNight = new Map<string, string>(); // nightDate → best ui
+  for (const e of events) {
+    const prev = byNight.get(e.d);
+    byNight.set(e.d, prev ? preferStable(prev, e.ui) : e.ui);
+  }
+
+  // Allow multiple distinct areas same night only if both are stable non-AUX keys
+  // (rare; e.g. shouldn't happen for singular ownership). Rebuild multi-key nights carefully:
+  const multi: Array<{ ui: string; d: string }> = [];
+  const nightKeys = new Map<string, Set<string>>();
+  for (const e of events) {
+    const set = nightKeys.get(e.d) ?? new Set();
+    set.add(e.ui);
+    nightKeys.set(e.d, set);
+  }
+  for (const [d, keys] of nightKeys) {
+    const list = [...keys];
+    const nonAux = list.filter((k) => !/^AUX\d+$/i.test(k));
+    const use = nonAux.length > 0 ? nonAux : list;
+    // One chip per night for aux aliases; keep all non-aux if truly multi (shouldn't).
+    if (use.every((k) => !/^AUX\d+$/i.test(k)) && use.length > 1) {
+      // Prefer single primary: first stable
+      multi.push({ ui: use[0], d });
+    } else {
+      multi.push({ ui: use[0], d });
+    }
+  }
+
+  const seen = new Set(multi.map((e) => `${e.d}|${e.ui}`));
+  const merged = [...multi];
 
   if (weekEntries?.length) {
     for (const { nightDate, slotKey } of weekEntries) {
       if (!slotKey) continue;
       if (beforeIso && nightDate >= beforeIso) continue;
-      const key = `${nightDate}|${slotKey}`;
+      const stable = normalizePlacementIdentity(slotKey);
+      // Skip week AUX3 if we already have STEP (or any non-AUX) for that night.
+      const already = merged.find((e) => e.d === nightDate);
+      if (already) {
+        if (/^AUX\d+$/i.test(stable) && !/^AUX\d+$/i.test(already.ui)) continue;
+        if (!/^AUX\d+$/i.test(stable) && /^AUX\d+$/i.test(already.ui)) {
+          already.ui = stable;
+          continue;
+        }
+        if (already.ui === stable) continue;
+      }
+      const key = `${nightDate}|${stable}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      events.push({ ui: slotKey, d: nightDate });
+      merged.push({ ui: stable, d: nightDate });
     }
   }
 
-  events.sort((a, b) => b.d.localeCompare(a.d));
-  return events;
+  merged.sort((a, b) => b.d.localeCompare(a.d));
+  return merged;
 }
 
 /**

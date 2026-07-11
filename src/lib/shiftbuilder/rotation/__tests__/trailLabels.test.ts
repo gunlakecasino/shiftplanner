@@ -147,6 +147,30 @@ describe("buildPlacementTrailLabels", () => {
     );
     expect(labels).toEqual(["STEP"]);
   });
+
+  it("collapses AUX3 + STEP same night to a single STEP chip", () => {
+    const history = {
+      tmId: "t1",
+      tmName: "Cookie",
+      zoneDates: {
+        AUX3: ["2026-07-09"],
+        STEP: ["2026-07-09"],
+        Z4: ["2026-07-08"],
+      },
+      zoneCounts: {},
+      totalAssignments: 3,
+      totalNights: 2,
+      lastDate: "2026-07-09",
+    };
+    const labels = buildPlacementTrailLabels(
+      history as any,
+      "2026-07-12",
+      5,
+    );
+    expect(labels).toContain("STEP");
+    expect(labels).not.toContain("AUX3");
+    expect(labels.filter((l) => l === "STEP").length).toBe(1);
+  });
 });
 
 describe("formatPlacementUiLabel (pad matrix + LAST 5)", () => {

@@ -199,4 +199,24 @@ describe("Step Up is opt-in (not permanent) + mislabel repair", () => {
       trailKeyFromDbSlotAndLayout("support_1", "aux", null, realSupport),
     ).toBe("SUP1");
   });
+
+  it("maps aux_3 ghost rows to STEP when AUX3 is the step_up shell", () => {
+    const layout = [
+      { key: "AUX1", role: "admin" as const, label: "ADMIN", locations: [] },
+      { key: "AUX2", role: "z9sr" as const, label: "Z9 SR", locations: [] },
+      {
+        key: "AUX3",
+        role: "step_up" as const,
+        label: "STEP UP",
+        locations: ["Step Up"],
+      },
+    ];
+    // uiToDb without auxDefs wrote aux_3 — must not show as AUX3 in trails
+    expect(trailKeyFromDbSlotAndLayout("aux_3", "aux", null, layout)).toBe(
+      "STEP",
+    );
+    expect(trailKeyFromDbSlotAndLayout("AUX3", "aux", null, layout)).toBe(
+      "STEP",
+    );
+  });
 });
