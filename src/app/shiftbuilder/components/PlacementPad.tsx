@@ -692,9 +692,14 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     if (!g || g === "F") sides.push({ ui: `WRR${d.num}`, label: `${d.num}W` });
     return sides;
   });
+  // Stable trail ids (STEP / JC / OAS1) so matrix exposure matches history — never
+  // "STEPUP" from stripping "STEP UP", and never AUXn which diverges across nights.
   const auxLocs = auxDefs
-    .filter((d) => !d.key.startsWith("SP") && d.role !== "blank" && d.role !== "support")
-    .map((d) => ({ ui: d.key, label: formatPlacementUiLabel(d.key, d.label || d.key) }));
+    .filter((d) => d.role !== "blank" && d.role !== "support")
+    .map((d) => {
+      const stable = formatPlacementUiLabel(d.key, d.label || d.key, auxDefs);
+      return { ui: stable, label: stable };
+    });
 
   const matrixSlotKeys = React.useMemo(
     () => buildMatrixSlotKeysForTm(a.tmId, members as any[], auxDefs),
@@ -1058,11 +1063,32 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   function getSlotAccent(key: string): string {
     if (/^Z\d+$/.test(key)) return getZoneColor(key);
-    const rrMatch = key.match(/^(?:M|W)?RR(\d+)$/i);
+    const rrMatch = key.match(/^(?:M|W)?RR(\d+)[MW]?$/i) || key.match(/^RR(\d+)([MW])?$/i);
     if (rrMatch) {
       return getRRAccent(parseInt(rrMatch[1], 10));
     }
-    return getAuxAccent(key) || '#6B7280';
+    // Map trail short codes back to roles for accent colors.
+    const roleFromTrail =
+      key === "STEP" || key === "step_up"
+        ? "step_up"
+        : key === "JC" || key === "job_coach"
+          ? "job_coach"
+          : key === "ADMIN" || key === "ADM"
+            ? "admin"
+            : key === "Z9SR"
+              ? "z9sr"
+              : /^(TSH|TR)\d+$/i.test(key)
+                ? "trash"
+                : /^(SUP|SP)\d+$/i.test(key)
+                  ? "support"
+                  : /^OAS\d+$/i.test(key)
+                    ? "oasis"
+                    : undefined;
+    if (roleFromTrail) {
+      return getAuxAccent(key, roleFromTrail as any) || "#6B7280";
+    }
+    const def = auxDefs.find((d) => d.key === key);
+    return getAuxAccent(key, def?.role) || "#6B7280";
   }
 
   const refinedZones = [
@@ -1088,7 +1114,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const refinedLastFive = last5Pills.map((ui) => {
     if (!ui) return { label: "—", color: "#C7C7CC" };
-    return { label: formatPlacementUiLabel(ui), color: getSlotAccent(ui) };
+    // Sequence is already normalized (STEP / SUP1 / …); format is idempotent.
+    const label = formatPlacementUiLabel(ui);
+    return { label, color: getSlotAccent(label) };
   });
 
   const portalStyleLocal = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);

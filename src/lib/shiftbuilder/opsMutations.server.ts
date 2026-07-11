@@ -1,5 +1,6 @@
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { dbToUi, uiToDb } from "@/lib/shiftbuilder/slot-keys";
+import { normalizeHistoryUiKey } from "@/lib/shiftbuilder/constants";
 import { matrixTmsAfterHistoryChange } from "@/lib/shiftbuilder/rotation/historyOwnership";
 import type { BreakGroupValue } from "@/lib/shiftbuilder/breakGroupResolve";
 import type { MoveTaskParams } from "./data";
@@ -480,10 +481,11 @@ function resolveHistoryUiSlotKey(
 ): string {
   try {
     const ui = dbToUi(slotKey, slotType, rrSide ?? null);
-    if (ui.startsWith("UNK:")) return slotKey;
-    return ui;
+    if (ui.startsWith("UNK:")) return normalizeHistoryUiKey(slotKey);
+    // Persist STEP / SUP1 / JC (not SP1 / step_up) so pad LAST 5 matches matrix.
+    return normalizeHistoryUiKey(ui);
   } catch {
-    return slotKey;
+    return normalizeHistoryUiKey(slotKey);
   }
 }
 

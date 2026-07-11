@@ -8,6 +8,7 @@ import {
   invalidateSlotDefaultsCache,
 } from './clientQueryCache';
 import { dbToUi, uiToDb } from './slot-keys';
+import { normalizeHistoryUiKey } from './constants';
 import type { BreakGroupValue } from './breakGroupResolve';
 import { addDays, startOfRosterWeek, daysBetween, formatLocalDateISO } from './dateUtils';
 import type { WeeklyShift } from './types/schedules';
@@ -3002,8 +3003,10 @@ export async function getTmPlacementHistory(
   for (const row of rows as any[]) {
     const d = nightIdToDate.get(row.night_id) ?? "";
     if (!d) continue;
-    const z = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
-    if (z.startsWith("UNK:")) continue;
+    const rawUi = dbToUi(row.slot_key, row.slot_type ?? "zone", row.rr_side ?? null);
+    if (rawUi.startsWith("UNK:")) continue;
+    // Stable trail vocabulary: step_up→STEP, SP1→SUP1 (never leave SP1/STEPUP in pad).
+    const z = normalizeHistoryUiKey(rawUi);
     if (!zoneDates[z]) zoneDates[z] = [];
     zoneDates[z].push(d);
     nightDates.add(d);

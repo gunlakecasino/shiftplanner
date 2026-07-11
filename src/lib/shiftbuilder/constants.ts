@@ -112,6 +112,45 @@ export function canonicalizeAuxSlotKeyForTrail(
   return auxRoleTrailCode(role, nth >= 0 ? nth : 0);
 }
 
+/**
+ * Normalize a history/DB/UI slot key to the stable trail vocabulary used in the
+ * pad LAST 5 and matrix (STEP, SUP1, TSH1, JC, …). Safe for data-layer use —
+ * no dependency on placementPadHelpers.
+ */
+export function normalizeHistoryUiKey(ui: string): string {
+  if (!ui) return ui;
+  const t = ui.trim();
+  if (!t) return t;
+
+  // Collapsed free-text labels ("STEP UP" → STEPUP)
+  const compact = t.replace(/\s+/g, "").toUpperCase();
+  if (compact === "STEPUP" || compact === "STEP_UP" || t === "step_up") return "STEP";
+  if (compact === "JOBCOACH" || compact === "JOB_COACH" || t === "job_coach") return "JC";
+  if (t === "z9_sr" || compact === "Z9SR") return "Z9SR";
+  if (t === "admin" || compact === "ADMIN" || compact === "ADM") return "ADMIN";
+  if (compact === "STEP" || compact === "JC") return compact;
+
+  const sp = t.match(/^SP(\d+)$/i);
+  if (sp) return `SUP${sp[1]}`;
+  const tr = t.match(/^TR(\d+)$/i);
+  if (tr) return `TSH${tr[1]}`;
+  const sup = t.match(/^SUP(\d+)$/i);
+  if (sup) return `SUP${sup[1]}`;
+  const tsh = t.match(/^TSH(\d+)$/i);
+  if (tsh) return `TSH${tsh[1]}`;
+  const oas = t.match(/^OAS(?:IS)?(\d+)$/i);
+  if (oas) return `OAS${oas[1]}`;
+
+  // RR side forms
+  if (/^MRR\d+$/i.test(t)) return `RR${t.replace(/^MRR/i, "")}M`;
+  if (/^WRR\d+$/i.test(t)) return `RR${t.replace(/^WRR/i, "")}W`;
+
+  if (/^Z\d+$/i.test(t)) return t.toUpperCase();
+  if (/^AUX\d+$/i.test(t)) return t.toUpperCase();
+
+  return t;
+}
+
 export const BLANK_AUX_DEFS: AuxDef[] = Array.from({ length: 6 }, (_, i) => ({
   key: `AUX${i + 1}`,
   role: "blank" as const,

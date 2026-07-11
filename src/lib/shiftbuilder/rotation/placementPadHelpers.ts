@@ -3,6 +3,7 @@ import {
   ZONE_DEFS,
   RR_DEFS,
   canonicalizeAuxSlotKeyForTrail,
+  normalizeHistoryUiKey,
 } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { isEligibleForSlot, normalizeGender, areSwapLanePeers } from "@/lib/shiftbuilder/placement";
@@ -66,7 +67,8 @@ export function getSpreadPlacementKeys(
   for (const [ui, ds] of Object.entries(h.zoneDates)) {
     for (const d of ds || []) {
       if (beforeIso && d >= beforeIso) continue;
-      events.push({ ui, d });
+      // Stable identity so step_up / STEP / AUX-step match matrix cells labeled STEP.
+      events.push({ ui: normalizePlacementIdentity(ui), d });
     }
   }
   events.sort((a, b) => b.d.localeCompare(a.d));
@@ -94,7 +96,7 @@ export function getSpreadPlacementCounts(
   for (const [ui, ds] of Object.entries(h.zoneDates)) {
     for (const d of ds || []) {
       if (beforeIso && d >= beforeIso) continue;
-      events.push({ ui, d });
+      events.push({ ui: normalizePlacementIdentity(ui), d });
     }
   }
   events.sort((a, b) => b.d.localeCompare(a.d));
@@ -247,11 +249,18 @@ export function formatCardPlacementTrailLabel(
   // Flex AUXn → stable code first (only when caller provided that night's layout).
   const resolved = canonicalizeAuxSlotKeyForTrail(ui, auxDefs);
 
-  // Canonical aux identity (DB → UI history keys + legacy + short codes).
+  // Canonical aux identity (DB → UI history keys + legacy + short codes + collapsed labels).
   if (resolved === "Z9SR" || resolved === "z9_sr") return "Z9SR";
   if (resolved === "ADM" || resolved === "ADMIN" || resolved === "admin") return "ADMIN";
-  if (resolved === "JC" || resolved === "job_coach") return "JC";
-  if (resolved === "STEP" || resolved === "step_up") return "STEP";
+  if (resolved === "JC" || resolved === "job_coach" || resolved === "JOBCOACH") return "JC";
+  if (
+    resolved === "STEP" ||
+    resolved === "step_up" ||
+    resolved === "STEPUP" ||
+    resolved === "STEP_UP"
+  ) {
+    return "STEP";
+  }
 
   // Already-canonical short trail codes from canonicalize / history.
   if (/^(TSH|SUP|OAS)\d+$/i.test(resolved)) return resolved.toUpperCase();
@@ -497,7 +506,8 @@ export function getLastPlacementSequence(
   for (const [ui, ds] of Object.entries(h.zoneDates)) {
     for (const d of ds || []) {
       if (beforeIso && d >= beforeIso) continue;
-      events.push({ ui, d });
+      // Normalize so LAST 5 shows STEP / SUP1, never raw SP1 or STEPUP.
+      events.push({ ui: normalizePlacementIdentity(ui), d });
     }
   }
   events.sort((a, b) => b.d.localeCompare(a.d));
@@ -521,7 +531,10 @@ export function buildMatrixSlotKeysForTm(
     if (!g || g === "F") keys.push(`WRR${d.num}`);
   }
   for (const d of auxDefs) {
-    if (d.role !== "blank" && d.role !== "support") keys.push(d.key);
+    if (d.role !== "blank" && d.role !== "support") {
+      // Use STEP/JC/OAS1/… so history exposure matches matrix cells.
+      keys.push(canonicalizeAuxSlotKeyForTrail(d.key, auxDefs));
+    }
   }
   return keys;
 }
@@ -723,13 +736,71 @@ export function formatRotationBriefForAnalyst(
   return parts.length ? parts.join("\n\n") : undefined;
 }
 
-/** Compact label for matrix cells and last-5 pills (no spaces). */
-export function formatPlacementUiLabel(ui: string, fallback?: string): string {
-  if (ui === "Z9SR") return "Z9SR";
-  if (/^Z\d+$/.test(ui)) return ui;
-  if (ui.startsWith("MRR")) return `RR${ui.replace("MRR", "")}M`;
-  if (ui.startsWith("WRR")) return `RR${ui.replace("WRR", "")}W`;
-  if (ui.startsWith("TR")) return `T${ui.replace(/\D/g, "")}`;
-  const raw = fallback ?? ui;
-  return raw.replace(/\s+/g, "");
+/**
+ * Compact label for matrix cells and last-5 pills.
+ * Always uses the same short-code vocabulary as card trails (STEP, SUP1, TSH1, …).
+ * Never strip spaces from "STEP UP" → "STEPUP" or leave raw SP1 for support.
+ *
+ * `auxDefs` must be the layout of the **placement night** when `ui` is AUXn;
+ * omit when `ui` is already a stable key (STEP, SP1, Z4, …).
+ */
+export function formatPlacementUiLabel(
+  ui: string,
+  fallback?: string,
+  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
+): string {
+  if (!ui && fallback) {
+    return formatCardPlacementTrailLabel(
+      normalizeCollapsedAuxLabel(fallback),
+      undefined,
+      auxDefs,
+    );
+  }
+  // Prefer role-stable trail codes over free-text fallbacks ("STEP UP" → STEPUP).
+  const fromKey = formatCardPlacementTrailLabel(ui, undefined, auxDefs);
+  if (fromKey && fromKey !== "—" && !/^AUX\d+$/i.test(fromKey)) {
+    return fromKey;
+  }
+  if (fallback?.trim()) {
+    const fromFallback = formatCardPlacementTrailLabel(
+      normalizeCollapsedAuxLabel(fallback),
+      undefined,
+      auxDefs,
+    );
+    if (fromFallback && fromFallback !== "—") return fromFallback;
+  }
+  return fromKey || (fallback ?? ui).replace(/\s+/g, "") || "—";
+}
+
+/** "STEP UP" / "STEPUP" / "Job Coach" → keys formatCardPlacementTrailLabel understands. */
+function normalizeCollapsedAuxLabel(raw: string): string {
+  const compact = raw.replace(/\s+/g, "").toUpperCase();
+  if (compact === "STEPUP" || compact === "STEP_UP") return "STEP";
+  if (compact === "JOBCOACH" || compact === "JOB_COACH") return "JC";
+  if (compact === "Z9SR" || compact === "Z9SMOKINGROOM") return "Z9SR";
+  if (compact === "ADMIN" || compact === "ADM") return "ADMIN";
+  // SUPPORT1 / TRASH2 / OASIS1
+  const numbered = compact.match(/^(SUPPORT|SUP|TRASH|TSH|OASIS|OAS)(\d+)$/i);
+  if (numbered) {
+    const fam = numbered[1].toUpperCase();
+    const n = numbered[2];
+    if (fam === "SUPPORT" || fam === "SUP") return `SUP${n}`;
+    if (fam === "TRASH" || fam === "TSH") return `TSH${n}`;
+    if (fam === "OASIS" || fam === "OAS") return `OAS${n}`;
+  }
+  return compact;
+}
+
+/**
+ * Normalize a history / matrix slot identity for matching + display.
+ * SP1→SUP1, step_up→STEP, STEPUP→STEP, AUXn via that night's layout when provided.
+ */
+export function normalizePlacementIdentity(
+  ui: string,
+  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
+): string {
+  if (auxDefs?.length && /^AUX\d+$/i.test(ui)) {
+    return formatCardPlacementTrailLabel(ui, undefined, auxDefs);
+  }
+  return normalizeHistoryUiKey(ui);
 }
