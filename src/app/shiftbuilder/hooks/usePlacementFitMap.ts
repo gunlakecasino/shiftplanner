@@ -321,11 +321,17 @@ export function usePlacementFitMap({
       const history = histories[tmId] ?? null;
       // Exclusive of tonight — same rule as pad prior-N windows.
       const weekEntries = weekEntriesForTm(scopedWeekForTrails, tmId, currentIso);
-      const labels = buildPlacementTrailLabels(history, currentIso, undefined, weekEntries);
+      const labels = buildPlacementTrailLabels(
+        history,
+        currentIso,
+        undefined,
+        weekEntries,
+        auxDefs,
+      );
       if (labels.length > 0) out[tmId] = labels;
     }
     return out;
-  }, [trailsEnabled, histories, currentIso, tmIdsKey, scopedWeekForTrails]);
+  }, [trailsEnabled, histories, currentIso, tmIdsKey, scopedWeekForTrails, auxDefs]);
 
   return { fitBySlot, historiesLoading, placementTrailsByTmId };
 }

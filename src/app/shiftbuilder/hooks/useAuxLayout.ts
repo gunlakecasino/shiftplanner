@@ -174,7 +174,15 @@ export function useAuxLayout({
   };
 
   const setAuxRole = (slotKey: string, role: AuxRole) => {
-    const beforeAux = [...auxDefs];
+    const current = auxDefs.find((d) => d.key === slotKey);
+    // Admin + Z9 SR are permanent shells — never clear back to blank.
+    if (
+      role === "blank" &&
+      (current?.role === "admin" || current?.role === "z9sr")
+    ) {
+      showToast("Admin and Z9 SR cards cannot be cleared", "error");
+      return;
+    }
 
     setAuxDefs((prev) => {
       const next = applyAuxRole(prev, slotKey, role);

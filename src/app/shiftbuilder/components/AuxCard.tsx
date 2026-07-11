@@ -226,6 +226,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   };
 
   const handleClearRole = () => {
+    // Permanent core aux shells cannot be cleared to blank.
+    if (def.role === "admin" || def.role === "z9sr") {
+      setShowRolePicker(false);
+      setPickerPosition(null);
+      return;
+    }
     if (onSetAuxRole) {
       onSetAuxRole(def.key, "blank");
     } else {
@@ -424,7 +430,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             onSelect={handleRoleSelect}
             onCustomLabel={handleCustomLabel}
             onClearRole={handleClearRole}
-            showClearRole={isConfigured}
+            showClearRole={
+              isConfigured && def.role !== "admin" && def.role !== "z9sr"
+            }
             initialCustomLabel={def.label}
             onClose={() => {
               setShowRolePicker(false);

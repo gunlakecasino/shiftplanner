@@ -16,6 +16,17 @@ describe("formatCardPlacementTrailLabel", () => {
     expect(formatCardPlacementTrailLabel("Z9SR")).toBe("Z9SR");
     expect(formatCardPlacementTrailLabel("TR1")).toBe("TR1");
   });
+
+  it("maps ADM and role-bearing AUX shells to ADMIN / Z9SR", () => {
+    expect(formatCardPlacementTrailLabel("ADM")).toBe("ADMIN");
+    expect(formatCardPlacementTrailLabel("admin")).toBe("ADMIN");
+    const auxDefs = [
+      { key: "AUX1", role: "admin", label: "ADMIN" },
+      { key: "AUX2", role: "z9sr", label: "Z9 SR" },
+    ];
+    expect(formatCardPlacementTrailLabel("AUX1", undefined, auxDefs)).toBe("ADMIN");
+    expect(formatCardPlacementTrailLabel("AUX2", undefined, auxDefs)).toBe("Z9SR");
+  });
 });
 
 describe("trailLabelMatchesSlotKey", () => {

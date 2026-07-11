@@ -152,11 +152,11 @@ export function resolveAuxLayout(
   rawDbAssignments: Array<{ slotKey?: string; slot_key?: string; tmId?: string | null; tm_id?: string | null }> | undefined | null,
 ): AuxDef[] {
   const parsed = parseAuxLayoutJson(storedLayout);
-  if (parsed?.length) return parsed;
+  if (parsed?.length) return ensureCoreAuxRoles(parsed);
   if (!nightHasAuxAssignmentData(rawDbAssignments)) {
     return defaultAuxDefsForNewNight();
   }
-  return migrateAuxLayoutFromDbRows(rawDbAssignments);
+  return ensureCoreAuxRoles(migrateAuxLayoutFromDbRows(rawDbAssignments));
 }
 
 export function remapAssignmentsToAuxKeys(
@@ -200,6 +200,8 @@ export function findRemovableEmptyAuxSlot(
   for (let i = auxDefs.length - 1; i >= 0; i--) {
     const d = auxDefs[i];
     const role = d.role ?? "blank";
+    // Never remove permanent Admin / Z9 SR shells.
+    if (role === "admin" || role === "z9sr") continue;
     if (role === "blank" && isAuxSlotEmpty(d, assignments)) return d;
   }
   return null;
@@ -279,41 +281,108 @@ export function activeAuxDefs(auxDefs: AuxDef[]): AuxDef[] {
   return auxDefs.filter(isTypedAuxDef);
 }
 
-/**
- * Ensures the "admin" aux card (if present or needed) is always the first in the list.
- * If an admin role exists later, it is moved to front.
- * If no admin exists, the first editable (blank) card is replaced with the admin card,
- * keeping the total count the same (replaces first blank with admin).
- */
-export function ensureAdminFirst(defs: AuxDef[]): AuxDef[] {
-  if (!defs || defs.length === 0) return defs;
-  const adminIndex = defs.findIndex((d) => d.role === "admin");
-  if (adminIndex === 0) return defs;
+const CORE_AUX_ROLES: Array<{
+  role: "admin" | "z9sr";
+  label: string;
+  locations: string[];
+}> = [
+  { role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
+  { role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
+];
 
+function promoteBlankToRole(
+  defs: AuxDef[],
+  role: "admin" | "z9sr",
+  label: string,
+  locations: string[],
+): AuxDef[] {
   const next = [...defs];
-
-  if (adminIndex > 0) {
-    const adminDef = next.splice(adminIndex, 1)[0];
-    return [adminDef, ...next];
-  }
-
-  // No admin: promote an empty blank shell in place. Never drop a custom-labeled card.
   const emptyBlankIdx = next.findIndex(
     (d) => d.role === "blank" && !d.label?.trim(),
   );
   if (emptyBlankIdx >= 0) {
     next[emptyBlankIdx] = {
       ...next[emptyBlankIdx],
-      role: "admin",
-      label: "ADMIN",
-      locations: ["Floor Admin"],
+      role,
+      label,
+      locations: [...locations],
     };
     return next;
   }
-
-  return defs;
+  // No blank shell: append a new core card if under max.
+  if (next.length < MAX_AUX_SLOTS) {
+    next.push({
+      key: nextAuxKey(next),
+      role,
+      label,
+      locations: [...locations],
+    });
+  }
+  return next;
 }
 
+/**
+ * Ensures Admin and Zone 9 Smoking Room cards are always present, with Admin first
+ * and Z9 SR second — matching ops expectation that both fixed aux roles are permanent.
+ *
+ * - Existing admin / z9sr cards are reordered to the front (admin, then z9sr).
+ * - Missing roles are promoted from empty blank shells (never overwrites labeled cards).
+ * - If no blank shells remain and under MAX_AUX_SLOTS, a new card is appended.
+ */
+export function ensureCoreAuxRoles(defs: AuxDef[]): AuxDef[] {
+  if (!defs || defs.length === 0) {
+    return defaultAuxDefsForNewNight();
+  }
+
+  let next = [...defs];
+
+  for (const core of CORE_AUX_ROLES) {
+    if (!next.some((d) => d.role === core.role)) {
+      next = promoteBlankToRole(next, core.role, core.label, core.locations);
+    }
+  }
+
+  // Stable order: admin, z9sr, then everything else (preserve relative order of the rest).
+  const admin = next.find((d) => d.role === "admin");
+  const z9 = next.find((d) => d.role === "z9sr");
+  const rest = next.filter((d) => d.role !== "admin" && d.role !== "z9sr");
+  const ordered: AuxDef[] = [];
+  if (admin) ordered.push(admin);
+  if (z9) ordered.push(z9);
+  ordered.push(...rest);
+
+  // Normalize labels/locations for core roles so UI never shows a bare "AUX1" shell
+  // when the role is admin/z9sr.
+  return ordered.map((d) => {
+    if (d.role === "admin") {
+      return {
+        ...d,
+        label: d.label?.trim() ? d.label : "ADMIN",
+        locations:
+          d.locations?.length > 0 ? d.locations : ["Floor Admin"],
+      };
+    }
+    if (d.role === "z9sr") {
+      return {
+        ...d,
+        label: d.label?.trim() ? d.label : "Z9 SR",
+        locations:
+          d.locations?.length > 0 ? d.locations : ["Z9 Smoking Room"],
+      };
+    }
+    return d;
+  });
+}
+
+/**
+ * @deprecated Prefer ensureCoreAuxRoles — kept for call-site compatibility.
+ * Ensures admin first; also ensures Z9 SR via ensureCoreAuxRoles.
+ */
+export function ensureAdminFirst(defs: AuxDef[]): AuxDef[] {
+  return ensureCoreAuxRoles(defs);
+}
+
+/** New night: Admin + Z9 SR fixed, then blank shells for operator-configured aux. */
 export function defaultAuxDefsForNewNight(): AuxDef[] {
   const adminDef: AuxDef = {
     key: "AUX1",
@@ -321,11 +390,17 @@ export function defaultAuxDefsForNewNight(): AuxDef[] {
     label: "ADMIN",
     locations: ["Floor Admin"],
   };
-  const blanks = Array.from({ length: 5 }, (_, i) => ({
-    key: `AUX${i + 2}`,
+  const z9Def: AuxDef = {
+    key: "AUX2",
+    role: "z9sr" as const,
+    label: "Z9 SR",
+    locations: ["Z9 Smoking Room"],
+  };
+  const blanks = Array.from({ length: 4 }, (_, i) => ({
+    key: `AUX${i + 3}`,
     role: "blank" as const,
     label: "",
-    locations: [],
+    locations: [] as string[],
   }));
-  return [adminDef, ...blanks];
+  return [adminDef, z9Def, ...blanks];
 }

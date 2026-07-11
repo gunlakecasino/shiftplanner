@@ -222,11 +222,40 @@ export function spreadCountForRepeatKey(
 export const CARD_PLACEMENT_TRAIL_COUNT = 3;
 
 /**
- * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR).
+ * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR, ADMIN).
  * Restroom sides keep M/W so prior placements are not collapsed into an ambiguous "RR8".
+ * Aux shells resolve through role when auxDefs are provided so AUX1≠"Admin" confusion ends.
  */
-export function formatCardPlacementTrailLabel(ui: string, fallback?: string): string {
-  if (ui === "Z9SR") return "Z9SR";
+export function formatCardPlacementTrailLabel(
+  ui: string,
+  fallback?: string,
+  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
+): string {
+  if (!ui) return (fallback ?? "").replace(/\s+/g, "") || "—";
+
+  // Canonical aux identity (DB → UI history keys + legacy).
+  if (ui === "Z9SR" || ui === "z9_sr") return "Z9SR";
+  if (ui === "ADM" || ui === "ADMIN" || ui === "admin") return "ADMIN";
+
+  if (auxDefs?.length) {
+    const def = auxDefs.find((d) => d.key === ui);
+    if (def?.role === "admin") return "ADMIN";
+    if (def?.role === "z9sr") return "Z9SR";
+    if (def?.role === "trash") {
+      const n =
+        auxDefs.filter((d) => d.role === "trash").findIndex((d) => d.key === ui) + 1;
+      return `TR${n || ""}`;
+    }
+    if (def?.role === "support") {
+      const n =
+        auxDefs.filter((d) => d.role === "support").findIndex((d) => d.key === ui) + 1;
+      return `SP${n || ""}`;
+    }
+    if (def?.label?.trim() && def.role && def.role !== "blank") {
+      return def.label.replace(/\s+/g, "").toUpperCase().slice(0, 10);
+    }
+  }
+
   if (/^Z\d+$/.test(ui)) return ui;
   // Prefer side-explicit RR labels (matches pad matrix style: RR8M / RR8W).
   if (/^MRR\d+$/i.test(ui)) return `RR${ui.replace(/^MRR/i, "")}M`;
@@ -236,9 +265,8 @@ export function formatCardPlacementTrailLabel(ui: string, fallback?: string): st
   if (bareRr) return `RR${bareRr[1]}`;
   if (ui.startsWith("TR")) return `TR${ui.replace(/\D/g, "")}`;
   if (ui.startsWith("SP")) return ui.toUpperCase();
-  if (ui.startsWith("AUX") || ui === "ADM" || ui === "ADMIN") {
-    return (fallback ?? ui).replace(/\s+/g, "");
-  }
+  // Unresolved AUXn without role context — still better than silent blank.
+  if (/^AUX\d+$/i.test(ui)) return ui.toUpperCase();
   const raw = fallback ?? ui;
   return raw.replace(/\s+/g, "");
 }
@@ -311,10 +339,11 @@ export function buildPlacementTrailLabels(
   beforeIso?: string,
   count = CARD_PLACEMENT_TRAIL_COUNT,
   weekEntries?: Array<{ nightDate: string; slotKey: string }>,
+  auxDefs?: Array<{ key: string; role?: string; label?: string }>,
 ): string[] {
   return collectPlacementTrailEvents(history, beforeIso, weekEntries)
     .slice(0, count)
-    .map((e) => formatCardPlacementTrailLabel(e.ui));
+    .map((e) => formatCardPlacementTrailLabel(e.ui, undefined, auxDefs));
 }
 
 /** Week plan entries for one TM, optionally scoped before a night (exclusive). */

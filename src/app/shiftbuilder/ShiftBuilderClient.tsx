@@ -1871,23 +1871,23 @@ function AuthedShiftBuilder() {
     }
   }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Enforce that the "admin" aux (role === 'admin') is always the first card
-  // in the AUXILIARY section. This reorders the auxDefs array (which controls
-  // both visual order in the grid and the persisted aux_layout) whenever a
-  // role change or load results in admin not being first.
+  // Enforce core aux cards: ADMIN first, Z9 SR second (always present).
+  // Reorders / promotes blanks via ensureCoreAuxRoles (exported as ensureAdminFirst).
   React.useEffect(() => {
-    if (!auxDefs || auxDefs.length <= 1) return;
-    const adminIndex = auxDefs.findIndex((d) => d.role === 'admin');
-    if (adminIndex > 0) {
-      setAuxDefs((prev) => {
-        const admin = prev[adminIndex];
-        const rest = prev.filter((_, i) => i !== adminIndex);
-        const next = [admin, ...rest];
-        queueMicrotask(() => scheduleAuxLayoutSave(0));
-        return next;
-      });
-    }
-  }, [auxDefs]);
+    if (!auxDefs || auxDefs.length === 0) return;
+    const ensured = ensureAdminFirst(auxDefs);
+    const same =
+      ensured.length === auxDefs.length &&
+      ensured.every(
+        (d, i) =>
+          d.key === auxDefs[i]?.key &&
+          d.role === auxDefs[i]?.role &&
+          d.label === auxDefs[i]?.label,
+      );
+    if (same) return;
+    setAuxDefs(ensured);
+    queueMicrotask(() => scheduleAuxLayoutSave(0));
+  }, [auxDefs, setAuxDefs, scheduleAuxLayoutSave]);
 
   // Keyboard shortcuts for undo/redo (one tab session)
   useEffect(() => {
