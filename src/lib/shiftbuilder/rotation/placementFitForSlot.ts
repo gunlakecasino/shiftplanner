@@ -188,12 +188,15 @@ export function resolveSlotAssignmentRow(
   draftAssignments: Record<string, DraftAssignmentRow>,
 ): SlotAssignmentRow | null {
   const draft = draftAssignments[slotKey];
-  if (isDraftMode && draft && !draft.proposedClear && draft.proposedTmName) {
-    return {
-      tmId: draft.proposedTmId,
-      tmName: draft.proposedTmName,
-      provenance: assignments[slotKey]?.provenance,
-    };
+  if (isDraftMode && draft) {
+    if (draft.proposedClear) return null;
+    if (draft.proposedTmId || draft.proposedTmName) {
+      return {
+        tmId: draft.proposedTmId,
+        tmName: draft.proposedTmName ?? draft.proposedTmId,
+        provenance: assignments[slotKey]?.provenance,
+      };
+    }
   }
   const live = assignments[slotKey];
   if (!live?.tmName && !live?.tmId) return null;
