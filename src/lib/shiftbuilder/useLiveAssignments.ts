@@ -258,14 +258,25 @@ export function useLiveAssignments(selectedDay: DayDef) {
         }
 
         const message = err instanceof Error ? err.message : "unknown error";
-        console.warn("[useLiveAssignments] Mutation rolled back due to conflict", {
+        console.warn("[useLiveAssignments] Mutation rolled back", {
           uiKey: params.uiKey,
           error: message,
           params,
         });
 
-        toast.error(`Change rolled back — another operator modified ${params.uiKey}`, {
-          description: "Your optimistic update was reverted. The board now reflects the latest server state.",
+        // Honest copy: only claim multi-operator conflict when the server said so.
+        const multiOp =
+          /another operator|reload and try again|409|concurrent/i.test(message);
+        const title = multiOp
+          ? `Change rolled back — another operator modified ${params.uiKey}`
+          : `Change rolled back on ${params.uiKey}`;
+        const description = multiOp
+          ? "Your optimistic update was reverted. Reload if the board looks stale."
+          : message ||
+            "The server rejected this change. The board was restored to the last known good state.";
+
+        toast.error(title, {
+          description,
           duration: 6000,
         });
       },

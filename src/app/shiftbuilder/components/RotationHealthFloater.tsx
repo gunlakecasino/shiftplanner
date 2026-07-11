@@ -354,8 +354,8 @@ export function RotationHealthFloater({
                   type="button"
                   onClick={() => void onApplyDraft?.()}
                   disabled={saveDisabled}
-                  title="Apply draft to live board"
-                  aria-label="Apply draft to live board"
+                  title="Apply to Live"
+                  aria-label="Apply to Live"
                   className="sb-interactive rounded p-1.5 disabled:opacity-40 shrink-0"
                   style={{
                     ...actionBtnBase,

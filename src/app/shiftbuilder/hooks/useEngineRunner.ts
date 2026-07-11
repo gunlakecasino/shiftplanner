@@ -85,18 +85,24 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
     warnings: string[] = []
   ) => {
     const lookup = buildTmLookupIndex(rosterForLookup);
+    // Live board baseline so "was:" lines and skip-if-same work (UX critical).
+    const liveAssignments = useShiftBuilderStore.getState().assignments ?? {};
     const newDraft: Record<string, any> = {};
     Object.entries(result.proposedAssignments).forEach(([slotKey, tmId]) => {
-      const current = {} as any; // caller can enhance if needed; simplified for hook
-      const currentTmId = current?.tmId;
+      const current = liveAssignments[slotKey] as
+        | { tmId?: string; tmName?: string }
+        | undefined;
+      const currentTmId = current?.tmId ?? null;
+      const currentTmName = current?.tmName ?? null;
 
       if (!tmId) {
+        // Engine proposed empty slot: only draft a clear when someone is live there.
         if (currentTmId) {
           newDraft[slotKey] = {
             proposedTmId: "",
             proposedTmName: "",
             previousTmId: currentTmId,
-            previousTmName: current?.tmName,
+            previousTmName: currentTmName,
             proposedClear: true,
           };
         }
@@ -107,13 +113,14 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
       if (!tm) return;
 
       const boardId = boardTmId(tm);
-      if (currentTmId === boardId) return;
+      // Skip no-ops — same TM already live on this slot.
+      if (currentTmId && String(currentTmId) === String(boardId)) return;
 
       newDraft[slotKey] = {
         proposedTmId: boardId,
         proposedTmName: tm.name || tm.fullName || boardId,
         previousTmId: currentTmId,
-        previousTmName: current?.tmName,
+        previousTmName: currentTmName,
       };
     });
     startHeavyTransition(() => {

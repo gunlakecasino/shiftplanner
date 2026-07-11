@@ -3577,3 +3577,10 @@ button,
 .dark .sb-unpublished-module__label {
   color: color-mix(in srgb, #f2f2f7 88%, #aeaeb2);
 }
+
+/* Shift notes contentEditable placeholder */
+.sb-shift-notes [contenteditable][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: var(--ios-tertiary-label, #8e8e93);
+  pointer-events: none;
+}

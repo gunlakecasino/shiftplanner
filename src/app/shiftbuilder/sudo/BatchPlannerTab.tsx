@@ -139,6 +139,14 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
   // -----------------------------------------------------------------------
   const handleRunAll = async () => {
     if (!selectedWeekId || batchRunning) return;
+    const ok = window.confirm(
+      `Run the placement engine for the whole week?\n\n` +
+        `• Writes LIVE to zone_assignments (no Draft Mode review)\n` +
+        `• Only fills empty slots (does not overwrite filled/locked)\n` +
+        `• No Grok — open a night on the board for AI review after\n\n` +
+        `Continue?`,
+    );
+    if (!ok) return;
     setBatchRunning(true);
     setBatchError(null);
     setBatchSummary(null);
@@ -178,6 +186,11 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
       setBatchError("This night hasn't been created in the DB yet. Open the board for that date first, or ensure the week exists in Batch Planner.");
       return;
     }
+    const ok = window.confirm(
+      `Run the placement engine for ${nightDate}?\n\n` +
+        `Writes LIVE to empty slots only (no Draft Mode). Continue?`,
+    );
+    if (!ok) return;
     setNightStates((prev) => ({ ...prev, [nightDate]: { phase: "running" } }));
     setBatchError(null);
     try {

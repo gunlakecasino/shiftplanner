@@ -1402,10 +1402,13 @@ function AuthedShiftBuilder() {
 
     const summaryPoints = grokExpl
       ? [grokExpl.slice(0, 120) + (grokExpl.length > 120 ? "…" : "")]
-      : ["Changes will be visible to all TMs immediately", "Cannot be auto-undone — use Discard to revert"];
+      : [
+          "Changes become visible to all TMs immediately after Apply to Live",
+          "To abandon these proposals without writing, use Discard Draft first",
+        ];
 
     const okToApply = await confirmDialog(
-      `This is the real one — TMs will see it immediately, and it can't be auto-undone.`,
+      `This writes to the live board — TMs will see it immediately.`,
       {
         title: `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board?`,
         confirmLabel: "Apply to Live",
@@ -1506,7 +1509,7 @@ function AuthedShiftBuilder() {
       useShiftBuilderStore.getState().clearDraft();
 
       setLastSavedAt(new Date());
-      const savedCount = draftEntries.filter(([, d]) => d.proposedTmId && !d.proposedClear).length;
+      const savedCount = draftEntries.length;
       showToast(
         `Applied ${savedCount} change${savedCount === 1 ? "" : "s"} to the live board — TMs can see it now.`,
         "success",
@@ -1664,7 +1667,7 @@ function AuthedShiftBuilder() {
         return;
       }
       setIsDraftMode(true);
-      showToast("Draft mode on — edits stay provisional until Save All", "info");
+      showToast("Draft mode on — edits stay provisional until Apply to Live", "info");
     });
   }, [canSeeDraftData, canEditAssignments, isCurrentNightLocked, isDraftMode, draftSlotCount, showToast, startHeavyTransition]);
 
@@ -2929,9 +2932,14 @@ function AuthedShiftBuilder() {
   // The persist helper never re-reads state — so if the operator switches to
   // a different day before the network call resolves, the write still lands
   // on the night it was issued against.
-  // ── Permission guard helpers (centralized so every mutation path is covered)
+  // ── Permission guard helpers (aligned with assertActorCanEditNight server policy)
+  // Server allows edit when: canAccessSudo || canSeeDraftData || !canEditPublishedOnly
+  // OR published night for published-only roles.
   const isNightEditable =
-    canSeeDraftData || currentNightStatus === "published";
+    canAccessSudo ||
+    canSeeDraftData ||
+    !canEditPublishedOnly ||
+    currentNightStatus === "published";
 
   const requireEdit = (): boolean => {
     if (!canEditAssignments) {
@@ -2939,7 +2947,10 @@ function AuthedShiftBuilder() {
       return false;
     }
     if (!isNightEditable) {
-      showToast("This night is unpublished — your role can only access published days", "error");
+      showToast(
+        "This night is unpublished — your role can only edit published days",
+        "error",
+      );
       return false;
     }
     return true;
@@ -7327,101 +7338,139 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     [plannedThisWeekRecentHistory, auxDefsForFit, storeAssignmentsForFit, deploymentFitBySlot, isDraftMode, draftAssignments, assignments, weekOverviewNights],
   );
 
-  /** WeekLens v2 conservative one-click apply for rotation suggestions.
-   *  Only operates on relevant slots (via shouldShowPlacementFitChip in the suggestion source).
-   *  Starts with simple "move TM to a fresh slot in family on one of the viol nights".
-   *  Uses live store for the specific night + history recording so it is undoable and updates health immediately.
-   *  Bilateral swaps and complex cases are intentionally left to the pad + main board for safety in v1.
+  /** WeekLens one-click apply — persists via the same live mutation path as board assign.
+   *  If the suggestion is for the currently open night and draft mode is on, lands in draft instead.
    */
   const applyWeekLensMove = React.useCallback(async (sugg: any) => {
     if (!sugg || !sugg.from || !sugg.to) return;
+    if (!requireEdit()) return;
 
     const fromTmId = sugg.from.tmId;
     const fromSlot = sugg.from.slotKey;
     const toSlot = sugg.to.slotKey;
     const fromName = sugg.from.tmName || fromTmId;
-
     if (!fromTmId || !fromSlot || !toSlot) return;
 
     try {
-      // Resolve the target night for the move.
-      // Prefer explicit nightDate on the suggestion (from suggestLocalRotationMoves), else find the first
-      // night in weekOverviewNights where this TM is currently on the from slot.
-      let targetDayIndex: number | null = null;
       let targetDate: Date | null = null;
+      let nightIdForMove: string | null = null;
 
       if (sugg.from.nightDate) {
-        // Find the DAY_DEFS entry whose formatted date matches the ISO in the suggestion
         for (let i = 0; i < DAY_DEFS.length; i++) {
           if (formatLocalDateISO(DAY_DEFS[i].date) === sugg.from.nightDate) {
-            targetDayIndex = i;
             targetDate = DAY_DEFS[i].date;
             break;
           }
         }
       }
-
-      if (targetDayIndex == null) {
-        // Fallback: scan the week data for the first occurrence of this (tm, fromSlot)
-        for (const n of (weekOverviewNights || [])) {
+      if (!targetDate) {
+        for (const n of weekOverviewNights || []) {
           const a = n.assignments?.[fromSlot];
           if (a?.tmId === fromTmId) {
-            targetDayIndex = n.dayIndex;
             targetDate = DAY_DEFS[n.dayIndex]?.date ?? null;
+            nightIdForMove = (n as { nightId?: string }).nightId ?? null;
             break;
           }
         }
       }
-
-      if (targetDayIndex == null || !targetDate) {
-        console.warn('[WeekLens] could not resolve night for move', sugg);
+      if (!targetDate) {
+        showToast("Couldn't resolve which night that move belongs to", "error");
         return;
       }
 
       const dateKey = formatLocalDateISO(targetDate);
+      const isCurrentNight = dateKey === formatLocalDateISO(selectedDay.date);
 
-      // Read the current (optimistic + live) assignments for exactly that night
-      const store = liveAssignmentsStore.getState();
-      const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
-
-      // Perform the conservative move:
-      // - Clear the from slot (unassign)
-      // - Place the TM on the to slot (assign). If 'to' was occupied we overwrite for this simple path
-      //   (real bilateral swap cases are left to the advisor text or pad).
-      if (currentNightAss[fromSlot]) {
-        delete currentNightAss[fromSlot]; // or set to null if the store expects explicit nulls
+      // Prefer draft when editing the open night in draft mode (reviewable).
+      if (isCurrentNight && (useShiftBuilderStore.getState().isDraftMode ?? false)) {
+        const storeAss = useShiftBuilderStore.getState().assignments ?? {};
+        const displaced = storeAss[toSlot];
+        engineApplyDraftMoveOrSwap?.(
+          fromSlot,
+          toSlot,
+          { tmId: fromTmId, tmName: fromName },
+          displaced?.tmId
+            ? { tmId: displaced.tmId, tmName: displaced.tmName ?? displaced.tmId }
+            : null,
+        );
+        showToast(
+          `Draft: ${fromName} ${fromSlot} → ${toSlot} — Apply to Live when ready`,
+          "info",
+        );
+        void handleRequestRotationAdvisor({ focusWeek: true });
+        return;
       }
 
-      currentNightAss[toSlot] = {
-        tmId: fromTmId,
-        tmName: fromName,
-        // breakGroup left undefined; normal board flow will handle if needed
-      } as any;
+      // Resolve night id for DB write
+      if (!nightIdForMove) {
+        const { getNightIdForDate } = await import("@/lib/shiftbuilder/data");
+        nightIdForMove = await getNightIdForDate(targetDate);
+      }
+      if (!nightIdForMove) {
+        showToast("That night isn't in the database yet — open it on the board first", "error");
+        return;
+      }
 
-      // Write back — this is the same primitive used by all live assign paths.
-      // The store subscription + liveAssignVersion bump will cause weekOverviewNights,
-      // plannedThisWeekRecentHistory, the table, health, and sidebar to refresh.
+      const { upsertZoneAssignment, deleteZoneAssignment } = await import(
+        "@/lib/shiftbuilder/data"
+      );
+      const { uiToDb } = await import("@/lib/shiftbuilder/slot-keys");
+
+      // Clear source slot
+      try {
+        await deleteZoneAssignment({
+          nightId: nightIdForMove,
+          uiKey: fromSlot,
+        });
+      } catch (e) {
+        console.warn("[WeekLens] clear from-slot failed", e);
+      }
+
+      // Place TM on target (overwrite if occupied — v1 simple path)
+      const mapped = uiToDb(toSlot);
+      await upsertZoneAssignment({
+        nightId: nightIdForMove,
+        slotKey: toSlot,
+        tmId: fromTmId,
+        slotType: mapped.slot_type,
+        rrSide: mapped.rr_side as "mens" | "womens" | null,
+      });
+
+      // Optimistic week store for immediate table refresh
+      const store = liveAssignmentsStore.getState();
+      const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
+      delete currentNightAss[fromSlot];
+      currentNightAss[toSlot] = { tmId: fromTmId, tmName: fromName } as any;
       store.setAssignmentsForNight(dateKey, currentNightAss);
 
-      // Record a lightweight history entry if the mechanism is available (best effort)
-      try {
-        // shiftHistory is in scope in Client; recordChange is the recorder.
-        // We do a minimal description so undo works at the board level.
-        // (If this throws it's non-fatal — the store update is the source of truth.)
-        // @ts-ignore - shiftHistory may have recordChange
-        if (typeof (window as any).__shiftHistoryRecord === 'function') {
-          (window as any).__shiftHistoryRecord(`WeekLens move: ${fromName} ${fromSlot} → ${toSlot}`);
-        }
-      } catch {}
+      if (isCurrentNight) {
+        const main = { ...(useShiftBuilderStore.getState().assignments ?? {}) };
+        delete main[fromSlot];
+        main[toSlot] = { tmId: fromTmId, tmName: fromName };
+        useShiftBuilderStore.getState().setAssignments(main);
+        setAssignments(main);
+        setLiveAssignVersion((v) => v + 1);
+      }
 
-      // Refresh the advisor glass + local suggestions list immediately so the UI reflects the change.
+      showToast(`${fromName}: ${fromSlot} → ${toSlot}`, "success");
       void handleRequestRotationAdvisor({ focusWeek: true });
-
-      // Optional: if the user had a pad open for one of the affected slots, it will pick up the live change.
     } catch (e) {
-      console.warn('[WeekLens] apply failed', e);
+      console.warn("[WeekLens] apply failed", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      showToast(`Couldn't apply week move: ${msg}`, "error");
     }
-  }, [handleRequestRotationAdvisor, weekOverviewNights, DAY_DEFS, formatLocalDateISO]);
+  }, [
+    handleRequestRotationAdvisor,
+    weekOverviewNights,
+    DAY_DEFS,
+    formatLocalDateISO,
+    selectedDay.date,
+    showToast,
+    requireEdit,
+    engineApplyDraftMoveOrSwap,
+    setAssignments,
+    setLiveAssignVersion,
+  ]);
 
   return (
     <div
@@ -7567,6 +7616,44 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onDiscardDraft={discardDraft}
         permissions={permissions}
       />
+
+      {/* Shift notes — operator pad (hydrated from server; saves via session mutation) */}
+      {canEditAssignments && (
+        <div
+          className="no-print mx-auto w-full max-w-[var(--sb-builder-canvas-max,1056px)] px-3 pb-1"
+          style={{ marginTop: -2 }}
+        >
+          <details className="sb-shift-notes group rounded-xl border border-black/8 bg-white/55 dark:bg-white/5 dark:border-white/10 backdrop-blur-md">
+            <summary className="cursor-pointer select-none list-none px-3 py-1.5 text-[11px] font-semibold tracking-wide text-[var(--ios-secondary-label)] flex items-center gap-2">
+              <span className="opacity-70">Shift notes</span>
+              <span className="ml-auto text-[10px] font-normal opacity-50 group-open:hidden">
+                tap to edit
+              </span>
+            </summary>
+            <div className="px-3 pb-2.5 pt-0.5">
+              <div
+                ref={notesRef}
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Shift notes for this night"
+                onInput={handleNotesInput}
+                className="min-h-[52px] max-h-[140px] overflow-y-auto rounded-lg border border-black/6 dark:border-white/10 bg-white/80 dark:bg-black/20 px-2.5 py-2 text-[12.5px] leading-snug text-[var(--ios-label)] outline-none focus:ring-2 focus:ring-[var(--sb-gold-border)]"
+                data-placeholder="Notes for this night (call-offs, BEOs, floor context)…"
+              />
+              {notesCompletion?.suggestion ? (
+                <button
+                  type="button"
+                  className="mt-1 text-[10px] font-medium text-[var(--sb-gold-ink)] opacity-80 hover:opacity-100"
+                  onClick={() => acceptNotesSuggestion?.()}
+                >
+                  Accept suggestion
+                </button>
+              ) : null}
+            </div>
+          </details>
+        </div>
+      )}
 
       <TimefoldResultsSheet
         open={timefoldSheetOpen}

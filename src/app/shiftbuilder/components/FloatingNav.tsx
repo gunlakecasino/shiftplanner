@@ -681,7 +681,11 @@ export default function FloatingNav(props: FloatingNavProps) {
             <span
               className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
               style={{ color: isDark ? "#a1a1aa" : "#666" }}
-              title={isDayPublished ? "Published night" : "Unpublished — read-only for your role"}
+              title={
+                isDayPublished
+                  ? "Published night"
+                  : "Unpublished — floor viewers cannot open this night"
+              }
             >
               <span
                 className="shrink-0"
@@ -693,7 +697,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   display: "inline-block",
                 }}
               />
-              {isDayPublished ? "PUBLISHED" : "READ-ONLY"}
+              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
             </span>
           )}
 
@@ -920,7 +924,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     }}
                   >
                     <Check size={14} />
-                    Save All Draft
+                    Apply to Live
                     {draftSlotCount > 0 && (
                       <span className="ml-auto text-[11px] tabular-nums opacity-60">{draftSlotCount}</span>
                     )}

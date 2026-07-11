@@ -6,14 +6,22 @@ import { hydrateAiUsageGlobals } from "@/lib/shiftbuilder/aiUsageTracker";
 import { OPS_PILL_Z } from "./canvasPillGlass";
 
 /**
- * OpsStatusBar — static LIVE dot + label in the bottom-right corner.
+ * OpsStatusBar — poll-sync health pill (bottom-right).
  * Telemetry details are exposed via the native title tooltip on hover/long-press.
  *
- * KD-13: pill reflects session poll health (`window.__realtimeState`), not
+ * KD-13: reflects session poll health (`window.__realtimeState`), not
  * Supabase Realtime (retired for ops multi-operator sync).
+ * Labels: SYNCED / POLLING / OFFLINE (not "LIVE", which implied push realtime).
  */
 
 type RealtimeState = "LIVE" | "SYNCING" | "OFFLINE";
+
+/** Operator-facing label — avoid "LIVE" (sounds like realtime). */
+function pollLabel(rt: RealtimeState): string {
+  if (rt === "LIVE") return "SYNCED";
+  if (rt === "SYNCING") return "POLLING";
+  return "OFFLINE";
+}
 
 let __opsInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -169,13 +177,13 @@ export function updateOpsStatusBarContent(): void {
   const dotEl = pill.querySelector("[data-ops-rt-dot]") as HTMLElement | null;
   const rtLabelEl = pill.querySelector("[data-ops-rt-label]");
 
-  if (rtLabelEl) rtLabelEl.textContent = t.rt;
+  if (rtLabelEl) rtLabelEl.textContent = pollLabel(t.rt);
   if (dotEl) {
     dotEl.style.background = t.rtColor;
     dotEl.style.boxShadow = `0 0 4px ${t.rtColor}`;
   }
 
-  pill.title = `Poll sync: ${t.rt} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;
+  pill.title = `Board poll (~20s): ${pollLabel(t.rt)} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;
 }
 
 /** Toggle visibility without tearing down the telemetry poll (e.g. iPad placement dock). */
