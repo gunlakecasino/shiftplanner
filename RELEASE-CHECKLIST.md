@@ -165,29 +165,9 @@ See `src/app/api/shiftbuilder/_lib/routeMap.ts` for the full map.
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Build + runtime |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Build + runtime |
-| `SUPABASE_SERVICE_ROLE_KEY` | Runtime only (server admin client — **not** for session signing) |
-| `OPS_SESSION_SECRET` | Runtime only — **required in production** (session cookie HMAC) |
-| `OPS_SESSION_SECRET_PREV` | Runtime only — optional one-release dual-verify during secret rotation |
+| `SUPABASE_SERVICE_ROLE_KEY` | Runtime only (server) |
+| `OPS_SESSION_SECRET` | Runtime only (session cookie signing) |
 | `XAI_API_KEY` | Runtime only (optional, AI engine) |
-| `AUTH_RELAXED_ORIGIN` | **Emergency only** — set to `1` for one-release WebView/iPad soak if PIN login 403s after same-origin tighten; **unset after soak** (never leave on in production) |
-
-**KD-2 / production session secret (Railway — set before deploy):**
-
-- [ ] Set `OPS_SESSION_SECRET` on Railway **before** shipping the fail-closed build
-- [ ] Do **not** rely on `SUPABASE_SERVICE_ROLE_KEY` (or any `NEXT_PUBLIC_*`) for session signing in production — that fallback is **removed**
-- [ ] **Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway
-- [ ] Missing `OPS_SESSION_SECRET` in production: `POST /api/auth/verify-pin` → **503** (no cookie); gated routes without valid session → **401**
-- [ ] After deploy: PIN login succeeds **and** `GET /api/shiftbuilder/night-core?date=…` with session cookie returns **200**
-
-**First cutover (live service-role-as-signer → dedicated secret):**  
-If production is still signing sessions with service-role material (old warn-and-continue path), a fresh random `OPS_SESSION_SECRET` **without** PREV will invalidate all mid-shift cookies on deploy (login still works; floor ops re-PIN). Prefer continuity:
-
-- [ ] **(a)** Set `OPS_SESSION_SECRET` = **current live signer material** (often the service-role key value that was used as the HMAC secret), deploy fail-closed build, then later rotate to a dedicated random with PREV (below); **or**
-- [ ] **(b)** In the **same** Railway env change before deploy: `OPS_SESSION_SECRET` = new random (`openssl rand -base64 48`) **and** `OPS_SESSION_SECRET_PREV` = old service-role-as-session material (server-only). Sign uses primary only; verify accepts either.
-
-**Later rotate / soak:**
-
-- [ ] Optional rotate without mass logout: set `OPS_SESSION_SECRET` = new, `OPS_SESSION_SECRET_PREV` = old material; remove `OPS_SESSION_SECRET_PREV` after soak
 
 ---
 
@@ -259,62 +239,74 @@ pnpm start   # http://localhost:3000/shiftbuilder
 
 ## Deploy (Railway)
 
-**Before deploy:** confirm `OPS_SESSION_SECRET` is set on the Railway service (required; dedicated HMAC secret — **not** service-role fallback). If rotating secrets mid-shift, set `OPS_SESSION_SECRET_PREV` to the previous secret first, deploy, soak, then remove PREV.
-
 ```bash
 railway up   # or GitHub auto-deploy
 ```
 
-- [ ] `OPS_SESSION_SECRET` present in Railway runtime env (fail-closed without it)
-- [ ] `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` **not** set on Railway
-- [ ] PIN login + authenticated night-core read smoke pass post-deploy
-
-**Never** set `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` on Railway (or any client-exposed env). Service role stays server-only as `SUPABASE_SERVICE_ROLE_KEY`.
+Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
 
 ---
 
-## Security — retire unauthenticated `create-user` Edge Function (P0)
+## Security — read-cutover soak hold (PR 11 → gate before PR 13)
 
-**Canonical path (do not change):** session-gated **`POST /api/admin/users`** via Settings → Users tab (`UsersTab` + `adminUsersClient` → `requireSudoAdmin` + admin PIN confirm + `createOpsUserWithPin`). Prefer session mutations; fail closed.
+**Process gate only — no SQL, no code cutover in this step.**  
+After **PR 11** (kill client API fallbacks + ops Realtime → poll) is **deployed** to production (or a staging twin that mirrors prod traffic), hold before any anon SELECT revoke.
 
-**Do not** call or redeploy `supabase/functions/create-user` for real user creation. Repo path is a **410 Gone stub** only (no service-role create). Prefer full dashboard undeploy so the public functions URL **404s**.
+| Alias | Exec plan | Meaning |
+|-------|-----------|---------|
+| PR 11a | **PR 11** | Code: fail-closed night APIs; poll sync; no client REST fallbacks |
+| PR 11b | **PR 12** (this runbook) | **24–48h soak hold** — documentation / process gate only |
+| PR 11c | **PR 13** | SQL: revoke anon SELECT on ops tables + residual open policies |
 
-### Inventory before undeploy (mandatory — KD-18)
+**Hard rule:** Do **not** merge or apply PR 13 SQL until this soak gate passes. Do **not** package PR 11 + PR 13 in one deploy.
 
-- [ ] Supabase Dashboard → **Edge Functions** → note whether **`create-user`** is currently **deployed**
-- [ ] Optional CLI (project-linked): `supabase functions list` — record deploy status
-- [ ] If deployed: review Edge Function **logs** for unexpected traffic (external dependents unknown)
-- [ ] Grep monorepo + CI/Railway/runbooks for `create-user` / `functions/create-user` (no active callers)
+### Hold window
 
-### Undeploy / disable
+- [ ] **PR 11 is live** on the target environment (Railway deploy confirmed)
+- [ ] **Hold 24–48 hours** after that deploy before any anon SELECT revoke migration
+- [ ] Prefer a low-traffic window for the eventual PR 13 apply (not during peak floor ops)
 
-- [ ] If deployed → **undeploy/delete** `create-user` in Supabase Dashboard **immediately** (do not leave live during code PR lag)
-- [ ] Confirm public URL is **only** **404** (undeployed) or **410** + `CREATE_USER_EDGE_RETIRED` (stub live). Use a **full create-shaped** probe with the **anon** key (never service role) so gateway JWT checks and the old validator are both exercised:
+### What to monitor (logs + board health)
+
+- [ ] Night board loads for PIN-authenticated operators via session APIs only (`/api/shiftbuilder/night-core`, night secondary / night layer routes)
+- [ ] When night APIs fail, operators see **error toasts / explicit failure** — not a silent empty board (no client anon fallback path)
+- [ ] Multi-tab / multi-operator: second tab sees another operator’s Apply within ~**poll interval** (`NIGHT_BOARD_POLL_MS` ≈ 20s; worst case document ≤30s)
+- [ ] Ops status pill reflects poll health (LIVE / OFFLINE) without Realtime channel dependency on ops tables
+- [ ] Search production logs / error tracking for residual client ops-table access warnings, night-core/secondary failures, and unexpected empty-board reports
+- [ ] Grep residual browser paths for `supabase.from('nights'|…)` / leftover fallback strings if any hotfix is suspected; fix stragglers in **hotfix PRs** — do not “fix” by re-opening anon SELECT
+
+### Gate criteria (pass = allow PR 13)
+
+- [ ] No production board load **depends** on anon Supabase SELECT for night/assignment/ops tables
+- [ ] No open critical residual client REST fallbacks for board read path
+- [ ] Floor smoke still green after soak (auth, day switch, assign/Apply, print as applicable)
+
+### Blocked until gate — PR 13 SQL + curl proof
+
+**Do not run** anon SELECT revoke / drop `*_anon_authenticated_read` (or equivalent) on ops tables until the checklist above is signed.
+
+When the gate passes, **PR 13** owns the migration (reverse SQL in migration comments) and **staging REST proof** with the public anon key. Reference curl DoD (run on **staging after PR 13 SQL**, not during soak):
 
 ```bash
-# SUPABASE_URL + SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) — never service role
-curl -sS -w "\nHTTP %{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-user" \
-  -H "Content-Type: application/json" \
-  -H "apikey: $SUPABASE_ANON_KEY" \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-  -d '{"full_name":"retire-probe","username":"retire_probe_do_not_create","pin":"000000","role":"viewer"}'
+# Expect permission denied / empty under RLS — not 200 with data rows
+curl -sS "$SUPABASE_URL/rest/v1/zone_assignments?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/nights?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/tm_profiles?select=tm_id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+curl -sS "$SUPABASE_URL/rest/v1/ops_ai_feedback?select=id&limit=1" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
 ```
 
-  **Pass (only):** **404** (function undeployed) **or** **410** with body `code: "CREATE_USER_EDGE_RETIRED"` (stub).
+After PR 13: logged-in board still works via session APIs; rollback = reverse SQL for SELECT policies (PR 11 code can stay).
 
-  **Fail — still privileged / not retired:**
-  - **200** + `success: true` → **critical** — old create path still works (may have created a probe user; delete if so)
-  - **400** (e.g. validation) → **old handler still deployed** (empty/partial body used to look “safe”; full payload proves the privileged code path)
-  - Any other 2xx/4xx that is not 404/410 with retired code → treat as fail and re-inventory
+### Soak sign-off
 
-  **Inconclusive:** **401** without anon `apikey`/`Authorization` only proves the gateway blocked unauthenticated shape — **not** undeploy. Rerun with the anon JWT headers above. Do **not** treat platform `verify_jwt` as app-level auth (anon JWT often satisfies gateway shape checks).
-- [ ] Do **not** re-deploy create-user except intentionally as the 410 stub (prefer leave undeployed)
-
-### Canonical admin create still works
-
-- [ ] Sign in as **sudo_admin**
-- [ ] Settings → **Users** → create operator (PIN confirm) succeeds via **`/api/admin/users`**
-- [ ] Unauthenticated / non-sudo POST to `/api/admin/users` is rejected (401/403)
+- [ ] Soak start (PR 11 deploy time / commit): _______________
+- [ ] Soak end (≥24h, prefer 48h): _______________
+- [ ] Residual issues / hotfixes: _______________
+- [ ] **Gate:** approve PR 13 SQL path — signed: _______________
 
 ---
 
@@ -323,7 +315,7 @@ curl -sS -w "\nHTTP %{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-u
 - [ ] Production URL loads `/shiftbuilder`
 - [ ] Floor supervisor iPad test
 - [ ] sudo_admin audit trail verified on live data
-- [ ] `create-user` Edge Function not live (404/410); Users tab create still works via `/api/admin/users`
+- [ ] **Read-cutover soak hold** complete (24–48h after PR 11); **no** anon SELECT revoke until gate; PR 13 staging curl proof ready when SQL ships
 - [x] Tag: `v1.0.0`
 
 ---
@@ -332,7 +324,7 @@ curl -sS -w "\nHTTP %{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-u
 
 1. Railway instant rollback to prior deployment
 2. Or redeploy prior git tag/commit
-3. Edge Functions are **independent** of Railway: rolling back the app does **not** restore or remove `create-user`. Do **not** redeploy a historical `supabase/functions/create-user` create handler (service-role RPC); leave the function **undeployed** or keep the **410 stub only**.
+3. **Read cutover:** Revert PR 11 deploy if board is unusable; do **not** rush PR 13 SQL as a “fix.” After PR 13, use reverse SQL for SELECT policies; keep PR 11 fail-closed reads.
 
 ---
 
