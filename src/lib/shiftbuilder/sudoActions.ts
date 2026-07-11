@@ -340,4 +340,7 @@ export async function updateActiveEngineConfig(updates: {
     weights: updates.weights,
     eligibilityRules: updates.eligibilityRules,
   });
+  // Bust 5m browser cache so EngineConfigTab loadConfig() / AI lab see fresh row.
+  const { invalidateEngineConfigCache } = await import("./clientQueryCache");
+  invalidateEngineConfigCache();
 }
