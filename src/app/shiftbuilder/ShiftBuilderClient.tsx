@@ -7886,7 +7886,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 className="min-h-[52px] max-h-[140px] overflow-y-auto rounded-lg border border-black/6 dark:border-white/10 bg-white/80 dark:bg-black/20 px-2.5 py-2 text-[12.5px] leading-snug text-[var(--ios-label)] outline-none focus:ring-2 focus:ring-[var(--sb-gold-border)]"
                 data-placeholder="Notes for this night (call-offs, BEOs, floor context)…"
               />
-              {notesCompletion?.suggestion ? (
+              {notesCompletion?.ghostText ? (
                 <button
                   type="button"
                   className="mt-1 text-[10px] font-medium text-[var(--sb-gold-ink)] opacity-80 hover:opacity-100"
