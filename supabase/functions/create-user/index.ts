@@ -27,14 +27,15 @@ const headers = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 410, headers });
-  }
-
+  // Log all methods (including OPTIONS preflight) for KD-18 inventory / Edge log review.
   console.warn(
     "[create-user] retired edge function hit — refusing creation; use POST /api/admin/users",
     { method: req.method, url: req.url },
   );
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 410, headers });
+  }
 
   return new Response(
     JSON.stringify({

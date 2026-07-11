@@ -265,10 +265,25 @@ Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
 ### Undeploy / disable
 
 - [ ] If deployed → **undeploy/delete** `create-user` in Supabase Dashboard **immediately** (do not leave live during code PR lag)
-- [ ] Confirm public URL is **404** (or **410** if only the retirement stub is live):  
-      `curl -sS -o /dev/null -w "%{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-user" -H "Content-Type: application/json" -d '{}'`  
-      Expect **404** or **410** — never **200** with `success: true`
-- [ ] Do **not** treat platform `verify_jwt` as mitigation (anon JWT often satisfies gateway shape checks; app auth was never present)
+- [ ] Confirm public URL is **only** **404** (undeployed) or **410** + `CREATE_USER_EDGE_RETIRED` (stub live). Use a **full create-shaped** probe with the **anon** key (never service role) so gateway JWT checks and the old validator are both exercised:
+
+```bash
+# SUPABASE_URL + SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) — never service role
+curl -sS -w "\nHTTP %{http_code}\n" -X POST "$SUPABASE_URL/functions/v1/create-user" \
+  -H "Content-Type: application/json" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -d '{"full_name":"retire-probe","username":"retire_probe_do_not_create","pin":"000000","role":"viewer"}'
+```
+
+  **Pass (only):** **404** (function undeployed) **or** **410** with body `code: "CREATE_USER_EDGE_RETIRED"` (stub).
+
+  **Fail — still privileged / not retired:**
+  - **200** + `success: true` → **critical** — old create path still works (may have created a probe user; delete if so)
+  - **400** (e.g. validation) → **old handler still deployed** (empty/partial body used to look “safe”; full payload proves the privileged code path)
+  - Any other 2xx/4xx that is not 404/410 with retired code → treat as fail and re-inventory
+
+  **Inconclusive:** **401** without anon `apikey`/`Authorization` only proves the gateway blocked unauthenticated shape — **not** undeploy. Rerun with the anon JWT headers above. Do **not** treat platform `verify_jwt` as app-level auth (anon JWT often satisfies gateway shape checks).
 - [ ] Do **not** re-deploy create-user except intentionally as the 410 stub (prefer leave undeployed)
 
 ### Canonical admin create still works
@@ -293,6 +308,7 @@ Ensure `OPS_SESSION_SECRET` is set (dedicated — not service-role fallback).
 
 1. Railway instant rollback to prior deployment
 2. Or redeploy prior git tag/commit
+3. Edge Functions are **independent** of Railway: rolling back the app does **not** restore or remove `create-user`. Do **not** redeploy a historical `supabase/functions/create-user` create handler (service-role RPC); leave the function **undeployed** or keep the **410 stub only**.
 
 ---
 
