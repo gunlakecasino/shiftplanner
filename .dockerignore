@@ -54,6 +54,8 @@ nixpacks.toml   # (we have one, but no need to copy it into the image)
 ZDS Goldens
 casinoIcons
 Nightwatch
+opsApp
+Agentic
 opsApp_Codebase_Analysis.md
 opsApp_UIUX_Checklist.docx
 liquidforge-eval-review.html

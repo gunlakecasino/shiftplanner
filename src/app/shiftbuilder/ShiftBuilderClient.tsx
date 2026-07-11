@@ -2709,7 +2709,7 @@ function AuthedShiftBuilder() {
   // conflict toasts. Multi-operator sync is poll + mutation invalidation (KD-13).
   const live = useLiveAssignments(selectedDay);
 
-  // Graves Default Schedule page uses its own QueryClient — broadcast invalidates ours.
+  // Cross-tab / schedule-edit broadcasts: invalidate night core even under the shared layout QueryClient.
   React.useEffect(() => {
     const qc = currentNight.queryClient;
     if (!qc) return;

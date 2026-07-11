@@ -19,7 +19,6 @@
  */
 
 import dynamic from "next/dynamic";
-import { QueryProvider } from "./providers";
 import PwaRegister from "./components/PwaRegister";
 import ShiftBuilderHelpButton from "./components/ShiftBuilderHelpButton";
 import ShiftBuilderAuthenticatedShell from "./components/ShiftBuilderAuthenticatedShell";
@@ -37,13 +36,13 @@ const ShiftBuilderClient = dynamic(() => import("./ShiftBuilderClient"), {
 
 export default function ShiftBuilderPage() {
   return (
-    <QueryProvider>
+    <>
       <PwaRegister />
       <DaySwitchTransitionBridge />
       <ShiftBuilderAuthenticatedShell>
         <ShiftBuilderClient />
       </ShiftBuilderAuthenticatedShell>
       <ShiftBuilderHelpButton />
-    </QueryProvider>
+    </>
   );
 }

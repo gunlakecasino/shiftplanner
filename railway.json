@@ -6,9 +6,6 @@
     "watchPatterns": [
       "src/**",
       "public/**",
-      "app/**",
-      "components/**",
-      "lib/**",
       "Dockerfile*",
       ".dockerignore",
       "**/*.toml",

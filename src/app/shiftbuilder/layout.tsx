@@ -3,8 +3,13 @@
 import { OpsAuthProvider } from "@/lib/auth/opsAuth";
 import { OpsAuthGate } from "./components/OpsAuthGate";
 import { ConfirmProvider } from "./components/ConfirmDialog";
+import { QueryProvider } from "./providers";
 import "./authGate.css";
 
+/**
+ * Single QueryClient for the entire /shiftbuilder tree.
+ * Pages must not wrap their own QueryProvider (duplicate clients break cache sharing).
+ */
 export default function ShiftBuilderLayout({
   children,
 }: {
@@ -13,7 +18,9 @@ export default function ShiftBuilderLayout({
   return (
     <OpsAuthProvider>
       <OpsAuthGate loadingSublabel="Preparing computer context">
-        <ConfirmProvider>{children}</ConfirmProvider>
+        <ConfirmProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </ConfirmProvider>
       </OpsAuthGate>
     </OpsAuthProvider>
   );

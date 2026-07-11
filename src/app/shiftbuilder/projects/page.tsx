@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { QueryProvider } from "../providers";
 
 const ProjectsClient = dynamic(() => import("./ProjectsClient"), {
   ssr: false,
@@ -9,9 +8,5 @@ const ProjectsClient = dynamic(() => import("./ProjectsClient"), {
 });
 
 export default function ShiftBuilderProjectsPage() {
-  return (
-    <QueryProvider>
-      <ProjectsClient />
-    </QueryProvider>
-  );
+  return <ProjectsClient />;
 }
