@@ -2943,7 +2943,20 @@ export async function getTmPlacementHistory(
   tmId: string,
   days = 30
 ): Promise<ZoneDetailEntry | null> {
-  const client = getSupabaseClient();
+  // Server API routes: prefer service role so trails aren't empty under RLS/anon.
+  // Browser: standard public client (caller should use /api/shiftbuilder/placement-histories).
+  let client = getSupabaseClient();
+  if (typeof window === "undefined") {
+    try {
+      const { createAdminClientSafe } = await import(
+        "@/app/api/admin/_lib/createAdminClient"
+      );
+      const admin = createAdminClientSafe();
+      if (admin) client = admin;
+    } catch {
+      /* keep default client */
+    }
+  }
   const today = new Date();
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
@@ -2961,14 +2974,26 @@ export async function getTmPlacementHistory(
   const nightIdToDate = new Map<string, string>();
   (nightRows as any[]).forEach((n) => nightIdToDate.set(n.id, n.night_date));
 
-  const { data: rows } = await client
-    .from("zone_assignments")
-    .select("night_id, slot_key, slot_type, rr_side")
-    .in("night_id", Array.from(nightIdToDate.keys()))
-    .eq("tm_id", tmId)
-    .not("slot_type", "eq", "overlap");
+  // Batch night_id filters — very long .in() lists can fail/truncate under PostgREST.
+  const nightIds = Array.from(nightIdToDate.keys());
+  const rows: any[] = [];
+  const NIGHT_CHUNK = 80;
+  for (let i = 0; i < nightIds.length; i += NIGHT_CHUNK) {
+    const chunk = nightIds.slice(i, i + NIGHT_CHUNK);
+    const { data: batch, error } = await client
+      .from("zone_assignments")
+      .select("night_id, slot_key, slot_type, rr_side")
+      .in("night_id", chunk)
+      .eq("tm_id", tmId)
+      .not("slot_type", "eq", "overlap");
+    if (error) {
+      console.warn("[data] getTmPlacementHistory chunk failed", error.message);
+      continue;
+    }
+    if (batch?.length) rows.push(...batch);
+  }
 
-  if (!rows?.length) return null;
+  if (!rows.length) return null;
 
   const zoneDates: Record<string, string[]> = {};
   const nightDates = new Set<string>();

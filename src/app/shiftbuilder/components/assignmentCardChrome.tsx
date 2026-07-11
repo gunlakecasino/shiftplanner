@@ -15,7 +15,7 @@ import {
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
-import { placementRepeatKeysMatch } from "./placementPadHelpers";
+import { trailLabelMatchesSlotKey } from "./placementPadHelpers";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
@@ -25,14 +25,14 @@ export function TmPlacementTrail({
   matchSlotKey,
 }: {
   labels?: string[];
-  /** When set, matching trail chips use critical-repeat styling (RR8 = MRR8/WRR8). */
+  /** When set, matching trail chips use critical-repeat styling (RR8M/MRR8, etc.). */
   matchSlotKey?: string;
 }) {
   if (!labels?.length) return null;
 
   return (
     <span
-      className="sb-tm-placement-trail no-print inline-flex items-baseline gap-[3px] shrink-0 self-baseline"
+      className="sb-tm-placement-trail no-print inline-flex flex-wrap items-baseline gap-x-[3px] gap-y-[1px] shrink-0 self-baseline max-w-[46%] justify-end"
       title={`Last ${labels.length} placements (newest first): ${labels.join(" → ")}`}
       aria-label={`Recent placements: ${labels.join(", ")}`}
       onClick={(e) => e.stopPropagation()}
@@ -40,7 +40,7 @@ export function TmPlacementTrail({
     >
       {labels.map((label, i) => {
         const isRepeat =
-          !!matchSlotKey && placementRepeatKeysMatch(label, matchSlotKey);
+          !!matchSlotKey && trailLabelMatchesSlotKey(label, matchSlotKey);
         return (
           <React.Fragment key={`${label}-${i}`}>
             {i > 0 ? (
@@ -49,7 +49,7 @@ export function TmPlacementTrail({
               </span>
             ) : null}
             <span
-              className={`text-[8px] font-semibold uppercase tracking-[0.05em] leading-none ${
+              className={`text-[8px] font-semibold uppercase tracking-[0.04em] leading-none tabular-nums ${
                 isRepeat ? "text-[#B91C1C]" : "text-neutral-400"
               }`}
               style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}

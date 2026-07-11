@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const tmIds = Array.isArray(body?.tmIds) ? (body.tmIds as string[]) : [];
     const days = typeof body?.days === "number" ? body.days : 30;
+    // Cap per request (client chunks boards larger than this).
     const unique = [...new Set(tmIds.filter((id) => typeof id === "string" && id.length > 0))].slice(
       0,
-      48,
+      64,
     );
 
     const entries = await Promise.all(

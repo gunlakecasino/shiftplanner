@@ -314,11 +314,15 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           ) : (
             <div className="min-w-0">
               <h3
-                className={`flex items-baseline gap-1 min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
+                className={`flex items-baseline gap-1.5 min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
                 style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
-                title={displayName}
+                title={
+                  placementTrail?.length
+                    ? `${displayName} · prior: ${placementTrail.join(" → ")}`
+                    : displayName
+                }
               >
-                <span className="truncate">{displayName}</span>
+                <span className="truncate min-w-0">{displayName}</span>
                 {showDigitalAssists ? (
                   <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
                 ) : null}

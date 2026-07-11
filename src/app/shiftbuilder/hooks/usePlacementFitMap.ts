@@ -11,6 +11,7 @@ import {
   collectDeploymentSlotKeys,
   PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
   shouldShowPlacementFitChip,
+  weekEntriesForTm,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
 import {
   computeSlotPlacementFit,
@@ -120,6 +121,7 @@ export function usePlacementFitMap({
       // Already fetched (or in-flight) for exactly this set of TMs. No need to hit the API again.
       return;
     }
+    // Mark in-flight only; clear on failure so the next render can retry.
     lastFetchedKeyRef.current = tmIdsKey;
 
     const tmIds = tmIdsKey.split(",").filter(Boolean);
@@ -127,6 +129,7 @@ export function usePlacementFitMap({
     let cancelled = false;
     setHistoriesLoading(true);
     // Drop TMs no longer on the board so we never score with stale peer histories.
+    // Keep entries we already have so trails don't flash empty during refetch.
     setHistories((prev) => {
       const pruned: Record<string, ZoneDetailEntry | null> = {};
       for (const id of tmIds) {
@@ -137,35 +140,41 @@ export function usePlacementFitMap({
 
     (async () => {
       try {
-        const res = await fetch("/api/shiftbuilder/placement-histories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tmIds,
-            days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
-          }),
-        });
-        if (!res.ok) throw new Error(`placement-histories ${res.status}`);
-        const data = await res.json();
-        if (cancelled) return;
-        const nextH = (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
-        // Only keep requested TMs (full replace for this board set).
-        const scoped: Record<string, ZoneDetailEntry | null> = {};
-        for (const id of tmIds) {
-          scoped[id] = nextH[id] ?? null;
+        // Chunk so large boards never exceed the API max (48) and leave TMs trail-less.
+        const CHUNK = 48;
+        const merged: Record<string, ZoneDetailEntry | null> = {};
+        for (let i = 0; i < tmIds.length; i += CHUNK) {
+          const chunk = tmIds.slice(i, i + CHUNK);
+          const res = await fetch("/api/shiftbuilder/placement-histories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tmIds: chunk,
+              days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+            }),
+          });
+          if (!res.ok) throw new Error(`placement-histories ${res.status}`);
+          const data = await res.json();
+          if (cancelled) return;
+          const nextH = (data.histories as Record<string, ZoneDetailEntry | null>) ?? {};
+          for (const id of chunk) {
+            merged[id] = nextH[id] ?? null;
+          }
         }
-        const nextSig = JSON.stringify(scoped);
+        if (cancelled) return;
+        const nextSig = JSON.stringify(merged);
         if (lastHistoriesSigRef.current !== nextSig) {
-          setHistories(scoped);
+          setHistories(merged);
           lastHistoriesSigRef.current = nextSig;
         }
       } catch {
-        // Keep pruned prior good histories for still-present TMs — not empty-as-truth.
+        // Allow retry on next effect: do not leave lastFetchedKey stuck on a failed fetch.
         if (!cancelled) {
+          lastFetchedKeyRef.current = null;
           setHistories((prev) => {
             const kept: Record<string, ZoneDetailEntry | null> = {};
             for (const [id, h] of Object.entries(prev)) {
-              if (tmIdSet.has(id)) kept[id] = h;
+              if (tmIdSet.has(id) && h) kept[id] = h;
             }
             return kept;
           });
@@ -310,7 +319,8 @@ export function usePlacementFitMap({
     const out: Record<string, string[]> = {};
     for (const tmId of tmIdsKey.split(",").filter(Boolean)) {
       const history = histories[tmId] ?? null;
-      const weekEntries = scopedWeekForTrails?.get(tmId);
+      // Exclusive of tonight — same rule as pad prior-N windows.
+      const weekEntries = weekEntriesForTm(scopedWeekForTrails, tmId, currentIso);
       const labels = buildPlacementTrailLabels(history, currentIso, undefined, weekEntries);
       if (labels.length > 0) out[tmId] = labels;
     }

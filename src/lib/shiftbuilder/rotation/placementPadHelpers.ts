@@ -221,15 +221,55 @@ export function spreadCountForRepeatKey(
 /** Card name trail — last N graves before tonight (newest first). */
 export const CARD_PLACEMENT_TRAIL_COUNT = 3;
 
-/** Compact trail label on assignment cards (e.g. Z4, RR8, Z9SR). */
+/**
+ * Compact trail label on assignment cards (e.g. Z4, RR8M, RR8W, Z9SR).
+ * Restroom sides keep M/W so prior placements are not collapsed into an ambiguous "RR8".
+ */
 export function formatCardPlacementTrailLabel(ui: string, fallback?: string): string {
   if (ui === "Z9SR") return "Z9SR";
   if (/^Z\d+$/.test(ui)) return ui;
-  const rr = ui.match(/^[MW]RR(\d+)$/);
-  if (rr) return `RR${rr[1]}`;
-  if (ui.startsWith("TR")) return `T${ui.replace(/\D/g, "")}`;
+  // Prefer side-explicit RR labels (matches pad matrix style: RR8M / RR8W).
+  if (/^MRR\d+$/i.test(ui)) return `RR${ui.replace(/^MRR/i, "")}M`;
+  if (/^WRR\d+$/i.test(ui)) return `RR${ui.replace(/^WRR/i, "")}W`;
+  // Bare RR8 (legacy / side-agnostic) — keep as RR8.
+  const bareRr = ui.match(/^RR(\d+)$/i);
+  if (bareRr) return `RR${bareRr[1]}`;
+  if (ui.startsWith("TR")) return `TR${ui.replace(/\D/g, "")}`;
+  if (ui.startsWith("SP")) return ui.toUpperCase();
+  if (ui.startsWith("AUX") || ui === "ADM" || ui === "ADMIN") {
+    return (fallback ?? ui).replace(/\s+/g, "");
+  }
   const raw = fallback ?? ui;
   return raw.replace(/\s+/g, "");
+}
+
+/**
+ * Whether a compact trail chip refers to the same rotation area as a full slot key.
+ * Handles trail labels like RR8M / RR8 / TR1 against slots MRR8 / WRR8 / TR1.
+ */
+export function trailLabelMatchesSlotKey(trailLabel: string, slotKey: string): boolean {
+  if (!trailLabel || !slotKey) return false;
+  if (placementRepeatKeysMatch(trailLabel, slotKey)) return true;
+
+  // RR8M / RR8W → MRR8 / WRR8
+  const sideRr = trailLabel.match(/^RR(\d+)([MW])$/i);
+  if (sideRr) {
+    const expanded = `${sideRr[2].toUpperCase() === "M" ? "MRR" : "WRR"}${sideRr[1]}`;
+    if (placementRepeatKeysMatch(expanded, slotKey)) return true;
+  }
+
+  // Bare RR8 → either MRR8 or WRR8 (area-level critical)
+  const bareRr = trailLabel.match(/^RR(\d+)$/i);
+  if (bareRr) {
+    if (placementRepeatKeysMatch(`MRR${bareRr[1]}`, slotKey)) return true;
+    if (placementRepeatKeysMatch(`WRR${bareRr[1]}`, slotKey)) return true;
+  }
+
+  // TR1 / T1 style
+  const trash = trailLabel.match(/^T(?:R)?(\d+)$/i);
+  if (trash && placementRepeatKeysMatch(`TR${trash[1]}`, slotKey)) return true;
+
+  return false;
 }
 
 /** Merge DB history with in-app week plan entries (builder live layer). */
