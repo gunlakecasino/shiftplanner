@@ -202,7 +202,10 @@ import ShiftBuilderBoard, { type ShiftBuilderBoardProps } from "./components/Shi
 import { BuilderPinnedFooter } from "./components/BuilderPinnedFooter";
 import EngineThoughtProcess from "./components/EngineThoughtProcess";
 import PlacementPad from "./components/PlacementPad";
-import { rosterPanelWidth } from "@/lib/shiftbuilder/tabletDevice";
+import {
+  rosterPanelWidth,
+  placementDockStageRightInset,
+} from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { isPublishedOnlyViewer } from "./lib/viewerNightPolicy";
 import {
@@ -1965,22 +1968,29 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
+    // Placement dock (iPad inspector) is 380px fixed right — shift stage so cards aren't buried.
+    const dockOpen =
+      (tablet || (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches)) &&
+      !!selectedSlotKey &&
+      isBuilderLiveCanvas &&
+      currentView === "deployment";
+    const dockInset = dockOpen ? placementDockStageRightInset() : 0;
     if (isBuilderLiveCanvas) {
       const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: hGutter,
+        right: hGutter + dockInset,
         bottom: builderStageBottomInsetPx(),
         left: hGutter,
       };
     }
     return {
       top: stageTopInsetPx(),
-      right: tablet ? 32 : 40,
+      right: (tablet ? 32 : 40) + dockInset,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? (tablet ? rosterPanelWidth() + 16 : rosterPanelWidth() + 16) : tablet ? 32 : 40,
     };
-  }, [rosterOpen, isBuilderLiveCanvas]);
+  }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey, currentView]);
 
   const {
     setZoomMode,

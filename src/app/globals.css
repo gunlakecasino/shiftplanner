@@ -1999,6 +1999,8 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* Override parent touch-action so finger can scroll task lists on iPad. */
+  touch-action: pan-y !important;
   scrollbar-width: thin;
   scrollbar-color: rgba(120, 120, 128, 0.5) rgba(0, 0, 0, 0.04);
   /* Inset scrollbar from overflow:hidden + rounded card edge (Safari clips edge scrollbars) */
@@ -3107,6 +3109,50 @@ button,
   /* Break badges on cards — enlarge hit area without changing ink size. */
   .sb-break-badge-btn {
     touch-action: manipulation;
+  }
+
+  /*
+   * Placement Dock — always available for coarse pointer (incl. Split View < 768).
+   * Full-height right inspector replaces flyout pads that overflow on glass.
+   */
+  .placement-dock {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    right: env(safe-area-inset-right, 0px);
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    width: min(380px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    border-radius: 20px 0 0 20px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-right: none;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    box-shadow: -10px 0 40px -12px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  .dark .placement-dock {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(12, 12, 14, 0.97);
+  }
+
+  .placement-dock-inner {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .placement-dock-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 }
 

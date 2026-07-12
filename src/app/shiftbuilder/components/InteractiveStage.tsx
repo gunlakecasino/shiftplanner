@@ -6,7 +6,6 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  TouchSensor,
   useSensor,
   useSensors,
   closestCenter,
@@ -21,6 +20,7 @@ import {
 import { createPortal } from "react-dom";
 import { snapTopLeftToCursor } from "@/lib/shiftbuilder/dndModifiers";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
+import { isCoarsePointerDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 function isDroppableVisible(
   id: UniqueIdentifier,
@@ -98,13 +98,24 @@ export default function InteractiveStage({
 }: InteractiveStageProps) {
   const reducedMotion = useReducedMotion();
 
-  // Sensors tuned for iPad + Pencil + Safari compatibility.
-  // Pointer for mouse/pencil, Touch for finger (with hold to distinguish from scroll).
-  // MeasuringStrategy.Always below helps with ancestor CSS scale(transform) rect accuracy.
-  // Pointer + touch only — KeyboardSensor steals Space/Enter from aux label inputs.
+  // Sensors tuned for iPad + Pencil + Safari.
+  // Modern iPadOS fires Pointer Events for touch — dual Pointer+Touch sensors
+  // double-handle the same gesture (ghosted drags / missed taps). Pointer only.
+  // Coarse pointer needs a longer distance so a finger tap still opens pads
+  // instead of starting a drag (was 4px — too twitchy on glass).
+  const [coarse, setCoarse] = React.useState(false);
+  React.useEffect(() => {
+    setCoarse(isCoarsePointerDevice());
+    const mq = window.matchMedia("(pointer: coarse)");
+    const onChange = () => setCoarse(isCoarsePointerDevice());
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: coarse ? 12 : 4 },
+    }),
   );
 
   // Prevent iOS Safari (iPad) and Mac Safari from interpreting drag gestures as pinch-to-zoom or "smart zoom".

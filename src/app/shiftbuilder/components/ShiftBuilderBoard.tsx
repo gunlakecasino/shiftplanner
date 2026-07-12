@@ -41,7 +41,8 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { useAssignments, useDraftAssignments, useAuxDefs, useShiftBuilderStore, useIsDraftMode, useBreakCounts, useDraftBreakdown, useDraftGrokReasoning } from "../store/useShiftBuilderStore";
 import { useShallow } from 'zustand/shallow';
 import PlacementPad, { resolvePadAnchorHost, type PlacementPadAnchor } from "./PlacementPad";
-import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
+import PlacementDock from "./placement-dock/PlacementDock";
+import { isTabletTouchDevice, isCoarsePointerDevice } from "@/lib/shiftbuilder/tabletDevice";
 import TasksPad from "./TasksPad";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
@@ -740,8 +741,21 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return () => document.removeEventListener("click", onDocClick, true);
   }, [selectedSlotKey, activeTaskEditPad, onSlotClose, closeTaskTextEditPad]);
 
+  // Coarse pointer (incl. Split View < 768px) — dock inspector instead of flyout pads.
+  const [useTabletDock, setUseTabletDock] = React.useState(false);
+  React.useEffect(() => {
+    const apply = () =>
+      setUseTabletDock(
+        !isPrintPreview && (isTabletTouchDevice() || isCoarsePointerDevice()),
+      );
+    apply();
+    const mq = window.matchMedia("(pointer: coarse)");
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, [isPrintPreview]);
+
   const tabletOverlayOpen =
-    isTabletTouchDevice() && !!(selectedSlotKey || activeTaskEditPad);
+    useTabletDock && !!(selectedSlotKey || activeTaskEditPad);
 
   React.useEffect(() => {
     setOpsStatusBarVisible(!tabletOverlayOpen);
@@ -985,7 +999,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     anchor: PlacementPadAnchor,
     hostId: string,
   ) => {
-    if (useExternalPad) return null;
+    // Tablet dock is rendered once at board root (full-height inspector).
+    if (useExternalPad || useTabletDock) return null;
     if (selectedSlotKey !== slotKey) return null;
     return (
       <PlacementPad
@@ -1975,6 +1990,17 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
           </div>
         )}
       </div>
+
+      {/* iPad inspector dock — full-height right panel; avoids flyout overflow. */}
+      {!isPrintPreview &&
+        useTabletDock &&
+        activePlacementPad &&
+        !useExternalPad && (
+          <PlacementDock
+            {...placementPadProps(activePlacementPad.slotKey)}
+            onClose={() => onSlotClose?.()}
+          />
+        )}
 
       {/* Rotation health — standalone orb above LIVE; hover for %. */}
       {!isPrintPreview && (
