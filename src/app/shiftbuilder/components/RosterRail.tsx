@@ -382,7 +382,7 @@ const RosterRail = React.memo(function RosterRail({
   const scheduledBandCount = graveOnly
     ? filterGravesScheduleRosterByBand(scheduleRoster, true).length
     : scheduleRoster.length;
-  const listEstimate = 48;
+  const listEstimate = 40;
 
   return (
     <>

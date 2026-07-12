@@ -8,29 +8,45 @@ import { useBoardTasksStore } from "../hooks/useBoardTaskSummary";
 
 /**
  * Floating ops pill — the at-a-glance "tasks tonight" readout for the board.
- * Mirrors the DraftStatusPill / RotationHealthFloater velvet-glass grammar.
- * Docks bottom-left (draft pill is bottom-center, health floater bottom-right).
- * Tap-through opens /shiftbuilder/projects. Dismiss hides the whole task
- * overlay (pill + card badges) for the session.
+ * Docks bottom-left; when the Graves roster is open, shifts right so it never
+ * sits on top of the roster panel.
  */
 export function BoardTaskPill() {
   const total = useBoardTasksStore((s) => s.total);
   const overdue = useBoardTasksStore((s) => s.overdue);
   const hidden = useBoardTasksStore((s) => s.hidden);
   const setHidden = useBoardTasksStore((s) => s.setHidden);
+  const [rosterOpen, setRosterOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const sync = () => setRosterOpen(document.body.classList.contains("sb-roster-open"));
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   if (typeof document === "undefined") return null;
   if (hidden || total <= 0) return null;
 
+  // Clear of roster panel when open (CSS var published by ShiftBuilderClient).
+  const left = rosterOpen
+    ? "calc(var(--sb-roster-inset, 268px) + 8px)"
+    : "20px";
+
   return createPortal(
     <div
-      className="sb-board-task-pill no-print fixed bottom-14 left-5 z-[118] flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 shadow-2xl"
+      className="sb-board-task-pill no-print fixed bottom-14 z-[118] flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 shadow-2xl"
       style={{
+        left,
         background: "var(--sb-glass)",
         backdropFilter: "var(--sb-glass-blur)",
         WebkitBackdropFilter: "var(--sb-glass-blur)",
         border: "1px solid var(--sb-glass-border)",
         boxShadow: "inset 0 1px 0 var(--sb-glass-highlight), 0 12px 32px -12px rgba(0,0,0,0.45)",
+        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        transition: "left 280ms cubic-bezier(0.22, 1, 0.36, 1)",
       }}
       role="status"
       aria-live="polite"

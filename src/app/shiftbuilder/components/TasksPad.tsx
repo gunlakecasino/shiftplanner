@@ -774,7 +774,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
           : usePortal && portalStyle
             ? { ...portalStyle, zIndex: 210, width: 360 }
             : { width: 360 }),
-        fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
       }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}

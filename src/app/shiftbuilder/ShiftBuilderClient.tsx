@@ -196,6 +196,7 @@ import EngineThoughtProcess from "./components/EngineThoughtProcess";
 import PlacementPad from "./components/PlacementPad";
 import {
   rosterPanelWidth,
+  rosterStageLeftInset,
   placementDockStageRightInset,
 } from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
@@ -1980,7 +1981,7 @@ function AuthedShiftBuilder() {
     const dockInset = dockOpen ? placementDockStageRightInset() : 0;
     // Floating roster is portaled over the stage — shift the live canvas left so
     // zone cards never sit under the panel (same contract as placement dock right).
-    const rosterLeft = rosterOpen ? rosterPanelWidth() + 24 : 0;
+    const rosterLeft = rosterOpen ? rosterStageLeftInset() : 0;
     if (isBuilderLiveCanvas) {
       const hGutter = tablet ? 12 : 16;
       return {
@@ -1994,13 +1995,24 @@ function AuthedShiftBuilder() {
       top: stageTopInsetPx(),
       right: (tablet ? 32 : 40) + dockInset,
       bottom: tablet ? 56 : 68,
-      left: rosterOpen
-        ? rosterPanelWidth() + 24
-        : tablet
-          ? 32
-          : 40,
+      left: rosterOpen ? rosterStageLeftInset() : tablet ? 32 : 40,
     };
   }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey, currentView]);
+
+  // Publish roster geometry to document so stage padding + floating pills can clear it.
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const w = rosterPanelWidth();
+    const inset = rosterStageLeftInset();
+    document.body.classList.toggle("sb-roster-open", rosterOpen);
+    document.documentElement.style.setProperty("--sb-roster-w", `${w}px`);
+    document.documentElement.style.setProperty("--sb-roster-inset", `${inset}px`);
+    return () => {
+      document.body.classList.remove("sb-roster-open");
+      document.documentElement.style.removeProperty("--sb-roster-w");
+      document.documentElement.style.removeProperty("--sb-roster-inset");
+    };
+  }, [rosterOpen]);
 
   const {
     setZoomMode,
@@ -8001,18 +8013,18 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               className={`sb-roster-shell z-[55] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "sb-roster-shell--open" : "pointer-events-none"}`}
               style={{
                 width: rosterPanelWidth(),
-                top: stageTopInsetPx() + 8,
-                left: 10,
-                // Full-height side panel (not a floating card over the board).
-                // Stage left inset matches width + gap so cards never sit underneath.
-                height: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + builderStageBottomInsetPx()}px)`,
-                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + builderStageBottomInsetPx()}px)`,
+                top: stageTopInsetPx() + 6,
+                left: 8,
+                // Content-height panel (not a full-viewport stocky slab). Stage left
+                // inset (JS + body.sb-roster-open CSS) keeps cards clear of this box.
+                height: "auto",
+                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + builderStageBottomInsetPx() + 12}px)`,
                 transformOrigin: "0% 0%",
-                transform: rosterOpen ? "translateX(0)" : "translateX(calc(-100% - 16px))",
+                transform: rosterOpen ? "translateX(0)" : "translateX(calc(-100% - 12px))",
                 opacity: rosterOpen ? 1 : 0,
                 pointerEvents: rosterOpen ? "auto" : "none",
                 transition:
-                  "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease",
+                  "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease",
               }}
             >
               <RosterRail

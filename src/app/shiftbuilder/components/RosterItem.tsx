@@ -51,7 +51,7 @@ const RosterItem = React.memo(function RosterItem({
         : "sb-roster-avatar--neutral";
 
   const rowClass = [
-    "sb-roster-row group flex items-center gap-2.5 px-2.5 py-2.5 text-sm touch-none",
+    "sb-roster-row group flex items-center gap-2 px-2 py-1.5 text-sm touch-none",
     rowTone === "scheduled" ? "sb-roster-row--scheduled" : "",
     rowTone === "on" ? "sb-roster-row--on" : "",
     isAssigned ? "sb-roster-row--placed" : "",

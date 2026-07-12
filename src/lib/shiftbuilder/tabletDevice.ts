@@ -50,14 +50,17 @@ export function padUsesSingleTap(): boolean {
   return isCoarsePointerDevice();
 }
 
-/** Floating roster width — roomy enough for names + chips, compact on tablet. */
+/**
+ * Floating roster width — slim so the board keeps real estate.
+ * Desktop: 248 · tablet/coarse: 212
+ */
 export function rosterPanelWidth(): number {
-  return isTabletTouchDevice() || isCoarsePointerDevice() ? 228 : 300;
+  return isTabletTouchDevice() || isCoarsePointerDevice() ? 212 : 248;
 }
 
-/** Stage left inset when roster is open (panel width + left offset + gap). */
+/** Stage left inset when roster is open (panel left offset 8 + width + 12 gap). */
 export function rosterStageLeftInset(): number {
-  return rosterPanelWidth() + 24;
+  return 8 + rosterPanelWidth() + 12;
 }
 
 /** Pencil long-hover opens pad faster on tablet (squeeze unavailable in Safari). */
