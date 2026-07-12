@@ -141,7 +141,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(!isLocked ? listeners : {})}
       {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl touch-none ${
+      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl ${
         isOver ? "drop-target-active" : ""
       } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
         isDimmed ? "sb-weekly-dim" : ""
