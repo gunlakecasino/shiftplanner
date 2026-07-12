@@ -7,6 +7,7 @@ import {
   X,
   ChevronDown,
   Check,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "./ConfirmDialog";
@@ -73,6 +74,11 @@ interface PrintCommandCenterProps {
   open: boolean;
   onClose: () => void;
   onPrint: (config: PrintConfig) => void;
+  /**
+   * Direct Golden PDF download (same capture pipeline as Print).
+   * Multi-night selection → ZIP of per-day PDFs.
+   */
+  onExport?: (config: PrintConfig) => void;
   /** Jump to on-canvas Golden preview for a deploy/breaks sheet */
   onPreviewSheet?: (args: {
     dayIndex: number;
@@ -303,6 +309,7 @@ export function PrintCommandCenter({
   open,
   onClose,
   onPrint,
+  onExport,
   onPreviewSheet,
   DAY_DEFS,
   selectedDayIndex,
@@ -419,6 +426,11 @@ export function PrintCommandCenter({
   // ── Derived values ────────────────────────────────────────────────────────
   const pageCount = useMemo(() => countPrintPages(days), [days]);
   const estSecs = useMemo(() => estimatePrintSeconds(days), [days]);
+  const uniqueExportDays = useMemo(
+    () => new Set(days.filter((d) => d.printDeploy || d.printBreaks).map((d) => d.dayIndex)).size,
+    [days],
+  );
+  const exportLabel = uniqueExportDays > 1 ? "Export ZIP" : "Export PDF";
 
   const sheetTypeLabel = printVariant === "planning" ? "Planning Worksheet" : "Floor Sheet";
 
@@ -529,6 +541,12 @@ export function PrintCommandCenter({
     onPrint(currentConfig());
   }, [pageCount, currentConfig, onPrint]);
 
+  // ── Export PDF / ZIP (Golden raster pipeline) ─────────────────────────────
+  const handleExport = useCallback(() => {
+    if (pageCount === 0 || !onExport) return;
+    onExport(currentConfig());
+  }, [pageCount, currentConfig, onExport]);
+
   // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
@@ -536,12 +554,17 @@ export function PrintCommandCenter({
       if (e.key === "Escape" && !isPrinting) { e.stopPropagation(); onClose(); }
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !isPrinting && pageCount > 0) {
         e.preventDefault();
-        handlePrint();
+        // ⌘⇧↩ = export PDF; ⌘↩ = browser print
+        if (e.shiftKey && onExport) {
+          handleExport();
+        } else {
+          handlePrint();
+        }
       }
     };
     document.addEventListener("keydown", h, true);
     return () => document.removeEventListener("keydown", h, true);
-  }, [open, isPrinting, pageCount, onClose, handlePrint]);
+  }, [open, isPrinting, pageCount, onClose, onExport, handlePrint, handleExport]);
 
   if (!mounted) return null;
 
@@ -597,7 +620,7 @@ export function PrintCommandCenter({
             <Printer size={17} color="#0A84FF" strokeWidth={2} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div id="pcc-title" style={{ fontSize: 15, fontWeight: 700, color: tx, letterSpacing: "-0.02em" }}>Print</div>
+            <div id="pcc-title" style={{ fontSize: 15, fontWeight: 700, color: tx, letterSpacing: "-0.02em" }}>Print &amp; Export</div>
             {DAY_DEFS.length > 0 && (
               <div style={{ fontSize: 11, color: ts, marginTop: 2 }}>
                 Graves week · {DAY_DEFS[0]?.short} {DAY_DEFS[0]?.dateNum} – {DAY_DEFS[6]?.short} {DAY_DEFS[6]?.dateNum} · {DAY_DEFS[0]?.monthYear}
@@ -878,12 +901,48 @@ export function PrintCommandCenter({
                   <span style={{ color: tx, fontWeight: 700 }}>{pageCount} sheet{pageCount !== 1 ? "s" : ""}</span>
                   {" · "}{formatEstTime(estSecs)}
                 </div>
-                <KbdHint label="Print" keys={["⌘", "↩"]} isDark={isDark} />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <KbdHint label="Print" keys={["⌘", "↩"]} isDark={isDark} />
+                  {onExport ? <KbdHint label="Export" keys={["⌘", "⇧", "↩"]} isDark={isDark} /> : null}
+                </div>
               </div>
             ) : (
               <span style={{ fontSize: 11, color: ts, opacity: 0.55 }}>Select nights to enable print</span>
             )}
           </div>
+
+          {onExport ? (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={isPrinting || pageCount === 0}
+              className="sb-interactive"
+              title={
+                uniqueExportDays > 1
+                  ? "Download ZIP of per-day Golden PDFs"
+                  : "Download Golden PDF (same fidelity as Print → Save as PDF)"
+              }
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                borderRadius: 10,
+                border: `1.5px solid ${uniqueExportDays > 1 ? "rgba(10,132,255,0.35)" : divider}`,
+                background: uniqueExportDays > 1
+                  ? (isDark ? "rgba(10,132,255,0.12)" : "rgba(10,132,255,0.08)")
+                  : (isDark ? "rgba(72,72,74,0.35)" : "rgba(255,255,255,0.9)"),
+                color: uniqueExportDays > 1 ? "#0A84FF" : ts,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: (isPrinting || pageCount === 0) ? "not-allowed" : "pointer",
+                opacity: isPrinting ? 0.5 : 1,
+              }}
+            >
+              <Download size={15} strokeWidth={2.2} />
+              {exportLabel}
+            </button>
+          ) : null}
 
           <button type="button" onClick={handlePrint} disabled={isPrinting || pageCount === 0} className="sb-interactive" style={{
             display: "flex", alignItems: "center", gap: 6,

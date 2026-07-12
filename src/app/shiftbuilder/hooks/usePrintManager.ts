@@ -335,8 +335,25 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
         }
       } catch (e) {
         console.error("[shiftbuilder] print-with-config error", e);
-        showToast(exportMode ? "Export failed — try again." : "Print failed — try again.", "error");
-        document.body.classList.remove("printing-dual-mode", "sb-print-export-busy");
+        const detail =
+          e instanceof Error && e.message
+            ? e.message.slice(0, 140)
+            : null;
+        showToast(
+          exportMode
+            ? detail
+              ? `Export failed: ${detail}`
+              : "Export failed — try again."
+            : detail
+              ? `Print failed: ${detail}`
+              : "Print failed — try again.",
+          "error",
+        );
+        document.body.classList.remove(
+          "printing-dual-mode",
+          "sb-print-export-busy",
+          "golden-export-raster",
+        );
         document.querySelector(".print-dual-container")?.remove();
         document.getElementById("__pcc-print-override")?.remove();
         document.getElementById("__pcc-export-override")?.remove();

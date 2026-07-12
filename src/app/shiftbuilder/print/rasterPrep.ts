@@ -141,10 +141,20 @@ export async function centerGoldenRasterContent(
 
   const contentW = right - left + 1;
   const contentH = bottom - top + 1;
+
+  // Full Golden sheets paint nearly edge-to-edge. Centering a near-full bbox
+  // from a 1–2px asymmetric margin can shift content and clip the opposite edge.
+  // Only re-center when the capture is clearly letterboxed.
+  const fillX = contentW / w;
+  const fillY = contentH / h;
+  if (fillX >= 0.94 && fillY >= 0.94) return dataUrl;
+
   const shiftX = Math.round((w - contentW) / 2 - left);
   const shiftY = Math.round((h - contentH) / 2 - top);
 
   if (shiftX === 0 && shiftY === 0) return dataUrl;
+  // Avoid tiny jitter from anti-aliased edge pixels.
+  if (Math.abs(shiftX) <= 2 && Math.abs(shiftY) <= 2) return dataUrl;
 
   const centered = document.createElement("canvas");
   centered.width = w;

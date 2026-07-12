@@ -163,17 +163,9 @@ import {
   patchNightCoreAuxLayoutCache,
   patchNightSecondaryTasksCache,
 } from "@/lib/shiftbuilder/scheduleCacheSync";
-import { generatePrintPreviewGoldenPages } from "./print/printPreviewPipeline";
-import type { LiveBoardOverlay } from "./print/mergePrintSnapshot";
-import { exportGoldenPdf } from "./print/exportPdf";
-import {
-  mountGoldenPrintSession,
-  runBrowserPrint,
-  waitForGoldenRenderSettled,
-} from "./print/printSession";
 import { PrintPreviewStage } from "./print/PrintPreviewStage";
 import type { PrintPreviewFocus } from "./print/LivePrintPreviewArtboard";
-// printPreviewStage* helpers no longer needed here (moved into usePrintManager)
+// Golden print capture / export / browser print live in usePrintManager.
 
 // === TEMPORARY DEBUG EXPOSURE (dev only) ===
 // Allows console inspection of the two main stores the user was trying to access.
@@ -9039,8 +9031,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       <PrintCommandCenter
         open={isPrintCenterOpen}
         onClose={() => setIsPrintCenterOpen(false)}
-        onPrint={handlePrintWithConfig}
-
+        onPrint={(config) => void handlePrintWithConfig(config)}
+        onExport={(config) => void handlePrintWithConfig(config, { exportMode: true })}
         onPreviewSheet={handlePreviewSheet}
         DAY_DEFS={DAY_DEFS}
         selectedDayIndex={selectedDayIndex}

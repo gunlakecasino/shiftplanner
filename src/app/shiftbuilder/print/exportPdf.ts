@@ -121,8 +121,12 @@ export async function rasterizeGoldenPrintPages(
 
       artboards.forEach((ab, j) => {
         ab.style.display = j === i ? "flex" : "none";
+        ab.style.visibility = j === i ? "visible" : "hidden";
       });
       session.container.style.height = `${GOLDEN_HEIGHT_PX}px`;
+      // Force a layout + paint pass for the newly-shown artboard before capture.
+      artboards[i].getBoundingClientRect();
+      await waitForGoldenRenderSettled();
 
       const raster = await rasterizeGoldenArtboardElement({
         artboard: artboards[i],
