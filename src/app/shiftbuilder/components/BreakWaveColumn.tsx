@@ -31,6 +31,8 @@ function waveAccentColor(wave: number): string {
   return "#c8d3dc";
 }
 
+const HELV = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
 function BreakWavePersonRow({
   tmName,
   chip,
@@ -46,24 +48,24 @@ function BreakWavePersonRow({
 
   return (
     <div
-      className="sb-break-wave-person sb-refined-card overflow-hidden rounded-xl"
+      className="sb-break-wave-person overflow-hidden rounded-lg"
       style={{ ["--card-accent" as string]: accent }}
     >
       <CardAccentStripe color={accent} />
       <div className="px-2 py-1.5 min-w-0">
         <div
-          className="font-bold leading-tight tracking-[-0.02em] text-gray-900 dark:text-[#F2F2F4] truncate"
-          style={{ fontSize: 13 }}
+          className="font-semibold leading-tight tracking-[-0.01em] text-gray-900 dark:text-[#F2F2F4] truncate"
+          style={{ fontSize: 12, fontFamily: HELV }}
         >
           {tmName || " "}
         </div>
-        <div className="mt-1 flex items-center gap-1 min-w-0">
+        <div className="mt-0.5 flex items-center gap-1 min-w-0">
           <span
-            className="inline-flex items-center rounded-md border px-1.5 py-px text-[8px] font-extrabold uppercase tracking-[0.35px] whitespace-nowrap shrink-0"
+            className="inline-flex items-center rounded-md border px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.04em] whitespace-nowrap shrink-0"
             style={{
               borderColor: accent,
               color: ink,
-              fontFamily: "var(--font-atkinson)",
+              fontFamily: HELV,
               background: "color-mix(in srgb, var(--ios-background-secondary) 88%, transparent)",
             }}
           >
@@ -71,8 +73,8 @@ function BreakWavePersonRow({
           </span>
           {sideLetter ? (
             <span
-              className="text-[8px] font-bold uppercase tracking-[0.4px] text-[#9CA3AF] shrink-0"
-              style={{ fontFamily: "var(--font-atkinson)" }}
+              className="text-[8px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF] shrink-0"
+              style={{ fontFamily: HELV }}
             >
               {sideLetter}
             </span>
@@ -202,20 +204,20 @@ function BuilderBreakWaveColumn({
 
   return (
     <div
-      className={`sb-break-wave-col-card sb-refined-card sb-breaks-wave-col flex flex-col overflow-hidden rounded-2xl min-h-0 max-h-full ${
+      className={`sb-break-wave-col-card sb-breaks-wave-col flex flex-col overflow-hidden rounded-xl min-h-0 max-h-full ${
         isOlWave ? "sb-breaks-wave-col--ol" : ""
       }`}
-      style={{ ["--card-accent" as string]: waveColor }}
+      style={{ ["--card-accent" as string]: waveColor, fontFamily: HELV }}
     >
       <CardAccentStripe color={waveColor} />
 
-      <div className="px-2.5 pt-2 pb-1.5 flex items-end gap-2 border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
+      <div className="sb-breaks-wave-col__head px-2 pt-1.5 pb-1.5 flex items-center gap-2 border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
         <div
-          className="font-black tabular-nums leading-none shrink-0"
+          className="font-bold tabular-nums leading-none shrink-0"
           style={{
-            fontSize: isOlWave ? 26 : 36,
-            letterSpacing: isOlWave ? "-0.8px" : "-1.5px",
-            fontFamily: "var(--font-atkinson)",
+            fontSize: isOlWave ? 20 : 26,
+            letterSpacing: "-0.04em",
+            fontFamily: HELV,
             color: ink,
           }}
         >
@@ -223,40 +225,66 @@ function BuilderBreakWaveColumn({
         </div>
         <div className="min-w-0 flex-1">
           <div
-            className="font-bold tracking-[0.07em] uppercase leading-none truncate"
-            style={{ fontSize: 10, fontFamily: "var(--font-atkinson)", color: ink }}
+            className="font-semibold tracking-[0.06em] uppercase leading-none truncate"
+            style={{ fontSize: 9, fontFamily: HELV, color: ink }}
           >
             {isOlWave ? "Overlaps" : `Break ${wave}`}
           </div>
-          <div className="mt-1 flex items-center gap-1">
-            <span className="sb-section-count--filled text-[9px] font-bold tabular-nums px-1.5 py-px rounded-md">
+          <div className="mt-0.5 flex items-center gap-1">
+            <span
+              className="text-[9px] font-bold tabular-nums px-1.5 py-px rounded-md"
+              style={{
+                background: "color-mix(in srgb, var(--card-accent) 12%, transparent)",
+                color: ink,
+                fontFamily: HELV,
+              }}
+            >
               {count}
             </span>
-            <span className="text-[9px] text-[#6B7280] dark:text-[#8E8E93]">people</span>
+            <span className="text-[9px] text-[#8E8E93]" style={{ fontFamily: HELV }}>
+              {count === 1 ? "person" : "people"}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 py-1.5 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-1.5 py-1.5 space-y-1.5">
+        {count === 0 ? (
+          <div
+            className="px-1.5 py-3 text-center text-[10px] text-[#AEAEB2]"
+            style={{ fontFamily: HELV }}
+          >
+            No one in this wave
+          </div>
+        ) : null}
         {(["zone", "rr", "aux", "overlap"] as const).map((cat) => {
           const items = assignments.filter((a) => a.type === cat);
           if (!items.length) return null;
 
           return (
             <div key={cat}>
-              <div className="sheet-section-header mb-1">
-                <span className="label">{CATEGORY_LABELS[cat]}</span>
-                <div className="divider" />
+              <div className="sb-breaks-cat-head flex items-center gap-1.5 mb-1 px-0.5">
+                <span
+                  className="text-[8px] font-bold uppercase tracking-[0.1em] text-[#8E8E93]"
+                  style={{ fontFamily: HELV }}
+                >
+                  {CATEGORY_LABELS[cat]}
+                </span>
+                <div className="flex-1 h-px bg-black/[0.06] dark:bg-white/[0.08]" />
+                <span className="text-[8px] font-semibold tabular-nums text-[#AEAEB2]">{items.length}</span>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {items.map((a, idx) => {
                   if (a.notPlaced) {
                     return (
                       <div
                         key={`${a.slotKey}-${idx}`}
-                        className="sb-break-wave-person sb-refined-card overflow-hidden rounded-xl px-2 py-1.5 opacity-60"
+                        className="sb-break-wave-person overflow-hidden rounded-lg px-2 py-1.5 opacity-55"
                       >
-                        <div className="font-semibold text-[12px] text-[#9CA3AF] truncate">
+                        <div
+                          className="font-medium text-[11px] text-[#9CA3AF] truncate"
+                          style={{ fontFamily: HELV }}
+                        >
                           {a.tmName || " "}
                         </div>
                       </div>

@@ -306,7 +306,8 @@ export function getOverlapAccent(slotKey: string): string {
 export function overlapSlotLabel(slotKey: string): string {
   const match = slotKey.match(/^OL-(PM|AM)-(\d+)$/);
   if (!match) return "Overlap";
-  return `${match[1]} Overlap ${Number(match[2]) + 1}`;
+  // Compact card chrome: "PM · 1" / "AM · 2"
+  return `${match[1]} · ${Number(match[2]) + 1}`;
 }
 
 // RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)

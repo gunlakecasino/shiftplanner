@@ -1235,10 +1235,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         <div className="flex flex-col items-end gap-1.5">
           {currentView === "breaks" && (
             <div
-              className="text-[9.5px] font-bold tracking-[1.2px] uppercase"
-              style={{ color: isDark ? "#9CA3AF" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
+              className="text-[9px] font-semibold tracking-[0.1em] uppercase"
+              style={{
+                color: isDark ? "#8E8E93" : "#6B7280",
+                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+              }}
             >
-              BY BREAK WAVE
+              Break waves
             </div>
           )}
 
@@ -1902,26 +1905,33 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               }`}
               data-print-target="overlaps"
             >
-              <div className="sheet-section-header shrink-0">
+              <div className={`sheet-section-header shrink-0 ${isPrintPreview ? "" : "sb-breaks-section-head"}`}>
                 <span className="label">OVERLAPS</span>
                 <div className="divider" />
+                {!isPrintPreview ? (
+                  <span className="sb-breaks-section-hint">Partial-shift slots</span>
+                ) : null}
               </div>
 
-              <div className={isPrintPreview ? "space-y-2" : "sb-breaks-overlap-strips flex-1 min-h-0 flex flex-col gap-2.5"}>
+              <div className={isPrintPreview ? "space-y-2" : "sb-breaks-overlap-strips flex-1 min-h-0 flex flex-col gap-2"}>
                 {[
                   {
                     time: "11p – 1a",
                     key: "PM" as const,
+                    band: "PM",
                     dayName: selectedDay.name,
                     dateNum: selectedDay.dateNum,
                     headerColor: selectedDay.color,
+                    note: "Same night",
                   },
                   {
                     time: "5a – 7a",
                     key: "AM" as const,
+                    band: "AM",
                     dayName: amOverlapDayName,
                     dateNum: amOverlapDateNum,
                     headerColor: nextDayColor,
+                    note: "Next morning",
                   },
                 ].map((row) => (
                   <div
@@ -1968,26 +1978,28 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       </>
                     ) : (
                       <>
-                        <div className="sb-breaks-overlap-row-header flex items-end justify-between gap-3 mb-1.5 px-0.5 shrink-0">
-                          <div className="flex items-baseline gap-2 min-w-0">
-                            <div
-                              className="font-black tabular-nums leading-none"
-                              style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
+                        <div className="sb-breaks-overlap-row-header shrink-0">
+                          <div className="sb-breaks-overlap-band">
+                            <span
+                              className="sb-breaks-overlap-band__pill"
+                              style={{
+                                background: row.key === "PM" ? "color-mix(in srgb, #B45309 14%, transparent)" : "color-mix(in srgb, #059669 14%, transparent)",
+                                color: row.key === "PM" ? "#B45309" : "#059669",
+                                borderColor: row.key === "PM" ? "color-mix(in srgb, #B45309 28%, transparent)" : "color-mix(in srgb, #059669 28%, transparent)",
+                              }}
                             >
-                              {row.dateNum}
-                            </div>
-                            <div
-                              className="font-bold tracking-[-0.4px] leading-none truncate"
-                              style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
-                            >
-                              {row.dayName}
-                            </div>
+                              {row.band}
+                            </span>
+                            <span className="sb-breaks-overlap-band__time">{row.time}</span>
                           </div>
-                          <div
-                            className="text-[10px] font-bold tracking-[0.35px] text-[#6B7280] dark:text-[#8E8E93] shrink-0"
-                            style={{ fontFamily: "var(--font-atkinson)" }}
-                          >
-                            {row.time}
+                          <div className="sb-breaks-overlap-day">
+                            <span className="sb-breaks-overlap-day__num" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
+                              {row.dateNum}
+                            </span>
+                            <span className="sb-breaks-overlap-day__name" style={{ color: row.headerColor }}>
+                              {row.dayName}
+                            </span>
+                            <span className="sb-breaks-overlap-day__note">{row.note}</span>
                           </div>
                         </div>
                         <div className={breaksOverlapGridClass}>

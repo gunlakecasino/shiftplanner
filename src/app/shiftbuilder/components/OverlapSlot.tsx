@@ -135,20 +135,22 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
     assignmentState = { kind: "unassigned" };
   }
 
+  const helv = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
   return (
     <div
       ref={setRef}
       {...(!isLocked ? listeners : {})}
       {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
-      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[72px] flex flex-col overflow-hidden rounded-2xl ${
+      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[64px] flex flex-col overflow-hidden rounded-xl ${
         isOver ? "drop-target-active" : ""
       } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
         isDimmed ? "sb-weekly-dim" : ""
       } ${isFocused ? "sb-weekly-highlight" : ""} ${
         showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""
       }`}
-      style={{ ["--card-accent" as string]: accent }}
+      style={{ ["--card-accent" as string]: accent, fontFamily: helv }}
     >
       <CardAccentStripe color={accent} />
 
@@ -157,14 +159,14 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         label={overlapSlotLabel(slotKey)}
         accentColor={accent}
         compact
-        titleClassName="!normal-case tracking-[0.02em]"
+        titleClassName="!normal-case tracking-[0.01em]"
         trailing={
           fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} compact /> : null
         }
       />
 
       <div
-        className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-2.5 pb-2"
+        className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-2 pb-1.5"
         {...(onCardClick ? assignZoneOpenHandlers(slotKey, onCardClick, isLocked) : {})}
       >
         <SlotAssignmentBody
@@ -177,7 +179,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
           placementTrailMatchSlotKey={slotKey}
-          nameSizeOverride={showDigitalAssists ? 18 : 16}
+          nameSizeOverride={showDigitalAssists ? 16 : 14}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {
               handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
@@ -196,10 +198,10 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           onOpenTasksPad={onOpenTaskTextEdit}
           isLocked={isLocked}
           enabled={showDigitalAssists}
-          className={`sb-card-task-scroll mx-2.5 mb-2 flex-1 min-h-[20px] overflow-y-auto ${taskLabelSizeClass(
+          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-[16px] overflow-y-auto ${taskLabelSizeClass(
             TASK_LABEL_SIZE_PX.rrOverlap,
           )} leading-tight ${taskLabelColorClass(hasTM)}`}
-          style={{ fontFamily: "var(--font-atkinson)", color: cardAccentInk(accent) }}
+          style={{ fontFamily: helv, color: cardAccentInk(accent) }}
         >
           {regularTasks.map((t) => (
             <TaskRow
@@ -219,10 +221,10 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         </CardTaskZone>
       ) : regularTasks.length > 0 ? (
         <div
-          className={`sb-card-task-scroll mx-2.5 mb-2 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(
+          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(
             TASK_LABEL_SIZE_PX.rrOverlap,
           )} leading-tight ${taskLabelColorClass(hasTM)}`}
-          style={{ fontFamily: "var(--font-atkinson)" }}
+          style={{ fontFamily: helv }}
         >
           {regularTasks.map((t) => (
             <TaskRow
