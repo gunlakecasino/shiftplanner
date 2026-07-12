@@ -585,39 +585,26 @@ function AuthedShiftBuilder() {
   // returns yesterday's calendar date until 8:30am local time (so the operator
   // finishing Friday's grave at 6:30am Saturday morning still lands on
   // Friday); after 8:30am it returns today.
-  // Restore the exact previously-selected GRAVE day (and therefore its week)
-  // so that refresh keeps you on the same Thursday of week N, not the current week.
-  // We persist the actual calendar date (ISO) for the chosen grave shift.
-  const getSavedDate = (): Date | null => {
-    const saved = localStorage.getItem("oms_selected_date");
-    if (!saved) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(saved)) {
-      return parseLocalDateISO(saved);
+  // Restore last grave day within current week / last 7 days; snap ancient localStorage.
+  // Shared with builderPrefetch via builderDateResume.
+  const getSavedDate = (): Date => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem("oms_selected_date");
+    } catch {
+      saved = null;
     }
-    const d = new Date(saved);
-    return isNaN(d.getTime()) ? null : d;
+    // Dynamic import avoided in useState init — pure sync helper.
+    const {
+      resolveResumeShiftDate,
+    } = require("@/lib/shiftbuilder/builderDateResume") as typeof import("@/lib/shiftbuilder/builderDateResume");
+    return resolveResumeShiftDate(saved);
   };
 
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     const savedDate = getSavedDate();
-    if (savedDate) {
-      const ws = startOfShiftWeek(savedDate);
-      const idx = Math.max(0, Math.min(6, daysBetween(ws, savedDate)));
-      return idx;
-    }
-    // Fallback: last index only (legacy), else default strictly to real calendar TODAY.
-    // User request: initial load into the canvas should land on "today".
-    const legacy = localStorage.getItem("oms_selected_day_index");
-    if (legacy !== null) {
-      const idx = parseInt(legacy, 10);
-      if (!isNaN(idx) && idx >= 0 && idx <= 6) return idx;
-    }
-    // Real calendar today (no grave rollover adjustment for initial landing)
-    const realToday = new Date();
-    realToday.setHours(0, 0, 0, 0);
-    const ws = startOfShiftWeek(realToday);
-    const idx = Math.max(0, Math.min(6, daysBetween(ws, realToday)));
-    return idx;
+    const ws = startOfShiftWeek(savedDate);
+    return Math.max(0, Math.min(6, daysBetween(ws, savedDate)));
   });
 
   // === Date / week selection (hoisted early to avoid TDZ with changeDay and useDayNavigation) ===
@@ -5763,7 +5750,17 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           accommodationRows,
           zoneMatrixRaw,
         ] = await Promise.all([
-          (await import("@/lib/shiftbuilder/engineOverrides")).getFullyResolvedEngineConfig(),
+          (async () => {
+            // Session API only — never browser anon REST to engine_* tables.
+            const res = await fetch("/api/shiftbuilder/config?resource=engine", {
+              credentials: "same-origin",
+              cache: "no-store",
+            });
+            if (!res.ok) {
+              throw new Error(`Engine config HTTP ${res.status}`);
+            }
+            return (await res.json()) as FullyResolvedEngineConfig;
+          })(),
           getTMSkillScores(),
           getSlotDifficultyRaw(),
           getTMPreferences(),

@@ -153,6 +153,14 @@ export function normalizeHistoryUiKey(ui: string): string {
   if (t === "admin" || compact === "ADMIN" || compact === "ADM") return "ADMIN";
   if (compact === "STEP" || compact === "JC") return compact;
 
+  // DB family keys (zone_assignments.slot_key) — never show raw trash_2 on trails.
+  const trashDb = t.match(/^trash_(\d+)$/i);
+  if (trashDb) return `TSH${trashDb[1]}`;
+  const supportDb = t.match(/^support_(\d+)$/i);
+  if (supportDb) return `SUP${supportDb[1]}`;
+  const oasisDb = t.match(/^oasis_(\d+)$/i);
+  if (oasisDb) return `OAS${oasisDb[1]}`;
+
   const sp = t.match(/^SP(\d+)$/i);
   if (sp) return `SUP${sp[1]}`;
   const tr = t.match(/^TR(\d+)$/i);

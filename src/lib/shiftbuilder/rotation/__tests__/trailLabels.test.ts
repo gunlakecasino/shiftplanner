@@ -197,6 +197,14 @@ describe("normalizeHistoryUiKey / pad LAST 5 sequence", () => {
     expect(normalizePlacementIdentity("step_up")).toBe("STEP");
   });
 
+  it("maps DB family keys trash_/support_/oasis_ to short trail codes", () => {
+    expect(normalizeHistoryUiKey("trash_2")).toBe("TSH2");
+    expect(normalizeHistoryUiKey("support_1")).toBe("SUP1");
+    expect(normalizeHistoryUiKey("oasis_1")).toBe("OAS1");
+    expect(formatCardPlacementTrailLabel("trash_2")).toBe("TSH2");
+    expect(formatCardPlacementTrailLabel("support_1")).toBe("SUP1");
+  });
+
   it("LAST 5 sequence shows STEP not SP1 for step_up history keys", () => {
     const history = {
       tmId: "t1",

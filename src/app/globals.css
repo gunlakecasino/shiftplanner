@@ -2249,6 +2249,11 @@ body {
     transform: scale(var(--sb-portrait-fit, 1));
     transform-origin: top left;
   }
+  /* Portrait miniature shrinks 7.5px trails to ~5px — unreadable. Full history
+     remains on Placement Pad LAST 5; name row stays primary. */
+  .sb-builder-stage.sb-builder-live .sb-tm-placement-trail {
+    display: none !important;
+  }
 }
 
 /* Workspace is the flex child that carries height into zones/RR/aux grids. */
@@ -3059,6 +3064,16 @@ button,
   .sb-tablet-touch-target {
     min-width: var(--touch-min, 44px);
     min-height: var(--touch-min, 44px);
+  }
+
+  /* Floor nav + break cycle — hit slop ≥ 44 even when ink is smaller. */
+  .sb-day-strip-btn,
+  .sb-week-nav-btn,
+  .icon-btn.sb-interactive,
+  .sb-break-badge-btn {
+    min-width: var(--touch-min, 44px);
+    min-height: var(--touch-min, 44px);
+    touch-action: manipulation;
   }
 
   /* Merge JS stage insets with safe-area at every width (overrides inline paddingTop). */

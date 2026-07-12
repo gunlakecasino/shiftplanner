@@ -1,14 +1,24 @@
-# ShiftBuilder v1.0.0 — Floor Release Notes
+# ShiftBuilder — Floor Release Notes
 
-**Date:** June 24, 2026  
 **Audience:** Gun Lake Casino floor supervisors & graves operations  
-**URL:** `/shiftbuilder` on production Railway host
+**URL:** https://zds.glcrops.cloud/shiftbuilder
 
 ---
 
-## Highlights (one sentence each)
+## iPad hardening — July 12, 2026
 
-- **PIN login is stable** — sign in once per shift; session stays alive with a 5-minute idle timeout and no more empty boards on first load.
+- **Session lasts a shift** — idle timeout raised to **45 minutes** (was 5); absolute cap **12 hours**. Stay signed in on the floor tablet.
+- **Bigger touch targets** — day strip, week arrows, and break pills meet 44px minimum on touch devices.
+- **Portrait trails** — prior-placement chips hide on the portrait miniature (unreadable when scaled); full LAST 5 remains on Placement Pad.
+- **Trail labels fixed** — `trash_2` style DB keys show as `TSH2` / `SUP1` / `OAS1`.
+- **Board assignments persist** — server validation no longer rejects business TM ids; night board reads use service role and skip stale cache.
+- **Cleaner iPad console** — session/meta audit and engine config no longer spam 500/400 noise after login.
+
+---
+
+## v1.0.0 highlights (June 24, 2026)
+
+- **PIN login is stable** — sign in once per shift; session stays alive with a sliding idle timeout and no more empty boards on first load.
 - **Day switching is smoother** — card shells stay fixed while names and tasks blur briefly (~250ms) until the new night’s assignments are ready.
 - **Every board change is logged** — sudo admins can pull a full audit trail of who moved whom, when, and on which night.
 - **Help is one tap away** — tap the floating **?** for the interactive grave-cover tutorial and the written floor operator guide.

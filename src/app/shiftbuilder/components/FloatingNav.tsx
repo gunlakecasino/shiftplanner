@@ -518,7 +518,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <button
             type="button"
             onClick={onPrevWeek}
-            className="icon-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
             style={{ color: "#aaa" }}
             title="Previous GRAVE week"
             aria-label="Previous GRAVE week"
@@ -540,7 +540,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     key={day.id}
                     type="button"
                     onClick={() => onDaySelect(day.id, day.date || new Date())}
-                    className="flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
+                    className="sb-day-strip-btn flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
                     style={{
                       background: pillColor,
                       borderRadius: 10,
@@ -583,7 +583,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   type="button"
                   onClick={() => onDaySelect(day.id, day.date || new Date())}
                   onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
-                  className="icon-btn flex flex-col items-center justify-center shrink-0 rounded-full"
+                  className="icon-btn sb-interactive sb-day-strip-btn flex flex-col items-center justify-center shrink-0 rounded-full"
                   style={{
                     width: 31,
                     height: 40,
@@ -602,7 +602,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <button
             type="button"
             onClick={onNextWeek}
-            className="icon-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
             style={{ color: "#aaa" }}
             title="Next GRAVE week"
             aria-label="Next GRAVE week"

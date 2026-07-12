@@ -20,13 +20,33 @@ export function BuilderDataPrefetch() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || !permissions) {
       lastPrefetchedUserIdRef.current = null;
       return;
     }
     if (lastPrefetchedUserIdRef.current === user.id) return;
-    lastPrefetchedUserIdRef.current = user.id;
-    prefetchBuilderWeek(queryClient, permissions);
+
+    let cancelled = false;
+    (async () => {
+      // Confirm session cookie is live before storming night-core (avoids 401 spam
+      // on expired cookie / race after PIN gate).
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      lastPrefetchedUserIdRef.current = user.id;
+      prefetchBuilderWeek(queryClient, permissions);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, user, permissions, queryClient]);
 
   return null;

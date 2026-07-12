@@ -139,12 +139,18 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    // Meta actions (session_start, settings_*, …) must never brick the UI with 500s
+    // when FK / schema is momentarily wrong. Board assign/unassign still fail closed.
+    const isMeta = META_ACTIONS.has(action);
     opsLog(
       "shiftbuilder/audit",
       "audit_persist_failed",
-      { code: error.code, message: error.message, action, nightDate },
-      "error",
+      { code: error.code, message: error.message, action, nightDate, soft: isMeta },
+      isMeta ? "warn" : "error",
     );
+    if (isMeta) {
+      return NextResponse.json({ ok: true, persisted: false, soft: true });
+    }
     return NextResponse.json(
       { error: error.message, code: error.code },
       { status: 500 },

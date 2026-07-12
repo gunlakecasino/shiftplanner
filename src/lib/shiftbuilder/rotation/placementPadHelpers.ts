@@ -275,6 +275,14 @@ export function formatCardPlacementTrailLabel(
   // Bare RR8 (legacy / side-agnostic) — keep as RR8.
   const bareRr = resolved.match(/^RR(\d+)$/i);
   if (bareRr) return `RR${bareRr[1]}`;
+  // DB family keys (trash_2, support_1, oasis_1) before UI TR/SP forms.
+  const trashDb = resolved.match(/^trash_(\d+)$/i);
+  if (trashDb) return `TSH${trashDb[1]}`;
+  const supportDb = resolved.match(/^support_(\d+)$/i);
+  if (supportDb) return `SUP${supportDb[1]}`;
+  const oasisDb = resolved.match(/^oasis_(\d+)$/i);
+  if (oasisDb) return `OAS${oasisDb[1]}`;
+
   // Legacy TR/SP UI keys + short codes as trail chips.
   // NOTE: do not use startsWith("SP") — that false-positives "STEP" as support.
   const trash = resolved.match(/^(?:TR|TSH)(\d+)$/i);

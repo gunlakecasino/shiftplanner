@@ -3,31 +3,22 @@ import {
   buildDayDefs,
   currentShiftDate,
   formatLocalDateISO,
-  parseLocalDateISO,
-  startOfShiftWeek,
   type DayDef,
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
+import {
+  OMS_SELECTED_DATE_KEY,
+  readSavedDateIso,
+  resolveResumeWeekStart,
+} from "@/lib/shiftbuilder/builderDateResume";
 import { fetchNightCoreData } from "../hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "../hooks/fetchNightSecondaryData";
 import { nightFetchOptionsForPermissions } from "./viewerNightPolicy";
 
-export const OMS_SELECTED_DATE_KEY = "oms_selected_date";
+export { OMS_SELECTED_DATE_KEY };
 
 export function resolveBuilderWeekStart(): Date {
-  const today = currentShiftDate();
-  if (typeof window === "undefined") return startOfShiftWeek(today);
-
-  try {
-    const saved = localStorage.getItem(OMS_SELECTED_DATE_KEY);
-    if (saved) {
-      const d = parseLocalDateISO(saved);
-      if (!isNaN(d.getTime())) return startOfShiftWeek(d);
-    }
-  } catch {
-    /* ignore */
-  }
-  return startOfShiftWeek(today);
+  return resolveResumeWeekStart(readSavedDateIso());
 }
 
 export function getBuilderWeekDayDefs(): DayDef[] {
@@ -37,7 +28,7 @@ export function getBuilderWeekDayDefs(): DayDef[] {
 
 /**
  * Seed TanStack cache for the operational week.
- * Safe to call during PIN gate, dynamic import shell, or post-auth.
+ * Call only after PIN auth + permissions are known — never pre-auth.
  */
 export function prefetchBuilderWeek(
   queryClient: QueryClient,
@@ -46,6 +37,9 @@ export function prefetchBuilderWeek(
     "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
   > | null,
 ): void {
+  // Fail closed: unauthenticated / unknown permissions → no night-core storm.
+  if (permissions == null) return;
+
   const dayDefs = getBuilderWeekDayDefs();
   const todayKey = formatLocalDateISO(currentShiftDate());
   const fetchOptions = nightFetchOptionsForPermissions(permissions);

@@ -7,15 +7,11 @@ import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
 import { sudoIosClasses } from "./sudoIosTheme";
 import {
-  getActiveEngineConfig,
   type EngineConfig,
   type PlacementMethod,
   type GrokReasoningEffort,
-  type SignalOverride,
-  type EligibilityRule,
   type FullyResolvedEngineConfig,
 } from "@/lib/shiftbuilder/engineConfig";
-import { getFullyResolvedEngineConfig } from "@/lib/shiftbuilder/engineOverrides";
 // Server action imported at call time so SudoWindow does not pull placement → data.ts via sudoActions batch block.
 
 interface EngineConfigTabProps {
@@ -94,7 +90,16 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
     setLoading(true);
     setError(null);
     try {
-      const active = await getActiveEngineConfig();
+      // Session-gated service-role config — never browser anon REST.
+      const res = await fetch("/api/shiftbuilder/config?resource=engine", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || `Engine config HTTP ${res.status}`);
+      }
+      const active = (await res.json()) as FullyResolvedEngineConfig;
       setConfig(active);
       setPlacementMethod(active.placementMethod);
       setGrokReasoningEffort(active.grokReasoningEffort);
