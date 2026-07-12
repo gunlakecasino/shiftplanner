@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
+import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { revalidateNightBoardCaches } from "@/lib/shiftbuilder/revalidateOpsCache";
 
 function getServerSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const client = createAdminClientSafe();
+  if (!client) {
+    throw new Error("aux-layout requires SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return client;
 }
 
 /**

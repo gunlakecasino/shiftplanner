@@ -1,21 +1,19 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { parseLocalDateISO } from "./dateUtils";
 import { getCachedNightIdForDate } from "./data.server";
 import { fetchRecentZoneHistoryServer } from "./zoneHistory.server";
 import type { ZoneHistoryRecord } from "./zoneHistory";
 import { normalizeTaskTextStyle } from "./taskTextStyle";
 
-let _client: SupabaseClient | null = null;
-
 function getSupabase(): SupabaseClient {
-  if (!_client) {
-    _client = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
+  const client = createAdminClientSafe();
+  if (!client) {
+    throw new Error(
+      "Night-secondary requires SUPABASE_SERVICE_ROLE_KEY (session APIs must not read board data with the anon key)",
     );
   }
-  return _client;
+  return client;
 }
 
 type NightSlotTaskRow = {

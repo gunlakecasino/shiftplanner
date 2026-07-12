@@ -1,29 +1,30 @@
 'use server';
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { unstable_cache } from 'next/cache';
+import { createAdminClientSafe } from '@/app/api/admin/_lib/createAdminClient';
 
 import type { TeamMember } from './data';
 
 /**
  * Server-only cached roster + stable config reads.
+ * Uses the service-role admin client (session APIs already gate access).
  * Edge-cached via unstable_cache so the first touch of a week feels instant.
  *
  * Invalidation: revalidateTag('roster' | 'slot-defaults' | 'night-lookup')
  * from admin mutations (see revalidateOpsCache.ts).
+ *
+ * Board assignment data must NOT go through this cache layer — see nightCoreBundle.
  */
 
-let _serverClient: SupabaseClient | null = null;
-
 function getServerSupabase(): SupabaseClient {
-  if (!_serverClient) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    _serverClient = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+  const client = createAdminClientSafe();
+  if (!client) {
+    throw new Error(
+      'data.server requires SUPABASE_SERVICE_ROLE_KEY (do not fall back to anon for ops reads)',
+    );
   }
-  return _serverClient;
+  return client;
 }
 
 function mapProfileRow(p: any): TeamMember {
@@ -167,7 +168,11 @@ export async function getCachedSlotDefaults(): Promise<CachedSlotDefault[]> {
   return cachedSlotDefaults();
 }
 
-/** Server-cached night id lookup — avoids repeated nights roundtrips during week prefetch. */
+/**
+ * Night id lookup for a calendar date.
+ * Short cache only — must revalidate when nights are created (see revalidateOpsCache).
+ * Uses service role so lookups still work after anon SELECT revoke.
+ */
 export async function getCachedNightIdForDate(isoDate: string): Promise<string | null> {
   const lookup = unstable_cache(
     async () => {
@@ -185,7 +190,7 @@ export async function getCachedNightIdForDate(isoDate: string): Promise<string |
       return data?.id ?? null;
     },
     ['shiftbuilder-night-id', isoDate],
-    { revalidate: 120, tags: ['night-lookup', `night-${isoDate}`] },
+    { revalidate: 30, tags: ['night-lookup', `night-${isoDate}`] },
   );
 
   return lookup();

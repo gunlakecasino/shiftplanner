@@ -1,10 +1,14 @@
 /**
  * Server-side night-core bundle for ShiftBuilder.
  * One parallel Supabase burst close to Postgres — consumed by /api/shiftbuilder/night-core.
+ *
+ * Always uses the service-role admin client (session APIs already gate access).
+ * Do NOT cache assignment payloads with unstable_cache — that caused production
+ * "edits vanish on refresh/poll" when revalidateTag lagged multi-replica deploys.
  */
 
-import { unstable_cache } from "next/cache";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { currentShiftDate, parseLocalDateISO, sameDay } from "./dateUtils";
 import {
   buildSlotDefaultBreakMap,
@@ -29,17 +33,14 @@ import {
   defaultAuxDefsForNewNight,
 } from "./auxLayout";
 
-let _bundleClient: SupabaseClient | null = null;
-
 function getBundleSupabase(): SupabaseClient {
-  if (!_bundleClient) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    _bundleClient = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+  const client = createAdminClientSafe();
+  if (!client) {
+    throw new Error(
+      "Night-core requires SUPABASE_SERVICE_ROLE_KEY (session APIs must not read board data with the anon key)",
+    );
   }
-  return _bundleClient;
+  return client;
 }
 
 async function fetchAssignmentsForNight(
@@ -56,7 +57,15 @@ async function fetchAssignmentsForNight(
     .order("sort_order", { ascending: true })
     .order("slot_key", { ascending: true });
 
-  if (error || !rows?.length) return [];
+  if (error) {
+    console.error("[nightCoreBundle] zone_assignments fetch failed", {
+      nightId,
+      message: error.message,
+      code: error.code,
+    });
+    throw new Error(`Failed to load zone_assignments: ${error.message}`);
+  }
+  if (!rows?.length) return [];
 
   return rows.map((row: any) => ({
     slotKey: row.slot_key,
@@ -279,15 +288,11 @@ export async function isNightCoreAllowedForTodayPolicy(isoDate: string): Promise
   return data?.status === "published";
 }
 
-/** Edge-cached full night-core payload for the builder critical path. */
+/**
+ * Fresh night-core payload for the builder critical path.
+ * Intentionally uncached: board mutations must be visible on the next poll/refresh.
+ * Roster/slot-defaults inside the builder still use short-lived data.server caches.
+ */
 export async function getNightCoreBundleForDate(isoDate: string): Promise<NightCoreBundlePayload> {
-  const cached = unstable_cache(
-    () => buildNightCoreBundleUncached(isoDate),
-    ["shiftbuilder-night-core", isoDate],
-    {
-      revalidate: 30,
-      tags: ["night-core", `night-${isoDate}`, "roster", "scheduled-roster"],
-    },
-  );
-  return cached();
+  return buildNightCoreBundleUncached(isoDate);
 }

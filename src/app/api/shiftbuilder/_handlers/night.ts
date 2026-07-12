@@ -1,6 +1,6 @@
 // v1.0.0 — Production Release — UI frozen & shipped June 24 2026
 import { NextRequest, NextResponse } from "next/server";
-import { unstable_cache, unstable_noStore } from "next/cache";
+import { unstable_noStore } from "next/cache";
 import { assertActorCanReadNight } from "@/lib/auth/assertNightEditable.server";
 import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
 import { opsLog } from "@/lib/opsLogger";
@@ -59,12 +59,9 @@ export async function handleNightLayerGet(
       });
     }
 
-    const cached = unstable_cache(
-      () => buildNightSecondaryBundle(dateParam),
-      ["shiftbuilder-night-secondary", dateParam],
-      { revalidate: 45, tags: ["night-secondary", `night-${dateParam}`] },
-    );
-    const payload = await cached();
+    // Fresh every request — tasks/notes/breaks must match the board after mutations.
+    // (Previous unstable_cache(45s) could re-show pre-edit tasks after refresh/poll.)
+    const payload = await buildNightSecondaryBundle(dateParam);
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
     });

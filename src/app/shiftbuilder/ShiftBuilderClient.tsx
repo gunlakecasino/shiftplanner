@@ -5613,6 +5613,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         // The real visual path is the main store (below). This reduces fighting layers.
         const movingSnap = movingFromMain;
         const displacedSnap = displacedFromMain;
+        // Snapshot for rollback if the server rejects the write (validation, 401, etc.).
+        const preDragAssignments = { ...mainAssignments };
 
         // Primary visual update: directly mutate the store the board/cards actually read.
         // This makes the move feel instant even if live layer has any internal delay.
@@ -5641,17 +5643,32 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         mirrorMainAssignmentsToLiveStore(captureDate);
         setLiveAssignVersion((v) => v + 1);
 
-        // Persistence strategy for assigned drag (the cleanest path for both move and swap):
-        // Do the optimistic visual update via the main store (already done above).
-        // Then use pure background persistence for the actual DB writes.
-        // This completely removes the live optimistic layer from the drag gesture,
-        // which was the source of the partial re-patches that broke swaps while
-        // move-to-empty started working.
+        // Single background persist path (no parallel legacy double-write — races
+        // made production look like "nothing saved" when one write undid the other).
         (async () => {
+          const dateKey = formatLocalDateISO(captureDate);
+          const rollbackDrag = (reason: string) => {
+            useShiftBuilderStore.getState().setAssignments(preDragAssignments);
+            setAssignments({ ...preDragAssignments });
+            mirrorMainAssignmentsToLiveStore(captureDate);
+            setLiveAssignVersion((v) => v + 1);
+            const qc = currentNight.queryClient;
+            if (qc) {
+              patchNightCoreAssignmentsCache(qc, dateKey, preDragAssignments);
+            }
+            console.error("[drag] background persist failed", reason);
+            showToast(`Couldn't save move ${fromKey} → ${toKey}: ${reason}`, "error");
+          };
+
           try {
-            const { upsertZoneAssignment } = await import("@/lib/shiftbuilder/data");
-            const nid = nightId || await resolveNightIdForDate(captureDate, captureDayName);
-            if (!nid) return;
+            const { upsertZoneAssignment, deleteZoneAssignment } = await import(
+              "@/lib/shiftbuilder/data"
+            );
+            const nid = nightId || (await resolveNightIdForDate(captureDate, captureDayName));
+            if (!nid) {
+              rollbackDrag("no night context yet — try again");
+              return;
+            }
 
             // Moving TM → target slot
             if (movingTmId) {
@@ -5676,12 +5693,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 tmId: displacedTmId,
               });
             } else {
-              // Source slot should be cleared
-              const { deleteZoneAssignment } = await import("@/lib/shiftbuilder/data");
               await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
             }
 
-            const dateKey = formatLocalDateISO(captureDate);
             const qc = currentNight.queryClient;
             if (qc) {
               patchNightCoreAssignmentsCache(
@@ -5690,24 +5704,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 useShiftBuilderStore.getState().assignments ?? {},
               );
             }
+            setLastSavedAt(new Date());
           } catch (e) {
-            console.error("[drag] background persist failed", e);
+            const msg = e instanceof Error ? e.message : String(e);
+            rollbackDrag(msg || "unknown error");
           }
         })();
-          // Legacy fallback only
-          (async () => {
-            let nid = nightId;
-            if (!nid) nid = await resolveNightIdForDate(captureDate, captureDayName);
-            if (!nid) return;
-            try {
-              await persistAssign(nid, captureDate, captureDayName, toKey, movingTmId);
-              await persistAssign(nid, captureDate, captureDayName, fromKey, displacedTmId);
-            } catch (e: any) {
-              console.error("[shiftbuilder] legacy drag persist failed", e);
-            }
-          })();
-
-        // (Legacy fallback removed for assigned drag.)
 
         return;
       }

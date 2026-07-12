@@ -140,8 +140,36 @@ async function resolveSession(request: NextRequest, perm: ActionPerm) {
   return requireOpsPermission(request, perm);
 }
 
-async function bustCache(date?: string) {
+async function resolveIsoDateFromBody(body: Record<string, unknown>): Promise<string | undefined> {
+  if (typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(body.date)) {
+    return body.date.slice(0, 10);
+  }
+  const nightId =
+    typeof body.nightId === "string"
+      ? body.nightId
+      : typeof body.targetNightId === "string"
+        ? body.targetNightId
+        : null;
+  if (!nightId) return undefined;
   try {
+    const { createAdminClientSafe } = await import("@/app/api/admin/_lib/createAdminClient");
+    const client = createAdminClientSafe();
+    if (!client) return undefined;
+    const { data } = await client
+      .from("nights")
+      .select("night_date")
+      .eq("id", nightId)
+      .maybeSingle();
+    const raw = data?.night_date != null ? String(data.night_date) : "";
+    return raw ? raw.slice(0, 10) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function bustCache(body: Record<string, unknown>) {
+  try {
+    const date = await resolveIsoDateFromBody(body);
     await revalidateNightBoardCaches(date);
   } catch {
     /* non-fatal */
@@ -194,12 +222,12 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case "upsert_zone_assignment": {
         const result = await upsertZoneAssignmentServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "delete_zone_assignment": {
         const result = await deleteZoneAssignmentServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "batch_apply_draft": {
@@ -209,22 +237,22 @@ export async function POST(request: NextRequest) {
           body.date != null ? String(body.date) : null,
           body.expectedUpdatedAt != null ? String(body.expectedUpdatedAt) : null,
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "toggle_assignment_lock": {
         const result = await toggleAssignmentLockServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "set_night_locked": {
         await setNightLockedServer(String(body.nightId), Boolean(body.locked));
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "set_night_published": {
         await setNightPublishedServer(String(body.nightId), Boolean(body.published));
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "set_night_card_border": {
@@ -233,37 +261,37 @@ export async function POST(request: NextRequest) {
           String(body.slotKey),
           String(body.color),
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "remove_night_card_border": {
         await removeNightCardBorderServer(String(body.nightId), String(body.slotKey));
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "upsert_break_assignment": {
         await upsertBreakAssignmentServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "delete_break_assignment": {
         await deleteBreakAssignmentServer(String(body.nightId), String(body.tmId));
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "add_night_slot_task": {
         await addNightSlotTaskServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "remove_night_slot_task": {
         await removeNightSlotTaskServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "move_night_slot_task": {
         await moveNightSlotTaskServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "update_night_slot_task_color": {
@@ -276,7 +304,7 @@ export async function POST(request: NextRequest) {
           body.markerType as "highlight" | "underline" | "circle" | "none" | null | undefined,
           (body.taskId as string | null | undefined) ?? null,
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "update_night_slot_task_style": {
@@ -288,7 +316,7 @@ export async function POST(request: NextRequest) {
           (body.rrSide as "mens" | "womens" | null) ?? null,
           (body.taskId as string | null | undefined) ?? null,
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "update_night_slot_task_coverage_side": {
@@ -299,7 +327,7 @@ export async function POST(request: NextRequest) {
           (body.coverageSide as "A" | "B" | null) ?? null,
           (body.rrSide as "mens" | "womens" | null) ?? null,
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "update_night_slot_task_label": {
@@ -311,12 +339,12 @@ export async function POST(request: NextRequest) {
           (body.rrSide as "mens" | "womens" | null) ?? null,
           (body.taskId as string | null | undefined) ?? null,
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "replace_night_slot_tasks_for_slot": {
         const applied = await replaceNightSlotTasksForSlotServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true, applied });
       }
       case "replace_all_night_slot_tasks": {
@@ -324,7 +352,7 @@ export async function POST(request: NextRequest) {
           String(body.nightId),
           (body.tasks as never[]) ?? [],
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "mark_tm_call_off": {
@@ -334,7 +362,7 @@ export async function POST(request: NextRequest) {
           date: String(body.date),
           reason: body.reason != null ? String(body.reason) : null,
         });
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "unmark_tm_call_off": {
@@ -342,7 +370,7 @@ export async function POST(request: NextRequest) {
           tmId: String(body.tmId),
           date: String(body.date),
         });
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "add_slot_default_task": {
@@ -448,7 +476,7 @@ export async function POST(request: NextRequest) {
       }
       case "update_night_tm_status": {
         await updateNightTmStatusServer(body as never);
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
       case "update_engine_config": {
@@ -462,7 +490,7 @@ export async function POST(request: NextRequest) {
           String(body.nightId),
           String(body.notes ?? ""),
         );
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "get_or_create_night": {
@@ -470,12 +498,12 @@ export async function POST(request: NextRequest) {
           date: String(body.date),
           dayName: String(body.dayName ?? ""),
         });
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "seed_default_breaks": {
         const result = await seedDefaultBreaksForNightServer(String(body.nightId));
-        await bustCache(body.date as string | undefined);
+        await bustCache(body);
         return NextResponse.json(result);
       }
       case "record_placement_history": {
