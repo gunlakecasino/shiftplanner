@@ -30,6 +30,7 @@ import {
   moveNightSlotTaskServer,
   replaceAllNightSlotTasksServer,
   replaceNightSlotTasksForSlotServer,
+  applyOverlapTasksToNightServer,
   restoreTMServer,
   saveNightNotesServer,
   seedDefaultBreaksForNightServer,
@@ -91,6 +92,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   update_night_slot_task_label: "canEditAssignments",
   replace_night_slot_tasks_for_slot: "canEditAssignments",
   replace_all_night_slot_tasks: "canEditAssignments",
+  apply_overlap_tasks: "canAccessSudo",
   mark_tm_call_off: "canEditAssignments",
   unmark_tm_call_off: "canEditAssignments",
   add_slot_default_task: "canAccessSudo",
@@ -354,6 +356,16 @@ export async function POST(request: NextRequest) {
         );
         await bustCache(body);
         return NextResponse.json({ ok: true });
+      }
+      case "apply_overlap_tasks": {
+        const result = await applyOverlapTasksToNightServer(String(body.nightId), {
+          bands: Array.isArray(body.bands)
+            ? (body.bands as Array<"AM" | "PM">)
+            : undefined,
+          forceRandom: body.forceRandom === true,
+        });
+        await bustCache(body);
+        return NextResponse.json({ ok: true, ...result });
       }
       case "mark_tm_call_off": {
         const result = await markTmCallOffServer({

@@ -2,6 +2,10 @@
 
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import type { TaskPool, WorkItem, WorkItemDetail, WorkItemStatus } from "@/lib/tasks/types";
+import {
+  canonicalizeDefaultSlotKey,
+  isOverlapPoolSlotKey,
+} from "@/lib/shiftbuilder/overlapPoolDefaults";
 import { DEFAULTS_KEY, POOLS_KEY, PROJECTS_KEY, type ProjectWithCounts } from "./useProjectsData";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -254,8 +258,16 @@ export interface CreateDefaultInput {
 export function useCreateSlotDefault() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateDefaultInput) =>
-      api<{ default: WorkItem }>("/api/shiftbuilder/projects/defaults", { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: (body: CreateDefaultInput) => {
+      // Canonicalize OL pool writes to overlap_am_0 / overlap_pm_0 (PR5).
+      // Server re-checks the same rule; client keeps request payloads consistent.
+      const slotKey = canonicalizeDefaultSlotKey(body.slotKey);
+      const slotType = isOverlapPoolSlotKey(slotKey) ? "overlap" : body.slotType;
+      return api<{ default: WorkItem }>("/api/shiftbuilder/projects/defaults", {
+        method: "POST",
+        body: JSON.stringify({ ...body, slotKey, slotType }),
+      });
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: DEFAULTS_KEY }),
   });
 }

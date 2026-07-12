@@ -34,6 +34,13 @@ export type AddTaskParams = {
   color?: string | null;
   isCoverage?: boolean;
   coverageSide?: "A" | "B" | null;
+  /** Template write-through (standing apply / rare manual link). */
+  sourceWorkItemId?: string | null;
+  /**
+   * Manual / free-text chip. On overlap slots, defaults to true when not coverage
+   * and caller omits the field (K14). Coverage bars always false.
+   */
+  isOneOff?: boolean;
 };
 
 export type RemoveTaskParams = {
@@ -823,7 +830,21 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
     color = null,
     isCoverage = false,
     coverageSide = null,
+    sourceWorkItemId = null,
   } = params;
+
+  // K14: manual OL adds default is_one_off=true; coverage always false.
+  const isOverlap =
+    slotType === "overlap" ||
+    /^overlap_(am|pm)(?:_\d+)?$/i.test(String(slotKey ?? ""));
+  let isOneOff = false;
+  if (isCoverage) {
+    isOneOff = false;
+  } else if (params.isOneOff !== undefined) {
+    isOneOff = !!params.isOneOff;
+  } else if (isOverlap) {
+    isOneOff = true;
+  }
 
   const { error } = await client.from("night_slot_tasks").insert({
     night_id: nightId,
@@ -836,6 +857,8 @@ export async function addNightSlotTaskServer(params: AddTaskParams): Promise<voi
     color,
     is_coverage: isCoverage,
     coverage_side: coverageSide,
+    source_work_item_id: sourceWorkItemId,
+    is_one_off: isOneOff,
   });
 
   if (error) {
@@ -1055,50 +1078,146 @@ export async function replaceNightSlotTasksForSlotServer(params: {
     sortOrder?: number;
     taskColor?: string | null;
     isCoverage?: boolean;
+    sourceWorkItemId?: string | null;
+    isOneOff?: boolean;
   }>;
   /** When true, re-insert existing is_coverage rows after applying the new task list. */
   preserveCoverage?: boolean;
+  /**
+   * When true with standingPoolLabels: only replace standing pool members
+   * (source_work_item_id ∈ pool ids OR label ∈ pool); preserve one-offs,
+   * non-pool manuals, and coverage. Used by Apply Overlap Tasks (K14).
+   */
+  replaceStandingOnly?: boolean;
+  /** Normalized or raw labels for the standing pool (normalized at merge time). */
+  standingPoolLabels?: string[];
+  /** Template ids for the standing pool (PR3 identity). */
+  standingPoolIds?: string[];
+  /** When true (default with standing-only), keep is_one_off rows. */
+  preserveOneOffs?: boolean;
 }): Promise<number> {
   const client = adminClient();
-  const { nightId, slotKey, rrSide, slotType, tasks, preserveCoverage = false } = params;
+  const {
+    nightId,
+    slotKey,
+    rrSide,
+    slotType,
+    tasks,
+    preserveCoverage = false,
+    replaceStandingOnly = false,
+    standingPoolLabels,
+    standingPoolIds,
+  } = params;
 
-  let preservedCoverage: Array<{
+  type Merged = {
     taskLabel: string;
     sortOrder?: number;
     taskColor?: string | null;
     isCoverage: boolean;
-  }> = [];
+    sourceWorkItemId?: string | null;
+    isOneOff?: boolean;
+  };
 
-  if (preserveCoverage) {
-    let covQ = client
+  let mergedTasks: Merged[] = [];
+
+  if (replaceStandingOnly && standingPoolLabels) {
+    const { mergeStandingOnlyTasks } = await import(
+      "@/lib/shiftbuilder/rotation/overlapTaskApply"
+    );
+    // Prefer new columns; fall back if migration not applied yet
+    let existingQ = client
       .from("night_slot_tasks")
-      .select("task_label, sort_order, color")
+      .select(
+        "task_label, sort_order, color, is_coverage, source_work_item_id, is_one_off",
+      )
       .eq("night_id", nightId)
-      .eq("slot_key", slotKey)
-      .eq("is_coverage", true);
-    covQ = rrSide ? covQ.eq("rr_side", rrSide) : covQ.is("rr_side", null);
-    const { data: covRows, error: covErr } = await covQ.order("sort_order", { ascending: true });
-    if (covErr) throw new Error(`Task replace coverage read failed: ${covErr.message}`);
-    preservedCoverage = (covRows ?? []).map((r, idx) => ({
-      taskLabel: r.task_label as string,
-      sortOrder: (r.sort_order as number | null) ?? idx,
-      taskColor: (r.color as string | null) ?? null,
-      isCoverage: true,
-    }));
+      .eq("slot_key", slotKey);
+    existingQ = rrSide ? existingQ.eq("rr_side", rrSide) : existingQ.is("rr_side", null);
+    let existingRows: Array<Record<string, unknown>> | null = null;
+    let existingErr: { message?: string } | null = null;
+    {
+      const res = await existingQ.order("sort_order", { ascending: true });
+      existingRows = (res.data as Array<Record<string, unknown>> | null) ?? null;
+      existingErr = res.error;
+    }
+    if (existingErr && /source_work_item_id|is_one_off/i.test(String(existingErr.message ?? ""))) {
+      let legacyQ = client
+        .from("night_slot_tasks")
+        .select("task_label, sort_order, color, is_coverage")
+        .eq("night_id", nightId)
+        .eq("slot_key", slotKey);
+      legacyQ = rrSide ? legacyQ.eq("rr_side", rrSide) : legacyQ.is("rr_side", null);
+      const legacy = await legacyQ.order("sort_order", { ascending: true });
+      existingRows = (legacy.data as Array<Record<string, unknown>> | null) ?? null;
+      existingErr = legacy.error;
+    }
+    if (existingErr) {
+      throw new Error(`Task replace standing-only read failed: ${existingErr.message}`);
+    }
+    mergedTasks = mergeStandingOnlyTasks({
+      existing: (existingRows ?? []).map((r) => ({
+        taskLabel: String(r.task_label ?? ""),
+        sortOrder: (r.sort_order as number | null) ?? 0,
+        taskColor: (r.color as string | null) ?? null,
+        isCoverage: (r.is_coverage as boolean | null) ?? false,
+        sourceWorkItemId: (r.source_work_item_id as string | null | undefined) ?? null,
+        isOneOff: (r.is_one_off as boolean | null | undefined) ?? false,
+      })),
+      newStanding: tasks.map((t) => ({
+        taskLabel: t.taskLabel,
+        sortOrder: t.sortOrder,
+        taskColor: t.taskColor ?? null,
+        isCoverage: false,
+        sourceWorkItemId: t.sourceWorkItemId ?? null,
+        isOneOff: t.isOneOff ?? false,
+      })),
+      standingPoolLabels,
+      standingPoolIds,
+      preserveCoverage,
+    });
+  } else {
+    let preservedCoverage: Merged[] = [];
+
+    if (preserveCoverage) {
+      let covQ = client
+        .from("night_slot_tasks")
+        .select("task_label, sort_order, color")
+        .eq("night_id", nightId)
+        .eq("slot_key", slotKey)
+        .eq("is_coverage", true);
+      covQ = rrSide ? covQ.eq("rr_side", rrSide) : covQ.is("rr_side", null);
+      const { data: covRows, error: covErr } = await covQ.order("sort_order", { ascending: true });
+      if (covErr) throw new Error(`Task replace coverage read failed: ${covErr.message}`);
+      preservedCoverage = (covRows ?? []).map((r, idx) => ({
+        taskLabel: r.task_label as string,
+        sortOrder: (r.sort_order as number | null) ?? idx,
+        taskColor: (r.color as string | null) ?? null,
+        isCoverage: true,
+        sourceWorkItemId: null,
+        isOneOff: false,
+      }));
+    }
+
+    mergedTasks = [
+      ...tasks.map((t) => ({
+        taskLabel: t.taskLabel,
+        sortOrder: t.sortOrder,
+        taskColor: t.taskColor ?? null,
+        isCoverage: t.isCoverage ?? false,
+        sourceWorkItemId: t.sourceWorkItemId ?? null,
+        isOneOff: t.isOneOff ?? false,
+      })),
+      ...preservedCoverage.map((t, idx) => ({
+        ...t,
+        sortOrder: tasks.length + idx,
+      })),
+    ];
   }
 
   let del = client.from("night_slot_tasks").delete().eq("night_id", nightId).eq("slot_key", slotKey);
   del = rrSide ? del.eq("rr_side", rrSide) : del.is("rr_side", null);
   const { error: delErr } = await del;
   if (delErr) throw new Error(`Task replace delete failed: ${delErr.message}`);
-
-  const mergedTasks = [
-    ...tasks,
-    ...preservedCoverage.map((t, idx) => ({
-      ...t,
-      sortOrder: tasks.length + idx,
-    })),
-  ];
 
   if (!mergedTasks.length) return 0;
 
@@ -1112,11 +1231,352 @@ export async function replaceNightSlotTasksForSlotServer(params: {
     sort_order: t.sortOrder ?? idx,
     color: t.taskColor ?? null,
     is_coverage: t.isCoverage ?? false,
+    source_work_item_id: t.sourceWorkItemId ?? null,
+    is_one_off: t.isCoverage ? false : !!t.isOneOff,
   }));
 
   const { error: insErr } = await client.from("night_slot_tasks").insert(inserts);
   if (insErr) throw new Error(`Task replace insert failed: ${insErr.message}`);
   return mergedTasks.length;
+}
+
+export type ApplyOverlapTasksResult = {
+  applied: number;
+  skippedEmpty: number;
+  mode: "fair" | "random_fallback";
+  byBand: { AM: number; PM: number };
+  preservedOneOffs: number;
+};
+
+/**
+ * Staffed-only overlap pool apply from ops_work_items (is_slot_default).
+ * Standing-only preserve (label ∈ pool and/or source_work_item_id ∈ pool ids).
+ *
+ * Fair mode: server env OVERLAP_FAIR_APPLY === "1" and opts.forceRandom !== true.
+ * Default unset/0 → random_fallback (safe until is_one_off + manual defaults are live).
+ * History load failure → random_fallback; still writes source_work_item_id on standing chips.
+ */
+export async function applyOverlapTasksToNightServer(
+  nightId: string,
+  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean },
+): Promise<ApplyOverlapTasksResult> {
+  if (!nightId) {
+    return {
+      applied: 0,
+      skippedEmpty: 0,
+      mode: "random_fallback",
+      byBand: { AM: 0, PM: 0 },
+      preservedOneOffs: 0,
+    };
+  }
+
+  const {
+    dedupeOverlapPoolTasks,
+    hashStringSeed,
+    isOverlapSlotKey,
+    normalizeTaskLabel,
+    overlapBandFromSlotKey,
+    randomAssignPoolToSeats,
+    standingPoolIdSet,
+    standingPoolLabelSet,
+  } = await import("@/lib/shiftbuilder/rotation/overlapTaskApply");
+  const {
+    fairAssignOverlapTasks,
+    randomAssignOverlapTasks,
+  } = await import("@/lib/shiftbuilder/rotation/overlapTaskFairness");
+  type Band = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapBand;
+  type PoolTask = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapPoolTask;
+  type Seat = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapStaffedSeat;
+
+  const client = adminClient();
+  const bandsWanted: Band[] = opts?.bands?.length
+    ? opts.bands
+    : (["AM", "PM"] as Band[]);
+
+  // Pool: active graves slot-default work items on any overlap_* key
+  const { data: workRows, error: workErr } = await client
+    .from("ops_work_items")
+    .select("id, slot_key, title, task_color")
+    .eq("is_slot_default", true)
+    .eq("active", true)
+    .eq("department", "graves")
+    .is("archived_at", null)
+    .not("slot_key", "is", null);
+
+  if (workErr) {
+    throw new Error(`applyOverlapTasks: pool read failed: ${workErr.message}`);
+  }
+
+  const rawPool: Array<{ id: string; label: string; color?: string | null; band: Band }> = [];
+  for (const r of workRows ?? []) {
+    const sk = String((r as { slot_key?: string }).slot_key ?? "");
+    const band = overlapBandFromSlotKey(sk);
+    if (!band || !bandsWanted.includes(band)) continue;
+    rawPool.push({
+      id: String((r as { id: string }).id),
+      label: String((r as { title?: string }).title ?? ""),
+      color: ((r as { task_color?: string | null }).task_color as string | null) ?? null,
+      band,
+    });
+  }
+
+  const poolAll = dedupeOverlapPoolTasks(rawPool);
+  const poolByBand: Record<Band, PoolTask[]> = { AM: [], PM: [] };
+  for (const t of poolAll) {
+    poolByBand[t.band].push(t);
+  }
+
+  // Staffed overlap seats (tm_id present)
+  const { data: assignRows, error: assignErr } = await client
+    .from("zone_assignments")
+    .select("slot_key, slot_type, tm_id")
+    .eq("night_id", nightId);
+
+  if (assignErr) {
+    throw new Error(`applyOverlapTasks: assignments read failed: ${assignErr.message}`);
+  }
+
+  const seatsByBand: Record<Band, Seat[]> = { AM: [], PM: [] };
+  let skippedEmpty = 0;
+  for (const r of assignRows ?? []) {
+    const sk = String((r as { slot_key?: string }).slot_key ?? "");
+    if (!isOverlapSlotKey(sk) && (r as { slot_type?: string }).slot_type !== "overlap") {
+      continue;
+    }
+    const band = overlapBandFromSlotKey(sk);
+    if (!band || !bandsWanted.includes(band)) continue;
+    const tmId = (r as { tm_id?: string | null }).tm_id;
+    if (!tmId) {
+      skippedEmpty += 1;
+      continue;
+    }
+    seatsByBand[band].push({ dbSlotKey: sk, tmId: String(tmId) });
+  }
+
+  // OVERLAP_FAIR_APPLY=1 → fair path; unset/0 or forceRandom → random_fallback
+  const wantFair =
+    process.env.OVERLAP_FAIR_APPLY === "1" && opts?.forceRandom !== true;
+  let mode: "fair" | "random_fallback" = "random_fallback";
+  let historyEvents: import("@/lib/shiftbuilder/rotation/overlapTaskFairness").TaskHistoryEvent[] =
+    [];
+  let tonightIso = "";
+  let scoreSnapshot: unknown = null;
+
+  if (wantFair) {
+    try {
+      const { loadOverlapTaskHistoryServer } = await import(
+        "@/lib/shiftbuilder/rotation/overlapTaskHistory.server"
+      );
+      const hist = await loadOverlapTaskHistoryServer(client, {
+        nightId,
+        windowNights: 30,
+      });
+      historyEvents = hist.events;
+      tonightIso = hist.tonightIso;
+      mode = "fair";
+    } catch (err) {
+      console.warn(
+        "[shiftbuilder] applyOverlapTasks history load failed → random_fallback",
+        err instanceof Error ? err.message : err,
+      );
+      mode = "random_fallback";
+      historyEvents = [];
+    }
+  }
+
+  const seedBase = hashStringSeed(nightId);
+  const byBand: { AM: number; PM: number } = { AM: 0, PM: 0 };
+  let applied = 0;
+  let preservedOneOffs = 0;
+
+  const assignmentLog: Array<{
+    slot: string;
+    tmId: string;
+    templateId: string;
+    label: string;
+  }> = [];
+
+  for (const band of bandsWanted) {
+    const pool = poolByBand[band];
+    const seats = seatsByBand[band];
+    // Unstaffed: no writes. Empty pool: no writes (nothing to distribute).
+    if (!seats.length || !pool.length) continue;
+
+    const seed = seedBase + (band === "AM" ? 1 : 2);
+    type AssignedTask = { id: string; label: string; color?: string | null };
+    let pairs: Array<{ seat: Seat; task: AssignedTask }> = [];
+
+    if (mode === "fair" && tonightIso) {
+      const fairPool = pool.map((t) => ({
+        templateId: t.id,
+        label: t.label,
+        color: t.color ?? null,
+      }));
+      const fairSeats = seats.map((s) => ({
+        dbSlotKey: s.dbSlotKey,
+        tmId: s.tmId,
+      }));
+      const fairResult = fairAssignOverlapTasks(
+        fairPool,
+        fairSeats,
+        historyEvents,
+        band,
+        tonightIso,
+        { seed, windowNights: 30 },
+      );
+      // Truncated score snapshot for structured log (last band wins / merge)
+      scoreSnapshot = {
+        band,
+        taskGlobalDue: fairResult.debug.taskGlobalDue.slice(0, 12),
+        pairScores: fairResult.debug.pairScores.slice(0, 24),
+        mode: fairResult.debug.mode,
+      };
+      pairs = fairResult.assignments.map((a) => ({
+        seat: { dbSlotKey: a.seat.dbSlotKey, tmId: a.seat.tmId },
+        task: {
+          id: a.task.templateId,
+          label: a.task.label,
+          color: a.task.color ?? null,
+        },
+      }));
+    } else {
+      // Prefer fairness module random for consistent PoolTask shape; keep
+      // randomAssignPoolToSeats as equivalent fallback path.
+      const fairPool = pool.map((t) => ({
+        templateId: t.id,
+        label: t.label,
+        color: t.color ?? null,
+      }));
+      const fairSeats = seats.map((s) => ({
+        dbSlotKey: s.dbSlotKey,
+        tmId: s.tmId,
+      }));
+      const rnd = randomAssignOverlapTasks(fairPool, fairSeats, seed);
+      if (rnd.assignments.length) {
+        pairs = rnd.assignments.map((a) => ({
+          seat: { dbSlotKey: a.seat.dbSlotKey, tmId: a.seat.tmId },
+          task: {
+            id: a.task.templateId,
+            label: a.task.label,
+            color: a.task.color ?? null,
+          },
+        }));
+      } else {
+        pairs = randomAssignPoolToSeats(pool, seats, seed).map((p) => ({
+          seat: p.seat,
+          task: { id: p.task.id, label: p.task.label, color: p.task.color },
+        }));
+      }
+    }
+
+    const assignedBySlot = new Map(pairs.map((p) => [p.seat.dbSlotKey, p.task]));
+    const poolSet = standingPoolLabelSet(pool);
+    const poolLabels = [...poolSet];
+    const poolIds = [...standingPoolIdSet(pool)];
+
+    // Every staffed seat: standing-only replace. Extra seats (pool < seats) get
+    // empty newStanding → prior standing pool chips cleared; manuals + coverage kept.
+    for (const seat of seats) {
+      const task = assignedBySlot.get(seat.dbSlotKey);
+      const newStanding = task
+        ? [
+            {
+              taskLabel: task.label,
+              sortOrder: 0,
+              taskColor: task.color ?? null,
+              isCoverage: false,
+              sourceWorkItemId: task.id,
+              isOneOff: false,
+            },
+          ]
+        : [];
+
+      let beforeRows: Array<Record<string, unknown>> = [];
+      {
+        const beforeRes = await client
+          .from("night_slot_tasks")
+          .select("task_label, is_coverage, is_one_off, source_work_item_id")
+          .eq("night_id", nightId)
+          .eq("slot_key", seat.dbSlotKey)
+          .is("rr_side", null);
+        if (
+          beforeRes.error &&
+          /is_one_off|source_work_item_id/i.test(String(beforeRes.error.message ?? ""))
+        ) {
+          const legacy = await client
+            .from("night_slot_tasks")
+            .select("task_label, is_coverage")
+            .eq("night_id", nightId)
+            .eq("slot_key", seat.dbSlotKey)
+            .is("rr_side", null);
+          beforeRows = (legacy.data as Array<Record<string, unknown>> | null) ?? [];
+        } else {
+          beforeRows = (beforeRes.data as Array<Record<string, unknown>> | null) ?? [];
+        }
+      }
+
+      for (const row of beforeRows) {
+        if (row.is_coverage === true) continue;
+        if (row.is_one_off === true) {
+          preservedOneOffs += 1;
+          continue;
+        }
+        const lab = String(row.task_label ?? "");
+        const src = String(row.source_work_item_id ?? "").trim();
+        const inPoolById = !!(src && poolIds.includes(src));
+        const inPoolByLabel = poolSet.has(normalizeTaskLabel(lab));
+        if (!inPoolById && !inPoolByLabel) preservedOneOffs += 1;
+      }
+
+      await replaceNightSlotTasksForSlotServer({
+        nightId,
+        slotKey: seat.dbSlotKey,
+        rrSide: null,
+        slotType: "overlap",
+        tasks: newStanding,
+        preserveCoverage: true,
+        preserveOneOffs: true,
+        replaceStandingOnly: true,
+        standingPoolLabels: poolLabels,
+        standingPoolIds: poolIds,
+      });
+
+      if (task) {
+        applied += 1;
+        byBand[band] += 1;
+        assignmentLog.push({
+          slot: seat.dbSlotKey,
+          tmId: seat.tmId,
+          templateId: task.id,
+          label: task.label,
+        });
+      }
+    }
+  }
+
+  console.info(
+    "[shiftbuilder] applyOverlapTasksToNight",
+    JSON.stringify({
+      nightId,
+      bands: bandsWanted,
+      mode,
+      staffed: {
+        AM: seatsByBand.AM.length,
+        PM: seatsByBand.PM.length,
+      },
+      poolIds: {
+        AM: poolByBand.AM.map((t) => t.id),
+        PM: poolByBand.PM.map((t) => t.id),
+      },
+      assignments: assignmentLog,
+      preservedOneOffs,
+      applied,
+      skippedEmpty,
+      scoreSnapshot,
+    }),
+  );
+
+  return { applied, skippedEmpty, mode, byBand, preservedOneOffs };
 }
 
 export async function replaceAllNightSlotTasksServer(

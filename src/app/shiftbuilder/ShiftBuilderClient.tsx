@@ -885,7 +885,6 @@ function AuthedShiftBuilder() {
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [publishWeekBusy, setPublishWeekBusy] = useState(false);
   const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
-  const [applyDefaultTasksBusy, setApplyDefaultTasksBusy] = useState(false);
   const [applyOverlapTasksBusy, setApplyOverlapTasksBusy] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
@@ -3468,6 +3467,8 @@ function AuthedShiftBuilder() {
         const { addNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
         for (const uiKey of keys) {
           const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
+          const isOverlap =
+            slot_type === "overlap" || /^overlap_/i.test(slot_key) || /^OL-/i.test(uiKey);
           await addNightSlotTask({
             nightId,
             slotKey: slot_key,
@@ -3475,12 +3476,14 @@ function AuthedShiftBuilder() {
             rrSide: rr_side,
             taskLabel: taskLabel.trim(),
             sortOrder: 50,
+            // K14: free-text / manual OL chips are one-offs (server also defaults this)
+            ...(isOverlap ? { isOneOff: true } : {}),
           });
           logBuilderChange({
             action: "task_add",
             slotKey: uiKey,
             targetNightId: nightId,
-            payload: { taskLabel: taskLabel.trim() },
+            payload: { taskLabel: taskLabel.trim(), isOneOff: isOverlap || undefined },
           });
         }
         // Best-effort refresh of task list (to pick up server-generated ids/sort etc).
@@ -3915,7 +3918,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     (currentView === "deployment" || !!selectedSlotKey) &&
     engineRunPhase === "idle" &&
     !restoreDefaultBreaksBusy &&
-    !applyDefaultTasksBusy &&
+    !applyOverlapTasksBusy &&
     !currentNight.isFetching;
 
   const { fitBySlot: deploymentFitBySlot, placementTrailsByTmId } = usePlacementFitMap({
@@ -6376,71 +6379,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     confirmDialog,
   ]);
 
-  const handleApplyDefaultTasks = React.useCallback(async () => {
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — cannot apply default tasks", "error");
-      return;
-    }
-
-    const existingCount = Object.values(selectedTasks).reduce(
-      (sum, rows) => sum + rows.length,
-      0,
-    );
-    const confirmMsg =
-      existingCount > 0
-        ? `Apply card-default task chips to tonight? This replaces existing task chips on every slot that has defaults configured (${existingCount} task${existingCount === 1 ? "" : "s"} on the board now).`
-        : "Apply card-default task chips to tonight? This installs defaults from Settings → Card Defaults.";
-    if (!(await confirmDialog(confirmMsg, { confirmLabel: "Apply" }))) return;
-
-    setApplyDefaultTasksBusy(true);
-    try {
-      let nid = queryNightId || nightId;
-      if (!nid) {
-        nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
-      }
-      if (!nid) {
-        showToast("No night loaded — pick a day first", "error");
-        return;
-      }
-
-      const { pushTaskDefaultsToNight, invalidateSlotDefaultsBundleCache } = await import("@/lib/shiftbuilder/data");
-      invalidateSlotDefaultsBundleCache();
-      const { applied } = await pushTaskDefaultsToNight(nid);
-
-      const dateKey = formatLocalDateISO(selectedDay.date);
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
-
-      const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
-      await yieldToMain();
-      await refreshNightTasksFromServer(nid, selectedDay.date);
-
-      showToast(
-        `Applied card-default tasks — ${applied} chip${applied !== 1 ? "s" : ""} installed`,
-        "success",
-      );
-    } catch (e: unknown) {
-      console.error("[shiftbuilder] apply default tasks failed", e);
-      const msg = e instanceof Error ? e.message : "Failed to apply default tasks";
-      showToast(msg, "error");
-    } finally {
-      setApplyDefaultTasksBusy(false);
-    }
-  }, [
-    isCurrentNightLocked,
-    selectedTasks,
-    queryNightId,
-    nightId,
-    selectedDay.date,
-    selectedDay.name,
-    showToast,
-    currentNight.queryClient,
-    resolveNightIdForDate,
-    refreshNightTasksFromServer,
-    confirmDialog,
-  ]);
-
   const handleApplyOverlapTasks = React.useCallback(async () => {
     if (isCurrentNightLocked) {
       showToast("This day is locked — cannot apply overlap tasks", "error");
@@ -6448,8 +6386,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     }
 
     const okToApplyOverlap = await confirmDialog(
-      "This replaces existing task chips on overlap slots that have defaults configured.",
-      { title: "Apply default task chips to overlap slots (AM/PM) tonight?", confirmLabel: "Apply" },
+      "Distribute standing AM/PM overlap pool tasks to staffed overlap cards only. Coverage bars and one-off (manual) chips are kept. Empty cards are left blank. Fairness uses prior nights only — re-applying tonight may reshuffle standing tasks among staffed seats.",
+      {
+        title: "Apply Overlap Tasks?",
+        confirmLabel: "Apply",
+      },
     );
     if (!okToApplyOverlap) {
       return;
@@ -6466,8 +6407,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         return;
       }
 
-      const { pushTaskDefaultsToNight } = await import("@/lib/shiftbuilder/data");
-      const { applied } = await pushTaskDefaultsToNight(nid, { overlapsOnly: true });
+      const { applyOverlapTasksToNight } = await import("@/lib/shiftbuilder/data");
+      const { applied, byBand, mode } = await applyOverlapTasksToNight(nid);
 
       const dateKey = formatLocalDateISO(selectedDay.date);
       await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
@@ -6478,8 +6419,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       await yieldToMain();
       await refreshNightTasksFromServer(nid, selectedDay.date);
 
+      const modeTag = mode === "fair" ? "fair" : "random";
       showToast(
-        `Applied overlap tasks — ${applied} chip${applied !== 1 ? "s" : ""} installed`,
+        `Applied overlap tasks — ${applied} chip${applied !== 1 ? "s" : ""} (AM ${byBand.AM}, PM ${byBand.PM}) · ${modeTag}`,
         "success",
       );
     } catch (e: unknown) {
@@ -7834,8 +7776,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onCopyYesterdayTasks={handleCopyYesterdayTasks}
         onRestoreDefaultBreaks={handleRestoreDefaultBreaks}
         restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
-        onApplyDefaultTasks={canAccessSudo ? handleApplyDefaultTasks : undefined}
-        applyDefaultTasksBusy={applyDefaultTasksBusy}
         onApplyOverlapTasks={canAccessSudo ? handleApplyOverlapTasks : undefined}
         applyOverlapTasksBusy={applyOverlapTasksBusy}
         onToggleWeekHealth={handleToggleWeekHealthTracker}

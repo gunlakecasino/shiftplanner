@@ -5,6 +5,21 @@
 **Date:** 2026-07-02
 **Branch:** `shiftbuilder-ultra-20260627`
 
+> ### Addendum — K13 (2026-07-12)
+>
+> **Apply Overlap Tasks is reintroduced** as an operator action on staffed OL seats only
+> (`applyOverlapTasksToNight` / `ops_work_items` band pools). This **supersedes T2 / §4.12
+> for OL apply only** — not a full reversal of the defaults cutover.
+>
+> - Zones / RR / AUX: still materialize on night create via `applySlotDefaultsToNight`
+>   (Apply Default Tasks stays retired).
+> - OL: **not** seeded on night create (K11); pool config in Projects Defaults; distribute
+>   via FloatingNav **Apply Overlap Tasks**. Fair vs random is server env
+>   `OVERLAP_FAIR_APPLY` (`1` / `0` / unset).
+> - Legacy `pushTaskDefaultsToNight` / `getSlotDefaultTasks` paths removed (PR7).
+>
+> Full design: `docs/OVERLAP_TASK_ROTATION_DESIGN.md`.
+
 **v2 revision notes (Fable 5 review):** v1's data model, portable-core architecture, and
 strangler boundary were sound and are kept. v2 adds what a review against the actual
 codebase surfaced: the plan must ride the existing realtime/optimistic-mutation
@@ -20,6 +35,7 @@ the legacy default-task machinery outright.** Once cut over, recurring Ops Task 
 are the *only* source of nightly default chips; `slot_default_tasks`, the push buttons,
 and the Apply Default/Overlap Tasks actions are retired. D1 and D11 are resolved (yes,
 and mandatory). New §4.12 (the replacement mandate), reworked T2, §7, and Phase 7.
+**(Partial override 2026-07-12: K13 reintroduces Apply Overlap for OL only — see addendum.)**
 
 ---
 

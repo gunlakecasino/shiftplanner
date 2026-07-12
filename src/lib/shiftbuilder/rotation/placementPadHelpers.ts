@@ -182,11 +182,18 @@ export const LAST5_SOFT_TRAIL_COUNT = 5;
 /**
  * Canonical repeat key for prior-N / critical-repeat checks.
  * MRR8, WRR8, and RR8 all map to RR8 (same restroom number).
+ * Overlap seats are fungible within band: OL-PM-N / overlap_pm_N → OL-PM
+ * (and AM → OL-AM). Match/display only — never rewrite stored history keys.
  */
 export function placementRepeatKey(ui: string): string {
   if (!ui) return ui;
   const rr = ui.match(/^(?:M|W)?RR(\d+)$/i);
   if (rr) return `RR${rr[1]}`;
+  // Fungible OL seats within AM/PM band (UI, band, and DB forms).
+  const olUi = ui.match(/^OL-(PM|AM)(?:-\d+)?$/i);
+  if (olUi) return `OL-${olUi[1].toUpperCase()}`;
+  const olDb = ui.match(/^overlap_(pm|am)(?:_\d+)?$/i);
+  if (olDb) return `OL-${olDb[1].toUpperCase()}`;
   return ui;
 }
 
@@ -248,6 +255,12 @@ export function formatCardPlacementTrailLabel(
 
   // Flex AUXn → stable code first (only when caller provided that night's layout).
   const resolved = canonicalizeAuxSlotKeyForTrail(ui, auxDefs);
+
+  // Fungible overlap seats — display band only (no card index). Storage stays indexed.
+  const olUi = resolved.match(/^OL-(PM|AM)(?:-\d+)?$/i);
+  if (olUi) return `OL-${olUi[1].toUpperCase()}`;
+  const olDb = resolved.match(/^overlap_(pm|am)(?:_\d+)?$/i);
+  if (olDb) return `OL-${olDb[1].toUpperCase()}`;
 
   // Canonical aux identity (DB → UI history keys + legacy + short codes + collapsed labels).
   if (resolved === "Z9SR" || resolved === "z9_sr") return "Z9SR";

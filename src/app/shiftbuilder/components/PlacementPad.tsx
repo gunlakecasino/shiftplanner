@@ -58,6 +58,10 @@ import {
 import { memberToPlacementProfile } from "./placementFitForSlot";
 import { postEngineInsight } from "../lib/engineInsightClient";
 import { BuilderLoadingLine } from "./builderPrimitives";
+import {
+  isOverlapInsightSlotKey,
+  type OverlapTaskInsightModel,
+} from "@/lib/shiftbuilder/rotation/buildOverlapTaskInsight";
 
 /* ── Refined visual tokens & helpers (from Refined Placement Pad) ─────────── */
 type ExposureLevel = 0 | 1 | 2 | 3;
@@ -601,10 +605,12 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const a = assignments[slotKey] || {};
   const tasks = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
   const isRestroomSide = /^[MW]RR\d+$/.test(slotKey);
+  /** Phase C — OL seats use task-rotation insights, not zone fit/matrix. */
+  const isOverlapSlot = isOverlapInsightSlotKey(slotKey);
   const isDock = presentation === "dock";
   const padLarge = isDock;
 
-  // Original heavy logic kept (history, rotation, xAI, fit)
+  // Original heavy logic kept (history, rotation, xAI, fit) — gated for OL in UI
   const currentIso = nightIsoFromDate(selectedDay.date);
   const [padHistory, setPadHistory] = useState<ZoneDetailEntry | null>(null);
   const [padHistoryLoading, setPadHistoryLoading] = useState(false);
@@ -634,6 +640,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const taskInputRef = useRef<HTMLInputElement>(null);
   const lightRunRef = useRef(0);
 
+  /** Phase C — overlap standing pool + recent task assignees. */
+  const [overlapInsight, setOverlapInsight] = useState<OverlapTaskInsightModel | null>(null);
+  const [overlapInsightLoading, setOverlapInsightLoading] = useState(false);
+
   // Reset pad UI/insight state when identity (slot/TM/night/insights) changes.
   useEffect(() => {
     setCoverageMode(false);
@@ -651,14 +661,16 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setDeepInsightLoading(false);
     // Drop prior TM's history immediately so matrix/fit never paint under the wrong id.
     setPadHistory(null);
-    setPadHistoryLoading(!!a.tmId);
+    setPadHistoryLoading(!isOverlapSlot && !!a.tmId);
     lightRunRef.current += 1;
     analystRequestRef.current += 1;
     setMatrixExpanded(false);
     setEvidenceOpen(false);
     setTaskInput("");
     setSweeperOpen(false);
-  }, [slotKey, a.tmId, selectedDay.date, insightsEnabled]);
+    setOverlapInsight(null);
+    setOverlapInsightLoading(isOverlapSlot);
+  }, [slotKey, a.tmId, selectedDay.date, insightsEnabled, isOverlapSlot]);
 
   const closeSide = anchor === "left" ? "left" : "right";
   const showDockAssignedSummary = isDock && dockTab === "assign" && !!a.tmId && !assignMode;
@@ -669,7 +681,13 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const usePortal = !isDock && !!hostId && !!portalStyle;
 
   // Fetch current TM placement history via session-gated batch API (aligned calendar lookback with chips).
+  // Skipped for OL — zone placement history is not used in Phase C task insights.
   useEffect(() => {
+    if (isOverlapSlot) {
+      setPadHistory(null);
+      setPadHistoryLoading(false);
+      return;
+    }
     if (!a.tmId) {
       setPadHistory(null);
       setPadHistoryLoading(false);
@@ -708,7 +726,62 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     return () => {
       cancelled = true;
     };
-  }, [slotKey, a.tmId]);
+  }, [slotKey, a.tmId, isOverlapSlot]);
+
+  // Phase C — overlap task insight (standing pool + recent assignees / TM tasks).
+  const tonightChipSig = React.useMemo(() => {
+    const list = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
+    return list
+      .map(
+        (t) =>
+          `${t.taskLabel}|${t.sourceWorkItemId ?? ""}|${t.isOneOff === true ? "1" : "0"}`,
+      )
+      .join(";");
+  }, [selectedTasks, slotKey]);
+
+  useEffect(() => {
+    if (!isOverlapSlot) {
+      setOverlapInsight(null);
+      setOverlapInsightLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setOverlapInsightLoading(true);
+    const list = (selectedTasks[slotKey] || []).filter((t) => !t.isCoverage);
+    const tonightChips = list.map((t) => ({
+      label: t.taskLabel,
+      sourceWorkItemId: t.sourceWorkItemId ?? null,
+      isOneOff: t.isOneOff === true ? true : undefined,
+      isCoverage: false as const,
+    }));
+    (async () => {
+      try {
+        const res = await fetch("/api/shiftbuilder/overlap-task-insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slotKey,
+            nightDate: currentIso,
+            tmId: a.tmId ?? null,
+            tonightChips,
+          }),
+        });
+        if (!res.ok) throw new Error(`overlap insights ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setOverlapInsight((data.insight as OverlapTaskInsightModel) ?? null);
+      } catch {
+        if (!cancelled) setOverlapInsight(null);
+      } finally {
+        if (!cancelled) setOverlapInsightLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // selectedTasks read via tonightChipSig + slotKey; avoid full-board identity churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOverlapSlot, slotKey, currentIso, a.tmId, tonightChipSig]);
 
   // Only use history that matches the currently assigned TM (guards race during switches).
   const safePadHistory =
@@ -1267,9 +1340,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           <InlineCoverage sourceKey={slotKey} auxDefs={auxDefs} onPick={async (t) => { if (onAddCoverage) await onAddCoverage(slotKey, t); setCoverageMode(false); }} onCancel={() => setCoverageMode(false)} />
         )}
 
-        {!showTmPicker && !coverageMode && a.tmName && (
+        {!showTmPicker && !coverageMode && (a.tmName || isOverlapSlot) && (
           <>
-            {showTasksPane && (
+            {showTasksPane && (a.tmName || isOverlapSlot) && (
               <div className="space-y-1.5">
                 {tasks.map((t) => (
                   <div
@@ -1324,7 +1397,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   </div>
                 ) : null}
 
-                {onAssignSweeper && (() => {
+                {!isOverlapSlot && onAssignSweeper && (() => {
                   const hasSweeper = tasks.some((t: any) => t.taskLabel?.toLowerCase().includes('sweep'));
                   return (
                     <div style={{ position: 'relative' }}>
@@ -1371,7 +1444,94 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </div>
             )}
 
-            {(showIntelPane || !isDock) && (
+            {/* Phase C — OL task insights (hide zone fit / matrix / last-5 / swap language) */}
+            {isOverlapSlot && (showIntelPane || !isDock) && (
+              <div className="space-y-3">
+                {overlapInsightLoading ? (
+                  <BuilderLoadingLine className="text-[11px]">Loading overlap task history</BuilderLoadingLine>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                        {overlapInsight?.band ?? "OL"} standing pool
+                      </p>
+                      {overlapInsight?.poolEmpty !== false && !(overlapInsight?.standingPool?.length) ? (
+                        <p className="text-[11px] text-gray-500 px-1">No standing pool configured</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {(overlapInsight?.standingPool ?? []).map((p) => (
+                            <span
+                              key={p.id || p.label}
+                              className="inline-flex items-center px-2 py-0.5 rounded-lg border border-gray-100 bg-gray-50 text-[10px] font-medium text-gray-700"
+                            >
+                              {p.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {tasks.length > 0 && (
+                      <div>
+                        <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                          Recent for tonight&apos;s task
+                          {overlapInsight?.tonightChips?.[0]?.label
+                            ? ` · ${overlapInsight.tonightChips[0].label}`
+                            : tasks[0]?.taskLabel
+                              ? ` · ${tasks[0].taskLabel}`
+                              : ""}
+                        </p>
+                        {(overlapInsight?.recentForTask?.length ?? 0) === 0 ? (
+                          <p className="text-[11px] text-gray-500 px-1">No recent assignees in band</p>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {(overlapInsight?.recentForTask ?? []).map((r) => (
+                              <li
+                                key={`${r.nightDate}-${r.tmId}`}
+                                className="flex items-center justify-between px-2 py-1 rounded-lg bg-white border border-gray-50 text-[11px]"
+                              >
+                                <span className="font-medium text-gray-800 truncate">{r.tmName}</span>
+                                <span className="text-gray-400 tabular-nums flex-shrink-0 ml-2">
+                                  {r.nightDate.slice(5)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                        Tasks this TM · last 30 nights
+                      </p>
+                      {overlapInsight?.emptySeat || !a.tmId ? (
+                        <p className="text-[11px] text-gray-500 px-1">Seat empty — assign a TM first.</p>
+                      ) : (overlapInsight?.recentForTm?.length ?? 0) === 0 ? (
+                        <p className="text-[11px] text-gray-500 px-1">No recent {overlapInsight?.band ?? "OL"} tasks for this TM</p>
+                      ) : (
+                        <ul className="space-y-0.5">
+                          {(overlapInsight?.recentForTm ?? []).map((r, i) => (
+                            <li
+                              key={`${r.nightDate}-${r.taskLabel}-${i}`}
+                              className="flex items-center justify-between px-2 py-1 rounded-lg bg-white border border-gray-50 text-[11px]"
+                            >
+                              <span className="font-medium text-gray-800 truncate">{r.taskLabel}</span>
+                              <span className="text-gray-400 tabular-nums flex-shrink-0 ml-2">
+                                {r.nightDate.slice(5)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Zone/RR intel — hidden for OL (Phase C) */}
+            {!isOverlapSlot && a.tmName && (showIntelPane || !isDock) && (
               <>
                 {padHistoryLoading && a.tmId ? (
                   <BuilderLoadingLine className="text-[11px]">Loading rotation history</BuilderLoadingLine>
@@ -1396,72 +1556,76 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </>
             )}
 
-            {/* Matrix — full gender-eligible surface (no truncation) */}
-            <div>
-              <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
+            {!isOverlapSlot && a.tmName && (
+              <>
+                {/* Matrix — full gender-eligible surface (no truncation) */}
+                <div>
+                  <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
 
-              <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
-                <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span>
-                <span className="font-bold text-gray-800">{rrWorkedCount}</span>
-                <span className="text-gray-300 mx-0.5">|</span>
-                <span className="text-gray-500">Zone</span>
-                <span className="font-bold text-gray-800">{zoneWorkedCount}</span>
-                <span className="text-gray-300 mx-0.5">|</span>
-                <span className="text-gray-500">Z9</span>
-                <span className="font-semibold text-gray-500">{z9Days}</span>
-                <span className="text-gray-500">Z9SR</span>
-                <span className="font-semibold text-gray-500">{z9srDays}</span>
-              </div>
+                  <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
+                    <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span>
+                    <span className="font-bold text-gray-800">{rrWorkedCount}</span>
+                    <span className="text-gray-300 mx-0.5">|</span>
+                    <span className="text-gray-500">Zone</span>
+                    <span className="font-bold text-gray-800">{zoneWorkedCount}</span>
+                    <span className="text-gray-300 mx-0.5">|</span>
+                    <span className="text-gray-500">Z9</span>
+                    <span className="font-semibold text-gray-500">{z9Days}</span>
+                    <span className="text-gray-500">Z9SR</span>
+                    <span className="font-semibold text-gray-500">{z9srDays}</span>
+                  </div>
 
-              <div className="flex items-center gap-2 mb-2 flex-wrap text-[9px] text-gray-500">
-                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_ONCE}/>1×</span>
-                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_TWICE}/>2×</span>
-                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_THRICE_PLUS}/>3×+</span>
-                <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_NONE}/>not in spread</span>
-              </div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap text-[9px] text-gray-500">
+                    <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_ONCE}/>1×</span>
+                    <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_TWICE}/>2×</span>
+                    <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_THRICE_PLUS}/>3×+</span>
+                    <span className="flex items-center gap-1"><LegendDot color={MATRIX_SPREAD_NONE}/>not in spread</span>
+                  </div>
 
-              <div className="grid grid-cols-5 gap-1">
-                {refinedZones.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-xl py-[5px] text-[10px] font-semibold text-center transition-colors"
-                      style={matrixSpreadPillStyle(item.exposure)}
-                      title={
-                        item.exposure === 0
-                          ? `${item.label} · not in last 30 nights`
-                          : `${item.label} · ${item.exposure >= 3 ? "3+" : item.exposure}× in last 30 nights`
-                      }
-                    >
-                      {item.label}
-                    </div>
-                  ))}
-              </div>
-            </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {refinedZones.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-xl py-[5px] text-[10px] font-semibold text-center transition-colors"
+                          style={matrixSpreadPillStyle(item.exposure)}
+                          title={
+                            item.exposure === 0
+                              ? `${item.label} · not in last 30 nights`
+                              : `${item.label} · ${item.exposure >= 3 ? "3+" : item.exposure}× in last 30 nights`
+                          }
+                        >
+                          {item.label}
+                        </div>
+                      ))}
+                  </div>
+                </div>
 
-            {/* LAST 5 — slot accent colors (matches deployment card chrome) */}
-            <div>
-              <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">LAST 5</p>
-              <div className="grid grid-cols-5 gap-1">
-                {refinedLastFive.map((p, i) => {
-                  const base = p.color;
-                  // Soft tinted pill using the actual zone/restroom accent color
-                  const style: React.CSSProperties = {
-                    background: `${base}22`,
-                    border: `1px solid ${base}55`,
-                    color: base
-                  };
-                  return (
-                    <div 
-                      key={i} 
-                      className="rounded-xl py-[5px] text-[10px] font-bold text-center"
-                      style={style}
-                    >
-                      {p.label}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                {/* LAST 5 — slot accent colors (matches deployment card chrome) */}
+                <div>
+                  <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">LAST 5</p>
+                  <div className="grid grid-cols-5 gap-1">
+                    {refinedLastFive.map((p, i) => {
+                      const base = p.color;
+                      // Soft tinted pill using the actual zone/restroom accent color
+                      const style: React.CSSProperties = {
+                        background: `${base}22`,
+                        border: `1px solid ${base}55`,
+                        color: base
+                      };
+                      return (
+                        <div 
+                          key={i} 
+                          className="rounded-xl py-[5px] text-[10px] font-bold text-center"
+                          style={style}
+                        >
+                          {p.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

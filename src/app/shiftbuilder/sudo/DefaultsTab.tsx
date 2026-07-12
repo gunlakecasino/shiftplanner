@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * DefaultsTab — configure per-slot default break groups and task chips,
- * then push them to the current night or the entire GRAVE week (Fri–Thu).
+ * DefaultsTab — configure per-slot default **break groups**, then push them to
+ * the current night or the entire GRAVE week (Fri–Thu).
  *
- * Sections: Zones | Restrooms | AUX | AM Overlaps (task pool, randomly assigned
- * to the 6 cards when "Default Tasks" is run from navbar) | PM Overlaps.
- * Each row: accent strip, icon + label, BreakBadge (click to cycle + auto-save),
- *           task chips with × removal, inline "add task" input.
+ * Sections: Zones | Restrooms | AUX | AM Overlaps | PM Overlaps.
+ * Each row: accent strip, icon + label, BreakBadge (click to cycle + auto-save).
+ *
+ * Standing task pools for OL live in Projects → Defaults (AM/PM Overlap Pool)
+ * and are applied via Apply Overlap Tasks — not from this tab.
  *
  * Push buttons live in a sticky action bar at the top.
  */
@@ -130,22 +131,22 @@ function buildSlotDefs(): SlotDef[] {
     });
   }
 
-  // AM Overlaps — single pool row (stored under overlap_am_0 for the pool).
-  // All tasks in this pool (plus any other overlap_am_* for legacy) are collected
-  // and randomly shuffled 1:1 across the 6 AM Overlap cards when Default Tasks is applied.
+  // AM Overlaps — single break-default row (stored under overlap_am_0).
+  // Standing task chips for the band pool are configured in Projects → Defaults.
   out.push({
     compositeKey: `overlap_am_0|`,
     dbKey: `overlap_am_0`,
     dbType: "overlap",
     rrSide: "",
-    label: "AM Overlap Pool",
-    sublabel: "Randomly assigned to AM Overlap 1–6 cards",
+    label: "AM Overlaps",
+    sublabel: "Break default · tasks in Projects → Defaults",
     icon: "◆",
     accent: "#059669",
     section: "am-overlap",
   });
 
-  // PM Overlaps — per-card (fixed) for now
+  // PM Overlaps — per-card break defaults (seats still need break groups).
+  // Task standing pool is Projects → Defaults → PM Overlap Pool (overlap_pm_0).
   for (let i = 0; i < 6; i++) {
     const uiKey = `OL-PM-${i}`;
     const dbKey = `overlap_pm_${i}`;
@@ -155,7 +156,7 @@ function buildSlotDefs(): SlotDef[] {
       dbType: "overlap",
       rrSide: "",
       label: overlapSlotLabel(uiKey),
-      sublabel: "PM Overlap",
+      sublabel: "Break default",
       icon: "◆",
       accent: getOverlapAccent(uiKey),
       section: "pm-overlap",
@@ -332,7 +333,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
     { id: "zone", label: "Zones" },
     { id: "rr",   label: "Restrooms" },
     { id: "aux",  label: "AUX / Support" },
-    { id: "am-overlap", label: "AM Overlaps (task pool — randomly shuffled on apply)" },
+    { id: "am-overlap", label: "AM Overlaps" },
     { id: "pm-overlap", label: "PM Overlaps" },
   ];
 
@@ -400,12 +401,12 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
         </div>
 
         {/* Legend */}
-        <div className={cn("mt-2 flex items-center gap-4", ios.legend)}>
+        <div className={cn("mt-2 flex items-center gap-4 flex-wrap", ios.legend)}>
           <span className="flex items-center gap-1">
             <span className="w-[18px] h-[12px] bg-[#1C1C1E] text-white text-[8px] font-bold rounded-[2px] flex items-center justify-center">1</span>
             Break group default (click to cycle: 1 → 2 → 3 → OL → –)
           </span>
-          <span>· Task chips are pushed as <em>replace</em> (existing chips are wiped)</span>
+          <span>· Standing OL tasks: Projects → Defaults (Apply Overlap for staffed seats)</span>
         </div>
       </div>
 

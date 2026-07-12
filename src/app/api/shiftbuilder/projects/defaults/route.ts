@@ -4,11 +4,13 @@ import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLi
 import { requireTasksAccess } from "../_lib/requireTasksAccess.server";
 import { rowToWorkItem, WORK_ITEM_COLUMNS } from "@/lib/tasks/mapping";
 import { SHIFTBUILDER_DEPARTMENT } from "@/lib/shiftbuilder/tasksAdapter";
+import { canonicalizeDefaultSlotKey, isOverlapPoolSlotKey } from "@/lib/shiftbuilder/overlapPoolDefaults";
 
 /**
- * Slot-default chip templates (successor to slot_default_tasks). These are the
- * per-slot default tasks that materialize onto every new night's cards. Managed
- * from /projects → Defaults; consumed by applySlotDefaultsToNight.
+ * Slot-default chip templates (successor to slot_default_tasks).
+ * - Zone / RR / AUX: materialize onto cards on new grave nights via applySlotDefaultsToNight.
+ * - AM/PM overlap: standing **pools** (canonical write overlap_am_0 / overlap_pm_0);
+ *   distributed to staffed seats by Apply Overlap Tasks — not fixed per-card night seeds.
  */
 export async function GET(request: NextRequest) {
   if (!isSameOriginOpsRequest(request)) {
@@ -50,10 +52,16 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const title = String(body.title ?? "").trim();
-  const slotKey = String(body.slotKey ?? "").trim();
-  const slotType = String(body.slotType ?? "").trim();
-  if (!title || !slotKey || !slotType) {
+  const rawSlotKey = String(body.slotKey ?? "").trim();
+  let slotType = String(body.slotType ?? "").trim();
+  if (!title || !rawSlotKey || !slotType) {
     return NextResponse.json({ error: "title, slotKey, slotType are required" }, { status: 400 });
+  }
+
+  // New OL pool members always land on the band bucket (_0); never scatter to _1…_5.
+  const slotKey = canonicalizeDefaultSlotKey(rawSlotKey);
+  if (isOverlapPoolSlotKey(slotKey)) {
+    slotType = "overlap";
   }
 
   const { data, error } = await admin

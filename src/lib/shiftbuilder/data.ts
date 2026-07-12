@@ -1154,6 +1154,10 @@ export interface NightSlotTask {
   isCoverage: boolean;  // true for "Add Coverage" bars — distinct from regular tasks
   /** A/B position when two TMs cover the same target slot (e.g. 6A / 6B). */
   coverageSide?: "A" | "B" | null;
+  /** Standing-pool template id (ops_work_items) when written by Apply Overlap. */
+  sourceWorkItemId?: string | null;
+  /** Manual / free-text chip; preserved across Apply Overlap (K14). */
+  isOneOff?: boolean;
 }
 
 /**
@@ -1229,6 +1233,8 @@ export async function getNightSlotTasks(nightId: string): Promise<NightSlotTask[
     textStyle: normalizeTaskTextStyle(r.text_style ?? r.textStyle ?? null),
     isCoverage: r.is_coverage ?? false,
     coverageSide: (r.coverage_side ?? null) as "A" | "B" | null,
+    sourceWorkItemId: (r.source_work_item_id ?? null) as string | null,
+    isOneOff: r.is_one_off === true,
   }));
 }
 
@@ -1248,6 +1254,12 @@ export interface AddTaskParams {
   color?: string | null; // optional highlight color for the task sphere
   isCoverage?: boolean;  // true for "Add Coverage" bars
   coverageSide?: "A" | "B" | null;
+  sourceWorkItemId?: string | null;
+  /**
+   * Manual one-off chip. On overlap, server defaults true when omitted and not coverage.
+   * Clients may pass true explicitly for free-text OL adds.
+   */
+  isOneOff?: boolean;
 }
 
 export async function addNightSlotTask(params: AddTaskParams): Promise<void> {
@@ -3124,16 +3136,6 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
   return rows;
 }
 
-/**
- * @deprecated Retired by the defaults cutover. The slot_default_tasks table has
- * been dropped; nightly default chips now come from slot-default Ops Tasks
- * (ops_work_items) via applySlotDefaultsToNight. Always returns []; kept only so
- * any lingering caller degrades to "no legacy defaults" instead of erroring.
- */
-export async function getSlotDefaultTasks(): Promise<SlotDefaultTask[]> {
-  return [];
-}
-
 // ── Writers ──────────────────────────────────────────────────────────────────
 
 /** Upsert many slot default rows (e.g. GRAVE break group map). */
@@ -3327,258 +3329,19 @@ export async function pushBreakDefaultsToWeek(
   return { nights: nightIds.length, applied: totalApplied };
 }
 
-// ── Push tasks ───────────────────────────────────────────────────────────────
+// ── Slot-default task materialization (ops_work_items) ───────────────────────
 
 /**
- * Replace tasks for every slot that has defaults defined.
- * For each such slot: delete existing night_slot_tasks rows, then insert fresh
- * rows from slot_default_tasks (replace semantics).
- * Slots with no defaults are left untouched.
+ * Seed a night's default card chips from slot-default Ops Tasks
+ * (`ops_work_items` where `is_slot_default=true`).
  *
- * Special behavior for AM Overlaps (OL-AM-0..5 / overlap_am_0..5):
- * All tasks configured for any overlap_am_* slot are collected as a pool,
- * randomly shuffled on every push, and assigned one-per-card across the 6
- * AM Overlap positions. This gives a fresh random layout each time "Default Tasks"
- * is clicked from the navbar (or on lazy night creation).
- */
-export async function pushTaskDefaultsToNight(
-  nightId: string,
-  opts: { overlapsOnly?: boolean } = {}
-): Promise<{ applied: number }> {
-  if (!nightId) return { applied: 0 };
-
-  // Force fresh read of slot defaults (bypass in-memory cache) so that
-  // changes made in Sudo Card Defaults (e.g. AM Overlap pool) are immediately
-  // visible when pressing "Default Tasks".
-  invalidateSlotDefaultsBundleCache();
-
-  let rawDefaults = await getSlotDefaultTasks();
-  if (!rawDefaults.length) return { applied: 0 };
-
-  // When called from "Apply Overlap Tasks", only consider overlap pool/per-card defaults
-  // (do not touch zone/RR/AUX tasks).
-  const workingDefaults = opts.overlapsOnly
-    ? rawDefaults.filter(
-        (d) => d.slotKey.startsWith("overlap_am_") || d.slotKey.startsWith("overlap_pm_")
-      )
-    : rawDefaults;
-
-  // ── Overlap task pools (AM + PM) : random distribution only to cards with a TM ──
-  // "Apply Overlap Tasks" (and Default Tasks for overlaps) collects tasks from the
-  // AM pool (overlap_am_*) and (when overlapsOnly) PM slots (overlap_pm_*), dedupes,
-  // shuffles, and distributes randomly **only to overlap cards that currently have a TM assigned**.
-  // Empty overlap cards are left untouched. This applies to both the dedicated
-  // "Apply Overlap Tasks" button and the overlap portion of normal defaults.
-  const AM_OVERLAP_PREFIX = "overlap_am_";
-  const PM_OVERLAP_PREFIX = "overlap_pm_";
-
-  const amOverlapTasks: SlotDefaultTask[] = [];
-  const pmOverlapTasks: SlotDefaultTask[] = [];
-
-  const otherDefaults = workingDefaults.filter((d) => {
-    if (d.slotKey.startsWith(AM_OVERLAP_PREFIX)) {
-      amOverlapTasks.push(d);
-      return false;
-    }
-    // Only treat PM as pooled/random when doing the dedicated overlap apply.
-    // For full "Default Tasks", keep per-pm slot behavior (backward).
-    if (opts.overlapsOnly && d.slotKey.startsWith(PM_OVERLAP_PREFIX)) {
-      pmOverlapTasks.push(d);
-      return false;
-    }
-    return true;
-  });
-
-  const dedupeByLabel = (tasks: SlotDefaultTask[]): SlotDefaultTask[] => {
-    const seen = new Set<string>();
-    return tasks.filter((t) => {
-      const key = (t.taskLabel || "").toLowerCase().trim();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
-
-  const uniqueAmPool = dedupeByLabel(amOverlapTasks);
-  const uniquePmPool = dedupeByLabel(pmOverlapTasks);
-
-  // Group non-overlap (and non-pooled-pm) slots normally
-  const bySlot = new Map<string, SlotDefaultTask[]>();
-  for (const t of otherDefaults) {
-    const key = `${t.slotKey}|${t.rrSide}`;
-    if (!bySlot.has(key)) bySlot.set(key, []);
-    bySlot.get(key)!.push(t);
-  }
-
-  // Load which overlap cards are actually staffed tonight (have TM).
-  // Only distribute pool tasks to those.
-  let staffedAmDb: string[] = [];
-  let staffedPmDb: string[] = [];
-  try {
-    const assignRows = await getNightAssignments(nightId);
-    const overlapRows = assignRows.filter(
-      (r: any) =>
-        r?.tmId &&
-        (r.slotType === "overlap" || String(r.slotKey || "").startsWith("overlap_"))
-    );
-    for (const r of overlapRows) {
-      const sk = String(r.slotKey || "");
-      if (sk.startsWith(AM_OVERLAP_PREFIX)) staffedAmDb.push(sk);
-      else if (sk.startsWith(PM_OVERLAP_PREFIX)) staffedPmDb.push(sk);
-    }
-  } catch (e) {
-    console.warn(
-      "[shiftbuilder/data] pushTaskDefaultsToNight: could not load staffed overlaps; overlaps will receive no pooled tasks this run",
-      e
-    );
-    // Leave staffed* empty → no overlap pool distribution (per "only cards that have a TM")
-  }
-
-  // AM pool → random to staffed AM overlap cards only (distinct as possible)
-  if (uniqueAmPool.length > 0 && staffedAmDb.length > 0) {
-    const targets = [...staffedAmDb];
-    // Shuffle targets for fair random distribution
-    for (let i = targets.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [targets[i], targets[j]] = [targets[j], targets[i]];
-    }
-
-    const shuffled = [...uniqueAmPool];
-    // Fisher-Yates shuffle for unbiased random from pool
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    const n = Math.min(shuffled.length, targets.length);
-    for (let i = 0; i < n; i++) {
-      const src = shuffled[i];
-      const targetSlotKey = targets[i];
-      const compositeKey = `${targetSlotKey}|`;
-      bySlot.set(compositeKey, [
-        {
-          ...src,
-          slotKey: targetSlotKey,
-          slotType: (src.slotType as any) || "overlap",
-        },
-      ]);
-    }
-  }
-
-  // PM pool (only in overlapsOnly mode) → random to staffed PM cards only
-  if (opts.overlapsOnly && uniquePmPool.length > 0 && staffedPmDb.length > 0) {
-    const targets = [...staffedPmDb];
-    for (let i = targets.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [targets[i], targets[j]] = [targets[j], targets[i]];
-    }
-
-    const shuffled = [...uniquePmPool];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    const n = Math.min(shuffled.length, targets.length);
-    for (let i = 0; i < n; i++) {
-      const src = shuffled[i];
-      const targetSlotKey = targets[i];
-      const compositeKey = `${targetSlotKey}|`;
-      bySlot.set(compositeKey, [
-        {
-          ...src,
-          slotKey: targetSlotKey,
-          slotType: (src.slotType as any) || "overlap",
-        },
-      ]);
-    }
-  }
-
-  let applied = 0;
-  const slotEntries = [...bySlot.entries()];
-  const { yieldToMain } = await import('./yieldToMain');
-  const CHUNK = 5;
-
-  const replaceSlotTasks = async (compositeKey: string, tasks: SlotDefaultTask[]) => {
-    const [slotKey, rrSide] = compositeKey.split('|');
-    const slotType = tasks[0].slotType;
-    const mappedTasks = tasks.map((t, idx) => ({
-      taskLabel: t.taskLabel,
-      sortOrder: t.sortOrder ?? idx,
-      taskColor: t.taskColor ?? null,
-      isCoverage: t.isCoverage,
-    }));
-
-    try {
-      const result = await runBoardMutation(
-        'replace_night_slot_tasks_for_slot',
-        {
-          nightId,
-          slotKey,
-          rrSide: rrSide || null,
-          slotType,
-          tasks: mappedTasks,
-          preserveCoverage: true,
-        },
-        async () => {
-          const { replaceNightSlotTasksForSlotServer } = await import('./opsMutations.server');
-          const count = await replaceNightSlotTasksForSlotServer({
-            nightId,
-            slotKey,
-            rrSide: rrSide || null,
-            slotType,
-            tasks: mappedTasks,
-            preserveCoverage: true,
-          });
-          return { ok: true, applied: count };
-        },
-      );
-      return (result as { applied?: number }).applied ?? mappedTasks.length;
-    } catch (err) {
-      console.error('[shiftbuilder/data] pushTaskDefaultsToNight replace error:', err);
-      return 0;
-    }
-  };
-
-  for (let i = 0; i < slotEntries.length; i += CHUNK) {
-    const slice = slotEntries.slice(i, i + CHUNK);
-    const counts = await Promise.all(
-      slice.map(([compositeKey, tasks]) => replaceSlotTasks(compositeKey, tasks)),
-    );
-    applied += counts.reduce((sum, n) => sum + n, 0);
-    if (i + CHUNK < slotEntries.length) await yieldToMain();
-  }
-
-  return { applied };
-}
-
-/** Push task defaults to all existing nights in the GRAVE week. */
-export async function pushTaskDefaultsToWeek(
-  weekStart: Date
-): Promise<{ nights: number; applied: number }> {
-  const nightIds = await resolveWeekNightIds(weekStart);
-  let totalApplied = 0;
-
-  const { yieldToMain } = await import('./yieldToMain');
-  for (let i = 0; i < nightIds.length; i++) {
-    const { applied } = await pushTaskDefaultsToNight(nightIds[i]);
-    totalApplied += applied;
-    if (i + 1 < nightIds.length) await yieldToMain();
-  }
-
-  return { nights: nightIds.length, applied: totalApplied };
-}
-
-/**
- * Cutover successor to pushTaskDefaultsToNight: seed a night's default card
- * chips from slot-default Ops Tasks (ops_work_items where is_slot_default=true)
- * instead of the legacy slot_default_tasks table.
+ * Zones / RR / AUX materialize on night create. Overlap (`overlap_*`) keys are
+ * **skipped** (K11) — OL standing work is applied only via Apply Overlap Tasks
+ * after seating (`applyOverlapTasksToNight`). Reuses per-slot replace with
+ * coverage preserved so Golden print chips stay the same shape.
  *
- * Simplified per the cutover decision — every slot (zones, RRs, AUX, AND
- * overlaps) is treated uniformly as fixed per-slot defaults; the old AM/PM
- * random-to-staffed pool distribution is gone. Reuses the exact same per-slot
- * replace mutation (delete + reinsert, preserving coverage bars), so chip shape
- * and Golden print output are unchanged from the legacy path.
+ * Replaces the retired `pushTaskDefaultsToNight` / `getSlotDefaultTasks` path
+ * (legacy `slot_default_tasks` table dropped; PR7 removed those dead callers).
  */
 export async function applySlotDefaultsToNight(
   nightId: string,
@@ -3617,6 +3380,10 @@ export async function applySlotDefaultsToNight(
   }>;
   for (const r of rows) {
     const slotKey = r.slot_key as string;
+    // K11: never seed OL chips on night create — pool apply only after seating.
+    if (/^overlap_(am|pm)(?:_\d+)?$/i.test(slotKey) || slotKey.startsWith('overlap_')) {
+      continue;
+    }
     const rrSide = (r.rr_side as string | null) || null;
     const key = `${slotKey}|${rrSide ?? ''}`;
     let group = bySlot.get(key);
@@ -3670,6 +3437,56 @@ export async function applySlotDefaultsToNight(
   }
 
   return { applied };
+}
+
+export type ApplyOverlapTasksToNightResult = {
+  applied: number;
+  skippedEmpty: number;
+  mode: "fair" | "random_fallback";
+  byBand: { AM: number; PM: number };
+  preservedOneOffs: number;
+};
+
+/**
+ * Apply standing AM/PM overlap pool tasks to **staffed** overlap cards only.
+ * Source: ops_work_items (is_slot_default) with slot_key ~ overlap_(am|pm).
+ * Standing-only replace preserves coverage + one-offs / non-pool manuals.
+ * Fair when server OVERLAP_FAIR_APPLY=1; else random_fallback (forceRandom forces random).
+ */
+export async function applyOverlapTasksToNight(
+  nightId: string,
+  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean },
+): Promise<ApplyOverlapTasksToNightResult> {
+  if (!nightId) {
+    return {
+      applied: 0,
+      skippedEmpty: 0,
+      mode: "random_fallback",
+      byBand: { AM: 0, PM: 0 },
+      preservedOneOffs: 0,
+    };
+  }
+
+  const result = await runBoardMutation<ApplyOverlapTasksToNightResult & { ok?: boolean }>(
+    "apply_overlap_tasks",
+    {
+      nightId,
+      bands: opts?.bands,
+      forceRandom: opts?.forceRandom,
+    },
+    async () => {
+      const { applyOverlapTasksToNightServer } = await import("./opsMutations.server");
+      return applyOverlapTasksToNightServer(nightId, opts);
+    },
+  );
+
+  return {
+    applied: result.applied ?? 0,
+    skippedEmpty: result.skippedEmpty ?? 0,
+    mode: result.mode ?? "random_fallback",
+    byBand: result.byBand ?? { AM: 0, PM: 0 },
+    preservedOneOffs: result.preservedOneOffs ?? 0,
+  };
 }
 
 /** Sweeper tasks excluded when copying prior-week same-day tasks (day-specific). */

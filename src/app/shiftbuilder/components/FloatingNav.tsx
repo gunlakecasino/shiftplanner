@@ -75,8 +75,6 @@ export interface FloatingNavProps {
   onCopyYesterdayTasks?: () => void;
   onRestoreDefaultBreaks?: () => void;
   restoreDefaultBreaksBusy?: boolean;
-  onApplyDefaultTasks?: () => void;
-  applyDefaultTasksBusy?: boolean;
   onApplyOverlapTasks?: () => void;
   applyOverlapTasksBusy?: boolean;
   onToggleWeekHealth?: () => void;
@@ -156,8 +154,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     onCopyYesterdayTasks,
     onRestoreDefaultBreaks,
     restoreDefaultBreaksBusy = false,
-    onApplyDefaultTasks,
-    applyDefaultTasksBusy = false,
     onApplyOverlapTasks,
     applyOverlapTasksBusy = false,
     onPrint,
@@ -958,9 +954,22 @@ export default function FloatingNav(props: FloatingNavProps) {
                     <Coffee size={14} /> Restore Default Breaks
                   </button>
                 )}
-                {/* Apply Default / Overlap Tasks retired by the defaults cutover —
-                    nightly defaults now materialize from slot-default Ops Tasks
-                    (managed in /shiftbuilder/projects → Defaults) on night creation. */}
+                {/* Apply Overlap Tasks (K13): staffed AM/PM pool from ops_work_items.
+                    Zone/RR defaults materialize on night create only (applySlotDefaultsToNight). */}
+                {onApplyOverlapTasks && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onApplyOverlapTasks();
+                      setMoreOpen(false);
+                    }}
+                    disabled={applyOverlapTasksBusy}
+                  >
+                    <Layers size={14} />
+                    {applyOverlapTasksBusy ? "Applying…" : "Apply Overlap Tasks"}
+                  </button>
+                )}
 
                 {/* Copies (task population) */}
                 {showDraftTools && onCopyPriorWeekTasks && (
@@ -988,7 +997,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {(onRestoreDefaultBreaks || onApplyOverlapTasks || onApplyDefaultTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
+                {(onRestoreDefaultBreaks || onApplyOverlapTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
                   <div className={menuDividerClass} />
                 )}
 

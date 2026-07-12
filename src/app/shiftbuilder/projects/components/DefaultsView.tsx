@@ -3,29 +3,51 @@
 import React, { useMemo, useState } from "react";
 import { LayoutGrid, Plus, X } from "lucide-react";
 import type { WorkItem } from "@/lib/tasks/types";
+import {
+  canonicalizeDefaultSlotKey,
+  canonicalOverlapPoolSlotKey,
+  overlapPoolBand,
+  OVERLAP_POOL_BLURB,
+  overlapPoolGroupKey,
+  overlapPoolLabel,
+  type OverlapPoolBand,
+} from "@/lib/shiftbuilder/overlapPoolDefaults";
 import { useSlotDefaults } from "../hooks/useProjectsData";
 import { useCreateSlotDefault, useDeleteSlotDefault } from "../hooks/useTaskMutations";
 import { EmptyState } from "./EmptyState";
 
-/** Human label for a slot group, derived from slot_key + rr_side. */
+/** Human label for a non-pool slot group, derived from slot_key + rr_side. */
 function slotLabel(slotKey: string, rrSide: string | null): string {
   const side = rrSide === "mens" ? " (Men's)" : rrSide === "womens" ? " (Women's)" : "";
   if (slotKey.startsWith("zone_")) return `Zone ${slotKey.slice(5)}`;
   if (slotKey.startsWith("rr_")) return `Restroom ${slotKey.slice(3).replace(/_/g, "+")}${side}`;
-  const overlapMatch = slotKey.match(/^overlap_(am|pm)_(\d+)$/);
-  if (overlapMatch) {
-    return `${overlapMatch[1].toUpperCase()} Overlap ${Number(overlapMatch[2]) + 1}`;
-  }
   return slotKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) + side;
 }
 
 interface SlotGroup {
   key: string;
+  /** Write target for new tasks (canonical `_0` for OL pools). */
   slotKey: string;
   slotType: string;
   rrSide: string | null;
   label: string;
   items: WorkItem[];
+  /** Band pool card (union read of all indices; write to `_0`). */
+  isOverlapPool?: boolean;
+  poolBand?: OverlapPoolBand;
+}
+
+function emptyPoolGroup(band: OverlapPoolBand): SlotGroup {
+  return {
+    key: overlapPoolGroupKey(band),
+    slotKey: canonicalOverlapPoolSlotKey(band),
+    slotType: "overlap",
+    rrSide: null,
+    label: overlapPoolLabel(band),
+    items: [],
+    isOverlapPool: true,
+    poolBand: band,
+  };
 }
 
 export function DefaultsView({ canManage }: { canManage: boolean }) {
@@ -37,9 +59,19 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
 
   const groups = useMemo<SlotGroup[]>(() => {
     const map = new Map<string, SlotGroup>();
+    // Always surface band pool shells so operators can add the first pool task.
+    map.set(overlapPoolGroupKey("am"), emptyPoolGroup("am"));
+    map.set(overlapPoolGroupKey("pm"), emptyPoolGroup("pm"));
+
     for (const d of defaults) {
       const slotKey = d.slotKey ?? "";
       const rrSide = d.rrSide ?? null;
+      const band = overlapPoolBand(slotKey);
+      if (band) {
+        // Union read: any overlap_am_* / overlap_pm_* lands in the band pool card.
+        map.get(overlapPoolGroupKey(band))!.items.push(d);
+        continue;
+      }
       const key = `${slotKey}|${rrSide ?? ""}`;
       let g = map.get(key);
       if (!g) {
@@ -55,8 +87,18 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
       }
       g.items.push(d);
     }
-    return [...map.values()].sort((a, b) => a.slotKey.localeCompare(b.slotKey) || a.label.localeCompare(b.label));
+
+    const pools = [map.get(overlapPoolGroupKey("am"))!, map.get(overlapPoolGroupKey("pm"))!];
+    const others = [...map.values()]
+      .filter((g) => !g.isOverlapPool)
+      .sort((a, b) => a.slotKey.localeCompare(b.slotKey) || a.label.localeCompare(b.label));
+    // Non-overlap slots first (zones/RR/AUX), then AM / PM pool cards.
+    return [...others, ...pools];
   }, [defaults]);
+
+  const hasNonPoolItems = groups.some((g) => !g.isOverlapPool && g.items.length > 0);
+  const hasPoolItems = groups.some((g) => g.isOverlapPool && g.items.length > 0);
+  const showEmpty = !isLoading && !hasNonPoolItems && !hasPoolItems && !canManage;
 
   const submitAdd = async (g: SlotGroup) => {
     const title = draft.trim();
@@ -64,9 +106,13 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
       setAddingTo(null);
       return;
     }
+    // Pool creates always write to canonical overlap_*_0 (never scatter to _1…_5).
+    const slotKey = g.isOverlapPool
+      ? canonicalizeDefaultSlotKey(g.slotKey)
+      : g.slotKey;
     await createDefault.mutateAsync({
       title,
-      slotKey: g.slotKey,
+      slotKey,
       slotType: g.slotType,
       rrSide: g.rrSide,
     });
@@ -76,11 +122,16 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-3">
-      <div className="sb-projects-card px-3 py-2">
+      <div className="sb-projects-card px-3 py-2 space-y-1.5">
         <p className="text-[11.5px] leading-snug text-[var(--ios-label-tertiary)]">
-          <span className="font-semibold text-[var(--ios-label-secondary)]">Nightly defaults.</span> These task
-          chips auto-populate the cards on every new grave night — the source that replaced the old Card
-          Defaults settings. Edits here affect future nights.
+          <span className="font-semibold text-[var(--ios-label-secondary)]">Nightly defaults.</span>{" "}
+          Zone, restroom, and AUX chips auto-populate those cards on every new grave night.
+        </p>
+        <p className="text-[11.5px] leading-snug text-[var(--ios-label-tertiary)]">
+          <span className="font-semibold text-[var(--ios-label-secondary)]">AM / PM Overlap Pools</span>{" "}
+          feed <span className="font-medium text-[var(--ios-label-secondary)]">Apply Overlap Tasks</span>{" "}
+          — standing tasks for <em>staffed</em> overlap seats only. They are not fixed per-card night
+          seeds and are not auto-painted onto empty OL cards on night create.
         </p>
       </div>
 
@@ -90,24 +141,37 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
             <div key={i} className="h-14 animate-pulse rounded-lg bg-[var(--ios-gray-6)]" />
           ))}
         </div>
-      ) : groups.length === 0 ? (
-        <EmptyState title="No default tasks" subtitle="Defaults materialize onto each new night. Add per-slot tasks here." />
+      ) : showEmpty ? (
+        <EmptyState
+          title="No default tasks"
+          subtitle="Add per-slot nightly defaults, or standing tasks under AM/PM Overlap Pool."
+        />
       ) : (
         <div className="space-y-2">
           {groups.map((g) => (
             <div key={g.key} className="sb-projects-card px-3 py-2.5">
-              <div className="mb-1.5 flex items-center gap-2">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
                 <LayoutGrid size={13} className="text-[var(--sb-projects-accent)]" />
                 <span className="text-[12.5px] font-semibold text-[var(--ios-label)]">{g.label}</span>
                 <span className="text-[10px] tabular-nums text-[var(--ios-label-quaternary)]">
                   {g.items.length}
                 </span>
               </div>
+              {g.isOverlapPool && (
+                <p className="mb-1.5 text-[10.5px] leading-snug text-[var(--ios-label-quaternary)]">
+                  {OVERLAP_POOL_BLURB}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 {g.items.map((d) => (
                   <span
                     key={d.id}
                     className="inline-flex items-center gap-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1 text-[11px] text-[var(--ios-label)]"
+                    title={
+                      g.isOverlapPool && d.slotKey && d.slotKey !== g.slotKey
+                        ? `Stored on ${d.slotKey} (union read)`
+                        : undefined
+                    }
                   >
                     {d.title}
                     {canManage && (

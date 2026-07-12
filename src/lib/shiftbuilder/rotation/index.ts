@@ -8,3 +8,7 @@ export * from "./placementFitScore";
 export * from "./placementFitForSlot";
 export * from "./placementFitPrerender";
 export * from "./shiftRotationHealth";
+export * from "./overlapTaskApply";
+// overlapTaskFairness: import from "@/lib/shiftbuilder/rotation/overlapTaskFairness"
+// (duplicate OverlapBand / mulberry32 names vs overlapTaskApply)
+export * from "./buildOverlapTaskInsight";
