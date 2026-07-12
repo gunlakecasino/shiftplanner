@@ -414,81 +414,58 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   const toolBtn = (active: boolean) =>
     [
-      "sb-interactive flex h-9 w-9 items-center justify-center rounded-xl border transition-all active:scale-[0.96]",
+      "sb-interactive flex h-7 w-7 items-center justify-center rounded-lg border transition-all active:scale-[0.96]",
       active
-        ? "border-[#007AFF]/40 bg-[#007AFF]/[0.12] text-[#007AFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-        : "border-black/[0.06] bg-white text-neutral-600 hover:bg-neutral-50 hover:border-black/10",
+        ? "border-[#007AFF]/35 bg-[#007AFF]/[0.12] text-[#007AFF]"
+        : "border-transparent bg-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700",
     ].join(" ");
-
-  const sectionLabel = "text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400";
 
   const refinedCard = (
     <div
       className={`w-full bg-white flex flex-col min-h-0 flex-1 overflow-hidden ${
         isDock
           ? "rounded-none shadow-none"
-          : "rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.09),0_1px_3px_rgba(0,0,0,0.05)]"
+          : "rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10),0_1px_3px_rgba(0,0,0,0.04)]"
       }`}
+      style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
     >
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      {!isDock ? (
-        <div className="px-4 pt-4 pb-3 shrink-0">
-          <div className="flex items-start justify-between gap-2.5">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-[15px] font-bold shadow-sm"
-                style={{ backgroundColor: slotMeta.accent }}
-              >
-                {slotMeta.icon}
-              </div>
-              <div className="min-w-0">
-                <p
-                  className="text-[9px] font-bold tracking-[0.14em] uppercase mb-px"
-                  style={{ color: slotMeta.accent }}
-                >
-                  {slotMeta.label}
-                </p>
-                <h2 className="text-[18px] font-bold text-gray-900 leading-tight tracking-tight">
-                  {isAddingNew ? "New task" : "Edit task"}
-                </h2>
-              </div>
+      {/* Compact header + task chips */}
+      <div className={`shrink-0 ${isDock ? "px-3 pt-2 pb-1.5" : "px-3 pt-2.5 pb-2"}`}>
+        <div className="flex items-center gap-2">
+          {!isDock ? (
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-[12px] font-bold"
+              style={{ backgroundColor: slotMeta.accent }}
+            >
+              {slotMeta.icon}
             </div>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <h2 className="text-[13px] font-bold text-gray-900 tracking-tight truncate">
+                {isAddingNew ? "New task" : "Edit task"}
+              </h2>
+              <span className="text-[10px] font-semibold truncate" style={{ color: slotMeta.accent }}>
+                {slotMeta.label}
+              </span>
+              {hasChanges ? (
+                <span className="text-[9px] font-semibold text-[#007AFF] shrink-0">· unsaved</span>
+              ) : null}
+            </div>
+          </div>
+          {!isDock ? (
             <button
               type="button"
               onClick={requestClose}
-              className="sb-interactive mt-0.5 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors"
+              className="sb-interactive w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200"
               aria-label="Close"
             >
               <X className="w-3.5 h-3.5 text-neutral-500" strokeWidth={2.5} />
             </button>
-          </div>
-          {hasChanges ? (
-            <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/[0.08] border border-[#007AFF]/20 px-2.5 py-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF] animate-pulse" />
-              <span className="text-[10px] font-semibold text-[#007AFF]">Unsaved changes</span>
-            </div>
           ) : null}
         </div>
-      ) : (
-        <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold text-gray-900 tracking-tight">
-              {isAddingNew ? "New task" : "Edit task"}
-            </p>
-            {hasChanges ? (
-              <p className="text-[10px] font-semibold text-[#007AFF] mt-0.5">Unsaved changes</p>
-            ) : (
-              <p className="text-[10px] text-neutral-400 mt-0.5">{slotMeta.label}</p>
-            )}
-          </div>
-        </div>
-      )}
 
-      <div className="h-px bg-gray-100 shrink-0" />
-
-      {/* ── Task switcher ────────────────────────────────────────────────── */}
-      <div className="px-3 pt-3 pb-2 shrink-0">
-        <div className="flex gap-1.5 overflow-x-auto items-center pb-0.5 scrollbar-none">
+        <div className="mt-2 flex gap-1 overflow-x-auto items-center scrollbar-none">
           {regularTasks.map((t) => {
             const active = !isAddingNew && t.id === activeTask?.id;
             return (
@@ -496,10 +473,10 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => selectExistingTask(t.id)}
-                className={`sb-interactive shrink-0 max-w-[140px] truncate text-[11px] px-3 py-1.5 rounded-full font-semibold transition-all active:scale-[0.97] ${
+                className={`sb-interactive shrink-0 max-w-[120px] truncate text-[10px] px-2 py-1 rounded-full font-semibold transition-all ${
                   active
-                    ? "bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.35)]"
-                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80 border border-black/[0.04]"
+                    ? "bg-[#007AFF] text-white"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/90"
                 }`}
                 title={t.taskLabel}
               >
@@ -511,123 +488,84 @@ const TasksPad: React.FC<TasksPadProps> = ({
             <button
               type="button"
               onClick={beginAddTask}
-              className={`sb-interactive shrink-0 inline-flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-full font-semibold transition-all active:scale-[0.97] ${
+              className={`sb-interactive shrink-0 inline-flex items-center gap-0.5 text-[10px] px-2 py-1 rounded-full font-semibold ${
                 isAddingNew
-                  ? "bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.35)]"
-                  : "border border-dashed border-[#007AFF]/40 text-[#007AFF] bg-[#007AFF]/[0.04] hover:bg-[#007AFF]/[0.08]"
+                  ? "bg-[#007AFF] text-white"
+                  : "border border-dashed border-[#007AFF]/45 text-[#007AFF] hover:bg-[#007AFF]/[0.06]"
               }`}
             >
-              <Plus size={13} strokeWidth={2.5} />
+              <Plus size={11} strokeWidth={2.5} />
               Add
             </button>
           ) : null}
         </div>
       </div>
 
-      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      <div className="h-px bg-gray-100 shrink-0" />
+
       {isAddingNew || activeTask ? (
         <div
-          className={`flex-1 min-h-0 flex flex-col ${isDock ? "overflow-y-auto overscroll-contain" : "overflow-y-auto"}`}
+          className={`flex-1 min-h-0 flex flex-col ${isDock ? "overflow-y-auto overscroll-contain" : ""}`}
           style={isDock ? { touchAction: "pan-y" } : undefined}
         >
-          <div className="px-4 pb-3 space-y-3.5 flex-1">
-            {/* Editor */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={sectionLabel}>Task text</span>
-                <span className="text-[10px] text-neutral-400 font-medium">Enter to save</span>
-              </div>
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={handleEditorInput}
-                onBlur={handleEditorBlur}
-                className="w-full min-h-[72px] rounded-2xl border border-black/[0.06] bg-neutral-50/90 px-3.5 py-3 text-[14px] font-semibold text-gray-900 leading-snug focus:outline-none focus:border-[#007AFF]/50 focus:ring-4 focus:ring-[#007AFF]/10 focus:bg-white whitespace-pre-wrap break-words transition-shadow"
-                style={{
-                  fontSize: textStyleDraft?.fontSizePx ?? TASK_LABEL_SIZE_PX.default,
-                  fontWeight: textStyleDraft?.fontWeight === "bold" ? 700 : 600,
-                  fontStyle: textStyleDraft?.fontStyle === "italic" ? "italic" : "normal",
-                  textDecoration: textStyleDraft?.textDecoration === "none" || !textStyleDraft?.textDecoration
+          <div className="px-3 pt-2.5 pb-2 space-y-2">
+            {/* Editor — live felt preview sits under the field, not a second panel */}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={handleEditorInput}
+              onBlur={handleEditorBlur}
+              className="w-full min-h-[44px] max-h-[88px] overflow-y-auto rounded-xl border border-black/[0.07] bg-neutral-50 px-2.5 py-2 text-[13px] font-semibold text-gray-900 leading-snug focus:outline-none focus:border-[#007AFF]/45 focus:ring-2 focus:ring-[#007AFF]/12 focus:bg-white whitespace-pre-wrap break-words"
+              style={{
+                fontSize: textStyleDraft?.fontSizePx ?? TASK_LABEL_SIZE_PX.default,
+                fontWeight: textStyleDraft?.fontWeight === "bold" ? 700 : 600,
+                fontStyle: textStyleDraft?.fontStyle === "italic" ? "italic" : "normal",
+                textDecoration:
+                  textStyleDraft?.textDecoration === "none" || !textStyleDraft?.textDecoration
                     ? undefined
                     : textStyleDraft.textDecoration,
-                }}
-                data-placeholder="Type the task…"
-              />
-            </div>
+              }}
+              data-placeholder="Task text…"
+            />
 
-            {/* Typography toolbar */}
-            <div>
-              <div className={`${sectionLabel} mb-1.5`}>Style</div>
-              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50/80 p-1.5 flex flex-wrap items-center gap-1">
-                <button type="button" className={toolBtn(textStyleDraft?.fontWeight === "bold")} onClick={() => applyFormat({ fontWeight: "bold" })} title="Bold (⌘B)" aria-pressed={textStyleDraft?.fontWeight === "bold"}>
-                  <Bold size={15} strokeWidth={2.5} />
+            {/* Single compact toolbar: type · ink · marker */}
+            <div className="rounded-xl border border-black/[0.06] bg-neutral-50/90 px-1.5 py-1.5 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-0.5">
+                <button type="button" className={toolBtn(textStyleDraft?.fontWeight === "bold")} onClick={() => applyFormat({ fontWeight: "bold" })} title="Bold" aria-pressed={textStyleDraft?.fontWeight === "bold"}>
+                  <Bold size={13} strokeWidth={2.5} />
                 </button>
-                <button type="button" className={toolBtn(textStyleDraft?.fontStyle === "italic")} onClick={() => applyFormat({ fontStyle: "italic" })} title="Italic (⌘I)" aria-pressed={textStyleDraft?.fontStyle === "italic"}>
-                  <Italic size={15} strokeWidth={2.5} />
+                <button type="button" className={toolBtn(textStyleDraft?.fontStyle === "italic")} onClick={() => applyFormat({ fontStyle: "italic" })} title="Italic" aria-pressed={textStyleDraft?.fontStyle === "italic"}>
+                  <Italic size={13} strokeWidth={2.5} />
                 </button>
-                <button type="button" className={toolBtn(textStyleDraft?.textDecoration === "underline")} onClick={() => applyFormat({ textDecoration: "underline" })} title="Underline (⌘U)" aria-pressed={textStyleDraft?.textDecoration === "underline"}>
-                  <Underline size={15} strokeWidth={2.5} />
+                <button type="button" className={toolBtn(textStyleDraft?.textDecoration === "underline")} onClick={() => applyFormat({ textDecoration: "underline" })} title="Underline" aria-pressed={textStyleDraft?.textDecoration === "underline"}>
+                  <Underline size={13} strokeWidth={2.5} />
                 </button>
                 <button type="button" className={toolBtn(textStyleDraft?.textDecoration === "line-through")} onClick={() => applyFormat({ textDecoration: "line-through" })} title="Strikethrough" aria-pressed={textStyleDraft?.textDecoration === "line-through"}>
-                  <Strikethrough size={15} strokeWidth={2.5} />
+                  <Strikethrough size={13} strokeWidth={2.5} />
                 </button>
-                <span className="w-px h-6 bg-black/[0.08] mx-0.5" />
+                <span className="w-px h-4 bg-black/[0.08] mx-0.5" />
                 {TASK_FONT_SIZES.map((sz) => (
                   <button
                     key={sz}
                     type="button"
                     onClick={() => applyFormat({ fontSizePx: sz })}
-                    className={`sb-interactive h-9 min-w-[36px] px-1.5 rounded-xl border text-[11px] font-bold transition-all active:scale-[0.96] ${
+                    className={`sb-interactive h-7 min-w-[26px] px-1 rounded-lg text-[10px] font-bold ${
                       textStyleDraft?.fontSizePx === sz
-                        ? "border-[#007AFF]/40 bg-[#007AFF]/[0.12] text-[#007AFF]"
-                        : "border-black/[0.06] bg-white text-neutral-600 hover:bg-neutral-50"
+                        ? "bg-[#007AFF]/[0.12] text-[#007AFF]"
+                        : "text-neutral-500 hover:bg-neutral-100"
                     }`}
                     aria-pressed={textStyleDraft?.fontSizePx === sz}
                   >
                     {sz}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className={toolBtn(false)}
-                  onClick={() => setTextStyleDraft(null)}
-                  title="Reset formatting"
-                >
-                  <Type size={15} strokeWidth={2.2} />
+                <button type="button" className={toolBtn(false)} onClick={() => setTextStyleDraft(null)} title="Reset type">
+                  <Type size={13} strokeWidth={2.2} />
                 </button>
               </div>
-            </div>
 
-            {/* Live board preview */}
-            <div>
-              <div className={`${sectionLabel} mb-1.5`}>On card</div>
-              <div className="rounded-2xl border border-black/[0.06] bg-gradient-to-b from-neutral-50 to-white px-3.5 py-3 min-h-[44px] flex items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                <TaskMarkerLabel
-                  label={labelDraft.trim() || "Task preview"}
-                  color={colorDraft}
-                  markerType={markerType}
-                  textStyle={textStyleDraft}
-                  className="inline-block font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Color */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={sectionLabel}>Ink color</span>
-                {colorDraft ? (
-                  <button
-                    type="button"
-                    onClick={() => setColorDraft(null)}
-                    className="text-[11px] font-semibold text-neutral-400 hover:text-[#FF3B30] transition-colors"
-                  >
-                    Clear
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {TASK_COLOR_SPHERES.map((c) => {
                   const selected = colorDraft === c.hex;
                   return (
@@ -635,14 +573,12 @@ const TasksPad: React.FC<TasksPadProps> = ({
                       key={c.hex}
                       type="button"
                       onClick={() => setColorDraft(c.hex)}
-                      className={`sb-interactive relative w-9 h-9 rounded-full transition-transform active:scale-90 ${
-                        selected ? "scale-110" : "hover:scale-105"
-                      }`}
+                      className="sb-interactive w-6 h-6 rounded-full transition-transform active:scale-90"
                       style={{
                         backgroundColor: c.hex,
                         boxShadow: selected
-                          ? `0 0 0 2.5px #fff, 0 0 0 4.5px ${c.hex}, 0 4px 12px ${c.hex}55`
-                          : "0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.35)",
+                          ? `0 0 0 2px #fff, 0 0 0 3.5px ${c.hex}`
+                          : "0 0 0 1px rgba(0,0,0,0.08)",
                       }}
                       title={c.name}
                       aria-label={c.name}
@@ -653,21 +589,15 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 <button
                   type="button"
                   onClick={() => setColorDraft(null)}
-                  className={`sb-interactive w-9 h-9 rounded-full bg-neutral-100 border border-black/[0.06] text-[13px] font-semibold text-neutral-400 flex items-center justify-center transition-transform active:scale-90 ${
-                    !colorDraft ? "ring-2 ring-[#007AFF] ring-offset-1" : "hover:bg-neutral-200/80"
+                  className={`sb-interactive w-6 h-6 rounded-full bg-white border text-[11px] leading-none text-neutral-400 flex items-center justify-center ${
+                    !colorDraft ? "border-[#007AFF] text-[#007AFF]" : "border-black/10"
                   }`}
                   title="No color"
                   aria-pressed={!colorDraft}
                 >
                   ×
                 </button>
-              </div>
-            </div>
-
-            {/* Marker style */}
-            <div>
-              <div className={`${sectionLabel} mb-1.5`}>Felt marker</div>
-              <div className="grid grid-cols-4 gap-1.5">
+                <span className="w-px h-4 bg-black/[0.08] mx-0.5" />
                 {MARKER_OPTIONS.map((m) => {
                   const Icon = m.icon;
                   const active = markerType === m.id;
@@ -676,37 +606,51 @@ const TasksPad: React.FC<TasksPadProps> = ({
                       key={m.id}
                       type="button"
                       onClick={() => setMarkerType(m.id)}
-                      className={`sb-interactive flex flex-col items-center gap-1 rounded-2xl border px-1.5 py-2.5 transition-all active:scale-[0.97] ${
+                      className={`sb-interactive h-7 px-1.5 rounded-lg inline-flex items-center gap-1 text-[9px] font-semibold ${
                         active
-                          ? "border-[#007AFF]/35 bg-[#007AFF]/[0.08] text-[#007AFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
-                          : "border-black/[0.06] bg-white text-neutral-500 hover:bg-neutral-50"
+                          ? "bg-[#007AFF]/[0.12] text-[#007AFF]"
+                          : "text-neutral-500 hover:bg-neutral-100"
                       }`}
+                      title={m.label}
                       aria-pressed={active}
                     >
-                      <Icon size={15} strokeWidth={2.2} />
-                      <span className="text-[9px] font-bold tracking-wide">{m.label}</span>
+                      <Icon size={12} strokeWidth={2.2} />
+                      <span className="hidden sm:inline">{m.label}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
+
+            {/* Tiny live chip preview (one line, not a whole section) */}
+            <div className="flex items-center gap-2 min-h-[22px] px-0.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400 shrink-0">
+                Card
+              </span>
+              <TaskMarkerLabel
+                label={labelDraft.trim() || "—"}
+                color={colorDraft}
+                markerType={markerType}
+                textStyle={textStyleDraft}
+                className="inline-block font-semibold text-[12px] min-w-0 truncate"
+              />
+            </div>
           </div>
 
-          {/* ── Footer ───────────────────────────────────────────────────── */}
           <div
-            className={`shrink-0 border-t border-gray-100 bg-white/95 backdrop-blur-sm ${
-              isDock ? "px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]" : "px-4 py-3"
+            className={`shrink-0 border-t border-gray-100 bg-white ${
+              isDock ? "px-3 py-2 pb-[max(8px,env(safe-area-inset-bottom))]" : "px-3 py-2"
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {onRemoveTask && !isAddingNew ? (
                 <button
                   type="button"
                   onClick={() => void handleRemove()}
                   disabled={saving}
-                  className="sb-interactive flex items-center gap-1.5 rounded-2xl border border-[#FFD5D5] bg-[#FFF0F0] text-[#FF3B30] text-[12px] font-semibold px-3 min-h-11 hover:bg-[#FFE5E5] disabled:opacity-50 active:scale-[0.98] transition-all"
+                  className="sb-interactive flex items-center gap-1 rounded-xl text-[#FF3B30] text-[11px] font-semibold px-2 h-8 hover:bg-[#FFF0F0] disabled:opacity-50"
                 >
-                  <Trash2 size={14} strokeWidth={2.2} />
+                  <Trash2 size={13} strokeWidth={2.2} />
                   Remove
                 </button>
               ) : null}
@@ -714,7 +658,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
               <button
                 type="button"
                 onClick={requestClose}
-                className="sb-interactive rounded-2xl border border-gray-200 bg-white text-gray-800 text-[12px] font-semibold px-4 min-h-11 hover:bg-neutral-50 active:scale-[0.98] transition-all"
+                className="sb-interactive rounded-xl border border-gray-200 text-gray-700 text-[11px] font-semibold px-3 h-8 hover:bg-neutral-50"
               >
                 Cancel
               </button>
@@ -723,31 +667,20 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 onClick={() => void handleSave()}
                 disabled={!hasChanges || saving}
                 whileTap={hasChanges && !saving ? premiumTap : {}}
-                className={`sb-interactive rounded-2xl text-[13px] font-bold px-5 min-h-11 transition-all ${
+                className={`sb-interactive rounded-xl text-[12px] font-bold px-3.5 h-8 ${
                   hasChanges && !saving
-                    ? "text-white shadow-[0_4px_14px_rgba(0,122,255,0.35)]"
+                    ? "text-white bg-[#007AFF] shadow-sm shadow-[#007AFF]/30"
                     : "bg-neutral-200 text-neutral-400 cursor-default"
                 }`}
-                style={
-                  hasChanges && !saving
-                    ? { background: "linear-gradient(180deg, #0A84FF 0%, #0070E0 100%)" }
-                    : undefined
-                }
               >
-                {saving ? "Saving…" : isAddingNew ? "Add task" : "Save"}
+                {saving ? "…" : isAddingNew ? "Add" : "Save"}
               </motion.button>
             </div>
           </div>
         </div>
       ) : (
-        <div className="px-6 py-10 text-center flex-1 flex flex-col items-center justify-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center text-neutral-400">
-            <Plus size={22} strokeWidth={2} />
-          </div>
-          <p className="text-[13px] text-neutral-500 leading-relaxed max-w-[220px]">
-            No task selected. Tap{" "}
-            <span className="font-bold text-[#007AFF]">+ Add</span> to create one for this slot.
-          </p>
+        <div className="px-4 py-6 text-center text-[12px] text-neutral-500">
+          Tap <span className="font-semibold text-[#007AFF]">+ Add</span> to create a task.
         </div>
       )}
     </div>
@@ -772,8 +705,8 @@ const TasksPad: React.FC<TasksPadProps> = ({
         ...(isDock
           ? { width: "100%", height: "100%", minHeight: 0, flex: 1 }
           : usePortal && portalStyle
-            ? { ...portalStyle, zIndex: 210, width: 360 }
-            : { width: 360 }),
+            ? { ...portalStyle, zIndex: 210, width: 312, maxHeight: "min(420px, 70vh)" }
+            : { width: 312, maxHeight: "min(420px, 70vh)" }),
         fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
       }}
       onClick={(e) => e.stopPropagation()}
