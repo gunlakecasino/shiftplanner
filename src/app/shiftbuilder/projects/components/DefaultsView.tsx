@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { LayoutGrid, Plus, X } from "lucide-react";
-import type { WorkItem } from "@/lib/tasks/types";
+import { ChevronDown, ChevronUp, LayoutGrid, Plus, X } from "lucide-react";
+import type { WorkItem, WorkItemPriority } from "@/lib/tasks/types";
 import {
   canonicalizeDefaultSlotKey,
   canonicalOverlapPoolSlotKey,
@@ -12,8 +12,19 @@ import {
   overlapPoolLabel,
   type OverlapPoolBand,
 } from "@/lib/shiftbuilder/overlapPoolDefaults";
+import {
+  formatRecurrenceDaysLabel,
+  nextPriority,
+  normalizeRecurrenceDays,
+  PRIORITY_CYCLE,
+  WEEKDAY_SHORT,
+} from "@/lib/shiftbuilder/rotation/overlapPoolSelect";
 import { useSlotDefaults } from "../hooks/useProjectsData";
-import { useCreateSlotDefault, useDeleteSlotDefault } from "../hooks/useTaskMutations";
+import {
+  useCreateSlotDefault,
+  useDeleteSlotDefault,
+  useUpdateSlotDefault,
+} from "../hooks/useTaskMutations";
 import { EmptyState } from "./EmptyState";
 
 /** Human label for a non-pool slot group, derived from slot_key + rr_side. */
@@ -50,16 +61,184 @@ function emptyPoolGroup(band: OverlapPoolBand): SlotGroup {
   };
 }
 
+const PRIORITY_TONE: Record<string, string> = {
+  urgent: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30",
+  high: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30",
+  normal: "bg-[var(--ios-gray-6)] text-[var(--ios-label-secondary)] border-[var(--sb-settings-border-paper)]",
+  low: "bg-[var(--ios-gray-6)] text-[var(--ios-label-quaternary)] border-dashed border-[var(--sb-settings-border-paper)]",
+};
+
+function sortPoolItems(items: WorkItem[]): WorkItem[] {
+  const rank: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
+  return [...items].sort((a, b) => {
+    const pr = (rank[b.priority] ?? 2) - (rank[a.priority] ?? 2);
+    if (pr !== 0) return pr;
+    const sa = a.poolSortOrder ?? 1e9;
+    const sb = b.poolSortOrder ?? 1e9;
+    if (sa !== sb) return sa - sb;
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function OverlapPoolTaskCard({
+  item,
+  canManage,
+  onDelete,
+  onPatch,
+  onMove,
+  isFirst,
+  isLast,
+}: {
+  item: WorkItem;
+  canManage: boolean;
+  onDelete: () => void;
+  onPatch: (patch: {
+    priority?: string;
+    recurrenceDays?: number[] | null;
+    poolSortOrder?: number | null;
+  }) => void;
+  onMove: (dir: -1 | 1) => void;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const days = normalizeRecurrenceDays(item.recurrenceDays) ?? [];
+  const everyNight = days.length === 0;
+  const priority = (item.priority ?? "normal") as WorkItemPriority;
+
+  const toggleDay = (d: number) => {
+    if (!canManage) return;
+    let next: number[];
+    if (everyNight) {
+      // Starting from every night: selecting a day means "only these"
+      next = [d];
+    } else if (days.includes(d)) {
+      next = days.filter((x) => x !== d);
+    } else {
+      next = [...days, d].sort((a, b) => a - b);
+    }
+    // Empty or all 7 → every night (null)
+    onPatch({
+      recurrenceDays: next.length === 0 || next.length === 7 ? null : next,
+    });
+  };
+
+  const setEveryNight = () => {
+    if (!canManage) return;
+    onPatch({ recurrenceDays: null });
+  };
+
+  return (
+    <div className="w-full rounded-lg border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1.5 space-y-1">
+      <div className="flex items-start gap-1.5">
+        {canManage && (
+          <div className="flex flex-col gap-0.5 pt-0.5">
+            <button
+              type="button"
+              disabled={isFirst}
+              onClick={() => onMove(-1)}
+              className="text-[var(--ios-label-quaternary)] hover:text-[var(--ios-label)] disabled:opacity-30"
+              aria-label="Move up (more important)"
+              title="Higher importance within priority"
+            >
+              <ChevronUp size={12} />
+            </button>
+            <button
+              type="button"
+              disabled={isLast}
+              onClick={() => onMove(1)}
+              className="text-[var(--ios-label-quaternary)] hover:text-[var(--ios-label)] disabled:opacity-30"
+              aria-label="Move down (less important)"
+              title="Lower importance within priority"
+            >
+              <ChevronDown size={12} />
+            </button>
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11.5px] font-medium text-[var(--ios-label)] truncate">
+              {item.title}
+            </span>
+            <button
+              type="button"
+              disabled={!canManage}
+              onClick={() => canManage && onPatch({ priority: nextPriority(priority) })}
+              className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${PRIORITY_TONE[priority] ?? PRIORITY_TONE.normal}`}
+              title={
+                canManage
+                  ? `Priority: ${priority} (click to cycle: ${PRIORITY_CYCLE.join(" → ")})`
+                  : `Priority: ${priority}`
+              }
+            >
+              {priority}
+            </button>
+            {canManage && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="ml-auto text-[var(--ios-label-quaternary)] hover:text-[var(--sb-projects-overdue)]"
+                aria-label={`Remove ${item.title}`}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              disabled={!canManage}
+              onClick={setEveryNight}
+              className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                everyNight
+                  ? "bg-[var(--sb-projects-accent)]/15 text-[var(--sb-projects-accent)]"
+                  : "text-[var(--ios-label-quaternary)] hover:bg-[var(--ios-gray-6)]"
+              }`}
+              title="Eligible every grave night"
+            >
+              All
+            </button>
+            {WEEKDAY_SHORT.map((label, d) => {
+              const on = everyNight || days.includes(d);
+              const dim = everyNight ? false : !days.includes(d);
+              return (
+                <button
+                  key={`${item.id}-d${d}`}
+                  type="button"
+                  disabled={!canManage}
+                  onClick={() => toggleDay(d)}
+                  className={`h-5 w-5 rounded text-[9px] font-semibold tabular-nums ${
+                    on && !dim
+                      ? "bg-[var(--sb-projects-accent)] text-white"
+                      : everyNight
+                        ? "bg-[var(--sb-projects-accent)]/20 text-[var(--sb-projects-accent)]"
+                        : "bg-[var(--ios-gray-6)] text-[var(--ios-label-quaternary)]"
+                  }`}
+                  title={formatRecurrenceDaysLabel(everyNight ? null : days)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            <span className="text-[9px] text-[var(--ios-label-quaternary)] ml-0.5">
+              {formatRecurrenceDaysLabel(item.recurrenceDays)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DefaultsView({ canManage }: { canManage: boolean }) {
   const { data: defaults = [], isLoading } = useSlotDefaults();
   const createDefault = useCreateSlotDefault();
+  const updateDefault = useUpdateSlotDefault();
   const deleteDefault = useDeleteSlotDefault();
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   const groups = useMemo<SlotGroup[]>(() => {
     const map = new Map<string, SlotGroup>();
-    // Always surface band pool shells so operators can add the first pool task.
     map.set(overlapPoolGroupKey("am"), emptyPoolGroup("am"));
     map.set(overlapPoolGroupKey("pm"), emptyPoolGroup("pm"));
 
@@ -68,7 +247,6 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
       const rrSide = d.rrSide ?? null;
       const band = overlapPoolBand(slotKey);
       if (band) {
-        // Union read: any overlap_am_* / overlap_pm_* lands in the band pool card.
         map.get(overlapPoolGroupKey(band))!.items.push(d);
         continue;
       }
@@ -88,11 +266,16 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
       g.items.push(d);
     }
 
+    // Sort OL pool items by importance
+    for (const band of ["am", "pm"] as OverlapPoolBand[]) {
+      const g = map.get(overlapPoolGroupKey(band))!;
+      g.items = sortPoolItems(g.items);
+    }
+
     const pools = [map.get(overlapPoolGroupKey("am"))!, map.get(overlapPoolGroupKey("pm"))!];
     const others = [...map.values()]
       .filter((g) => !g.isOverlapPool)
       .sort((a, b) => a.slotKey.localeCompare(b.slotKey) || a.label.localeCompare(b.label));
-    // Non-overlap slots first (zones/RR/AUX), then AM / PM pool cards.
     return [...others, ...pools];
   }, [defaults]);
 
@@ -106,18 +289,37 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
       setAddingTo(null);
       return;
     }
-    // Pool creates always write to canonical overlap_*_0 (never scatter to _1…_5).
     const slotKey = g.isOverlapPool
       ? canonicalizeDefaultSlotKey(g.slotKey)
       : g.slotKey;
+    const maxSort = g.isOverlapPool
+      ? Math.max(-1, ...g.items.map((i) => i.poolSortOrder ?? -1))
+      : null;
     await createDefault.mutateAsync({
       title,
       slotKey,
       slotType: g.slotType,
       rrSide: g.rrSide,
+      priority: "normal",
+      poolSortOrder: g.isOverlapPool ? maxSort! + 1 : null,
     });
     setDraft("");
     setAddingTo(null);
+  };
+
+  const movePoolItem = async (g: SlotGroup, index: number, dir: -1 | 1) => {
+    const sorted = sortPoolItems(g.items);
+    const j = index + dir;
+    if (j < 0 || j >= sorted.length) return;
+    const a = sorted[index];
+    const b = sorted[j];
+    // Swap pool_sort_order (use index if null)
+    const aOrd = a.poolSortOrder ?? index;
+    const bOrd = b.poolSortOrder ?? j;
+    await Promise.all([
+      updateDefault.mutateAsync({ id: a.id, patch: { poolSortOrder: bOrd } }),
+      updateDefault.mutateAsync({ id: b.id, patch: { poolSortOrder: aOrd } }),
+    ]);
   };
 
   return (
@@ -129,9 +331,9 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
         </p>
         <p className="text-[11.5px] leading-snug text-[var(--ios-label-tertiary)]">
           <span className="font-semibold text-[var(--ios-label-secondary)]">AM / PM Overlap Pools</span>{" "}
-          feed <span className="font-medium text-[var(--ios-label-secondary)]">Apply Overlap Tasks</span>{" "}
-          — standing tasks for <em>staffed</em> overlap seats only. They are not fixed per-card night
-          seeds and are not auto-painted onto empty OL cards on night create.
+          feed <span className="font-medium text-[var(--ios-label-secondary)]">Apply Overlap Tasks</span>
+          . Set <em>priority</em> (must-do vs if-staffed), <em>days</em> (which nights), and order.
+          Apply cuts to staffed seats: urgent/high first. Not auto-seeded on empty OL cards.
         </p>
       </div>
 
@@ -159,63 +361,107 @@ export function DefaultsView({ canManage }: { canManage: boolean }) {
               </div>
               {g.isOverlapPool && (
                 <p className="mb-1.5 text-[10.5px] leading-snug text-[var(--ios-label-quaternary)]">
-                  {OVERLAP_POOL_BLURB}
+                  {OVERLAP_POOL_BLURB} Higher priority runs first when fewer seats are staffed.
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {g.items.map((d) => (
-                  <span
-                    key={d.id}
-                    className="inline-flex items-center gap-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1 text-[11px] text-[var(--ios-label)]"
-                    title={
-                      g.isOverlapPool && d.slotKey && d.slotKey !== g.slotKey
-                        ? `Stored on ${d.slotKey} (union read)`
-                        : undefined
-                    }
-                  >
-                    {d.title}
-                    {canManage && (
+
+              {g.isOverlapPool ? (
+                <div className="space-y-1.5">
+                  {sortPoolItems(g.items).map((d, idx, arr) => (
+                    <OverlapPoolTaskCard
+                      key={d.id}
+                      item={d}
+                      canManage={canManage}
+                      isFirst={idx === 0}
+                      isLast={idx === arr.length - 1}
+                      onDelete={() => deleteDefault.mutate(d.id)}
+                      onPatch={(patch) =>
+                        updateDefault.mutate({ id: d.id, patch })
+                      }
+                      onMove={(dir) => void movePoolItem(g, idx, dir)}
+                    />
+                  ))}
+                  {canManage &&
+                    (addingTo === g.key ? (
+                      <input
+                        autoFocus
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => submitAdd(g)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void submitAdd(g);
+                          if (e.key === "Escape") {
+                            setAddingTo(null);
+                            setDraft("");
+                          }
+                        }}
+                        placeholder="Task label…"
+                        className="h-8 w-full rounded-md border border-[var(--sb-projects-accent-border)] bg-[var(--ios-background-secondary)] px-2 text-[11px] outline-none"
+                      />
+                    ) : (
                       <button
                         type="button"
-                        onClick={() => deleteDefault.mutate(d.id)}
-                        className="text-[var(--ios-label-quaternary)] hover:text-[var(--sb-projects-overdue)]"
-                        aria-label={`Remove ${d.title}`}
-                      >
-                        <X size={11} />
-                      </button>
-                    )}
-                  </span>
-                ))}
-                {canManage &&
-                  (addingTo === g.key ? (
-                    <input
-                      autoFocus
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onBlur={() => submitAdd(g)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void submitAdd(g);
-                        if (e.key === "Escape") {
-                          setAddingTo(null);
+                        onClick={() => {
+                          setAddingTo(g.key);
                           setDraft("");
-                        }
-                      }}
-                      placeholder="Task label…"
-                      className="h-7 w-[140px] rounded-md border border-[var(--sb-projects-accent-border)] bg-[var(--ios-background-secondary)] px-2 text-[11px] outline-none"
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddingTo(g.key);
-                        setDraft("");
-                      }}
-                      className="inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--sb-projects-accent-border)] px-2 py-1 text-[11px] font-medium text-[var(--sb-projects-accent)]"
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--sb-projects-accent-border)] px-2 py-1 text-[11px] font-medium text-[var(--sb-projects-accent)]"
+                      >
+                        <Plus size={11} /> pool task
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {g.items.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex items-center gap-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 py-1 text-[11px] text-[var(--ios-label)]"
                     >
-                      <Plus size={11} /> task
-                    </button>
+                      {d.title}
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => deleteDefault.mutate(d.id)}
+                          className="text-[var(--ios-label-quaternary)] hover:text-[var(--sb-projects-overdue)]"
+                          aria-label={`Remove ${d.title}`}
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
                   ))}
-              </div>
+                  {canManage &&
+                    (addingTo === g.key ? (
+                      <input
+                        autoFocus
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => submitAdd(g)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void submitAdd(g);
+                          if (e.key === "Escape") {
+                            setAddingTo(null);
+                            setDraft("");
+                          }
+                        }}
+                        placeholder="Task label…"
+                        className="h-7 w-[140px] rounded-md border border-[var(--sb-projects-accent-border)] bg-[var(--ios-background-secondary)] px-2 text-[11px] outline-none"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingTo(g.key);
+                          setDraft("");
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--sb-projects-accent-border)] px-2 py-1 text-[11px] font-medium text-[var(--sb-projects-accent)]"
+                      >
+                        <Plus size={11} /> task
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -50,4 +50,4 @@ export function overlapPoolLabel(band: OverlapPoolBand): string {
 }
 
 export const OVERLAP_POOL_BLURB =
-  "Standing pool for staffed seats — distributed when you Apply Overlap Tasks (not auto-seeded on night create).";
+  "Standing pool for staffed seats — distributed when you Apply Overlap Tasks (not auto-seeded on night create). Priority + days control which tasks run when staffing is short or the night of week differs.";

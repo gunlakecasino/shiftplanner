@@ -12,3 +12,4 @@ export * from "./overlapTaskApply";
 // overlapTaskFairness: import from "@/lib/shiftbuilder/rotation/overlapTaskFairness"
 // (duplicate OverlapBand / mulberry32 names vs overlapTaskApply)
 export * from "./buildOverlapTaskInsight";
+export * from "./overlapPoolSelect";

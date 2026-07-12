@@ -64,6 +64,33 @@ export async function POST(request: NextRequest) {
     slotType = "overlap";
   }
 
+  const priorityRaw = String(body.priority ?? "normal").trim().toLowerCase();
+  const priority = ["low", "normal", "high", "urgent"].includes(priorityRaw)
+    ? priorityRaw
+    : "normal";
+
+  let recurrence_days: number[] | null = null;
+  let recurrence_type: string | null = null;
+  if (Array.isArray(body.recurrenceDays) && body.recurrenceDays.length > 0) {
+    const parsed: number[] = [];
+    for (const x of body.recurrenceDays as unknown[]) {
+      const n = typeof x === "number" ? x : Number.parseInt(String(x), 10);
+      if (Number.isInteger(n) && n >= 0 && n <= 6) parsed.push(n);
+    }
+    const days = [...new Set(parsed)].sort((a, b) => a - b);
+    if (days.length > 0 && days.length < 7) {
+      recurrence_days = days;
+      recurrence_type = "weekly";
+    }
+  }
+
+  const poolSortOrder =
+    body.poolSortOrder == null || body.poolSortOrder === ""
+      ? null
+      : Number.isFinite(Number(body.poolSortOrder))
+        ? Math.trunc(Number(body.poolSortOrder))
+        : null;
+
   const { data, error } = await admin
     .from("ops_work_items")
     .insert({
@@ -78,12 +105,15 @@ export async function POST(request: NextRequest) {
       rr_side: body.rrSide || null,
       task_color: body.taskColor || null,
       is_coverage: Boolean(body.isCoverage),
+      priority,
+      recurrence_days,
+      recurrence_type,
+      pool_sort_order: poolSortOrder,
       created_by_name: actor.operatorName,
       updated_by_name: actor.operatorName,
     })
     .select(WORK_ITEM_COLUMNS)
     .single();
-
   if (error) {
     console.error("[projects/defaults] create error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

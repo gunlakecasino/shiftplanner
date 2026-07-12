@@ -6385,17 +6385,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       return;
     }
 
-    const okToApplyOverlap = await confirmDialog(
-      "Distribute standing AM/PM overlap pool tasks to staffed overlap cards only. Coverage bars and one-off (manual) chips are kept. Empty cards are left blank. Fairness uses prior nights only — re-applying tonight may reshuffle standing tasks among staffed seats.",
-      {
-        title: "Apply Overlap Tasks?",
-        confirmLabel: "Apply",
-      },
-    );
-    if (!okToApplyOverlap) {
-      return;
-    }
-
     setApplyOverlapTasksBusy(true);
     try {
       let nid = queryNightId || nightId;
@@ -6408,6 +6397,44 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       }
 
       const { applyOverlapTasksToNight } = await import("@/lib/shiftbuilder/data");
+
+      // Phase D: dry-run preview (day filter + priority cut) before confirm
+      const preview = await applyOverlapTasksToNight(nid, { preview: true });
+      const plan = preview.plan;
+      const fmtBand = (band: "AM" | "PM") => {
+        const p = plan?.[band];
+        if (!p) return `${band}: —`;
+        const sel =
+          p.selected.length > 0
+            ? p.selected.map((t) => `${t.label} (${t.priority})`).join(", ")
+            : "(none)";
+        const skipStaff =
+          p.skippedStaffing.length > 0
+            ? ` · skip staffing: ${p.skippedStaffing.map((t) => t.label).join(", ")}`
+            : "";
+        const skipDay =
+          p.skippedDay.length > 0
+            ? ` · not today: ${p.skippedDay.map((t) => t.label).join(", ")}`
+            : "";
+        return `${band} (${p.staffed} seat${p.staffed !== 1 ? "s" : ""}): ${sel}${skipStaff}${skipDay}`;
+      };
+      const bodyLines = [
+        "Distribute standing AM/PM pool tasks to staffed seats only.",
+        "Coverage bars and one-off chips stay. Empty cards stay blank.",
+        "Tonight's plan (priority + day rules; fewer seats → fewer tasks):",
+        fmtBand("PM"),
+        fmtBand("AM"),
+        "Re-applying tonight may reshuffle who gets which standing task.",
+      ].join("\n");
+
+      const okToApplyOverlap = await confirmDialog(bodyLines, {
+        title: "Apply Overlap Tasks?",
+        confirmLabel: "Apply",
+      });
+      if (!okToApplyOverlap) {
+        return;
+      }
+
       const { applied, byBand, mode } = await applyOverlapTasksToNight(nid);
 
       const dateKey = formatLocalDateISO(selectedDay.date);

@@ -5,11 +5,13 @@
 | **Title** | Overlap Fungible Seats + Task-Based Rotation (ShiftBuilder) |
 | **Author** | _(design — Grok Build)_ |
 | **Date** | 2026-07-12 |
-| **Status** | **Implemented in tree** (2026-07-12) — PR1–PR7 local; prod fair flag still operator-owned |
+| **Status** | **Implemented** (2026-07-12) — PR1–PR7 + Phase D.1 (day + priority cut); prod fair flag still operator-owned |
 | **Repo** | `/Users/briankillian/oms_root` (gunlakecasino/shiftplanner) |
 | **Related** | `docs/TASKS_SYSTEM_PLAN.md` (partially **superseded for OL apply** — see K13), `src/lib/shiftbuilder/rotation/placementPadHelpers.ts`, `src/lib/shiftbuilder/data.ts`, `src/app/shiftbuilder/components/FloatingNav.tsx` |
 
 **Implementation notes (shipped in tree):** dual-format OL history (store `OL-PM-N` / `OL-AM-N`, match band `OL-PM` / `OL-AM`); Apply Overlap via `applyOverlapTasksToNight` + server env **`OVERLAP_FAIR_APPLY`** (`1` = fair, `0`/unset = seeded random); dead `pushTaskDefaults*` / `getSlotDefaultTasks` removed (PR7).
+
+**Phase D.1 (shipped):** day-of-week filter (`recurrence_days`) + priority/pool_sort cut (`n = staffed seats`) before fair/random assign; Defaults UI day chips + priority cycle + reorder; Apply confirm shows tonight’s plan (selected / skip staffing / not today); pad insights list tonight-eligible pool. Pure module: `rotation/overlapPoolSelect.ts`.
 
 ---
 
@@ -601,14 +603,14 @@ Reuse the **same server history loader** as fair apply (thin query from pad via 
 
 ---
 
-### Phase D — Optional later
+### Phase D — Optional later / partial ship
 
 | Item | Notes |
 | --- | --- |
-| Staffing-tier pools | Different subsets for 2 vs 4 vs 6 seats |
+| **Day-of-week + priority cut (D.1)** | **Shipped** — `overlapPoolSelect` + Defaults day/priority + Apply preview |
+| Staffing-tier *separate* pools | Prefer single ordered pool + cut at n (D.1); only if ops outgrows |
 | Auto-seat assign | Engine places OL TMs without index preference |
 | Task-swap between OL TMs | `moveNightSlotTaskServer` already partial |
-| Day-of-week pool variants | `recurrence_days` on slot-default work items |
 | Fairness ledger table | If 30-night scan becomes hot |
 | Undo last apply | Board mutation snapshot |
 | Same-night re-apply stability | Synthetic `daysSince=0` events from tonight’s standing chips |

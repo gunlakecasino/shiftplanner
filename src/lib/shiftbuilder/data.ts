@@ -3445,17 +3445,37 @@ export type ApplyOverlapTasksToNightResult = {
   mode: "fair" | "random_fallback";
   byBand: { AM: number; PM: number };
   preservedOneOffs: number;
+  plan?: {
+    AM: {
+      staffed: number;
+      selected: Array<{ id: string; label: string; priority: string }>;
+      skippedStaffing: Array<{ id: string; label: string; priority: string }>;
+      skippedDay: Array<{ id: string; label: string }>;
+      weekday: number;
+    };
+    PM: {
+      staffed: number;
+      selected: Array<{ id: string; label: string; priority: string }>;
+      skippedStaffing: Array<{ id: string; label: string; priority: string }>;
+      skippedDay: Array<{ id: string; label: string }>;
+      weekday: number;
+    };
+    tonightIso: string;
+  };
+  preview?: boolean;
 };
 
 /**
  * Apply standing AM/PM overlap pool tasks to **staffed** overlap cards only.
  * Source: ops_work_items (is_slot_default) with slot_key ~ overlap_(am|pm).
+ * Phase D: day-of-week + priority cut, then fair/random assign.
  * Standing-only replace preserves coverage + one-offs / non-pool manuals.
  * Fair when server OVERLAP_FAIR_APPLY=1; else random_fallback (forceRandom forces random).
+ * preview: true returns plan without writing chips.
  */
 export async function applyOverlapTasksToNight(
   nightId: string,
-  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean },
+  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean; preview?: boolean },
 ): Promise<ApplyOverlapTasksToNightResult> {
   if (!nightId) {
     return {
@@ -3464,6 +3484,7 @@ export async function applyOverlapTasksToNight(
       mode: "random_fallback",
       byBand: { AM: 0, PM: 0 },
       preservedOneOffs: 0,
+      preview: !!opts?.preview,
     };
   }
 
@@ -3473,6 +3494,7 @@ export async function applyOverlapTasksToNight(
       nightId,
       bands: opts?.bands,
       forceRandom: opts?.forceRandom,
+      preview: opts?.preview,
     },
     async () => {
       const { applyOverlapTasksToNightServer } = await import("./opsMutations.server");
@@ -3486,6 +3508,8 @@ export async function applyOverlapTasksToNight(
     mode: result.mode ?? "random_fallback",
     byBand: result.byBand ?? { AM: 0, PM: 0 },
     preservedOneOffs: result.preservedOneOffs ?? 0,
+    plan: result.plan,
+    preview: result.preview ?? !!opts?.preview,
   };
 }
 

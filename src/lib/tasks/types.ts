@@ -103,6 +103,11 @@ export interface WorkItem {
   rrSide: string | null;
   taskColor: string | null;
   isCoverage: boolean;
+  /**
+   * Optional rank within priority for slot-default / OL standing pools.
+   * Lower = more important when priority ties. null = unordered (last).
+   */
+  poolSortOrder: number | null;
 }
 
 export interface ChecklistItem {

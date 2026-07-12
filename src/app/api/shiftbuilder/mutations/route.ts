@@ -358,13 +358,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
       case "apply_overlap_tasks": {
+        const preview = body.preview === true;
         const result = await applyOverlapTasksToNightServer(String(body.nightId), {
           bands: Array.isArray(body.bands)
             ? (body.bands as Array<"AM" | "PM">)
             : undefined,
           forceRandom: body.forceRandom === true,
+          preview,
         });
-        await bustCache(body);
+        // Preview is read-only; skip night cache bust so board doesn't flash.
+        if (!preview) await bustCache(body);
         return NextResponse.json({ ok: true, ...result });
       }
       case "mark_tm_call_off": {

@@ -104,10 +104,12 @@ export async function getOverlapTaskInsightsServer(
     params.nightDate,
   );
 
-  // Standing pool (same source as Apply Overlap)
+  // Standing pool (same source as Apply Overlap) + Phase D day/priority filter for display
   const { data: workRows, error: workErr } = await client
     .from("ops_work_items")
-    .select("id, slot_key, title, task_color")
+    .select(
+      "id, slot_key, title, task_color, priority, recurrence_days, pool_sort_order",
+    )
     .eq("is_slot_default", true)
     .eq("active", true)
     .eq("department", "graves")
@@ -118,24 +120,67 @@ export async function getOverlapTaskInsightsServer(
     throw new Error(`overlap insights pool read failed: ${workErr.message}`);
   }
 
+  const {
+    normalizeRecurrenceDays,
+    selectOverlapPoolForNight,
+  } = await import("@/lib/shiftbuilder/rotation/overlapPoolSelect");
+
   const rawPool: Array<{
     id: string;
     label: string;
     color?: string | null;
     band: OverlapInsightBand;
   }> = [];
+  const metaById = new Map<
+    string,
+    {
+      priority: string;
+      recurrenceDays: number[] | null;
+      poolSortOrder: number | null;
+    }
+  >();
   for (const r of workRows ?? []) {
     const sk = String((r as { slot_key?: string }).slot_key ?? "");
     const b = overlapBandFromSlotKey(sk);
     if (b !== band) continue;
+    const id = String((r as { id: string }).id);
+    const pso = (r as { pool_sort_order?: number | null }).pool_sort_order;
+    metaById.set(id, {
+      priority: String((r as { priority?: string }).priority ?? "normal"),
+      recurrenceDays: normalizeRecurrenceDays(
+        (r as { recurrence_days?: unknown }).recurrence_days,
+      ),
+      poolSortOrder:
+        pso == null || !Number.isFinite(Number(pso)) ? null : Number(pso),
+    });
     rawPool.push({
-      id: String((r as { id: string }).id),
+      id,
       label: String((r as { title?: string }).title ?? ""),
       color: ((r as { task_color?: string | null }).task_color as string | null) ?? null,
       band: b,
     });
   }
-  const pool = dedupeOverlapPoolTasks(rawPool).map((t) => ({
+  const deduped = dedupeOverlapPoolTasks(rawPool);
+  // Show tonight's eligible pool (day filter); order by priority for pad readability
+  const selectable = deduped.map((t) => {
+    const m = metaById.get(t.id);
+    return {
+      id: t.id,
+      label: t.label,
+      color: t.color ?? null,
+      band: t.band as "AM" | "PM",
+      priority: m?.priority ?? "normal",
+      recurrenceDays: m?.recurrenceDays ?? null,
+      poolSortOrder: m?.poolSortOrder ?? null,
+    };
+  });
+  // seatsCount large so we list all eligible (not staffing-cut); pad shows full tonight set
+  const { selected: tonightEligible } = selectOverlapPoolForNight(
+    selectable,
+    99,
+    tonightIso,
+  );
+  const pool = tonightEligible.map((t) => ({
     id: t.id,
     label: t.label,
   }));

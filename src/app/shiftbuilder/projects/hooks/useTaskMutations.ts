@@ -253,6 +253,22 @@ export interface CreateDefaultInput {
   rrSide?: string | null;
   taskColor?: string | null;
   isCoverage?: boolean;
+  priority?: string;
+  recurrenceDays?: number[] | null;
+  poolSortOrder?: number | null;
+}
+
+export interface UpdateDefaultInput {
+  id: string;
+  patch: Partial<{
+    title: string;
+    taskColor: string | null;
+    active: boolean;
+    isCoverage: boolean;
+    priority: string;
+    recurrenceDays: number[] | null;
+    poolSortOrder: number | null;
+  }>;
 }
 
 export function useCreateSlotDefault() {
@@ -268,6 +284,18 @@ export function useCreateSlotDefault() {
         body: JSON.stringify({ ...body, slotKey, slotType }),
       });
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: DEFAULTS_KEY }),
+  });
+}
+
+export function useUpdateSlotDefault() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: UpdateDefaultInput) =>
+      api<{ default: WorkItem }>(`/api/shiftbuilder/projects/defaults/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: DEFAULTS_KEY }),
   });
 }

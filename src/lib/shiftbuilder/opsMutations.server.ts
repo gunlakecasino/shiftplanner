@@ -1240,25 +1240,37 @@ export async function replaceNightSlotTasksForSlotServer(params: {
   return mergedTasks.length;
 }
 
+export type ApplyOverlapPoolPlanBand = {
+  staffed: number;
+  selected: Array<{ id: string; label: string; priority: string }>;
+  skippedStaffing: Array<{ id: string; label: string; priority: string }>;
+  skippedDay: Array<{ id: string; label: string }>;
+  weekday: number;
+};
+
 export type ApplyOverlapTasksResult = {
   applied: number;
   skippedEmpty: number;
   mode: "fair" | "random_fallback";
   byBand: { AM: number; PM: number };
   preservedOneOffs: number;
+  /** Phase D selection plan (always filled when night exists). */
+  plan?: { AM: ApplyOverlapPoolPlanBand; PM: ApplyOverlapPoolPlanBand; tonightIso: string };
+  /** When true, no chip writes were performed. */
+  preview?: boolean;
 };
 
 /**
  * Staffed-only overlap pool apply from ops_work_items (is_slot_default).
- * Standing-only preserve (label ∈ pool and/or source_work_item_id ∈ pool ids).
+ * Phase D: day-of-week filter + priority cut (n = staffed seats), then fair/random assign.
+ * Standing-only preserve uses the **full** band pool (all days) so off-day standing chips clear.
  *
  * Fair mode: server env OVERLAP_FAIR_APPLY === "1" and opts.forceRandom !== true.
- * Default unset/0 → random_fallback (safe until is_one_off + manual defaults are live).
- * History load failure → random_fallback; still writes source_work_item_id on standing chips.
+ * opts.preview === true → compute plan + assignments without writing chips.
  */
 export async function applyOverlapTasksToNightServer(
   nightId: string,
-  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean },
+  opts?: { bands?: Array<"AM" | "PM">; forceRandom?: boolean; preview?: boolean },
 ): Promise<ApplyOverlapTasksResult> {
   if (!nightId) {
     return {
@@ -1267,6 +1279,7 @@ export async function applyOverlapTasksToNightServer(
       mode: "random_fallback",
       byBand: { AM: 0, PM: 0 },
       preservedOneOffs: 0,
+      preview: !!opts?.preview,
     };
   }
 
@@ -1284,19 +1297,43 @@ export async function applyOverlapTasksToNightServer(
     fairAssignOverlapTasks,
     randomAssignOverlapTasks,
   } = await import("@/lib/shiftbuilder/rotation/overlapTaskFairness");
+  const { normalizeRecurrenceDays, selectOverlapPoolForNight } = await import(
+    "@/lib/shiftbuilder/rotation/overlapPoolSelect"
+  );
   type Band = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapBand;
   type PoolTask = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapPoolTask;
   type Seat = import("@/lib/shiftbuilder/rotation/overlapTaskApply").OverlapStaffedSeat;
+  type SelectablePoolTask =
+    import("@/lib/shiftbuilder/rotation/overlapPoolSelect").SelectablePoolTask;
 
   const client = adminClient();
   const bandsWanted: Band[] = opts?.bands?.length
     ? opts.bands
     : (["AM", "PM"] as Band[]);
+  const isPreview = opts?.preview === true;
 
-  // Pool: active graves slot-default work items on any overlap_* key
+  // Resolve night calendar date (required for DOW filter even in random mode)
+  const { data: nightRow, error: nightErr } = await client
+    .from("nights")
+    .select("id, night_date")
+    .eq("id", nightId)
+    .maybeSingle();
+  if (nightErr) {
+    throw new Error(`applyOverlapTasks: night read failed: ${nightErr.message}`);
+  }
+  let tonightIso = String(
+    (nightRow as { night_date?: string } | null)?.night_date ?? "",
+  ).slice(0, 10);
+  if (!tonightIso) {
+    throw new Error("applyOverlapTasks: night has no night_date");
+  }
+
+  // Pool: active graves slot-default work items on any overlap_* key (+ Phase D fields)
   const { data: workRows, error: workErr } = await client
     .from("ops_work_items")
-    .select("id, slot_key, title, task_color")
+    .select(
+      "id, slot_key, title, task_color, priority, recurrence_days, pool_sort_order",
+    )
     .eq("is_slot_default", true)
     .eq("active", true)
     .eq("department", "graves")
@@ -1307,23 +1344,57 @@ export async function applyOverlapTasksToNightServer(
     throw new Error(`applyOverlapTasks: pool read failed: ${workErr.message}`);
   }
 
-  const rawPool: Array<{ id: string; label: string; color?: string | null; band: Band }> = [];
+  const metaById = new Map<
+    string,
+    {
+      priority: string;
+      recurrenceDays: number[] | null;
+      poolSortOrder: number | null;
+      color: string | null;
+      label: string;
+      band: Band;
+    }
+  >();
+  const rawPool: Array<{ id: string; label: string; color?: string | null; band: Band }> =
+    [];
   for (const r of workRows ?? []) {
     const sk = String((r as { slot_key?: string }).slot_key ?? "");
     const band = overlapBandFromSlotKey(sk);
     if (!band || !bandsWanted.includes(band)) continue;
-    rawPool.push({
-      id: String((r as { id: string }).id),
-      label: String((r as { title?: string }).title ?? ""),
-      color: ((r as { task_color?: string | null }).task_color as string | null) ?? null,
+    const id = String((r as { id: string }).id);
+    const label = String((r as { title?: string }).title ?? "");
+    const color =
+      ((r as { task_color?: string | null }).task_color as string | null) ?? null;
+    const pso = (r as { pool_sort_order?: number | null }).pool_sort_order;
+    metaById.set(id, {
+      priority: String((r as { priority?: string }).priority ?? "normal"),
+      recurrenceDays: normalizeRecurrenceDays(
+        (r as { recurrence_days?: unknown }).recurrence_days,
+      ),
+      poolSortOrder:
+        pso == null || !Number.isFinite(Number(pso)) ? null : Number(pso),
+      color,
+      label,
       band,
     });
+    rawPool.push({ id, label, color, band });
   }
 
   const poolAll = dedupeOverlapPoolTasks(rawPool);
   const poolByBand: Record<Band, PoolTask[]> = { AM: [], PM: [] };
+  const selectableByBand: Record<Band, SelectablePoolTask[]> = { AM: [], PM: [] };
   for (const t of poolAll) {
     poolByBand[t.band].push(t);
+    const meta = metaById.get(t.id);
+    selectableByBand[t.band].push({
+      id: t.id,
+      label: t.label,
+      color: t.color ?? meta?.color ?? null,
+      band: t.band,
+      priority: meta?.priority ?? "normal",
+      recurrenceDays: meta?.recurrenceDays ?? null,
+      poolSortOrder: meta?.poolSortOrder ?? null,
+    });
   }
 
   // Staffed overlap seats (tm_id present)
@@ -1359,8 +1430,23 @@ export async function applyOverlapTasksToNightServer(
   let mode: "fair" | "random_fallback" = "random_fallback";
   let historyEvents: import("@/lib/shiftbuilder/rotation/overlapTaskFairness").TaskHistoryEvent[] =
     [];
-  let tonightIso = "";
   let scoreSnapshot: unknown = null;
+  const selectPlan: { AM: ApplyOverlapPoolPlanBand; PM: ApplyOverlapPoolPlanBand } = {
+    AM: {
+      staffed: seatsByBand.AM.length,
+      selected: [],
+      skippedStaffing: [],
+      skippedDay: [],
+      weekday: 0,
+    },
+    PM: {
+      staffed: seatsByBand.PM.length,
+      selected: [],
+      skippedStaffing: [],
+      skippedDay: [],
+      weekday: 0,
+    },
+  };
 
   if (wantFair) {
     try {
@@ -1372,7 +1458,7 @@ export async function applyOverlapTasksToNightServer(
         windowNights: 30,
       });
       historyEvents = hist.events;
-      tonightIso = hist.tonightIso;
+      if (hist.tonightIso) tonightIso = hist.tonightIso;
       mode = "fair";
     } catch (err) {
       console.warn(
@@ -1397,63 +1483,64 @@ export async function applyOverlapTasksToNightServer(
   }> = [];
 
   for (const band of bandsWanted) {
-    const pool = poolByBand[band];
+    const fullPool = poolByBand[band];
+    const selectable = selectableByBand[band];
     const seats = seatsByBand[band];
-    // Unstaffed: no writes. Empty pool: no writes (nothing to distribute).
-    if (!seats.length || !pool.length) continue;
 
+    // Phase D: day filter + priority cut for tonight
     const seed = seedBase + (band === "AM" ? 1 : 2);
+    const { selected: tonightPool, debug: selectDebug } = selectOverlapPoolForNight(
+      selectable,
+      seats.length,
+      tonightIso,
+      { timeZone: "America/Detroit" },
+    );
+    selectPlan[band] = {
+      staffed: seats.length,
+      selected: selectDebug.selected,
+      skippedStaffing: selectDebug.skippedStaffing,
+      skippedDay: selectDebug.skippedDay,
+      weekday: selectDebug.weekday,
+    };
+
+    // Unstaffed or nothing eligible tonight: still clear standing on staffed seats
+    // when not preview (empty tonightPool + staffed seats).
+    if (!seats.length) continue;
+    if (!fullPool.length && !tonightPool.length) continue;
+
     type AssignedTask = { id: string; label: string; color?: string | null };
     let pairs: Array<{ seat: Seat; task: AssignedTask }> = [];
 
-    if (mode === "fair" && tonightIso) {
-      const fairPool = pool.map((t) => ({
-        templateId: t.id,
-        label: t.label,
-        color: t.color ?? null,
-      }));
-      const fairSeats = seats.map((s) => ({
-        dbSlotKey: s.dbSlotKey,
-        tmId: s.tmId,
-      }));
-      const fairResult = fairAssignOverlapTasks(
-        fairPool,
-        fairSeats,
-        historyEvents,
-        band,
-        tonightIso,
-        { seed, windowNights: 30 },
+    if (tonightPool.length) {
+      const colorById = new Map(
+        selectable.map((t) => [t.id, t.color ?? null] as const),
       );
-      // Truncated score snapshot for structured log (last band wins / merge)
-      scoreSnapshot = {
-        band,
-        taskGlobalDue: fairResult.debug.taskGlobalDue.slice(0, 12),
-        pairScores: fairResult.debug.pairScores.slice(0, 24),
-        mode: fairResult.debug.mode,
-      };
-      pairs = fairResult.assignments.map((a) => ({
-        seat: { dbSlotKey: a.seat.dbSlotKey, tmId: a.seat.tmId },
-        task: {
-          id: a.task.templateId,
-          label: a.task.label,
-          color: a.task.color ?? null,
-        },
-      }));
-    } else {
-      // Prefer fairness module random for consistent PoolTask shape; keep
-      // randomAssignPoolToSeats as equivalent fallback path.
-      const fairPool = pool.map((t) => ({
-        templateId: t.id,
-        label: t.label,
-        color: t.color ?? null,
-      }));
-      const fairSeats = seats.map((s) => ({
-        dbSlotKey: s.dbSlotKey,
-        tmId: s.tmId,
-      }));
-      const rnd = randomAssignOverlapTasks(fairPool, fairSeats, seed);
-      if (rnd.assignments.length) {
-        pairs = rnd.assignments.map((a) => ({
+      if (mode === "fair") {
+        const fairPool = tonightPool.map((t) => ({
+          templateId: t.id,
+          label: t.label,
+          color: t.color ?? colorById.get(t.id) ?? null,
+        }));
+        const fairSeats = seats.map((s) => ({
+          dbSlotKey: s.dbSlotKey,
+          tmId: s.tmId,
+        }));
+        const fairResult = fairAssignOverlapTasks(
+          fairPool,
+          fairSeats,
+          historyEvents,
+          band,
+          tonightIso,
+          { seed, windowNights: 30 },
+        );
+        scoreSnapshot = {
+          band,
+          taskGlobalDue: fairResult.debug.taskGlobalDue.slice(0, 12),
+          pairScores: fairResult.debug.pairScores.slice(0, 24),
+          mode: fairResult.debug.mode,
+          select: selectDebug,
+        };
+        pairs = fairResult.assignments.map((a) => ({
           seat: { dbSlotKey: a.seat.dbSlotKey, tmId: a.seat.tmId },
           task: {
             id: a.task.templateId,
@@ -1462,20 +1549,61 @@ export async function applyOverlapTasksToNightServer(
           },
         }));
       } else {
-        pairs = randomAssignPoolToSeats(pool, seats, seed).map((p) => ({
-          seat: p.seat,
-          task: { id: p.task.id, label: p.task.label, color: p.task.color },
+        const fairPool = tonightPool.map((t) => ({
+          templateId: t.id,
+          label: t.label,
+          color: t.color ?? colorById.get(t.id) ?? null,
         }));
+        const fairSeats = seats.map((s) => ({
+          dbSlotKey: s.dbSlotKey,
+          tmId: s.tmId,
+        }));
+        const rnd = randomAssignOverlapTasks(fairPool, fairSeats, seed);
+        if (rnd.assignments.length) {
+          pairs = rnd.assignments.map((a) => ({
+            seat: { dbSlotKey: a.seat.dbSlotKey, tmId: a.seat.tmId },
+            task: {
+              id: a.task.templateId,
+              label: a.task.label,
+              color: a.task.color ?? null,
+            },
+          }));
+        } else {
+          const asPool: PoolTask[] = tonightPool.map((t) => ({
+            id: t.id,
+            label: t.label,
+            color: t.color ?? null,
+            band,
+          }));
+          pairs = randomAssignPoolToSeats(asPool, seats, seed).map((p) => ({
+            seat: p.seat,
+            task: { id: p.task.id, label: p.task.label, color: p.task.color },
+          }));
+        }
       }
     }
 
-    const assignedBySlot = new Map(pairs.map((p) => [p.seat.dbSlotKey, p.task]));
-    const poolSet = standingPoolLabelSet(pool);
-    const poolLabels = [...poolSet];
-    const poolIds = [...standingPoolIdSet(pool)];
+    if (isPreview) {
+      for (const p of pairs) {
+        applied += 1;
+        byBand[band] += 1;
+        assignmentLog.push({
+          slot: p.seat.dbSlotKey,
+          tmId: p.seat.tmId,
+          templateId: p.task.id,
+          label: p.task.label,
+        });
+      }
+      continue;
+    }
 
-    // Every staffed seat: standing-only replace. Extra seats (pool < seats) get
-    // empty newStanding → prior standing pool chips cleared; manuals + coverage kept.
+    const assignedBySlot = new Map(pairs.map((p) => [p.seat.dbSlotKey, p.task]));
+    // Full band pool for standing identity (includes other-day tasks)
+    const poolSet = standingPoolLabelSet(fullPool);
+    const poolLabels = [...poolSet];
+    const poolIds = [...standingPoolIdSet(fullPool)];
+
+    // Every staffed seat: standing-only replace. Extra seats get empty newStanding.
     for (const seat of seats) {
       const task = assignedBySlot.get(seat.dbSlotKey);
       const newStanding = task
@@ -1560,10 +1688,12 @@ export async function applyOverlapTasksToNightServer(
       nightId,
       bands: bandsWanted,
       mode,
+      preview: isPreview,
       staffed: {
         AM: seatsByBand.AM.length,
         PM: seatsByBand.PM.length,
       },
+      plan: selectPlan,
       poolIds: {
         AM: poolByBand.AM.map((t) => t.id),
         PM: poolByBand.PM.map((t) => t.id),
@@ -1576,7 +1706,15 @@ export async function applyOverlapTasksToNightServer(
     }),
   );
 
-  return { applied, skippedEmpty, mode, byBand, preservedOneOffs };
+  return {
+    applied,
+    skippedEmpty,
+    mode,
+    byBand,
+    preservedOneOffs,
+    plan: { ...selectPlan, tonightIso },
+    preview: isPreview,
+  };
 }
 
 export async function replaceAllNightSlotTasksServer(
