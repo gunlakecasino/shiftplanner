@@ -3,13 +3,27 @@
 import React, { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Bold, Italic, Underline, Strikethrough, Type } from "lucide-react";
+import {
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Type,
+  X,
+  Plus,
+  Trash2,
+  Highlighter,
+  Minus,
+  Circle,
+  Ban,
+} from "lucide-react";
 import { premiumSpring, premiumTap } from "@/lib/premiumSpring";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { usePortalPlacementStyle, type PlacementPadAnchor } from "./PlacementPad";
 import { TASK_COLOR_SPHERES } from "./TaskRow";
 import { TaskMarkerLabel } from "./TaskMarkerLabel";
 import { resolveTaskAppearanceColor } from "@/lib/shiftbuilder/taskMarkerStyle";
+import { getSlotMeta } from "./MarkerPad";
 import {
   applyTaskLevelFormat,
   formatTaskLabelTitleCase,
@@ -81,6 +95,13 @@ export interface TasksPadProps {
   isDark?: boolean;
 }
 
+const MARKER_OPTIONS = [
+  { id: "highlight" as const, label: "Highlight", icon: Highlighter },
+  { id: "underline" as const, label: "Underline", icon: Minus },
+  { id: "circle" as const, label: "Ring", icon: Circle },
+  { id: "none" as const, label: "None", icon: Ban },
+];
+
 const TasksPad: React.FC<TasksPadProps> = ({
   slotKey,
   task: initialTask,
@@ -101,6 +122,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
 }) => {
   const isDock = presentation === "dock";
   const regularTasks = slotTasks.filter((t) => !t.isCoverage);
+  const slotMeta = React.useMemo(() => getSlotMeta(slotKey), [slotKey]);
   const [isAddingNew, setIsAddingNew] = useState(
     initialAddMode || (!initialTask && regularTasks.length === 0),
   );
@@ -124,8 +146,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
   const [textStyleDraft, setTextStyleDraft] = useState<TaskTextStyle | null>(
     isAddingNew ? null : originalTextStyle,
   );
-  // Selection-scope formatting deferred until contentEditable renders spans.
-  // Always whole-task so Enter-to-save and applyFormat stay honest.
   const [saving, setSaving] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -133,7 +153,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
   const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor);
   const usePortal = !isDock && !!hostId && !!portalStyle;
 
-  /** Content signature so pad resyncs when task rows change, not only list length. */
   const slotTasksSig = React.useMemo(
     () =>
       regularTasks
@@ -163,9 +182,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
     setMarkerType(nextTask.markerType || "highlight");
     setTextStyleDraft(normalizeTaskTextStyle(nextTask.textStyle ?? null));
     if (editorRef.current) editorRef.current.innerText = nextTask.taskLabel;
-    // usePortal: the pad renders inline first, then remounts into a portal once the
-    // placement style is measured (rAF). That remount creates a fresh contentEditable
-    // node, so re-run to re-seed its text — otherwise the editor opens blank.
   }, [slotKey, initialTask?.id, initialAddMode, slotTasksSig, usePortal]);
 
   const beginAddTask = useCallback(() => {
@@ -221,7 +237,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
       fontStyle?: "normal" | "italic";
       textDecoration?: "none" | "underline" | "line-through";
     }) => {
-      // Whole-task only (selection scope deferred until rich editor).
       if (patch.fontSizePx !== undefined) {
         setTextStyleDraft((prev) => applyTaskLevelFormat(prev, { fontSizePx: patch.fontSizePx }));
       }
@@ -325,7 +340,6 @@ const TasksPad: React.FC<TasksPadProps> = ({
           return;
         }
         await onAddTask(slotKey, newLabel);
-        // Appearance after add still keyed by label (row just created); ok.
         await persistAppearance(newLabel);
         if (textStyleDraft && onSetTaskTextStyle) {
           await onSetTaskTextStyle(slotKey, newLabel, textStyleDraft);
@@ -398,12 +412,346 @@ const TasksPad: React.FC<TasksPadProps> = ({
     }
   };
 
-  const fmtBtn = (active: boolean) =>
-    `w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
+  const toolBtn = (active: boolean) =>
+    [
+      "sb-interactive flex h-9 w-9 items-center justify-center rounded-xl border transition-all active:scale-[0.96]",
       active
-        ? "bg-[var(--ios-blue)]/12 border-[var(--ios-blue)] text-[var(--ios-blue)]"
-        : "border-black/10 hover:bg-[var(--ios-gray-6)] text-neutral-600"
-    }`;
+        ? "border-[#007AFF]/40 bg-[#007AFF]/[0.12] text-[#007AFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+        : "border-black/[0.06] bg-white text-neutral-600 hover:bg-neutral-50 hover:border-black/10",
+    ].join(" ");
+
+  const sectionLabel = "text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-400";
+
+  const refinedCard = (
+    <div
+      className={`w-full bg-white flex flex-col min-h-0 flex-1 overflow-hidden ${
+        isDock
+          ? "rounded-none shadow-none"
+          : "rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.09),0_1px_3px_rgba(0,0,0,0.05)]"
+      }`}
+    >
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      {!isDock ? (
+        <div className="px-4 pt-4 pb-3 shrink-0">
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-[15px] font-bold shadow-sm"
+                style={{ backgroundColor: slotMeta.accent }}
+              >
+                {slotMeta.icon}
+              </div>
+              <div className="min-w-0">
+                <p
+                  className="text-[9px] font-bold tracking-[0.14em] uppercase mb-px"
+                  style={{ color: slotMeta.accent }}
+                >
+                  {slotMeta.label}
+                </p>
+                <h2 className="text-[18px] font-bold text-gray-900 leading-tight tracking-tight">
+                  {isAddingNew ? "New task" : "Edit task"}
+                </h2>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={requestClose}
+              className="sb-interactive mt-0.5 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-3.5 h-3.5 text-neutral-500" strokeWidth={2.5} />
+            </button>
+          </div>
+          {hasChanges ? (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-[#007AFF]/[0.08] border border-[#007AFF]/20 px-2.5 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#007AFF] animate-pulse" />
+              <span className="text-[10px] font-semibold text-[#007AFF]">Unsaved changes</span>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-gray-900 tracking-tight">
+              {isAddingNew ? "New task" : "Edit task"}
+            </p>
+            {hasChanges ? (
+              <p className="text-[10px] font-semibold text-[#007AFF] mt-0.5">Unsaved changes</p>
+            ) : (
+              <p className="text-[10px] text-neutral-400 mt-0.5">{slotMeta.label}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="h-px bg-gray-100 shrink-0" />
+
+      {/* ── Task switcher ────────────────────────────────────────────────── */}
+      <div className="px-3 pt-3 pb-2 shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto items-center pb-0.5 scrollbar-none">
+          {regularTasks.map((t) => {
+            const active = !isAddingNew && t.id === activeTask?.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectExistingTask(t.id)}
+                className={`sb-interactive shrink-0 max-w-[140px] truncate text-[11px] px-3 py-1.5 rounded-full font-semibold transition-all active:scale-[0.97] ${
+                  active
+                    ? "bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.35)]"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/80 border border-black/[0.04]"
+                }`}
+                title={t.taskLabel}
+              >
+                {t.taskLabel}
+              </button>
+            );
+          })}
+          {onAddTask ? (
+            <button
+              type="button"
+              onClick={beginAddTask}
+              className={`sb-interactive shrink-0 inline-flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-full font-semibold transition-all active:scale-[0.97] ${
+                isAddingNew
+                  ? "bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.35)]"
+                  : "border border-dashed border-[#007AFF]/40 text-[#007AFF] bg-[#007AFF]/[0.04] hover:bg-[#007AFF]/[0.08]"
+              }`}
+            >
+              <Plus size={13} strokeWidth={2.5} />
+              Add
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      {isAddingNew || activeTask ? (
+        <div
+          className={`flex-1 min-h-0 flex flex-col ${isDock ? "overflow-y-auto overscroll-contain" : "overflow-y-auto"}`}
+          style={isDock ? { touchAction: "pan-y" } : undefined}
+        >
+          <div className="px-4 pb-3 space-y-3.5 flex-1">
+            {/* Editor */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={sectionLabel}>Task text</span>
+                <span className="text-[10px] text-neutral-400 font-medium">Enter to save</span>
+              </div>
+              <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={handleEditorInput}
+                onBlur={handleEditorBlur}
+                className="w-full min-h-[72px] rounded-2xl border border-black/[0.06] bg-neutral-50/90 px-3.5 py-3 text-[14px] font-semibold text-gray-900 leading-snug focus:outline-none focus:border-[#007AFF]/50 focus:ring-4 focus:ring-[#007AFF]/10 focus:bg-white whitespace-pre-wrap break-words transition-shadow"
+                style={{
+                  fontSize: textStyleDraft?.fontSizePx ?? TASK_LABEL_SIZE_PX.default,
+                  fontWeight: textStyleDraft?.fontWeight === "bold" ? 700 : 600,
+                  fontStyle: textStyleDraft?.fontStyle === "italic" ? "italic" : "normal",
+                  textDecoration: textStyleDraft?.textDecoration === "none" || !textStyleDraft?.textDecoration
+                    ? undefined
+                    : textStyleDraft.textDecoration,
+                }}
+                data-placeholder="Type the task…"
+              />
+            </div>
+
+            {/* Typography toolbar */}
+            <div>
+              <div className={`${sectionLabel} mb-1.5`}>Style</div>
+              <div className="rounded-2xl border border-black/[0.06] bg-neutral-50/80 p-1.5 flex flex-wrap items-center gap-1">
+                <button type="button" className={toolBtn(textStyleDraft?.fontWeight === "bold")} onClick={() => applyFormat({ fontWeight: "bold" })} title="Bold (⌘B)" aria-pressed={textStyleDraft?.fontWeight === "bold"}>
+                  <Bold size={15} strokeWidth={2.5} />
+                </button>
+                <button type="button" className={toolBtn(textStyleDraft?.fontStyle === "italic")} onClick={() => applyFormat({ fontStyle: "italic" })} title="Italic (⌘I)" aria-pressed={textStyleDraft?.fontStyle === "italic"}>
+                  <Italic size={15} strokeWidth={2.5} />
+                </button>
+                <button type="button" className={toolBtn(textStyleDraft?.textDecoration === "underline")} onClick={() => applyFormat({ textDecoration: "underline" })} title="Underline (⌘U)" aria-pressed={textStyleDraft?.textDecoration === "underline"}>
+                  <Underline size={15} strokeWidth={2.5} />
+                </button>
+                <button type="button" className={toolBtn(textStyleDraft?.textDecoration === "line-through")} onClick={() => applyFormat({ textDecoration: "line-through" })} title="Strikethrough" aria-pressed={textStyleDraft?.textDecoration === "line-through"}>
+                  <Strikethrough size={15} strokeWidth={2.5} />
+                </button>
+                <span className="w-px h-6 bg-black/[0.08] mx-0.5" />
+                {TASK_FONT_SIZES.map((sz) => (
+                  <button
+                    key={sz}
+                    type="button"
+                    onClick={() => applyFormat({ fontSizePx: sz })}
+                    className={`sb-interactive h-9 min-w-[36px] px-1.5 rounded-xl border text-[11px] font-bold transition-all active:scale-[0.96] ${
+                      textStyleDraft?.fontSizePx === sz
+                        ? "border-[#007AFF]/40 bg-[#007AFF]/[0.12] text-[#007AFF]"
+                        : "border-black/[0.06] bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                    aria-pressed={textStyleDraft?.fontSizePx === sz}
+                  >
+                    {sz}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={toolBtn(false)}
+                  onClick={() => setTextStyleDraft(null)}
+                  title="Reset formatting"
+                >
+                  <Type size={15} strokeWidth={2.2} />
+                </button>
+              </div>
+            </div>
+
+            {/* Live board preview */}
+            <div>
+              <div className={`${sectionLabel} mb-1.5`}>On card</div>
+              <div className="rounded-2xl border border-black/[0.06] bg-gradient-to-b from-neutral-50 to-white px-3.5 py-3 min-h-[44px] flex items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <TaskMarkerLabel
+                  label={labelDraft.trim() || "Task preview"}
+                  color={colorDraft}
+                  markerType={markerType}
+                  textStyle={textStyleDraft}
+                  className="inline-block font-bold"
+                />
+              </div>
+            </div>
+
+            {/* Color */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={sectionLabel}>Ink color</span>
+                {colorDraft ? (
+                  <button
+                    type="button"
+                    onClick={() => setColorDraft(null)}
+                    className="text-[11px] font-semibold text-neutral-400 hover:text-[#FF3B30] transition-colors"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {TASK_COLOR_SPHERES.map((c) => {
+                  const selected = colorDraft === c.hex;
+                  return (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => setColorDraft(c.hex)}
+                      className={`sb-interactive relative w-9 h-9 rounded-full transition-transform active:scale-90 ${
+                        selected ? "scale-110" : "hover:scale-105"
+                      }`}
+                      style={{
+                        backgroundColor: c.hex,
+                        boxShadow: selected
+                          ? `0 0 0 2.5px #fff, 0 0 0 4.5px ${c.hex}, 0 4px 12px ${c.hex}55`
+                          : "0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.35)",
+                      }}
+                      title={c.name}
+                      aria-label={c.name}
+                      aria-pressed={selected}
+                    />
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setColorDraft(null)}
+                  className={`sb-interactive w-9 h-9 rounded-full bg-neutral-100 border border-black/[0.06] text-[13px] font-semibold text-neutral-400 flex items-center justify-center transition-transform active:scale-90 ${
+                    !colorDraft ? "ring-2 ring-[#007AFF] ring-offset-1" : "hover:bg-neutral-200/80"
+                  }`}
+                  title="No color"
+                  aria-pressed={!colorDraft}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Marker style */}
+            <div>
+              <div className={`${sectionLabel} mb-1.5`}>Felt marker</div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {MARKER_OPTIONS.map((m) => {
+                  const Icon = m.icon;
+                  const active = markerType === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMarkerType(m.id)}
+                      className={`sb-interactive flex flex-col items-center gap-1 rounded-2xl border px-1.5 py-2.5 transition-all active:scale-[0.97] ${
+                        active
+                          ? "border-[#007AFF]/35 bg-[#007AFF]/[0.08] text-[#007AFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
+                          : "border-black/[0.06] bg-white text-neutral-500 hover:bg-neutral-50"
+                      }`}
+                      aria-pressed={active}
+                    >
+                      <Icon size={15} strokeWidth={2.2} />
+                      <span className="text-[9px] font-bold tracking-wide">{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Footer ───────────────────────────────────────────────────── */}
+          <div
+            className={`shrink-0 border-t border-gray-100 bg-white/95 backdrop-blur-sm ${
+              isDock ? "px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]" : "px-4 py-3"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {onRemoveTask && !isAddingNew ? (
+                <button
+                  type="button"
+                  onClick={() => void handleRemove()}
+                  disabled={saving}
+                  className="sb-interactive flex items-center gap-1.5 rounded-2xl border border-[#FFD5D5] bg-[#FFF0F0] text-[#FF3B30] text-[12px] font-semibold px-3 min-h-11 hover:bg-[#FFE5E5] disabled:opacity-50 active:scale-[0.98] transition-all"
+                >
+                  <Trash2 size={14} strokeWidth={2.2} />
+                  Remove
+                </button>
+              ) : null}
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={requestClose}
+                className="sb-interactive rounded-2xl border border-gray-200 bg-white text-gray-800 text-[12px] font-semibold px-4 min-h-11 hover:bg-neutral-50 active:scale-[0.98] transition-all"
+              >
+                Cancel
+              </button>
+              <motion.button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={!hasChanges || saving}
+                whileTap={hasChanges && !saving ? premiumTap : {}}
+                className={`sb-interactive rounded-2xl text-[13px] font-bold px-5 min-h-11 transition-all ${
+                  hasChanges && !saving
+                    ? "text-white shadow-[0_4px_14px_rgba(0,122,255,0.35)]"
+                    : "bg-neutral-200 text-neutral-400 cursor-default"
+                }`}
+                style={
+                  hasChanges && !saving
+                    ? { background: "linear-gradient(180deg, #0A84FF 0%, #0070E0 100%)" }
+                    : undefined
+                }
+              >
+                {saving ? "Saving…" : isAddingNew ? "Add task" : "Save"}
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="px-6 py-10 text-center flex-1 flex flex-col items-center justify-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center text-neutral-400">
+            <Plus size={22} strokeWidth={2} />
+          </div>
+          <p className="text-[13px] text-neutral-500 leading-relaxed max-w-[220px]">
+            No task selected. Tap{" "}
+            <span className="font-bold text-[#007AFF]">+ Add</span> to create one for this slot.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 
   const content = (
     <motion.div
@@ -414,244 +762,26 @@ const TasksPad: React.FC<TasksPadProps> = ({
       transition={premiumSpring}
       className={`sb-tasks-pad flex flex-col ${
         isDock
-          ? "placement-dock-inner h-full min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-none border-0 shadow-none bg-transparent"
-          : "overflow-hidden rounded-xl border border-[var(--ios-gray-4)]/20 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] dark:bg-[var(--ios-background-secondary)] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)]"
+          ? "placement-dock-inner h-full min-h-0 flex-1 overflow-hidden rounded-none border-0 shadow-none bg-transparent"
+          : "overflow-hidden"
       }`}
       data-tasks-pad
       data-tasks-pad-dirty={hasChanges ? "true" : undefined}
       data-tasks-pad-presentation={presentation}
       style={{
         ...(isDock
-          ? { width: "100%", height: "100%", minHeight: 0, flex: 1, touchAction: "pan-y" }
+          ? { width: "100%", height: "100%", minHeight: 0, flex: 1 }
           : usePortal && portalStyle
-            ? { ...portalStyle, zIndex: 210 }
-            : { width: 320 }),
+            ? { ...portalStyle, zIndex: 210, width: 360 }
+            : { width: 360 }),
         fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-        backdropFilter: isDock ? undefined : "blur(12px) saturate(140%)",
-        borderColor: isDark && !isDock ? "color-mix(in srgb, var(--ios-gray-4) 8%, transparent)" : undefined,
       }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={handleKeyDown}
     >
-      {/* Dock chrome already shows title/close — skip duplicate flyout header. */}
-      {!isDock ? (
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--ios-gray-4)]/15 bg-[color-mix(in_srgb,var(--ios-background-tertiary)_70%,transparent)]">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-neutral-500 shrink-0">
-            Tasks Pad
-          </span>
-          <span className="text-[10px] font-mono text-neutral-400 truncate">· {slotKey}</span>
-        </div>
-        <button
-          type="button"
-          onClick={requestClose}
-          className="text-neutral-400 hover:text-neutral-600 text-sm leading-none px-1"
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      </div>
-      ) : null}
-
-      <div className="px-2 pt-2 pb-1 flex gap-1 overflow-x-auto items-center">
-        {regularTasks.map((t) => {
-          const active = !isAddingNew && t.id === activeTask?.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => selectExistingTask(t.id)}
-              className={`shrink-0 max-w-[120px] truncate text-[10px] px-2 py-1 rounded-md border ${
-                active
-                  ? "bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)] font-semibold"
-                  : "border-black/10 text-neutral-600"
-              }`}
-              title={t.taskLabel}
-            >
-              {t.taskLabel}
-            </button>
-          );
-        })}
-        {onAddTask ? (
-          <button
-            type="button"
-            onClick={beginAddTask}
-            className={`shrink-0 text-[10px] px-2 py-1 rounded-md border font-semibold ${
-              isAddingNew
-                ? "bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)]"
-                : "border-dashed border-[var(--ios-blue)]/40 text-[var(--ios-blue)]"
-            }`}
-          >
-            + Add
-          </button>
-        ) : null}
-      </div>
-
-      {isAddingNew || activeTask ? (
-        <>
-          {/* Selection scope deferred — contentEditable does not render spans. */}
-          <div className="px-3 pt-2 flex items-center gap-1">
-            <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mr-1">Apply to</span>
-            <span className="text-[10px] text-neutral-400 px-2 py-0.5">Whole task</span>
-          </div>
-
-          {isAddingNew ? (
-            <div className="px-3 pt-1 text-[11px] text-neutral-500">
-              New task for <span className="font-mono text-neutral-600">{slotKey}</span>
-            </div>
-          ) : null}
-
-          <div className="px-3 pt-2 pb-1 flex items-center gap-1 flex-wrap">
-            <button type="button" className={fmtBtn(textStyleDraft?.fontWeight === "bold")} onClick={() => applyFormat({ fontWeight: "bold" })} title="Bold">
-              <Bold size={13} strokeWidth={2.5} />
-            </button>
-            <button type="button" className={fmtBtn(textStyleDraft?.fontStyle === "italic")} onClick={() => applyFormat({ fontStyle: "italic" })} title="Italic">
-              <Italic size={13} strokeWidth={2.5} />
-            </button>
-            <button type="button" className={fmtBtn(textStyleDraft?.textDecoration === "underline")} onClick={() => applyFormat({ textDecoration: "underline" })} title="Underline">
-              <Underline size={13} strokeWidth={2.5} />
-            </button>
-            <button type="button" className={fmtBtn(textStyleDraft?.textDecoration === "line-through")} onClick={() => applyFormat({ textDecoration: "line-through" })} title="Strikethrough">
-              <Strikethrough size={13} strokeWidth={2.5} />
-            </button>
-            <span className="w-px h-5 bg-black/10 mx-0.5" />
-            {TASK_FONT_SIZES.map((sz) => (
-              <button
-                key={sz}
-                type="button"
-                onClick={() => applyFormat({ fontSizePx: sz })}
-                className={`h-7 min-w-[28px] px-1 rounded-md border text-[10px] font-semibold ${
-                  textStyleDraft?.fontSizePx === sz
-                    ? "bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)]"
-                    : "border-black/10 text-neutral-600"
-                }`}
-              >
-                {sz}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={fmtBtn(false)}
-              onClick={() => setTextStyleDraft(null)}
-              title="Reset formatting"
-            >
-              <Type size={13} strokeWidth={2.2} />
-            </button>
-          </div>
-
-          <div className="px-3 pt-1 pb-2">
-            <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Task text</div>
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={handleEditorInput}
-              onBlur={handleEditorBlur}
-              className="w-full min-h-[52px] rounded-md border border-[var(--ios-gray-4)]/20 bg-[var(--ios-background-secondary)] px-2.5 py-2 font-medium focus:outline-none focus:border-[var(--ios-blue)]/60 whitespace-pre-wrap break-words"
-              style={{ fontSize: TASK_LABEL_SIZE_PX.default }}
-            />
-          </div>
-
-          <div className="px-3 pb-2">
-            <div className="text-[9px] uppercase tracking-[0.4px] text-neutral-400 mb-1">Preview</div>
-            <div
-              className="rounded-md px-2.5 py-1.5 font-medium leading-tight border border-[var(--ios-gray-4)]/15"
-              style={{ fontSize: TASK_LABEL_SIZE_PX.default }}
-            >
-              <TaskMarkerLabel
-                label={labelDraft.trim() || "—"}
-                color={colorDraft}
-                markerType={markerType}
-                textStyle={textStyleDraft}
-                className="inline-block"
-              />
-            </div>
-          </div>
-
-          <div className="px-3 pt-1 pb-2.5 border-t border-[var(--ios-gray-4)]/15">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] uppercase tracking-[0.4px] text-neutral-400">Color &amp; marker</span>
-              {colorDraft ? (
-                <button type="button" onClick={() => setColorDraft(null)} className="text-[10px] text-neutral-400 hover:text-red-400">
-                  clear
-                </button>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {TASK_COLOR_SPHERES.map((c) => (
-                <button
-                  key={c.hex}
-                  type="button"
-                  onClick={() => setColorDraft(c.hex)}
-                  className={`w-7 h-7 rounded-full ring-1 transition-all ${colorDraft === c.hex ? "ring-[var(--ios-blue)] scale-110" : "ring-black/15 hover:ring-black/30"}`}
-                  style={{ backgroundColor: c.hex }}
-                  title={c.name}
-                />
-              ))}
-              <button
-                type="button"
-                onClick={() => setColorDraft(null)}
-                className={`w-7 h-7 rounded-full bg-[var(--ios-background-secondary)] ring-1 text-[10px] flex items-center justify-center ${!colorDraft ? "ring-[var(--ios-blue)] scale-110" : "ring-[var(--ios-gray-4)]/30"}`}
-                title="No color"
-              >
-                ×
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {(["highlight", "underline", "circle", "none"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMarkerType(m)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${
-                    markerType === m
-                      ? "bg-[var(--ios-blue)]/10 border-[var(--ios-blue)] text-[var(--ios-blue)]"
-                      : "border-black/15 hover:bg-[var(--ios-gray-6)]"
-                  }`}
-                >
-                  {m === "highlight" ? "Felt highlight" : m === "underline" ? "Felt line" : m === "circle" ? "Felt ring" : "None"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={`mt-auto border-t border-[var(--ios-gray-4)]/15 flex items-center gap-2 shrink-0 ${isDock ? "px-3 py-3" : "px-3 py-2"}`}>
-            {onRemoveTask ? (
-              <button
-                type="button"
-                onClick={() => void handleRemove()}
-                disabled={saving}
-                className={`rounded text-red-500/90 hover:text-red-500 hover:bg-red-500/5 disabled:opacity-50 ${isDock ? "text-[13px] min-h-11 px-3" : "text-[11px] px-2 py-1"}`}
-              >
-                Remove task
-              </button>
-            ) : null}
-            <div className="flex-1" />
-            <button
-              type="button"
-              onClick={requestClose}
-              className={`rounded border border-[var(--ios-gray-4)]/20 ${isDock ? "text-[13px] min-h-11 px-4" : "text-[11px] px-3 py-1"}`}
-            >
-              Cancel
-            </button>
-            <motion.button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!hasChanges || saving}
-              whileTap={hasChanges && !saving ? premiumTap : {}}
-              className={`rounded font-semibold ${isDock ? "text-[13px] min-h-11 px-4" : "text-[11px] px-3 py-1"} ${hasChanges && !saving ? "bg-[var(--ios-blue)] text-white" : "bg-neutral-200 text-neutral-400 cursor-default"}`}
-            >
-              {isAddingNew ? "Add task" : "Save"}
-            </motion.button>
-          </div>
-        </>
-      ) : (
-        <div className="px-3 py-6 text-center text-[12px] text-neutral-500">
-          Select a task tab or tap <span className="font-semibold text-[var(--ios-blue)]">+ Add</span> to create one.
-        </div>
-      )}
+      {refinedCard}
     </motion.div>
   );
 
@@ -662,19 +792,28 @@ const TasksPad: React.FC<TasksPadProps> = ({
       <motion.aside
         className="placement-dock no-print"
         role="dialog"
-        aria-label={`Tasks dock — ${slotKey}`}
+        aria-label={`Tasks dock — ${slotMeta.label}`}
         data-tasks-dock
         initial={reducedMotion ? false : { x: 24, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={premiumSpring}
       >
         <div className="placement-dock-header flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-3 bg-white/95 dark:bg-black/40">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[14px] font-bold shrink-0"
+            style={{ backgroundColor: slotMeta.accent }}
+          >
+            {slotMeta.icon}
+          </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+            <div
+              className="truncate text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: slotMeta.accent }}
+            >
               Tasks
             </div>
             <div className="truncate text-[18px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
-              {slotKey}
+              {slotMeta.label}
             </div>
           </div>
           <button
@@ -686,7 +825,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
             ×
           </button>
         </div>
-        <div className="placement-dock-body min-h-0 flex-1 overflow-hidden flex flex-col">
+        <div className="placement-dock-body min-h-0 flex-1 overflow-hidden flex flex-col bg-white">
           {content}
         </div>
       </motion.aside>,
@@ -699,7 +838,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
       <AnimatePresence>
         <div
           key="overlay"
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/25 backdrop-blur-[2px]"
           onClick={requestClose}
           onPointerDown={(e) => {
             if (e.target === e.currentTarget) requestClose();
@@ -713,14 +852,13 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   return createPortal(
     <AnimatePresence>
-      {/* Backdrop sits below the pad (z 205) so taps on the pad hit the pad, not onClose. */}
       <div
         key="overlay"
         onClick={requestClose}
         onPointerDown={(e) => {
           if (e.target === e.currentTarget) requestClose();
         }}
-        className="fixed inset-0 z-[205] bg-black/10"
+        className="fixed inset-0 z-[205] bg-black/15"
         aria-hidden
       />
       {content}
