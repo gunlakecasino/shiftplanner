@@ -7,9 +7,24 @@
  * is covered by engine/__tests__/eligibilityConstitution.test.ts.
  */
 import { describe, expect, it } from "vitest";
-import { ProposalValidationError } from "./validateAssignments.server";
+import {
+  isUuidKey,
+  ProposalValidationError,
+} from "./validateAssignments.server";
 import { dbToUi } from "./slot-keys";
 import { slotTypeForKey } from "./eligibilityCore";
+
+describe("isUuidKey (tm_profiles.id vs business tm_id)", () => {
+  it("accepts standard uuid strings", () => {
+    expect(isUuidKey("ba71f53c-b93f-4923-8e12-3e896d0a9a4c")).toBe(true);
+  });
+
+  it("rejects business TM keys so they never hit uuid columns", () => {
+    expect(isUuidKey("tm_drew")).toBe(false);
+    expect(isUuidKey("tm_jared")).toBe(false);
+    expect(isUuidKey("")).toBe(false);
+  });
+});
 
 describe("ProposalValidationError", () => {
   it("exposes invalid[] and 400 status for mutations route", () => {

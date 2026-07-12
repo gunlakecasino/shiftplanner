@@ -81,6 +81,14 @@ function normalizeNightDateIso(raw: string): string {
   return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
 }
 
+/** Postgres uuid columns reject non-uuid `.in()` values (e.g. business key `tm_drew`). */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuidKey(value: string): boolean {
+  return UUID_RE.test(value.trim());
+}
+
 /**
  * Resolve authoritative night_date for a night id via admin.
  * Schedule day-key MUST come from this — never from a client-supplied date alone.
@@ -219,30 +227,47 @@ export async function validateProposalsForNight(params: {
   >();
 
   if (neededTmIds.size > 0) {
+    // Board uses business keys (`tm_drew`). `tm_profiles.id` is uuid — never pass
+    // non-uuid keys into `.in("id", …)` or Postgres fails the whole batch and
+    // every live assign is rejected (production 400: invalid input syntax for type uuid).
     const ids = Array.from(neededTmIds);
-    const [{ data: byId, error: errById }, { data: byTmId, error: errByTmId }] =
-      await Promise.all([
-        client
-          .from("tm_profiles")
-          .select("id, tm_id, grave_pool, gender, display_name, full_name")
-          .in("id", ids),
-        client
-          .from("tm_profiles")
-          .select("id, tm_id, grave_pool, gender, display_name, full_name")
-          .in("tm_id", ids),
-      ]);
+    const uuidIds = ids.filter(isUuidKey);
+    const businessIds = ids.filter((id) => !isUuidKey(id));
 
-    if (errById || errByTmId) {
-      const msg = errById?.message || errByTmId?.message || "profile load failed";
+    const profileSelect =
+      "id, tm_id, grave_pool, gender, display_name, full_name" as const;
+
+    const [byIdRes, byTmIdRes] = await Promise.all([
+      uuidIds.length > 0
+        ? client.from("tm_profiles").select(profileSelect).in("id", uuidIds)
+        : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+      // Prefer business keys on tm_id; also include any raw uuids that might be stored there.
+      ids.length > 0
+        ? client.from("tm_profiles").select(profileSelect).in("tm_id", [
+            ...businessIds,
+            // If a client ever sent a uuid as tmId that is also stored in tm_id, cover it.
+            ...uuidIds,
+          ])
+        : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+    ]);
+
+    if (byIdRes.error || byTmIdRes.error) {
+      const msg =
+        byIdRes.error?.message ||
+        byTmIdRes.error?.message ||
+        "profile load failed";
       return invalidStar(`TM profile load failed: ${msg}`);
     }
 
     const seen = new Set<string>();
-    const profiles = [...(byId || []), ...(byTmId || [])].filter((p) => {
-      if (seen.has(p.id as string)) return false;
-      seen.add(p.id as string);
-      return true;
-    });
+    const profiles = [...(byIdRes.data || []), ...(byTmIdRes.data || [])].filter(
+      (p) => {
+        const pid = p.id as string;
+        if (seen.has(pid)) return false;
+        seen.add(pid);
+        return true;
+      },
+    );
 
     for (const p of profiles) {
       profileByIdOrTmId.set(p.id as string, p as Record<string, unknown>);
