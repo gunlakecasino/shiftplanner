@@ -14,7 +14,7 @@ import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { CriticalRepeatNameMark, TmPlacementTrail } from "./assignmentCardChrome";
+import { TmNameBlock } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
@@ -312,24 +312,34 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               }
             />
           ) : (
-            <div className="min-w-0">
-              <h3
-                className={`flex items-baseline gap-1.5 min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] ${assignmentState.kind === "unassigned" ? "text-[#9CA3AF] opacity-70" : "text-gray-900"}`}
-                style={assignmentState.kind === "unassigned" ? { color: "#A1A1AA", opacity: 0.75 } : {}}
-                title={
-                  placementTrail?.length
-                    ? `${displayName} · prior: ${placementTrail.join(" → ")}`
-                    : displayName
-                }
-              >
-                <span className="truncate min-w-0">{displayName}</span>
-                {showDigitalAssists ? (
-                  <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
-                ) : null}
-                {showDigitalAssists && isCriticalRepeatFit(fitChip) ? (
-                  <CriticalRepeatNameMark />
-                ) : null}
-              </h3>
+            <div
+              className="min-w-0"
+              title={
+                placementTrail?.length
+                  ? `${displayName} · prior: ${placementTrail.join(" → ")}`
+                  : displayName
+              }
+            >
+              {assignmentState.kind === "unassigned" ? (
+                <h3
+                  className="min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] text-[#9CA3AF] opacity-70"
+                  style={{ color: "#A1A1AA", opacity: 0.75 }}
+                >
+                  <span className="truncate min-w-0 block">{displayName}</span>
+                </h3>
+              ) : showDigitalAssists ? (
+                <TmNameBlock
+                  name={displayName}
+                  fontSize={25}
+                  placementTrail={placementTrail}
+                  placementTrailMatchSlotKey={def.key}
+                  criticalRepeat={isCriticalRepeatFit(fitChip)}
+                />
+              ) : (
+                <h3 className="min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] text-gray-900">
+                  <span className="truncate min-w-0 block">{displayName}</span>
+                </h3>
+              )}
               {assignmentState.kind === "draft" && assignmentState.previousName ? (
                 <span
                   className="text-[9px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px] block"

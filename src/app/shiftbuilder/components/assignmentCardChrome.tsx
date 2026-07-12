@@ -19,7 +19,14 @@ import { trailLabelMatchesSlotKey } from "./placementPadHelpers";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
-/** Last 3 grave placements before tonight — muted trail beside the TM name (builder only). */
+/**
+ * Last 3 grave placements before tonight (newest first).
+ *
+ * Layout contract: always a **secondary row under the TM name** — never inline
+ * on the name baseline. Inline trails fought the 24px name type on narrow RR
+ * halves (wrapped chips, ragged right edge, name truncation). Under-name row
+ * keeps name primary and trail scannable as quiet metadata.
+ */
 export function TmPlacementTrail({
   labels,
   matchSlotKey,
@@ -30,10 +37,12 @@ export function TmPlacementTrail({
 }) {
   if (!labels?.length) return null;
 
+  const full = labels.join(" → ");
+
   return (
     <span
-      className="sb-tm-placement-trail no-print inline-flex flex-wrap items-baseline gap-x-[3px] gap-y-[1px] shrink-0 self-baseline max-w-[46%] justify-end"
-      title={`Last ${labels.length} placements (newest first): ${labels.join(" → ")}`}
+      className="sb-tm-placement-trail no-print flex items-center gap-x-[3px] min-w-0 max-w-full overflow-hidden mt-[3px] leading-none"
+      title={`Last ${labels.length} placements (newest first): ${full}`}
       aria-label={`Recent placements: ${labels.join(", ")}`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
@@ -44,15 +53,22 @@ export function TmPlacementTrail({
         return (
           <React.Fragment key={`${label}-${i}`}>
             {i > 0 ? (
-              <span className="text-[7px] text-neutral-300/90 select-none leading-none" aria-hidden>
+              <span
+                className="text-[6.5px] text-neutral-300/80 select-none leading-none shrink-0"
+                aria-hidden
+              >
                 ·
               </span>
             ) : null}
             <span
-              className={`text-[8px] font-semibold uppercase tracking-[0.04em] leading-none tabular-nums ${
-                isRepeat ? "text-[#B91C1C]" : "text-neutral-400"
+              className={`text-[7.5px] font-semibold uppercase tracking-[0.06em] leading-none tabular-nums shrink-0 ${
+                isRepeat
+                  ? "text-[#B91C1C]"
+                  : "text-[color-mix(in_srgb,var(--ios-label)_38%,transparent)] dark:text-neutral-500"
               }`}
-              style={{ fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))" }}
+              style={{
+                fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
+              }}
             >
               {label}
             </span>
@@ -60,6 +76,51 @@ export function TmPlacementTrail({
         );
       })}
     </span>
+  );
+}
+
+/** Name row + optional under-name trail + critical mark — shared card name stack. */
+export function TmNameBlock({
+  name,
+  fontSize,
+  placementTrail,
+  placementTrailMatchSlotKey,
+  criticalRepeat = false,
+  trailing,
+  className = "",
+  nameClassName = "",
+}: {
+  name: string;
+  fontSize: number;
+  placementTrail?: string[];
+  placementTrailMatchSlotKey?: string;
+  criticalRepeat?: boolean;
+  /** Extra end-of-name-row content (draft "D" badge, etc.). */
+  trailing?: React.ReactNode;
+  className?: string;
+  nameClassName?: string;
+}) {
+  return (
+    <div className={`flex flex-col min-w-0 w-full ${className}`.trim()}>
+      <div className="flex items-center gap-1 min-w-0">
+        <span
+          className={`font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 ${nameClassName}`.trim()}
+          style={{
+            fontSize,
+            lineHeight: 1.05,
+            fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+          }}
+        >
+          {name}
+        </span>
+        {trailing}
+        {criticalRepeat ? <CriticalRepeatNameMark /> : null}
+      </div>
+      <TmPlacementTrail
+        labels={placementTrail}
+        matchSlotKey={placementTrailMatchSlotKey}
+      />
+    </div>
   );
 }
 
@@ -743,32 +804,22 @@ export function SlotAssignmentBody({
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
             transition={premiumSpring}
           >
-            <div className="flex items-baseline gap-1 min-w-0">
-              <span
-                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-                style={{
-                  fontSize,
-                  lineHeight: 1.02,
-                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-                }}
-              >
-                {state.proposedName}
-              </span>
-              <span
-                className="ml-1 text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none self-center"
-                style={{ paddingTop: "1px", paddingBottom: "1px" }}
-                title="Draft change from optimizer"
-              >
-                D
-              </span>
-              {showDigitalAssists ? (
-                <TmPlacementTrail
-                  labels={placementTrail}
-                  matchSlotKey={placementTrailMatchSlotKey}
-                />
-              ) : null}
-              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
-            </div>
+            <TmNameBlock
+              name={state.proposedName}
+              fontSize={fontSize}
+              placementTrail={placementTrail}
+              placementTrailMatchSlotKey={placementTrailMatchSlotKey}
+              criticalRepeat={criticalRepeat}
+              trailing={
+                <span
+                  className="text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none shrink-0"
+                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                  title="Draft change from optimizer"
+                >
+                  D
+                </span>
+              }
+            />
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}
@@ -783,35 +834,20 @@ export function SlotAssignmentBody({
           </motion.div>
         ) : (
           <div key="draft" className="flex flex-col min-w-0">
-            <div className="flex items-baseline gap-1 min-w-0">
-              <span
-                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-                style={{
-                  fontSize,
-                  lineHeight: 1.02,
-                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-                }}
-              >
-                {state.proposedName}
-              </span>
-              <span
-                className="ml-1 text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none self-center"
-                style={{ paddingTop: "1px", paddingBottom: "1px" }}
-                title="Draft change from optimizer"
-              >
-                D
-              </span>
-              {showDigitalAssists ? (
-                <TmPlacementTrail
-                  labels={placementTrail}
-                  matchSlotKey={placementTrailMatchSlotKey}
-                />
-              ) : null}
-              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
-            </div>
-            {isDuplicate && showDigitalAssists ? (
-              <DuplicateTmBadge otherSlots={otherSlotsForTm} />
-            ) : null}
+            <TmNameBlock
+              name={state.proposedName}
+              fontSize={fontSize}
+              criticalRepeat={false}
+              trailing={
+                <span
+                  className="text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none shrink-0"
+                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                  title="Draft change from optimizer"
+                >
+                  D
+                </span>
+              }
+            />
             {state.previousName ? (
               <span
                 className="text-[9px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px] px-1 py-[1px] inline-block"
@@ -826,7 +862,7 @@ export function SlotAssignmentBody({
         showDigitalAssists ? (
           <motion.div
             key={`assigned-${state.tmId ?? state.tmName}`}
-            className="flex items-center gap-1 min-w-0"
+            className="flex items-start gap-1 min-w-0 w-full"
             initial={{ opacity: 0, y: 6, scale: 0.93 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -2, scale: 0.97 }}
@@ -837,26 +873,18 @@ export function SlotAssignmentBody({
                 : { ...premiumSpring, stiffness: 400, damping: 28 }
             }
           >
-            {state.isLocked ? <LockIcon size={lockSize} /> : null}
-            <span className="inline-flex items-baseline gap-1 min-w-0">
-              <span
-                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-                style={{
-                  fontSize,
-                  lineHeight: 1.02,
-                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-                }}
-              >
-                {state.tmName}
+            {state.isLocked ? (
+              <span className="mt-[0.35em] shrink-0">
+                <LockIcon size={lockSize} />
               </span>
-              {showDigitalAssists ? (
-                <TmPlacementTrail
-                  labels={placementTrail}
-                  matchSlotKey={placementTrailMatchSlotKey}
-                />
-              ) : null}
-              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
-            </span>
+            ) : null}
+            <TmNameBlock
+              name={state.tmName}
+              fontSize={fontSize}
+              placementTrail={placementTrail}
+              placementTrailMatchSlotKey={placementTrailMatchSlotKey}
+              criticalRepeat={criticalRepeat}
+            />
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}
@@ -867,28 +895,16 @@ export function SlotAssignmentBody({
             className="flex items-center gap-1.5 min-w-0"
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}
-            <span className="inline-flex items-baseline gap-1 min-w-0">
-              <span
-                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-                style={{
-                  fontSize: showDigitalAssists ? fontSize : fontSize,
-                  lineHeight: 1.0,
-                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-                }}
-              >
-                {state.tmName}
-              </span>
-              {showDigitalAssists ? (
-                <TmPlacementTrail
-                  labels={placementTrail}
-                  matchSlotKey={placementTrailMatchSlotKey}
-                />
-              ) : null}
-              {criticalRepeat && showDigitalAssists ? <CriticalRepeatNameMark /> : null}
+            <span
+              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
+              style={{
+                fontSize,
+                lineHeight: 1.0,
+                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+              }}
+            >
+              {state.tmName}
             </span>
-            {isDuplicate && showDigitalAssists ? (
-              <DuplicateTmBadge otherSlots={otherSlotsForTm} />
-            ) : null}
           </div>
         )
       ) : state.kind === "covered" ? (
