@@ -51,7 +51,7 @@ const RosterItem = React.memo(function RosterItem({
         : "sb-roster-avatar--neutral";
 
   const rowClass = [
-    "sb-roster-row group flex items-center gap-2.5 px-2.5 py-2 text-sm touch-none border border-transparent",
+    "sb-roster-row group flex items-center gap-2.5 px-2.5 py-2.5 text-sm touch-none",
     rowTone === "scheduled" ? "sb-roster-row--scheduled" : "",
     rowTone === "on" ? "sb-roster-row--on" : "",
     isAssigned ? "sb-roster-row--placed" : "",
@@ -67,19 +67,20 @@ const RosterItem = React.memo(function RosterItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <div className="sb-roster-row__name truncate">{tm.name}</div>
-
-          {tm.primarySection && (
-            <span className="sb-roster-chip sb-roster-chip--section shrink-0">{tm.primarySection}</span>
-          )}
-
           {tm.gravePool && (
             <span className="sb-roster-chip sb-roster-chip--pool shrink-0" title={`Grave pool: ${tm.gravePool}`}>
               G
             </span>
           )}
         </div>
-
-        <div className="sb-roster-row__meta font-mono tabular-nums">{tm.id}</div>
+        <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+          {tm.primarySection ? (
+            <span className="sb-roster-chip sb-roster-chip--section shrink-0 truncate max-w-[9rem]">
+              {tm.primarySection}
+            </span>
+          ) : null}
+          <span className="sb-roster-row__meta font-mono tabular-nums truncate">{tm.id}</span>
+        </div>
       </div>
 
       {isAssigned && (
@@ -87,11 +88,10 @@ const RosterItem = React.memo(function RosterItem({
           {canEdit && !isLocked && onUnplace ? (
             <button
               type="button"
-              className="sb-roster-unplace-btn opacity-70 group-hover:opacity-100 hover:opacity-100 px-1.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] hover:bg-[#FF3B3014] active:scale-95 transition-all"
+              className="sb-roster-unplace-btn opacity-80 group-hover:opacity-100 hover:opacity-100 px-2 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] bg-[#FF3B3010] hover:bg-[#FF3B3018] active:scale-95 transition-all border border-[#FF3B3022]"
               title={`Unplace ${tm.name} from the board`}
               aria-label={`Unplace ${tm.name}`}
               onPointerDown={(e) => {
-                // Don't start a drag from the unplace control
                 e.stopPropagation();
               }}
               onClick={(e) => {

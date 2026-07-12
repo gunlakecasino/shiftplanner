@@ -1978,20 +1978,27 @@ function AuthedShiftBuilder() {
       isBuilderLiveCanvas &&
       currentView === "deployment";
     const dockInset = dockOpen ? placementDockStageRightInset() : 0;
+    // Floating roster is portaled over the stage — shift the live canvas left so
+    // zone cards never sit under the panel (same contract as placement dock right).
+    const rosterLeft = rosterOpen ? rosterPanelWidth() + 24 : 0;
     if (isBuilderLiveCanvas) {
       const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
         right: hGutter + dockInset,
         bottom: builderStageBottomInsetPx(),
-        left: hGutter,
+        left: rosterOpen ? rosterLeft : hGutter,
       };
     }
     return {
       top: stageTopInsetPx(),
       right: (tablet ? 32 : 40) + dockInset,
       bottom: tablet ? 56 : 68,
-      left: rosterOpen ? (tablet ? rosterPanelWidth() + 16 : rosterPanelWidth() + 16) : tablet ? 32 : 40,
+      left: rosterOpen
+        ? rosterPanelWidth() + 24
+        : tablet
+          ? 32
+          : 40,
     };
   }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey, currentView]);
 
@@ -7991,22 +7998,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           createPortal(
             <RosterDropZone
               isLocked={boardInteractionLocked || !canEditAssignments}
-              className={`sb-roster-shell z-[55] rounded-[18px] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "" : "pointer-events-none"}`}
+              className={`sb-roster-shell z-[55] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "sb-roster-shell--open" : "pointer-events-none"}`}
               style={{
                 width: rosterPanelWidth(),
                 top: stageTopInsetPx() + 8,
-                left: 12,
-                // Floating module (not a full-height slab covering half the page).
-                // Auto-sizes to its content (Placed list etc), min for nice module presence,
-                // max caps the coverage on iPad + MacBook. Inner body scrolls when long.
-                height: "auto",
-                minHeight: isTabletTouchDevice() ? 340 : 380,
-                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + 80}px)`,
-                transformOrigin: "0% 50%",
-                transform: rosterOpen ? "scale(1)" : "scale(0.94) translateX(-10px)",
+                left: 10,
+                // Full-height side panel (not a floating card over the board).
+                // Stage left inset matches width + gap so cards never sit underneath.
+                height: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + builderStageBottomInsetPx()}px)`,
+                maxHeight: `calc(var(--sb-viewport-height, 100dvh) - ${stageTopInsetPx() + builderStageBottomInsetPx()}px)`,
+                transformOrigin: "0% 0%",
+                transform: rosterOpen ? "translateX(0)" : "translateX(calc(-100% - 16px))",
                 opacity: rosterOpen ? 1 : 0,
                 pointerEvents: rosterOpen ? "auto" : "none",
-                transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease",
+                transition:
+                  "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease",
               }}
             >
               <RosterRail
@@ -8018,6 +8024,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 isDark={isDark}
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}
+                onClose={() => setRosterOpen(false)}
                 onUnmarkCalledOff={handleUnmarkCalledOff}
                 onUnplaceTm={(tmId, tmName) => {
                   const slotKey = getSlotForTmId(tmId);

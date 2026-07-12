@@ -44,6 +44,8 @@ export interface RosterRailProps {
   isDark: boolean;
   isCurrentNightLocked: boolean;
   canEditAssignments: boolean;
+  /** Close the floating roster panel. */
+  onClose?: () => void;
   /** Remove TM from Called Off — returns them to the assignable pool (slots stay cleared). */
   onUnmarkCalledOff?: (tmId: string, tmName: string) => void | Promise<void>;
   /** Unplace a placed TM from their board card (Already Placed section). */
@@ -163,6 +165,7 @@ const RosterRail = React.memo(function RosterRail({
   isDark,
   isCurrentNightLocked,
   canEditAssignments,
+  onClose,
   onUnmarkCalledOff,
   onUnplaceTm,
   amOverlapDayName,
@@ -384,17 +387,34 @@ const RosterRail = React.memo(function RosterRail({
   return (
     <>
       <header className="sb-roster-header">
-        <div className="sb-roster-header__title-row">
-          <div className="sb-roster-header__glyph" aria-hidden>
-            <MsIcon name="groups" size={13} fill={1} />
+        <div className="sb-roster-header__top">
+          <div className="sb-roster-header__identity">
+            <div className="sb-roster-header__glyph" aria-hidden>
+              <MsIcon name="groups" size={15} fill={1} />
+            </div>
+            <div className="min-w-0">
+              <p className="sb-roster-header__kicker">Tonight</p>
+              <h2 className="sb-roster-header__title">
+                {selectedDay.name.slice(0, 3)} {selectedDay.dateNum}
+              </h2>
+            </div>
           </div>
-          <span className="sb-roster-header__title">Grave Roster</span>
-          <div className="sb-roster-header__line" />
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="sb-roster-close sb-interactive"
+              aria-label="Close roster"
+              title="Close roster"
+            >
+              <MsIcon name="close" size={16} />
+            </button>
+          ) : null}
         </div>
         <p className="sb-roster-header__subtitle">
           {graveOnly
-            ? `Graves band · ${scheduledBandCount} on tonight's sheet`
-            : `Graves Default Schedule · ${scheduleRoster.length} scheduled`}
+            ? `Graves band · ${scheduledBandCount} on sheet`
+            : `Graves Default · ${scheduleRoster.length} scheduled`}
         </p>
         {(placedCount > 0 || unplacedCount > 0) && (
           <>
@@ -405,7 +425,10 @@ const RosterRail = React.memo(function RosterRail({
               </span>
               <span className="sb-roster-stat sb-roster-stat--pending">
                 <span className="sb-roster-stat__dot" />
-                {unplacedCount} to place
+                {unplacedCount} open
+              </span>
+              <span className="sb-roster-stat sb-roster-stat--pct" title="Placement progress">
+                {placementPct}%
               </span>
             </div>
             <div className="sb-roster-progress" aria-hidden>
@@ -421,9 +444,9 @@ const RosterRail = React.memo(function RosterRail({
             type="text"
             value={rosterSearch}
             onChange={(e) => setRosterSearch(e.target.value)}
-            placeholder="Search by name or ID…"
+            placeholder="Search name or ID…"
             className="sb-roster-search sb-interactive"
-            style={{ fontFamily: "var(--font-geist-sans)" }}
+            style={{ fontFamily: "var(--font-atkinson, var(--font-geist-sans), system-ui)" }}
           />
           <div className="sb-roster-search__icon">
             <MsIcon name="search" size={14} />
@@ -447,9 +470,6 @@ const RosterRail = React.memo(function RosterRail({
             Graves only
           </button>
         </div>
-        {graveOnly && (
-          <p className="sb-roster-filter-hint">Showing full-grave band from Graves Default Schedule</p>
-        )}
       </div>
 
       <div className="sb-roster-body">
