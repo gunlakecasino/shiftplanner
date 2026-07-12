@@ -95,13 +95,11 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   // measurement side-effects or ResizeObserver during the settle frames before capture).
   React.useLayoutEffect(() => {
     if (isPrintPreview) {
-      // Static compact for sacred print capture. Pick a safe small size from the
-      // prop or default. No hanging indent (prevents extra layout height). No RO.
-      // Additionally force nowrap + truncate so long custom labels (e.g. "Lobby")
-      // or measurement differences never add a second line in any browser's print engine.
+      // Static compact for Golden print/export — no ResizeObserver during capture.
+      // Long labels wrap with a hanging indent (tab) instead of trailing off with "…".
       const staticSize = `${parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.print)}px`;
       setFontSize(staticSize);
-      setHanging({ textIndent: '0', paddingLeft: '0' });
+      setHanging({ textIndent: "-1em", paddingLeft: "1em" });
       return;
     }
 

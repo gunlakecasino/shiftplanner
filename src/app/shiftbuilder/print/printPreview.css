@@ -372,6 +372,25 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-weight: 700 !important;
 }
 
+/* Official / all Golden — task labels wrap with hanging indent, never trail with "…" */
+.print-stage-inner .print-artboard .sb-golden-task-list [data-task-label],
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-task-list [data-task-label],
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-task-list [data-task-label] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.print-stage-inner .print-artboard .sb-golden-task-list [data-task-label] > span,
+body.printing-dual-mode .print-dual-container .print-artboard .sb-golden-task-list [data-task-label] > span,
+body.golden-export-raster .print-dual-container .print-artboard .sb-golden-task-list [data-task-label] > span {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  max-width: 100%;
+}
+
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-coverage-bar .sb-coverage-bar-label,
 .print-stage-inner .print-artboard[data-print-variant="official"] .sb-coverage-bar span,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="official"] .sb-coverage-bar span,
@@ -605,18 +624,21 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   margin-top: 2px;
 }
 
-/* Sheet 2 — allow aux/overlap tasks to wrap two lines in the upper band */
+/* Sheet 2 — aux/overlap tasks wrap with hanging indent (no "…") */
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper [data-task-label] span {
-  display: -webkit-box !important;
-  -webkit-box-orient: vertical !important;
-  -webkit-line-clamp: 2 !important;
+  display: block !important;
   white-space: normal !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
   line-height: 1.12 !important;
   font-size: 8.5px !important;
+  /* Continuation tab — first line flush, wrapped lines indented */
+  text-indent: -1em !important;
+  padding-left: 1em !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,

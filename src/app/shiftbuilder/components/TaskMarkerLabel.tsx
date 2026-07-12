@@ -182,6 +182,12 @@ function FeltRing({ ink, isPrint }: { ink: string; isPrint?: boolean }) {
   );
 }
 
+/** Continuation indent when a print task wraps (first line flush, next lines tabbed). */
+export const PRINT_TASK_HANGING = {
+  textIndent: "-1em",
+  paddingLeft: "1em",
+} as const;
+
 export function TaskMarkerLabel({
   label,
   color,
@@ -207,14 +213,25 @@ export function TaskMarkerLabel({
   const showMarker = shouldRenderTaskMarker(normalized, color);
   const ink = taskMarkerInk(color);
 
+  // Print: wrap long labels with a hanging indent (tab) instead of truncating with "…".
+  // Builder can pass measured hanging; print defaults to a fixed tab when unset.
+  const indent = hanging ?? (isPrintPreview ? PRINT_TASK_HANGING : { textIndent: "0", paddingLeft: "0" });
+
   const base: React.CSSProperties = {
     fontSize: textStyle?.fontSizePx ? `${textStyle.fontSizePx}px` : fontSize,
-    textIndent: hanging?.textIndent ?? "0",
-    paddingLeft: hanging?.paddingLeft ?? "0",
+    textIndent: indent.textIndent,
+    paddingLeft: indent.paddingLeft,
     color: textColor,
     ...taskLevelCss(textStyle),
     ...(isPrintPreview
-      ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+      ? {
+          whiteSpace: "normal",
+          overflow: "visible",
+          textOverflow: "clip",
+          overflowWrap: "break-word",
+          wordBreak: "break-word",
+          hyphens: "manual",
+        }
       : {}),
   };
 
@@ -289,7 +306,8 @@ export function TaskMarkerLabel({
           ...base,
           backgroundColor: "transparent",
           borderLeft: "none",
-          display: "inline-block",
+          // Block on print so multi-line wrap + hanging indent apply cleanly.
+          display: isPrintPreview ? "block" : "inline-block",
         }}
       >
         <span

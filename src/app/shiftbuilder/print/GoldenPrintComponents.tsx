@@ -118,8 +118,9 @@ export function GoldenTaskRow({
           isPrintPreview
           fontSize={`${TASK_LABEL_SIZE_PX.print}px`}
           textColor={textColor}
-          className="block rounded-sm font-bold py-px"
-          hanging={{ textIndent: "0", paddingLeft: "0" }}
+          className="block rounded-sm font-bold py-px min-w-0 max-w-full"
+          // Wrap overflow onto a new indented line (no "…"). Matches builder hanging indent.
+          hanging={{ textIndent: "-1em", paddingLeft: "1em" }}
         />
       </div>
     </div>
