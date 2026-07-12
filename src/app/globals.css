@@ -3089,6 +3089,25 @@ button,
     min-width: 36px !important;
     min-height: 36px !important;
   }
+
+  /* Aux + / − shell controls — were 20×20 and hard to hit with a finger. */
+  .sb-builder-stage .sb-aux-slot-btn {
+    min-width: var(--touch-min, 44px) !important;
+    min-height: var(--touch-min, 44px) !important;
+    touch-action: manipulation;
+  }
+
+  /* Roster unplace control — full HIG target on coarse pointer. */
+  .sb-roster-unplace-btn {
+    min-height: var(--touch-min, 44px);
+    min-width: 64px;
+    touch-action: manipulation;
+  }
+
+  /* Break badges on cards — enlarge hit area without changing ink size. */
+  .sb-break-badge-btn {
+    touch-action: manipulation;
+  }
 }
 
 /* ── iPad / coarse-pointer tablet foundation (Phase A) ───────────────────── */

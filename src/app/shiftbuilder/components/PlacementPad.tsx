@@ -30,6 +30,10 @@ import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
 import {
+  placeFixedPopover,
+  readViewportHeight,
+} from "@/lib/shiftbuilder/viewportLock";
+import {
   PLACEMENT_SPREAD_NIGHTS,
   PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
   getSpreadPlacementKeys,
@@ -501,15 +505,52 @@ function computePortalStyle(hostId: string, anchor: PlacementPadAnchor): React.C
   const rect = host.getBoundingClientRect();
   const gap = 6;
   const padW = PAD_W;
-  const maxH = Math.min(window.innerHeight - 24, PAD_MAX_HEIGHT);
-  let left = rect.right + gap; let top = rect.top;
-  if (anchor === "left") { left = rect.left - padW - gap; top = rect.top; }
-  else if (anchor === "bottom") { left = rect.right + gap; top = Math.max(8, rect.bottom - maxH); }
-  if (left + padW > window.innerWidth - 8) left = rect.left - padW - gap;
-  if (left < 8) left = 8;
-  const base: React.CSSProperties = { position: "fixed", left, width: padW, zIndex: 200, maxHeight: maxH, display: "flex", flexDirection: "column", overflow: "hidden" };
-  if (anchor !== "bottom") { let clampedTop = top; if (clampedTop + maxH > window.innerHeight - 8) clampedTop = Math.max(8, window.innerHeight - maxH - 8); return { ...base, top: clampedTop }; }
-  return { ...base, top };
+  // visualViewport on iPad Safari — window.innerHeight lies under dynamic chrome.
+  const maxH = Math.min(Math.max(180, readViewportHeight() - 24), PAD_MAX_HEIGHT);
+
+  // Prefer right of card; left-anchor cards open left; bottom-anchor still docks to card bottom.
+  const preferLeft = anchor === "left";
+  const placed = placeFixedPopover(rect, padW, maxH, {
+    gap,
+    pad: 8,
+    preferBelow: anchor !== "left",
+    preferLeft,
+  });
+
+  // For classic left/right side pads, pin vertical start to card top then clamp via placeFixedPopover.
+  let top = placed.top;
+  let left = placed.left;
+  if (anchor === "right" || anchor === "left") {
+    // Re-place with height-aware clamp but prefer aligning top with card.
+    const aligned = placeFixedPopover(
+      new DOMRect(rect.x, rect.y, rect.width, Math.min(rect.height, 40)),
+      padW,
+      maxH,
+      { gap, pad: 8, preferBelow: true, preferLeft },
+    );
+    top = aligned.top;
+    left = aligned.left;
+    // Prefer aligning with card top when it fits.
+    if (rect.top + maxH <= readViewportHeight() - 8) {
+      top = Math.max(8, rect.top);
+    }
+  } else if (anchor === "bottom") {
+    // Sit beside card, bottom-aligned within viewport.
+    left = placed.left;
+    top = Math.max(8, Math.min(rect.bottom - maxH, placed.top));
+  }
+
+  return {
+    position: "fixed",
+    left,
+    top,
+    width: padW,
+    zIndex: 200,
+    maxHeight: maxH,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
 }
 
 export function usePortalPlacementStyle(hostId: string | undefined, anchor: PlacementPadAnchor, _tabletPickerOpen = false): React.CSSProperties | null {
@@ -523,7 +564,25 @@ export function usePortalPlacementStyle(hostId: string | undefined, anchor: Plac
       setStyle(computePortalStyle(hostId, anchor));
     });
   }, [hostId, anchor]);
-  useLayoutEffect(() => { update(); window.addEventListener("resize", update); window.addEventListener("scroll", update, true); const vv = window.visualViewport; if (vv) vv.addEventListener("resize", update); return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); if (vv) vv.removeEventListener("resize", update); }; }, [update]);
+  useLayoutEffect(() => {
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
+    }
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      if (vv) {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+      }
+    };
+  }, [update]);
   return style;
 }
 

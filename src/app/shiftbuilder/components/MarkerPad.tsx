@@ -1342,12 +1342,13 @@ const MarkerPad: React.FC<MarkerPadProps> = ({
   // Default view in TmPicker uses the first; typing switches to the second.
 
   const isDarkPanel = isDark !== false;
+  // iPad: clear Face ID bar + home indicator; desktop keeps classic insets.
   const panelStyle: React.CSSProperties = {
     position: "fixed",
-    top: 68,
-    right: 12,
+    top: "max(68px, calc(12px + env(safe-area-inset-top, 0px)))",
+    right: "max(12px, env(safe-area-inset-right, 0px))",
     width: 284,
-    bottom: 58,
+    bottom: "max(58px, calc(12px + env(safe-area-inset-bottom, 0px)))",
     borderRadius: 20,
     background: "var(--sb-glass)",
     backdropFilter: "var(--sb-glass-blur)",
