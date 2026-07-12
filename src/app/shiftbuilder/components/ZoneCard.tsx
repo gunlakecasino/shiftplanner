@@ -261,6 +261,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             onPointerDown: longPress.onPointerDown,
             onPointerUp: longPress.onPointerUp,
             onPointerCancel: longPress.onPointerCancel,
+            onContextMenu: longPress.onContextMenu,
           }
         : {})}
       {...(!isLocked ? listeners : {})}

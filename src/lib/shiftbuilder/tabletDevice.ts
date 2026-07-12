@@ -41,6 +41,15 @@ export function isTabletTouchDevice(): boolean {
   }
 }
 
+/**
+ * iPad / finger: single tap opens placement & tasks pads.
+ * Desktop mouse: double-click (see CardTaskZone.padUsesSingleTap).
+ * Uses coarse pointer (not min-width 768) so Split View still single-taps.
+ */
+export function padUsesSingleTap(): boolean {
+  return isCoarsePointerDevice();
+}
+
 /** Floating roster width — compact on tablet for more artboard space. */
 export function rosterPanelWidth(): number {
   return isTabletTouchDevice() || isCoarsePointerDevice() ? 200 : 268;

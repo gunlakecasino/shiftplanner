@@ -3154,6 +3154,12 @@ button,
     flex-direction: column;
     min-height: 0;
   }
+
+  /* Tasks dock body may scroll independently of PlacementPad picker scroll rules. */
+  .placement-dock [data-tasks-pad] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
 
 /* ── iPad / coarse-pointer tablet foundation (Phase A) ───────────────────── */

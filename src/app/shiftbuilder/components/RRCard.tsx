@@ -434,6 +434,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onPointerDown: longPress.onPointerDown,
             onPointerUp: longPress.onPointerUp,
             onPointerCancel: longPress.onPointerCancel,
+            onContextMenu: longPress.onContextMenu,
           }
         : {})}
       className={`relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}

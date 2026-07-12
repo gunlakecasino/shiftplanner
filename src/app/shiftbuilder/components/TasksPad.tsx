@@ -21,6 +21,8 @@ import {
   type TaskTextStyle,
 } from "@/lib/shiftbuilder/taskTextStyle";
 
+export type TasksPadPresentation = "flyout" | "dock";
+
 export interface TasksPadProps {
   slotKey: string;
   task?: NightSlotTask;
@@ -28,6 +30,11 @@ export interface TasksPadProps {
   hostId?: string;
   /** Flyout anchor — matches Placement Pad for the same slot. */
   anchor?: PlacementPadAnchor;
+  /**
+   * `dock` = fill tablet inspector shell (no body-portal flyout).
+   * Used on coarse-pointer devices so the editor stays on-screen.
+   */
+  presentation?: TasksPadPresentation;
   /** When true, start in add-new-task mode (even if the slot already has tasks). */
   addMode?: boolean;
   onClose: () => void;
@@ -80,6 +87,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
   slotTasks = [],
   hostId,
   anchor = "right",
+  presentation = "flyout",
   addMode: initialAddMode = false,
   onClose,
   onEditTask,
@@ -91,6 +99,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
   onRemoveTask,
   isDark = false,
 }) => {
+  const isDock = presentation === "dock";
   const regularTasks = slotTasks.filter((t) => !t.isCoverage);
   const [isAddingNew, setIsAddingNew] = useState(
     initialAddMode || (!initialTask && regularTasks.length === 0),
@@ -121,8 +130,8 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
-  const portalStyle = usePortalPlacementStyle(hostId, anchor);
-  const usePortal = !!hostId && !!portalStyle;
+  const portalStyle = usePortalPlacementStyle(isDock ? undefined : hostId, anchor);
+  const usePortal = !isDock && !!hostId && !!portalStyle;
 
   /** Content signature so pad resyncs when task rows change, not only list length. */
   const slotTasksSig = React.useMemo(
@@ -399,26 +408,35 @@ const TasksPad: React.FC<TasksPadProps> = ({
   const content = (
     <motion.div
       key="tasks-pad"
-      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
+      initial={reducedMotion || isDock ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: -2 }}
+      exit={reducedMotion || isDock ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: -2 }}
       transition={premiumSpring}
-      className="sb-tasks-pad rounded-xl border border-[var(--ios-gray-4)]/20 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] dark:bg-[var(--ios-background-secondary)] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)] overflow-hidden flex flex-col"
+      className={`sb-tasks-pad flex flex-col ${
+        isDock
+          ? "placement-dock-inner h-full min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-none border-0 shadow-none bg-transparent"
+          : "overflow-hidden rounded-xl border border-[var(--ios-gray-4)]/20 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] dark:bg-[var(--ios-background-secondary)] shadow-[0_10px_30px_rgba(0,0,0,0.18),_inset_0_1px_0_rgba(255,255,255,0.6)]"
+      }`}
       data-tasks-pad
       data-tasks-pad-dirty={hasChanges ? "true" : undefined}
+      data-tasks-pad-presentation={presentation}
       style={{
-        ...(usePortal && portalStyle
-          ? { ...portalStyle, zIndex: 210 }
-          : { width: 320 }),
+        ...(isDock
+          ? { width: "100%", height: "100%", minHeight: 0, flex: 1, touchAction: "pan-y" }
+          : usePortal && portalStyle
+            ? { ...portalStyle, zIndex: 210 }
+            : { width: 320 }),
         fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-        backdropFilter: "blur(12px) saturate(140%)",
-        borderColor: isDark ? "color-mix(in srgb, var(--ios-gray-4) 8%, transparent)" : undefined,
+        backdropFilter: isDock ? undefined : "blur(12px) saturate(140%)",
+        borderColor: isDark && !isDock ? "color-mix(in srgb, var(--ios-gray-4) 8%, transparent)" : undefined,
       }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={handleKeyDown}
     >
+      {/* Dock chrome already shows title/close — skip duplicate flyout header. */}
+      {!isDock ? (
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--ios-gray-4)]/15 bg-[color-mix(in_srgb,var(--ios-background-tertiary)_70%,transparent)]">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-neutral-500 shrink-0">
@@ -435,6 +453,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
           ✕
         </button>
       </div>
+      ) : null}
 
       <div className="px-2 pt-2 pb-1 flex gap-1 overflow-x-auto items-center">
         {regularTasks.map((t) => {
@@ -598,13 +617,13 @@ const TasksPad: React.FC<TasksPadProps> = ({
             </div>
           </div>
 
-          <div className="mt-auto border-t border-[var(--ios-gray-4)]/15 px-3 py-2 flex items-center gap-2">
+          <div className={`mt-auto border-t border-[var(--ios-gray-4)]/15 flex items-center gap-2 shrink-0 ${isDock ? "px-3 py-3" : "px-3 py-2"}`}>
             {onRemoveTask ? (
               <button
                 type="button"
                 onClick={() => void handleRemove()}
                 disabled={saving}
-                className="text-[11px] px-2 py-1 rounded text-red-500/90 hover:text-red-500 hover:bg-red-500/5 disabled:opacity-50"
+                className={`rounded text-red-500/90 hover:text-red-500 hover:bg-red-500/5 disabled:opacity-50 ${isDock ? "text-[13px] min-h-11 px-3" : "text-[11px] px-2 py-1"}`}
               >
                 Remove task
               </button>
@@ -613,7 +632,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
             <button
               type="button"
               onClick={requestClose}
-              className="text-[11px] px-3 py-1 rounded border border-[var(--ios-gray-4)]/20"
+              className={`rounded border border-[var(--ios-gray-4)]/20 ${isDock ? "text-[13px] min-h-11 px-4" : "text-[11px] px-3 py-1"}`}
             >
               Cancel
             </button>
@@ -622,7 +641,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
               onClick={() => void handleSave()}
               disabled={!hasChanges || saving}
               whileTap={hasChanges && !saving ? premiumTap : {}}
-              className={`text-[11px] px-3 py-1 rounded font-semibold ${hasChanges && !saving ? "bg-[var(--ios-blue)] text-white" : "bg-neutral-200 text-neutral-400 cursor-default"}`}
+              className={`rounded font-semibold ${isDock ? "text-[13px] min-h-11 px-4" : "text-[11px] px-3 py-1"} ${hasChanges && !saving ? "bg-[var(--ios-blue)] text-white" : "bg-neutral-200 text-neutral-400 cursor-default"}`}
             >
               {isAddingNew ? "Add task" : "Save"}
             </motion.button>
@@ -635,6 +654,45 @@ const TasksPad: React.FC<TasksPadProps> = ({
       )}
     </motion.div>
   );
+
+  // Tablet dock shell — full-height inspector (same chrome as PlacementDock).
+  if (isDock) {
+    if (typeof document === "undefined") return null;
+    return createPortal(
+      <motion.aside
+        className="placement-dock no-print"
+        role="dialog"
+        aria-label={`Tasks dock — ${slotKey}`}
+        data-tasks-dock
+        initial={reducedMotion ? false : { x: 24, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={premiumSpring}
+      >
+        <div className="placement-dock-header flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-3 bg-white/95 dark:bg-black/40">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+              Tasks
+            </div>
+            <div className="truncate text-[18px] font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
+              {slotKey}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={requestClose}
+            className="sb-interactive sb-tablet-touch-target flex h-11 w-11 items-center justify-center rounded-full border border-black/[0.06] bg-neutral-100 text-lg text-neutral-500"
+            aria-label="Close tasks"
+          >
+            ×
+          </button>
+        </div>
+        <div className="placement-dock-body min-h-0 flex-1 overflow-hidden flex flex-col">
+          {content}
+        </div>
+      </motion.aside>,
+      document.body,
+    );
+  }
 
   if (!usePortal) {
     return (

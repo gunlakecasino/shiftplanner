@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import { isCoarsePointerDevice } from "@/lib/shiftbuilder/tabletDevice";
+import { padUsesSingleTap as padUsesSingleTapDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 export type OpenTasksPadHandler = (
   slotKey: string,
@@ -16,13 +16,9 @@ export type OpenPlacementPadHandler = (
   event?: React.MouseEvent,
 ) => void;
 
-/**
- * iPad / finger: single tap opens pads.
- * Uses coarse pointer (not min-width 768) so Split View / Stage Manager still
- * single-taps — previously those modes fell back to double-click.
- */
+/** Re-export — single-tap pads on any coarse pointer (Split View safe). */
 export function padUsesSingleTap(): boolean {
-  return isCoarsePointerDevice();
+  return padUsesSingleTapDevice();
 }
 
 /** Upper assignee band — tap (iPad) or double-click (desktop) opens Placement Pad. */

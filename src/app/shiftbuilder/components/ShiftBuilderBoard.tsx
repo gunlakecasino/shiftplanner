@@ -690,13 +690,35 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     setActiveTaskEditPad(null);
   }, []);
 
+  // Coarse pointer (incl. Split View < 768px) — dock inspector instead of flyout pads.
+  // Declared before handleOpenTaskTextEdit so tablet open keeps slot selection for stage inset.
+  const [useTabletDock, setUseTabletDock] = React.useState(false);
+  React.useEffect(() => {
+    const apply = () =>
+      setUseTabletDock(
+        !isPrintPreview && (isTabletTouchDevice() || isCoarsePointerDevice()),
+      );
+    apply();
+    const mq = window.matchMedia("(pointer: coarse)");
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, [isPrintPreview]);
+
   const handleOpenTaskTextEdit = React.useCallback((
     slotKey: string,
     task?: NightSlotTask,
     options?: { addMode?: boolean },
   ) => {
     if (isPrintPreview) return;
-    onSlotClose?.();
+    // Desktop flyout: close placement so two floating pads don't stack.
+    // Tablet dock: keep (or set) slot selection so stage right-inset + peer-dim
+    // stay active. PlacementDock already yields when activeTaskEditPad is set;
+    // closing tasks returns the operator to the placement dock for that slot.
+    if (useTabletDock) {
+      onSlotOpen?.(slotKey);
+    } else {
+      onSlotClose?.();
+    }
     const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[slotKey] ?? []).filter(
       (t) => !t.isCoverage,
     );
@@ -710,7 +732,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       anchor: placement?.anchor ?? "right",
       addMode,
     });
-  }, [isPrintPreview, selectedTasks, onSlotClose, auxDefs]);
+  }, [isPrintPreview, selectedTasks, onSlotClose, onSlotOpen, auxDefs, useTabletDock]);
 
   // Close flyout pads on outside click (placement + tasks).
   // Dirty Tasks Pad asks before discard (matches in-pad Cancel / Escape).
@@ -741,24 +763,18 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return () => document.removeEventListener("click", onDocClick, true);
   }, [selectedSlotKey, activeTaskEditPad, onSlotClose, closeTaskTextEditPad]);
 
-  // Coarse pointer (incl. Split View < 768px) — dock inspector instead of flyout pads.
-  const [useTabletDock, setUseTabletDock] = React.useState(false);
-  React.useEffect(() => {
-    const apply = () =>
-      setUseTabletDock(
-        !isPrintPreview && (isTabletTouchDevice() || isCoarsePointerDevice()),
-      );
-    apply();
-    const mq = window.matchMedia("(pointer: coarse)");
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, [isPrintPreview]);
-
   const tabletOverlayOpen =
     useTabletDock && !!(selectedSlotKey || activeTaskEditPad);
 
   React.useEffect(() => {
     setOpsStatusBarVisible(!tabletOverlayOpen);
+  }, [tabletOverlayOpen]);
+
+  // Let CSS / stage know the right inspector is open (tasks or placement dock).
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("sb-tablet-dock-open", tabletOverlayOpen);
+    return () => document.body.classList.remove("sb-tablet-dock-open");
   }, [tabletOverlayOpen]);
 
   const renderTaskTextEditPad = () => {
@@ -768,12 +784,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     );
     return (
       <TasksPad
-        key={`${activeTaskEditPad.slotKey}:${activeTaskEditPad.task?.id ?? "slot"}:${activeTaskEditPad.addMode ? "add" : "edit"}`}
+        key={`${activeTaskEditPad.slotKey}:${activeTaskEditPad.task?.id ?? "slot"}:${activeTaskEditPad.addMode ? "add" : "edit"}:${useTabletDock ? "dock" : "flyout"}`}
         slotKey={activeTaskEditPad.slotKey}
         task={activeTaskEditPad.task}
         slotTasks={slotTaskList}
-        hostId={activeTaskEditPad.hostId}
+        hostId={useTabletDock ? undefined : activeTaskEditPad.hostId}
         anchor={activeTaskEditPad.anchor}
+        presentation={useTabletDock ? "dock" : "flyout"}
         addMode={activeTaskEditPad.addMode}
         onClose={closeTaskTextEditPad}
         onEditTask={onEditTask}
@@ -787,6 +804,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       />
     );
   };
+
+  // On tablet dock: prefer tasks inspector over placement when both would open.
+  const showPlacementDock =
+    useTabletDock &&
+    !!activePlacementPad &&
+    !useExternalPad &&
+    !activeTaskEditPad;
 
   // Equalize card heights within each grid row on the deployment sheet.
   React.useEffect(() => {
@@ -1991,11 +2015,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         )}
       </div>
 
-      {/* iPad inspector dock — full-height right panel; avoids flyout overflow. */}
-      {!isPrintPreview &&
-        useTabletDock &&
-        activePlacementPad &&
-        !useExternalPad && (
+      {/* iPad inspector dock — full-height right panel; avoids flyout overflow.
+          Tasks dock takes priority when the task editor is open. */}
+      {!isPrintPreview && showPlacementDock && activePlacementPad && (
           <PlacementDock
             {...placementPadProps(activePlacementPad.slotKey)}
             onClose={() => onSlotClose?.()}

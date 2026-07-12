@@ -397,6 +397,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             onPointerDown: longPress.onPointerDown,
             onPointerUp: longPress.onPointerUp,
             onPointerCancel: longPress.onPointerCancel,
+            onContextMenu: longPress.onContextMenu,
           }
         : {})}
       {...(!isLocked && !(isUnsetBlank && !hasTM) ? listeners : {})}

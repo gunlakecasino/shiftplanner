@@ -1968,9 +1968,20 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
-    // Placement dock (iPad inspector) is 380px fixed right — shift stage so cards aren't buried.
+    // Placement / Tasks dock (iPad inspector) is 380px fixed right — shift stage so cards aren't buried.
+    // selectedSlotKey covers both: Tasks dock keeps selection open on coarse pointer.
+    const coarse =
+      tablet ||
+      (typeof window !== "undefined" &&
+        (() => {
+          try {
+            return window.matchMedia("(pointer: coarse)").matches;
+          } catch {
+            return false;
+          }
+        })());
     const dockOpen =
-      (tablet || (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches)) &&
+      coarse &&
       !!selectedSlotKey &&
       isBuilderLiveCanvas &&
       currentView === "deployment";
