@@ -993,8 +993,12 @@ export async function previewWeekEngine(weekStartIso: string): Promise<WeekPrevi
       // Mirrors the interactive single-night engine's default: narrow to
       // tonight's Graves Default Schedule when it's loaded, else use the
       // full grave pool.
-      const rosterForEngine =
+      const scheduledRoster =
         scheduledIds.size > 0 ? grave.filter((tm) => scheduledIds.has(tm.id)) : grave;
+      // Subtract forward-dated PTO/LOA/off for this night (mirrors sudoBatchPlanner).
+      const { getUnavailableTmIdsForDate } = await import("@/lib/shiftbuilder/availability.server");
+      const unavailable = await getUnavailableTmIdsForDate(meta.nightIso);
+      const rosterForEngine = scheduledRoster.filter((tm) => !unavailable.has(tm.id));
 
       return {
         nightIso: meta.nightIso,

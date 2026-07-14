@@ -471,9 +471,16 @@ async function runEngineForSingleNight(params: {
   // requireSchedule gates whether we RUN a night (skip with no schedule data).
   // filterBySchedule gates whether we NARROW the roster to scheduled TMs only —
   // defaults false so the full grave pool is always available.
-  const rosterForEngine = (filterBySchedule && scheduledIds.size > 0)
+  const scheduledRoster = (filterBySchedule && scheduledIds.size > 0)
     ? grave.filter((tm) => scheduledIds.has(tm.id))
     : grave;
+  // Subtract forward-dated PTO/LOA/off for this night so the engine never places
+  // someone who is unavailable (net-new availability model, keyed on slug tm_id).
+  const { getUnavailableTmIdsForDate } = await import("./availability.server");
+  const unavailable = await getUnavailableTmIdsForDate(nightDate);
+  const rosterForEngine = scheduledRoster.filter((tm) => !unavailable.has(tm.id));
+  const excludedForPto = scheduledRoster.length - rosterForEngine.length;
+  if (excludedForPto > 0) notes.push(`Excluded ${excludedForPto} TM(s) off (PTO/LOA) on ${nightDate}`);
 
   if (rosterForEngine.length === 0) {
     return { nightId, nightDate, dayName, status: "skip", assigned: 0, preserved: 0, unfilled: 0, notes: ["Skipped: no available TMs for this night"] };
