@@ -161,6 +161,12 @@ async function fetchOnScheduleTmIds(
 
 export type NightCoreBundlePayload = {
   nightId: string | null;
+  /** Night-level lifecycle: draft | published | archived | locked (nights.status). */
+  status?: string | null;
+  /** Night-level lock (nights.is_locked). When true, board writes must be blocked client-side. */
+  isLocked?: boolean;
+  /** Night row updated_at — optimistic concurrency for batch_apply_draft. */
+  updatedAt?: string | null;
   assignments: Record<string, any>;
   auxDefs: AuxDef[];
   members: any[];
@@ -189,6 +195,27 @@ async function fetchAuxLayoutForNight(nightId: string): Promise<unknown | null> 
     return null;
   }
   return data?.aux_layout ?? null;
+}
+
+async function fetchNightMeta(
+  nightId: string | null,
+  isoDate: string,
+): Promise<{ status: string | null; isLocked: boolean; updatedAt: string | null }> {
+  const supabase = getBundleSupabase();
+  // Prefer id; fall back to date so callers always get meta when a night row exists.
+  const query = nightId
+    ? supabase.from("nights").select("status, is_locked, updated_at").eq("id", nightId).maybeSingle()
+    : supabase.from("nights").select("status, is_locked, updated_at").eq("night_date", isoDate).maybeSingle();
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[nightCoreBundle] night meta fetch failed", error.message);
+    return { status: null, isLocked: false, updatedAt: null };
+  }
+  return {
+    status: (data as any)?.status ?? null,
+    isLocked: !!(data as any)?.is_locked,
+    updatedAt: (data as any)?.updated_at ?? null,
+  };
 }
 
 async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreBundlePayload> {
@@ -251,8 +278,13 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
 
   const gravesScheduleRoster = buildGravesScheduleRosterRows(scheduled, allMembers);
 
+  const nightMeta = await fetchNightMeta(nightId, isoDate);
+
   return {
     nightId,
+    status: nightMeta.status,
+    isLocked: nightMeta.isLocked,
+    updatedAt: nightMeta.updatedAt,
     assignments,
     auxDefs,
     members,

@@ -484,6 +484,17 @@ async function runEngineForSingleNight(params: {
   // legacy runWeightedPlanner which never saw engine_eligibility_rules /
   // engine_signal_overrides). "no-ai" + "all-existing" reproduces the batch
   // runner's prior deterministic, never-overwrite-a-filled-slot behavior.
+  //
+  // N4 (early): load Supervisor-Brain / ops knowledge so hard accommodations
+  // (e.g. "Daryl never sweeps") apply on the batch path, not only at write-gate.
+  let knowledge: import("./opsKnowledge/types").OpsKnowledge | undefined;
+  try {
+    const { loadOpsKnowledgeServer } = await import("./opsKnowledge/opsKnowledge.server");
+    knowledge = await loadOpsKnowledgeServer();
+  } catch (e) {
+    console.warn("[batch-night] loadOpsKnowledgeServer failed — engine runs without knowledge", e);
+  }
+
   const orderedSlots = getSlotsInPlacementOrder();
   const engineResult = runNightEngineFromClient(
     {
@@ -501,6 +512,7 @@ async function runEngineForSingleNight(params: {
       preferencesByTm: prefByTm,
       pairAffinitiesByTm: pairByTm,
       accommodationsByTm: accByTm,
+      knowledge,
     },
     { mode: "no-ai", preserve: "all-existing" },
   );
