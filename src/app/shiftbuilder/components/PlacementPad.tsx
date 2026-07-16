@@ -609,6 +609,48 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const isOverlapSlot = isOverlapInsightSlotKey(slotKey);
   const isDock = presentation === "dock";
   const padLarge = isDock;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogTitleId = React.useId();
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const frame = requestAnimationFrame(() => dialogRef.current?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (isDock || event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [isDock]);
 
   // Original heavy logic kept (history, rotation, xAI, fit) — gated for OL in UI
   const currentIso = nightIsoFromDate(selectedDay.date);
@@ -1265,7 +1307,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-bold tracking-[0.14em] uppercase mb-px" style={{ color: refinedZoneColor }}>{label}</p>
-              <h2 className="text-[18px] font-bold text-gray-900 leading-tight truncate">{refinedName}</h2>
+              <h2 id={dialogTitleId} className="text-[18px] font-bold text-gray-900 leading-tight truncate">{refinedName}</h2>
             </div>
           </div>
 
@@ -1278,8 +1320,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                 </div>
               </div>
             )}
-            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="mt-0.5 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200" aria-label="Close">
-              <X className="w-3 h-3 text-gray-500" />
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="sb-tablet-touch-target mt-0.5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200" aria-label="Close assignment panel">
+              <X className="w-4 h-4 text-gray-500" />
             </button>
           </div>
         </div>
@@ -1652,6 +1694,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
   const outer = (
     <motion.div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal={isDock ? undefined : true}
+      aria-labelledby={dialogTitleId}
+      tabIndex={-1}
       className={`placement-pad no-print ${isDock ? "placement-dock-inner h-full" : usePortalLocal ? "fixed" : anchorClass(anchor)} flex flex-col overflow-hidden`}
       style={
         isDock 

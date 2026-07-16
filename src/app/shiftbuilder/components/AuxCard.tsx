@@ -48,7 +48,7 @@ export interface AuxCardProps {
   loading?: boolean;
   borderColor?: string;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+  draftInfo?: { proposedTmId?: string; proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   onRemoveTask?: (
     slotKey: string,
     taskLabel: string,
@@ -131,11 +131,20 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key, role);
   const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
+  // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: a proposed
+  // occupant must drag as an assigned slot (move/swap), not as an empty one
+  // (coverage-request).
+  const auxDraftActive =
+    isDraftMode && !!draftInfo?.proposedTmName?.trim() && !draftInfo?.proposedClear;
+  const slotTm = {
+    tmId: auxDraftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
+    tmName: auxDraftActive ? draftInfo!.proposedTmName : a.tmName,
+  };
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key,
     "aux",
-    { tmId: a.tmId, tmName: a.tmName },
-    isLocked || (isUnsetBlank && !a.tmName),  // use a.tmName (same as hook will compute) to avoid TDZ
+    slotTm,
+    isLocked || (isUnsetBlank && !slotTm.tmName),
   );
 
   // Relax configured if we have an assignment/draft/covered, so assigned TMs always show

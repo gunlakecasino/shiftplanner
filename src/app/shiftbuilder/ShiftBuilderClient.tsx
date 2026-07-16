@@ -871,6 +871,7 @@ function AuthedShiftBuilder() {
 
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
+  const historyPersistBusyRef = useRef(false);
 
   // Ref for handle to avoid TDZ when passing to early useAuxLayout
   const handleBoardLiveUnassignRef = useRef<((slotKey: string) => void) | null>(null);
@@ -1888,26 +1889,6 @@ function AuthedShiftBuilder() {
     queueMicrotask(() => scheduleAuxLayoutSave(0));
   }, [auxDefs, setAuxDefs, scheduleAuxLayoutSave, isAuxLayoutHydrated]);
 
-  // Keyboard shortcuts for undo/redo (one tab session)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
-      const isRedo = (e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y");
-      if (isUndo) {
-        e.preventDefault();
-        const prev = shiftHistory.undo();
-        if (prev) applySnapshot(prev);
-      }
-      if (isRedo) {
-        e.preventDefault();
-        const next = shiftHistory.redo();
-        if (next) applySnapshot(next);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [shiftHistory]);
-
   // === Velvet Marker Pad — floating right panel for quick slot edits ===
   /** Active anchored placement pad slot (card-attached inspector + editor). */
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
@@ -2287,13 +2268,6 @@ function AuthedShiftBuilder() {
 
     const qc = currentNight.queryClient;
     const liveStore = liveAssignmentsStore.getState();
-
-    // Prefetch the entire grave week in the background. Small number of days (usually 7), cheap.
-    DAY_DEFS.forEach((def) => {
-      try {
-        currentNight.prefetchNight(def.date);
-      } catch {}
-    });
 
     // Immediate seed for anything already in cache right now.
     let seeded = false;
@@ -2745,21 +2719,15 @@ function AuthedShiftBuilder() {
     }
   }, [currentNight?.assignments, currentNight?.nightId, processedDayData]);
 
-  // Week prefetch: BuilderDataPrefetch seeds cache during PIN gate; this effect
-  // tops up when weekStart changes (calendar navigation) or selected day shifts.
+  // The full week is only needed by Week view. Startup and ordinary day work
+  // prefetch the selected/adjacent nights; hover handles intentional navigation.
   React.useEffect(() => {
-    if (!currentNight?.prefetchNight || DAY_DEFS.length === 0) return;
-
-    const selectedDef = DAY_DEFS[selectedDayIndex];
-    if (selectedDef?.date) {
-      currentNight.prefetchNight(selectedDef.date);
-    }
-
-    DAY_DEFS.forEach((def, idx) => {
-      if (idx === selectedDayIndex) return;
-      setTimeout(() => currentNight.prefetchNight(def.date), 40 * idx);
-    });
-  }, [DAY_DEFS, selectedDayIndex, currentNight, weekStart]);
+    if (currentView !== "weekly" || !currentNight?.prefetchNight || DAY_DEFS.length === 0) return;
+    const timers = DAY_DEFS.map((def, index) =>
+      window.setTimeout(() => currentNight.prefetchNight(def.date), index * 140),
+    );
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [DAY_DEFS, currentNight, currentView, weekStart]);
 
   // Use query data as source of truth (full TanStack Query commitment)
   const queryAssignments = currentNight.assignments || {};
@@ -2961,7 +2929,7 @@ function AuthedShiftBuilder() {
           }
         }
 
-        const dateKey = captureDate.toISOString().slice(0, 10);
+        const dateKey = formatLocalDateISO(captureDate);
         const patchNightCache = (old: any) => {
           if (!old?.assignments) return old;
           return {
@@ -3241,13 +3209,171 @@ function AuthedShiftBuilder() {
     auxDefs: [...auxDefs],
   });
 
-  const applySnapshot = (snapshot: Snapshot) => {
+  const applySnapshot = async (snapshot: Snapshot, actionLabel: "Undo" | "Redo") => {
+    if (historyPersistBusyRef.current) return;
+    historyPersistBusyRef.current = true;
+
+    const before = getCurrentSnapshot();
+    const captureDate = selectedDay.date;
+    const captureDayName = selectedDay.name;
+    const dateKey = formatLocalDateISO(captureDate);
+    const allKeys = new Set([
+      ...Object.keys(before.assignments),
+      ...Object.keys(snapshot.assignments),
+    ]);
+
+    // Paint immediately, but do not persist aux layout until assignment writes
+    // succeed. A failed history action restores this complete snapshot.
     setAssignments(snapshot.assignments);
-    // Re-hydrate so undo/redo of aux roles persists under the same gate (and
-    // stamps fingerprint), instead of a silent setAuxDefs that never saves.
     hydrateAuxLayout(snapshot.auxDefs, currentNight.nightId ?? nightId ?? null);
-    queueMicrotask(() => scheduleAuxLayoutSave(0));
+
+    try {
+      const changedAssignmentKeys = [...allKeys].filter((slotKey) => {
+        const previous = before.assignments[slotKey];
+        const target = snapshot.assignments[slotKey];
+        return (previous?.tmId ?? null) !== (target?.tmId ?? null);
+      });
+      const lockKeys = [...allKeys].filter((slotKey) => {
+        const previous = before.assignments[slotKey];
+        const target = snapshot.assignments[slotKey];
+        return Boolean(previous?.isLocked) !== Boolean(target?.isLocked) && Boolean(target?.tmId);
+      });
+      const breakKeys = [...allKeys].filter((slotKey) => {
+        const previous = before.assignments[slotKey];
+        const target = snapshot.assignments[slotKey];
+        return Boolean(target?.tmId) && (
+          (previous?.tmId ?? null) !== (target?.tmId ?? null) ||
+          Number(previous?.breakGroup ?? 0) !== Number(target?.breakGroup ?? 0)
+        );
+      });
+
+      const needsNightWrite =
+        changedAssignmentKeys.length > 0 || lockKeys.length > 0 || breakKeys.length > 0;
+      let targetNightId = currentNight.nightId ?? nightId ?? null;
+      if (needsNightWrite && !targetNightId) {
+        targetNightId = await resolveNightIdForDate(captureDate, captureDayName);
+      }
+      if (needsNightWrite && !targetNightId) {
+        throw new Error("no night context yet");
+      }
+
+      if (targetNightId && changedAssignmentKeys.length > 0) {
+        const { batchApplyDraftAssignments } = await import("@/lib/shiftbuilder/data");
+        await batchApplyDraftAssignments(
+          targetNightId,
+          changedAssignmentKeys.map((slotKey) => {
+            const mapped = uiToDb(slotKey, snapshot.auxDefs);
+            return {
+              slotKey: mapped.slot_key,
+              slotType: mapped.slot_type,
+              rrSide: mapped.rr_side,
+              tmId: snapshot.assignments[slotKey]?.tmId ?? null,
+            };
+          }),
+          dateKey,
+        );
+      }
+
+      if (targetNightId && lockKeys.length > 0) {
+        const { toggleAssignmentLock } = await import("@/lib/shiftbuilder/data");
+        for (const slotKey of lockKeys) {
+          const mapped = uiToDb(slotKey, snapshot.auxDefs);
+          await toggleAssignmentLock({
+            nightId: targetNightId,
+            slotKey: mapped.slot_key,
+            slotType: mapped.slot_type,
+            rrSide: mapped.rr_side,
+            currentLocked: Boolean(before.assignments[slotKey]?.isLocked),
+          });
+        }
+      }
+
+      if (targetNightId && breakKeys.length > 0) {
+        const {
+          updateSlotBreakGroup,
+          deleteBreakAssignment,
+          upsertBreakAssignment,
+        } = await import("@/lib/shiftbuilder/data");
+
+        const displacedTmIds = new Set<string>();
+        for (const slotKey of changedAssignmentKeys) {
+          const previousTmId = before.assignments[slotKey]?.tmId;
+          const targetTmId = snapshot.assignments[slotKey]?.tmId;
+          if (previousTmId && previousTmId !== targetTmId) displacedTmIds.add(previousTmId);
+        }
+        await Promise.all(
+          [...displacedTmIds].map((tmId) => deleteBreakAssignment(targetNightId!, tmId)),
+        );
+
+        for (const slotKey of breakKeys) {
+          const target = snapshot.assignments[slotKey];
+          const mapped = uiToDb(slotKey, snapshot.auxDefs);
+          const group = Number(target?.breakGroup ?? 0) as BreakGroup;
+          await updateSlotBreakGroup(
+            targetNightId,
+            mapped.slot_key,
+            mapped.rr_side,
+            group,
+            target.tmId,
+          );
+          if (group === 0) {
+            await deleteBreakAssignment(targetNightId, target.tmId);
+          } else {
+            await upsertBreakAssignment({
+              nightId: targetNightId,
+              tmId: target.tmId,
+              groupNum: group,
+              slotRef: slotKey,
+            });
+          }
+        }
+      }
+
+      queueMicrotask(() => scheduleAuxLayoutSave(0));
+      liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, snapshot.assignments);
+      if (currentNight.queryClient && getBoardAssignmentsDayKey() === dateKey) {
+        patchNightCoreAssignmentsCache(
+          currentNight.queryClient,
+          dateKey,
+          snapshot.assignments,
+        );
+      }
+      setLastSavedAt(new Date());
+      showToast(`${actionLabel} saved`, "success");
+    } catch (error) {
+      setAssignments(before.assignments);
+      hydrateAuxLayout(before.auxDefs, currentNight.nightId ?? nightId ?? null);
+      shiftHistory.clear();
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`${actionLabel} couldn't be saved — restored previous state: ${message}`, "error");
+    } finally {
+      historyPersistBusyRef.current = false;
+    }
   };
+
+  // Keyboard history actions now persist to the same night before they are
+  // considered complete; they can no longer reappear after polling/reload.
+  const shiftHistoryRef = useRef(shiftHistory);
+  const applyHistorySnapshotRef = useRef(applySnapshot);
+  shiftHistoryRef.current = shiftHistory;
+  applyHistorySnapshotRef.current = applySnapshot;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
+      const isRedo = (e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y");
+      if (isUndo) {
+        e.preventDefault();
+        const previous = shiftHistoryRef.current.undo();
+        if (previous) void applyHistorySnapshotRef.current(previous, "Undo");
+      } else if (isRedo) {
+        e.preventDefault();
+        const next = shiftHistoryRef.current.redo();
+        if (next) void applyHistorySnapshotRef.current(next, "Redo");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const recordWithSnapshot = (description: string, before: Snapshot, mutator: () => void) => {
     const prev = before; // already captured
@@ -4796,7 +4922,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         logEngineRunSummary({
           mode: "interactive-draft",
           dayName: selectedDay.name,
-          nightDate: selectedDay.date.toISOString().slice(0, 10),
+          nightDate: formatLocalDateISO(selectedDay.date),
           durationMs: engineDuration,
           rosterSize: rosterForEngine.length,
           slotsProcessed: orderedSlots.length,
@@ -5075,7 +5201,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         });
         if (!res.ok) throw new Error(await res.text());
         setPickerScheduleEpoch((e) => e + 1);
-        const dateKey = selectedDay.date.toISOString().slice(0, 10);
+        const dateKey = formatLocalDateISO(selectedDay.date);
         await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
         showToast(`${tmName} added on-call for tonight`, "success");
       } catch (e) {
@@ -5670,10 +5796,16 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         (async () => {
           const dateKey = formatLocalDateISO(captureDate);
           const rollbackDrag = (reason: string) => {
-            useShiftBuilderStore.getState().setAssignments(preDragAssignments);
-            setAssignments({ ...preDragAssignments });
-            mirrorMainAssignmentsToLiveStore(captureDate);
-            setLiveAssignVersion((v) => v + 1);
+            // If the operator has moved to another day, never paint Day A's
+            // rollback snapshot onto the visible Day B board.
+            if (getBoardAssignmentsDayKey() === dateKey) {
+              useShiftBuilderStore.getState().setAssignments(preDragAssignments);
+              setAssignments({ ...preDragAssignments });
+              mirrorMainAssignmentsToLiveStore(captureDate);
+              setLiveAssignVersion((v) => v + 1);
+            } else {
+              liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, preDragAssignments);
+            }
             const qc = currentNight.queryClient;
             if (qc) {
               patchNightCoreAssignmentsCache(qc, dateKey, preDragAssignments);
@@ -5683,7 +5815,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           };
 
           try {
-            const { upsertZoneAssignment, deleteZoneAssignment } = await import(
+            const {
+              upsertZoneAssignment,
+              deleteZoneAssignment,
+              batchApplyDraftAssignments,
+            } = await import(
               "@/lib/shiftbuilder/data"
             );
             const nid = nightId || (await resolveNightIdForDate(captureDate, captureDayName));
@@ -5692,34 +5828,48 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               return;
             }
 
-            // Moving TM → target slot
-            if (movingTmId) {
-              const { slot_key, slot_type, rr_side } = uiToDb(toKey);
-              await upsertZoneAssignment({
-                nightId: nid,
-                slotKey: slot_key,
-                slotType: slot_type,
-                rrSide: rr_side,
-                tmId: movingTmId,
-              });
-            }
-
-            // Displaced TM (swap) or clear source (move-to-empty)
             if (displacedTmId) {
-              const { slot_key, slot_type, rr_side } = uiToDb(fromKey);
-              await upsertZoneAssignment({
-                nightId: nid,
-                slotKey: slot_key,
-                slotType: slot_type,
-                rrSide: rr_side,
-                tmId: displacedTmId,
-              });
+              // A real swap is one batch upsert, so both occupants move or
+              // neither does. Two sequential writes could strand the board
+              // half-swapped when the second request failed.
+              const target = uiToDb(toKey);
+              const source = uiToDb(fromKey);
+              await batchApplyDraftAssignments(
+                nid,
+                [
+                  {
+                    slotKey: target.slot_key,
+                    slotType: target.slot_type,
+                    rrSide: target.rr_side,
+                    tmId: movingTmId,
+                  },
+                  {
+                    slotKey: source.slot_key,
+                    slotType: source.slot_type,
+                    rrSide: source.rr_side,
+                    tmId: displacedTmId,
+                  },
+                ],
+                dateKey,
+              );
             } else {
+              // Move to an empty target. The robust delete retains legacy-key
+              // cleanup; rollback keeps the UI honest if either write fails.
+              if (movingTmId) {
+                const { slot_key, slot_type, rr_side } = uiToDb(toKey);
+                await upsertZoneAssignment({
+                  nightId: nid,
+                  slotKey: slot_key,
+                  slotType: slot_type,
+                  rrSide: rr_side,
+                  tmId: movingTmId,
+                });
+              }
               await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
             }
 
             const qc = currentNight.queryClient;
-            if (qc) {
+            if (qc && getBoardAssignmentsDayKey() === dateKey) {
               patchNightCoreAssignmentsCache(
                 qc,
                 dateKey,
@@ -5743,9 +5893,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         unassign(a.fromSlot);
         return;
       }
-      // → nowhere: also unassign (drag-to-trash convention)
+      // → nowhere: keep the assignment. Unassigning on a missed drop is too
+      // destructive on touch; the roster remains the explicit remove target.
       if (!over) {
-        unassign(a.fromSlot);
+        showToast("Assignment kept — drop on the roster to unassign", "info");
         return;
       }
     }
@@ -6011,7 +6162,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         setLastSavedAt(new Date());
         const dateKey = formatLocalDateISO(captureDate);
         const qc = currentNight.queryClient;
-        if (qc) {
+        if (qc && getBoardAssignmentsDayKey() === dateKey) {
           patchNightCoreAssignmentsCache(
             qc,
             dateKey,
@@ -6529,33 +6680,39 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       const captureDate = selectedDay.date;
       const captureDayName = selectedDay.name;
 
-      setSelectedTasks((prev) => {
-        const existing = prev[uiKey] ?? [];
-        const already = existing.find((t) => t.taskLabel === catalogTask.label);
-        if (already) {
-          // Remove
-          const next = existing.filter((t) => t.taskLabel !== catalogTask.label);
-          persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask.label);
-          return { ...prev, [uiKey]: next };
-        }
-        // Add — synthesize an optimistic row so the UI updates immediately.
-        const optimistic: NightSlotTask = {
-          id: `optimistic-${catalogTask.id}-${Date.now()}`,
-          nightId: targetNightId ?? "",
-          slotKey: catalogTask.slotKey,
-          slotType: catalogTask.slotType,
-          rrSide: catalogTask.rrSide,
-          taskLabel: catalogTask.label,
-          catalogTaskId: catalogTask.id,
-          sortOrder: catalogTask.sortOrder,
-          color: null,
-          isCoverage: false,
-        };
-        persistAddTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask);
-        return { ...prev, [uiKey]: [...existing, optimistic] };
-      });
+      // Decide add-vs-remove and persist OUTSIDE the state updater: React
+      // double-invokes updaters in dev StrictMode, which fired duplicate DB
+      // writes when the persist calls lived inside.
+      const existing = selectedTasks[uiKey] ?? [];
+      const already = existing.find((t) => t.taskLabel === catalogTask.label);
+      if (already) {
+        persistRemoveTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask.label);
+        setSelectedTasks((prev) => ({
+          ...prev,
+          [uiKey]: (prev[uiKey] ?? []).filter((t) => t.taskLabel !== catalogTask.label),
+        }));
+        return;
+      }
+      // Add — synthesize an optimistic row so the UI updates immediately.
+      const optimistic: NightSlotTask = {
+        id: `optimistic-${catalogTask.id}-${Date.now()}`,
+        nightId: targetNightId ?? "",
+        slotKey: catalogTask.slotKey,
+        slotType: catalogTask.slotType,
+        rrSide: catalogTask.rrSide,
+        taskLabel: catalogTask.label,
+        catalogTaskId: catalogTask.id,
+        sortOrder: catalogTask.sortOrder,
+        color: null,
+        isCoverage: false,
+      };
+      persistAddTask(targetNightId, captureDate, captureDayName, uiKey, catalogTask);
+      setSelectedTasks((prev) => ({
+        ...prev,
+        [uiKey]: [...(prev[uiKey] ?? []), optimistic],
+      }));
     },
-    [nightId, selectedDay.date, selectedDay.name, persistAddTask, persistRemoveTask]
+    [nightId, selectedDay.date, selectedDay.name, selectedTasks, persistAddTask, persistRemoveTask]
   );
 
   // Snapshot helpers for optimistic task-row mutations (rollback on error).
@@ -7656,41 +7813,58 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         return;
       }
 
-      const { upsertZoneAssignment, deleteZoneAssignment } = await import(
+      const { batchApplyDraftAssignments } = await import(
         "@/lib/shiftbuilder/data"
       );
       const { uiToDb } = await import("@/lib/shiftbuilder/slot-keys");
-
-      // Clear source slot
-      try {
-        await deleteZoneAssignment({
-          nightId: nightIdForMove,
-          uiKey: fromSlot,
-        });
-      } catch (e) {
-        console.warn("[WeekLens] clear from-slot failed", e);
-      }
-
-      // Place TM on target (overwrite if occupied — v1 simple path)
-      const mapped = uiToDb(toSlot);
-      await upsertZoneAssignment({
-        nightId: nightIdForMove,
-        slotKey: toSlot,
-        tmId: fromTmId,
-        slotType: mapped.slot_type,
-        rrSide: mapped.rr_side as "mens" | "womens" | null,
-      });
+      const source = uiToDb(fromSlot);
+      const target = uiToDb(toSlot);
+      const swapPartner = sugg.to.viaSwapWith as
+        | { tmId: string; tmName?: string }
+        | undefined;
+      await batchApplyDraftAssignments(
+        nightIdForMove,
+        [
+          {
+            slotKey: target.slot_key,
+            slotType: target.slot_type,
+            rrSide: target.rr_side,
+            tmId: fromTmId,
+          },
+          {
+            slotKey: source.slot_key,
+            slotType: source.slot_type,
+            rrSide: source.rr_side,
+            tmId: swapPartner?.tmId ?? null,
+          },
+        ],
+        dateKey,
+      );
 
       // Optimistic week store for immediate table refresh
       const store = liveAssignmentsStore.getState();
       const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
-      delete currentNightAss[fromSlot];
+      if (swapPartner?.tmId) {
+        currentNightAss[fromSlot] = {
+          tmId: swapPartner.tmId,
+          tmName: swapPartner.tmName ?? swapPartner.tmId,
+        } as any;
+      } else {
+        delete currentNightAss[fromSlot];
+      }
       currentNightAss[toSlot] = { tmId: fromTmId, tmName: fromName } as any;
       store.setAssignmentsForNight(dateKey, currentNightAss);
 
       if (isCurrentNight) {
         const main = { ...(useShiftBuilderStore.getState().assignments ?? {}) };
-        delete main[fromSlot];
+        if (swapPartner?.tmId) {
+          main[fromSlot] = {
+            tmId: swapPartner.tmId,
+            tmName: swapPartner.tmName ?? swapPartner.tmId,
+          };
+        } else {
+          delete main[fromSlot];
+        }
         main[toSlot] = { tmId: fromTmId, tmName: fromName };
         useShiftBuilderStore.getState().setAssignments(main);
         setAssignments(main);
@@ -7761,7 +7935,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
           if (typeof performance !== "undefined" && performance.mark) {
             performance.mark("day-switch-start", {
-              detail: { navId: id, date: date.toISOString().slice(0, 10) },
+              detail: { navId: id, date: formatLocalDateISO(date) },
             });
           }
 

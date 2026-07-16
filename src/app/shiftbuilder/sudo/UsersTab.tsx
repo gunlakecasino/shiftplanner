@@ -24,7 +24,7 @@ import {
 } from "@/lib/auth/permissionCatalog";
 import { PermissionMatrix } from "../components/PermissionMatrix";
 import { AdminPinConfirmModal } from "../components/AdminPinConfirmModal";
-import { useToast } from "@/app/shiftbuilder/hooks/useToast";
+import { toast } from "sonner";
 import { useConfirm } from "../components/ConfirmDialog";
 import { SudoTabLoading } from "./SudoGlass";
 import { logSettingsAudit } from "@/lib/shiftbuilder/opsAuditLog";
@@ -138,7 +138,9 @@ export function UsersTab({ onDataChanged, isDark = false }: UsersTabProps) {
   const [selectedUser, setSelectedUser] = React.useState<SudoUser | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [issuingPin, setIssuingPin] = React.useState(false);
-  const { showToast } = useToast();
+  const showToast = React.useCallback((message: string, kind: "error" | "info" | "success" = "error") => {
+    toast[kind](message);
+  }, []);
   const confirmDialog = useConfirm();
 
   const [showCreateModal, setShowCreateModal] = React.useState(false);

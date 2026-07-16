@@ -1139,6 +1139,8 @@ function SkillsForm({
   onFlash: (kind: "ok" | "err", msg: string) => void;
   isDark?: boolean;
 }) {
+  const [draftScores, setDraftScores] = React.useState<Record<string, number>>({});
+  const lastSubmittedRef = React.useRef<Record<string, number>>({});
   const byId = React.useMemo(() => {
     const m = new Map<string, number>();
     slotSkills.forEach((s) => m.set(s.slotId, s.score));
@@ -1146,10 +1148,18 @@ function SkillsForm({
   }, [slotSkills]);
 
   const setScore = async (slotId: string, score: number) => {
+    if (lastSubmittedRef.current[slotId] === score) return;
+    lastSubmittedRef.current[slotId] = score;
     try {
       await dyn.upsertSlotSkill({ tmId, slotId, score });
       await onScoreSaved();
+      setDraftScores((current) => {
+        const next = { ...current };
+        delete next[slotId];
+        return next;
+      });
     } catch (err) {
+      delete lastSubmittedRef.current[slotId];
       onFlash("err", err instanceof Error ? err.message : String(err));
     }
   };
@@ -1206,13 +1216,23 @@ function SkillsForm({
                         min={0}
                         max={10}
                         step={1}
-                        value={current ?? 5}
-                        onChange={(e) => setScore(slotId, Number(e.target.value))}
+                        value={draftScores[slotId] ?? current ?? 5}
+                        onChange={(e) => {
+                          const score = Number(e.target.value);
+                          setDraftScores((scores) => ({ ...scores, [slotId]: score }));
+                        }}
+                        onPointerUp={(e) => void setScore(slotId, Number(e.currentTarget.value))}
+                        onKeyUp={(e) => {
+                          if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
+                            void setScore(slotId, Number(e.currentTarget.value));
+                          }
+                        }}
+                        onBlur={(e) => void setScore(slotId, Number(e.currentTarget.value))}
                         className="w-full"
                       />
                     </td>
                     <td className="px-2 py-1.5 text-right text-zinc-300 font-mono">
-                      {current ?? "—"}
+                      {draftScores[slotId] ?? current ?? "—"}
                     </td>
                   </tr>
                 );

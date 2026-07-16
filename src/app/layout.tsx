@@ -11,6 +11,8 @@ import {
 } from "next/font/google";
 import "./globals.css";
 
+export { viewport } from "./viewport";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

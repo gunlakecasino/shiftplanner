@@ -183,6 +183,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     isDayPublished = false,
     canPublishDay = false,
     onToggleDayPublished,
+    publishDayBusy = false,
     onPublishWeek,
     onUnpublishWeek,
     publishWeekBusy = false,
@@ -377,7 +378,7 @@ export default function FloatingNav(props: FloatingNavProps) {
               <div className="flex items-center justify-between mb-2 px-1">
                 <button
                   type="button"
-                  onClick={() => setCalendarView(addDays(calendarView, -30))}
+                  onClick={() => setCalendarView((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
                   className={`w-6 h-6 rounded-full flex items-center justify-center ${
                     isDark ? "hover:bg-white/10 text-zinc-400" : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label-tertiary)]"
                   }`}
@@ -390,7 +391,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setCalendarView(addDays(calendarView, 32))}
+                  onClick={() => setCalendarView((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
                   className={`w-6 h-6 rounded-full flex items-center justify-center ${
                     isDark ? "hover:bg-white/10 text-zinc-400" : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label-tertiary)]"
                   }`}
@@ -658,7 +659,8 @@ export default function FloatingNav(props: FloatingNavProps) {
               className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
               style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
               onClick={onToggleDayPublished}
-              disabled={!canPublishDay}
+              disabled={!canPublishDay || publishDayBusy}
+              aria-busy={publishDayBusy}
               title={isDayPublished ? "Unpublish this day" : "Publish this day"}
             >
               <span
@@ -811,7 +813,7 @@ export default function FloatingNav(props: FloatingNavProps) {
 
             {moreOpen && (
               <div
-                className={`absolute right-0 top-full mt-2 w-64 z-[70] ${menuPanelClass}`}
+                className={`absolute right-0 top-full mt-2 w-64 max-h-[min(70vh,560px)] overflow-y-auto overscroll-contain z-[70] ${menuPanelClass}`}
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -1021,7 +1023,8 @@ export default function FloatingNav(props: FloatingNavProps) {
                       onToggleDayPublished?.();
                       setMoreOpen(false);
                     }}
-                    disabled={!canPublishDay}
+                    disabled={!canPublishDay || publishDayBusy}
+                    aria-busy={publishDayBusy}
                   >
                     {isDayPublished ? "Unpublish Day" : "Publish Day"}
                   </button>

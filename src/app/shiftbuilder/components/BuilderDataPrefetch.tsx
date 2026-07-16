@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
-import { warmSupabaseConnection } from "@/lib/supabase";
 import { prefetchBuilderWeek } from "../lib/builderPrefetch";
 
 /**
@@ -16,10 +15,6 @@ export function BuilderDataPrefetch() {
   const lastPrefetchedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    void warmSupabaseConnection();
-  }, []);
-
-  useEffect(() => {
     if (!isAuthenticated || !user || !permissions) {
       lastPrefetchedUserIdRef.current = null;
       return;
@@ -27,6 +22,7 @@ export function BuilderDataPrefetch() {
     if (lastPrefetchedUserIdRef.current === user.id) return;
 
     let cancelled = false;
+    let cancelPrefetch = () => {};
     (async () => {
       // Confirm session cookie is live before storming night-core (avoids 401 spam
       // on expired cookie / race after PIN gate).
@@ -41,11 +37,12 @@ export function BuilderDataPrefetch() {
       }
       if (cancelled) return;
       lastPrefetchedUserIdRef.current = user.id;
-      prefetchBuilderWeek(queryClient, permissions);
+      cancelPrefetch = prefetchBuilderWeek(queryClient, permissions);
     })();
 
     return () => {
       cancelled = true;
+      cancelPrefetch();
     };
   }, [isAuthenticated, user, permissions, queryClient]);
 

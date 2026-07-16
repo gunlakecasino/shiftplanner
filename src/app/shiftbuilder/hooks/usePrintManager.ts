@@ -14,7 +14,6 @@ import {
 } from "../print/printConfigUtils";
 import { generatePrintPreviewGoldenPages } from "../print/printPreviewPipeline";
 import type { LiveBoardOverlay } from "../print/mergePrintSnapshot";
-import { exportGoldenPdf } from "../print/exportPdf";
 import {
   mountGoldenPrintSession,
   runBrowserPrint,
@@ -312,6 +311,9 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
 
         if (exportMode) {
           setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering Golden sheets…" });
+          // html-to-image + jsPDF are export-only and among the largest client
+          // dependencies. Keep them out of the operational board startup path.
+          const { exportGoldenPdf } = await import("../print/exportPdf");
           const result = await exportGoldenPdf({
             pages: goldenPages,
             config,

@@ -14,16 +14,19 @@ async function requireOwnedRequest(
   admin: import("@supabase/supabase-js").SupabaseClient,
   id: string,
   ownerUserId: string,
-): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+): Promise<
+  | { ok: true; request: { id: string; approval_state: string | null; status: string | null } }
+  | { ok: false; response: NextResponse }
+> {
   const { data, error } = await admin
     .from("ops_work_items")
-    .select("id, created_by_user_id")
+    .select("id, created_by_user_id, approval_state, status")
     .eq("id", id)
     .maybeSingle();
   if (error || !data || data.created_by_user_id !== ownerUserId) {
     return { ok: false, response: NextResponse.json({ error: "Request not found" }, { status: 404 }) };
   }
-  return { ok: true };
+  return { ok: true, request: data };
 }
 
 /**
@@ -43,7 +46,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const owned = await requireOwnedRequest(admin, id, actor.user.id);
   if (!owned.ok) return owned.response;
-
   const body = await request.json().catch(() => ({}));
   const patch: Record<string, unknown> = { updated_by_name: actor.operatorName };
 
@@ -90,15 +92,27 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const owned = await requireOwnedRequest(admin, id, actor.user.id);
   if (!owned.ok) return owned.response;
+  if (owned.request.approval_state === "approved") {
+    return NextResponse.json(
+      { error: "Approved work must be archived by a manager" },
+      { status: 409 },
+    );
+  }
 
-  const { error } = await admin
+  const { data, error } = await admin
     .from("ops_work_items")
     .update({ archived_at: new Date().toISOString(), updated_by_name: actor.operatorName })
-    .eq("id", id);
+    .eq("id", id)
+    .in("approval_state", ["pending", "rejected"])
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error("[projects/requests] withdraw error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "Request state changed; refresh and try again" }, { status: 409 });
   }
 
   return NextResponse.json({ ok: true });

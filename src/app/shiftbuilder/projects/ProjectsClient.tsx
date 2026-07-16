@@ -116,13 +116,13 @@ function ProjectsShell() {
     [updateTask],
   );
 
-  const filteredTasks = useMemo(() => applySmartFilter(tasks, smartFilter), [tasks, smartFilter]);
+  const filteredTasks = useMemo(() => applySmartFilter(tasks, smartFilter), [tasks, smartFilter, now]);
 
   const overdueCount = useMemo(() => {
     const tonight = tonightDateISO();
     return tasks.filter((t) => t.dueDate && t.dueDate < tonight && t.status !== "complete" && t.status !== "cancelled")
       .length;
-  }, [tasks]);
+  }, [tasks, now]);
 
   const formattedDate = `${now.toLocaleString("en-US", { month: "long" })} ${now.getDate()}, ${now.getFullYear()}`;
   const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

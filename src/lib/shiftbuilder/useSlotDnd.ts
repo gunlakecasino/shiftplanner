@@ -52,6 +52,15 @@ export function useSlotDnd(
     data: dragData,
     disabled,
   });
+  // The card shell contains real buttons (break, task, remove). Exposing the
+  // shell itself as dnd-kit's default role=button creates nested button
+  // semantics. Pointer dragging remains on the shell; keyboard assignment is
+  // exposed by the explicit assignee band inside each card.
+  const groupAttributes = {
+    ...attributes,
+    role: "group" as const,
+    tabIndex: -1,
+  };
   const setRef = (el: HTMLElement | null) => {
     setDropRef(el);
     setDragRef(el);
@@ -65,5 +74,5 @@ export function useSlotDnd(
   const dragFitTier = useDragFitTier(slotKey);
   const dragFitClass =
     dragFitTier && !isDragging && !disabled ? `sb-dragfit-${dragFitTier}` : "";
-  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes, hasTM, dragFitClass };
+  return { setRef, isOver: !!incomingFromOther, isDragging, listeners, attributes: groupAttributes, hasTM, dragFitClass };
 }

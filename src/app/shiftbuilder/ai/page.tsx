@@ -227,6 +227,7 @@ export default function EngineAILab() {
           borderColor: "rgba(255,255,255,0.06)",
           background: "rgba(15,15,18,0.92)",
           backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
         }}
       >
         <div className="flex items-center gap-3">

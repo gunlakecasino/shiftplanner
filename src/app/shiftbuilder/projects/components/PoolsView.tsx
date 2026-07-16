@@ -7,6 +7,7 @@ import type { DistributionMode } from "@/lib/tasks/types";
 import { usePools } from "../hooks/useProjectsData";
 import { useCreatePool, useDeletePool, useDistributePool } from "../hooks/useTaskMutations";
 import { EmptyState } from "./EmptyState";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 const MODE_LABEL: Record<DistributionMode, string> = {
   round_robin: "Round-robin",
@@ -18,6 +19,7 @@ export function PoolsView({ canManage }: { canManage: boolean }) {
   const { data: pools = [], isLoading } = usePools();
   const distribute = useDistributePool();
   const deletePool = useDeletePool();
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [flash, setFlash] = useState<{ poolId: string; text: string } | null>(null);
 
@@ -104,7 +106,14 @@ export function PoolsView({ canManage }: { canManage: boolean }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => deletePool.mutate(p.id)}
+                    onClick={async () => {
+                      const accepted = await confirm("Tasks will be kept and simply removed from this pool.", {
+                        title: `Delete ${p.name}?`,
+                        confirmLabel: "Delete pool",
+                        tone: "danger",
+                      });
+                      if (accepted) await deletePool.mutateAsync(p.id);
+                    }}
                     title="Delete pool (tasks are kept, just unpooled)"
                     className="shrink-0 text-[var(--ios-label-quaternary)] hover:text-[var(--sb-projects-overdue)]"
                   >

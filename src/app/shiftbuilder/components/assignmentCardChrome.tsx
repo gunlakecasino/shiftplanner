@@ -242,7 +242,7 @@ export function CardSlotHeader({
             className={`font-bold tracking-[0.07em] uppercase truncate ${titleClassName ?? ""}`}
             style={{
               fontSize: 10,
-              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui)",
+              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
               letterSpacing: "0.07em",
             }}
           >
@@ -980,5 +980,6 @@ export function cardBodyInteriorStyle(showDigitalAssists: boolean, paddingBottom
     paddingBottom,
     background: showDigitalAssists ? "color-mix(in srgb, var(--ios-background-secondary) 2.2%, transparent)" : undefined,
     backdropFilter: showDigitalAssists ? "blur(0.5px)" : undefined,
+    WebkitBackdropFilter: showDigitalAssists ? "blur(0.5px)" : undefined,
   };
 }

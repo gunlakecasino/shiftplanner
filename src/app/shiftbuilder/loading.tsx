@@ -1,7 +1,6 @@
-/**
- * Route transitions defer to shiftbuilder/layout OpsAuthGate (pin-over-skeleton).
- * Avoid stacking a second BuilderLoadingShell here.
- */
+import { BuilderLoadingShell } from "./components/builderPrimitives";
+
+/** Auth remains owned by OpsAuthGate; this fills the post-auth route gap. */
 export default function ShiftBuilderLoading() {
-  return null;
+  return <BuilderLoadingShell label="LOADING" sublabel="Preparing your workspace" />;
 }

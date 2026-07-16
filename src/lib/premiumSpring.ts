@@ -42,6 +42,10 @@ export const premiumHoverLift = {
 
 /** Builder grid hosts — shadow-only hover (no scale) to avoid zoom jitter inside the scaled canvas. */
 export const premiumBuilderCardHost = {
+  // Framer makes gesture-enabled divs keyboard-focusable by default. The card
+  // already exposes deliberate assignee/task controls, so keep this visual
+  // animation wrapper out of the tab order.
+  tabIndex: -1,
   whileTap: { scale: 0.995, transition: { ...premiumSpring, stiffness: 500, damping: 24 } },
 };
 

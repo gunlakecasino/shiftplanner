@@ -101,7 +101,10 @@ export function TaskListView({
   canComplete: boolean;
   onSetStatus: (taskId: string, status: WorkItemStatus) => void;
 }) {
-  const groups = useMemo(() => groupTasks(tasks), [tasks]);
+  // Re-evaluate the grave-date boundary while a Projects tab remains open.
+  // A stable React Query array reference must not freeze Due Tonight grouping.
+  const graveDateKey = tonightDateISO();
+  const groups = useMemo(() => groupTasks(tasks), [tasks, graveDateKey]);
 
   if (loading) {
     return (

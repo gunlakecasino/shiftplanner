@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { toast } from "sonner";
+import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 
 /**
  * Canonical production service-worker registrar + update lifecycle.
@@ -34,7 +36,21 @@ export default function PwaRegister() {
 
     let reloaded = false;
     let updatePending = false;
+    let waitingWorker: ServiceWorker | null = null;
     let cleanup = () => {};
+
+    const activateWaitingWorker = () => {
+      if (!waitingWorker) return;
+      updatePending = true;
+      waitingWorker.postMessage({ type: "SKIP_WAITING" });
+      waitingWorker = null;
+    };
+
+    const unsubscribeDraft = useShiftBuilderStore.subscribe((state) => {
+      if (waitingWorker && Object.keys(state.draftAssignments).length === 0) {
+        activateWaitingWorker();
+      }
+    });
 
     // Fired when the new worker takes control — reload once so the fresh build renders.
     const onControllerChange = () => {
@@ -67,8 +83,18 @@ export default function PwaRegister() {
               // genuine update (not the first install) — promote it and let
               // controllerchange trigger the reload.
               if (installing.state === "installed" && navigator.serviceWorker.controller) {
-                updatePending = true;
-                installing.postMessage({ type: "SKIP_WAITING" });
+                waitingWorker = installing;
+                const draftCount = Object.keys(
+                  useShiftBuilderStore.getState().draftAssignments,
+                ).length;
+                if (draftCount > 0) {
+                  toast.info("Update ready", {
+                    description: "Finish or discard the open draft; the app will update safely afterward.",
+                    duration: 10_000,
+                  });
+                } else {
+                  activateWaitingWorker();
+                }
               }
             });
           });
@@ -86,6 +112,7 @@ export default function PwaRegister() {
 
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      unsubscribeDraft();
       cleanup();
     };
   }, []);

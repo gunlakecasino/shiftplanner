@@ -13,6 +13,7 @@ import {
 } from "../hooks/useTaskMutations";
 import { EmptyState } from "./EmptyState";
 import { SlotSelect, type SlotSelection } from "./SlotSelect";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 type Frequency = "daily" | "weekly" | "biweekly" | "monthly";
@@ -49,6 +50,7 @@ export function RecurringView({
   const { data: roster = [] } = useRoster();
   const generateNext = useGenerateNextOccurrence();
   const archiveTask = useArchiveTask();
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
 
   return (
@@ -127,7 +129,14 @@ export function RecurringView({
                     </button>
                     <button
                       type="button"
-                      onClick={() => archiveTask.mutate(t.id)}
+                      onClick={async () => {
+                        const accepted = await confirm("Future occurrences will stop generating. Existing tasks are unchanged.", {
+                          title: "Archive recurring template?",
+                          confirmLabel: "Archive",
+                          tone: "danger",
+                        });
+                        if (accepted) await archiveTask.mutateAsync(t.id);
+                      }}
                       title="Archive template"
                       className="shrink-0 text-[var(--ios-label-quaternary)] hover:text-[var(--sb-projects-overdue)]"
                     >

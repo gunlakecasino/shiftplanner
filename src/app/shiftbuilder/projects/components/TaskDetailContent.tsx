@@ -21,6 +21,7 @@ import {
   WORK_ITEM_STATUSES,
   type WorkItemStatus,
 } from "@/lib/tasks/types";
+import { useConfirm } from "../../components/ConfirmDialog";
 
 const STATUS_LABEL: Record<WorkItemStatus, string> = {
   not_started: "Not Started",
@@ -53,6 +54,7 @@ export function TaskDetailContent({
   const addComment = useAddComment(taskId);
   const addChecklistItem = useAddChecklistItem(taskId);
   const toggleChecklistItem = useToggleChecklistItem(taskId);
+  const confirm = useConfirm();
 
   const [titleDraft, setTitleDraft] = useState("");
   const [loadedTaskId, setLoadedTaskId] = useState<string | null>(null);
@@ -60,6 +62,13 @@ export function TaskDetailContent({
   const [reasonDraft, setReasonDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [checklistDraft, setChecklistDraft] = useState("");
+
+  const submitComment = async () => {
+    const body = commentDraft.trim();
+    if (!body) return;
+    await addComment.mutateAsync(body);
+    setCommentDraft("");
+  };
 
   // Adjust local draft when the loaded task changes — done during render
   // (React's recommended pattern for "state derived from a prop change"),
@@ -367,20 +376,17 @@ export function TaskDetailContent({
               </div>
             ))}
           </div>
-          <div className="mt-1.5 flex items-center gap-1.5">
+          {canComplete && <div className="mt-1.5 flex items-center gap-1.5">
             <input
               value={commentDraft}
               onChange={(e) => setCommentDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && commentDraft.trim()) {
-                  addComment.mutate(commentDraft.trim());
-                  setCommentDraft("");
-                }
+                if (e.key === "Enter" && commentDraft.trim()) void submitComment();
               }}
               placeholder="Leave a note for the next shift…"
               className="h-7 flex-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 text-[11.5px] outline-none"
             />
-          </div>
+          </div>}
         </div>
 
         {/* Activity */}
@@ -406,8 +412,14 @@ export function TaskDetailContent({
         <div className="border-t border-[var(--sb-settings-border-subtle)] px-4 py-2.5">
           <button
             type="button"
-            onClick={() => {
-              archiveTask.mutate(taskId);
+            onClick={async () => {
+              const accepted = await confirm("This removes the task from active views. Its history is retained.", {
+                title: "Archive task?",
+                confirmLabel: "Archive",
+                tone: "danger",
+              });
+              if (!accepted) return;
+              await archiveTask.mutateAsync(taskId);
               onClose();
             }}
             className="flex items-center gap-1.5 text-[11.5px] text-[var(--sb-projects-overdue)] opacity-80 hover:opacity-100"

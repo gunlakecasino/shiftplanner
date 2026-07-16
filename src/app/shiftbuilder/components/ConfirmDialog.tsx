@@ -38,9 +38,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<ConfirmState | null>(null);
   const [closing, setClosing] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = React.useRef<HTMLElement | null>(null);
 
   const confirm = React.useCallback<ConfirmFn>((message, options) => {
     return new Promise((resolve) => {
+      previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
       setClosing(false);
       setState({ message, ...options, resolve });
     });
@@ -62,16 +67,42 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!state) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") settle(false);
-      if (e.key === "Enter") settle(true);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        settle(false);
+        return;
+      }
+      if (e.key !== "Tab" || !cardRef.current) return;
+      const focusable = Array.from(
+        cardRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [state, settle]);
 
   React.useEffect(() => {
-    if (state) cardRef.current?.focus();
+    if (state) cancelRef.current?.focus();
   }, [state]);
+
+  React.useEffect(() => {
+    if (!state && !closing) {
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
+    }
+  }, [state, closing]);
 
   return (
     <ConfirmContext.Provider value={confirm}>
@@ -82,6 +113,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           style={{
             background: "rgba(0,0,0,0.4)",
             backdropFilter: "blur(2px)",
+            WebkitBackdropFilter: "blur(2px)",
             opacity: closing ? 0 : 1,
           }}
           onMouseDown={() => settle(false)}
@@ -137,6 +169,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 
             <div className="mt-6 flex gap-3">
               <button
+                ref={cancelRef}
                 type="button"
                 onClick={() => settle(false)}
                 className="sb-interactive flex-1 rounded-2xl border border-neutral-200 py-2.5 text-[13px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 active:scale-[0.985]"

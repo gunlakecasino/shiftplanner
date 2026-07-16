@@ -40,13 +40,27 @@ export function assignZoneOpenHandlers(
 ): {
   onClick?: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  role: "button";
+  tabIndex: number;
 } {
   const open = (e: React.MouseEvent) =>
     handleAssignZoneDoubleClick(e, slotKey, onOpenPlacementPad, isLocked);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (isLocked || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onOpenPlacementPad(slotKey, e.currentTarget as HTMLElement);
+  };
+  const accessibility = {
+    role: "button" as const,
+    tabIndex: isLocked ? -1 : 0,
+    onKeyDown,
+  };
   if (padUsesSingleTap()) {
-    return { onClick: open };
+    return { ...accessibility, onClick: open };
   }
-  return { onDoubleClick: open };
+  return { ...accessibility, onDoubleClick: open };
 }
 
 /** Lower card band — tap (iPad) or double-click (desktop) opens Tasks Pad. */

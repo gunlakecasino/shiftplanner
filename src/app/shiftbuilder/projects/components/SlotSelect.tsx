@@ -26,6 +26,7 @@ export function SlotSelect({
   disabled = false,
   className = "",
   placeholder = "No location",
+  "aria-label": ariaLabel = "Task location",
 }: {
   slotKey: string | null;
   rrSide: string | null;
@@ -33,11 +34,13 @@ export function SlotSelect({
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  "aria-label"?: string;
 }) {
   const value = slotValue(slotKey, rrSide);
 
   return (
     <select
+      aria-label={ariaLabel}
       value={value}
       disabled={disabled}
       onChange={(e) => {

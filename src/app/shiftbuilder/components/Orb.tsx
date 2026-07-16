@@ -20,6 +20,20 @@ export default function Orb({
   backgroundColor = "#000000",
 }: OrbProps) {
   const ctnDom = useRef<HTMLDivElement>(null);
+  const propsRef = useRef({
+    hue,
+    hoverIntensity,
+    rotateOnHover,
+    forceHoverState,
+    backgroundColor,
+  });
+  propsRef.current = {
+    hue,
+    hoverIntensity,
+    rotateOnHover,
+    forceHoverState,
+    backgroundColor,
+  };
 
   const vert = /* glsl */ `
     precision highp float;
@@ -211,11 +225,11 @@ export default function Orb({
         iResolution: {
           value: new Vec3(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height),
         },
-        hue: { value: hue },
+        hue: { value: propsRef.current.hue },
         hover: { value: 0 },
         rot: { value: 0 },
-        hoverIntensity: { value: hoverIntensity },
-        backgroundColor: { value: hexToVec3(backgroundColor) },
+        hoverIntensity: { value: propsRef.current.hoverIntensity },
+        backgroundColor: { value: hexToVec3(propsRef.current.backgroundColor) },
       },
     });
 
@@ -275,14 +289,15 @@ export default function Orb({
       const dt = (t - lastTime) * 0.001;
       lastTime = t;
       program.uniforms.iTime.value = t * 0.001;
-      program.uniforms.hue.value = hue;
-      program.uniforms.hoverIntensity.value = hoverIntensity;
-      program.uniforms.backgroundColor.value = hexToVec3(backgroundColor);
+      const props = propsRef.current;
+      program.uniforms.hue.value = props.hue;
+      program.uniforms.hoverIntensity.value = props.hoverIntensity;
+      program.uniforms.backgroundColor.value = hexToVec3(props.backgroundColor);
 
-      const effectiveHover = forceHoverState ? 1 : targetHover;
+      const effectiveHover = props.forceHoverState ? 1 : targetHover;
       program.uniforms.hover.value += (effectiveHover - program.uniforms.hover.value) * 0.1;
 
-      if (rotateOnHover && effectiveHover > 0.5) {
+      if (props.rotateOnHover && effectiveHover > 0.5) {
         currentRot += dt * rotationSpeed;
       }
       program.uniforms.rot.value = currentRot;
@@ -301,7 +316,7 @@ export default function Orb({
       }
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [hue, hoverIntensity, rotateOnHover, forceHoverState, backgroundColor]);
+  }, []);
 
   return <div ref={ctnDom} className="orb-container" />;
 }

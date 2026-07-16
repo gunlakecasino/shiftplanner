@@ -870,7 +870,12 @@ export function suggestLocalRotationMoves(
       : [];
 
     for (const peer of peerSlots) {
-      const peers = occupantsBySlot[peer] || [];
+      // A bilateral suggestion must describe a real same-night swap. Offering
+      // a peer from another night makes the Apply action overwrite the target
+      // slot without moving that peer anywhere.
+      const peers = (occupantsBySlot[peer] || []).filter(
+        (candidate) => candidate.night === fromNight,
+      );
       for (const p of peers) {
         if (p.tmId === tmId) continue;
         // Very light: if the peer TM also has some repeat pressure elsewhere, or just offer the cross.

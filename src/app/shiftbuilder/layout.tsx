@@ -4,6 +4,7 @@ import { OpsAuthProvider } from "@/lib/auth/opsAuth";
 import { OpsAuthGate } from "./components/OpsAuthGate";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { QueryProvider } from "./providers";
+import { Toaster } from "sonner";
 import "./authGate.css";
 
 /**
@@ -20,6 +21,12 @@ export default function ShiftBuilderLayout({
       <OpsAuthGate loadingSublabel="Preparing computer context">
         <ConfirmProvider>
           <QueryProvider>{children}</QueryProvider>
+          <Toaster
+            position="bottom-right"
+            richColors
+            closeButton
+            toastOptions={{ duration: 5000 }}
+          />
         </ConfirmProvider>
       </OpsAuthGate>
     </OpsAuthProvider>

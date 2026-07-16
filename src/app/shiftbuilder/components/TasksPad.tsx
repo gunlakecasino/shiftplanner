@@ -767,11 +767,13 @@ const TasksPad: React.FC<TasksPadProps> = ({
   }
 
   if (!usePortal) {
-    return (
+    if (typeof document === "undefined") return null;
+    return createPortal(
       <AnimatePresence>
         <div
           key="overlay"
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/25 backdrop-blur-[2px]"
+          style={{ WebkitBackdropFilter: "blur(2px)" }}
           onClick={requestClose}
           onPointerDown={(e) => {
             if (e.target === e.currentTarget) requestClose();
@@ -779,7 +781,8 @@ const TasksPad: React.FC<TasksPadProps> = ({
         >
           {content}
         </div>
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
     );
   }
 

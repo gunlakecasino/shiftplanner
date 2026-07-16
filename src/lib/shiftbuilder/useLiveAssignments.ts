@@ -43,7 +43,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { liveAssignmentsStore, initLiveCacheForNight } from "./liveCache";
+import {
+  liveAssignmentsStore,
+  initLiveCacheForNight,
+  getBoardAssignmentsDayKey,
+} from "./liveCache";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import { patchNightCoreAssignmentsCache } from "./scheduleCacheSync";
 import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
@@ -102,6 +106,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
     getOptimisticPatch: (params: TParams) => Partial<any>
   ) => {
     return useMutation({
+      meta: { suppressGlobalError: true },
       mutationFn: async (params: any) => {
         let { resolvedNightId, uiKey, captureDate, captureDayName, ...rest } = params;
 
@@ -171,6 +176,10 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
         // 3. Snapshot Zustand (for rollback)
         const previousStoreState = liveAssignmentsStore.getState().assignmentsByNight[dateKey] ?? {};
+        // Snapshot the actual board store before any optimistic patch. Capturing
+        // this after setAssignments would make a failed save "roll back" to the
+        // failed optimistic value and leave the board out of sync with the DB.
+        const previousMainAssignments = useShiftBuilderStore.getState().assignments;
 
         // 4. Optimistically update BOTH layers (instant UI for this client + any live listeners)
         const patch = getOptimisticPatch(params as TParams);
@@ -232,7 +241,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
           console.warn("[useLiveAssignments] failed to patch main useShiftBuilderStore", e);
         }
 
-        return { previousNightData, previousStoreState, dateKey, uiKey: params.uiKey, previousMainAssignments: useShiftBuilderStore.getState().assignments };
+        return { previousNightData, previousStoreState, dateKey, uiKey: params.uiKey, previousMainAssignments };
       },
 
       onError: (err, params, context: any) => {
@@ -283,7 +292,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
       onSuccess: (_data, params, context: any) => {
         // Re-assert store → query after DB write so day switches use patched cache, not stale bundles.
-        if (context?.dateKey) {
+        // Never copy the currently visible Day B store into Day A's cache when
+        // a Day A mutation resolves after the operator has already switched.
+        if (context?.dateKey && getBoardAssignmentsDayKey() === context.dateKey) {
           const store = useShiftBuilderStore.getState().assignments ?? {};
           patchNightCoreAssignmentsCache(queryClient, context.dateKey, store);
         }

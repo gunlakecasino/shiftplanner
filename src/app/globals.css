@@ -389,8 +389,9 @@ body {
 
 /* Beautiful focus rings for keyboard + iPad pencil */
 :focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-tint);
+  outline: 2px solid var(--accent-2, #007AFF);
+  outline-offset: 2px;
+  box-shadow: none;
   border-radius: 8px;
 }
 
@@ -3237,6 +3238,7 @@ button,
   /* Floor nav + break cycle — hit slop ≥ 44 even when ink is smaller. */
   .sb-day-strip-btn,
   .sb-week-nav-btn,
+  .sb-interactive,
   .icon-btn.sb-interactive,
   .sb-break-badge-btn {
     min-width: var(--touch-min, 44px);

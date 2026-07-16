@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local agent/tooling and separately-built desktop utilities are not part
+    // of the Next.js application lint surface.
+    ".grok/**",
+    ".codex/**",
+    ".gunlakecasino-*/**",
+    "opsApp/**",
   ]),
 ]);
 

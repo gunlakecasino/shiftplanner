@@ -50,12 +50,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     .from("ops_work_items")
     .update(patch)
     .eq("id", id)
+    // Optimistic concurrency: only the first manager to decide a pending
+    // request may update it. A second decision returns no row instead of
+    // silently overwriting the first manager's choice.
+    .eq("approval_state", "pending")
     .select(WORK_ITEM_COLUMNS)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("[projects/requests/decision] update error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "This request has already been decided" }, { status: 409 });
   }
 
   const status = current.status as WorkItemStatus;

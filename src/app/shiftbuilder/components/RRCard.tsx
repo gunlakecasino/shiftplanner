@@ -34,8 +34,8 @@ export interface RRCardProps {
   loading?: boolean;
   borderColor?: string;
   isDraftMode?: boolean;
-  draftInfoW?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
-  draftInfoM?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+  draftInfoW?: { proposedTmId?: string; proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+  draftInfoM?: { proposedTmId?: string; proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   onRemoveTask?: (
     slotKey: string,
     taskLabel: string,
@@ -96,7 +96,7 @@ const RRSide: React.FC<{
   ) => void;
   isLocked?: boolean;
   isDraftMode?: boolean;
-  draftInfo?: { proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
+  draftInfo?: { proposedTmId?: string; proposedTmName: string; previousTmName?: string; proposedClear?: boolean };
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
@@ -132,8 +132,18 @@ const RRSide: React.FC<{
   placementTrail,
 }) => {
   const a = assignment || {};
+  // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: in draft mode a
+  // proposed occupant must register as an assigned slot (move/swap gesture),
+  // not as an empty one (coverage-request gesture). Locked nights disable the
+  // draggable at the dnd-kit level, same as the other card types.
+  const rrDraftActive =
+    isDraftMode && !!draftInfo?.proposedTmName?.trim() && !draftInfo?.proposedClear;
+  const slotTm = {
+    tmId: rrDraftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
+    tmName: rrDraftActive ? draftInfo!.proposedTmName : a.tmName,
+  };
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
-    slotKey, "rr", { tmId: a.tmId, tmName: a.tmName },
+    slotKey, "rr", slotTm, isLocked,
   );
 
   const dim = !hasTM && !loading;

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { DndContext, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
 import { STATUS_REQUIRES_REASON } from "@/lib/tasks/types";
@@ -73,6 +74,7 @@ export function TaskBoardView({
     const taskId = (event.active.data.current as { taskId?: string } | undefined)?.taskId;
     const status = (event.over?.data.current as { status?: WorkItemStatus } | undefined)?.status;
     if (!taskId || !status) return;
+    if (tasks.find((task) => task.id === taskId)?.status === status) return;
     if (STATUS_REQUIRES_REASON.has(status)) {
       setPendingReason({ taskId, status });
       setReasonDraft("");
@@ -104,16 +106,20 @@ export function TaskBoardView({
         ))}
       </div>
 
-      {pendingReason && (
+      {pendingReason && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[220] flex items-center justify-center bg-black/20"
           onClick={() => setPendingReason(null)}
+          style={{ backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }}
         >
           <div
             className="sb-projects-card w-[320px] p-4"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-status-reason-title"
           >
-            <p className="mb-2 text-[12.5px] font-semibold text-[var(--ios-label)]">
+            <p id="task-status-reason-title" className="mb-2 text-[12.5px] font-semibold text-[var(--ios-label)]">
               Why is this {pendingReason.status}?
             </p>
             <input
@@ -145,7 +151,8 @@ export function TaskBoardView({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </DndContext>
   );

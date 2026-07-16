@@ -201,6 +201,7 @@ export default function InteractiveStage({
                         ? "0 8px 24px rgba(0,0,0,0.55)"
                         : "0 8px 24px rgba(0,0,0,0.12)",
                       backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)",
                       fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                     }}
                     initial={{ scale: 0.96, y: 2, opacity: 0.85 }}
@@ -222,6 +223,7 @@ export default function InteractiveStage({
                         ? "0 8px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)"
                         : "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.90)",
                       backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)",
                       fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
                     }}
                     initial={{ scale: 0.96, y: 2, opacity: 0.85 }}

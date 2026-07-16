@@ -36,29 +36,42 @@ export function prefetchBuilderWeek(
     ShiftBuilderPermissions,
     "canEditPublishedOnly" | "canSeeDraftData" | "canAccessSudo"
   > | null,
-): void {
+): () => void {
   // Fail closed: unauthenticated / unknown permissions → no night-core storm.
-  if (permissions == null) return;
+  if (permissions == null) return () => {};
 
   const dayDefs = getBuilderWeekDayDefs();
   const todayKey = formatLocalDateISO(currentShiftDate());
+  const savedKey = readSavedDateIso();
+  const selectedIndex = Math.max(
+    0,
+    dayDefs.findIndex((def) => formatLocalDateISO(def.date) === (savedKey ?? todayKey)),
+  );
   const fetchOptions = nightFetchOptionsForPermissions(permissions);
+  const timers: number[] = [];
 
-  dayDefs.forEach((def, i) => {
+  const prefetch = (def: DayDef) => {
     const dateKey = formatLocalDateISO(def.date);
-    const delay = dateKey === todayKey ? 0 : 20 + i * 25;
+    void queryClient.prefetchQuery({
+      queryKey: ["nightCore", dateKey],
+      queryFn: () => fetchNightCoreData(def, fetchOptions),
+      staleTime: 1000 * 60 * 5,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: ["nightSecondary", dateKey],
+      queryFn: () => fetchNightSecondaryData(def, fetchOptions),
+      staleTime: 1000 * 60 * 5,
+    });
+  };
 
-    window.setTimeout(() => {
-      queryClient.prefetchQuery({
-        queryKey: ["nightCore", dateKey],
-        queryFn: () => fetchNightCoreData(def, fetchOptions),
-        staleTime: 1000 * 60 * 5,
-      });
-      queryClient.prefetchQuery({
-        queryKey: ["nightSecondary", dateKey],
-        queryFn: () => fetchNightSecondaryData(def, fetchOptions),
-        staleTime: 1000 * 60 * 5,
-      });
-    }, delay);
-  });
+  // The selected night is the only startup-critical payload. Adjacent nights
+  // warm later for quick navigation; the rest wait for hover or Week view.
+  prefetch(dayDefs[selectedIndex]);
+  [selectedIndex - 1, selectedIndex + 1]
+    .filter((index) => index >= 0 && index < dayDefs.length)
+    .forEach((index, priority) => {
+      timers.push(window.setTimeout(() => prefetch(dayDefs[index]), 800 + priority * 500));
+    });
+
+  return () => timers.forEach((timer) => window.clearTimeout(timer));
 }

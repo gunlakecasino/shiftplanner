@@ -954,17 +954,20 @@ export const TmPicker: React.FC<{
 }) => {
   const isTablet = variant === "tablet";
   const [filter, setFilter] = useState("");
+  const [showAllEligible, setShowAllEligible] = useState(false);
   const [unavailableFor, setUnavailableFor] = useState<string | null>(null);
 
   // Rule:
   // 1. Default list (no text in box) = scheduled + eligible + unassigned only (tms prop)
   // 2. When typing → switch to all eligible (allTms prop) for search
   // 3. The default list must *never* contain anyone who is not scheduled tonight for the correct role group.
-  const searchPool = filter.trim() && allTms ? allTms : tms;
+  const searchPool = (filter.trim() || showAllEligible) && allTms ? allTms : tms;
   const scheduledIds = new Set(tms.map((t) => t.tmId));
   const filtered = filter.trim()
     ? searchPool.filter(t => t.tmName.toLowerCase().includes(filter.toLowerCase()))
-    : tms;
+    : showAllEligible
+      ? searchPool
+      : tms;
 
   const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
   const textMuted   = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)";
@@ -1014,6 +1017,7 @@ export const TmPicker: React.FC<{
 
       {/* Filter input */}
       <input
+        aria-label="Search eligible team members"
         type="text"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
@@ -1040,13 +1044,15 @@ export const TmPicker: React.FC<{
         fontSize: isTablet ? 15 : 9,
         fontWeight: 600,
         letterSpacing: "0.3px",
-        color: filter.trim() ? textMuted : accent,
+        color: filter.trim() || showAllEligible ? textMuted : accent,
         padding: isTablet ? "2px 4px" : "0 4px",
         flexShrink: 0,
         lineHeight: 1.35,
       }}>
         {filter.trim()
           ? "Search: all eligible TMs (broad pool)"
+          : showAllEligible
+            ? "Eligible on-call candidates"
           : fitByTmId && Object.keys(fitByTmId).length > 0
             ? "Sorted by rotation health (strongest first)"
             : "Default: Graves Default Schedule + on-call (unassigned)"}
@@ -1071,12 +1077,25 @@ export const TmPicker: React.FC<{
       >
         {filtered.length === 0 ? (
           <div style={{ fontSize: isTablet ? 17 : 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
-            {filter.trim() ? "No match" : tms.length === 0 ? "All TMs placed" : "No match"}
+            {filter.trim() ? "No eligible team member matches that search" : "Everyone scheduled is already placed"}
+            {!filter.trim() && tms.length === 0 && allTms && allTms.length > 0 && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowAllEligible(true);
+                }}
+                className="sb-tablet-touch-target mx-auto mt-3 block rounded-xl border px-3 py-2 font-semibold"
+                style={{ borderColor: inputBorder, color: accent, background: rowBg }}
+              >
+                Show eligible on-call candidates
+              </button>
+            )}
           </div>
         ) : filtered.map(tm => {
           const inDefaultList = scheduledIds.has(tm.tmId);
           const showOnCall =
-            filter.trim() && onAddOnCall && !inDefaultList;
+            (filter.trim() || showAllEligible) && onAddOnCall && !inDefaultList;
           return (
             <div
               key={tm.tmId}

@@ -13,7 +13,7 @@
 //   • Everything else             → passthrough.
 //
 // Bump CACHE_VERSION on every release so activate() purges the previous caches.
-const CACHE_VERSION = "v4-ipad-20260712";
+const CACHE_VERSION = "v5-ipad-20260716";
 const SHELL_CACHE = `shiftforge-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `shiftforge-static-${CACHE_VERSION}`;
 const OFFLINE_URL = "/shiftbuilder";
@@ -31,8 +31,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE).catch(() => undefined)),
   );
-  // Take over as soon as installed; the page controls the reload via controllerchange.
-  self.skipWaiting();
+  // Do not skip waiting here. The page promotes this worker only when no
+  // uncommitted ShiftBuilder draft is open.
 });
 
 self.addEventListener("activate", (event) => {
@@ -49,7 +49,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Let the page promote a waiting worker immediately (belt-and-suspenders with skipWaiting).
+// Let the page promote a waiting worker when it is safe to reload.
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
@@ -144,7 +144,11 @@ async function networkFirstNavigation(request) {
     // that references dead chunk hashes — the exact "hard-reset to see the new
     // deploy" symptom. no-store forces a fresh document every navigation.
     const response = await fetch(request.url, { cache: "no-store", credentials: "same-origin" });
-    if (response && response.status === 200) {
+    if (
+      response &&
+      response.status === 200 &&
+      new URL(request.url).pathname === OFFLINE_URL
+    ) {
       // Keep the canonical shell fresh for offline fallback.
       const clone = response.clone();
       caches.open(SHELL_CACHE).then((c) => c.put(OFFLINE_URL, clone));

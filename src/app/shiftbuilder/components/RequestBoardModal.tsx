@@ -47,7 +47,6 @@ function RequestRow({ item, isDark }: { item: WorkItem; isDark: boolean }) {
   const [priority, setPriority] = React.useState(item.priority);
   const [dueDate, setDueDate] = React.useState(item.dueDate ?? "");
   const [err, setErr] = React.useState<string | null>(null);
-
   const beginEdit = () => {
     setTitle(item.title);
     setDescription(item.description ?? "");
@@ -188,6 +187,45 @@ export function RequestBoardModal({
   const [category, setCategory] = React.useState("");
   const [dueDate, setDueDate] = React.useState("");
   const [err, setErr] = React.useState<string | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
+  const dialogTitleId = React.useId();
+  const dialogDescriptionId = React.useId();
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = requestAnimationFrame(() => titleInputRef.current?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const nodes = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, [open]);
 
   const reset = () => {
     setTitle("");
@@ -229,9 +267,15 @@ export function RequestBoardModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[10045] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      style={{ WebkitBackdropFilter: "blur(4px)" }}
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+        aria-describedby={dialogDescriptionId}
         onClick={(e) => e.stopPropagation()}
         className={cn(
           "w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl",
@@ -241,12 +285,12 @@ export function RequestBoardModal({
         {/* Header */}
         <div className="flex items-start justify-between gap-3 p-5 pb-3">
           <div>
-            <div className="text-lg font-semibold">Request Work</div>
-            <p className={cn("text-[13px]", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>
+            <div id={dialogTitleId} className="text-lg font-semibold">Request Work</div>
+            <p id={dialogDescriptionId} className={cn("text-[13px]", isDark ? "text-zinc-400" : "text-[#6C6C72]")}>
               Submit a task or project for the team. A manager reviews it before it goes live.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 -m-1 text-xl leading-none">
+          <button type="button" onClick={onClose} aria-label="Close request work" className="sb-tablet-touch-target p-1 -m-1 text-xl leading-none">
             <X size={18} />
           </button>
         </div>
@@ -274,12 +318,15 @@ export function RequestBoardModal({
               ))}
             </div>
             <input
+              ref={titleInputRef}
+              aria-label="Request title"
               className={cn(inputClass, "mb-2")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={workType === "task" ? "What needs doing?" : "Project name"}
             />
             <textarea
+              aria-label="Request details"
               className={cn(inputClass, "mb-2 resize-none")}
               rows={2}
               value={description}
@@ -287,12 +334,12 @@ export function RequestBoardModal({
               placeholder="Details (optional)"
             />
             <div className="flex gap-2 mb-2">
-              <select className={cn(inputClass, "flex-1")} value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <select aria-label="Request priority" className={cn(inputClass, "flex-1")} value={priority} onChange={(e) => setPriority(e.target.value)}>
                 {WORK_ITEM_PRIORITIES.map((p) => (
                   <option key={p} value={p}>{titleCase(p)}</option>
                 ))}
               </select>
-              <select className={cn(inputClass, "flex-1")} value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select aria-label="Request category" className={cn(inputClass, "flex-1")} value={category} onChange={(e) => setCategory(e.target.value)}>
                 <option value="">Category…</option>
                 {WORK_ITEM_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{titleCase(c)}</option>
