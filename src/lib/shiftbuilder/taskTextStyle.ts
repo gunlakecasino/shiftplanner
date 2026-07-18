@@ -30,16 +30,20 @@ export const TASK_LABEL_COLOR = {
   secondaryDark: "#AEAEB2",
 } as const;
 
-/** Default task label sizes (px) by card context. */
+/**
+ * Default task label sizes (px) by card context.
+ * Product default is 11 across zone / RR / AUX (builder + print) with wrap +
+ * hanging indent; cards grow to fit rather than shrinking type first.
+ */
 export const TASK_LABEL_SIZE_PX = {
-  default: 14,
-  zoneCard: 13,
-  zoneList: 12.5,
-  rrOverlap: 10.5,
-  dense: 10,
-  denseSmall: 9.5,
-  print: 10.5,
-  printDense: 9.5,
+  default: 11,
+  zoneCard: 11,
+  zoneList: 11,
+  rrOverlap: 11,
+  dense: 11,
+  denseSmall: 11,
+  print: 11,
+  printDense: 11,
 } as const;
 
 export function taskLabelSizeClass(px: number): string {

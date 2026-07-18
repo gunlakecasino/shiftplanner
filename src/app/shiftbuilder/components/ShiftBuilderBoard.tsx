@@ -647,7 +647,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const gridHostClass = isPrintPreview
     ? "relative h-full"
     : "relative h-full min-h-0 flex flex-col";
-  const builderGridAutoRows = "minmax(0, 1fr)";
+  // Content-sized rows: cards grow with tasks (11px + wrap), then equalize
+  // lifts each row to the tallest card so the whole band stays aligned.
+  const builderGridAutoRows = "minmax(min-content, auto)";
   const zoneGridClass = isPrintPreview
     ? `sb-print-card-grid grid grid-cols-5 gap-1.5 flex-1 w-full${builderCardGridClass}`
     : `sb-zone-grid flex-1 w-full min-h-0${builderCardGridClass}`;

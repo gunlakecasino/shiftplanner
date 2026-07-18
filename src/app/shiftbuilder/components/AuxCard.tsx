@@ -535,7 +535,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 onOpenTasksPad={onOpenTaskTextEdit}
                 isLocked={isLocked}
                 enabled={showDigitalAssists}
-                className={`sb-card-task-scroll mt-auto min-h-[28px] flex-1 overflow-y-auto ${!hasTM ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}
+                className={`sb-card-task-zone mt-auto min-h-[28px] flex-1 overflow-visible ${!hasTM ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}
               >
                 <ZoneTaskList
                   tasks={regularTasks}
@@ -547,12 +547,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
                   dense
-                  textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
+                  textSize="text-[11px]"
                   isPrintPreview={false}
                 />
               </CardTaskZone>
             ) : (
-              <div className={`sb-card-task-scroll mt-auto min-h-0 flex-1 overflow-y-auto ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+              <div className={`sb-card-task-zone mt-auto min-h-0 flex-1 overflow-visible ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
                 <ZoneTaskList
                   tasks={regularTasks}
                   hasTM={hasTM}
@@ -563,7 +563,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
                   dense
-                  textSize={hasTM ? "text-[9.5px]" : "text-[8.5px]"}
+                  textSize="text-[11px]"
                   isPrintPreview={!showDigitalAssists}
                 />
               </div>

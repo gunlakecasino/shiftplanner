@@ -31,6 +31,7 @@ import {
   type TaskTextStyle,
 } from "@/lib/shiftbuilder/taskTextStyle";
 import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
+import { mapNightTasksToUiKeys as mapNightTasksToUiKeysLib } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
 // the static dependency graph of this very large file and stop Turbopack module factory errors.
@@ -3572,61 +3573,12 @@ function AuthedShiftBuilder() {
     ]
   );
 
-  // Map DB task rows to UI keys, with special remapping for aux cards so that
-  // tasks added/persisted under canonical DB keys (admin/trash_N/...) land on the
-  // current AUXn keys from auxDefs (role-based layout).
-  const mapNightTasksToUiKeys = React.useCallback((rows: NightSlotTask[], currentAuxDefs: AuxDef[] = []) => {
-    const tasksByUiKey: Record<string, NightSlotTask[]> = {};
-    rows.forEach((row) => {
-      let uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-      if (uiKey.startsWith("UNK:")) {
-        if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
-          const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
-          for (let i = 0; i < 6; i++) {
-            (tasksByUiKey[`OL-${half}-${i}`] ??= []).push(row);
-          }
-        }
-        return;
-      }
-      if (currentAuxDefs.length > 0) {
-        // Legacy TR/SP + short-code OAS/TSH/SUP/JC/STEP → flex AUXn shell.
-        if (
-          uiKey === "ADM" ||
-          uiKey === "Z9SR" ||
-          uiKey === "JC" ||
-          uiKey === "STEP" ||
-          /^(TR|TSH|SP|SUP|OAS)\d+$/i.test(uiKey)
-        ) {
-          let match: AuxDef | undefined;
-          if (uiKey === "ADM") {
-            match = currentAuxDefs.find((d) => d.role === "admin");
-          } else if (uiKey === "Z9SR") {
-            match = currentAuxDefs.find((d) => d.role === "z9sr");
-          } else if (uiKey === "JC") {
-            match = currentAuxDefs.find((d) => d.role === "job_coach");
-          } else if (uiKey === "STEP") {
-            match = currentAuxDefs.find((d) => d.role === "step_up");
-          } else {
-            const numbered = uiKey.match(/^(TR|TSH|SP|SUP|OAS)(\d+)$/i);
-            if (numbered) {
-              const family = numbered[1].toUpperCase();
-              const n = parseInt(numbered[2], 10);
-              const role =
-                family === "TR" || family === "TSH"
-                  ? "trash"
-                  : family === "SP" || family === "SUP"
-                    ? "support"
-                    : "oasis";
-              match = currentAuxDefs.filter((d) => d.role === role)[n - 1];
-            }
-          }
-          if (match?.key) uiKey = match.key;
-        }
-      }
-      (tasksByUiKey[uiKey] ??= []).push(row);
-    });
-    return tasksByUiKey;
-  }, []);
+  // Map DB task rows → UI keys (incl. flex AUX role shells). Shared with print.
+  const mapNightTasksToUiKeys = React.useCallback(
+    (rows: NightSlotTask[], currentAuxDefs: AuxDef[] = []) =>
+      mapNightTasksToUiKeysLib(rows, currentAuxDefs),
+    [],
+  );
 
   const handleCmdkAddTask = React.useCallback(
     async (uiKeys: string | string[], taskLabel: string) => {

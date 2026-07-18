@@ -2,7 +2,7 @@ import { addDays } from "@/lib/shiftbuilder/dateUtils";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { DAY_LONG, SHIFT_DAY_COLORS } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
+import { mapNightTasksToUiKeys } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import {
   ZONE_DEFS,
   RR_DEFS,
@@ -28,24 +28,6 @@ import type {
   PrintOverlapRow,
   PrintBreaksPerson,
 } from "./printPreviewTypes";
-
-function tasksByUiKey(rows: NightSlotTask[]): Record<string, NightSlotTask[]> {
-  const out: Record<string, NightSlotTask[]> = {};
-  rows.forEach((row) => {
-    const uiKey = dbToUi(row.slotKey, row.slotType, row.rrSide ?? null);
-    if (uiKey.startsWith("UNK:")) {
-      if (row.slotType === "overlap" && (row.slotKey === "overlap_pm" || row.slotKey === "overlap_am")) {
-        const half = row.slotKey === "overlap_pm" ? "PM" : "AM";
-        for (let i = 0; i < 6; i++) {
-          (out[`OL-${half}-${i}`] ??= []).push(row);
-        }
-      }
-      return;
-    }
-    (out[uiKey] ??= []).push(row);
-  });
-  return out;
-}
 
 function toTaskLines(tasks: NightSlotTask[] | undefined): PrintTaskLine[] {
   return (tasks ?? []).map((t) => ({
@@ -123,7 +105,10 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
     dayIndex,
     day,
     assignments,
-    tasksBySlot: tasksByUiKey((secondary.tasks ?? []) as NightSlotTask[]),
+    tasksBySlot: mapNightTasksToUiKeys(
+      (secondary.tasks ?? []) as NightSlotTask[],
+      core.auxDefs ?? [],
+    ),
     auxDefs: core.auxDefs ?? [],
     amOverlapDayName: DAY_LONG[amDate.getDay()],
     amOverlapDateNum: amDate.getDate(),

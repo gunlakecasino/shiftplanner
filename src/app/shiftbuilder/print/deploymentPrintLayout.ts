@@ -60,9 +60,19 @@ export function solveOfficialDeploymentLayout(
   snapshot: PrintDaySnapshot,
 ): OfficialDeploymentLayout {
   const pressure = measureDeploymentTaskPressure(snapshot);
+  const { tasksBySlot, auxDefs } = snapshot;
+  const auxKeys = auxDefs
+    .filter((d) => d.role !== "blank" || !!d.label)
+    .map((d) => d.key);
+  const maxAux = Math.max(
+    0,
+    ...auxKeys.map((k) => nonCoverageTaskCount(tasksBySlot, k)),
+  );
 
-  // Aux + RR are pinned — only zones (row 2) absorb flexible height.
+  // Zones absorb most flexible height; AUX grows with task load so every
+  // aux task can print at the default 11px (rows align via grid + equalize).
   let zonesFlexGrow: number = BASE.zones;
+  let auxFlexGrow = 0;
 
   if (pressure >= 3) {
     zonesFlexGrow += 0.95;
@@ -74,31 +84,21 @@ export function solveOfficialDeploymentLayout(
     zonesFlexGrow += 1.85;
   }
 
-  let density: DeploymentPrintDensity = "normal";
-  let taskFontPx: number = TASK_LABEL_SIZE_PX.print;
-  let taskDenseFontPx: number = TASK_LABEL_SIZE_PX.printDense;
-  let taskLineHeight = 1.12;
-  let taskGapPx = 2;
+  if (maxAux >= 2) auxFlexGrow = 0.55;
+  if (maxAux >= 3) auxFlexGrow = 0.9;
+  if (maxAux >= 5) auxFlexGrow = 1.35;
 
-  if (pressure >= 5) {
-    density = "compact";
-    taskFontPx = 9.5;
-    taskDenseFontPx = 9;
-    taskLineHeight = 1.08;
-    taskGapPx = 1;
-  }
-  if (pressure >= 7) {
-    density = "tight";
-    taskFontPx = 9;
-    taskDenseFontPx = 8.5;
-    taskLineHeight = 1.05;
-    taskGapPx = 0;
-  }
+  // Prefer fixed 11px + wrap + growing cards/sections over shrinking type.
+  const density: DeploymentPrintDensity = "normal";
+  const taskFontPx: number = TASK_LABEL_SIZE_PX.print;
+  const taskDenseFontPx: number = TASK_LABEL_SIZE_PX.printDense;
+  const taskLineHeight = 1.15;
+  const taskGapPx = 2;
 
   return {
     zonesFlexGrow,
     rrFlexGrow: 0,
-    auxFlexGrow: 0,
+    auxFlexGrow,
     density,
     taskFontPx,
     taskDenseFontPx,
@@ -115,10 +115,10 @@ export function applyOfficialDeploymentLayoutAttrs(
   artboard.setAttribute("data-print-density", layout.density);
   artboard.setAttribute("data-print-zones-grow", String(layout.zonesFlexGrow));
   artboard.setAttribute("data-print-rr-grow", "0");
-  artboard.setAttribute("data-print-aux-grow", "0");
+  artboard.setAttribute("data-print-aux-grow", String(layout.auxFlexGrow));
   artboard.style.setProperty("--sb-print-zones-grow", String(layout.zonesFlexGrow));
   artboard.style.setProperty("--sb-print-rr-grow", "0");
-  artboard.style.setProperty("--sb-print-aux-grow", "0");
+  artboard.style.setProperty("--sb-print-aux-grow", String(layout.auxFlexGrow));
   artboard.style.setProperty("--sb-print-task-px", `${layout.taskFontPx}px`);
   artboard.style.setProperty("--sb-print-task-dense-px", `${layout.taskDenseFontPx}px`);
   artboard.style.setProperty("--sb-print-task-leading", String(layout.taskLineHeight));
@@ -154,16 +154,23 @@ function applySectionFlex(
   section.style.overflow = "hidden";
 }
 
-function pinAuxSection(aux: HTMLElement | null): void {
+function pinAuxSection(aux: HTMLElement | null, grow = 0): void {
   if (!aux) return;
-  aux.style.flexGrow = "0";
-  aux.style.flexShrink = "0";
-  aux.style.flexBasis = "auto";
+  // Content-sized when grow is 0; share remaining height when aux has tasks.
+  if (grow > 0) {
+    aux.style.flexGrow = String(grow);
+    aux.style.flexShrink = "1";
+    aux.style.flexBasis = "0";
+  } else {
+    aux.style.flexGrow = "0";
+    aux.style.flexShrink = "0";
+    aux.style.flexBasis = "auto";
+  }
   aux.style.minHeight = "0";
   aux.style.display = "flex";
   aux.style.flexDirection = "column";
   aux.style.overflow = "visible";
-  aux.style.marginTop = "auto";
+  aux.style.marginTop = grow > 0 ? "0" : "auto";
 }
 
 function pinRRSection(rr: HTMLElement | null): void {
@@ -344,10 +351,11 @@ export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
   const aux = el.querySelector(".sb-print-section-aux") as HTMLElement | null;
 
   let zonesGrow = readGrow(el, "data-print-zones-grow", BASE.zones);
+  let auxGrow = readGrow(el, "data-print-aux-grow", 0);
 
   applySectionFlex(zones, zonesGrow);
   pinRRSection(rr);
-  pinAuxSection(aux);
+  pinAuxSection(aux, auxGrow);
   applyZoneRowFlex(zones);
   capZonesStack(body, zones, rr, aux);
 
@@ -361,20 +369,35 @@ export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
 
   const auxGrid = aux?.querySelector(".sb-print-card-grid") as HTMLElement | null;
   if (auxGrid) {
-    auxGrid.style.flex = "0 0 auto";
+    // Content-height cards that equalize to the tallest in the AUX row.
+    auxGrid.style.flex = auxGrow > 0 ? "1 1 auto" : "0 0 auto";
     auxGrid.style.gridAutoRows = "auto";
+    auxGrid.style.alignItems = "stretch";
+    auxGrid.querySelectorAll<HTMLElement>("[data-slot-key]").forEach((cell) => {
+      cell.style.height = "100%";
+      cell.style.minHeight = "0";
+      cell.style.display = "flex";
+      cell.style.flexDirection = "column";
+    });
   }
 
   for (let pass = 0; pass < 6; pass++) {
     applySectionFlex(zones, zonesGrow);
     pinRRSection(rr);
-    pinAuxSection(aux);
+    pinAuxSection(aux, auxGrow);
     applyZoneRowFlex(zones);
     capZonesStack(body, zones, rr, aux);
 
     if (!taskListsClip(el)) break;
 
-    // Reclaim row-2 height via zones flex — never from pinned RR or aux.
+    // Prefer growing AUX when its tasks clip, then zones flex, then last-resort density.
+    if (auxGrow < 2.2) {
+      auxGrow = Math.min(2.2, auxGrow + 0.35);
+      el.setAttribute("data-print-aux-grow", String(auxGrow));
+      el.style.setProperty("--sb-print-aux-grow", String(auxGrow));
+      continue;
+    }
+
     if (zonesGrow > 4) {
       zonesGrow = Math.max(4, zonesGrow - 0.35);
       el.setAttribute("data-print-zones-grow", String(zonesGrow));
@@ -382,6 +405,7 @@ export function postProcessOfficialDeploymentArtboard(artboard: Element): void {
       continue;
     }
 
+    // Last resort only — keep 11px as long as layout can expand.
     if (bumpDensity(el) === null) break;
   }
 }

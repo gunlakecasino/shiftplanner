@@ -36,25 +36,38 @@ const ZoneTaskList: React.FC<{
   dense?: boolean;
   /** Forwarded to TaskRow: when true use static golden sizes (no dynamic measurement). */
   isPrintPreview?: boolean;
-  /** Accepted for call-site compatibility (ZoneCard etc); ZoneTaskList computes its own internal textSize. */
+  /** Optional override; defaults to 11px global task label size. */
   textSize?: string;
   /** Accepted for call-site compatibility; ZoneTaskList computes its own textColor. */
   textColorClass?: string;
-}> = ({ tasks, hasTM, slotKey, onRemoveTask, onSetTaskColor, onSetTaskMarker, onEditTask, onOpenTaskTextEdit, dense = false, isPrintPreview = false }) => {
+}> = ({
+  tasks,
+  hasTM,
+  slotKey,
+  onRemoveTask,
+  onSetTaskColor,
+  onSetTaskMarker,
+  onEditTask,
+  onOpenTaskTextEdit,
+  dense = false,
+  isPrintPreview = false,
+  textSize: textSizeProp,
+}) => {
   if (!tasks || tasks.length === 0) return null;
   const textColor = taskLabelColorClass(hasTM);
 
-  // Dense AUX in print: cap at 2 + "+N more". Live builder scrolls the full list in AuxCard.
-  const maxVisible = dense && isPrintPreview ? 2 : tasks.length;
-  const visibleTasks = tasks.slice(0, maxVisible);
-  const extra = tasks.length - visibleTasks.length;
+  // Show every task — cards + rows grow (equalize) instead of capping at 2.
+  const visibleTasks = tasks;
 
   const isPrint = isPrintPreview;
-  const textSize = dense
-    ? taskLabelSizeClass(isPrint ? TASK_LABEL_SIZE_PX.printDense : TASK_LABEL_SIZE_PX.denseSmall)
-    : taskLabelSizeClass(isPrint ? TASK_LABEL_SIZE_PX.print : TASK_LABEL_SIZE_PX.zoneList);
+  // Prefer explicit textSize from the card; fall back to global 11px default.
+  const textSize =
+    textSizeProp ||
+    taskLabelSizeClass(
+      isPrint ? TASK_LABEL_SIZE_PX.print : TASK_LABEL_SIZE_PX.zoneList,
+    );
   const containerClass = dense
-    ? `mt-auto pt-0 ${textSize} leading-[1.05] ${textColor}`
+    ? `mt-auto pt-0 ${textSize} leading-[1.15] ${textColor}`
     : `mt-auto ${isPrint ? "pt-0.5" : "pt-1"} ${textSize} leading-tight ${textColor}`;
 
   return (
@@ -87,15 +100,6 @@ const ZoneTaskList: React.FC<{
           </motion.div>
         ))}
       </AnimatePresence>
-      {extra > 0 && dense && (
-        <div 
-          className="text-[7.5px] opacity-75 pl-0.5 tabular-nums tracking-[0.2px]" 
-          style={{ fontFamily: "var(--font-atkinson)" }}
-          title={`+${extra} more task${extra > 1 ? 's' : ''} — full list available via Placement Pad, Sudo Tasks tab, or drag`}
-        >
-          +{extra} more
-        </div>
-      )}
     </div>
   );
 };

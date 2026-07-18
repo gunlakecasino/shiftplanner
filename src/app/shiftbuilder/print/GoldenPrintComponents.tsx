@@ -146,13 +146,16 @@ export function GoldenTaskList({
 
   return (
     <div
-      className={`sb-golden-task-list min-h-0 flex-1 flex flex-col justify-start ${dense ? "sb-golden-task-list--dense" : ""} ${textColor}`}
+      className={`sb-golden-task-list flex flex-col justify-start shrink-0 ${dense ? "sb-golden-task-list--dense" : ""} ${textColor}`}
       style={{
         fontFamily: "var(--font-atkinson)",
         fontSize,
         fontWeight: "var(--sb-print-task-weight, 700)",
-        lineHeight: "var(--sb-print-task-leading, 1.12)",
+        lineHeight: "var(--sb-print-task-leading, 1.15)",
         gap: "var(--sb-print-task-gap, 2px)",
+        // Content-sized: cards/rows grow so every task prints (no min-h-0 clip).
+        minHeight: "auto",
+        overflow: "visible",
       }}
     >
       {tasks.map((t) => (
@@ -596,7 +599,7 @@ export function GoldenAuxCard({
         {!isBlank ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
-        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5 overflow-visible"
         style={{ paddingBottom: bodyPadBottom }}
       >
         {isEmpty ? (
