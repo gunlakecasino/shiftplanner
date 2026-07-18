@@ -88,6 +88,63 @@
   border-color: var(--sb-projects-done);
 }
 
+/* Bulk-select checkbox (List view) — accent, not done-green: selection ≠ completion. */
+.sb-projects-checkbox[data-selected="true"] {
+  background: var(--sb-projects-accent);
+  border-color: var(--sb-projects-accent);
+}
+
+/* Bulk action bar — sticks to the viewport bottom while the list card is in view. */
+.sb-projects-bulkbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--sb-projects-accent-border);
+  background: var(--ios-background-secondary);
+}
+
+.sb-projects-bulkbar-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sb-projects-accent);
+  margin-right: 0.25rem;
+}
+
+.sb-projects-bulkbar-btn {
+  min-height: 27px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-projects-accent-border);
+  background: var(--sb-projects-accent-tint);
+  color: var(--sb-projects-accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 0.2rem 0.7rem;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.sb-projects-bulkbar-btn:hover {
+  background: var(--sb-projects-accent);
+  color: white;
+}
+
+.sb-projects-bulkbar-select {
+  min-height: 27px;
+  max-width: 180px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-settings-border-paper);
+  background: var(--ios-background-primary);
+  color: var(--ios-label-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 0 0.7rem;
+  outline: none;
+}
+
 @media (max-width: 767px) {
   .sb-projects-checkbox {
     width: 26px;

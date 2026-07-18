@@ -111,9 +111,16 @@ export interface RosterMember {
   name: string;
 }
 
+/**
+ * Own key root, deliberately outside ["projects"]: the roster (tm_profiles) never
+ * changes when work items / pools do, so realtime invalidations of the projects
+ * tree must not refetch it.
+ */
+export const ROSTER_KEY = ["roster"] as const;
+
 export function useRoster() {
   return useQuery({
-    queryKey: ["projects", "roster"],
+    queryKey: ROSTER_KEY,
     queryFn: () => fetchJson<{ roster: RosterMember[] }>("/api/shiftbuilder/projects/roster"),
     select: (data) => data.roster,
     staleTime: 5 * 60_000,

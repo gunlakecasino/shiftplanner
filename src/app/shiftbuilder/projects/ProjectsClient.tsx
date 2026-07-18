@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Target } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { PostPinRouteGuard } from "../components/PostPinRouteGuard";
@@ -57,6 +57,23 @@ function applySmartFilter(tasks: ReturnType<typeof useTasks>["data"], filter: Sm
   }
 }
 
+// --- URL-persisted view state (?view=board&filter=overdue&project=<id>) ------
+// Defaults stay out of the URL; unknown values fall back to the default.
+
+const DEFAULT_VIEW: BoardView = "list";
+const DEFAULT_FILTER: SmartFilter = "open";
+
+const VIEW_VALUES: readonly BoardView[] = ["list", "board", "calendar", "recurring", "pools", "defaults", "planner"];
+const FILTER_VALUES: readonly SmartFilter[] = ["all", "open", "overdue", "tonight", "complete", "my-floor", "from-recap", "staffing", "compliance"];
+
+function parseView(raw: string | null): BoardView {
+  return raw && (VIEW_VALUES as readonly string[]).includes(raw) ? (raw as BoardView) : DEFAULT_VIEW;
+}
+
+function parseFilter(raw: string | null): SmartFilter {
+  return raw && (FILTER_VALUES as readonly string[]).includes(raw) ? (raw as SmartFilter) : DEFAULT_FILTER;
+}
+
 function ProjectsGate() {
   const router = useRouter();
   const { permissions, isLoading } = useOpsAuth();
@@ -86,13 +103,31 @@ function ProjectsShell() {
   const canManage = permissions?.canManageTasks ?? false;
   const canComplete = canManage || (permissions?.canCompleteOwnTasks ?? false);
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [smartFilter, setSmartFilter] = useState<SmartFilter>("open");
-  const [view, setView] = useState<BoardView>("list");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => searchParams.get("project"));
+  const [smartFilter, setSmartFilter] = useState<SmartFilter>(() => parseFilter(searchParams.get("filter")));
+  const [view, setView] = useState<BoardView>(() => parseView(searchParams.get("view")));
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useProjectsRealtime();
+
+  // Mirror view state to the URL so a reload / shared link restores the console.
+  // Defaults are deleted rather than written; replace (not push) keeps history clean.
+  useEffect(() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    const setOrDelete = (key: string, value: string | null) =>
+      value ? sp.set(key, value) : sp.delete(key);
+    setOrDelete("view", view === DEFAULT_VIEW ? null : view);
+    setOrDelete("filter", smartFilter === DEFAULT_FILTER ? null : smartFilter);
+    setOrDelete("project", selectedProjectId);
+    const next = sp.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [view, smartFilter, selectedProjectId, pathname, router, searchParams]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);

@@ -30,6 +30,9 @@ export function OpsTaskRow({
   onOpen,
   canComplete,
   onSetStatus,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   task: WorkItem;
   roster: RosterMember[];
@@ -39,6 +42,10 @@ export function OpsTaskRow({
    *  the row out of "Open", and a row-local mutation would unmount mid-flight,
    *  dropping onSettled reconciliation. */
   onSetStatus: (taskId: string, status: WorkItemStatus) => void;
+  /** Bulk-select (List view): leading checkbox column, state owned by TaskListView. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (taskId: string) => void;
 }) {
   const isDone = task.status === "complete";
   const assignee = roster.find((r) => r.tmId === task.assigneeTmId);
@@ -56,6 +63,24 @@ export function OpsTaskRow({
       className="sb-projects-row flex cursor-pointer items-center gap-3 px-3 py-2.5"
       onClick={() => onOpen(task.id)}
     >
+      {selectable && (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={selected ? `Deselect task: ${task.title}` : `Select task: ${task.title}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.(task.id);
+          }}
+          className="-my-2 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center"
+        >
+          <span className="sb-projects-checkbox" data-selected={selected}>
+            {selected && <Check size={13} strokeWidth={3} color="white" />}
+          </span>
+        </button>
+      )}
+
       <motion.button
         type="button"
         onClick={toggleDone}

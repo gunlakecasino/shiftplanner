@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 
 const ProjectsClient = dynamic(() => import("./ProjectsClient"), {
@@ -8,5 +9,11 @@ const ProjectsClient = dynamic(() => import("./ProjectsClient"), {
 });
 
 export default function ShiftBuilderProjectsPage() {
-  return <ProjectsClient />;
+  // Suspense boundary: ProjectsClient reads useSearchParams(), which requires
+  // one at the page level for the route to stay statically renderable.
+  return (
+    <Suspense fallback={null}>
+      <ProjectsClient />
+    </Suspense>
+  );
 }
