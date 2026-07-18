@@ -246,14 +246,29 @@ const RosterRail = React.memo(function RosterRail({
     [rawPool, isPlaced],
   );
 
+  /** Alias-safe: call_offs may store tm_id slug while roster row id is UUID (or vice versa). */
+  const isCalledOff = React.useCallback(
+    (tm: GravesScheduleRosterRow) => {
+      if (calledOffIds.has(tm.id)) return true;
+      for (const cid of calledOffIds) {
+        if (!cid) continue;
+        if (cid === tm.id) return true;
+        const resolved = resolveTmFromLookup(identityLookup, cid);
+        if (resolved && boardTmId(resolved) === tm.id) return true;
+      }
+      return false;
+    },
+    [calledOffIds, identityLookup],
+  );
+
   const placedCount = React.useMemo(
-    () => sourceRoster.filter((t) => t.isPlaced && !calledOffIds.has(t.id)).length,
-    [sourceRoster, calledOffIds],
+    () => sourceRoster.filter((t) => t.isPlaced && !isCalledOff(t)).length,
+    [sourceRoster, isCalledOff],
   );
 
   const unplacedCount = React.useMemo(
-    () => sourceRoster.filter((t) => !t.isPlaced && !calledOffIds.has(t.id)).length,
-    [sourceRoster, calledOffIds],
+    () => sourceRoster.filter((t) => !t.isPlaced && !isCalledOff(t)).length,
+    [sourceRoster, isCalledOff],
   );
 
   const isPorter = React.useCallback(
@@ -261,13 +276,25 @@ const RosterRail = React.memo(function RosterRail({
     [],
   );
 
-  const calledOff = React.useMemo(
-    () => sourceRoster.filter((t) => calledOffIds.has(t.id)),
-    [sourceRoster, calledOffIds],
-  );
+  const calledOff = React.useMemo(() => {
+    const fromPool = sourceRoster.filter((t) => isCalledOff(t));
+    // Include call-offs that aren't in tonight's band-filtered pool (still show under Called Off).
+    const seen = new Set(fromPool.map((t) => t.id));
+    for (const cid of calledOffIds) {
+      if (!cid || seen.has(cid)) continue;
+      const resolved = resolveTmFromLookup(identityLookup, cid);
+      if (!resolved) continue;
+      const row = rowFromLookupEntry(resolved);
+      if (!row.id || seen.has(row.id)) continue;
+      seen.add(row.id);
+      fromPool.push({ ...row, isPlaced: false });
+    }
+    return fromPool;
+  }, [sourceRoster, calledOffIds, identityLookup, isCalledOff]);
+
   const notCalledOff = React.useMemo(
-    () => sourceRoster.filter((t) => !calledOffIds.has(t.id)),
-    [sourceRoster, calledOffIds],
+    () => sourceRoster.filter((t) => !isCalledOff(t)),
+    [sourceRoster, isCalledOff],
   );
 
   const {

@@ -5290,7 +5290,23 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         });
 
         const dateKey = formatLocalDateISO(selectedDay.date);
-        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        const qc = currentNight.queryClient;
+        if (qc) {
+          qc.setQueryData(["nightSecondary", dateKey], (old: any) => {
+            if (!old || typeof old !== "object") return old;
+            const prevIds: string[] =
+              old.calledOffIds instanceof Set
+                ? Array.from(old.calledOffIds as Set<string>)
+                : Array.isArray(old.calledOffIds)
+                  ? (old.calledOffIds as string[])
+                  : [];
+            return {
+              ...old,
+              calledOffIds: new Set(prevIds.filter((id) => id !== tmId)),
+            };
+          });
+        }
+        await qc?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
         setPickerScheduleEpoch((e) => e + 1);
         showToast(`${tmName} restored to tonight's roster`, "success");
       } catch (e) {
@@ -5328,6 +5344,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           reason: status,
         });
 
+        // Optimistic: Called Off section + board clear before secondary refetch.
+        // Secondary used to hardcode calledOffIds:[] which wiped this set on poll —
+        // still keep local set + query cache in sync so roster never flings them
+        // back into "On Sheet — Not Placed".
         setCalledOffIds((prev) => {
           const next = new Set(prev);
           next.add(tmId);
@@ -5339,14 +5359,39 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         for (const [slotKey, row] of Object.entries(cleared)) {
           const a = row as { tmId?: string | null };
           if (a?.tmId === tmId) {
-            cleared[slotKey] = { ...a, tmId: null, tmName: null };
+            delete cleared[slotKey];
           }
         }
         store.setAssignments(cleared);
 
         const dateKey = formatLocalDateISO(selectedDay.date);
-        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-        await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+        const qc = currentNight.queryClient;
+        if (qc) {
+          qc.setQueryData(["nightSecondary", dateKey], (old: any) => {
+            if (!old || typeof old !== "object") return old;
+            const prevIds: string[] =
+              old.calledOffIds instanceof Set
+                ? Array.from(old.calledOffIds as Set<string>)
+                : Array.isArray(old.calledOffIds)
+                  ? (old.calledOffIds as string[])
+                  : [];
+            const merged = new Set(prevIds);
+            merged.add(tmId);
+            return { ...old, calledOffIds: merged };
+          });
+          // Reassert board assignments without waiting for core refetch.
+          try {
+            const { patchNightCoreAssignmentsCache } = await import(
+              "@/lib/shiftbuilder/scheduleCacheSync"
+            );
+            patchNightCoreAssignmentsCache(qc, dateKey, cleared as any);
+          } catch {
+            /* non-fatal */
+          }
+        }
+
+        await qc?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        await qc?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
         shiftData.mirrorCurrentDay();
         setLiveAssignVersion((v) => v + 1);
         setPickerScheduleEpoch((e) => e + 1);

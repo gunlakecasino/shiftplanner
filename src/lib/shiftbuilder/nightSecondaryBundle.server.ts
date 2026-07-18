@@ -93,7 +93,7 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
     fetchRecentZoneHistoryServer(anchorDate, 7, supabase),
   ]);
 
-  const [notesRes, tasksRes, breaksRes, bordersRes] = await Promise.all([
+  const [notesRes, tasksRes, breaksRes, bordersRes, callOffsRes] = await Promise.all([
     nightId
       ? supabase.from("nights").select("notes").eq("id", nightId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -117,7 +117,18 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
           .select("slot_key, border_color")
           .eq("night_id", nightId)
       : Promise.resolve({ data: [], error: null }),
+    // call_offs is keyed by night_date (not night_id). Without this, Mark
+    // unavailable only clears board slots; the roster never learns they are
+    // called off and they reappear under "On Sheet — Not Placed" after poll.
+    supabase.from("call_offs").select("tm_id").eq("night_date", isoDate),
   ]);
+
+  if (callOffsRes.error) {
+    console.warn(
+      "[nightSecondaryBundle] call_offs fetch failed",
+      callOffsRes.error.message,
+    );
+  }
 
   const cardBorders: Record<string, string> = {};
   (bordersRes.data || []).forEach((r: { slot_key?: string; border_color?: string }) => {
@@ -128,12 +139,20 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
   const mappedBreaks = breakRows.map(mapBreakAssignment);
   const mappedTasks = ((tasksRes.data ?? []) as NightSlotTaskRow[]).map(mapNightSlotTask);
 
+  const calledOffIds = Array.from(
+    new Set(
+      ((callOffsRes.data ?? []) as Array<{ tm_id?: string | null }>)
+        .map((r) => (typeof r.tm_id === "string" ? r.tm_id.trim() : ""))
+        .filter(Boolean),
+    ),
+  );
+
   return {
     notes: (notesRes.data as { notes?: string } | null)?.notes ?? "",
     tasks: mappedTasks,
     breakAssignments: mappedBreaks,
     cardBorders,
-    calledOffIds: [],
+    calledOffIds,
     rawBreakRows: mappedBreaks,
     recentZoneHistory,
   };

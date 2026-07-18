@@ -1857,9 +1857,15 @@ export async function markTmCallOffServer(params: {
   const { nightId, tmId, date, reason } = params;
   const client = adminClient();
 
+  if (!nightId || !tmId || !date) {
+    throw new Error("markTmCallOff: nightId, tmId, and date are required");
+  }
+
+  // Delete zone rows (same as slot unassign) so empty shells with null tm_id
+  // don't linger and rehydrate as ghost placement state.
   const zoneClear = await client
     .from("zone_assignments")
-    .update({ tm_id: null, is_filled: false, is_locked: false })
+    .delete()
     .eq("night_id", nightId)
     .eq("tm_id", tmId);
   if (zoneClear.error) {
@@ -1882,6 +1888,24 @@ export async function markTmCallOffServer(params: {
     .eq("tm_id", tmId);
   if (breakClear.error) {
     throw new Error(`markTmCallOff: break clear failed: ${breakClear.error.message}`);
+  }
+
+  // Drop singular night×TM history so trails/matrix don't keep called-off people.
+  try {
+    const delHist = await client
+      .from("tm_placement_history")
+      .delete()
+      .eq("night_id", nightId)
+      .eq("tm_id", tmId);
+    if (delHist.error) {
+      console.warn("[ops] markTmCallOff history clear failed", delHist.error.message);
+    } else {
+      await refreshTmZoneMatrixServer(tmId).catch((e) =>
+        console.warn("[ops] matrix refresh after call-off failed", e),
+      );
+    }
+  } catch (histErr) {
+    console.warn("[ops] markTmCallOff history cleanup skipped", histErr);
   }
 
   const upsert = await client.from("call_offs").upsert(
