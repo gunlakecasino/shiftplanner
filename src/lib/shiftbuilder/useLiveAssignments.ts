@@ -41,7 +41,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   liveAssignmentsStore,
@@ -340,6 +340,12 @@ export function useLiveAssignments(selectedDay: DayDef) {
     () => ({ tmId: null, tmName: null })
   );
 
+  // TanStack Query keeps `.mutate` referentially stable across renders; the
+  // mutation result object itself is not. Depending on `.mutate` keeps
+  // assign/unassign — and therefore the memoized `live` object below — stable.
+  const assignMutate = assignMutation.mutate;
+  const unassignMutate = unassignMutation.mutate;
+
   const assign = useCallback(
     (uiKey: string, tmId: string, tmName: string, opts: LiveAssignOptions) => {
       const resolvedNightId = opts.targetNightId;
@@ -348,7 +354,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
         console.warn("[useLiveAssignments] assign called without targetNightId — will resolve inside mutation");
       }
 
-      assignMutation.mutate({
+      assignMutate({
         uiKey,
         tmId,
         tmName,
@@ -358,7 +364,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
       ensureRealtime(resolvedNightId ?? null);
     },
-    [assignMutation, ensureRealtime]
+    [assignMutate, ensureRealtime]
   );
 
   const unassign = useCallback(
@@ -369,7 +375,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
         console.warn("[useLiveAssignments] unassign called without targetNightId — will resolve inside mutation (this was the main cause of DB not updating)");
       }
 
-      unassignMutation.mutate({
+      unassignMutate({
         uiKey,
         ...opts,
         resolvedNightId, // pass as-is; mutationFn will resolve if missing
@@ -379,7 +385,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
       ensureRealtime(resolvedNightId ?? null);
     },
-    [unassignMutation, ensureRealtime]
+    [unassignMutate, ensureRealtime]
   );
 
   const toggleLock = useCallback(
@@ -393,11 +399,18 @@ export function useLiveAssignments(selectedDay: DayDef) {
     []
   );
 
-  return {
-    assign,
-    unassign,
-    toggleLock,
-    isMutating: assignMutation.isPending || unassignMutation.isPending,
-    ensureRealtime, // exposed so the client can wire it when nightId becomes available
-  };
+  const isMutating = assignMutation.isPending || unassignMutation.isPending;
+
+  // Stable object identity so `live={live}` doesn't defeat React.memo on the
+  // board; it only changes when a member genuinely changes.
+  return useMemo(
+    () => ({
+      assign,
+      unassign,
+      toggleLock,
+      isMutating,
+      ensureRealtime, // exposed so the client can wire it when nightId becomes available
+    }),
+    [assign, unassign, toggleLock, isMutating, ensureRealtime],
+  );
 }

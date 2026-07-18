@@ -813,6 +813,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     !activeTaskEditPad;
 
   // Equalize card heights within each grid row on the deployment sheet.
+  // Row-equalize machinery. Split in two so data changes don't rebuild
+  // observers: this effect owns ONE persistent ResizeObserver + the equalize
+  // implementation for the life of the view; the small effect after it merely
+  // schedules a pass when board data changes. Dynamic flags are read through
+  // refs so the machinery never needs data-shaped dependencies.
+  const equalizeRef = React.useRef<() => void>(() => {});
+  const equalizeRafRef = React.useRef(0);
+  const isAnyDragActiveRef = React.useRef(isAnyDragActive);
+  isAnyDragActiveRef.current = isAnyDragActive;
+
   React.useEffect(() => {
     let innerRaf = 0;
     let ro: ResizeObserver | null = null;
@@ -886,7 +896,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
     const equalize = () => {
       if (isPrintPreview) return;
-      if (isAnyDragActive) return;
+      if (isAnyDragActiveRef.current) return;
       if (dayTransitionPauseRef.current) return;
       const zEl = zonesGridRef.current;
       const rEl = restroomsGridRef.current;
@@ -897,6 +907,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       equalizeCardsInGrid(zEl, getGridColumnCount(zEl));
       equalizeCardsInGrid(aEl, getGridColumnCount(aEl));
     };
+    equalizeRef.current = equalize;
+
+    const scheduleEqualize = () => {
+      cancelAnimationFrame(equalizeRafRef.current);
+      equalizeRafRef.current = requestAnimationFrame(equalize);
+    };
 
     const attachResizeObserver = () => {
       const grids = [zonesGridRef.current, restroomsGridRef.current, auxGridRef.current].filter(
@@ -904,36 +920,42 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       ) as HTMLElement[];
       if (!grids.length || typeof ResizeObserver === "undefined") return;
       ro?.disconnect();
-      ro = new ResizeObserver(() => {
-        requestAnimationFrame(equalize);
-      });
+      ro = new ResizeObserver(scheduleEqualize);
       grids.forEach((el) => ro!.observe(el));
     };
 
-    const onViewportSync = () => requestAnimationFrame(equalize);
+    const onViewportSync = scheduleEqualize;
     window.addEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
 
-    if (!isAnyDragActive) {
-      const outerRaf = requestAnimationFrame(() => {
+    // Mount / view-change: double-rAF so fonts and grid layout settle before
+    // the first measurement, then observe.
+    const outerRaf = requestAnimationFrame(() => {
+      equalize();
+      innerRaf = requestAnimationFrame(() => {
         equalize();
-        innerRaf = requestAnimationFrame(() => {
-          equalize();
-          attachResizeObserver();
-        });
+        attachResizeObserver();
       });
-
-      return () => {
-        cancelAnimationFrame(outerRaf);
-        cancelAnimationFrame(innerRaf);
-        ro?.disconnect();
-        window.removeEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
-      };
-    }
+    });
 
     return () => {
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+      cancelAnimationFrame(equalizeRafRef.current);
       ro?.disconnect();
       window.removeEventListener(VIEWPORT_SYNC_EVENT, onViewportSync);
+      equalizeRef.current = () => {};
     };
+  }, [currentView, isPrintPreview, nightId, artboardScale]);
+
+  // Data changes only *schedule* one equalize pass on the persistent
+  // machinery above — previously this dependency list tore down and rebuilt
+  // the ResizeObserver and forced a double measurement of every card on each
+  // assignment/task/draft change. `isAnyDragActive` stays a dependency so the
+  // pass suppressed during a drag runs once on drop.
+  React.useEffect(() => {
+    if (currentView !== "deployment") return;
+    cancelAnimationFrame(equalizeRafRef.current);
+    equalizeRafRef.current = requestAnimationFrame(() => equalizeRef.current());
   }, [
     currentView,
     assignments,
@@ -944,10 +966,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     isDraftMode,
     cardBorders,
     selectedSlotKey,
-    artboardScale,
     isAnyDragActive,
-    isPrintPreview,
-    nightId,
     equalizeEpoch,
   ]);
 

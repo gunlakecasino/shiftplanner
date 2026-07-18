@@ -573,6 +573,19 @@ const RosterDropZone: React.FC<{
   );
 };
 
+/**
+ * Identity-stable wrapper around a handler that closes over fresh state every
+ * render. React.memo(ShiftBuilderBoard) only bails out when every function
+ * prop keeps its identity; the big plain handlers (assign, toggleLock,
+ * setBreakGroupForSlot, applyDraft) can't be usefully useCallback'd because
+ * their dependency sets change each render — so we route calls through a ref.
+ */
+function useStableCallback<T extends (...args: never[]) => unknown>(fn: T): T {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useCallback(((...args: never[]) => ref.current(...args)) as T, []);
+}
+
 // ---------------------------------------------------------------------------
 // Inner component — the real ShiftBuilder experience (only rendered after PIN auth)
 // ---------------------------------------------------------------------------
@@ -4038,6 +4051,7 @@ function AuthedShiftBuilder() {
   const auxDefsForFit = useAuxDefs() ?? [];
   const deferredAssignmentsForFit = useDeferredValue(storeAssignmentsForFit);
   const deferredDraftAssignmentsForFit = useDeferredValue(draftAssignments);
+  const deferredLiveAssignVersion = useDeferredValue(liveAssignVersion);
 const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   const deploymentRotationFitEnabled =
@@ -4215,7 +4229,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         if ((a as any)?.tmId) allWeekTms.add((a as any).tmId);
       }
     }
-    for (const a of Object.values(storeAssignmentsForFit)) {
+    for (const a of Object.values(deferredAssignmentsForFit)) {
       if ((a as any)?.tmId) allWeekTms.add((a as any).tmId);
     }
     const broadOther: Record<string, PlacementTmProfile | null> = {};
@@ -4231,10 +4245,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       const boardReadyForDay = getBoardAssignmentsDayKey() === dateKey;
       const dayAssignments =
         isActiveDay && boardReadyForDay
-          ? (storeAssignmentsForFit as Record<string, any>)
+          ? (deferredAssignmentsForFit as Record<string, any>)
           : ((night.assignments || {}) as Record<string, any>);
       const dayIsDraft = isActiveDay && isDraftMode;
-      const dayDraftAssignments = dayIsDraft ? draftAssignments : {};
+      const dayDraftAssignments = dayIsDraft ? deferredDraftAssignmentsForFit : {};
 
       const hasAssignments = Object.values(dayAssignments).some(
         (a: any) => !!(a?.tmId || a?.tmName),
@@ -4333,10 +4347,14 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     auxDefsForFit,
     effectiveRealRoster,
     selectedDayIndex,
-    storeAssignmentsForFit,
+    // Deferred inputs: the week×slots fit computation is the heaviest memo in
+    // the file. Feeding deferred values lets a drag paint first and this
+    // recompute follow in a non-urgent render, instead of running
+    // synchronously inside the drop's render pass.
+    deferredAssignmentsForFit,
     isDraftMode,
-    draftAssignments,
-    liveAssignVersion,
+    deferredDraftAssignmentsForFit,
+    deferredLiveAssignVersion,
   ]);
 
   // Selected day: same fit map as card chips / ROT pill (immediate selectedDayIndex, not deferred board).
@@ -7188,13 +7206,48 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     setBreakGroup(g);
   }, []);
 
-  const handlePadAssign = React.useCallback((slotKey: string, tmId: string, tmName: string) => {
+  // Identity-stable board props. Every wrapper below calls the freshest
+  // handler through a ref, so React.memo(ShiftBuilderBoard) actually bails
+  // out instead of re-rendering the whole board on each parent render.
+  const handlePadAssign = useStableCallback((slotKey: string, tmId: string, tmName: string) => {
     assign(slotKey, tmId, tmName);
-  }, [assign]);
+  });
 
-  const handlePadToggleLock = React.useCallback((slotKey: string) => {
+  const handlePadToggleLock = useStableCallback((slotKey: string) => {
     toggleLock(slotKey);
-  }, [toggleLock]);
+  });
+
+  const stableSetBreakGroupForSlot = useStableCallback((slotKey: string, group: BreakGroup) => {
+    setBreakGroupForSlot(slotKey, group);
+  });
+
+  const stableApplyDraft = useStableCallback(() => {
+    void applyDraft();
+  });
+
+  const stableOpenSettings = useStableCallback(() => {
+    handleOpenSettings();
+  });
+
+  const stableAssignSweeper = useStableCallback((slotKey: string, sweeperLabel: string) => {
+    handleAssignSweeperTask(slotKey, sweeperLabel);
+  });
+
+  const stableAddTask = useStableCallback((slotKey: string, label: string) => {
+    handleCmdkAddTask(slotKey, label);
+  });
+
+  const stableWeekHealthSelectDay = useStableCallback((idx: number) => {
+    changeDay(idx);
+  });
+
+  const stableOptimizeNight = useStableCallback((options?: CoverageEngineRunOptions) => {
+    return optimizeNight(options);
+  });
+
+  const stableDiscardDraft = useStableCallback(() => {
+    return discardDraft();
+  });
 
   const handlePadClearSlot = React.useCallback((slotKey: string) => {
     // Prefer the live optimistic path (updates TanStack Query cache + liveAssignmentsStore
@@ -8013,7 +8066,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           canPublish ? () => void handleToggleWeekPublished(false) : undefined
         }
         publishWeekBusy={publishWeekBusy}
-        onOptimizeNight={canRunEngine ? optimizeNight : undefined}
+        onOptimizeNight={canRunEngine ? stableOptimizeNight : undefined}
         engineRunning={engineRunPhase !== "idle"}
         onRunWeek={canRunEngine ? () => void runWeekPreview() : undefined}
         weekRunBusy={weekRunBusy}
@@ -8030,7 +8083,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               }
             : undefined
         }
-        onDiscardDraft={discardDraft}
+        onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
       />
 
@@ -8284,11 +8337,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 selectedDayIndex={selectedDayIndex}
                 canRunEngine={canRunEngine}
                 canEditAssignments={canEditAssignments}
-                onOptimizeNight={canRunEngine ? optimizeNight : undefined}
+                onOptimizeNight={canRunEngine ? stableOptimizeNight : undefined}
                 onClearBoard={handleClearBoard}
                 engineRunning={engineRunPhase !== "idle"}
-                onApplyDraft={() => { void applyDraft(); }}
-                onDiscardDraft={discardDraft}
+                onApplyDraft={stableApplyDraft}
+                onDiscardDraft={stableDiscardDraft}
                 showDraftStatusPill={
                   mounted && isBuilderLiveCanvas && isDraftMode && !isPrintPreview
                 }
@@ -8298,7 +8351,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
-                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
+                onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={boardInteractionLocked}
                 loadingAssignments={boardColdLoading}
@@ -8311,7 +8364,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onSetTaskAppearance={handleBoardSetTaskAppearance}
                 onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
-                setBreakGroupForSlot={setBreakGroupForSlot}
+                setBreakGroupForSlot={stableSetBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
                 onAddAuxSlot={addAuxSlot}
@@ -8339,8 +8392,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onClearSlot={handlePadClearSlot}
                 onToggleLock={handlePadToggleLock}
                 onAssign={handlePadAssign}
-                onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
-                onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                onAssignSweeper={stableAssignSweeper}
+                onAddTask={stableAddTask}
                 onClearSlotTasks={handleClearSlotTasks}
                 onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}
                 nextDayColor={nextDayColor}
@@ -8355,7 +8408,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 weekHealthDayDefs={DAY_DEFS}
                 selectedDayDateKey={selectedDayDateKey}
                 weekHealthLoading={weekHealthLoading}
-                onWeekHealthSelectDay={(idx) => changeDay(idx)}
+                onWeekHealthSelectDay={stableWeekHealthSelectDay}
                 onWeekHealthDismiss={dismissWeekHealthTracker}
               />
               </BuilderUnpublishedNightShell>
@@ -8364,7 +8417,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               <BuilderPinnedFooter
                 pageLabel={builderPageLabel}
                 isDark={isDark}
-                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
+                onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
               />
             </div>
           )}
@@ -8920,7 +8973,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 currentView={currentView as "deployment" | "breaks"}
                 breakGroup={breakGroup}
                 isDark={isDark}
-                onOpenSettings={canAccessSudo ? () => handleOpenSettings() : undefined}
+                onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={boardInteractionLocked}
                 loadingAssignments={boardColdLoading}
@@ -8934,7 +8987,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onSetTaskAppearance={handleBoardSetTaskAppearance}
                 onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
-                setBreakGroupForSlot={setBreakGroupForSlot}
+                setBreakGroupForSlot={stableSetBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
                 onAddAuxSlot={addAuxSlot}
@@ -8962,8 +9015,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onClearSlot={handlePadClearSlot}
                 onToggleLock={handlePadToggleLock}
                 onAssign={handlePadAssign}
-                onAssignSweeper={(slotKey, sweeperLabel) => handleAssignSweeperTask(slotKey, sweeperLabel)}
-                onAddTask={(slotKey, label) => handleCmdkAddTask(slotKey, label)}
+                onAssignSweeper={stableAssignSweeper}
+                onAddTask={stableAddTask}
                 onClearSlotTasks={handleClearSlotTasks}
                 onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}
                 nextDayColor={nextDayColor}
