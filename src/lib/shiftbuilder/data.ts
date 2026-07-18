@@ -898,9 +898,17 @@ export async function upsertZoneAssignment(params: UpsertAssignmentParams) {
  */
 export async function deleteZoneAssignment(params: {
   nightId: string;
-  uiKey: string;           // UI key like "Z9", "Z9SR", "MRR1", etc.
+  uiKey: string;           // UI key like "Z9", "Z9SR", "MRR1", "AUX3", etc.
   slotType?: string;
   rrSide?: string | null;
+  /**
+   * Canonical DB slot_key already resolved with the night's aux layout
+   * (e.g. AUX3 + role support → "support_1"). Required for flex AUX unassign:
+   * the server cannot read the client store, so uiToDb("AUX3") alone becomes
+   * "aux_3" and misses the real row — which is why removes appeared to stick
+   * until refresh.
+   */
+  dbSlotKey?: string;
 }) {
   return runBoardMutation(
     'delete_zone_assignment',

@@ -1196,7 +1196,7 @@ function AuthedShiftBuilder() {
     currentNightId: currentNight.nightId ?? null,
     queryClient: currentNight.queryClient,
     showToast,
-    handleBoardLiveUnassign: handleBoardLiveUnassignRef.current ?? undefined,
+    handleBoardLiveUnassignRef,
     getAssignmentsSnapshot: () => useShiftBuilderStore.getState().assignments,
     recordAuxChange: React.useCallback((description: string, beforeAux: AuxDef[]) => {
       const live = useShiftBuilderStore.getState().assignments ?? assignments;
@@ -3096,13 +3096,16 @@ function AuthedShiftBuilder() {
     const prevAssignment = assignments[slotKey];
     const tmIdBeingRemoved = prevAssignment?.tmId ?? null;
 
-    // Derive side for RR clears (MRR/WRR) so legacy direct delete path (if live layer not available) still targets the correct rr_side row.
+    // Derive DB key + side so legacy direct delete (and flex AUX) targets the
+    // same row assign wrote (e.g. AUX3+support → support_1, not aux_3).
     let derivedRrSide: 'mens' | 'womens' | null = null;
     let derivedSlotType: string | undefined;
+    let derivedDbSlotKey: string | undefined;
     try {
-      const { rr_side, slot_type } = uiToDb(slotKey);
-      derivedRrSide = rr_side;
-      derivedSlotType = slot_type;
+      const mapped = uiToDb(slotKey);
+      derivedRrSide = mapped.rr_side;
+      derivedSlotType = mapped.slot_type;
+      derivedDbSlotKey = mapped.slot_key;
     } catch {}
 
     // Prefer the live optimistic layer (now wired to the main board store + correct nightCore key).
@@ -3134,6 +3137,7 @@ function AuthedShiftBuilder() {
               uiKey: slotKey,
               slotType: derivedSlotType,
               rrSide: derivedRrSide,
+              dbSlotKey: derivedDbSlotKey,
             }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
           );
         }
@@ -5924,7 +5928,15 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                   tmId: movingTmId,
                 });
               }
-              await deleteZoneAssignment({ nightId: nid, uiKey: fromKey });
+              // Pass layout-aware DB key so flex AUX deletes hit support_1 / step_up / etc.
+              const fromMapped = uiToDb(fromKey);
+              await deleteZoneAssignment({
+                nightId: nid,
+                uiKey: fromKey,
+                slotType: fromMapped.slot_type,
+                rrSide: fromMapped.rr_side,
+                dbSlotKey: fromMapped.slot_key,
+              });
             }
 
             const qc = currentNight.queryClient;

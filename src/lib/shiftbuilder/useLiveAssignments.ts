@@ -133,6 +133,10 @@ export function useLiveAssignments(selectedDay: DayDef) {
         // For unassign (tmId null), use the robust delete that also cleans
         // legacy keys (e.g. "Z9" vs "zone_9"). This is the permanent fix for
         // ghost assignments from old data.
+        //
+        // CRITICAL: pass dbSlotKey = the layout-aware mapping (AUX3+support →
+        // support_1). Assign already writes slot_key; without dbSlotKey the
+        // server remaps AUXn → aux_n and the real row survives refresh.
         if ((rest as any).tmId == null) {
           const { deleteZoneAssignment } = await import("@/lib/shiftbuilder/data");
           return deleteZoneAssignment({
@@ -141,6 +145,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
             slotType: slot_type,
             // pass explicit rrSide so delete is side-aware even if uiKey ever arrives in DB form
             rrSide: rr_side,
+            dbSlotKey: slot_key,
           });
         }
 

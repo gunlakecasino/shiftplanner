@@ -112,6 +112,7 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
       uiKey: slotKey,
       slotType: finalSlotType,
       rrSide: finalRrSide,
+      dbSlotKey: finalSlotKey,
     });
   }
 
@@ -206,39 +207,118 @@ export async function deleteZoneAssignmentServer(params: {
   uiKey: string;
   slotType?: string;
   rrSide?: string | null;
+  /**
+   * Preferred DB slot_key when the client already mapped via auxDefs
+   * (flex AUX: AUX3→support_1). Server-side uiToDb has no aux layout store.
+   */
+  dbSlotKey?: string;
 }) {
   const client = adminClient();
-  const { nightId, uiKey, slotType = "zone", rrSide = null } = params;
+  const {
+    nightId,
+    uiKey,
+    slotType = "zone",
+    rrSide = null,
+    dbSlotKey,
+  } = params;
 
   if (!nightId || !uiKey) {
     throw new Error("nightId and uiKey are required");
   }
 
-  let canonical: { slot_key: string; slot_type: string; rr_side: string | null };
+  type SlotRef = { slot_key: string; slot_type: string; rr_side: string | null };
+  let remapped: SlotRef;
   if (isDbSlotKey(uiKey)) {
-    canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
+    remapped = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
   } else {
     try {
-      canonical = uiToDb(uiKey) as typeof canonical;
+      const mapped = uiToDb(uiKey);
+      remapped = {
+        slot_key: mapped.slot_key,
+        slot_type: mapped.slot_type,
+        rr_side: mapped.rr_side,
+      };
     } catch {
-      canonical = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
+      remapped = { slot_key: uiKey, slot_type: slotType, rr_side: rrSide };
     }
   }
 
-  const variants = [
+  // Prefer client-resolved DB key (correct for role-mapped flex AUX shells).
+  // Fall back to server remap (zones/RR/legacy fixed AUX keys that need no layout).
+  const preferredKey =
+    typeof dbSlotKey === "string" && dbSlotKey.trim()
+      ? dbSlotKey.trim()
+      : remapped.slot_key;
+  const preferredType =
+    typeof dbSlotKey === "string" && dbSlotKey.trim()
+      ? slotType === "zone" && !isDbSlotKey(uiKey)
+        ? remapped.slot_type
+        : slotType
+      : remapped.slot_type;
+  // When client passed a role-mapped aux key, never keep slotType default "zone".
+  const canonicalType =
+    preferredType === "zone" &&
+    /^(admin|z9_sr|job_coach|step_up|support_|trash_|oasis_|aux_)/.test(
+      preferredKey,
+    )
+      ? "aux"
+      : preferredType;
+
+  const canonical: { slot_key: string; slot_type: string; rr_side: string | null } = {
+    slot_key: preferredKey,
+    slot_type: canonicalType,
+    rr_side: rrSide ?? remapped?.rr_side ?? null,
+  };
+
+  // Deduped key variants: mapped DB key + UI key + remapped-without-layout
+  // (aux_N ghosts from older writes) + lowercase UI.
+  const variantSeeds: Array<{
+    slot_key: string;
+    slot_type: string;
+    rr_side: string | null;
+  }> = [
     canonical,
     { slot_key: canonical.slot_key, slot_type: canonical.slot_type, rr_side: null },
-    { slot_key: uiKey, slot_type: slotType, rr_side: rrSide },
-    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: rrSide },
-    { slot_key: uiKey, slot_type: slotType, rr_side: null },
-    { slot_key: uiKey.toLowerCase(), slot_type: slotType, rr_side: null },
   ];
+  if (remapped.slot_key !== canonical.slot_key) {
+    variantSeeds.push(
+      remapped,
+      { ...remapped, rr_side: null },
+    );
+  }
+  if (uiKey !== canonical.slot_key) {
+    variantSeeds.push(
+      { slot_key: uiKey, slot_type: canonical.slot_type, rr_side: rrSide },
+      { slot_key: uiKey, slot_type: canonical.slot_type, rr_side: null },
+      { slot_key: uiKey.toLowerCase(), slot_type: canonical.slot_type, rr_side: rrSide },
+      { slot_key: uiKey.toLowerCase(), slot_type: canonical.slot_type, rr_side: null },
+    );
+  }
+  // Flex AUX shells sometimes stored under aux_N when written without layout context.
+  const auxShell = uiKey.match(/^AUX(\d+)$/i);
+  if (auxShell) {
+    const ghost = `aux_${auxShell[1]}`;
+    if (ghost !== canonical.slot_key) {
+      variantSeeds.push(
+        { slot_key: ghost, slot_type: "aux", rr_side: null },
+        { slot_key: ghost, slot_type: "aux", rr_side: rrSide },
+      );
+    }
+  }
+
+  const seen = new Set<string>();
+  const variants = variantSeeds.filter((v) => {
+    const id = `${v.slot_type}|${v.slot_key}|${v.rr_side ?? "∅"}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 
   let totalDeleted = 0;
   for (const v of variants) {
     let q = client
       .from("zone_assignments")
-      .delete()
+      .delete({ count: "exact" })
       .eq("night_id", nightId)
       .eq("slot_key", v.slot_key)
       .eq("slot_type", v.slot_type);
@@ -251,15 +331,31 @@ export async function deleteZoneAssignmentServer(params: {
   }
 
   // Clear singular history for this night×slot and rebuild matrix for vacated TMs.
+  // Prefer canonical DB key (what assign wrote); also try uiKey for legacy history rows.
   try {
-    const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
-      nightId,
-      slotKey: uiKey,
-      slotType: canonical.slot_type,
-      rrSide: canonical.rr_side,
-    });
+    const historyKeys = Array.from(
+      new Set(
+        [canonical.slot_key, uiKey, remapped.slot_key].filter(
+          (k): k is string => typeof k === "string" && k.length > 0,
+        ),
+      ),
+    );
+    const cleared = new Set<string>();
+    for (const histKey of historyKeys) {
+      try {
+        const { clearedTmIds } = await clearPlacementHistoryForSlotServer({
+          nightId,
+          slotKey: histKey,
+          slotType: canonical.slot_type,
+          rrSide: canonical.rr_side,
+        });
+        clearedTmIds.forEach((id) => cleared.add(id));
+      } catch (e) {
+        console.warn("[ops] clear history variant failed", histKey, e);
+      }
+    }
     await Promise.all(
-      clearedTmIds.map((id) =>
+      Array.from(cleared).map((id) =>
         refreshTmZoneMatrixServer(id).catch((e) =>
           console.warn("[ops] matrix refresh after clear failed", id, e),
         ),

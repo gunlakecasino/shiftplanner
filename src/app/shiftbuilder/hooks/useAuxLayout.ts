@@ -37,6 +37,12 @@ export interface UseAuxLayoutParams {
   queryClient: any;
   showToast: (msg: string, type?: "success" | "error") => void;
   handleBoardLiveUnassign?: (slotKey: string) => void;
+  /**
+   * Preferred over the plain callback: always reads the latest unassign fn
+   * (ShiftBuilderClient sets a ref after hooks to avoid TDZ). Prevents
+   * clear-role from skipping DB unassign when the ref was null on first paint.
+   */
+  handleBoardLiveUnassignRef?: React.MutableRefObject<((slotKey: string) => void) | null>;
   // For history snapshots (caller provides the before recorder; after is handled in Client history effect)
   recordAuxChange?: (description: string, beforeAux: AuxDef[]) => void;
   // Access to live assignments for snapshots
@@ -72,6 +78,7 @@ export function useAuxLayout({
   queryClient,
   showToast,
   handleBoardLiveUnassign,
+  handleBoardLiveUnassignRef,
   recordAuxChange,
   getAssignmentsSnapshot,
 }: UseAuxLayoutParams): UseAuxLayoutReturn {
@@ -277,15 +284,21 @@ export function useAuxLayout({
       return;
     }
 
+    // Unassign while the store still has the typed role so uiToDb(AUX3) →
+    // support_1 / step_up / etc. Clearing role first made deletes target aux_N.
+    // Prefer the live ref so we never miss unassign when the callback was null
+    // on the first client render (TDZ / ref wiring).
+    if (role === "blank") {
+      const unassignFn =
+        handleBoardLiveUnassignRef?.current ?? handleBoardLiveUnassign;
+      unassignFn?.(slotKey);
+    }
+
     setAuxDefsState((prev) => {
       const next = applyAuxRole(prev, slotKey, role);
       queueMicrotask(() => persistAuxLayoutNowRef.current(next));
       return next;
     });
-
-    if (role === "blank" && handleBoardLiveUnassign) {
-      handleBoardLiveUnassign(slotKey);
-    }
   };
 
   const setAuxLabel = (slotKey: string, label: string) => {
