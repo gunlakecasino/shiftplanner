@@ -176,14 +176,20 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
         </div>
 
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-            <span className="ms mt-0.5 shrink-0 text-red-400" style={{ fontSize: 16 }}>warning</span>
+          <div className={cn(
+            "mb-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",
+            isDark ? "border-red-900/60 bg-red-950/40 text-red-200" : "border-red-200 bg-red-50 text-red-700"
+          )}>
+            <span className={cn("ms mt-0.5 shrink-0", isDark ? "text-red-400" : "text-red-500")} style={{ fontSize: 16 }}>warning</span>
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="mb-4 rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200">
+          <div className={cn(
+            "mb-4 rounded-lg border px-3 py-2 text-sm",
+            isDark ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-200" : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          )}>
             {success}
           </div>
         )}
@@ -225,36 +231,6 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        {/* =====================================================================
-            Phase 1 (2026-05-28) — Granular Engine UI
-            Version selector (new version_name + is_preset + parent_id from migration),
-            live Signal Override editor (writes to engine_signal_overrides),
-            Eligibility Rules list, and TM Zone Matrix preview (from tm_zone_matrix).
-            All changes are versioned and safe behind Draft Mode when applied.
-            ===================================================================== */}
-        <div className="mb-8 border-t border-zinc-800 pt-6">
-          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-amber-400">
-            <span className="ms" style={{ fontSize: 14 }}>tune</span>
-            <span>Granular Overrides &amp; Versioning (Phase 1)</span>
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-[13px]">
-            <div className="mb-3 text-amber-300">Version History (parent_id chain + presets)</div>
-            <div className="text-zinc-400 text-[12px]">
-              Select or fork a version. New overrides create a child config. Presets are marked <span className="font-mono text-amber-400">is_preset</span>.
-              (Full UI + write path to engine_config + engine_signal_overrides coming in next Sudo pass — currently shows the new types from getFullyResolvedEngineConfig.)
-            </div>
-
-            {/* Placeholder for version selector + override editor that will use the new normalized tables */}
-            <div className="mt-4 text-[11px] text-zinc-500">
-              • Active resolved version will appear here via <span className="font-mono">getFullyResolvedEngineConfig()</span><br />
-              • Per-signal multipliers / disables (engine_signal_overrides)<br />
-              • Custom eligibility rules (engine_eligibility_rules)<br />
-              • Live TM Zone Matrix preview (tm_zone_matrix — 4w/8w counts per zone for fairness)
-            </div>
           </div>
         </div>
 
@@ -304,7 +280,11 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              "sb-interactive inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-black",
+              "sb-interactive inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold",
+              // bg-white is not remapped by the settings light-theme catch-all,
+              // so it would render white-on-paper. Use a solid dark button on
+              // light and the legacy white button in dark.
+              isDark ? "bg-white text-black" : "bg-[#1C1C1E] text-white",
               saving && "opacity-70 cursor-wait"
             )}
           >

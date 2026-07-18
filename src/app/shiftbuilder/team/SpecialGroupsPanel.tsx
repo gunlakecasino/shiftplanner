@@ -13,6 +13,7 @@
 
 import React from "react";
 import { UserPlus, X } from "lucide-react";
+import { toast } from "sonner";
 import { SudoTabLoading } from "../sudo/SudoGlass";
 import type { TMRecord } from "@/lib/shiftbuilder/sudoActions";
 
@@ -23,6 +24,16 @@ const SPECIAL_GROUPS: Array<{ name: string; blurb: string; accent: string }> = [
   { name: "On Call", blurb: "Backup coverage for tonight's gaps", accent: "#B89708" },
 ];
 
+// Legacy tm_groups that still confer AM/PM band eligibility in
+// gravesDefaultSchedule.isEligibleForBand (pool === band OR group membership).
+// Their source of truth moved to the Graves Schedule grave_pool bands, so any
+// lingering membership here silently keeps a TM band-eligible with no other
+// way to see or remove it. We surface those members only when they exist so an
+// admin can retire them; the section self-hides once the groups are empty.
+const LEGACY_OVERLAP_GROUP_NAMES = new Set(
+  ["AM Overlaps", "AM Overlap", "PM Overlaps", "PM Overlap"].map((n) => n.toLowerCase()),
+);
+
 type Group = { id: string; name: string; members: string[] };
 
 export function SpecialGroupsPanel() {
@@ -30,7 +41,6 @@ export function SpecialGroupsPanel() {
   const [tms, setTms] = React.useState<TMRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
-  const [flash, setFlash] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
 
   const nameById = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -38,10 +48,13 @@ export function SpecialGroupsPanel() {
     return m;
   }, [tms]);
 
-  const loadGroups = React.useCallback(async () => {
+  const loadGroups = React.useCallback(async (): Promise<Group[]> => {
     const res = await fetch("/api/admin/tm-groups");
+    if (!res.ok) throw new Error(`Failed to load groups (${res.status})`);
     const json = await res.json();
-    setGroups((json.data || []) as Group[]);
+    const fresh = (json.data || []) as Group[];
+    setGroups(fresh);
+    return fresh;
   }, []);
 
   React.useEffect(() => {
@@ -52,7 +65,7 @@ export function SpecialGroupsPanel() {
         const [roster] = await Promise.all([listAllTMs(), loadGroups()]);
         setTms(roster.filter((t) => t.active));
       } catch {
-        setFlash({ kind: "err", msg: "Failed to load special groups" });
+        toast.error("Failed to load special groups");
       } finally {
         setLoading(false);
       }
@@ -60,14 +73,14 @@ export function SpecialGroupsPanel() {
   }, [loadGroups]);
 
   const flashFor = (kind: "ok" | "err", msg: string) => {
-    setFlash({ kind, msg });
-    setTimeout(() => setFlash(null), 2400);
+    if (kind === "ok") toast.success(msg);
+    else toast.error(msg);
   };
 
   const ensureGroup = async (name: string): Promise<Group | null> => {
-    let g: Group | null = groups.find((x) => x.name === name) ?? null;
-    if (g) return g;
-    await fetch("/api/admin/tm-groups", {
+    const existing = groups.find((x) => x.name === name) ?? null;
+    if (existing) return existing;
+    const res = await fetch("/api/admin/tm-groups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -76,13 +89,10 @@ export function SpecialGroupsPanel() {
         description: `${name} weekly special assignments`,
       }),
     });
-    await loadGroups();
-    const res = await fetch("/api/admin/tm-groups");
-    const json = await res.json();
-    const fresh = (json.data || []) as Group[];
-    setGroups(fresh);
-    g = fresh.find((x) => x.name === name) ?? null;
-    return g ?? null;
+    if (!res.ok) throw new Error(`create_group failed (${res.status})`);
+    // loadGroups already refetches and commits the fresh list — no second GET.
+    const fresh = await loadGroups();
+    return fresh.find((x) => x.name === name) ?? null;
   };
 
   const addMember = async (name: string, tmId: string) => {
@@ -123,6 +133,16 @@ export function SpecialGroupsPanel() {
     }
   };
 
+  // Legacy AM/PM Overlap groups that still carry members. Each entry pairs the
+  // group with its remaining member ids so we can offer a targeted removal.
+  const legacyOverlapGroups = React.useMemo(
+    () =>
+      groups
+        .filter((g) => LEGACY_OVERLAP_GROUP_NAMES.has((g.name || "").toLowerCase()))
+        .filter((g) => (g.members?.length ?? 0) > 0),
+    [groups],
+  );
+
   if (loading) return <SudoTabLoading className="!py-6 text-[13px]">Loading special groups</SudoTabLoading>;
 
   return (
@@ -134,18 +154,6 @@ export function SpecialGroupsPanel() {
           <span className="font-medium text-neutral-600">Graves Schedule</span> — this is the one place for on-call.
         </p>
       </div>
-
-      {flash && (
-        <div
-          className={`rounded-lg border px-3 py-2 text-[12px] ${
-            flash.kind === "ok"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-              : "border-red-200 bg-red-50 text-red-800"
-          }`}
-        >
-          {flash.msg}
-        </div>
-      )}
 
       <div className="grid max-w-md gap-4">
         {SPECIAL_GROUPS.map((def) => {
@@ -166,7 +174,77 @@ export function SpecialGroupsPanel() {
           );
         })}
       </div>
+
+      {legacyOverlapGroups.length > 0 && (
+        <LegacyOverlapCleanup
+          groups={legacyOverlapGroups}
+          nameById={nameById}
+          busy={busy}
+          onRemove={removeMember}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Cleanup surface for stale AM/PM Overlap tm_groups membership. Rendered only
+ * when such members exist. Removing here clears the legacy band-eligibility
+ * override so grave_pool on the Graves Schedule becomes the sole source.
+ */
+function LegacyOverlapCleanup({
+  groups,
+  nameById,
+  busy,
+  onRemove,
+}: {
+  groups: Group[];
+  nameById: Map<string, string>;
+  busy: boolean;
+  onRemove: (group: Group, tmId: string) => void;
+}) {
+  return (
+    <section className="max-w-md rounded-2xl border border-amber-300/70 bg-amber-50/60 p-4">
+      <h3 className="text-[13px] font-bold text-[#7A5B00]">Legacy overlap memberships</h3>
+      <p className="mt-0.5 text-[11px] leading-relaxed text-[#8a6a1a]">
+        These team members still sit in an old <span className="font-mono">AM/PM Overlaps</span> group,
+        which keeps them band-eligible regardless of their Graves Schedule pool. Remove them here so the
+        Graves Schedule is the only thing that decides overlap eligibility.
+      </p>
+      <div className="mt-3 space-y-3">
+        {groups.map((group) => (
+          <div key={group.id}>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#8a6a1a]">
+              {group.name}
+            </div>
+            <div className="space-y-1">
+              {[...group.members]
+                .sort((a, b) => (nameById.get(a) ?? "").localeCompare(nameById.get(b) ?? ""))
+                .map((id) => (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between rounded-lg bg-white/70 px-2.5 py-1.5 text-[13px]"
+                  >
+                    <span className="truncate font-medium text-neutral-800">
+                      {nameById.get(id) ?? id}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onRemove(group, id)}
+                      className="sb-interactive rounded-md p-1 text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                      title={`Remove from ${group.name}`}
+                      aria-label={`Remove ${nameById.get(id) ?? "member"} from ${group.name}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

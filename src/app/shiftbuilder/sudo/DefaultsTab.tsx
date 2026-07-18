@@ -15,6 +15,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import BreakBadge from "../components/BreakBadge";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
@@ -185,9 +186,6 @@ export interface DefaultsTabProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ToastKind = "error" | "success" | "info";
-interface LocalToast { id: number; message: string; kind: ToastKind; }
-
-let _toastId = 0;
 
 const PUSH_CONFIRM_MESSAGES: Record<"breaks-today" | "breaks-week", string> = {
   "breaks-today":
@@ -207,7 +205,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   const ios = sudoIosClasses(isDark);
   const confirmDialog = useConfirm();
   const [loading, setLoading] = useState(true);
-  const [toasts, setToasts] = useState<LocalToast[]>([]);
 
   // Default break groups: compositeKey → 0|1|2|3
   const [breakGroups, setBreakGroups] = useState<Record<string, BreakGroup>>({});
@@ -246,9 +243,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
 
   // ── Toasts ────────────────────────────────────────────────────────────────
   const showToast = (message: string, kind: ToastKind = "info") => {
-    const id = ++_toastId;
-    setToasts((p) => [...p, { id, message, kind }]);
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+    toast[kind](message);
   };
 
   // ── Break group cycling ───────────────────────────────────────────────────
@@ -447,26 +442,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
             );
           })
         )}
-      </div>
-
-      {/* ── Toasts ────────────────────────────────────────────────────── */}
-      <div className="fixed bottom-6 right-6 z-[11000] space-y-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={cn(
-              "flex items-start gap-2 px-4 py-3 rounded-lg shadow-xl text-[12px] font-medium max-w-xs pointer-events-auto",
-              t.kind === "error"   ? "bg-red-900/90 border border-red-700 text-red-100" :
-              t.kind === "success" ? "bg-green-900/90 border border-green-700 text-green-100" :
-                                    "bg-zinc-800 border border-zinc-700 text-zinc-200"
-            )}
-            style={atkinsonStyle}
-          >
-            {t.kind === "error"   && <span className="ms mt-0.5 shrink-0 text-red-400" style={{ fontSize: 14 }}>warning</span>}
-            {t.kind === "success" && <span className="ms mt-0.5 shrink-0 text-green-400" style={{ fontSize: 14 }}>check_circle</span>}
-            {t.message}
-          </div>
-        ))}
       </div>
     </div>
   );

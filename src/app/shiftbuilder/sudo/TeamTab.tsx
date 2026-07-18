@@ -26,11 +26,11 @@ import type {
   TMSlotSkill,
 } from "@/lib/shiftbuilder/sudoActions";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import { useConfirm } from "../components/ConfirmDialog";
 import {
   GlassSurface,
   GoldHairline,
-  SudoBanner,
   CenteredGlassModal,
   SudoTabButton,
   SudoTabLoading,
@@ -69,7 +69,6 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
   const [poolFilter, setPoolFilter] = React.useState<"all" | "Graves" | "PM Overlap" | "AM Overlap" | "None">("all");
 
   const [drawerTmId, setDrawerTmId] = React.useState<string | null>(null);
-  const [toast, setToast] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [allSlotIds, setAllSlotIds] = React.useState<string[]>([]);
 
   const refresh = React.useCallback(async () => {
@@ -108,8 +107,8 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
   }, []);
 
   const flash = (kind: "ok" | "err", msg: string) => {
-    setToast({ kind, msg });
-    setTimeout(() => setToast(null), 5000);
+    if (kind === "ok") toast.success(msg);
+    else toast.error(msg);
   };
 
   const filtered = React.useMemo(() => {
@@ -160,12 +159,6 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
           <span className="ms" style={{ fontSize: 12 }}>refresh</span> refresh
         </button>
       </div>
-
-      {toast && (
-        <SudoBanner kind={toast.kind} isDark={isDark} className="mx-6 mt-3">
-          {toast.msg}
-        </SudoBanner>
-      )}
 
       <div className="flex-1 min-h-0 overflow-auto px-6 py-5 space-y-4">
         {/* Filter bar */}
@@ -327,7 +320,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
 // =====================================================================
 
 function PoolPill({ pool, isDark = false }: { pool: string | null; isDark?: boolean }) {
-  if (!pool) return <span className="text-zinc-600 text-[10px] font-mono">—</span>;
+  if (!pool) return <span className={cn("text-[10px] font-mono", isDark ? "text-zinc-600" : "text-neutral-400")}>—</span>;
   const p = pool.toUpperCase();
   const label =
     p === "FULL" ? "Graves"
@@ -342,7 +335,9 @@ function PoolPill({ pool, isDark = false }: { pool: string | null; isDark?: bool
       ? "bg-[#AF52DE]/10 text-[#AF52DE] border-[#AF52DE]/20"
       : p === "AM"
       ? "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20"
-      : "bg-zinc-800 text-zinc-400 border-zinc-700";
+      : isDark
+      ? "bg-zinc-800 text-zinc-400 border-zinc-700"
+      : "bg-neutral-100 text-neutral-600 border-neutral-300";
   return (
     <span
       className={cn(
@@ -356,7 +351,7 @@ function PoolPill({ pool, isDark = false }: { pool: string | null; isDark?: bool
 }
 
 function GenderPill({ gender, isDark = false }: { gender?: 'M' | 'F' | null; isDark?: boolean }) {
-  if (!gender) return <span className="text-zinc-600 text-[10px] font-mono">—</span>;
+  if (!gender) return <span className={cn("text-[10px] font-mono", isDark ? "text-zinc-600" : "text-neutral-400")}>—</span>;
   const isM = gender === 'M';
   return (
     <span
@@ -380,7 +375,9 @@ function StatusPill({ active, status, isDark = false }: { active: boolean; statu
         ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
         : status === "transferred"
         ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
-        : "bg-zinc-800 text-zinc-500 border-zinc-700";
+        : isDark
+        ? "bg-zinc-800 text-zinc-500 border-zinc-700"
+        : "bg-neutral-100 text-neutral-500 border-neutral-300";
     return (
       <span className={cn("text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-mono border", color)}>
         {status || "inactive"}
@@ -419,12 +416,6 @@ function TMEditDrawer({
   const [tab, setTab] = React.useState<DrawerTab>("identity");
   const [form, setForm] = React.useState<TMRecord>(tm);
   const [saving, setSaving] = React.useState(false);
-  const [drawerToast, setDrawerToast] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
-
-  const flashDrawer = React.useCallback((kind: "ok" | "err", msg: string) => {
-    setDrawerToast({ kind, msg });
-    setTimeout(() => setDrawerToast(null), 5000);
-  }, []);
   const [detail, setDetail] = React.useState<{
     preferences: TMPreference[];
     accommodations: TMAccommodation[];
@@ -481,12 +472,10 @@ function TMEditDrawer({
         slotPreference: form.slotPreference,
         notes: form.notes,
       });
-      flashDrawer("ok", `Saved ${form.displayName}`);
       onFlash("ok", `Saved ${form.displayName}`);
       await onSaved();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      flashDrawer("err", msg);
       onFlash("err", msg);
     } finally {
       setSaving(false);
@@ -509,7 +498,6 @@ function TMEditDrawer({
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      flashDrawer("err", msg);
       onFlash("err", msg);
     } finally {
       setSaving(false);
@@ -520,12 +508,10 @@ function TMEditDrawer({
     setSaving(true);
     try {
       await dyn.restoreTM(form.tmId);
-      flashDrawer("ok", `${form.displayName} restored`);
       onFlash("ok", `${form.displayName} restored`);
       await onSaved();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      flashDrawer("err", msg);
       onFlash("err", msg);
     } finally {
       setSaving(false);
@@ -596,13 +582,6 @@ function TMEditDrawer({
         </div>
       }
     >
-      {/* In-modal toast banner */}
-      {drawerToast && (
-        <SudoBanner kind={drawerToast.kind} isDark={isDark} className="mb-4">
-          {drawerToast.msg}
-        </SudoBanner>
-      )}
-
       {/* Horizontal tab strip (gold accent for active) */}
       <div className="flex items-center gap-1 border-b border-black/10 dark:border-white/10 pb-2 mb-4">
         {(["identity", "grave", "prefs", "skills"] as DrawerTab[]).map((t) => (
@@ -809,11 +788,11 @@ function GraveForm({
       <Field label="Grave Pool" isDark={isDark}>
         <div className="flex flex-wrap gap-1.5">
           {([
-            { value: null,    label: "None",       active: "bg-zinc-700 text-zinc-200 border-zinc-500" },
+            { value: null,    label: "None",       active: isDark ? "bg-zinc-700 text-zinc-200 border-zinc-500" : "bg-neutral-700 text-white border-neutral-600" },
             { value: "Full",  label: "Graves",     active: "bg-[#007AFF]/20 text-[#60aaff] border-[#007AFF]/40" },
             { value: "PM",    label: "PM Overlap", active: "bg-[#AF52DE]/20 text-[#d084f0] border-[#AF52DE]/40" },
             { value: "AM",    label: "AM Overlap", active: "bg-[#34C759]/20 text-[#5ddf7d] border-[#34C759]/40" },
-            { value: "Other", label: "Other",      active: "bg-zinc-700 text-zinc-200 border-zinc-500" },
+            { value: "Other", label: "Other",      active: isDark ? "bg-zinc-700 text-zinc-200 border-zinc-500" : "bg-neutral-700 text-white border-neutral-600" },
           ] as Array<{ value: string | null; label: string; active: string }>).map(({ value, label, active }) => (
             <button
               key={String(value)}
@@ -896,10 +875,10 @@ function PrefsForm({
     <div className="space-y-5">
       {/* Preferences */}
       <section>
-        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">Preferences</div>
-        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+        <div className={cn("text-[11px] uppercase tracking-wider mb-2 font-mono", isDark ? "text-zinc-400" : "text-neutral-500")}>Preferences</div>
+        <div className={cn("rounded-lg border overflow-hidden", isDark ? "border-zinc-800" : "border-neutral-200")}>
           <table className="w-full text-[11.5px]">
-            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+            <thead className={cn("text-[9px] uppercase tracking-wider", isDark ? "bg-zinc-950 text-zinc-500" : "bg-neutral-50 text-neutral-500")}>
               <tr>
                 <th className="text-left px-2 py-1.5">Stance</th>
                 <th className="text-left px-2 py-1.5">Strength</th>
@@ -911,17 +890,17 @@ function PrefsForm({
             <tbody>
               {preferences.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                  <td colSpan={5} className={cn("px-2 py-3 text-center text-[11px]", isDark ? "text-zinc-600" : "text-neutral-400")}>
                     No preferences yet
                   </td>
                 </tr>
               )}
               {preferences.map((p) => (
-                <tr key={p.id} className="border-t border-zinc-900">
-                  <td className="px-2 py-1.5 text-zinc-300">{p.stance}</td>
-                  <td className="px-2 py-1.5 text-zinc-400">{p.strength}</td>
-                  <td className="px-2 py-1.5 text-zinc-200 font-mono">{p.target}</td>
-                  <td className="px-2 py-1.5 text-zinc-500 truncate max-w-[180px]">{p.note ?? ""}</td>
+                <tr key={p.id} className={cn("border-t", isDark ? "border-zinc-900" : "border-neutral-200")}>
+                  <td className={cn("px-2 py-1.5", isDark ? "text-zinc-300" : "text-neutral-700")}>{p.stance}</td>
+                  <td className={cn("px-2 py-1.5", isDark ? "text-zinc-400" : "text-neutral-600")}>{p.strength}</td>
+                  <td className={cn("px-2 py-1.5 font-mono", isDark ? "text-zinc-200" : "text-neutral-900")}>{p.target}</td>
+                  <td className={cn("px-2 py-1.5 truncate max-w-[180px]", isDark ? "text-zinc-500" : "text-neutral-500")}>{p.note ?? ""}</td>
                   <td className="px-2 py-1.5 text-right">
                     <button
                       onClick={async () => {
@@ -932,14 +911,14 @@ function PrefsForm({
                           onFlash("err", err instanceof Error ? err.message : String(err));
                         }
                       }}
-                      className="text-zinc-600 hover:text-red-400"
+                      className={cn(isDark ? "text-zinc-600 hover:text-red-400" : "text-neutral-400 hover:text-red-500")}
                     >
                       <span className="ms" style={{ fontSize: 12 }}>delete</span>
                     </button>
                   </td>
                 </tr>
               ))}
-              <tr className="border-t border-zinc-900 bg-zinc-900/40">
+              <tr className={cn("border-t", isDark ? "border-zinc-900 bg-zinc-900/40" : "border-neutral-200 bg-neutral-50")}>
                 <td className="px-2 py-1.5">
                   <select
                     value={newPref.stance}
@@ -990,7 +969,7 @@ function PrefsForm({
                         onFlash("err", err instanceof Error ? err.message : String(err));
                       }
                     }}
-                    className="text-emerald-400 hover:text-emerald-300 text-[10px] font-mono"
+                    className={cn("text-[10px] font-mono", isDark ? "text-emerald-400 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-500")}
                   >
                     add
                   </button>
@@ -1003,10 +982,10 @@ function PrefsForm({
 
       {/* Accommodations */}
       <section>
-        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">Accommodations</div>
-        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+        <div className={cn("text-[11px] uppercase tracking-wider mb-2 font-mono", isDark ? "text-zinc-400" : "text-neutral-500")}>Accommodations</div>
+        <div className={cn("rounded-lg border overflow-hidden", isDark ? "border-zinc-800" : "border-neutral-200")}>
           <table className="w-full text-[11.5px]">
-            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+            <thead className={cn("text-[9px] uppercase tracking-wider", isDark ? "bg-zinc-950 text-zinc-500" : "bg-neutral-50 text-neutral-500")}>
               <tr>
                 <th className="text-left px-2 py-1.5">Type</th>
                 <th className="text-left px-2 py-1.5">Severity</th>
@@ -1018,17 +997,17 @@ function PrefsForm({
             <tbody>
               {accommodations.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                  <td colSpan={5} className={cn("px-2 py-3 text-center text-[11px]", isDark ? "text-zinc-600" : "text-neutral-400")}>
                     No accommodations
                   </td>
                 </tr>
               )}
               {accommodations.map((a) => (
-                <tr key={a.id} className="border-t border-zinc-900">
-                  <td className="px-2 py-1.5 text-zinc-300">{a.type}</td>
-                  <td className="px-2 py-1.5 text-zinc-400">{a.severity}</td>
-                  <td className="px-2 py-1.5 text-zinc-200 font-mono">{a.target ?? "—"}</td>
-                  <td className="px-2 py-1.5 text-zinc-500 truncate max-w-[180px]">{a.note}</td>
+                <tr key={a.id} className={cn("border-t", isDark ? "border-zinc-900" : "border-neutral-200")}>
+                  <td className={cn("px-2 py-1.5", isDark ? "text-zinc-300" : "text-neutral-700")}>{a.type}</td>
+                  <td className={cn("px-2 py-1.5", isDark ? "text-zinc-400" : "text-neutral-600")}>{a.severity}</td>
+                  <td className={cn("px-2 py-1.5 font-mono", isDark ? "text-zinc-200" : "text-neutral-900")}>{a.target ?? "—"}</td>
+                  <td className={cn("px-2 py-1.5 truncate max-w-[180px]", isDark ? "text-zinc-500" : "text-neutral-500")}>{a.note}</td>
                   <td className="px-2 py-1.5 text-right">
                     <button
                       onClick={async () => {
@@ -1039,14 +1018,14 @@ function PrefsForm({
                           onFlash("err", err instanceof Error ? err.message : String(err));
                         }
                       }}
-                      className="text-zinc-600 hover:text-red-400"
+                      className={cn(isDark ? "text-zinc-600 hover:text-red-400" : "text-neutral-400 hover:text-red-500")}
                     >
                       <span className="ms" style={{ fontSize: 12 }}>delete</span>
                     </button>
                   </td>
                 </tr>
               ))}
-              <tr className="border-t border-zinc-900 bg-zinc-900/40">
+              <tr className={cn("border-t", isDark ? "border-zinc-900 bg-zinc-900/40" : "border-neutral-200 bg-neutral-50")}>
                 <td className="px-2 py-1.5">
                   <select
                     value={newAcc.type}
@@ -1106,7 +1085,7 @@ function PrefsForm({
                         onFlash("err", err instanceof Error ? err.message : String(err));
                       }
                     }}
-                    className="text-emerald-400 hover:text-emerald-300 text-[10px] font-mono"
+                    className={cn("text-[10px] font-mono", isDark ? "text-emerald-400 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-500")}
                   >
                     add
                   </button>
@@ -1192,12 +1171,12 @@ function SkillsForm({
       </Field>
 
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2 font-mono">
+        <div className={cn("text-[11px] uppercase tracking-wider mb-2 font-mono", isDark ? "text-zinc-400" : "text-neutral-500")}>
           Per-slot scores (auto-saves)
         </div>
-        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+        <div className={cn("rounded-lg border overflow-hidden", isDark ? "border-zinc-800" : "border-neutral-200")}>
           <table className="w-full text-[11.5px]">
-            <thead className="bg-zinc-950 text-zinc-500 text-[9px] uppercase tracking-wider">
+            <thead className={cn("text-[9px] uppercase tracking-wider", isDark ? "bg-zinc-950 text-zinc-500" : "bg-neutral-50 text-neutral-500")}>
               <tr>
                 <th className="text-left px-2 py-1.5">Slot</th>
                 <th className="text-left px-2 py-1.5 w-48">Score</th>
@@ -1208,8 +1187,8 @@ function SkillsForm({
               {allSlotIds.map((slotId) => {
                 const current = byId.get(slotId) ?? null;
                 return (
-                  <tr key={slotId} className="border-t border-zinc-900">
-                    <td className="px-2 py-1.5 text-zinc-200 font-mono">{slotId}</td>
+                  <tr key={slotId} className={cn("border-t", isDark ? "border-zinc-900" : "border-neutral-200")}>
+                    <td className={cn("px-2 py-1.5 font-mono", isDark ? "text-zinc-200" : "text-neutral-900")}>{slotId}</td>
                     <td className="px-2 py-1.5">
                       <input
                         type="range"
@@ -1231,7 +1210,7 @@ function SkillsForm({
                         className="w-full"
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-right text-zinc-300 font-mono">
+                    <td className={cn("px-2 py-1.5 text-right font-mono", isDark ? "text-zinc-300" : "text-neutral-700")}>
                       {draftScores[slotId] ?? current ?? "—"}
                     </td>
                   </tr>
@@ -1239,7 +1218,7 @@ function SkillsForm({
               })}
               {allSlotIds.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-2 py-3 text-center text-zinc-600 text-[11px]">
+                  <td colSpan={3} className={cn("px-2 py-3 text-center text-[11px]", isDark ? "text-zinc-600" : "text-neutral-400")}>
                     No slots defined in slot_difficulty
                   </td>
                 </tr>

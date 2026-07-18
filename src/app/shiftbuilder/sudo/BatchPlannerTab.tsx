@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
 import { SudoTabLoading } from "./SudoGlass";
 import { sudoIosClasses } from "./sudoIosTheme";
+import { useConfirm } from "../components/ConfirmDialog";
 import {
   listWeeksWithNights,
   listNightsForWeek,
@@ -63,6 +64,7 @@ export interface BatchPlannerTabProps {
 
 export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerTabProps) {
   const ios = sudoIosClasses(isDark);
+  const confirm = useConfirm();
   const [weeks, setWeeks] = React.useState<WeekOption[]>([]);
   const [weeksLoading, setWeeksLoading] = React.useState(true);
   const [weeksError, setWeeksError] = React.useState<string | null>(null);
@@ -139,13 +141,16 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
   // -----------------------------------------------------------------------
   const handleRunAll = async () => {
     if (!selectedWeekId || batchRunning) return;
-    const ok = window.confirm(
-      `Run the placement engine for the whole week?\n\n` +
-        `• Writes LIVE to zone_assignments (no Draft Mode review)\n` +
-        `• Only fills empty slots (does not overwrite filled/locked)\n` +
-        `• No Grok — open a night on the board for AI review after\n\n` +
-        `Continue?`,
-    );
+    const ok = await confirm("Continue?", {
+      title: "Run the placement engine for the whole week?",
+      summaryPoints: [
+        "Writes LIVE to zone_assignments (no Draft Mode review)",
+        "Only fills empty slots (does not overwrite filled/locked)",
+        "No Grok — open a night on the board for AI review after",
+      ],
+      confirmLabel: "Run All Nights",
+      tone: "danger",
+    });
     if (!ok) return;
     setBatchRunning(true);
     setBatchError(null);
@@ -186,10 +191,11 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
       setBatchError("This night hasn't been created in the DB yet. Open the board for that date first, or ensure the week exists in Batch Planner.");
       return;
     }
-    const ok = window.confirm(
-      `Run the placement engine for ${nightDate}?\n\n` +
-        `Writes LIVE to empty slots only (no Draft Mode). Continue?`,
-    );
+    const ok = await confirm("Writes LIVE to empty slots only (no Draft Mode). Continue?", {
+      title: `Run the placement engine for ${nightDate}?`,
+      confirmLabel: "Run",
+      tone: "danger",
+    });
     if (!ok) return;
     setNightStates((prev) => ({ ...prev, [nightDate]: { phase: "running" } }));
     setBatchError(null);
@@ -249,7 +255,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
       <div className="flex-1 overflow-y-auto py-4 space-y-5">
         {/* Week picker */}
         <div className="space-y-1.5">
-          <label className="text-[11px] text-zinc-400 font-mono uppercase tracking-wider">Week</label>
+          <label className={cn("text-[11px] font-mono uppercase tracking-wider", isDark ? "text-zinc-400" : "text-neutral-600")}>Week</label>
           {weeksLoading ? (
             <SudoTabLoading>Loading weeks</SudoTabLoading>
           ) : weeksError ? (
@@ -264,8 +270,11 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
                 }}
                 disabled={anyRunning}
                 className={cn(
-                  "w-full appearance-none bg-zinc-900 border border-zinc-700 rounded-lg",
-                  "px-3 py-2 pr-8 text-[13px] text-zinc-100",
+                  "w-full appearance-none rounded-lg border",
+                  isDark
+                    ? "bg-zinc-900 border-zinc-700 text-zinc-100"
+                    : "bg-white border-neutral-200 text-neutral-900",
+                  "px-3 py-2 pr-8 text-[13px]",
                   "focus:outline-none focus:ring-1 focus:ring-amber-500/60",
                   anyRunning && "opacity-50 cursor-not-allowed"
                 )}
@@ -292,7 +301,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               disabled={anyRunning}
               className="accent-amber-500"
             />
-            <span className="text-[12px] text-zinc-300">Skip nights with existing assignments</span>
+            <span className={cn("text-[12px]", isDark ? "text-zinc-300" : "text-neutral-700")}>Skip nights with existing assignments</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -302,7 +311,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               disabled={anyRunning}
               className="accent-amber-500"
             />
-            <span className="text-[12px] text-zinc-300">Skip nights with no schedule import</span>
+            <span className={cn("text-[12px]", isDark ? "text-zinc-300" : "text-neutral-700")}>Skip nights with no schedule import</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -312,9 +321,9 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               disabled={anyRunning}
               className="accent-amber-500"
             />
-            <span className="text-[12px] text-zinc-300">
+            <span className={cn("text-[12px]", isDark ? "text-zinc-300" : "text-neutral-700")}>
               Only roster scheduled TMs{" "}
-              <span className="text-zinc-500">(uncheck to use full grave pool)</span>
+              <span className={isDark ? "text-zinc-500" : "text-neutral-500"}>(uncheck to use full grave pool)</span>
             </span>
           </label>
         </div>
@@ -344,7 +353,12 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               setBatchError(null);
             }}
             disabled={anyRunning}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] text-zinc-400 hover:text-zinc-100 border border-zinc-700 hover:border-zinc-500 transition-colors disabled:opacity-30"
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] border transition-colors disabled:opacity-30",
+              isDark
+                ? "text-zinc-400 hover:text-zinc-100 border-zinc-700 hover:border-zinc-500"
+                : "text-neutral-500 hover:text-neutral-900 border-neutral-300 hover:border-neutral-400"
+            )}
           >
             <span className="ms" style={{ fontSize: 14 }}>refresh</span>
             Reset
@@ -353,18 +367,28 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
 
         {/* Error */}
         {batchError && (
-          <div className="flex items-start gap-2 bg-red-950/40 border border-red-800/50 rounded-lg px-3 py-2 text-[12px] text-red-300">
+          <div className={cn(
+            "flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]",
+            isDark
+              ? "bg-red-950/40 border-red-800/50 text-red-300"
+              : "bg-red-50 border-red-200 text-red-700"
+          )}>
             <span className="ms shrink-0 mt-px" style={{ fontSize: 16 }}>cancel</span>
             <span>{batchError}</span>
           </div>
         )}
 
         {/* Info callout */}
-        <div className="flex items-start gap-2 bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-3 py-2 text-[11px] text-zinc-400">
-          <span className="ms shrink-0 mt-px text-zinc-500" style={{ fontSize: 14 }}>info</span>
+        <div className={cn(
+          "flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px]",
+          isDark
+            ? "bg-zinc-900/60 border-zinc-700/50 text-zinc-400"
+            : "bg-neutral-50 border-neutral-200 text-neutral-600"
+        )}>
+          <span className={cn("ms shrink-0 mt-px", isDark ? "text-zinc-500" : "text-neutral-400")} style={{ fontSize: 14 }}>info</span>
           <span>
             Batch runner uses the weighted scoring engine only — no Grok. Results are written directly to{" "}
-            <span className="font-mono text-zinc-300">zone_assignments</span>. Open any night on the main board to run Grok on top, or to review and adjust individual picks.
+            <span className={cn("font-mono", isDark ? "text-zinc-300" : "text-neutral-800")}>zone_assignments</span>. Open any night on the main board to run Grok on top, or to review and adjust individual picks.
           </span>
         </div>
 
@@ -385,6 +409,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
                 runState={nightStates[n.nightDate] ?? { phase: "idle" }}
                 anyRunning={anyRunning}
                 onRun={() => handleRunNight(n.nightId, n.nightDate)}
+                isDark={isDark}
               />
             ))}
           </div>
@@ -403,11 +428,13 @@ function NightRowItem({
   runState,
   anyRunning,
   onRun,
+  isDark = false,
 }: {
   night: NightRow;
   runState: NightRunState;
   anyRunning: boolean;
   onRun: () => void;
+  isDark?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = React.useState(false);
   const isDerived = night.nightId.startsWith("derived-");
@@ -417,30 +444,30 @@ function NightRowItem({
       className={cn(
         "flex flex-col rounded-lg border transition-colors",
         runState.phase === "done" && runState.result.status === "ok"
-          ? "border-emerald-700/40 bg-emerald-950/20"
+          ? isDark ? "border-emerald-700/40 bg-emerald-950/20" : "border-emerald-300 bg-emerald-50"
           : runState.phase === "done" && runState.result.status === "skip"
-          ? "border-zinc-700/40 bg-zinc-900/40"
+          ? isDark ? "border-zinc-700/40 bg-zinc-900/40" : "border-neutral-200 bg-neutral-50"
           : runState.phase === "done" && runState.result.status === "error"
-          ? "border-red-800/40 bg-red-950/20"
+          ? isDark ? "border-red-800/40 bg-red-950/20" : "border-red-200 bg-red-50"
           : runState.phase === "running"
-          ? "border-amber-700/40 bg-amber-950/20"
-          : "border-zinc-800 bg-zinc-900/30"
+          ? isDark ? "border-amber-700/40 bg-amber-950/20" : "border-amber-300 bg-amber-50"
+          : isDark ? "border-zinc-800 bg-zinc-900/30" : "border-neutral-200 bg-white"
       )}
     >
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Status icon */}
         <div className="shrink-0 w-5 flex justify-center">
           {runState.phase === "running" && <span className="sb-status-dot sb-status-dot--syncing !w-3 !h-3" aria-hidden="true" />}
-          {runState.phase === "done" && runState.result.status === "ok" && <span className="ms text-emerald-400" style={{ fontSize: 16 }}>check_circle</span>}
-          {runState.phase === "done" && runState.result.status === "skip" && <span className="ms text-zinc-500" style={{ fontSize: 16 }}>skip_next</span>}
-          {runState.phase === "done" && runState.result.status === "error" && <span className="ms text-red-400" style={{ fontSize: 16 }}>cancel</span>}
-          {runState.phase === "idle" && <span className="ms text-zinc-600" style={{ fontSize: 16 }}>calendar_today</span>}
+          {runState.phase === "done" && runState.result.status === "ok" && <span className={cn("ms", isDark ? "text-emerald-400" : "text-emerald-600")} style={{ fontSize: 16 }}>check_circle</span>}
+          {runState.phase === "done" && runState.result.status === "skip" && <span className={cn("ms", isDark ? "text-zinc-500" : "text-neutral-400")} style={{ fontSize: 16 }}>skip_next</span>}
+          {runState.phase === "done" && runState.result.status === "error" && <span className={cn("ms", isDark ? "text-red-400" : "text-red-500")} style={{ fontSize: 16 }}>cancel</span>}
+          {runState.phase === "idle" && <span className={cn("ms", isDark ? "text-zinc-600" : "text-neutral-400")} style={{ fontSize: 16 }}>calendar_today</span>}
         </div>
 
         {/* Day + date */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
-            <span className="text-[13px] font-semibold text-zinc-200">{night.dayName || "—"}</span>
+            <span className={cn("text-[13px] font-semibold", isDark ? "text-zinc-200" : "text-neutral-900")}>{night.dayName || "—"}</span>
             <span className="text-[11px] text-zinc-500 font-mono">{night.nightDate}</span>
             {isDerived ? (
               <span className="text-[10px] text-amber-600/80 font-mono">no DB row</span>
@@ -455,26 +482,26 @@ function NightRowItem({
             <div className="flex items-center gap-3 mt-0.5 text-[11px]">
               {runState.result.status === "ok" && (
                 <>
-                  <span className="text-emerald-400">↑ {runState.result.assigned} assigned</span>
+                  <span className={isDark ? "text-emerald-400" : "text-emerald-600"}>↑ {runState.result.assigned} assigned</span>
                   {runState.result.preserved > 0 && (
-                    <span className="text-zinc-500">{runState.result.preserved} preserved</span>
+                    <span className={isDark ? "text-zinc-500" : "text-neutral-500"}>{runState.result.preserved} preserved</span>
                   )}
                   {runState.result.unfilled > 0 && (
-                    <span className="text-amber-400">{runState.result.unfilled} unfilled</span>
+                    <span className={isDark ? "text-amber-400" : "text-amber-600"}>{runState.result.unfilled} unfilled</span>
                   )}
                 </>
               )}
               {runState.result.status === "skip" && (
-                <span className="text-zinc-500">{runState.result.notes[0] ?? "Skipped"}</span>
+                <span className={isDark ? "text-zinc-500" : "text-neutral-500"}>{runState.result.notes[0] ?? "Skipped"}</span>
               )}
               {runState.result.status === "error" && (
-                <span className="text-red-400 truncate">{runState.result.errorMessage}</span>
+                <span className={cn("truncate", isDark ? "text-red-400" : "text-red-600")}>{runState.result.errorMessage}</span>
               )}
               {/* Notes toggle */}
               {runState.result.notes.length > 0 && runState.result.status === "ok" && (
                 <button
                   onClick={() => setNotesOpen((o) => !o)}
-                  className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className={cn("transition-colors", isDark ? "text-zinc-500 hover:text-zinc-300" : "text-neutral-500 hover:text-neutral-700")}
                 >
                   {notesOpen ? "hide notes" : `${runState.result.notes.length} note${runState.result.notes.length === 1 ? "" : "s"}`}
                 </button>
@@ -489,7 +516,9 @@ function NightRowItem({
           disabled={anyRunning || runState.phase === "running"}
           className={cn(
             "sb-interactive flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium",
-            "border border-zinc-700 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300",
+            isDark
+              ? "border border-zinc-700 text-zinc-300 hover:border-amber-500/60 hover:text-amber-300"
+              : "border border-neutral-300 text-neutral-700 hover:border-amber-500/60 hover:text-amber-600",
             "disabled:opacity-30 disabled:cursor-not-allowed"
           )}
         >
@@ -506,9 +535,9 @@ function NightRowItem({
 
       {/* Notes panel */}
       {notesOpen && runState.phase === "done" && runState.result.notes.length > 0 && (
-        <div className="border-t border-zinc-800 px-3 py-2 space-y-0.5">
+        <div className={cn("border-t px-3 py-2 space-y-0.5", isDark ? "border-zinc-800" : "border-neutral-200")}>
           {runState.result.notes.map((note, i) => (
-            <div key={i} className="text-[11px] text-zinc-400 font-mono">
+            <div key={i} className={cn("text-[11px] font-mono", isDark ? "text-zinc-400" : "text-neutral-600")}>
               · {note}
             </div>
           ))}
