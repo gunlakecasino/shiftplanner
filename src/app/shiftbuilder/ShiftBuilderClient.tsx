@@ -3240,6 +3240,14 @@ function AuthedShiftBuilder() {
     setAssignments(snapshot.assignments);
     hydrateAuxLayout(snapshot.auxDefs, currentNight.nightId ?? nightId ?? null);
 
+    // Tracks whether the PRIMARY assignment table is already in its intended
+    // state (batch committed, or no assignment change was needed). The three
+    // write phases are not one transaction, so if a later secondary phase
+    // (locks / breaks) throws we must NOT blindly roll the board back to
+    // `before` — that would discard a committed primary write and desync the
+    // board from the DB. See the catch for the two-branch reconciliation.
+    let assignmentsCommitted = false;
+
     try {
       const changedAssignmentKeys = [...allKeys].filter((slotKey) => {
         const previous = before.assignments[slotKey];
@@ -3286,6 +3294,10 @@ function AuthedShiftBuilder() {
           dateKey,
         );
       }
+      // Assignment table now matches the snapshot (written above, or unchanged
+      // because there was nothing to write). Any failure past this point is a
+      // secondary-metadata failure, not an assignment rollback.
+      assignmentsCommitted = true;
 
       if (targetNightId && lockKeys.length > 0) {
         const { toggleAssignmentLock } = await import("@/lib/shiftbuilder/data");
@@ -3354,11 +3366,29 @@ function AuthedShiftBuilder() {
       setLastSavedAt(new Date());
       showToast(`${actionLabel} saved`, "success");
     } catch (error) {
-      setAssignments(before.assignments);
-      hydrateAuxLayout(before.auxDefs, currentNight.nightId ?? nightId ?? null);
-      shiftHistory.clear();
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`${actionLabel} couldn't be saved — restored previous state: ${message}`, "error");
+      if (!assignmentsCommitted) {
+        // Nothing durable persisted — the assignment write itself failed (or we
+        // never got a night id). Safe to restore the complete pre-action state.
+        setAssignments(before.assignments);
+        hydrateAuxLayout(before.auxDefs, currentNight.nightId ?? nightId ?? null);
+        shiftHistory.clear();
+        showToast(`${actionLabel} couldn't be saved — restored previous state: ${message}`, "error");
+      } else {
+        // Primary assignments committed; only secondary lock/break metadata
+        // failed. Keep the applied snapshot (it matches the persisted
+        // assignments) and reconcile the secondary tables from the server so
+        // the board can't silently diverge. Do NOT clear history: the undo/redo
+        // itself succeeded.
+        liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, snapshot.assignments);
+        if (currentNight.queryClient && getBoardAssignmentsDayKey() === dateKey) {
+          patchNightCoreAssignmentsCache(currentNight.queryClient, dateKey, snapshot.assignments);
+          void currentNight.queryClient.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+        }
+        queueMicrotask(() => scheduleAuxLayoutSave(0));
+        setLastSavedAt(new Date());
+        showToast(`${actionLabel} applied — break/lock details need a refresh: ${message}`, "error");
+      }
     } finally {
       historyPersistBusyRef.current = false;
     }
@@ -3374,12 +3404,17 @@ function AuthedShiftBuilder() {
     const handler = (e: KeyboardEvent) => {
       const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
       const isRedo = (e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y");
+      if (!isUndo && !isRedo) return;
+      e.preventDefault();
+      // Gate BEFORE consuming the history stack. undo()/redo() mutate the
+      // stacks synchronously, so checking the busy flag only inside
+      // applySnapshot would let a rapid second keypress pop a snapshot that
+      // then gets dropped — desyncing the history pointer from the board.
+      if (historyPersistBusyRef.current) return;
       if (isUndo) {
-        e.preventDefault();
         const previous = shiftHistoryRef.current.undo();
         if (previous) void applyHistorySnapshotRef.current(previous, "Undo");
-      } else if (isRedo) {
-        e.preventDefault();
+      } else {
         const next = shiftHistoryRef.current.redo();
         if (next) void applyHistorySnapshotRef.current(next, "Redo");
       }
@@ -4243,6 +4278,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       const dateKey = formatLocalDateISO(dayDef.date);
       const isActiveDay = night.dayIndex === selectedDayIndex;
       const boardReadyForDay = getBoardAssignmentsDayKey() === dateKey;
+      // The active day reads deferred assignments (keeps the week-fit recompute
+      // off the drag path). Its immediate guard could briefly pair a just-
+      // switched day with the prior day's deferred snapshot, but that transient
+      // never reaches the header: weekDailyHealths overlays the selected day
+      // with selectedDayLiveHealth (immediate storeAssignmentsForFit). Keep the
+      // deferral — do not swap this back to the immediate store.
       const dayAssignments =
         isActiveDay && boardReadyForDay
           ? (deferredAssignmentsForFit as Record<string, any>)
