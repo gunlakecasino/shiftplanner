@@ -12,7 +12,7 @@
 import { z } from "zod";
 import type { AiToolset } from "./provider";
 import type { Draft, NightContext, SlotPlacement } from "../types";
-import { canPlace } from "../eligibility";
+import { canPlace, gateOptionsFor } from "../eligibility";
 import { rotationHealthPoints } from "../health/model";
 import { prefScoreFor, skillScoreFor, scorecardFor } from "../objective";
 
@@ -38,15 +38,15 @@ export function buildAiTools(ctx: NightContext): AiToolset {
   return {
     checkEligibility: {
       description:
-        "Check whether a team member is hard-eligible for a slot (gender for restrooms, grave pool, overlap band, operator rules, schedule). Returns { ok, reason }.",
+        "Check whether a team member is hard-eligible for a slot (gender for restrooms, grave pool, overlap band, operator rules, accommodations, schedule). Returns { ok, reason }.",
       parameters: z.object({ tmId: z.string(), slotKey: z.string() }),
       execute: ({ tmId, slotKey }) => {
         const tm = ctx.rosterById.get(tmId);
         if (!tm) return { ok: false, reason: "TM not in tonight's roster" };
-        return canPlace(tm, slotKey, {
-          eligibilityRules: ctx.eligibilityRules,
-          scheduledTmIds: ctx.scheduledTmIds,
-        });
+        // P2-26: must be the SAME options bag the guard uses. Omitting
+        // knowledge / accommodations told the model a placement was fine that
+        // the guard then rejected.
+        return canPlace(tm, slotKey, gateOptionsFor(ctx, tm));
       },
     },
 

@@ -200,7 +200,10 @@ const RRSide: React.FC<{
           placementTrail={placementTrail}
           placementTrailMatchSlotKey={slotKey}
           onSwapCoverageSides={
-            showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
+            showDigitalAssists &&
+            coveredBy.length === 2 &&
+            coveredBy.every((entry) => !entry.isSynthetic) &&
+            onSwapCoverageSides
               ? () => onSwapCoverageSides(slotKey, coveredBy)
               : undefined
           }

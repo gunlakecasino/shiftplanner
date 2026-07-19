@@ -733,7 +733,7 @@ function IdentityForm({
           {([
             { val: 'M', label: 'Male (MRR)' },
             { val: 'F', label: 'Female (WRR)' },
-            { val: null, label: 'Unknown (both ok)' },
+            { val: null, label: 'Unknown (RR blocked)' },
           ] as const).map((opt) => (
             <button
               key={String(opt.val)}

@@ -121,7 +121,7 @@ export function MatrixPanel({ report }: MatrixPanelProps) {
         </div>
       </ReportPanel>
 
-      <ReportPanel title="Nightly Zone Fill" subtitle="How many of Z1–Z10 were filled each grave night">
+      <ReportPanel title="Nightly Zone Coverage" subtitle="How many of Z1-Z10 were staffed or operationally covered each grave night">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-[11px]">
             <thead>
@@ -130,7 +130,7 @@ export function MatrixPanel({ report }: MatrixPanelProps) {
                   Night
                 </th>
                 <th className="py-2 pr-3 text-center font-semibold text-[var(--ios-label-tertiary)]">
-                  Filled
+                  Covered
                 </th>
                 {ZONE_KEYS.map((z) => (
                   <th key={z} className="px-1 py-2 text-center text-[9px] font-bold" style={{ color: getSlotColor(z) }}>
@@ -159,30 +159,37 @@ export function MatrixPanel({ report }: MatrixPanelProps) {
                       className="inline-block rounded-md px-2 py-0.5 text-[10px] font-bold tabular-nums"
                       style={{
                         color:
-                          night.zonesFilled >= 10
+                          night.zonesCovered >= 10
                             ? "#34C759"
-                            : night.zonesFilled >= 8
+                            : night.zonesCovered >= 8
                               ? "#FF9500"
                               : "#FF453A",
                         background: `color-mix(in srgb, ${
-                          night.zonesFilled >= 10
+                          night.zonesCovered >= 10
                             ? "#34C759"
-                            : night.zonesFilled >= 8
+                            : night.zonesCovered >= 8
                               ? "#FF9500"
                               : "#FF453A"
                         } 12%, transparent)`,
                       }}
                     >
-                      {night.zonesFilled}/10
+                      {night.zonesCovered}/10
                     </span>
                   </td>
                   {ZONE_KEYS.map((z) => (
                     <td key={z} className="px-1 py-2 text-center">
-                      {night.zoneAssignments[z] ? (
+                      {night.zoneAssignments[z] || night.zoneCoverageAssignments[z]?.length ? (
                         <span
                           className="inline-block h-2 w-2 rounded-full"
-                          style={{ background: getSlotColor(z) }}
-                          title={`${z} filled`}
+                          style={{
+                            background: night.zoneAssignments[z]
+                              ? getSlotColor(z)
+                              : "transparent",
+                            boxShadow: night.zoneAssignments[z]
+                              ? undefined
+                              : `inset 0 0 0 1.5px ${getSlotColor(z)}`,
+                          }}
+                          title={night.zoneAssignments[z] ? `${z} staffed` : `${z} covered`}
                         />
                       ) : (
                         <span className="text-[var(--ios-label-quaternary)]">·</span>

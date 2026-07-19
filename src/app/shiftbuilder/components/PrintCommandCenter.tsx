@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Check,
   Download,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "./ConfirmDialog";
@@ -547,6 +548,35 @@ export function PrintCommandCenter({
     onExport(currentConfig());
   }, [pageCount, currentConfig, onExport]);
 
+  const handlePreview = useCallback(() => {
+    if (pageCount === 0 || !onPreviewSheet) return;
+    const selected =
+      days.find((d) => d.dayIndex === selectedDayIndex && (d.printDeploy || d.printBreaks)) ??
+      days.find((d) => d.printDeploy || d.printBreaks);
+    if (!selected) return;
+    const view = selected.printDeploy ? "deployment" : "breaks";
+    const label = DAY_DEFS[selected.dayIndex]?.name ?? `Day ${selected.dayIndex + 1}`;
+    onPreviewSheet({
+      dayIndex: selected.dayIndex,
+      view,
+      label,
+      printVariant,
+      includeShiftNotes,
+      planningBlankSlate,
+      includeTimestamp,
+    });
+  }, [
+    DAY_DEFS,
+    days,
+    includeShiftNotes,
+    includeTimestamp,
+    onPreviewSheet,
+    pageCount,
+    planningBlankSlate,
+    printVariant,
+    selectedDayIndex,
+  ]);
+
   // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
@@ -941,6 +971,33 @@ export function PrintCommandCenter({
             >
               <Download size={15} strokeWidth={2.2} />
               {exportLabel}
+            </button>
+          ) : null}
+
+          {onPreviewSheet ? (
+            <button
+              type="button"
+              onClick={handlePreview}
+              disabled={isPrinting || pageCount === 0}
+              className="sb-interactive"
+              title="Open on-canvas print preview"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                borderRadius: 10,
+                border: `1.5px solid ${divider}`,
+                background: isDark ? "rgba(72,72,74,0.35)" : "rgba(255,255,255,0.9)",
+                color: ts,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: (isPrinting || pageCount === 0) ? "not-allowed" : "pointer",
+                opacity: isPrinting ? 0.5 : 1,
+              }}
+            >
+              <Eye size={15} strokeWidth={2.2} />
+              Preview
             </button>
           ) : null}
 

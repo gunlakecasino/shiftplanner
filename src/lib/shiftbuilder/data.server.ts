@@ -36,6 +36,7 @@ function mapProfileRow(p: any): TeamMember {
     primarySection: p.primary_section,
     gravePool: p.grave_pool ?? null,
     gender: p.gender ?? null,
+    adminTrainingStatus: p.admin_training_status ?? null,
   };
 }
 
@@ -44,7 +45,7 @@ async function fetchTeamMembersBase(filter: Record<string, unknown> = {}): Promi
 
   let query = supabase
     .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
     .eq('active', true);
 
   Object.entries(filter).forEach(([k, v]) => {
@@ -74,7 +75,7 @@ const cachedGraveRoster = unstable_cache(
     const supabase = getServerSupabase();
     const { data, error } = await supabase
       .from('tm_profiles')
-      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
       .eq('active', true)
       .not('grave_pool', 'is', null)
       .order('display_name', { ascending: true });

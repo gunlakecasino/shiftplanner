@@ -1,0 +1,733 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\lexmax}{lex\,max}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+\newcommand{\ind}[1]{\mathbf{1}\!\left[#1\right]}
+\newcommand{\canplace}{\textsc{CanPlace}}
+\newcommand{\score}{\textsc{Score}}
+\newcommand{\nightsolve}{\textsc{NightSolve}}
+\newcommand{\weeksolve}{\textsc{WeekSolve}}
+\newcommand{\canon}{\textsc{Canon}}
+\newcommand{\lex}{\succ_{\mathrm{lex}}}
+
+\algrenewcommand\algorithmicrequire{\textbf{Input:}}
+\algrenewcommand\algorithmicensure{\textbf{Output:}}
+
+% Ragged-right paragraph columns: narrow measures justify badly.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{\bfseries The Grave-Shift Placement Problem\\[0.35em]
+\large A Lexicographic Assignment Formulation}
+\author{ShiftBuilder --- Internal Maintenance, Gun Lake Casino}
+\date{18 July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+We give a formal specification of the nightly team-member placement problem
+solved by ShiftBuilder, and an algorithm for it. The operational requirement
+is a strict priority ordering over four objectives---coverage, rotation,
+preference, and skill---together with a family of hard constraints that are
+never tradeable. We show that this is precisely a \emph{lexicographic
+assignment problem}: a maximum-cardinality bipartite matching for the
+dominant objective, refined by lexicographic vector comparison over the
+remainder. The formulation yields provable coverage optimality, exact
+infeasibility certificates via the deficiency form of Hall's theorem, and
+structural enforcement of the priority ordering. We contrast it with the
+scalarized (weighted-sum) formulation currently deployed, and identify the
+classes of defect that the lexicographic formulation renders
+unrepresentable.
+\end{abstract}
+
+\section{Scope and motivation}
+
+Each night, a roster of approximately twenty-five team members must be
+assigned to approximately thirty-four board positions: ten zones, ten
+restroom stations, an administrative position, a smoking-room position, a
+flexible auxiliary row, and two bands of partial-shift overlap seats. The
+assignment is subject to hard physical and policy constraints, and is
+evaluated against four objectives whose relative priority has been ratified
+by the operator:
+\begin{equation}
+\label{eq:hierarchy}
+\textsf{coverage} \;\succ\; \textsf{rotation} \;\succ\;
+\textsf{preference} \;\succ\; \textsf{skill}.
+\end{equation}
+
+The symbol $\succ$ in \eqref{eq:hierarchy} denotes \emph{priority}, not a
+weight ratio. The operator did not assert that one unit of coverage is worth
+some number of units of rotation; the assertion is that coverage decides,
+and the remaining objectives are consulted only among coverage-equal
+solutions. Section~\ref{sec:objective} makes this precise, and
+Remark~\ref{rem:bigm} explains why encoding a priority ordering as a weighted
+sum is a lossy translation.
+
+\section{Notation}
+\label{sec:notation}
+
+\begin{definition}[Instance]
+A placement instance is a tuple
+$\mathcal{I} = (T, S, \mathcal{R}, \mathrm{lock}, \mathrm{pin}, H, W, \theta)$
+where
+\begin{itemize}[itemsep=0.15em,topsep=0.25em]
+  \item $T$ is the set of team members scheduled tonight, after removal of
+        call-offs and dated unavailability;
+  \item $S$ is the ordered set of board positions, indexed by fill order;
+  \item $\mathcal{R} \subseteq S$ is the set of \emph{required} positions
+        (restrooms and zones); we write $\mathcal{O} = S \setminus
+        \mathcal{R}$ for the \emph{optional} remainder;
+  \item $\mathrm{lock} \subseteq S$ are operator-locked positions, each with
+        an incumbent $\iota(s) \in T$;
+  \item $\mathrm{pin} \subseteq S$ are preserved-but-unlocked existing
+        placements, per the run's preserve policy;
+  \item $H(t)$ is the placement history of $t$, a sequence of
+        $(\textit{night}, \textit{area})$ events in decreasing night order;
+  \item $W(t)$ is the set of placements already planned for $t$ earlier in
+        the current week solve;
+  \item $\theta$ is the active engine configuration (weights and thresholds),
+        and $\zeta$ a pseudorandom seed.
+\end{itemize}
+\end{definition}
+
+An \emph{assignment} is a partial injection $\mu : S \rightharpoonup T$;
+$\mu(s) = t$ means $t$ holds position $s$. Injectivity encodes the physical
+constraint that a person occupies at most one position per night. We write
+$\mathrm{dom}(\mu)$ for the filled positions and
+$\mathrm{cov}(\mu) = \lvert \mathrm{dom}(\mu) \cap \mathcal{R} \rvert$ for
+the coverage of $\mu$.
+
+\subsection{Area identity}
+
+Rotation is not defined over positions but over \emph{areas}. Let
+$\alpha : S \to \mathcal{A}$ be the area map. It is not injective: the two
+sides of a restroom pair share an area, because working either side of
+restroom~8 is operationally the same exposure, and overlap seats within a
+band are fungible. Zones and auxiliary roles are their own areas.
+\begin{equation}
+\alpha(\texttt{MRR8}) = \alpha(\texttt{WRR8}) = \texttt{RR8},
+\qquad
+\alpha(\texttt{OL-PM-}k) = \texttt{OL-PM},
+\qquad
+\alpha(\texttt{Z4}) = \texttt{Z4}.
+\end{equation}
+
+\subsection{Key normalization}
+
+Position identity is recorded in several vocabularies across the persistence
+layer: a user-interface form, a database form, a historical trail form, and
+a per-night ephemeral form for flexible auxiliary shells. Let $\canon$ be the
+total function mapping any of these to canonical form.
+
+\begin{definition}[Boundary rule]
+\label{def:boundary}
+Every key entering the algorithm is normalized by $\canon$ at the boundary.
+The algorithm is defined only over canonical keys. $\canon$ is total over
+production key forms; an unrecognized key yields a distinguished value
+$\bot$, and $\canplace(\cdot, \bot, \cdot)$ is false.
+\end{definition}
+
+Definition~\ref{def:boundary} is stated as part of the algorithm rather than
+as an implementation note because the alternative---comparing keys drawn from
+distinct vocabularies---silently produces \emph{false negatives} in every
+rotation predicate, and false negatives in a rotation predicate are
+indistinguishable from good news. A system in this state reports that a
+member has never worked a position they worked last week.
+
+\section{The feasibility gate}
+\label{sec:gate}
+
+All hard constraints are collected into a single predicate. No other part of
+the algorithm may test eligibility.
+
+\begin{definition}[Gate]
+$\canplace(t, s, r)$ holds when member $t$ may occupy position $s$ at
+relaxation level $r \in \{0, 1\}$. The constituent gates are:
+
+\smallskip
+\noindent\textbf{Level 0} (never relaxed, at any $r$):
+\begin{description}[itemsep=0.1em,topsep=0.2em,leftmargin=3.2em,font=\normalfont\itshape]
+  \item[$G_1$] Position physics. Zone positions require a full-grave member;
+        men's and women's restrooms require the corresponding gender;
+        overlap seats require the matching partial-shift band; full-night
+        positions exclude partial-shift members. Unknown gender and unknown
+        position family both \emph{fail closed}.
+  \item[$G_2$] Locks. $s \in \mathrm{lock} \Rightarrow t = \iota(s)$.
+  \item[$G_3$] Accommodations, from all recorded sources.
+  \item[$G_4$] Schedule membership.
+  \item[$G_5$] Operator rules, evaluated \emph{within their declared scope}.
+        A rule scoped to a position class constrains only that class.
+  \item[$G_6$] Hard avoidance: declared position avoidance, and pairwise
+        avoidance with an already-placed neighbour.
+\end{description}
+
+\smallskip
+\noindent\textbf{Level 1} (relaxed only when $r = 1$):
+\begin{description}[itemsep=0.1em,topsep=0.2em,leftmargin=3.2em,font=\normalfont\itshape]
+  \item[$G_7$] Rotation. The area $\alpha(s)$ must not occur among the three
+        most recent events of $H(t)$ merged with $W(t)$. Continuity roles
+        (the administrative position and auxiliary roles flagged as
+        continuity) and overlap seats are exempt by policy.
+\end{description}
+\end{definition}
+
+The ladder has exactly two rungs. There is no level at which a Level-0 gate
+yields. Every placement made at $r = 1$ carries a relaxation record in its
+provenance, and Section~\ref{sec:ilp} shows how the \emph{number} of such
+records is itself minimized.
+
+\begin{remark}
+The placement of $G_6$ at Level 0 is a policy choice, and it is the choice
+the written operator contract makes: a hard avoidance is described there as a
+constraint, not a cost. Should the operator wish avoidance to be tradeable
+against coverage, the correct edit is to demote $G_6$ to a term in $\pi$
+(Section~\ref{sec:objective}), not to introduce a third relaxation rung.
+\end{remark}
+
+\section{The objective}
+\label{sec:objective}
+
+\begin{definition}[Score]
+For a candidate placement of $t$ at $s$ under partial assignment $\mu$,
+\begin{equation}
+\score(t, s, \mu) \;=\; \bigl(\rho(t,s),\; \pi(t,s,\mu),\; \kappa(t,s)\bigr)
+\in \mathbb{Z} \times \mathbb{R} \times \mathbb{R},
+\end{equation}
+with components defined as follows.
+\end{definition}
+
+\paragraph{Rotation.} Let $\sigma_{30}(t,a)$ be the number of the last thirty
+worked nights in which $t$ occupied area $a$, let $\gamma(t,a)$ be the number
+of days since $t$ last occupied $a$, and let $\mathrm{sf}$ and $\mathrm{l}_5$
+be indicators for a same-side restroom-family repeat within the critical
+window and a same-area repeat within the last five events. Then
+\begin{equation}
+\label{eq:rot}
+\rho(t,s) \;=\; 100
+\;-\; 55\,\ind{\mathrm{sf}}
+\;-\; 25 \min\bigl(\sigma_{30}(t, \alpha(s)),\, 3\bigr)
+\;-\; 10\,\ind{\mathrm{l}_5}
+\;+\; \min\!\left(7, \left\lfloor \gamma(t,\alpha(s))/8 \right\rfloor\right).
+\end{equation}
+The prior-three same-area condition does \emph{not} appear in
+\eqref{eq:rot}; it is the gate $G_7$, and a gate is not a term.
+
+\paragraph{Preference.} With $h, f \in \mathbb{Z}$ the summed hard and soft
+preference signals for $(t,s)$ and $a(t,s,\mu)$ the pair-affinity signal
+against already-placed neighbours,
+\begin{equation}
+\pi(t,s,\mu) \;=\; \mathrm{clamp}(h, 0, 1)
+\;+\; 0.4\,\mathrm{clamp}(f, -1, 1)
+\;+\; 0.5\,a(t,s,\mu).
+\end{equation}
+Every term is clamped, so $\pi$ is bounded by construction. Hard
+\emph{avoidance} does not appear here; it is $G_6$.
+
+\paragraph{Skill.} With $\varsigma(t)$ the skill score and $d(s)$ the
+position difficulty,
+\begin{equation}
+\kappa(t,s) \;=\; \max\bigl(-1,\; -\lvert \varsigma(t) - d(s) \rvert\bigr),
+\qquad
+\kappa(t,s) \geq -0.4 \ \text{ whenever } \varsigma(t) \geq d(s).
+\end{equation}
+The floor encodes that being overqualified is not a defect.
+
+\begin{definition}[Lexicographic order]
+For $\mathbf{u}, \mathbf{v} \in \mathbb{R}^n$, $\mathbf{u} \lex \mathbf{v}$
+if and only if there exists $k$ with $u_k > v_k$ and $u_i = v_i$ for all
+$i < k$.
+\end{definition}
+
+Candidates are compared by $\lex$ on $\score$, with ties broken first by the
+member's tie-break rank and then by identifier. Since identifiers are
+unique, the comparison is total and the algorithm therefore deterministic.
+
+\begin{remark}[Integrality of $\rho$]
+\label{rem:quantize}
+The rotation component is integer-valued by construction. This is
+deliberate. Under a strict lexicographic order, a real-valued dominant
+component makes exact ties a measure-zero event, and the subordinate
+components are never consulted: two boards differing by $10^{-4}$ in
+rotation would be treated as rotation-distinct, and preference would never
+speak. Quantization creates a band of genuine rotation-equivalence within
+which the lower objectives decide. The granularity of that band is the one
+tuning decision this formulation genuinely requires.
+\end{remark}
+
+\begin{remark}[Why not a weighted sum]
+\label{rem:bigm}
+A scalarization $\Phi = w_1 f_1 + w_2 f_2 + w_3 f_3$ reproduces
+lexicographic behaviour only if each weight dominates the entire achievable
+range of everything beneath it,
+\begin{equation}
+\label{eq:bigm}
+w_i \;>\; \sum_{j > i} w_j \cdot \bigl(\max f_j - \min f_j\bigr) .
+\end{equation}
+Condition \eqref{eq:bigm} depends on the \emph{ranges} of the subordinate
+objectives. It is therefore invalidated by any retuning that widens a lower
+objective, by any unclamped sum, and by the accumulation of several
+simultaneously matching preference rows. The failure is silent: no
+constraint is violated and no exception is raised; the priority ordering
+simply inverts. Lexicographic comparison has no analogue of
+\eqref{eq:bigm} to violate, because no arithmetic is performed across
+objectives.
+\end{remark}
+
+\section{The night algorithm}
+\label{sec:night}
+
+Let $G_r = (T \cup S, E_r)$ be the bipartite \emph{eligibility graph} at
+relaxation level $r$, with $\{t,s\} \in E_r$ exactly when
+$\canplace(t,s,r)$. Coverage is a property of matchings in $G_r$; the
+remaining objectives select among them.
+
+\begin{algorithm}[htbp]
+\caption{$\nightsolve(\mathcal{I}, \zeta)$}
+\label{alg:night}
+\begin{algorithmic}[1]
+\Require instance $\mathcal{I}$, seed $\zeta$
+\Ensure assignment $\mu$, provenance, scorecard, certificates
+
+\Statex \textbf{Phase A --- feasibility census}
+\State $E_0 \gets \{\, \{t,s\} : s \in \mathcal{R},\ \canplace(t,s,0) \,\}$
+\State $M^{*} \gets \textsc{MaxMatching}(G_0)$
+  \Comment{Hopcroft--Karp}
+\ForAll{$s \in \mathcal{R}$ unmatched in $M^{*}$}
+  \State $\mathrm{cert}(s) \gets \textsc{DeficientSet}(G_0, s)$
+    \Comment{Theorem~\ref{thm:hall}}
+\EndFor
+
+\Statex \textbf{Phase B --- coverage}
+\State $\mu \gets \{\, s \mapsto \iota(s) : s \in \mathrm{lock} \,\} \cup
+        \{\, s \mapsto \mu_0(s) : s \in \mathrm{pin} \,\}$
+\State \textsc{Augment}$(\mu,\ E_0$ restricted to unassigned members$)$
+\If{some $s \in \mathcal{R}$ remains open}
+  \State \textsc{Augment}$(\mu,\ E_0)$ along shortest augmenting paths
+    \Comment{may displace pinned members}
+  \State record each displacement as \textsf{moved-for-coverage}
+\EndIf
+\If{some $s \in \mathcal{R}$ remains open}
+  \State $E_1 \gets E_0 \cup \{\, \{t,s\} : \canplace(t,s,1) \,\}$
+  \State \textsc{Augment}$(\mu,\ E_1)$ for open required positions only
+  \State tag each $E_1 \setminus E_0$ edge used with
+         \textsf{relaxation}$=G_7$
+\EndIf
+
+\Statex \textbf{Phase C --- selection}
+\ForAll{$s \in \mathcal{R}$ in fill order, $s \notin \mathrm{lock}$}
+  \State $C \gets \{\, t \text{ unassigned} : \canplace(t,s,r(s))
+          \wedge \textsc{Feasible}(\mu, s \mapsto t) \,\}$
+  \State $t^{*} \gets \lexmax_{t \in C} \score(t, s, \mu)$
+  \State $\mu(s) \gets t^{*}$;\ \ append $s$ to $W(t^{*})$
+\EndFor
+\ForAll{$s \in \mathcal{O}$ in fill order}
+  \State as above, with $r = 0$ and no displacement permitted
+\EndFor
+
+\Statex \textbf{Phase D --- refinement}
+\For{$k = 1$ \textbf{to} $K$ (in seeded order)}
+  \State propose a swap or relocation $\mu'$ with both endpoints admissible
+         at $r = 0$, locks untouched, $\mathrm{cov}(\mu') =
+         \mathrm{cov}(\mu)$
+  \If{$\Sigma\score(\mu') \lex \Sigma\score(\mu)$}
+    \State $\mu \gets \mu'$
+  \EndIf
+\EndFor
+
+\Statex \textbf{Phase E --- advisory overlay (optional)}
+\State obtain proposed overrides from the language model, which is given the
+       rules, the per-position candidate rankings, and tools calling the
+       \emph{same} $\canplace$ and $\score$
+\State accept an override only if $\canplace(\cdot,\cdot,0)$ holds,
+       $\mathrm{cov}$ is unchanged, and $\Sigma\score$ does not regress
+
+\Statex \textbf{Phase F --- verification}
+\Repeat
+  \State $V \gets$ violations of Invariants \textbf{I1}--\textbf{I5}
+  \State revert positions implicated in $V$ to their Phase-C values
+\Until{$V = \emptyset$}
+\State \Return $\mu$, provenance, scorecard (with $V$), certificates
+\end{algorithmic}
+\end{algorithm}
+
+Two structural points distinguish Algorithm~\ref{alg:night} from a greedy
+fill.
+
+First, Phase~B decides \emph{which} positions can be filled before Phase~C
+decides \emph{who} fills them. A greedy walk conflates these, and in doing so
+commits early choices that can strand a later position: if the only member
+eligible for a restroom has already been consumed by a zone, a greedy walk
+has no move that recovers. The augmenting path of Phase~B is exactly that
+move---it relocates an already-placed member through a chain of
+reassignments---and it is found automatically rather than written as a
+special case.
+
+Second, Phase~C's oracle $\textsc{Feasible}(\mu, s \mapsto t)$ tests whether
+fixing $t$ at $s$ still admits a maximum matching on the remainder. Without
+it, an optimal-looking local choice could destroy the coverage guarantee
+established in Phase~B.
+
+\section{Correctness}
+\label{sec:correctness}
+
+\begin{theorem}[Deficiency certificate]
+\label{thm:hall}
+Let $G_0$ be the eligibility graph and $\nu(G_0)$ the size of a maximum
+matching. Then
+\begin{equation}
+\lvert \mathcal{R} \rvert - \nu(G_0)
+\;=\; \max_{A \subseteq \mathcal{R}}
+      \bigl( \lvert A \rvert - \lvert N(A) \rvert \bigr),
+\end{equation}
+where $N(A) \subseteq T$ is the neighbourhood of $A$. Any maximizing $A$ is a
+witness that $\lvert A \rvert - \lvert N(A) \rvert$ positions of $A$ must go
+unfilled.
+\end{theorem}
+
+\begin{proof}
+This is the deficiency form of Hall's theorem, equivalent to
+K\H{o}nig's theorem on bipartite graphs. The maximizing set $A$ is
+recoverable from the alternating-path structure produced by the matching
+algorithm: take the unmatched required positions together with all positions
+reachable from them by alternating paths.
+\end{proof}
+
+Theorem~\ref{thm:hall} is the algorithm's explanation facility, not merely
+its analysis. When five women's restrooms draw on only three eligible
+members, the returned set $A$ names those five positions and the deficiency
+is two. This is a proof of impossibility localized to the responsible
+positions, and it subsumes special-cased headcount arithmetic: a gender
+shortfall is not a separate calculation but an instance of deficiency.
+
+\begin{proposition}[Coverage optimality]
+\label{prop:cov}
+Let $r^{*}$ be the highest relaxation level used by Phase~B. Then
+$\mathrm{cov}(\mu)$ is maximum over all assignments satisfying the gates at
+levels $\leq r^{*}$ and respecting $\mathrm{lock}$.
+\end{proposition}
+
+\begin{proof}
+Locked positions contribute forced edges; contract them, which reduces the
+problem to matching on the residual graph. By Berge's lemma a matching is
+maximum if and only if it admits no augmenting path. Phase~B searches for
+augmenting paths over the full residual graph---first among unassigned
+members, then, if positions remain open, over paths that displace pinned
+members---and terminates only when none exists. Hence the matching is
+maximum at level~$0$. If required positions remain open, the edge set is
+extended to $E_1$ and the search repeated, yielding a maximum matching at
+level~$1$. Maximality at $r^{*}$ follows.
+\end{proof}
+
+\begin{proposition}[Selection preserves coverage]
+\label{prop:oracle}
+If Phase~C admits only candidates passing $\textsc{Feasible}$, then on
+termination $\mathrm{cov}(\mu)$ equals the value established in
+Proposition~\ref{prop:cov}.
+\end{proposition}
+
+\begin{proof}
+By induction on the fill order. The hypothesis is that after $k$ selections
+the partial assignment extends to a maximum matching. For $k = 0$ this is
+Proposition~\ref{prop:cov}. For the inductive step, $\textsc{Feasible}$
+admits $t$ at $s$ exactly when $\mu \cup \{s \mapsto t\}$ extends to a
+maximum matching; such a $t$ exists because the maximum matching guaranteed
+by the hypothesis assigns \emph{some} member to $s$, and that member passes
+the test. Selecting any admitted candidate preserves the hypothesis.
+\end{proof}
+
+\begin{proposition}[Priority soundness]
+\label{prop:lex}
+Let $\mu, \mu'$ be assignments with $\mathrm{cov}(\mu) >
+\mathrm{cov}(\mu')$. Then $\mu$ is preferred, irrespective of $\rho, \pi,
+\kappa$. Analogously, if coverage is equal and $\Sigma\rho(\mu) >
+\Sigma\rho(\mu')$, then $\mu$ is preferred irrespective of $\pi, \kappa$.
+\end{proposition}
+
+\begin{proof}
+Immediate from the definition of $\lex$: comparison is decided at the first
+index at which the vectors differ, and no subsequent component is examined.
+\end{proof}
+
+Proposition~\ref{prop:lex} is trivial as mathematics and load-bearing as
+engineering: it is exactly the guarantee that condition \eqref{eq:bigm}
+fails to provide robustly. Under lexicographic comparison the ratified
+ordering \eqref{eq:hierarchy} holds by the type of the comparison, and is
+therefore invariant under retuning of any component's internal weights.
+
+\begin{proposition}[Determinism]
+$\nightsolve$ and $\weeksolve$ are pure functions of
+$(\mathcal{I}, \zeta)$.
+\end{proposition}
+
+\begin{proof}
+Candidate comparison is a total order (lexicographic on $\score$, then on
+the tie-break pair, whose second element is unique). All iteration orders
+derive from $\zeta$ by a fixed generator. No component reads ambient state:
+in particular the rotation component is computed against an explicit
+\textit{before-night} cursor rather than the wall clock.
+\end{proof}
+
+\section{The week algorithm}
+\label{sec:week}
+
+The week solve is the night solve folded over the week, with a shared
+rolling history, followed by a cross-night polish. It is not a second
+algorithm; in particular it invokes the same gate, so no constraint enforced
+on a single night can be evaded across a week.
+
+\begin{algorithm}[htbp]
+\caption{$\weeksolve(N, \mathcal{I}, \zeta)$ for nights $N = (n_1, \dots,
+n_7)$}
+\label{alg:week}
+\begin{algorithmic}[1]
+\State $W \gets \emptyset$
+\ForAll{$n \in N$ in chronological order}
+  \State $\mathcal{I}_n \gets$ instance for $n$ with history
+         $\mathrm{merge}(H, W)$
+  \State $\mu_n \gets \nightsolve(\mathcal{I}_n, \zeta \oplus n)$
+  \State $W \gets W \cup \mu_n$
+    \Comment{planned nights are visible to later nights}
+\EndFor
+\For{$k = 1$ \textbf{to} $K_W$ (in seeded order)}
+  \State propose exchanging placements across nights $n_i \neq n_j$, both
+         endpoints admissible at $r = 0$, coverage of both preserved
+  \If{$\textsc{WeekScore}$ improves lexicographically}
+    \State accept, and \textbf{rebuild} the context of every night after
+           $\min(n_i, n_j)$
+  \EndIf
+\EndFor
+\State \Return $(\mu_n)_{n \in N}$, week scorecard, relaxation ledger
+\end{algorithmic}
+\end{algorithm}
+
+\noindent
+The week score governing the polish loop of Algorithm~\ref{alg:week} is
+\begin{equation}
+\textsc{WeekScore} = \Bigl(\textstyle\sum_n \mathrm{cov}(\mu_n),\;
+-\!\sum_n \mathrm{rep}(\mu_n),\;
+\sum_n \Sigma\rho,\; \sum_n \Sigma\pi,\; \sum_n \Sigma\kappa \Bigr),
+\end{equation}
+with $\mathrm{rep}$ counting within-week area repeats. The context rebuild
+that accompanies each accepted exchange is required for soundness: an
+exchange alters the history that later nights were evaluated against, and
+evaluating a night against a board that no longer exists admits exchanges
+whose true downstream effect is negative.
+
+\section{The placement matrix as a derived view}
+\label{sec:matrix}
+
+The placement matrix records, per member and per zone, exposure counts over
+trailing calendar windows. We observe that it is a pure function of history
+and the clock:
+\begin{equation}
+\label{eq:matrix}
+\mathcal{M}(t, a) \;=\; \bigl( c_{28}(t,a),\; c_{56}(t,a),\; \ell(t,a)
+\bigr),
+\qquad
+c_{w}(t,a) \;=\;
+\bigl\lvert \{\, e \in H(t) : \alpha(e) = a,\ \delta(e) \leq w \,\}
+\bigr\rvert,
+\end{equation}
+where $\delta(e)$ is the age of event $e$ in days and $\ell(t,a)$ the most
+recent night on which $t$ occupied $a$. Consequently
+\begin{equation}
+\mathcal{M} \;\equiv\; f(H, \mathrm{now}),
+\end{equation}
+and materializing $\mathcal{M}$ is a caching decision rather than a design
+one. At the operative scale---order $10^3$ history rows---evaluating
+\eqref{eq:matrix} on read is submillisecond, and the materialized form
+should be regarded as an optimization to be justified, not a default.
+
+The distinction matters because a materialized $\mathcal{M}$ admits states
+that \eqref{eq:matrix} cannot express. A stored count can disagree with
+history, either because a mutation path failed to trigger a rebuild, or
+because trailing windows were computed at a past instant and no longer
+correspond to the present one. Neither failure is representable when
+$\mathcal{M}$ is evaluated on read. If materialization is retained, the
+governing invariant is that $\mathcal{M}$ be reconstructible from $H$ alone,
+identically, at any time; a rebuild triggered by every mutation that touches
+history, together with a periodic sweep, then bounds staleness while
+eliminating incorrectness.
+
+\section{An equivalent integer program}
+\label{sec:ilp}
+
+The same problem admits a compact integer formulation, useful as an
+independent oracle against which the staged algorithm can be validated.
+
+\begin{align}
+\text{variables}\quad
+& x_{ts} \in \{0,1\} && \text{$t$ occupies $s$} \\
+& y_s \in \{0,1\} && \text{$s \in \mathcal{R}$ left open} \\
+& z_{ts} \in \{0,1\} && \text{edge used under relaxation } G_7 \\[0.4em]
+\text{subject to}\quad
+& \textstyle\sum_{s} x_{ts} \leq 1 && \forall t \in T \\
+& \textstyle\sum_{t} x_{ts} + y_s = 1 && \forall s \in \mathcal{R} \\
+& \textstyle\sum_{t} x_{ts} \leq 1 && \forall s \in \mathcal{O} \\
+& x_{ts} = 0 && \forall (t,s) \text{ failing a Level-0 gate} \\
+& x_{ts} \leq z_{ts} && \forall (t,s) \text{ failing only } G_7 \\
+& x_{\iota(s)s} = 1 && \forall s \in \mathrm{lock}
+\end{align}
+
+The objective is optimized in stages, each stage constraining the next:
+\begin{enumerate}[itemsep=0.1em,topsep=0.25em]
+  \item minimize $\sum_{s \in \mathcal{R}_1} y_s$, then
+        $\sum_{s \in \mathcal{R}_2} y_s$ \hfill (coverage, by tier)
+  \item minimize $\sum_{t,s} z_{ts}$ \hfill (fewest relaxations)
+  \item maximize $\sum_{t,s} \rho(t,s)\, x_{ts}$ \hfill (rotation)
+  \item maximize $\sum_{t,s} \pi(t,s)\, x_{ts}$ \hfill (preference)
+  \item maximize $\sum_{t,s} \kappa(t,s)\, x_{ts}$ \hfill (skill)
+\end{enumerate}
+
+Staged optimization---each stage fixing the optimum of its predecessor as a
+constraint---realizes \eqref{eq:hierarchy} without weight arithmetic, and is
+the standard formulation of preemptive goal programming. Since $\pi$ depends
+on the assignment through pair affinity, that term is either linearized with
+auxiliary products or, in practice, evaluated in the final stage over a
+restricted candidate set.
+
+\begin{remark}
+At $\lvert T \rvert \approx 25$ and $\lvert S \rvert \approx 34$ the
+program has fewer than a thousand binaries and solves in milliseconds.
+Running it as a shadow validator alongside the staged algorithm yields a
+disagreement certificate---a concrete board on which the two differ---which
+is a considerably stronger signal than an assertion failure.
+\end{remark}
+
+\section{Invariants}
+\label{sec:invariants}
+
+\begin{description}[itemsep=0.15em,topsep=0.3em,leftmargin=3.4em,
+                    font=\normalfont\bfseries]
+  \item[I1] $\mu$ is injective: no member holds two positions.
+  \item[I2] Locked positions are identical across any run.
+  \item[I3] No output placement violates a Level-0 gate.
+  \item[I4] $\mathrm{cov}(\mu)$ attains the matching bound of
+            Proposition~\ref{prop:cov}: coverage is optimal, not
+            best-effort.
+  \item[I5] Every $G_7$ waiver appears in the relaxation ledger, and the
+            number of waivers is minimized.
+  \item[I6] $\nightsolve$ and $\weeksolve$ are pure in
+            $(\mathcal{I}, \zeta)$.
+  \item[I7] $\mathcal{M} \equiv f(H, \mathrm{now})$, over a single history
+            store with singular $(\textit{night}, \textit{position})$
+            ownership closed under every mutation path.
+  \item[I8] $\canon$ is total over production key forms; unrecognized keys
+            fail closed.
+  \item[I9] Explanations---score vectors, deficiency certificates,
+            relaxation ledgers---are byproducts of solving, not
+            reconstructions after it.
+\end{description}
+
+Invariants \textbf{I1}--\textbf{I5} are checked in Phase~F and re-checked
+after any repair, so a result reporting no violations has been shown to have
+none. \textbf{I3} and \textbf{I8} are amenable to property-based testing over
+randomized rosters, configurations, and seeds.
+
+\section{Complexity}
+
+Let $n = \lvert T \rvert$, $m = \lvert S \rvert$, $E = \lvert E_0 \rvert
+\leq nm$.
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Phase & Operation & Complexity & At $n{=}25, m{=}34$ \\
+\midrule
+A & Hopcroft--Karp & $O(E\sqrt{n+m})$ & ${\sim}10^{4}$ ops \\
+A & Deficiency certificates & $O(E)$ per open position & negligible \\
+B & Augmentation & $O(E\sqrt{n+m})$ & ${\sim}10^{4}$ ops \\
+C & Selection with oracle & $O(m \cdot n \cdot E)$ worst case &
+    ${\sim}10^{6}$ ops \\
+D & Refinement & $O(K)$, budget-bounded & tunable \\
+F & Verification & $O(m)$ per pass & negligible \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The whole solve completes well within ten milliseconds. No approximation is
+required at this scale: provable coverage optimality and full determinism
+are available at no practical cost, and any heuristic in the implementation
+should be justified by explanatory or incremental-update requirements rather
+than by performance.
+
+\section{Relation to the deployed implementation}
+
+The deployed system is staged in the same shape---plan, optimize, advise,
+verify---and that shape is worth preserving, since it is the source of the
+provenance that makes engine output auditable by the operator. The
+formulation above substitutes for its internals as follows.
+
+\begin{center}
+\begin{tabular}{@{}L{0.29\textwidth}L{0.30\textwidth}L{0.30\textwidth}@{}}
+\toprule
+\textbf{Deployed} & \textbf{Specified here} & \textbf{Consequence} \\
+\midrule
+Greedy fill with rescue and backfill passes &
+Maximum matching, then selection under a feasibility oracle &
+Coverage provably optimal; stranding unrepresentable
+(Prop.~\ref{prop:cov}, \ref{prop:oracle}) \\[0.3em]
+Scalar weighted sum with hard gates &
+Lexicographic vector $(\rho, \pi, \kappa)$ &
+Ordering \eqref{eq:hierarchy} holds by construction
+(Prop.~\ref{prop:lex}, Rem.~\ref{rem:bigm}) \\[0.3em]
+Three distinct relaxation behaviours &
+One two-rung ladder inside $\canplace$ &
+Single semantics; every waiver ledgered \\[0.3em]
+Multiple history stores and key vocabularies &
+One store, $\canon$ at the boundary &
+Rotation false-negatives eliminated as a class
+(Def.~\ref{def:boundary}) \\[0.3em]
+Materialized matrix with refresh choreography &
+Derived view; materialization optional &
+Staleness bounded, incorrectness unrepresentable
+(\S\ref{sec:matrix}) \\[0.3em]
+Repair without re-verification &
+Verify--repair--re-verify to fixpoint &
+A clean report is a proof, not an assumption \\[0.3em]
+Feasibility by headcount arithmetic &
+Deficiency certificates &
+Exact, per-position, gender split subsumed
+(Thm.~\ref{thm:hall}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\noindent
+Two companion documents complete the set:
+
+\begin{description}[itemsep=0.2em,topsep=0.3em,leftmargin=1.2em]
+  \item[\normalfont\texttt{PLACEMENT\_ARCHITECTURE.md}] --- a narrative
+        description of the system as built, including the persistence layer
+        and the explanation surfaces.
+  \item[\normalfont\texttt{PLACEMENT\_REVIEW\_2026-07-18.md}] --- a
+        catalogue of the specific divergences between the deployed system
+        and this specification, with severity ranking and a suggested
+        remediation order.
+\end{description}
+
+\end{document}

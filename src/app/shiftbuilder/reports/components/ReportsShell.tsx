@@ -11,6 +11,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { shiftBuilderVersionLabel } from "../../version";
 import { GoldHairline } from "../../sudo/SudoGlass";
 import { ReportsDashboard } from "./ReportsDashboard";
+import { currentShiftDate } from "@/lib/shiftbuilder/dateUtils";
 import "../../settings/settingsShell.css";
 import "../../settings/settingsTheme.css";
 import "../reportsShell.css";
@@ -31,7 +32,8 @@ export function ReportsShell() {
     return () => clearInterval(t);
   }, []);
 
-  const formattedDate = `${now.toLocaleString("en-US", { month: "long" })} ${now.getDate()}, ${now.getFullYear()}`;
+  const shiftDate = currentShiftDate(now);
+  const formattedDate = `${shiftDate.toLocaleString("en-US", { month: "long" })} ${shiftDate.getDate()}, ${shiftDate.getFullYear()}`;
   const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const tabMotion = reduceMotion

@@ -95,10 +95,12 @@ export function runNightEngine(
 
   // ── Stage 6: guard ─────────────────────────────────────────────────────────
   const g0 = now();
-  const validation = validateDraft(incumbent, ctx);
+  let validation = validateDraft(incumbent, ctx);
   if (!validation.ok) {
-    // Fall back offending slots to the planner seed (which is guard-clean by
-    // construction). Never fail a whole run for a single bad slot.
+    // Repair 1: fall back offending slots to the planner seed. Never fail a
+    // whole run for a single bad slot. The seed is NOT guard-clean by
+    // construction (it can carry an ineligible locked placement), so the repair
+    // is re-validated rather than assumed good (P1-8).
     for (const [slotKey, res] of Object.entries(validation.perSlot)) {
       if (!res.ok) {
         const seedPlacement = planner.draft[slotKey];
@@ -106,7 +108,24 @@ export function runNightEngine(
         else delete incumbent[slotKey];
       }
     }
+    validation = validateDraft(incumbent, ctx);
   }
+  if (!validation.ok) {
+    // Repair 2: the seed reinstated a violation. Drop the offending placement
+    // outright — an illegal placement is not coverage. Locked slots are left
+    // alone (removing one is itself a violation) so the operator sees the
+    // conflict they created rather than a silent unlock.
+    for (const [slotKey, res] of Object.entries(validation.perSlot)) {
+      if (res.ok) continue;
+      const row = ctx.assignments[slotKey];
+      if (row && (row.isLocked || row.is_locked)) continue;
+      delete incumbent[slotKey];
+    }
+    validation = validateDraft(incumbent, ctx);
+  }
+  // Whatever survives is reported honestly: `validation.hardViolations` lands in
+  // the stage telemetry and, via scorecardFor, in the result scorecard — so the
+  // UI can no longer toast success over an illegal board.
   stage("guard", now() - g0, incumbent, validation.hardViolations);
 
   // ── Stage 7: result ────────────────────────────────────────────────────────

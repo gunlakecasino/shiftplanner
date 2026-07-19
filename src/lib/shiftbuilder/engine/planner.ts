@@ -3,8 +3,12 @@
  *
  * Successor to runWeightedPlanner, rebuilt on the unified primitives. Walks the
  * fill order (ctx.slots is already ordered), and for each slot:
- *   - preserves locked / existing placements per the preserve policy;
- *   - leaves optional Z1/Z2 open (manual-only);
+ *   - preserves locked / existing placements per the preserve policy, after
+ *     re-validating each one through `canPlace` (P1-8) — an unlocked placement
+ *     that is no longer legal is dropped and re-staffed, a locked one is kept
+ *     but flagged `eligible: false` so the guard/scorecard can report it;
+ *   - leaves optional slots open for manual placement (the optional set is
+ *     currently empty — Z1/Z2 became regular zones on 2026-07-03);
  *   - otherwise scores every eligible, unused TM with the existing signal scorer
  *     (scoring.scoreAssignment — one scorer, N3), computes rotation health with
  *     the one health model, and picks via the shared rescue ladder so coverage
@@ -16,8 +20,9 @@
  */
 
 import { scoreAssignment, type ScoringContext } from "../scoring";
+import { ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD } from "../skills/placement-engine";
 import { rotationHealthPoints } from "./health/model";
-import { canPlace } from "./eligibility";
+import { canPlace, gateOptionsFor } from "./eligibility";
 import { rescueLadder, bestByHierarchy, type RescueCandidate } from "./rescue";
 import { prefScoreFor, skillScoreFor, hasHardAvoid } from "./objective";
 import type {
@@ -51,6 +56,22 @@ function finiteScore(result: ReturnType<typeof scoreAssignment>): number {
   return sum;
 }
 
+function adminSlotKeys(ctx: NightContext): Set<string> {
+  return new Set([
+    "ADM",
+    ...ctx.auxDefs.filter((d) => d.role === "admin").map((d) => d.key),
+  ]);
+}
+
+function adminRequired(ctx: NightContext): boolean {
+  let count = 0;
+  for (const tm of ctx.roster) {
+    if (!tm.scheduled) continue;
+    if (tm.isFullGrave) count += 1;
+  }
+  return count >= ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD;
+}
+
 export function runPlanner(ctx: NightContext, opts: PlannerOptions = {}): PlannerResult {
   const preserve: PreservePolicy = opts.preserve ?? "all-existing";
   const topK = opts.topK ?? 5;
@@ -59,6 +80,8 @@ export function runPlanner(ctx: NightContext, opts: PlannerOptions = {}): Planne
   const breakdown: Record<string, SlotRanking> = {};
   const notes: string[] = [];
   const currentDraft = new Map<string, string>();
+  const requiredAdmin = adminRequired(ctx);
+  const adminSlots = adminSlotKeys(ctx);
 
   const scoringCtxBase: Omit<ScoringContext, "currentDraft"> = {
     config: ctx.config,
@@ -77,39 +100,84 @@ export function runPlanner(ctx: NightContext, opts: PlannerOptions = {}): Planne
   const boardForHealth: Record<string, { tmId?: string; tmName?: string }> = {};
 
   // ── Pass 1: preserve locked / existing placements, seed the draft ──────────
-  for (const slot of ctx.slots) {
-    const existing = ctx.assignments[slot.key];
-    if (!existing?.tmId) continue;
-    const locked = !!(existing.isLocked || existing.is_locked);
-    const shouldPreserve = preserve === "locked-only" ? locked : true;
-    if (!shouldPreserve) continue;
+  // Every preserved placement is re-validated (P1-8): the live board can carry a
+  // placement that is no longer legal (roster change, new operator rule, new
+  // accommodation). An illegal *unlocked* placement is dropped so pass 2 can
+  // re-staff the slot; an illegal *locked* placement is kept — a lock is the
+  // operator's explicit will — but noted, and its scorecard says `eligible:
+  // false` so the guard and the scorecard both surface it instead of the run
+  // presenting as clean. Locked slots are seeded first so a duplicated TM
+  // resolves in favour of the lock rather than fill order.
+  const preservedIds = new Set<string>();
+  const preservePass = (wantLocked: boolean) => {
+    for (const slot of ctx.slots) {
+      if (draft[slot.key]) continue;
+      const existing = ctx.assignments[slot.key];
+      if (!existing?.tmId) continue;
+      const locked = !!(existing.isLocked || existing.is_locked);
+      if (locked !== wantLocked) continue;
+      const shouldPreserve = preserve === "locked-only" ? locked : true;
+      if (!shouldPreserve) continue;
 
-    const tm = ctx.rosterById.get(existing.tmId);
-    const name = existing.tmName ?? tm?.name ?? existing.tmId;
-    const placement: SlotPlacement = {
-      tmId: existing.tmId,
-      tmName: name,
-      provenance: {
-        stage: "preserved",
-        reason: locked ? "Locked — kept as-is" : "Existing placement preserved",
-        scorecard: {
-          eligible: true,
-          healthPoints: 0,
-          isCritical: false,
-          prefScore: tm ? prefScoreFor(tm, slot.key, ctx) : 0,
-          skillScore: tm ? skillScoreFor(tm, slot.key, ctx) : 0,
+      const tm = ctx.rosterById.get(existing.tmId);
+      const name = existing.tmName ?? tm?.name ?? existing.tmId;
+
+      // One TM per night: a TM already seeded elsewhere can't be preserved twice.
+      if (preservedIds.has(existing.tmId)) {
+        if (!locked) {
+          notes.push(`${slot.key} not preserved — ${name} is already placed this night`);
+          continue;
+        }
+        notes.push(`Locked slot ${slot.key}: ${name} is double-booked with another locked slot`);
+      }
+
+      const gate = tm
+        ? canPlace(tm, slot.key, gateOptionsFor(ctx, tm))
+        : { ok: false, reason: "TM not in roster" };
+
+      if (!gate.ok && !locked) {
+        notes.push(`${slot.key} not preserved — ${name} is no longer eligible (${gate.reason})`);
+        continue;
+      }
+      if (!gate.ok) {
+        notes.push(`Locked slot ${slot.key}: ${name} is not eligible (${gate.reason}) — kept, flagged`);
+      }
+
+      const placement: SlotPlacement = {
+        tmId: existing.tmId,
+        tmName: name,
+        provenance: {
+          stage: "preserved",
+          reason: locked ? "Locked — kept as-is" : "Existing placement preserved",
+          scorecard: {
+            eligible: gate.ok,
+            healthPoints: 0,
+            isCritical: false,
+            prefScore: tm ? prefScoreFor(tm, slot.key, ctx) : 0,
+            skillScore: tm ? skillScoreFor(tm, slot.key, ctx) : 0,
+          },
         },
-      },
-    };
-    draft[slot.key] = placement;
-    currentDraft.set(slot.key, existing.tmId);
-    boardForHealth[slot.key] = { tmId: existing.tmId, tmName: name };
-    breakdown[slot.key] = { topCandidates: [], pickedTmId: existing.tmId, preserved: true };
-  }
+      };
+      draft[slot.key] = placement;
+      preservedIds.add(existing.tmId);
+      currentDraft.set(slot.key, existing.tmId);
+      boardForHealth[slot.key] = { tmId: existing.tmId, tmName: name };
+      breakdown[slot.key] = { topCandidates: [], pickedTmId: existing.tmId, preserved: true };
+    }
+  };
+  preservePass(true);
+  preservePass(false);
 
   // ── Pass 2: fill the remaining slots in fill order ─────────────────────────
   for (const slot of ctx.slots) {
     if (draft[slot.key]) continue;
+    if (adminSlots.has(slot.key) && !requiredAdmin) {
+      notes.push(
+        `${slot.key} left open — Admin is not required below ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD} available full-grave graves TMs`,
+      );
+      breakdown[slot.key] = { topCandidates: [], pickedTmId: null, preserved: false };
+      continue;
+    }
     if (slot.isOptional) {
       breakdown[slot.key] = { topCandidates: [], pickedTmId: null, preserved: false };
       continue;
@@ -121,11 +189,7 @@ export function runPlanner(ctx: NightContext, opts: PlannerOptions = {}): Planne
 
     for (const tm of ctx.roster) {
       if (usedIds.has(tm.id)) continue;
-      const gate = canPlace(tm, slot.key, {
-        eligibilityRules: ctx.eligibilityRules,
-        scheduledTmIds: ctx.scheduledTmIds,
-        knowledge: ctx.knowledge,
-      });
+      const gate = canPlace(tm, slot.key, gateOptionsFor(ctx, tm));
       if (!gate.ok) continue;
 
       const scoringCtx: ScoringContext = { ...scoringCtxBase, currentDraft };

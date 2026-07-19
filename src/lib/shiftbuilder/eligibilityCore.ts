@@ -37,6 +37,67 @@ export function slotTypeForKey(slotKey: string): string {
   return "aux";
 }
 
+/**
+ * Slot-key families the liturgy knows how to gate (P1-14).
+ *
+ * Deliberately covers all three live vocabularies — the UI board keys
+ * (`Z4`, `MRR8`, `AUX3`, `OL-AM-2`), the `zone_assignments` DB family keys
+ * (`zone_4`, `trash_2`, `overlap_am_2`) and the per-TM trail codes
+ * (`RR8M`, `TSH1`, `SUP1`, `STEP`) — because `canPlace` is reached from
+ * surfaces that hold each of them.
+ *
+ * `"unknown"` is the fail-CLOSED bucket: a key nobody here recognizes is not
+ * silently eligible for the whole roster. Teaching the board a new slot
+ * vocabulary means teaching this function about it; forgetting now blocks
+ * placements loudly instead of quietly waving overlap TMs onto full-night
+ * positions.
+ */
+export type SlotFamily =
+  | "zone"
+  | "overlap-am"
+  | "overlap-pm"
+  | "mrr"
+  | "wrr"
+  | "full-night"
+  | "unknown";
+
+export function slotFamilyForKey(slotKey: string): SlotFamily {
+  const u = String(slotKey ?? "").trim().toUpperCase();
+  if (!u) return "unknown";
+
+  // Overlap bands — UI (OL-AM-2), DB (overlap_am_2), legacy label (AM-Overlap).
+  if (u.startsWith("OL-AM") || u.includes("AM-OVERLAP") || /^OVERLAP_AM(_\d+)?$/.test(u)) {
+    return "overlap-am";
+  }
+  if (u.startsWith("OL-PM") || u.includes("PM-OVERLAP") || /^OVERLAP_PM(_\d+)?$/.test(u)) {
+    return "overlap-pm";
+  }
+
+  // Restrooms — board keys (MRR8 / WRR8) and per-TM trail codes (RR8M / RR8W).
+  if (/^MRR\d+$/.test(u) || /^RR\d+M$/.test(u)) return "mrr";
+  if (/^WRR\d+$/.test(u) || /^RR\d+W$/.test(u)) return "wrr";
+
+  // Zones + the Z9 smoking room.
+  if (/^Z\d+$/.test(u) || u === "Z9SR" || u === "Z9_SR" || /^ZONE_\d+$/.test(u)) return "zone";
+
+  // Full-night, non-gendered positions (admin / trash / support / oasis /
+  // job coach / step up / flex aux shells), in all three vocabularies.
+  if (
+    u === "ADM" ||
+    u === "ADMIN" ||
+    u === "JC" ||
+    u === "JOB_COACH" ||
+    u === "STEP" ||
+    u === "STEP_UP" ||
+    /^(TR|TSH|SP|SUP|OAS|AUX)\d+$/.test(u) ||
+    /^(TRASH|SUPPORT|OASIS)_\d+$/.test(u)
+  ) {
+    return "full-night";
+  }
+
+  return "unknown";
+}
+
 export function normalizeGender(val: unknown): "M" | "F" | "" {
   const s = String(val || "").toUpperCase().trim();
   if (!s) return "";
@@ -52,6 +113,14 @@ export function normalizeGender(val: unknown): "M" | "F" | "" {
  * Does **not** accept operator eligibility rules (that was the hardcoded
  * `slotType: "zone"` footgun). Compose rules + schedule + knowledge via
  * `canPlace` in engine/eligibility.ts.
+ *
+ * Fails CLOSED in both directions (P1-14, 2026-07-18):
+ *   - an unrecognized slot key (`slotFamilyForKey` -> `"unknown"`) is eligible
+ *     for **nobody**, rather than for everyone including overlap TMs;
+ *   - a TM with missing/unparseable gender holds **neither** restroom, which is
+ *     the same population `engine/feasibility.ts` counts toward neither the
+ *     male nor the female pool. Gate and feasibility now derive that answer
+ *     from this one function, so they cannot drift apart again.
  */
 export function isEligibleForSlot(tm: any, slotKey: string): boolean {
   const isAMOverlapAssigned = !!(tm.isAMOverlap || tm.isAMOverlapTonight);
@@ -71,52 +140,40 @@ export function isEligibleForSlot(tm: any, slotKey: string): boolean {
     isFullGraveBySchedule ||
     (isGrave && !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned);
 
-  // Main Zone Deployment + Z9 Smoking Room — strict full-grave only
-  if (slotKey.startsWith("Z")) {
-    return isFullGrave;
-  }
+  const isFullNightOnly =
+    !isOverlapByPool && !isAMOverlapAssigned && !isPMOverlapAssigned;
 
-  // Overlap Tab AM — accept TMs flagged as AM by either signal
-  if (slotKey.startsWith("OL-AM") || slotKey.includes("AM-Overlap")) {
-    return isGrave && (isAMOverlapAssigned || gravePoolKind === "AM");
-  }
+  switch (slotFamilyForKey(slotKey)) {
+    // Main Zone Deployment + Z9 Smoking Room — strict full-grave only
+    case "zone":
+      return isFullGrave;
 
-  // Overlap Tab PM — accept TMs flagged as PM by either signal
-  if (slotKey.startsWith("OL-PM") || slotKey.includes("PM-Overlap")) {
-    return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
-  }
+    // Overlap Tab AM — accept TMs flagged as AM by either signal
+    case "overlap-am":
+      return isGrave && (isAMOverlapAssigned || gravePoolKind === "AM");
 
-  // Men's Restrooms — full-night grave shift, male TMs only
-  if (slotKey.startsWith("MRR")) {
-    if (!isGrave) return false;
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const g = normalizeGender(tm.gender);
-    if (g === "F") return false;
-    return true;
-  }
+    // Overlap Tab PM — accept TMs flagged as PM by either signal
+    case "overlap-pm":
+      return isGrave && (isPMOverlapAssigned || gravePoolKind === "PM");
 
-  // Women's Restrooms — full-night grave shift, female TMs only
-  if (slotKey.startsWith("WRR")) {
-    if (!isGrave) return false;
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    const g = normalizeGender(tm.gender);
-    if (g === "M") return false;
-    return true;
-  }
+    // Men's Restrooms — full-night grave shift, male TMs only. Unknown gender
+    // is NOT male (fail closed) — see the docstring.
+    case "mrr":
+      return isGrave && isFullNightOnly && normalizeGender(tm.gender) === "M";
 
-  // Admin, Trash, Support, AUX — full-night positions, no gender restriction.
-  // AM/PM overlap TMs work partial shifts (10pm–3am or 3am–7am) and cannot
-  // hold a full-night restroom or admin slot. Only full-grave TMs (or non-grave
-  // active TMs on the roster) are eligible here.
-  if (
-    slotKey === "ADM" ||
-    slotKey.startsWith("TR") ||
-    slotKey.startsWith("AUX") ||
-    slotKey.startsWith("SP")
-  ) {
-    if (isOverlapByPool || isAMOverlapAssigned || isPMOverlapAssigned) return false;
-    return true;
-  }
+    // Women's Restrooms — full-night grave shift, female TMs only.
+    case "wrr":
+      return isGrave && isFullNightOnly && normalizeGender(tm.gender) === "F";
 
-  return true;
+    // Admin, Trash, Support, Oasis, Job Coach, Step Up, AUX — full-night
+    // positions, no gender restriction. AM/PM overlap TMs work partial shifts
+    // (10pm–3am or 3am–7am) and cannot hold one. Only full-grave TMs (or
+    // non-grave active TMs on the roster) are eligible here.
+    case "full-night":
+      return isFullNightOnly;
+
+    // Unrecognized slot key — nobody is eligible (fail closed).
+    default:
+      return false;
+  }
 }

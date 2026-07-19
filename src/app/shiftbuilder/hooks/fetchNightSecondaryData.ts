@@ -28,6 +28,9 @@ function mapNightSlotTaskRow(row: Record<string, unknown>): NightSlotTask {
     markerType: (row.markerType ?? row.marker_type ?? null) as NightSlotTask["markerType"],
     textStyle: normalizeTaskTextStyle(row.textStyle ?? row.text_style ?? null),
     isCoverage: Boolean(row.isCoverage ?? row.is_coverage ?? false),
+    coverageSide: (row.coverageSide ?? row.coverage_side ?? null) as NightSlotTask["coverageSide"],
+    sourceWorkItemId: (row.sourceWorkItemId ?? row.source_work_item_id ?? null) as string | null,
+    isOneOff: Boolean(row.isOneOff ?? row.is_one_off ?? false),
   };
 }
 

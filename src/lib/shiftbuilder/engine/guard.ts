@@ -20,7 +20,7 @@
  */
 
 import type { Draft, NightContext } from "./types";
-import { canPlace } from "./eligibility";
+import { canPlace, gateOptionsFor } from "./eligibility";
 import { assignViolatesFillOrder } from "../xaiFillOrderContract";
 
 export interface DraftValidation {
@@ -64,11 +64,7 @@ export function validateDraft(
     }
     const tm = ctx.rosterById.get(placement.tmId);
     const verdict = tm
-      ? canPlace(tm, slotKey, {
-          eligibilityRules: ctx.eligibilityRules,
-          scheduledTmIds: ctx.scheduledTmIds,
-          knowledge: ctx.knowledge,
-        })
+      ? canPlace(tm, slotKey, gateOptionsFor(ctx, tm))
       : { ok: false, reason: "TM not in roster" };
     perSlot[slotKey] = verdict;
     if (!verdict.ok) {

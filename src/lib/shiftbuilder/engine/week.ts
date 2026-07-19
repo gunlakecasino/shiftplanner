@@ -26,8 +26,9 @@ import { buildNightContext, type BuildNightContextInput } from "./context";
 import { runNightEngine } from "./index";
 import { projectDraftHealth } from "./health/projections";
 import { weekPolicyScore } from "./health/weekPolicy";
-import { prefScoreFor, skillScoreFor } from "./objective";
-import { canPlace } from "./eligibility";
+import { hasHardAvoid, prefScoreFor, skillScoreFor } from "./objective";
+import { canPlace, gateOptionsFor } from "./eligibility";
+import { validateDraft } from "./guard";
 import { resolvedWeights } from "../engineConfig";
 import { buildWeekRepeatData } from "@/lib/shiftbuilder/rotation/shiftRotationHealth";
 import { placementRepeatKey } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
@@ -113,9 +114,16 @@ function computeWeekScorecard(
   let prefTotal = 0;
   let skillTotal = 0;
   const nightlyHealths: number[] = [];
+  // P1-8: a week can only be as clean as its nights. Hardcoding `[]` here let a
+  // week result present as guard-clean while a constituent night carried hard
+  // violations, so `compareWeek`/`compareScorecards` could never demote it.
+  const hardViolations: string[] = [];
 
   for (const [nightIso, draft] of Object.entries(nights)) {
     const ctx = ctxByNight.get(nightIso)!;
+    for (const v of validateDraft(draft, ctx).hardViolations) {
+      hardViolations.push(`${nightIso} — ${v}`);
+    }
     for (const [slotKey, p] of Object.entries(draft)) {
       const slot = ctx.slotByKey.get(slotKey);
       if (!slot) continue;
@@ -151,7 +159,7 @@ function computeWeekScorecard(
     skillTotal,
     maxWeeklyRepeat: policy.maxWeeklyRepeat,
     repeatViolations: policy.repeatViolations,
-    hardViolations: [],
+    hardViolations,
   };
 }
 
@@ -255,7 +263,23 @@ function mulberry32(seed: number) {
   };
 }
 
-/** Swap the TMs on two slots within one night, if both remain eligible. */
+/**
+ * Swap the TMs on two slots within one night, if both remain eligible.
+ *
+ * This is a **pure improvement move** — it never fills an empty slot, so it can
+ * never buy coverage and is therefore capped at rung 1 of the relaxation ladder
+ * (`MAX_RELAX_FOR_IMPROVEMENT`, see engine/rescue.ts, D1):
+ *   - a hard-avoid destination is rejected outright, in BOTH directions. Only
+ *     coverage rescue of an otherwise-empty required slot may reach rung 2;
+ *   - a prior-3 same-area repeat on the destination IS permitted (rung 1) — it
+ *     is priced by `healthTotal` in the week scorecard and `compareWeek` only
+ *     accepts net improvements, so it needs no separate gate.
+ *
+ * The gate goes through `gateOptionsFor`, so Supervisor-Brain knowledge and
+ * `tm_accommodations` apply here exactly as on the night path (P0-1/P0-2 —
+ * polish previously swapped on bare liturgy + operator rules, so a hard
+ * `no_sweeper` dossier was enforced by Run Engine but ignored by Run Week).
+ */
 function trySwapWithinNight(
   draft: Draft,
   ctx: NightContext,
@@ -273,8 +297,9 @@ function trySwapWithinNight(
   const tmA = ctx.rosterById.get(a.tmId);
   const tmB = ctx.rosterById.get(b.tmId);
   if (!tmA || !tmB) return false;
-  if (!canPlace(tmA, slotB, gateOpts(ctx)).ok) return false;
-  if (!canPlace(tmB, slotA, gateOpts(ctx)).ok) return false;
+  if (!canPlace(tmA, slotB, gateOptionsFor(ctx, tmA)).ok) return false;
+  if (!canPlace(tmB, slotA, gateOptionsFor(ctx, tmB)).ok) return false;
+  if (hasHardAvoid(tmA, slotB, ctx) || hasHardAvoid(tmB, slotA, ctx)) return false;
   draft[slotA] = { ...b };
   draft[slotB] = { ...a };
   return true;
@@ -285,17 +310,53 @@ function isLocked(ctx: NightContext, slotKey: string): boolean {
   return !!(row && (row.isLocked || row.is_locked));
 }
 
-function gateOpts(ctx: NightContext) {
-  return { eligibilityRules: ctx.eligibilityRules, scheduledTmIds: ctx.scheduledTmIds };
+
+/**
+ * Rebuild every night context AFTER `changedIso` from the current drafts (P1-18).
+ *
+ * The rolling solve bakes each night's predecessors into `weeklyRecentHistory`.
+ * When polish moves a TM on night N, the contexts for N+1..Thu still carry the
+ * PRE-swap week history, so their rotation health is computed against a board
+ * that no longer exists and the polish accepts/rejects moves on stale numbers.
+ * Rebuilding here means a swap is always judged against the board it created.
+ * Contexts at or before `changedIso` are untouched — their history cannot
+ * depend on a later night.
+ *
+ * Returns the nightIsos whose contexts were replaced, so their cached health
+ * can be dropped.
+ */
+function rebuildContextsAfter(
+  nightInputs: BuildNightContextInput[],
+  nights: Record<string, Draft>,
+  ctxByNight: Map<string, NightContext>,
+  changedIso: string,
+): string[] {
+  const rebuilt: string[] = [];
+  const solved: Array<{ nightIso: string; draft: Draft }> = [];
+  for (const nightInput of nightInputs) {
+    if (nightInput.nightIso > changedIso) {
+      const augmentedWeek = rollingHistory(nightInput.weeklyRecentHistory, solved);
+      ctxByNight.set(
+        nightInput.nightIso,
+        buildNightContext({ ...nightInput, weeklyRecentHistory: augmentedWeek }),
+      );
+      rebuilt.push(nightInput.nightIso);
+    }
+    const draft = nights[nightInput.nightIso];
+    if (draft) solved.push({ nightIso: nightInput.nightIso, draft });
+  }
+  return rebuilt;
 }
 
 /**
  * Bounded, deterministic cross-night polish. Within-night swaps evaluated
- * against the WEEK scorecard so repeats spanning nights get untangled. Only the
- * mutated night is re-scored per move; the week policy is recomputed exactly
- * from the full week.
+ * against the WEEK scorecard so repeats spanning nights get untangled. The
+ * mutated night AND every night after it are re-scored per move — later nights
+ * inherit the mutated night through the rolling week history (P1-18); the week
+ * policy is recomputed exactly from the full week.
  */
 function polishWeek(
+  nightInputs: BuildNightContextInput[],
   nights: Record<string, Draft>,
   ctxByNight: Map<string, NightContext>,
   seed: number,
@@ -323,18 +384,31 @@ function polishWeek(
     const beforeB = draft[slotB];
     if (!trySwapWithinNight(draft, ctx, slotA, slotB)) continue;
 
-    healthCache.byNight.delete(nightIso); // this night changed
+    invalidate(nightIso);
     const next = computeWeekScorecard(nights, ctxByNight, healthCache);
     if (compareWeek(next, current) > 0) {
       current = next;
     } else {
-      // Revert.
+      // Revert — and restore the downstream contexts to match the reverted board.
       draft[slotA] = beforeA;
       draft[slotB] = beforeB;
-      healthCache.byNight.delete(nightIso);
+      invalidate(nightIso);
     }
   }
 
+  /** Drop the mutated night's cached health and rebuild every night after it. */
+  function invalidate(nightIso: string): void {
+    healthCache.byNight.delete(nightIso);
+    for (const iso of rebuildContextsAfter(nightInputs, nights, ctxByNight, nightIso)) {
+      healthCache.byNight.delete(iso);
+    }
+  }
+
+  // Polish is a pure-improvement pass: capped at MAX_RELAX_FOR_IMPROVEMENT
+  // (engine/rescue.ts, D1), hard-avoid destinations are rejected outright in
+  // trySwapWithinNight, and prior-3 repeats are priced by the week scorecard
+  // rather than gated. So polish can introduce no new rung and this list is
+  // genuinely empty — it is not a missing implementation.
   return { relaxations: [] };
 }
 
@@ -461,20 +535,20 @@ export function runWeekEngine(
     stages.push({
       stage: "rolling-solve",
       ms: now() - r0,
-      scorecard: { coverage: sc.coverage, healthTotal: sc.weekHealth, prefTotal: sc.prefTotal, skillTotal: sc.skillTotal, hardViolations: [] },
+      scorecard: { coverage: sc.coverage, healthTotal: sc.weekHealth, prefTotal: sc.prefTotal, skillTotal: sc.skillTotal, hardViolations: sc.hardViolations },
       notes: [`week repeats: ${sc.repeatViolations}, max ${sc.maxWeeklyRepeat}`],
     });
   }
 
   // ── Stage: cross-night polish ──────────────────────────────────────────────
   const p0 = now();
-  polishWeek(nights, ctxByNight, seed, polishMoveBudget);
+  polishWeek(input.nights, nights, ctxByNight, seed, polishMoveBudget);
   const polishCache: NightHealthCache = { byNight: new Map() };
   const weekScorecard = computeWeekScorecard(nights, ctxByNight, polishCache);
   stages.push({
     stage: "cross-night-polish",
     ms: now() - p0,
-    scorecard: { coverage: weekScorecard.coverage, healthTotal: weekScorecard.weekHealth, prefTotal: weekScorecard.prefTotal, skillTotal: weekScorecard.skillTotal, hardViolations: [] },
+    scorecard: { coverage: weekScorecard.coverage, healthTotal: weekScorecard.weekHealth, prefTotal: weekScorecard.prefTotal, skillTotal: weekScorecard.skillTotal, hardViolations: weekScorecard.hardViolations },
     notes: [`week repeats: ${weekScorecard.repeatViolations}, max ${weekScorecard.maxWeeklyRepeat}`],
   });
 

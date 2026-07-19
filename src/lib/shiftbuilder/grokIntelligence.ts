@@ -17,7 +17,8 @@ import {
   getEligibilityRulesText,
   type AuxDef,
 } from "./placement";
-import { canPlace, slotTypeForKey } from "./engine/eligibility";
+import { canPlace, slotTypeForKey, type CanPlaceOptions } from "./engine/eligibility";
+import type { TMAccommodationRow } from "./data";
 import {
   getXaiFillOrderHardRules,
   getXaiSwapHardRules,
@@ -481,8 +482,20 @@ function normalizeRawAction(raw: any, roster: TeamMember[]): GrokAction | null {
 export function guardGrokActions(
   rawActions: any[],
   roster: TeamMember[], // or the enriched version used in the client
-  currentAssignments: Record<string, any>
+  currentAssignments: Record<string, any>,
+  /**
+   * Hard-gate inputs (P0-2). Optional only for backward compatibility: when a
+   * caller omits it, Grok's actions are checked against the bare core liturgy
+   * and NOT against operator eligibility rules, the schedule gate, Supervisor
+   * dossiers or `tm_accommodations` — i.e. the guard is weaker than the engine
+   * it is guarding. `accommodationsByTm` is keyed per TM because this guard
+   * loops over actions for many TMs; the rest of the bag is night-wide.
+   */
+  gate: Omit<CanPlaceOptions, "slotType" | "accommodations"> & {
+    accommodationsByTm?: Map<string, TMAccommodationRow[]>;
+  } = {}
 ): { validActions: GrokAction[]; warnings: string[] } {
+  const { accommodationsByTm, ...nightGate } = gate;
   const validActions: GrokAction[] = [];
   const warnings: string[] = [];
 
@@ -505,9 +518,14 @@ export function guardGrokActions(
         continue;
       }
 
-      if (!canPlace(tm, action.slotKey, { slotType: slotTypeForKey(action.slotKey) }).ok) {
+      const verdict = canPlace(tm, action.slotKey, {
+        ...nightGate,
+        accommodations: accommodationsByTm?.get(action.tmId),
+        slotType: slotTypeForKey(action.slotKey),
+      });
+      if (!verdict.ok) {
         warnings.push(
-          `Grok suggestion rejected by guard: ${tm.name || action.tmId} is not eligible for ${action.slotKey} per placement rules.`
+          `Grok suggestion rejected by guard: ${tm.name || action.tmId} is not eligible for ${action.slotKey} — ${verdict.reason}.`
         );
         continue;
       }

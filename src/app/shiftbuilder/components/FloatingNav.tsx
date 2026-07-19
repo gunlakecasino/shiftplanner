@@ -1111,6 +1111,20 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
+                {onViewChange && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onViewChange(currentView === "weekly" ? "deployment" : "weekly");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <CalendarRange size={14} />
+                    {currentView === "weekly" ? "Exit Weekly View" : "Weekly View"}
+                  </button>
+                )}
+
                 {(onOpenCoverGuide || onPrint || onCanvasModeChange) && (
                   <div className={menuDividerClass} />
                 )}

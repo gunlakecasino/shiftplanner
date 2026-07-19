@@ -27,33 +27,54 @@ export interface CoverageTier {
  * The authoritative tiered model of the fill order.
  * This is the data structure Grok should primarily reason about.
  */
-// Operator-ratified fill order (2026-07-03):
-//   1. Men's restrooms   1 → 7 → 8 → 10 → 6
-//   2. Women's restrooms 1 → 7 → 8 → 10 → 6
-//   3. Zones             9 → 3 → 4 → 5 → 7 → 8 → 10 → 2 → 1 → 6
-//   4. Auxiliary         Admin → Z9 SR
-// Z1/Z2 are now regular zones near the end of the zone order (not manual-only).
-// Admin fills AFTER all 10 zones — on a short roster a zone fills before Admin.
+// Operator-ratified fill order (2026-07-18):
+//   1. All restroom obligations
+//   2. Critical zones      4 → 5 → 9
+//   3. Admin               required at 14+ available full-grave graves TMs
+//   4. Remaining zones     2 → 3 → 1 → 7 → 8 → 10 → 6 → Z9 Smoking Room
+//   5. Auxiliary default   Trash 1 → Trash 2 → Support
+// RR1+2 is a single placement per side; restroom consolidation/SOS is handled by
+// the coverage-plan layer, while this static order names the normal board slots.
+export const ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD = 14;
+
+const RESTROOM_SLOTS = ["MRR1","MRR6","MRR7","MRR8","MRR10","WRR1","WRR6","WRR7","WRR8","WRR10"] as const;
+const CRITICAL_ZONE_SLOTS = ["Z4", "Z5", "Z9"] as const;
+const REMAINING_ZONE_SLOTS = ["Z2", "Z3", "Z1", "Z7", "Z8", "Z10", "Z6"] as const;
+
 export const COVERAGE_TIERS: readonly CoverageTier[] = [
   {
     name: "Critical - Restrooms",
-    slots: ["MRR1","MRR7","MRR8","MRR10","MRR6","WRR1","WRR7","WRR8","WRR10","WRR6"],
+    slots: RESTROOM_SLOTS,
     minUniqueTMs: 10, // 5 male + 5 female, non-reusable; men's filled before women's
-    description: "All 10 restrooms. Men's (1,7,8,10,6) then women's (1,7,8,10,6). Strict gender matching. Highest priority.",
+    description: "All restroom service positions. Strict gender matching, with RR1+2 treated as one placement per side.",
     isHardCoverage: true,
   },
   {
-    name: "Core - Zones",
-    slots: ["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"],
-    minUniqueTMs: 10, // 10 full-grave Zones (non-reusable with restrooms)
-    description: "All 10 main zones in fill order 9,3,4,5,7,8,10,2,1,6. Dedicated full-grave TMs.",
+    name: "Critical - Zones 4/5/9",
+    slots: CRITICAL_ZONE_SLOTS,
+    minUniqueTMs: 3,
+    description: "Critical floor zones 4, 5, and 9 after restrooms.",
     isHardCoverage: true,
   },
   {
-    name: "Auxiliary - Admin + Smoking Room",
-    slots: ["ADM", "Z9SR"],
-    minUniqueTMs: 2, // Admin first, then Z9 Smoking Room
-    description: "Admin then Z9 Smoking Room — filled after all zones.",
+    name: "Conditional - Admin",
+    slots: ["ADM"],
+    minUniqueTMs: 1,
+    description: "Admin is required when at least 14 available full-grave grave-shift TMs are present and requires Admin-trained status.",
+    isHardCoverage: true,
+  },
+  {
+    name: "Remaining - Zones",
+    slots: REMAINING_ZONE_SLOTS,
+    minUniqueTMs: 7,
+    description: "Remaining zones in fill order 2,3,1,7,8,10,6.",
+    isHardCoverage: false,
+  },
+  {
+    name: "Remaining - Z9 Smoking Room",
+    slots: ["Z9SR"],
+    minUniqueTMs: 1,
+    description: "Zone 9 Smoking Room after Zone 6.",
     isHardCoverage: false,
   },
   {
@@ -72,7 +93,7 @@ export const COVERAGE_TIERS: readonly CoverageTier[] = [
   },
 ] as const;
 
-const CORE_ZONE_SLOTS = ["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"] as const;
+const CORE_ZONE_SLOTS = [...CRITICAL_ZONE_SLOTS, ...REMAINING_ZONE_SLOTS] as const;
 
 /**
  * Build coverage tiers from flex aux layout (roles on AUXn keys).
@@ -93,21 +114,37 @@ export function buildCoverageTiers(auxDefs: AuxDef[] = []): CoverageTier[] {
     )
     .map((d) => d.key);
 
-  // Zones first (all 10), then Auxiliary = Admin → Z9 SR (operator order 2026-07-03).
+  const orderedAdminSlots = adminSlots.length > 0 ? adminSlots : ["ADM"];
+  const orderedZ9srSlots = z9srSlots.length > 0 ? z9srSlots : ["Z9SR"];
+
   return [
     COVERAGE_TIERS[0],
     {
-      name: "Core - Zones",
-      slots: [...CORE_ZONE_SLOTS],
-      minUniqueTMs: 10,
-      description: "All 10 main zones in fill order 9,3,4,5,7,8,10,2,1,6. Full-grave TMs.",
+      name: "Critical - Zones 4/5/9",
+      slots: [...CRITICAL_ZONE_SLOTS],
+      minUniqueTMs: 3,
+      description: "Critical floor zones 4, 5, and 9 after restrooms.",
       isHardCoverage: true,
     },
     {
-      name: "Auxiliary - Admin + Smoking Room",
-      slots: [...adminSlots, ...z9srSlots],
-      minUniqueTMs: adminSlots.length + z9srSlots.length,
-      description: "Admin then Z9 Smoking Room — filled after all zones.",
+      name: "Conditional - Admin",
+      slots: orderedAdminSlots,
+      minUniqueTMs: orderedAdminSlots.length,
+      description: "Admin is required at 14+ available full-grave graves TMs.",
+      isHardCoverage: true,
+    },
+    {
+      name: "Remaining - Zones",
+      slots: [...REMAINING_ZONE_SLOTS],
+      minUniqueTMs: 7,
+      description: "Remaining zones in fill order 2,3,1,7,8,10,6.",
+      isHardCoverage: false,
+    },
+    {
+      name: "Remaining - Z9 Smoking Room",
+      slots: orderedZ9srSlots,
+      minUniqueTMs: orderedZ9srSlots.length,
+      description: "Zone 9 Smoking Room after Zone 6.",
       isHardCoverage: false,
     },
     {
@@ -161,12 +198,13 @@ export function getPlacementOrderDescription(): string {
   return `DEFAULT FILL ORDER — expressed as explicit Coverage Tiers (authoritative model):
 
 Tier 1: Critical - Restrooms (10 unique TMs required — 5 male + 5 female)
-Tier 2: Core - Admin + All Zones (11 additional unique full-grave TMs)
-Tier 3: High Value - Z9SR
-Tier 4: Essential Support - Trash 1 & 2
-Tier 5: Float / Overflow - Support 1 & 2
+Tier 2: Critical - Zones 4, 5, and 9 (3 additional full-grave TMs)
+Tier 3: Conditional - Admin (required at 14+ available full-grave graves TMs, Admin-trained only)
+Tier 4: Remaining Zones - Z2, Z3, Z1, Z7, Z8, Z10, Z6
+Tier 5: Z9 Smoking Room
+Tier 6: Trash 1, Trash 2, then Support / Overflow
 
-Total to clear Tier 1 + Tier 2: **minimum 21 unique TMs**.
+Total to clear restrooms + Z4/Z5/Z9 + Admin: **minimum 14 unique TMs**.
 
 This tier model is the primary structure Grok and the engine must reason with.`;
 }
@@ -198,7 +236,7 @@ export interface CoverageFeasibility {
   tiersFullyCleared: string[];
   tiersPartiallyCleared: string[];
   impossibleTiers: string[];
-  minimumTMsRequiredForFullTopCoverage: number; // 21
+  minimumTMsRequiredForFullTopCoverage: number; // 14
   shortfall: number;
   explanation: string;
   /** Present when a gender split is supplied. Tier 1 needs ≥5 of each. */
@@ -228,11 +266,13 @@ export function calculateCoverageFeasibility(
   genderSplit?: GenderSplit,
 ): CoverageFeasibility {
   const minForTier1 = COVERAGE_TIERS[0].minUniqueTMs;                    // 10
-  const minForTier2 = minForTier1 + COVERAGE_TIERS[1].minUniqueTMs;     // 21
+  const minForTier2 = minForTier1 + COVERAGE_TIERS[1].minUniqueTMs;     // 13
+  const minForAdmin = ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD;              // 14
 
   const maleShortfall = genderSplit ? Math.max(0, RR_PER_GENDER - genderSplit.male) : 0;
   const femaleShortfall = genderSplit ? Math.max(0, RR_PER_GENDER - genderSplit.female) : 0;
   const genderBlocksTier1 = maleShortfall > 0 || femaleShortfall > 0;
+  const adminRequired = availableUniqueTMs >= ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD;
 
   const tiersFullyCleared: string[] = [];
   const tiersPartiallyCleared: string[] = [];
@@ -242,10 +282,17 @@ export function calculateCoverageFeasibility(
 
   const tier1Clear = availableUniqueTMs >= minForTier1 && !genderBlocksTier1;
   const tier2Clear = availableUniqueTMs >= minForTier2 && !genderBlocksTier1;
+  const adminClear = availableUniqueTMs >= minForAdmin && !genderBlocksTier1;
 
   if (tier2Clear) {
     tiersFullyCleared.push(COVERAGE_TIERS[0].name, COVERAGE_TIERS[1].name);
     maxTierName = COVERAGE_TIERS[1].name;
+    if (adminClear) {
+      tiersFullyCleared.push(COVERAGE_TIERS[2].name);
+      maxTierName = COVERAGE_TIERS[2].name;
+    } else if (adminRequired) {
+      tiersPartiallyCleared.push(COVERAGE_TIERS[2].name);
+    }
   } else if (tier1Clear) {
     tiersFullyCleared.push(COVERAGE_TIERS[0].name);
     tiersPartiallyCleared.push(COVERAGE_TIERS[1].name);
@@ -257,8 +304,12 @@ export function calculateCoverageFeasibility(
   if (!tier2Clear) {
     impossibleTiers.push(COVERAGE_TIERS[1].name);
   }
+  if (adminRequired && !adminClear) {
+    impossibleTiers.push(COVERAGE_TIERS[2].name);
+  }
 
-  const shortfall = Math.max(0, minForTier2 - availableUniqueTMs);
+  const topTarget = adminRequired ? minForAdmin : minForTier2;
+  const shortfall = Math.max(0, topTarget - availableUniqueTMs);
 
   let explanation = `With ${availableUniqueTMs} unique TMs available`;
   if (genderSplit) explanation += ` (${genderSplit.male}M + ${genderSplit.female}F full-grave)`;
@@ -269,10 +320,12 @@ export function calculateCoverageFeasibility(
     if (maleShortfall > 0) parts.push(`${maleShortfall} more male TM(s) for MRRs`);
     explanation += `→ Tier 1 (Restrooms) cannot be cleared: ${parts.join("; ")}.`;
   } else if (shortfall > 0) {
-    explanation += `→ Short ${shortfall} TMs to clear Tier 1 + Tier 2 (Restrooms + Zones + Admin).\n`;
+    explanation += `→ Short ${shortfall} TMs to clear the critical board (Restrooms + Z4/Z5/Z9${adminRequired ? " + Admin" : ""}).\n`;
     explanation += `→ ${COVERAGE_TIERS[1].name} cannot be fully cleared.`;
   } else {
-    explanation += `→ Full Tier 1 + Tier 2 coverage is mathematically possible.`;
+    explanation += adminRequired
+      ? `→ Critical board plus Admin is mathematically possible.`
+      : `→ Critical board is mathematically possible; Admin is not required below ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD}.`;
   }
 
   return {
@@ -281,7 +334,7 @@ export function calculateCoverageFeasibility(
     tiersFullyCleared,
     tiersPartiallyCleared,
     impossibleTiers,
-    minimumTMsRequiredForFullTopCoverage: minForTier2,
+    minimumTMsRequiredForFullTopCoverage: topTarget,
     shortfall: genderBlocksTier1 ? Math.max(shortfall, maleShortfall + femaleShortfall) : shortfall,
     explanation,
     maleShortfall: genderSplit ? maleShortfall : undefined,
@@ -297,14 +350,17 @@ export const UNIQUE_TM_REQUIREMENTS = {
   // Tier 1: All 10 Restrooms (5 MRR + 5 WRR) require distinct people with correct gender
   restrooms: 10,
 
-  // Tier 2: Admin is 1 additional unique TM
+  // Tier 2: Zones 4, 5, and 9 require 3 additional full-grave TMs
+  criticalZones: 3,
+
+  // Tier 3: Admin is 1 additional unique TM when the 14-person threshold is met
   admin: 1,
 
-  // Tier 3: All 10 main Zones require 10 more unique TMs (full-grave)
-  zones: 10,
+  // Remaining main Zones require 7 more unique TMs (full-grave)
+  remainingZones: 7,
 
-  // Total to clear the absolute top of the order (Restrooms + Admin + Zones 1-10)
-  topPriorityClear: 21,   // 10 RR + 1 ADM + 10 Zones
+  // Total to clear the ratified critical board with conditional Admin
+  topPriorityClear: 14,   // 10 RR + Z4/Z5/Z9 + ADM
 };
 
 /**
@@ -329,8 +385,12 @@ export function calculateMinimumUniqueTMsForOrderPrefix(upToSlotKey: string): nu
   // Count admin
   const hasAdmin = order.slice(0, idx + 1).includes('ADM');
 
-  // Count zones
-  const zonesInPrefix = order.slice(0, idx + 1).filter(s => /^Z\d+$/.test(s)).length;
+  const criticalZonesInPrefix = order.slice(0, idx + 1).filter(s =>
+    (CRITICAL_ZONE_SLOTS as readonly string[]).includes(s),
+  ).length;
+  const remainingZonesInPrefix = order.slice(0, idx + 1).filter(s =>
+    (REMAINING_ZONE_SLOTS as readonly string[]).includes(s),
+  ).length;
 
   let minimum = 0;
 
@@ -339,12 +399,16 @@ export function calculateMinimumUniqueTMsForOrderPrefix(upToSlotKey: string): nu
     minimum += 10; // You basically need all 10 to "clear" the restroom block in the order
   }
 
+  if (criticalZonesInPrefix > 0) {
+    minimum += 3;
+  }
+
   if (hasAdmin) {
     minimum += 1;
   }
 
-  if (zonesInPrefix > 0) {
-    minimum += 10; // All 10 zones need distinct full-grave TMs
+  if (remainingZonesInPrefix > 0) {
+    minimum += 7;
   }
 
   return minimum;
@@ -355,14 +419,15 @@ export function calculateMinimumUniqueTMsForOrderPrefix(upToSlotKey: string): nu
  * Perfect for injecting into Grok prompts and the AI Lab.
  */
 export function getUniqueTMConstraintText(upToSlotKey?: string): string {
-  const { restrooms, admin, zones, topPriorityClear } = UNIQUE_TM_REQUIREMENTS;
+  const { restrooms, admin, criticalZones, remainingZones, topPriorityClear } = UNIQUE_TM_REQUIREMENTS;
 
   let text = `HARD UNIQUE-TM CONSTRAINT (non-negotiable):
 
-- All 10 Restroom slots (5 MRR + 5 WRR) require **10 distinct TMs** with correct gender.
-- Admin requires **1 additional unique TM**.
-- All 10 main Zone slots require **10 more distinct full-grave TMs**.
-- Therefore, clearing Restrooms + Admin + Zones 1-10 requires a **minimum of 21 unique TMs**.
+- All ${restrooms} Restroom slots (5 MRR + 5 WRR) require **${restrooms} distinct TMs** with correct gender.
+- Zones 4, 5, and 9 require **${criticalZones} more distinct full-grave TMs**.
+- Admin requires **${admin} additional Admin-trained TM** when at least ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD} available full-grave graves TMs are present.
+- The remaining main Zone slots require **${remainingZones} more distinct full-grave TMs**.
+- Therefore, clearing Restrooms + Z4/Z5/Z9 + Admin requires a **minimum of ${topPriorityClear} unique TMs**.
 
 You cannot reuse the same people across these blocks.`;
 

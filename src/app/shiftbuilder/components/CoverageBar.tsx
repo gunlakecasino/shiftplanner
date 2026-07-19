@@ -32,6 +32,7 @@ const CoverageBar = React.memo(function CoverageBar({
   const [hovered, setHovered] = React.useState(false);
   const accent = task.color || "#6B7280";
   const goldBanner = isGoldAccent(accent);
+  const isSynthetic = task.id.startsWith("coverage:");
 
   return (
     <div
@@ -68,7 +69,7 @@ const CoverageBar = React.memo(function CoverageBar({
       >
         {builderCalm ? task.taskLabel.replace(/^AND\s+/i, '+ ') : task.taskLabel}
       </span>
-      {onRemoveTask && (
+      {onRemoveTask && !isSynthetic && (
         <button
           onClick={(e) => {
             e.stopPropagation();

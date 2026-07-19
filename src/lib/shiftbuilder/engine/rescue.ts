@@ -12,8 +12,13 @@
  *  - Every rung below "clean" is recorded in provenance (`relaxations`) and
  *    surfaced in the UI — a relaxed placement is a flagged conversation, never
  *    a silent one.
- *  - Hard-avoid is only ever relaxed for a **required** (non-optional) slot; an
- *    optional Z1/Z2 is left open instead.
+ *  - Hard-avoid is only ever relaxed for a **required** (non-optional) slot AND
+ *    only when rungs 0 and 1 produced no candidate at all — i.e. only when the
+ *    rung-2 pick is the difference between a filled required slot and an empty
+ *    one (D1.2). An optional Z1/Z2 is left open instead.
+ *  - Pure *improvement* moves (optimizer replace/swap, week polish) trade within
+ *    a tier and never buy coverage, so they are capped at
+ *    `MAX_RELAX_FOR_IMPROVEMENT` (rung 1) and may never reach rung 2.
  *  - The planner and the optimizer both call `rescueLadder` + `bestByHierarchy`,
  *    so on a starved roster they descend the ladder identically and pick the
  *    same TM (invariant I5).
@@ -24,6 +29,27 @@
  */
 
 import type { Relaxation, SlotModel } from "./types";
+
+/** Relaxation rungs. Higher = more broken. See D1 doctrine. */
+export const RELAX_NONE = 0; // clean
+export const RELAX_ROTATION = 1; // may break the prior-3 same-area rotation gate
+export const RELAX_HARD_AVOID = 2; // may additionally break a hard-avoid preference
+export type RelaxLevel = 0 | 1 | 2;
+
+/** The ladder in order — iterate this rather than hand-rolling `0..2` loops. */
+export const RELAX_RUNGS: readonly RelaxLevel[] = [
+  RELAX_NONE,
+  RELAX_ROTATION,
+  RELAX_HARD_AVOID,
+];
+
+/**
+ * The highest rung a *pure improvement* move may use. Improvement moves trade
+ * within a tier; they never buy coverage, so they may never reach
+ * RELAX_HARD_AVOID. Only coverage rescue (an otherwise-empty required slot)
+ * may descend to RELAX_HARD_AVOID.
+ */
+export const MAX_RELAX_FOR_IMPROVEMENT: RelaxLevel = RELAX_ROTATION;
 
 export interface RescueCandidate {
   tmId: string;

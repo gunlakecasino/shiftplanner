@@ -307,7 +307,10 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               targetSlotKey={def.key}
               onClick={(e) => e.stopPropagation()}
               onSwapSides={
-                showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
+                showDigitalAssists &&
+                coveredBy.length === 2 &&
+                coveredBy.every((entry) => !entry.isSynthetic) &&
+                onSwapCoverageSides
                   ? () => onSwapCoverageSides(def.key, coveredBy)
                   : undefined
               }

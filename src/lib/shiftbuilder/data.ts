@@ -162,6 +162,8 @@ export interface TeamMember {
   gravePool?: string | null;   // e.g. "A", "B", "Main", etc. — indicates GRAVE shift availability
   /** Biological gender used to assign MRR (Men's) vs WRR (Women's) restroom slots. */
   gender?: 'M' | 'F' | null;
+  /** Explicit Admin certification; only "trained" is eligible for Admin. */
+  adminTrainingStatus?: string | null;
 }
 
 export interface ZoneAssignmentRow {
@@ -175,6 +177,8 @@ export interface ZoneAssignmentRow {
   updatedAt?: string;
   /** Break group (1/2/3) assigned to this SLOT in zone_assignments. 0 = not on breaks. */
   breakGroup?: number | null;
+  /** Canonical UI slot keys serviced in addition to this assignment's primary slot. */
+  additionalCoverageSlots?: string[];
 }
 
 export interface NightInfo {
@@ -197,7 +201,7 @@ export interface NightInfo {
 export async function getActiveTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
     .eq('active', true)
     .order('display_name', { ascending: true });
 
@@ -214,6 +218,7 @@ export async function getActiveTeamMembers(): Promise<TeamMember[]> {
     primarySection: p.primary_section,
     gravePool: p.grave_pool ?? null,
     gender: p.gender ?? null,
+    adminTrainingStatus: p.admin_training_status ?? null,
   }));
 }
 
@@ -227,7 +232,7 @@ export async function getActiveTeamMembers(): Promise<TeamMember[]> {
 export async function getGraveAvailableTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('tm_profiles')
-    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+    .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
     .eq('active', true)
     .not('grave_pool', 'is', null)   // Primary signal: they are in a grave pool
     .order('display_name', { ascending: true });
@@ -245,6 +250,7 @@ export async function getGraveAvailableTeamMembers(): Promise<TeamMember[]> {
     primarySection: p.primary_section,
     gravePool: p.grave_pool ?? null,
     gender: p.gender ?? null,
+    adminTrainingStatus: p.admin_training_status ?? null,
   }));
 }
 
@@ -257,7 +263,7 @@ export async function getGravePMOverlapMembers(): Promise<TeamMember[]> {
   try {
     const { data, error } = await supabase
       .from('tm_profiles')
-      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
       .eq('active', true)
       .eq('grave_pool', 'PM')
       .order('display_name', { ascending: true });
@@ -275,6 +281,7 @@ export async function getGravePMOverlapMembers(): Promise<TeamMember[]> {
       primarySection: p.primary_section,
       gravePool: 'PM',
       gender: p.gender ?? null,
+      adminTrainingStatus: p.admin_training_status ?? null,
       isPMOverlap: true,
       isAMOverlap: false,
     }));
@@ -294,7 +301,7 @@ export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
   try {
     const { data, error } = await supabase
       .from('tm_profiles')
-      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender')
+      .select('tm_id, display_name, full_name, status, primary_section, active, grave_pool, gender, admin_training_status')
       .eq('active', true)
       .eq('grave_pool', 'AM')
       .order('display_name', { ascending: true });
@@ -312,6 +319,7 @@ export async function getGraveAMOverlapMembers(): Promise<TeamMember[]> {
       primarySection: p.primary_section,
       gravePool: 'AM',
       gender: p.gender ?? null,
+      adminTrainingStatus: p.admin_training_status ?? null,
       isPMOverlap: false,
       isAMOverlap: true,
     }));

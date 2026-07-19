@@ -55,7 +55,7 @@ export interface TMRecord {
   active: boolean;
   gravePool: string | null;
   primarySection: string | null;
-  /** Biological gender for MRR vs WRR restroom eligibility. 'M' | 'F' | null (null = unknown = eligible for both as safe fallback). */
+  /** Biological gender for MRR vs WRR restroom eligibility. 'M' | 'F' | null (unknown = blocked from restrooms). */
   gender?: 'M' | 'F' | null;
   tieBreakRank: number | null;
   skillScore: number | null;

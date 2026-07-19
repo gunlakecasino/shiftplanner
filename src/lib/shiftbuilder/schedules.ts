@@ -14,6 +14,7 @@ export interface ScheduledTm {
   name: string;
   gravePool: string | null;
   gender: string | null;
+  adminTrainingStatus?: string | null;
 }
 
 export interface ScheduledTmWithRole extends ScheduledTm {

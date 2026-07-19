@@ -168,9 +168,13 @@ export function GoldenTaskList({
 export function GoldenCoverageBar({
   label,
   color,
+  offset = 0,
+  roundedBottom = true,
 }: {
   label: string;
   color: string;
+  offset?: number;
+  roundedBottom?: boolean;
 }) {
   const bg = coverageBarBg(color || "#6B7280");
   return (
@@ -178,11 +182,11 @@ export function GoldenCoverageBar({
       className="sb-coverage-bar group flex items-center justify-between px-2 select-none"
       style={{
         position: "absolute",
-        bottom: 0,
+        bottom: offset,
         left: 0,
         right: 0,
         background: bg,
-        borderRadius: "0 0 3px 3px",
+        borderRadius: roundedBottom ? "0 0 3px 3px" : 0,
         paddingTop: 3,
         paddingBottom: 3,
         zIndex: 2,
@@ -202,6 +206,30 @@ export function GoldenCoverageBar({
         {label}
       </span>
     </div>
+  );
+}
+
+function GoldenCoverageStack({
+  tasks,
+  color,
+}: {
+  tasks: PrintTaskLine[];
+  color: string;
+}) {
+  const coverageTasks = tasks.filter((t) => t.isCoverage);
+  if (!coverageTasks.length) return null;
+  return (
+    <>
+      {coverageTasks.map((task, index) => (
+        <GoldenCoverageBar
+          key={task.id}
+          label={task.label}
+          color={color}
+          offset={index * COVERAGE_BAR_H}
+          roundedBottom={index === 0}
+        />
+      ))}
+    </>
   );
 }
 
@@ -241,8 +269,8 @@ export function GoldenZoneCard({
   const icon = ZONE_ICONS[slotKey] ?? "●";
   const isEmpty = empty || !tmName?.trim();
   const regular = tasks.filter((t) => !t.isCoverage);
-  const coverage = tasks.find((t) => t.isCoverage);
-  const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 12;
+  const coverageCount = tasks.filter((t) => t.isCoverage).length;
+  const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 12;
 
   return (
     <div
@@ -313,9 +341,7 @@ export function GoldenZoneCard({
           <GoldenTaskList tasks={regular} hasTM={false} />
         ) : null}
       </div>
-      {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={color} />
-      ) : null}
+      <GoldenCoverageStack tasks={tasks} color={color} />
     </div>
   );
 }
@@ -342,8 +368,8 @@ export function GoldenRRSide({
   coveredBy?: CoveredByEntry[];
 }) {
   const regular = tasks.filter((t) => !t.isCoverage);
-  const coverage = tasks.find((t) => t.isCoverage);
-  const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 6;
+  const coverageCount = tasks.filter((t) => t.isCoverage).length;
+  const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 6;
   const isEmpty = empty || !tmName?.trim();
   const ink = cardAccentInk(accentColor);
 
@@ -407,9 +433,7 @@ export function GoldenRRSide({
         )}
         <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
       </div>
-      {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={accentColor} />
-      ) : null}
+      <GoldenCoverageStack tasks={tasks} color={accentColor} />
     </div>
   );
 }
@@ -651,8 +675,8 @@ export function GoldenOverlapSlot({
   const label = overlapSlotLabel(slotKey);
   const isEmpty = !tmName?.trim();
   const regular = tasks.filter((t) => !t.isCoverage);
-  const coverage = tasks.find((t) => t.isCoverage);
-  const coveragePad = coverage ? COVERAGE_BAR_H + 8 : 8;
+  const coverageCount = tasks.filter((t) => t.isCoverage).length;
+  const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 8;
 
   return (
     <div
@@ -712,9 +736,7 @@ export function GoldenOverlapSlot({
           <GoldenTaskList tasks={regular} hasTM={false} dense />
         ) : null}
       </div>
-      {coverage ? (
-        <GoldenCoverageBar label={coverage.label} color={accent} />
-      ) : null}
+      <GoldenCoverageStack tasks={tasks} color={accent} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ZONE_DEFS } from "./constants";
 import type { ReportWindow } from "./data";
 import { dbToUi } from "./slot-keys";
-import { formatLocalDateISO } from "./dateUtils";
+import { currentShiftDate, formatLocalDateISO } from "./dateUtils";
 import type {
   AreaCoverageSummary,
   NightZoneFill,
@@ -26,7 +26,7 @@ function getServerSupabase(): SupabaseClient {
 }
 
 function graveWeekRange(which: "this-week" | "last-4-weeks"): { from: string; to: string } {
-  const today = new Date();
+  const today = currentShiftDate();
   const daysSinceFri = (today.getDay() + 2) % 7;
   const thisFri = new Date(today);
   thisFri.setDate(today.getDate() - daysSinceFri);
@@ -45,7 +45,7 @@ function graveWeekRange(which: "this-week" | "last-4-weeks"): { from: string; to
 
 function resolveWindow(reportWindow: ReportWindow): { from: string; to: string } {
   if (typeof reportWindow === "number") {
-    const today = new Date();
+    const today = currentShiftDate();
     const cutoff = new Date(today);
     cutoff.setDate(cutoff.getDate() - reportWindow);
     return {
@@ -69,11 +69,12 @@ function buildZoneFillSummary(nightFills: NightZoneFill[], totalNights: number):
   let underfillNights = 0;
 
   for (const night of nightFills) {
-    sumFilled += night.zonesFilled;
-    if (night.zonesFilled >= 10) fullFillNights++;
+    const covered = night.zonesCovered ?? night.zonesFilled;
+    sumFilled += covered;
+    if (covered >= 10) fullFillNights++;
     else underfillNights++;
     for (const z of ZONE_KEYS) {
-      if (night.zoneAssignments[z]) {
+      if (night.zoneAssignments[z] || night.zoneCoverageAssignments[z]?.length) {
         perZoneFilled.set(z, (perZoneFilled.get(z) ?? 0) + 1);
       }
     }
@@ -155,7 +156,7 @@ export async function getRotationReport(reportWindow: ReportWindow): Promise<Rot
 
   const { data: assignmentRows, error: assignErr } = await client
     .from("zone_assignments")
-    .select("night_id, slot_key, slot_type, rr_side, tm_id")
+    .select("night_id, slot_key, slot_type, rr_side, tm_id, additional_coverage_slots")
     .in("night_id", Array.from(nightIdToDate.keys()))
     .not("tm_id", "is", null);
 
@@ -169,6 +170,7 @@ export async function getRotationReport(reportWindow: ReportWindow): Promise<Rot
     slot_type: string;
     rr_side: string | null;
     tm_id: string;
+    additional_coverage_slots?: string[] | null;
   }>;
 
   const nightFillMap = new Map<string, NightZoneFill>();
@@ -177,6 +179,8 @@ export async function getRotationReport(reportWindow: ReportWindow): Promise<Rot
       nightDate: date,
       zonesFilled: 0,
       zoneAssignments: {},
+      zoneCoverageAssignments: {},
+      zonesCovered: 0,
       rrAssignments: 0,
       auxAssignments: 0,
       overlapAssignments: 0,
@@ -219,6 +223,14 @@ export async function getRotationReport(reportWindow: ReportWindow): Promise<Rot
       } else if (slotType === "rr") night.rrAssignments++;
       else if (slotType === "aux") night.auxAssignments++;
       else if (slotType === "overlap") night.overlapAssignments++;
+
+      for (const coveredKey of row.additional_coverage_slots ?? []) {
+        if (!isZoneUiKey(coveredKey)) continue;
+        const sources = night.zoneCoverageAssignments[coveredKey] ?? [];
+        if (!sources.includes(row.tm_id)) {
+          night.zoneCoverageAssignments[coveredKey] = [...sources, row.tm_id];
+        }
+      }
     }
 
     if (slotType === "zone" && isZoneUiKey(uiKey)) zonePlacements++;
@@ -250,11 +262,23 @@ export async function getRotationReport(reportWindow: ReportWindow): Promise<Rot
     } else if (slotType === "rr") tm.rrCount++;
     else if (slotType === "aux") tm.auxCount++;
     else if (slotType === "overlap") tm.overlapCount++;
+
+    for (const coveredKey of row.additional_coverage_slots ?? []) {
+      if (!isZoneUiKey(coveredKey)) continue;
+      if (!tm.zoneDates[coveredKey]) tm.zoneDates[coveredKey] = [];
+      tm.zoneDates[coveredKey].push(nightDate);
+      tm.zoneNightDates.add(nightDate);
+      if (nightDate > tm.lastZoneDate) tm.lastZoneDate = nightDate;
+    }
   }
 
   const nightFills = Array.from(nightFillMap.values()).map((n) => ({
     ...n,
     zonesFilled: Object.keys(n.zoneAssignments).length,
+    zonesCovered: new Set([
+      ...Object.keys(n.zoneAssignments),
+      ...Object.keys(n.zoneCoverageAssignments),
+    ]).size,
   }));
 
   const tmIds = Array.from(tmMap.keys());

@@ -108,6 +108,7 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
     tasksBySlot: mapNightTasksToUiKeys(
       (secondary.tasks ?? []) as NightSlotTask[],
       core.auxDefs ?? [],
+      assignments,
     ),
     auxDefs: core.auxDefs ?? [],
     amOverlapDayName: DAY_LONG[amDate.getDay()],

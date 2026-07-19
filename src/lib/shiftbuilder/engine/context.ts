@@ -31,7 +31,7 @@ import {
   normalizeGender,
   type AuxDef,
 } from "../placement";
-import { COVERAGE_TIERS, getTierForSlot } from "../skills/placement-engine";
+import { COVERAGE_TIERS, buildCoverageTiers } from "../skills/placement-engine";
 import { shouldShowPlacementFitChip } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 import { buildDefaultAdjacency } from "../scoring";
 import { assignmentTmId, boardTmId } from "../tmIdentity";
@@ -42,6 +42,16 @@ import type {
   TmModel,
   WeekNightRecord,
 } from "./types";
+
+function normalizeAdminTrainingStatus(
+  value: unknown,
+): TmModel["adminTrainingStatus"] {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (s === "trained") return "trained";
+  if (s === "not_trained" || s === "not-trained" || s === "not trained") return "not_trained";
+  if (s === "expired") return "expired";
+  return "unknown";
+}
 
 export interface BuildNightContextInput {
   nightIso: string;
@@ -80,11 +90,15 @@ function scopeWeekHistoryBefore(
   return out;
 }
 
-function slotTierInfo(slotKey: string): { tier: number; isHardCoverage: boolean } {
-  const t = getTierForSlot(slotKey);
+function slotTierInfo(
+  slotKey: string,
+  auxDefs: AuxDef[],
+): { tier: number; isHardCoverage: boolean } {
+  const tiers = buildCoverageTiers(auxDefs);
+  const t = tiers.find((tier) => tier.slots.includes(slotKey));
   if (t) {
-    const idx = COVERAGE_TIERS.findIndex((x) => x.name === t.name);
-    return { tier: idx < 0 ? COVERAGE_TIERS.length : idx, isHardCoverage: t.isHardCoverage };
+    const idx = tiers.findIndex((x) => x.name === t.name);
+    return { tier: idx < 0 ? tiers.length : idx, isHardCoverage: t.isHardCoverage };
   }
   return { tier: COVERAGE_TIERS.length, isHardCoverage: false };
 }
@@ -95,7 +109,7 @@ function buildSlotModels(
 ): SlotModel[] {
   const orderedKeys = getSlotsInPlacementOrder(auxDefs);
   return orderedKeys.map((key) => {
-    const { tier, isHardCoverage } = slotTierInfo(key);
+    const { tier, isHardCoverage } = slotTierInfo(key, auxDefs);
     // slot_difficulty uses its own key scheme; resolve via the scoring helper.
     const diffKey = uiKeyToDifficultyKey(key);
     const difficulty = diffKey ? slotDifficulty.get(diffKey) ?? null : null;
@@ -138,6 +152,9 @@ function normalizeTm(
     isAMOverlap,
     isPMOverlap,
     isFullGrave: isFullGraveForPlacement(raw),
+    adminTrainingStatus: normalizeAdminTrainingStatus(
+      raw.adminTrainingStatus ?? raw.admin_training_status,
+    ),
     scheduled: scheduledTmIds.size === 0 ? true : scheduledTmIds.has(id),
   };
 }

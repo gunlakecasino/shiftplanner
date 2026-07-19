@@ -35,14 +35,14 @@ describe("Draft-mode adapter (P2-4)", () => {
   });
 
   it("surfaces relaxations in the reasoning text", () => {
-    // Force a relaxation: single saturated TM on a locked-restroom board.
-    const members = makeRoster({ males: 7, females: 5 });
-    const lockKeys = ["MRR1", "MRR6", "MRR7", "MRR8", "MRR10", "ADM", "WRR1", "WRR6", "WRR7", "WRR8", "WRR10"];
-    const lockTms = ["tm_m1", "tm_m2", "tm_m3", "tm_m4", "tm_m5", "tm_m6", "tm_f1", "tm_f2", "tm_f3", "tm_f4", "tm_f5"];
+    // Force a relaxation: single saturated TM on a board locked through Z4/Z5.
+    const members = makeRoster({ males: 8, females: 5 });
+    const lockKeys = ["MRR1", "MRR6", "MRR7", "MRR8", "MRR10", "WRR1", "WRR6", "WRR7", "WRR8", "WRR10", "Z4", "Z5"];
+    const lockTms = ["tm_m1", "tm_m2", "tm_m3", "tm_m4", "tm_m5", "tm_f1", "tm_f2", "tm_f3", "tm_f4", "tm_f5", "tm_m6", "tm_m7"];
     const assignments: Record<string, any> = {};
     lockKeys.forEach((k, i) => (assignments[k] = { tmId: lockTms[i], tmName: lockTms[i], isLocked: true }));
     const histories = {
-      tm_m7: historyFor("tm_m7", "Male 7", "2026-07-03", [
+      tm_m8: historyFor("tm_m8", "Male 8", "2026-07-03", [
         { slotKey: "Z9", daysAgo: 1 }, { slotKey: "Z9", daysAgo: 2 }, { slotKey: "Z9", daysAgo: 3 },
       ]),
     };

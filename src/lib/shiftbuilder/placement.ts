@@ -68,6 +68,7 @@ import {
   deriveTargetSlotsInOrder,
   calculateCoverageFeasibility,
   COVERAGE_TIERS,
+  ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD,
 } from "./skills/placement-engine";
 
 // Minimal interface to avoid circular imports
@@ -280,6 +281,17 @@ export function countFullGraveInRoster(roster: any[]): number {
   return roster.filter((tm) => isFullGraveForPlacement(tm)).length;
 }
 
+function isAdminPlacementSlot(slotKey: string): boolean {
+  const k = String(slotKey ?? "").toUpperCase();
+  return k === "ADM" || k === "ADMIN" || k === "AUX_ADMIN";
+}
+
+function isAdminTrained(tm: any): boolean {
+  return String(tm?.adminTrainingStatus ?? tm?.admin_training_status ?? "")
+    .trim()
+    .toLowerCase() === "trained";
+}
+
 type ScoredPlannerCandidate = {
   tmId: string;
   tmName: string;
@@ -382,8 +394,8 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
 
   if (feasibility.shortfall > 0) {
     notes.push(
-      `REALITY CHECK: With only ${fullGraveCount} full-grave TMs (${availableUnique} in engine pool) it is impossible to clear Tier 1 + Tier 2. ` +
-      `Restrooms fill first; remaining full-grave staff go to Admin + zones. Overlap TMs are manual-only.`
+      `REALITY CHECK: With only ${fullGraveCount} full-grave TMs (${availableUnique} in engine pool) it is impossible to clear the full critical board. ` +
+      `Restrooms and Zones 4/5/9 fill first; Admin is required at ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD}+ available full-grave TMs. Overlap TMs are manual-only.`
     );
   }
 
@@ -468,6 +480,18 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
       continue;
     }
 
+    if (isAdminPlacementSlot(slotKey) && fullGraveCount < ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD) {
+      breakdown[slotKey] = {
+        topCandidates: [],
+        pickedTmId: null,
+        preserved: false,
+      };
+      notes.push(
+        `Admin left open — not required below ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD} available full-grave graves TMs`,
+      );
+      continue;
+    }
+
     // Build candidate set: eligible (core liturgy + operator rules) + not yet placed this run.
     const slotType = slotTypeForKey(slotKey);
     const passesOperatorRules = (tm: any) =>
@@ -476,7 +500,13 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     const usedIds = new Set(currentDraft.values());
     const candidates = roster.filter((tm: any) => {
       const id = assignmentTmId(tm);
-      return id && !usedIds.has(id) && isEligibleForSlot(tm, slotKey) && passesOperatorRules(tm);
+      return (
+        id &&
+        !usedIds.has(id) &&
+        isEligibleForSlot(tm, slotKey) &&
+        (!isAdminPlacementSlot(slotKey) || isAdminTrained(tm)) &&
+        passesOperatorRules(tm)
+      );
     });
 
     // DEBUG — log details when candidates are unexpectedly empty
@@ -596,6 +626,7 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
     // Respect the same "manual assign only" contract as the main loop above —
     // otherwise this greedy pass silently auto-fills Z1/Z2 on every engine run.
     if (isOptionalDeploymentSlot(slotKey)) continue;
+    if (isAdminPlacementSlot(slotKey) && fullGraveCount < ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD) continue;
     const stillUsed = new Set(currentDraft.values());
     // Backfill must honor the same hard gate as the main loop: liturgy +
     // operator rules (was bare isEligibleForSlot — operator rules skipped).
@@ -609,6 +640,7 @@ export function runWeightedPlanner(input: WeightedPlannerInput): CoveragePlanner
         id &&
         !stillUsed.has(id) &&
         isEligibleForSlot(tm, slotKey) &&
+        (!isAdminPlacementSlot(slotKey) || isAdminTrained(tm)) &&
         passesBackfillRules(tm)
       );
     });
@@ -687,24 +719,26 @@ export {
 export function getPlacementOrderText(): string {
   return `AUTHORITATIVE PLACEMENT / FILL ORDER (strict, non-negotiable unless impossible due to hard constraints):
 
-1. Men's Restrooms (male TMs only): MRR1 → MRR7 → MRR8 → MRR10 → MRR6
-2. Women's Restrooms (female TMs only): WRR1 → WRR7 → WRR8 → WRR10 → WRR6
-3. Zones: Z9 → Z3 → Z4 → Z5 → Z7 → Z8 → Z10 → Z2 → Z1 → Z6
-4. Auxiliary: Admin (ADM) → Zone 9 Smoking Room (Z9SR)
+1. Restrooms: MRR1+2, MRR6, MRR7, MRR8, MRR10, then WRR1+2, WRR6, WRR7, WRR8, WRR10
+2. Critical zones: Z4 → Z5 → Z9
+3. Conditional Admin: ADM is required at ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD}+ available full-grave graves TMs and requires Admin-trained status
+4. Remaining zones: Z2 → Z3 → Z1 → Z7 → Z8 → Z10 → Z6
+5. Zone 9 Smoking Room: Z9SR
 
 Then, if present in the layout: Trash (TR1, TR2), Support (SP1, SP2), and any operator-added AUX after those.
 
 Notes:
-- Men's restrooms fill completely before women's restrooms.
-- Z1 and Z2 are regular zones near the end of the zone order (Z2 before Z1); Z6 is the lowest-priority zone.
-- Admin fills AFTER all 10 zones. On a short roster, a zone fills before Admin.
+- RR1+2 is one placement per side.
+- Z1 and Z2 are regular zones after Admin; Z6 is the last main zone before Z9SR.
+- Below ${ADMIN_REQUIRED_FULL_GRAVE_THRESHOLD} available full-grave graves TMs, Admin is not required and should not steal from the critical board.
 
 HARD UNIQUE-TM LIMIT (non-negotiable physical reality):
 - All 10 Restrooms require 5 male + 5 female = **10 distinct TMs**.
-- All 10 Zones require **10 more distinct full-grave TMs**.
-- Admin + Z9SR require more beyond that.
+- Zones 4, 5, and 9 require **3 more distinct full-grave TMs**.
+- Admin requires **1 more Admin-trained TM** when the threshold is met.
+- Remaining zones and Z9SR require more beyond that.
 
-You cannot reuse the same people. If the roster is short, lower-priority slots (Z6, then Admin, then Z9SR) are left open first.
+You cannot reuse the same people. If the roster is short, lower-priority slots are left open in reverse order after critical coverage is protected.
 
 The engine and the AI MUST fill slots in exactly this order. Never fill a lower-priority slot while a higher-priority one is fillable. Clearly call out impossibility when headcount is insufficient.`;
 }

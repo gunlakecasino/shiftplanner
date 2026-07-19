@@ -907,8 +907,12 @@ export async function previewWeekEngine(weekStartIso: string): Promise<WeekPrevi
     getNightAssignments,
   } = await import("@/lib/shiftbuilder/data");
   const { getAllScheduledTmIdsForNight } = await import("@/lib/shiftbuilder/gravesDefaultSchedule");
-  const { loadPlacementHistoriesForRoster } = await import(
-    "@/lib/shiftbuilder/sudoBatchPlanner.server"
+  const { getTmPlacementHistory } = await import("@/lib/shiftbuilder/data");
+  const { PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS } = await import(
+    "@/lib/shiftbuilder/rotation/placementPadHelpers"
+  );
+  const { loadOpsKnowledgeServer } = await import(
+    "@/lib/shiftbuilder/opsKnowledge/opsKnowledge.server"
   );
 
   // Derive the 7 grave-week dates (Fri..Thu) from weekStartIso.
@@ -966,8 +970,37 @@ export async function previewWeekEngine(weekStartIso: string): Promise<WeekPrevi
     accByTm.get(r.tmId)!.push(r);
   });
 
+  // P0-1: Supervisor-Brain knowledge is a HARD input for this engine (a hard
+  // `no_sweeper` / blocked-slot dossier must block here exactly as it does on
+  // Run Engine). Fail loudly rather than silently previewing a week that
+  // ignores accommodations and still reports itself guard-clean.
+  let knowledge: import("@/lib/shiftbuilder/opsKnowledge/types").OpsKnowledge;
+  try {
+    knowledge = await loadOpsKnowledgeServer();
+  } catch (e) {
+    throw new Error(
+      `previewWeekEngine: could not load Supervisor Brain knowledge — refusing to run the week engine without hard accommodations (${e instanceof Error ? e.message : String(e)})`,
+    );
+  }
+
+  // A5: the interactive surfaces (pad, chips, picker, Run Engine) all fetch
+  // PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS of history. "Optimize Week" used to
+  // fetch 30 calendar days via the batch planner's helper, so the same engine
+  // judged the same TM differently depending on entry point.
   const tmIds = grave.map((tm) => tm.id).filter(Boolean);
-  const placementHistories = await loadPlacementHistoriesForRoster(tmIds);
+  const placementHistories: Record<string, Awaited<ReturnType<typeof getTmPlacementHistory>>> = {};
+  const HISTORY_CHUNK = 16;
+  for (let i = 0; i < tmIds.length; i += HISTORY_CHUNK) {
+    const chunk = tmIds.slice(i, i + HISTORY_CHUNK);
+    await Promise.all(
+      chunk.map(async (tmId) => {
+        placementHistories[tmId] = await getTmPlacementHistory(
+          tmId,
+          PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+        );
+      }),
+    );
+  }
 
   const existingAssignmentsByNight: WeekPreviewResult["existingAssignmentsByNight"] = {};
   const nights = await Promise.all(
@@ -1015,6 +1048,7 @@ export async function previewWeekEngine(weekStartIso: string): Promise<WeekPrevi
         preferencesByTm: prefByTm,
         pairAffinitiesByTm: pairByTm,
         accommodationsByTm: accByTm,
+        knowledge,
       };
     }),
   );

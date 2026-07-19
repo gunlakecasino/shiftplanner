@@ -26,6 +26,7 @@ import {
   OpsKnowledgeLoadError,
 } from "@/lib/shiftbuilder/opsKnowledge/data.server";
 import { dbToUi } from "@/lib/shiftbuilder/slot-keys";
+import type { TMAccommodationRow } from "@/lib/shiftbuilder/data";
 
 export type Proposal = {
   /** UI key (Z4, MRR6) or DB key (zone_4, rr_6) — normalized server-side. */
@@ -214,6 +215,36 @@ export async function validateProposalsForNight(params: {
     return invalidStar("Supervisor knowledge unavailable");
   }
 
+  // ── Sudo-authored accommodations (admin, fail closed on load error) ──
+  // P0-2: `tm_accommodations` is the operator's own limit store. Without it this
+  // write gate enforces only Supervisor-Brain dossiers, so a hard accommodation
+  // authored in Sudo would block an engine proposal but not a manual Apply.
+  // Loaded via the admin client (not `data.getTMAccommodations`, which swallows
+  // read errors and returns `[]` — that would fail OPEN in a fail-closed path).
+  const accommodationsByTm = new Map<string, TMAccommodationRow[]>();
+  {
+    const { data, error } = await client
+      .from("tm_accommodations")
+      .select("tm_id, type, severity, target, note, status")
+      .eq("status", "active");
+    if (error) return invalidStar("Accommodations unavailable");
+    for (const r of data ?? []) {
+      const key = String((r as Record<string, unknown>).tm_id ?? "").trim();
+      if (!key) continue;
+      const row: TMAccommodationRow = {
+        tmId: key,
+        type: String((r as Record<string, unknown>).type ?? ""),
+        severity: String((r as Record<string, unknown>).severity ?? ""),
+        target: ((r as Record<string, unknown>).target as string | null) ?? null,
+        note: String((r as Record<string, unknown>).note ?? ""),
+        status: String((r as Record<string, unknown>).status ?? ""),
+      };
+      const list = accommodationsByTm.get(key);
+      if (list) list.push(row);
+      else accommodationsByTm.set(key, [row]);
+    }
+  }
+
   // ── Profiles for proposed TMs ──
   const neededTmIds = new Set<string>();
   for (const p of params.proposals) {
@@ -235,7 +266,7 @@ export async function validateProposalsForNight(params: {
     const businessIds = ids.filter((id) => !isUuidKey(id));
 
     const profileSelect =
-      "id, tm_id, grave_pool, gender, display_name, full_name" as const;
+      "id, tm_id, grave_pool, gender, admin_training_status, display_name, full_name" as const;
 
     const [byIdRes, byTmIdRes] = await Promise.all([
       uuidIds.length > 0
@@ -322,6 +353,7 @@ export async function validateProposalsForNight(params: {
       tmId: (profile.tm_id as string) || tmId,
       gravePool: profile.grave_pool as string | null,
       gender: profile.gender as string | null,
+      adminTrainingStatus: profile.admin_training_status as string | null,
       isAMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.amOverlap, profileIndex),
       isPMOverlap: isTmIdOnScheduleSet(tmId, scheduledIds.pmOverlap, profileIndex),
     };
@@ -329,11 +361,21 @@ export async function validateProposalsForNight(params: {
     const slotType = slotTypeForKey(uiKey);
 
     try {
+      // Accommodation rows may be keyed by either identifier the board uses
+      // (uuid `id` or business `tm_id`) — check both, in the same order the
+      // profile index resolves them.
+      const accommodations =
+        accommodationsByTm.get(tmForEligibility.id) ??
+        accommodationsByTm.get(tmForEligibility.tmId) ??
+        accommodationsByTm.get(tmId);
+
       const verdict = canPlace(tmForEligibility, uiKey, {
         eligibilityRules,
         scheduledTmIds: onScheduleTonight,
         slotType,
+        adminSlotKeys: new Set(["ADM"]),
         knowledge,
+        accommodations,
       });
       if (!verdict.ok) {
         invalid.push({

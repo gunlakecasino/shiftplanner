@@ -93,7 +93,7 @@ export function ReportsControlBar({
       {report && !loading && (
         <span className="hidden text-[10px] text-[var(--ios-label-tertiary)] sm:inline">
           {report.totalNights} nights · {zoneTms} zone TMs · avg{" "}
-          {report.zoneFill.avgZonesFilled}/10 filled ·{" "}
+          {report.zoneFill.avgZonesFilled}/10 covered ·{" "}
           {formatReportDate(report.dateRange.from)} – {formatReportDate(report.dateRange.to)}
         </span>
       )}

@@ -205,7 +205,7 @@ Tier breakdown (same order, do not reorder):
 ${tierLines}
 
 HARD RULES FOR EVERY SUGGESTION (assign, swap, ranked pick, watchout, narrative):
-1. NEVER recommend filling a core-order slot while any earlier slot in the array above is still empty tonight — unless you explicitly state headcount makes Tier 1+2 impossible (shortfall ≥ 1 vs 21 unique TMs).
+1. NEVER recommend filling a core-order slot while any earlier slot in the array above is still empty tonight — unless you explicitly state headcount, gender split, or Admin training makes the earlier slot impossible. The critical board is restrooms + Z4/Z5/Z9, plus Admin at 14+ available full-grave graves TMs.
 2. NEVER recommend moving a TM off restrooms, ADM, or zones to support/trash/AUX while higher-priority core slots remain empty.
 3. NEVER tell the operator to "fill Z* first" or skip ahead of the restroom chain or ADM when those slots are open.
 4. Overlap slots (OL-AM-*, OL-PM-*) are NOT in this walk order; do not treat them as higher priority than restrooms/zones.

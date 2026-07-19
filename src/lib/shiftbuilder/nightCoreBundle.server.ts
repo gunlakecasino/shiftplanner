@@ -51,7 +51,7 @@ async function fetchAssignmentsForNight(
   const { data: rows, error } = await supabase
     .from("zone_assignments")
     .select(
-      "night_id, slot_key, slot_type, tm_id, rr_side, is_locked, is_filled, updated_at, sort_order, break_group",
+      "night_id, slot_key, slot_type, tm_id, rr_side, is_locked, is_filled, updated_at, sort_order, break_group, additional_coverage_slots",
     )
     .eq("night_id", nightId)
     .order("sort_order", { ascending: true })
@@ -77,6 +77,9 @@ async function fetchAssignmentsForNight(
     isFilled: !!row.is_filled,
     updatedAt: row.updated_at,
     breakGroup: row.break_group ?? null,
+    additionalCoverageSlots: Array.isArray(row.additional_coverage_slots)
+      ? row.additional_coverage_slots.filter((slot: unknown): slot is string => typeof slot === "string")
+      : [],
   }));
 }
 

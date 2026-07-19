@@ -144,7 +144,18 @@ export function isEligibleUnderRules(
 
     // Example rule shapes (extensible)
     if (cond.grave_pool && tm.gravePool !== cond.grave_pool) return false;
-    if (cond.min_weeks && (tm.weeksInRole ?? 0) < cond.min_weeks) return false;
+    // `weeksInRole` is `number | undefined`, where undefined means UNKNOWN —
+    // never zero (P0-4; see `engine/eligibility.ts::weeksInRoleFromMemberRow`).
+    // There is no hire-date column on `tm_profiles` today, so coercing unknown
+    // to 0 made a single `min_weeks` rule fail the ENTIRE roster. Unknown now
+    // means "condition not applicable".
+    if (
+      cond.min_weeks != null &&
+      typeof tm.weeksInRole === "number" &&
+      tm.weeksInRole < cond.min_weeks
+    ) {
+      return false;
+    }
     if (Array.isArray(cond.exclude_tm_ids) && cond.exclude_tm_ids.includes(resolvedTmId)) return false;
     if (Array.isArray(cond.only_zones) && !cond.only_zones.includes(slotKey)) return false;
     if (Array.isArray(cond.slot_types) && !cond.slot_types.includes(slotType)) return false;

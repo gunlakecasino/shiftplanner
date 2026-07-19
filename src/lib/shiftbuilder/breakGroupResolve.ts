@@ -95,6 +95,7 @@ export type RawAssignmentForBreak = {
   tmId?: string | null;
   tmName?: string;
   breakGroup?: number | null;
+  additionalCoverageSlots?: string[] | null;
 };
 
 /** Map DB assignment rows → UI keys with resolved break pills. */
@@ -108,6 +109,7 @@ export function enrichAssignmentsWithBreakGroups(
     tmName: string;
     breakGroup: BreakGroupValue;
     breakGroupExplicit?: boolean;
+    additionalCoverageSlots: string[];
   }
 > {
   const assignments: Record<string, any> = {};
@@ -136,6 +138,9 @@ export function enrichAssignmentsWithBreakGroups(
         tmId: row.tmId,
         tmName: row.tmName || row.tmId,
         breakGroup,
+        additionalCoverageSlots: Array.isArray(row.additionalCoverageSlots)
+          ? [...row.additionalCoverageSlots]
+          : [],
         ...(explicit ? { breakGroupExplicit: true } : {}),
       };
     } catch {

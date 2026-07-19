@@ -38,8 +38,17 @@ export interface TmModel {
   isAMOverlap: boolean;
   isPMOverlap: boolean;
   isFullGrave: boolean;
+  /** Explicit Admin certification from tm_profiles.admin_training_status. */
+  adminTrainingStatus: "trained" | "not_trained" | "expired" | "unknown";
   /** True when this TM is on tonight's graves_default_schedule (+ on-call). */
   scheduled: boolean;
+  /**
+   * Weeks the TM has held the grave role, for operator `min_weeks` rules.
+   * `undefined` means UNKNOWN, never zero — there is no hire-date column on
+   * `tm_profiles` today, so this is only populated when the roster row actually
+   * carries one of the recognized fields (see `eligibility.weeksInRoleFromMemberRow`).
+   */
+  weeksInRole?: number;
 }
 
 /** One deployment slot with everything a stage needs to reason about it. */

@@ -8,6 +8,10 @@ export type NightZoneFill = {
   zonesFilled: number;
   /** UI zone key → tm_id when filled */
   zoneAssignments: Record<string, string>;
+  /** UI zone key → source tm_ids when covered by a non-zone assignment */
+  zoneCoverageAssignments: Record<string, string[]>;
+  /** Direct zone assignments plus operational coverage */
+  zonesCovered: number;
   rrAssignments: number;
   auxAssignments: number;
   overlapAssignments: number;

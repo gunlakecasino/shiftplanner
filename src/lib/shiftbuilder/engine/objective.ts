@@ -7,6 +7,9 @@
  * `objectiveValue` collapses a scorecard to one number for the optimizer's hot
  * loop, using tier multipliers **derived from board bounds** (not magic numbers)
  * with a static guarantee that no lower tier can ever outweigh a higher one.
+ * That guarantee is only real because `prefScoreFor` and `skillScoreFor` clamp
+ * each signal band's raw to [-1,1] before weighting — the clamps are what bound
+ * the per-slot maxima `tierMultipliers` divides by (D2). Do not remove them.
  *
  * A stage may only replace the incumbent draft with one whose scorecard is
  * `compareScorecards(next, prev) >= 0`. That single rule makes every component
@@ -17,6 +20,7 @@ import type { Draft, NightContext, Scorecard, SlotModel, TmModel } from "./types
 import { rotationHealthPoints } from "./health/model";
 import { resolvedWeights } from "../engineConfig";
 import { preferenceTargetMatches, uiKeyToSlotDifficultyKey } from "../scoring";
+import { validateDraft } from "./guard";
 
 const EMPTY_SCORECARD: Scorecard = {
   coverage: 0,
@@ -30,18 +34,27 @@ const EMPTY_SCORECARD: Scorecard = {
 // Per-slot tier contributions (preferences + skill; health via model.ts)
 // =====================================================================
 
-/** Preference contribution — hard prefer/avoid weighted above soft (matches solver + scoring.ts). */
+/**
+ * Preference contribution for one (tm, slot). Hard and soft rows are summed
+ * within their own band and each band's raw is clamped to [-1,1] *before*
+ * weighting — identical to scoring.scorePreference. Without the clamp, stacked
+ * family+exact prefer rows exceed maxPrefPerSlot and break the tier-domination
+ * bound that tierMultipliers() relies on (D2 / P1-12).
+ */
 export function prefScoreFor(tm: TmModel, slotKey: string, ctx: NightContext): number {
   const weights = resolvedWeights(ctx.config);
   const rows = ctx.preferencesByTm.get(tm.id) ?? [];
-  let score = 0;
+  let hardRaw = 0;
+  let softRaw = 0;
   for (const row of rows) {
     if (!row.target || !preferenceTargetMatches(row.target, slotKey)) continue;
     const sign = row.stance === "prefer" ? 1 : row.stance === "avoid" ? -1 : 0;
-    const mag = row.strength === "hard" ? weights.preference_fit : weights.soft_prefer_set;
-    score += sign * mag;
+    if (row.strength === "hard") hardRaw += sign;
+    else softRaw += sign;
   }
-  return score;
+  hardRaw = Math.max(-1, Math.min(1, hardRaw));
+  softRaw = Math.max(-1, Math.min(1, softRaw));
+  return hardRaw * weights.preference_fit + softRaw * weights.soft_prefer_set;
 }
 
 /** True when the TM has a hard-avoid preference for the slot (constraint candidate — D1). */
@@ -73,6 +86,13 @@ export function skillScoreFor(tm: TmModel, slotKey: string, ctx: NightContext): 
 // Whole-draft scorecard
 // =====================================================================
 
+/**
+ * Score a whole draft. `hardViolations` is populated from the ONE validator
+ * (guard.validateDraft) — it used to be hardcoded `[]`, which meant a scorecard
+ * structurally *could not* carry a violation, so `compareScorecards` never
+ * penalized an illegal board and the UI toasted success over it (P1-8).
+ * A draft with hard violations now loses every comparison to a clean one.
+ */
 export function scorecardFor(draft: Draft, ctx: NightContext): Scorecard {
   const board: Record<string, { tmId?: string; tmName?: string }> = {};
   for (const [k, p] of Object.entries(draft)) board[k] = { tmId: p.tmId, tmName: p.tmName };
@@ -110,7 +130,9 @@ export function scorecardFor(draft: Draft, ctx: NightContext): Scorecard {
     }
   }
 
-  return { coverage, healthTotal, prefTotal, skillTotal, hardViolations: [] };
+  const hardViolations = validateDraft(draft, ctx).hardViolations;
+
+  return { coverage, healthTotal, prefTotal, skillTotal, hardViolations };
 }
 
 // =====================================================================
@@ -150,6 +172,11 @@ export function tierMultipliers(slotCount: number, ctx: NightContext): TierMulti
   const weights = resolvedWeights(ctx.config);
   const n = Math.max(1, slotCount);
   const maxHealthPerSlot = 100;
+  // Per-slot maxima are now GUARANTEED by the clamps in prefScoreFor /
+  // skillScoreFor (D2): each band's raw is clamped to [-1,1] before weighting,
+  // so |pref| <= |preference_fit| + |soft_prefer_set| and |skill| <=
+  // |skill_match|, no matter how many preference rows stack. The +1 is slack,
+  // not a fudge factor.
   const maxPrefPerSlot = Math.abs(weights.preference_fit) + Math.abs(weights.soft_prefer_set) + 1;
   const maxSkillPerSlot = Math.abs(weights.skill_match) + 1;
 

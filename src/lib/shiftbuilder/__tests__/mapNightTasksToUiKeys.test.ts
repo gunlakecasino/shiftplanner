@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mapNightTasksToUiKeys } from "../mapNightTasksToUiKeys";
+import { buildCoveredByIndex } from "../coverageHelpers";
 import type { NightSlotTask } from "../data";
 import type { AuxDef } from "../placement";
 
@@ -51,5 +52,54 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
       [],
     );
     expect(mapped.Z3?.map((t) => t.taskLabel)).toEqual(["Zone task"]);
+  });
+
+  it("projects canonical restroom coverage into PDF-compatible task rows", () => {
+    const assignments = {
+      MRR7: { tmId: "gary", tmName: "Gary", additionalCoverageSlots: ["Z7"] },
+      WRR7: { tmId: "amanda", tmName: "Amanda", additionalCoverageSlots: ["Z7"] },
+    };
+
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+
+    expect(mapped.MRR7).toMatchObject([
+      { taskLabel: "And Zone 7", isCoverage: true, coverageSide: "B" },
+    ]);
+    expect(mapped.WRR7).toMatchObject([
+      { taskLabel: "And Zone 7", isCoverage: true, coverageSide: "A" },
+    ]);
+    expect(buildCoveredByIndex(assignments, mapped).Z7).toMatchObject([
+      { tmName: "Amanda", side: "A", sourceKey: "WRR7", isSynthetic: true },
+      { tmName: "Gary", side: "B", sourceKey: "MRR7", isSynthetic: true },
+    ]);
+  });
+
+  it("does not duplicate a legacy banner already representing canonical coverage", () => {
+    const mapped = mapNightTasksToUiKeys(
+      [
+        task({
+          id: "legacy-coverage",
+          slotKey: "rr_7",
+          slotType: "rr",
+          rrSide: "mens",
+          taskLabel: "And Zone 7",
+          isCoverage: true,
+        }),
+      ],
+      [],
+      { MRR7: { tmId: "gary", tmName: "Gary", additionalCoverageSlots: ["Z7"] } },
+    );
+
+    expect(mapped.MRR7?.filter((row) => row.isCoverage)).toHaveLength(1);
+    expect(mapped.MRR7?.[0].id).toBe("legacy-coverage");
+  });
+
+  it("suppresses synthetic empty-zone fallback when the zone is directly staffed", () => {
+    const mapped = mapNightTasksToUiKeys([], [], {
+      MRR1: { tmId: "daryl", tmName: "Daryl", additionalCoverageSlots: ["Z1"] },
+      Z1: { tmId: "zone-tm", tmName: "Zone TM" },
+    });
+
+    expect(mapped.MRR1).toBeUndefined();
   });
 });

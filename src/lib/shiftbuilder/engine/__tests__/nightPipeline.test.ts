@@ -99,26 +99,26 @@ describe("night pipeline (P2-3)", () => {
 
 describe("coverage hierarchy under pressure (I2/I4)", () => {
   it("fills a required zone even when the only candidate is a prior-3 repeat, tagging the relaxation (I5)", () => {
-    // Restrooms locked with 5M + 5F; one extra male (tm_m6) is the sole free
+    // Restrooms plus Z4/Z5 locked; one extra male (tm_m8) is the sole free
     // full-grave TM, and he is saturated on Z9 the last 3 nights. Coverage
     // (tier) must still win: Z9 gets filled, with the relaxation recorded.
-    const members = makeRoster({ males: 7, females: 5 });
-    const lockKeys = ["MRR1", "MRR6", "MRR7", "MRR8", "MRR10", "ADM", "WRR1", "WRR6", "WRR7", "WRR8", "WRR10"];
-    const lockTms = ["tm_m1", "tm_m2", "tm_m3", "tm_m4", "tm_m5", "tm_m6", "tm_f1", "tm_f2", "tm_f3", "tm_f4", "tm_f5"];
+    const members = makeRoster({ males: 8, females: 5 });
+    const lockKeys = ["MRR1", "MRR6", "MRR7", "MRR8", "MRR10", "WRR1", "WRR6", "WRR7", "WRR8", "WRR10", "Z4", "Z5"];
+    const lockTms = ["tm_m1", "tm_m2", "tm_m3", "tm_m4", "tm_m5", "tm_f1", "tm_f2", "tm_f3", "tm_f4", "tm_f5", "tm_m6", "tm_m7"];
     const assignments: Record<string, { tmId: string; tmName: string; isLocked: boolean }> = {};
     lockKeys.forEach((k, i) => {
       assignments[k] = { tmId: lockTms[i], tmName: lockTms[i], isLocked: true };
     });
-    // tm_m7 is the only free full-grave TM, saturated on Z9 the last 3 nights.
+    // tm_m8 is the only free full-grave TM, saturated on Z9 the last 3 nights.
     const histories = {
-      tm_m7: historyFor("tm_m7", "Male 7", NIGHT, [
+      tm_m8: historyFor("tm_m8", "Male 8", NIGHT, [
         { slotKey: "Z9", daysAgo: 1 }, { slotKey: "Z9", daysAgo: 2 }, { slotKey: "Z9", daysAgo: 3 },
       ]),
     };
     const ctx = makeContext({ members, histories, assignments });
     const planner = runPlanner(ctx, { preserve: "locked-only" });
     expect(planner.draft.Z9).toBeDefined();
-    expect(planner.draft.Z9!.tmId).toBe("tm_m7");
+    expect(planner.draft.Z9!.tmId).toBe("tm_m8");
     const relax = planner.draft.Z9!.provenance.relaxations ?? [];
     expect(relax).toContain("rotation-prior3");
   });
@@ -144,11 +144,11 @@ function sig(draft: Record<string, { tmId: string }>): string {
   return Object.keys(draft).sort().map((k) => `${k}:${draft[k].tmId}`).join("|");
 }
 
-describe("fill order 2026-07-03 — Z1/Z2 regular zones, admin after zones", () => {
-  it("zone slot order is 9,3,4,5,7,8,10,2,1,6", () => {
+describe("fill order 2026-07-18 — critical zones, conditional admin, then remaining zones", () => {
+  it("zone slot order is 4,5,9,2,3,1,7,8,10,6", () => {
     const ctx = fullContext();
     const zoneOrder = ctx.slots.filter((s) => /^Z\d+$/.test(s.key)).map((s) => s.key);
-    expect(zoneOrder).toEqual(["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"]);
+    expect(zoneOrder).toEqual(["Z4", "Z5", "Z9", "Z2", "Z3", "Z1", "Z7", "Z8", "Z10", "Z6"]);
   });
 
   it("Z2 comes before Z1, and Z6 is the last zone", () => {
@@ -159,12 +159,48 @@ describe("fill order 2026-07-03 — Z1/Z2 regular zones, admin after zones", () 
     expect(zoneKeys[zoneKeys.length - 1]).toBe("Z6");
   });
 
-  it("admin fills after all 10 zones (a zone outranks admin when short)", () => {
+  it("admin follows restrooms and critical zones, before the remaining zones", () => {
     const ctx = fullContext();
     const keys = ctx.slots.map((s) => s.key);
-    for (const z of ["Z9", "Z3", "Z4", "Z5", "Z7", "Z8", "Z10", "Z2", "Z1", "Z6"]) {
+    for (const z of ["Z4", "Z5", "Z9"]) {
       expect(keys.indexOf(z)).toBeLessThan(keys.indexOf("ADM"));
     }
+    for (const z of ["Z2", "Z3", "Z1", "Z7", "Z8", "Z10", "Z6"]) {
+      expect(keys.indexOf("ADM")).toBeLessThan(keys.indexOf(z));
+    }
+  });
+
+  it("does not require admin below the 14-person full-grave threshold", () => {
+    const ctx = makeContext({ members: makeRoster({ males: 7, females: 6 }) });
+    const result = runNightEngine(ctx, { seed: 1 });
+    expect(result.draft.ADM).toBeUndefined();
+    const notes = result.telemetry.stages.flatMap((s) => s.notes).join(" ");
+    expect(notes).toMatch(/Admin is not required below 14/);
+  });
+
+  it("requires Admin-trained status for admin", () => {
+    const members = makeRoster({ males: 8, females: 6 }).map((tm) => ({
+      ...tm,
+      adminTrainingStatus: tm.id === "tm_m1" ? ("trained" as const) : ("not_trained" as const),
+    }));
+    const assignments = {
+      MRR1: { tmId: "tm_m2", tmName: "Male 2", isLocked: true },
+      MRR6: { tmId: "tm_m3", tmName: "Male 3", isLocked: true },
+      MRR7: { tmId: "tm_m4", tmName: "Male 4", isLocked: true },
+      MRR8: { tmId: "tm_m5", tmName: "Male 5", isLocked: true },
+      MRR10: { tmId: "tm_m6", tmName: "Male 6", isLocked: true },
+      WRR1: { tmId: "tm_f1", tmName: "Female 1", isLocked: true },
+      WRR6: { tmId: "tm_f2", tmName: "Female 2", isLocked: true },
+      WRR7: { tmId: "tm_f3", tmName: "Female 3", isLocked: true },
+      WRR8: { tmId: "tm_f4", tmName: "Female 4", isLocked: true },
+      WRR10: { tmId: "tm_f5", tmName: "Female 5", isLocked: true },
+      Z4: { tmId: "tm_m7", tmName: "Male 7", isLocked: true },
+      Z5: { tmId: "tm_m8", tmName: "Male 8", isLocked: true },
+      Z9: { tmId: "tm_f6", tmName: "Female 6", isLocked: true },
+    };
+    const ctx = makeContext({ members, assignments });
+    const result = runNightEngine(ctx, { seed: 1 });
+    expect(result.draft.ADM?.tmId).toBe("tm_m1");
   });
 
   it("on a short roster the lowest-priority zone (Z6) is left open before higher zones", () => {

@@ -8,11 +8,68 @@
 
 import type { NightSlotTask } from "./data";
 import type { AuxDef } from "./placement";
-import { dbToUi } from "./slot-keys";
+import {
+  buildCoverageLabelIndex,
+  getSlotAccentColor,
+  getSlotCoverageLabel,
+  parseCoverageTargetFromTaskLabel,
+  type CoverageSide,
+} from "./coverageHelpers";
+import { dbToUi, uiToDb } from "./slot-keys";
+
+export type CoverageProjectionAssignment = {
+  tmId?: string | null;
+  tmName?: string | null;
+  additionalCoverageSlots?: string[] | null;
+  additional_coverage_slots?: string[] | null;
+};
+
+function coverageTargets(row: CoverageProjectionAssignment | undefined): string[] {
+  const raw = row?.additionalCoverageSlots ?? row?.additional_coverage_slots ?? [];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((key): key is string => typeof key === "string" && key.trim().length > 0))];
+}
+
+function coverageTargetLabel(targetKey: string, auxDefs: AuxDef[]): string {
+  const aux = auxDefs.find((def) => def.key === targetKey);
+  return aux?.locations?.[0]?.trim() || aux?.label?.trim() || getSlotCoverageLabel(targetKey);
+}
+
+function defaultCoverageSide(sourceKey: string): CoverageSide | null {
+  if (sourceKey.startsWith("WRR")) return "A";
+  if (sourceKey.startsWith("MRR")) return "B";
+  return null;
+}
+
+function syntheticCoverageTask(
+  sourceKey: string,
+  targetKey: string,
+  auxDefs: AuxDef[],
+): NightSlotTask {
+  const dbSlot = uiToDb(sourceKey, auxDefs);
+  return {
+    id: `coverage:${sourceKey}:${targetKey}`,
+    nightId: "",
+    slotKey: dbSlot.slot_key,
+    slotType: dbSlot.slot_type,
+    rrSide: dbSlot.rr_side,
+    taskLabel: `And ${coverageTargetLabel(targetKey, auxDefs)}`,
+    catalogTaskId: null,
+    sortOrder: 99,
+    color: getSlotAccentColor(sourceKey),
+    markerType: null,
+    textStyle: null,
+    isCoverage: true,
+    coverageSide: defaultCoverageSide(sourceKey),
+    sourceWorkItemId: null,
+    isOneOff: false,
+  };
+}
 
 export function mapNightTasksToUiKeys(
   rows: NightSlotTask[],
   currentAuxDefs: AuxDef[] = [],
+  assignments: Record<string, CoverageProjectionAssignment> = {},
 ): Record<string, NightSlotTask[]> {
   const tasksByUiKey: Record<string, NightSlotTask[]> = {};
 
@@ -76,6 +133,48 @@ export function mapNightTasksToUiKeys(
 
     (tasksByUiKey[uiKey] ??= []).push(row);
   });
+
+  const labelToKey = buildCoverageLabelIndex(currentAuxDefs);
+
+  // Collapse duplicate stored presentation rows by normalized source + target.
+  // Unknown legacy labels remain visible because they cannot be reconciled safely.
+  for (const [sourceKey, tasks] of Object.entries(tasksByUiKey)) {
+    const seenTargets = new Set<string>();
+    tasksByUiKey[sourceKey] = tasks.filter((task) => {
+      if (!task.isCoverage) return true;
+      const targetKey = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey);
+      if (!targetKey) return true;
+      if (seenTargets.has(targetKey)) return false;
+      seenTargets.add(targetKey);
+      return true;
+    });
+  }
+
+  // Project canonical operational coverage into the task shape already consumed
+  // by the live cards, covered-by index, print preview, and exported PDF.
+  for (const [sourceKey, assignment] of Object.entries(assignments)) {
+    if (!assignment?.tmId && !assignment?.tmName?.trim()) continue;
+
+    for (const targetKey of coverageTargets(assignment)) {
+      if (targetKey === sourceKey) continue;
+
+      // Empty-zone fallback is not valid once the direct target is staffed.
+      const targetAssignment = assignments[targetKey];
+      if (targetAssignment?.tmId || targetAssignment?.tmName?.trim()) continue;
+
+      const existing = tasksByUiKey[sourceKey] ?? [];
+      const alreadyProjected = existing.some(
+        (task) =>
+          task.isCoverage &&
+          parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey) === targetKey,
+      );
+      if (alreadyProjected) continue;
+
+      (tasksByUiKey[sourceKey] ??= []).push(
+        syntheticCoverageTask(sourceKey, targetKey, currentAuxDefs),
+      );
+    }
+  }
 
   return tasksByUiKey;
 }

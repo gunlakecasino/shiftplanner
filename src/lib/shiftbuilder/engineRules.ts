@@ -30,6 +30,7 @@ import {
   type CoveragePlannerResult,
 } from "./placement";
 import { canPlace, slotTypeForKey } from "./engine/eligibility";
+import type { OpsKnowledge } from "./opsKnowledge/types";
 import { getXaiFillOrderHardRules, getXaiSwapHardRules } from "./xaiFillOrderContract";
 
 // Wire in the new granular AI-native skill as the preferred source for eligibility
@@ -73,6 +74,13 @@ export interface EngineRulesContext {
 
   /** TMs on tonight's Graves Default Schedule (+ on-call overrides for this night) */
   scheduledTmIds?: Set<string>;
+
+  /**
+   * Supervisor Brain dossiers. Threaded into `canPlace` so this surface agrees
+   * with the engine gate (P0-2) — without it, a hard `no_sweeper` dossier is
+   * enforced by Run Engine and ignored here.
+   */
+  knowledge?: OpsKnowledge;
 }
 
 export interface PlacementRuleViolation {
@@ -143,10 +151,15 @@ export class EngineRules {
     }
 
     const eligibilityRules = (this.ctx.config as any).eligibilityRules ?? [];
+    // P0-2: every hard input travels together — operator rules, schedule gate,
+    // Supervisor dossiers AND the operator's own `tm_accommodations` rows.
+    const tmId = (tm.tmId || tm.id || "").trim();
     return canPlace(tm, slotKey, {
       eligibilityRules,
       scheduledTmIds: this.ctx.scheduledTmIds,
       slotType: slotTypeForKey(slotKey),
+      knowledge: this.ctx.knowledge,
+      accommodations: this.ctx.scoringContext.accommodationsByTm?.get(tmId),
     }).ok;
   }
 

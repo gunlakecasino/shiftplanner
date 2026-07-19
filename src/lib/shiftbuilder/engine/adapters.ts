@@ -119,6 +119,10 @@ export function runWeekEngineFromClient(
       preferencesByTm: n.preferencesByTm,
       pairAffinitiesByTm: n.pairAffinitiesByTm,
       accommodationsByTm: n.accommodationsByTm,
+      // P0-1: knowledge was dropped here, so Run Week solved every night
+      // without Supervisor-Brain hard accommodations while Run Engine honored
+      // them — and the week result still presented as guard-clean.
+      knowledge: n.knowledge,
     })),
   };
   return runWeekEngine(input, opts);

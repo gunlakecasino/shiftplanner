@@ -10,6 +10,8 @@ export type CoveredByEntry = {
   side?: CoverageSide | null;
   sourceKey: string;
   taskLabel: string;
+  taskId?: string;
+  isSynthetic?: boolean;
 };
 
 /** Returns the accent hex for any UI slot key (zone, RR side, aux). */
@@ -58,6 +60,7 @@ export function expandCoverageToKeys(uiKey: string): string[] {
 }
 
 type CoverageTaskRow = {
+  id?: string;
   taskLabel: string;
   isCoverage?: boolean;
   coverageSide?: CoverageSide | null;
@@ -182,6 +185,8 @@ export function buildCoveredByIndex(
         side: t.coverageSide ?? null,
         sourceKey,
         taskLabel: t.taskLabel,
+        taskId: t.id,
+        isSynthetic: t.id?.startsWith("coverage:") === true,
       });
     }
   }

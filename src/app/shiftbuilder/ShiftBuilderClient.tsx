@@ -3576,7 +3576,11 @@ function AuthedShiftBuilder() {
   // Map DB task rows → UI keys (incl. flex AUX role shells). Shared with print.
   const mapNightTasksToUiKeys = React.useCallback(
     (rows: NightSlotTask[], currentAuxDefs: AuxDef[] = []) =>
-      mapNightTasksToUiKeysLib(rows, currentAuxDefs),
+      mapNightTasksToUiKeysLib(
+        rows,
+        currentAuxDefs,
+        useShiftBuilderStore.getState().assignments,
+      ),
     [],
   );
 
@@ -6099,23 +6103,33 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   }, [currentNight.notes, selectedDay.date]);
 
   const lastHydratedTasksSigRef = React.useRef<string>("");
+  const assignmentCoverageSig = React.useMemo(
+    () =>
+      Object.entries(assignments)
+        .map(([sourceKey, row]) => {
+          const targets = row?.additionalCoverageSlots ?? row?.additional_coverage_slots ?? [];
+          return Array.isArray(targets) && targets.length > 0
+            ? `${sourceKey}:${[...targets].sort().join("+")}`
+            : "";
+        })
+        .filter(Boolean)
+        .sort()
+        .join("|"),
+    [assignments],
+  );
   const nightTasksSig = React.useMemo(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     const rows = currentNight.tasks as NightSlotTask[] | undefined;
-    if (!rows?.length) return `${dayKey}:0`;
-    return `${dayKey}:${rows.length}:${rows.map((r) => r.id).join(",")}`;
-  }, [currentNight.tasks, selectedDay.date]);
+    if (!rows?.length) return `${dayKey}:0:${assignmentCoverageSig}`;
+    return `${dayKey}:${rows.length}:${rows.map((r) => r.id).join(",")}:${assignmentCoverageSig}`;
+  }, [currentNight.tasks, selectedDay.date, assignmentCoverageSig]);
 
   React.useEffect(() => {
     if (currentNight.isSecondaryLoading) return;
     if (lastHydratedTasksSigRef.current === nightTasksSig) return;
     lastHydratedTasksSigRef.current = nightTasksSig;
 
-    const nightTaskRows = currentNight.tasks as NightSlotTask[] | undefined;
-    if (!nightTaskRows?.length) {
-      startHeavyTransition(() => setSelectedTasks({}));
-      return;
-    }
+    const nightTaskRows = (currentNight.tasks ?? []) as NightSlotTask[];
     const tasksByUiKey = mapNightTasksToUiKeys(nightTaskRows, auxDefs);
     startHeavyTransition(() => setSelectedTasks(tasksByUiKey));
   }, [currentNight.isSecondaryLoading, nightTasksSig, currentNight.tasks, startHeavyTransition, mapNightTasksToUiKeys, auxDefs]);

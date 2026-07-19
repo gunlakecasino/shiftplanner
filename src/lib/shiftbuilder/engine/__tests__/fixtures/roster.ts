@@ -27,6 +27,7 @@ export interface RosterMember extends Record<string, unknown> {
   gravePool: string;
   isAMOverlap: boolean;
   isPMOverlap: boolean;
+  adminTrainingStatus: "trained" | "not_trained" | "unknown";
   skill_score: number;
 }
 
@@ -37,25 +38,25 @@ export function makeRoster(opts: RosterOpts = {}): RosterMember[] {
   for (let i = 1; i <= males; i++) {
     out.push({
       id: `tm_m${i}`, name: `Male ${i}`, gender: "M",
-      gravePool: "Full", isAMOverlap: false, isPMOverlap: false, skill_score: skill,
+      gravePool: "Full", isAMOverlap: false, isPMOverlap: false, adminTrainingStatus: "trained", skill_score: skill,
     });
   }
   for (let i = 1; i <= females; i++) {
     out.push({
       id: `tm_f${i}`, name: `Female ${i}`, gender: "F",
-      gravePool: "Full", isAMOverlap: false, isPMOverlap: false, skill_score: skill,
+      gravePool: "Full", isAMOverlap: false, isPMOverlap: false, adminTrainingStatus: "trained", skill_score: skill,
     });
   }
   for (let i = 1; i <= amOverlap; i++) {
     out.push({
       id: `tm_am${i}`, name: `AM ${i}`, gender: i % 2 ? "M" : "F",
-      gravePool: "AM", isAMOverlap: true, isPMOverlap: false, skill_score: skill,
+      gravePool: "AM", isAMOverlap: true, isPMOverlap: false, adminTrainingStatus: "trained", skill_score: skill,
     });
   }
   for (let i = 1; i <= pmOverlap; i++) {
     out.push({
       id: `tm_pm${i}`, name: `PM ${i}`, gender: i % 2 ? "M" : "F",
-      gravePool: "PM", isAMOverlap: false, isPMOverlap: true, skill_score: skill,
+      gravePool: "PM", isAMOverlap: false, isPMOverlap: true, adminTrainingStatus: "trained", skill_score: skill,
     });
   }
   return out;

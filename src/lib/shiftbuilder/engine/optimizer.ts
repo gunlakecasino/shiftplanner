@@ -2,12 +2,26 @@
  * engine/optimizer.ts — deterministic local search (P2-2).
  *
  * Successor to timefoldLocalSolver, rebuilt on the unified primitives. Seeds
- * from the planner draft, then hill-climbs fill / replace / swap moves, scoring
- * every candidate solution with the ONE objective (tier multipliers) and the
- * ONE health model (static variant for the hot loop). A move is accepted only
- * when it raises the objective — so by construction the result's scorecard is
- * ≥ the seed's (invariant I3), which means it can never trade coverage for
- * rotation (N1).
+ * from the planner draft, then hill-climbs fill / relocate / replace / swap
+ * moves, scoring every candidate solution with the ONE objective (tier
+ * multipliers) and the ONE health model (static variant for the hot loop). A
+ * move is accepted only when it raises the objective — so by construction the
+ * result's scorecard is ≥ the seed's (invariant I3), which means it can never
+ * trade coverage for rotation (N1).
+ *
+ * PRESERVE SEMANTICS (P1-13, settled 2026-07-18). A **lock** pins a slot; a
+ * *preserved* (unlocked) existing placement is a SEED, not a pin. Under either
+ * preserve policy the optimizer may move an unlocked TM — including a manual
+ * one — whenever doing so raises the objective, and coverage is the top term,
+ * so an unlocked manual placement is only ever disturbed for a strictly better
+ * board. Operators who want a placement untouched must lock it. Only
+ * `lockedSlots` is treated as immutable anywhere in this module.
+ *
+ * COVERAGE RELOCATION (P0-3). Open required slots are not limited to unused
+ * TMs: `relocateIntoOpen` can pull an unlocked placed TM into an open required
+ * slot and backfill the vacated slot from the unused pool. Without it, the only
+ * MRR-eligible free male being preserved in a zone left the restroom open all
+ * night while a legal full-coverage board existed — coverage is tier 1.
  *
  * Determinism (N7/I8): the search runs on a fixed *move budget* driven by a
  * seeded RNG — never wall-clock — so identical (context, seed, budget) yields
@@ -16,9 +30,16 @@
  */
 
 import type { Draft, NightContext, Relaxation, SlotModel, SlotPlacement } from "./types";
-import { canPlace } from "./eligibility";
+import { canPlace, gateOptionsFor } from "./eligibility";
 import { rotationHealthPointsStatic } from "./health/model";
 import { prefScoreFor, skillScoreFor, hasHardAvoid, tierMultipliers, type TierMultipliers } from "./objective";
+import {
+  MAX_RELAX_FOR_IMPROVEMENT,
+  RELAX_HARD_AVOID,
+  RELAX_ROTATION,
+  RELAX_RUNGS,
+  type RelaxLevel,
+} from "./rescue";
 import { isInPriorPlacementSameAreaWindow, weekEntriesForTm } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 
 export interface OptimizerOptions {
@@ -69,11 +90,7 @@ class PairEvaluator {
       return bad;
     }
 
-    const eligible = canPlace(tm, slotKey, {
-      eligibilityRules: this.ctx.eligibilityRules,
-      scheduledTmIds: this.ctx.scheduledTmIds,
-      knowledge: this.ctx.knowledge,
-    }).ok;
+    const eligible = canPlace(tm, slotKey, gateOptionsFor(this.ctx, tm)).ok;
 
     let healthPoints = 0;
     let isCritical = false;
@@ -105,12 +122,21 @@ class PairEvaluator {
     return out;
   }
 
-  /** Hard placement legality at a relaxation level (0 clean, 1 prior-3 ok, 2 hard-avoid ok). */
-  canHold(tmId: string, slotKey: string, relaxLevel: number): boolean {
+  /**
+   * Hard placement legality at a relaxation rung (D1.2):
+   *   RELAX_NONE (0)        — clean: no prior-3 repeat, no hard-avoid
+   *   RELAX_ROTATION (1)    — the prior-3 same-area rotation gate may break
+   *   RELAX_HARD_AVOID (2)  — a hard-avoid preference may additionally break
+   *
+   * Hard eligibility (`canPlace`) is never relaxable at any rung. Rung 2 is
+   * reserved for coverage rescue on a required slot; pure improvement moves
+   * must pass `MAX_RELAX_FOR_IMPROVEMENT`.
+   */
+  canHold(tmId: string, slotKey: string, relaxLevel: RelaxLevel): boolean {
     const e = this.eval(tmId, slotKey);
     if (!e.eligible) return false;
-    if (e.isHardAvoid && relaxLevel < 2) return false;
-    if (e.isPrior3 && relaxLevel < 1) return false;
+    if (e.isHardAvoid && relaxLevel < RELAX_HARD_AVOID) return false;
+    if (e.isPrior3 && relaxLevel < RELAX_ROTATION) return false;
     return true;
   }
 }
@@ -163,22 +189,96 @@ export function runOptimizer(
   };
 
   const usedIn = (sol: Solution) => new Set(sol.values());
+  const coverageOf = (sol: Solution) => {
+    let n = 0;
+    for (const slotKey of requiredSlots) if (sol.get(slotKey)) n += 1;
+    return n;
+  };
 
   const greedyFillOpen = (sol: Solution) => {
     for (const slotKey of requiredSlots) {
       if (sol.get(slotKey) || lockedSlots.has(slotKey)) continue;
       const slot = slotByKey.get(slotKey)!;
       const used = usedIn(sol);
-      for (let relax = 0; relax <= 2; relax++) {
+      // Coverage rescue on a required slot: descend the ladder and stop at the
+      // first rung that yields anybody, so rung 2 (hard-avoid) is only ever
+      // reached when rungs 0 and 1 found nobody — D1.2.
+      for (const relax of RELAX_RUNGS) {
         let best: { tmId: string; key: number } | null = null;
         for (const tmId of allTmIds) {
           if (used.has(tmId)) continue;
           if (!ev.canHold(tmId, slotKey, relax)) continue;
           const e = ev.eval(tmId, slotKey);
-          const key = slot.isRotationTracked ? e.healthPoints * 1000 + e.prefScore : e.prefScore * 1000 + e.skillScore;
+          // Rank by the SAME tier units as objective() — never ad-hoc constants.
+          // The old `health*1000 + pref` inverted as soon as preference_fit
+          // approached 1000 (P1-12); these units are derived from the clamped
+          // per-slot maxima and are safe-integer-checked in tierMultipliers().
+          const key = slot.isRotationTracked
+            ? e.healthPoints * mult.HEALTH_UNIT + e.prefScore * mult.PREF_UNIT + e.skillScore * mult.SKILL_UNIT
+            : e.prefScore * mult.PREF_UNIT + e.skillScore * mult.SKILL_UNIT;
+          // Strict `>` over the fixed allTmIds order: ties resolve to roster
+          // order deliberately, which is what keeps the search deterministic.
           if (!best || key > best.key) best = { tmId, key };
         }
         if (best) { sol.set(slotKey, best.tmId); break; }
+      }
+    }
+  };
+
+  /**
+   * Coverage relocation (P0-3). An open required slot that no *unused* TM can
+   * hold may still be fillable by an already-placed, unlocked TM — provided the
+   * slot they vacate can then be backfilled. Tries each such relocation, runs
+   * `greedyFillOpen` on the trial board to backfill the vacated slot, and keeps
+   * it only on a strict objective gain (coverage is the top term, so a genuine
+   * coverage win always wins).
+   *
+   * A relocation is accepted ONLY when it strictly raises coverage. Shuffling a
+   * TM between two required slots at equal coverage is not this move's job (the
+   * replace/swap passes own that) and would silently trade fill-order priority
+   * — which the count-based coverage term cannot see — for a health gain.
+   *
+   * Ladder discipline: candidates are gathered rung by rung and the search stops
+   * at the first rung with any candidate, so rung 2 is reachable only when rungs
+   * 0/1 are empty (D1.2) — and since every accepted relocation raises coverage,
+   * hard-avoid is never broken for a mere health/preference gain (D1.0).
+   */
+  const relocateIntoOpen = (sol: Solution) => {
+    let improved = true;
+    let guardCounter = 0;
+    while (improved && guardCounter++ < 4) {
+      improved = false;
+      for (const target of requiredSlots) {
+        if (sol.get(target) || lockedSlots.has(target)) continue;
+        const cur = objective(sol);
+        const curCoverage = coverageOf(sol);
+        let best: { board: Solution; val: number } | null = null;
+
+        for (const relax of RELAX_RUNGS) {
+          const sources = requiredSlots.filter((source) => {
+            if (source === target || lockedSlots.has(source)) return false;
+            const tmId = sol.get(source);
+            return !!tmId && ev.canHold(tmId, target, relax);
+          });
+          if (sources.length === 0) continue;
+
+          for (const source of sources) {
+            const trial = new Map(sol);
+            trial.set(target, trial.get(source)!);
+            trial.delete(source);
+            greedyFillOpen(trial);
+            if (coverageOf(trial) <= curCoverage) continue;
+            const val = objective(trial);
+            if (val > cur && (!best || val > best.val)) best = { board: trial, val };
+          }
+          break; // this rung had candidates — D1.2 forbids descending further
+        }
+
+        if (best) {
+          sol.clear();
+          for (const [k, v] of best.board) sol.set(k, v);
+          improved = true;
+        }
       }
     }
   };
@@ -193,20 +293,23 @@ export function runOptimizer(
       if (!aTm) continue;
 
       if (rand() < 0.5) {
-        // Replace with an unused TM.
+        // Replace with an unused TM. Pure improvement move — capped at rung 1
+        // (D1.3); a replace never buys coverage, so it may not break hard-avoid.
         const used = usedIn(sol);
-        const pool = allTmIds.filter((id) => !used.has(id) && ev.canHold(id, a, 2));
+        const pool = allTmIds.filter((id) => !used.has(id) && ev.canHold(id, a, MAX_RELAX_FOR_IMPROVEMENT));
         if (pool.length === 0) continue;
         const nTm = pool[Math.floor(rand() * pool.length)];
         sol.set(a, nTm);
         if (objective(sol) <= cur) sol.set(a, aTm);
       } else {
-        // Swap two placed TMs.
+        // Swap two placed TMs. Also a pure improvement move: both destinations
+        // are gated at rung 1 (D1.3). The gate applies to destinations only —
+        // a TM currently sitting on a rung-2 rescue placement may still move out.
         const b = mutable[Math.floor(rand() * mutable.length)];
         if (b === a) continue;
         const bTm = sol.get(b);
         if (!bTm) continue;
-        if (!ev.canHold(aTm, b, 2) || !ev.canHold(bTm, a, 2)) continue;
+        if (!ev.canHold(aTm, b, MAX_RELAX_FOR_IMPROVEMENT) || !ev.canHold(bTm, a, MAX_RELAX_FOR_IMPROVEMENT)) continue;
         sol.set(a, bTm); sol.set(b, aTm);
         if (objective(sol) <= cur) { sol.set(a, aTm); sol.set(b, bTm); }
       }
@@ -235,7 +338,10 @@ export function runOptimizer(
           if (b === a) continue;
           const bTm = sol.get(b);
           if (!bTm) continue;
-          if (!ev.canHold(aTm, b, 2) || !ev.canHold(bTm, a, 2)) continue;
+          // Rung 1 cap (D1.3): a critical repeat that can only be cleared by
+          // placing someone on a hard-avoid slot stays flagged-critical —
+          // hard-avoid outranks rotation health.
+          if (!ev.canHold(aTm, b, MAX_RELAX_FOR_IMPROVEMENT) || !ev.canHold(bTm, a, MAX_RELAX_FOR_IMPROVEMENT)) continue;
           sol.set(a, bTm); sol.set(b, aTm);
           const val = objective(sol);
           sol.set(a, aTm); sol.set(b, bTm); // revert to measure
@@ -252,18 +358,23 @@ export function runOptimizer(
 
   let bestSolution: Solution = new Map(seedSolution);
   greedyFillOpen(bestSolution);
+  relocateIntoOpen(bestSolution);
   let bestObj = objective(bestSolution);
 
   for (let r = 0; r < restarts; r++) {
     const rand = mulberry32(seed + r * 7919);
     const sol: Solution = r === 0 ? new Map(bestSolution) : buildScratch(seedSolution, lockedSlots);
     greedyFillOpen(sol);
+    relocateIntoOpen(sol);
     improvePass(sol, rand, moveBudget);
     repairCriticals(sol);
     const obj = objective(sol);
     if (obj > bestObj) { bestObj = obj; bestSolution = sol; }
   }
 
+  // Final sweep: improve/repair passes can free a TM who unblocks a still-open
+  // required slot, so relocate once more before repairing criticals.
+  relocateIntoOpen(bestSolution);
   repairCriticals(bestSolution);
   return buildResultDraft(ctx, seedDraft, bestSolution, ev, slotByKey);
 }
@@ -288,9 +399,18 @@ function buildResultDraft(
   const draft: Draft = {};
   const relaxationsUsed: Relaxation[] = [];
 
-  // Optional/preserved slots from the seed pass through untouched.
+  // Optional slots are outside the search space entirely (they never entered
+  // `seedSolution`), so they pass through untouched.
+  //
+  // Preserved slots do NOT pass through here (P1-13): they are seeds, not pins,
+  // and the search may legitimately have moved or vacated them. Copying them
+  // back unconditionally — as this loop used to — could resurrect a TM at their
+  // old slot while the solution also placed them elsewhere, i.e. a double-book.
+  // Unmoved preserved slots keep their original provenance via the
+  // `seedPlacement.tmId === tmId` branch below; locks are immutable in the
+  // search, so they always take that branch.
   for (const [slotKey, p] of Object.entries(seedDraft)) {
-    if (slotByKey.get(slotKey)?.isOptional || p.provenance.stage === "preserved") {
+    if (slotByKey.get(slotKey)?.isOptional) {
       draft[slotKey] = p;
     }
   }

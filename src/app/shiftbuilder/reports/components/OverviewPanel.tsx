@@ -29,14 +29,14 @@ export function OverviewPanel({ report }: OverviewPanelProps) {
     label: z.key,
     value: report.zoneFill.perZoneFillRate[z.key] ?? 0,
     color: getSlotColor(z.key),
-    meta: `${report.zoneFill.perZoneFillRate[z.key] ?? 0}% nights filled`,
+    meta: `${report.zoneFill.perZoneFillRate[z.key] ?? 0}% nights covered`,
   }));
 
   const nightTrend = report.nightFills.slice(-14).map((n) => ({
     label: n.nightDate.slice(5),
-    value: n.zonesFilled,
-    color: n.zonesFilled >= 10 ? "#34C759" : n.zonesFilled >= 8 ? "#FF9500" : "#FF453A",
-    meta: `${n.zonesFilled}/10 zones`,
+    value: n.zonesCovered,
+    color: n.zonesCovered >= 10 ? "#34C759" : n.zonesCovered >= 8 ? "#FF9500" : "#FF453A",
+    meta: `${n.zonesCovered}/10 zones`,
   }));
 
   return (
@@ -57,7 +57,7 @@ export function OverviewPanel({ report }: OverviewPanelProps) {
           accent="#007AFF"
         />
         <StatCard
-          label="Avg Zones Filled"
+          label="Avg Zones Covered"
           value={kpis.avgZonesFilled}
           sub={`${kpis.fullFillPct}% nights at 10/10`}
           icon={Layers}
@@ -124,11 +124,11 @@ export function OverviewPanel({ report }: OverviewPanelProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ReportPanel title="Zone Fill Rate" subtitle="% of nights each zone had a TM">
+        <ReportPanel title="Zone Coverage Rate" subtitle="% of nights each zone was directly staffed or covered">
           <BarChart orientation="horizontal" items={zoneFillBars} maxValue={100} />
         </ReportPanel>
 
-        <ReportPanel title="Nightly Zone Fill" subtitle="Last 14 grave nights in window">
+        <ReportPanel title="Nightly Zone Coverage" subtitle="Last 14 grave nights in window">
           <BarChart items={nightTrend} height={120} maxValue={10} />
         </ReportPanel>
       </div>
@@ -187,7 +187,7 @@ export function OverviewPanel({ report }: OverviewPanelProps) {
 
       <ReportPanel
         title="Zone Coverage Grid"
-        subtitle="Fill frequency and rotation depth per zone"
+        subtitle="Operational coverage frequency and rotation depth per zone"
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
           {ZONE_DEFS.map((z) => {

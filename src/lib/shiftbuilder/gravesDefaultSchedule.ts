@@ -94,6 +94,7 @@ export interface GravesScheduleRow {
   tmName: string;
   gravePool?: string | null;
   gender?: string | null;
+  adminTrainingStatus?: string | null;
 }
 
 export interface ScheduledIdsForNight {
@@ -108,7 +109,7 @@ async function loadProfileIndex(
 ): Promise<Map<string, ScheduledTm>> {
   const { data: profiles } = await supabase
     .from("tm_profiles")
-    .select("id, tm_id, display_name, full_name, grave_pool, gender, active")
+    .select("id, tm_id, display_name, full_name, grave_pool, gender, admin_training_status, active")
     .eq("active", true);
 
   const map = new Map<string, ScheduledTm>();
@@ -119,6 +120,7 @@ async function loadProfileIndex(
       name: p.display_name || p.full_name || p.tm_id || p.id,
       gravePool: p.grave_pool,
       gender: p.gender,
+      adminTrainingStatus: p.admin_training_status ?? null,
     };
     map.set(p.id, row);
     if (p.tm_id) map.set(p.tm_id, row);
@@ -392,6 +394,7 @@ type ProfileRow = {
   full_name?: string | null;
   grave_pool?: string | null;
   gender?: string | null;
+  admin_training_status?: string | null;
 };
 
 function profileDisplayName(p: ProfileRow): string {
@@ -435,7 +438,7 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
   const [{ data: profiles }, { data: groups }, { data: scheduleRows }] = await Promise.all([
     supabase
       .from("tm_profiles")
-      .select("id, tm_id, display_name, full_name, grave_pool, gender, active")
+      .select("id, tm_id, display_name, full_name, grave_pool, gender, admin_training_status, active")
       .eq("active", true)
       .order("display_name"),
     supabase.from("tm_groups").select("id, name, tm_group_members (tm_id)"),
@@ -474,6 +477,7 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
         tmName: profileDisplayName(p),
         gravePool: p.grave_pool,
         gender: p.gender,
+        adminTrainingStatus: p.admin_training_status ?? null,
       });
     }
     rows.sort((a, b) => a.tmName.localeCompare(b.tmName));

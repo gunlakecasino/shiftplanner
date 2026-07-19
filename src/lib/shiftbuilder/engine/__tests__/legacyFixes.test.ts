@@ -44,14 +44,14 @@ describe("F10 — gender-aware feasibility (P0-8)", () => {
   it("21 full-grave men cannot clear Tier 1 (5 women short)", () => {
     const f = calculateCoverageFeasibility(21, { male: 21, female: 0 });
     expect(f.femaleShortfall).toBe(5);
-    expect(f.tiersFullyCleared).not.toContain("Core - Admin + Zones");
+    expect(f.tiersFullyCleared).not.toContain("Critical - Zones 4/5/9");
     expect(f.explanation).toMatch(/female/i);
   });
   it("a balanced 12M + 10F roster clears both tiers", () => {
     const f = calculateCoverageFeasibility(22, { male: 12, female: 10 });
     expect(f.maleShortfall).toBe(0);
     expect(f.femaleShortfall).toBe(0);
-    expect(f.tiersFullyCleared).toContain("Core - Zones");
+    expect(f.tiersFullyCleared).toContain("Critical - Zones 4/5/9");
   });
   it("single-arg form stays gender-blind (backward compatible)", () => {
     const f = calculateCoverageFeasibility(21);
