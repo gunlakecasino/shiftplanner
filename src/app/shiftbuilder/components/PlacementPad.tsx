@@ -435,7 +435,11 @@ export interface PlacementPadProps {
   onAssign?: (slotKey: string, tmId: string, tmName: string) => void;
   onAddTask?: (slotKey: string, label: string) => void | Promise<void>;
   /** Opens Tasks Pad — primary surface for adding and formatting tasks. */
-  onOpenTasksPad?: (slotKey: string, task?: NightSlotTask, options?: { addMode?: boolean }) => void;
+  onOpenTasksPad?: (
+    slotKey: string,
+    task?: NightSlotTask,
+    options?: { addMode?: boolean; preservePlacement?: boolean },
+  ) => void;
   onRemoveTask?: (
     slotKey: string,
     taskLabel: string,
@@ -1425,8 +1429,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   <div
                     key={t.id || t.taskLabel}
                     className={`sb-placement-pad-task-row flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px] ${onOpenTasksPad ? "cursor-pointer hover:border-[#007AFF]/30 hover:bg-[#007AFF]/[0.03]" : ""}`}
-                    onClick={onOpenTasksPad ? (e) => { e.stopPropagation(); onOpenTasksPad(slotKey, t); } : undefined}
-                    onKeyDown={onOpenTasksPad ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTasksPad(slotKey, t); } } : undefined}
+                    onClick={onOpenTasksPad ? (e) => { e.stopPropagation(); onOpenTasksPad(slotKey, t, { preservePlacement: true }); } : undefined}
+                    onKeyDown={onOpenTasksPad ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTasksPad(slotKey, t, { preservePlacement: true }); } } : undefined}
                     role={onOpenTasksPad ? "button" : undefined}
                     tabIndex={onOpenTasksPad ? 0 : undefined}
                   >
@@ -1498,7 +1502,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                 ) : onOpenTasksPad ? (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true }); }}
+                    onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true, preservePlacement: true }); }}
                     className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" />

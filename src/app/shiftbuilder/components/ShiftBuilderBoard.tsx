@@ -713,14 +713,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   const handleOpenTaskTextEdit = React.useCallback((
     slotKey: string,
     task?: NightSlotTask,
-    options?: { addMode?: boolean },
+    options?: { addMode?: boolean; preservePlacement?: boolean },
   ) => {
     if (isPrintPreview) return;
-    // Desktop flyout: close placement so two floating pads don't stack.
-    // Tablet dock: keep (or set) slot selection so stage right-inset + peer-dim
-    // stay active. PlacementDock already yields when activeTaskEditPad is set;
-    // closing tasks returns the operator to the placement dock for that slot.
-    if (useTabletDock) {
+    // Tasks launched from Placement Pad return there when they close. Direct
+    // card task edits are independent and must not leave a placement dock
+    // underneath the Tasks dock.
+    if (useTabletDock && options?.preservePlacement) {
       onSlotOpen?.(slotKey);
     } else {
       onSlotClose?.();

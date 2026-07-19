@@ -5944,6 +5944,11 @@ button,
   border-left-width: 0 !important;
 }
 
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-package-card-task-list {
+  padding: 0 2px 0 0 !important;
+  overscroll-behavior: contain;
+}
+
 /* SheetBuilder refinement: the placement experience is a persistent inspector.
    It occupies layout space on desktop and uses the uploaded package's clean,
    white panel treatment instead of covering a placement card. */

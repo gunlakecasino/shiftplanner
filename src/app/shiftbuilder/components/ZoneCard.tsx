@@ -251,6 +251,34 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         : "";
   const zoneNumber = Number(String(def.key).replace(/\D/g, "")) || 1;
   const packageNotes = regularTasks.map((task) => task.taskLabel).filter(Boolean);
+  const packageTaskInteractionsEnabled = !isLocked && !isViewOnly;
+  const packageTaskContent = regularTasks.length > 0 ? (
+    <CardTaskZone
+      slotKey={def.key}
+      onOpenTasksPad={packageTaskInteractionsEnabled ? onOpenTaskTextEdit : undefined}
+      isLocked={!packageTaskInteractionsEnabled}
+      enabled={packageTaskInteractionsEnabled}
+      className="sb-package-card-task-list min-w-0 max-h-[78px] overflow-y-auto"
+      style={{ color: cardAccentInk(color) }}
+    >
+      {regularTasks.map((task) => (
+        <TaskRow
+          key={task.id}
+          task={task}
+          slotKey={def.key}
+          onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
+          onSetTaskColor={packageTaskInteractionsEnabled ? onSetTaskColor : undefined}
+          onSetTaskMarker={packageTaskInteractionsEnabled ? onSetTaskMarker : undefined}
+          onEditTask={packageTaskInteractionsEnabled ? onEditTask : undefined}
+          onOpenTaskTextEdit={packageTaskInteractionsEnabled ? onOpenTaskTextEdit : undefined}
+          textSize={taskLabelSizeClass(10)}
+          textColorClass={taskLabelColorClass(hasTM)}
+          draggable={packageTaskInteractionsEnabled}
+          isPrintPreview={false}
+        />
+      ))}
+    </CardTaskZone>
+  ) : undefined;
   const packageCoverage = coveredBy.map((entry, index) => ({
     label: entry.side ? `${String(def.key).replace(/^Z/, "")}${entry.side}` : String(index + 1),
     name: entry.tmName,
@@ -285,6 +313,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         zone={zoneNumber}
         name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
         notes={packageNotes}
+        taskContent={packageTaskContent}
         unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
         coverage={assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {

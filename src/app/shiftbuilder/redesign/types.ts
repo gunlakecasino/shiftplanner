@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export interface CoverageEntry {
   name: string;
   label: string;
@@ -12,6 +14,7 @@ export interface ShiftCardProps {
   notes?: string[];
   unassigned?: boolean;
   coverage?: CoverageEntry[];
+  taskContent?: ReactNode;
   noChip?: boolean;
   onClick?: () => void;
 }
